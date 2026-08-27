@@ -2525,6 +2525,157 @@ assertEqual(
 		}
 	})();
 
+	// P78: the replay lock's two decision rules. Both live in optimizer_ui.js and are pure, so they
+	// are checked here rather than by driving a real run: the wrong answer to either is silent, and
+	// both are the class of bug that has shipped before - a banner claiming an outcome that belongs
+	// to a plan no longer on screen, and a step re-imposing the run's strategy over the plan the
+	// user just edited (the PF8 / P74 class).
+	(() => {
+		console.log(" ");
+		console.log("=== P78: replay lock ===");
+		if (typeof replayBannerText !== "function" || typeof replayCarryOnStep !== "function") {
+			assertEqual(true, false, "P78: replayBannerText and replayCarryOnStep must be defined");
+			return;
+		}
+		const RUN_LABEL = "Replaying the worst path of 500 through your plan: money runs out in 2041.";
+		const st = () => ({ label: RUN_LABEL, pathName: "the worst path of 500 (Historical)",
+		                    planFields: { strategy: "fixed" } });
+
+		// Unmodified: the run's own sentence, outcome and all.
+		assertEqual(replayBannerText(st()), RUN_LABEL,
+			"P78: an unedited replay keeps the run's own label");
+		// Modified: names the path, claims no outcome. The ruin year must not survive into it.
+		const mod = replayBannerText({ ...st(), modified: true });
+		assertEqual(mod.includes("MODIFIED"), true, "P78: an edited replay says the plan is modified");
+		assertEqual(mod.includes("2041"), false,
+			"P78: an edited replay must NOT repeat the run's ruin year");
+		// A state with no pathName still says something.
+		assertEqual(replayBannerText({ label: RUN_LABEL, modified: true }), RUN_LABEL,
+			"P78: a state with no pathName falls back to its label rather than going blank");
+		assertEqual(replayBannerText(null), "", "P78: no state, no text");
+
+		// ENTRY (no prev): the fresh state keeps its plan fields, because replayPath is about to
+		// hand them to the sidebar. Stripping them here would replay a plan nobody chose.
+		const entry = replayCarryOnStep(null, st());
+		assertEqual(entry.planFields !== null, true,
+			"P78: entering a replay keeps the run's plan fields for the handoff");
+
+		// STEP after the handoff (prev has no planFields): drop them and inherit modified.
+		const onNext = replayCarryOnStep({ planFields: null, modified: true }, st());
+		assertEqual(onNext.planFields, null,
+			"P78: stepping must NOT re-impose the run's plan over the edited one");
+		assertEqual(onNext.modified, true, "P78: the modified flag follows the step");
+
+		// STEP while prev STILL carries fields - a state that never reached the sidebar. Nothing
+		// has been handed over, so the next path keeps its own rather than replaying a blank plan.
+		const early = replayCarryOnStep(st(), st());
+		assertEqual(early.planFields !== null, true,
+			"P78: before the handoff, stepping keeps the run's plan fields");
+	})();
+
+	// P82: the ring, and the real-return formula. Both are pure and both are silent when wrong -
+	// a ring that stops at the ends looks like a disabled button, and a real return computed by
+	// subtraction is off by a fraction of a point that grows exactly where it matters.
+	(() => {
+		console.log(" ");
+		console.log("=== P82: replay ring and real return ===");
+		if (typeof ringStep !== "function" || typeof realReturnOf !== "function") {
+			assertEqual(true, false, "P82: ringStep and realReturnOf must be defined");
+			return;
+		}
+		// Forward through the middle, and off the end back to the start.
+		assertEqual(ringStep(0, 1, 46), 1, "P82: forward steps forward");
+		assertEqual(ringStep(45, 1, 46), 0, "P82: forward past the last stop reaches the first");
+		// Backward off the front. The double-modulo form is what makes this 45 and not -1: a plain
+		// `% len` in JavaScript keeps the sign, and -1 indexes nothing.
+		assertEqual(ringStep(0, -1, 46), 45, "P82: back past the first stop reaches the last");
+		assertEqual(ringStep(45, -1, 46), 44, "P82: backward steps backward");
+		// A stop that has fallen out of the ring steps from the start rather than refusing to move.
+		assertEqual(ringStep(-1, 1, 46), 0, "P82: an off-ring position steps from the start");
+		assertEqual(ringStep(-1, -1, 46), 0, "P82: an off-ring position steps from the start either way");
+		// A one-stop ring stays put instead of going out of range.
+		assertEqual(ringStep(0, 1, 1), 0, "P82: a single-stop ring stays on its one stop");
+		assertEqual(ringStep(0, 1, 0), -1, "P82: an empty ring has nowhere to step");
+
+		// Real return is COMPOUNDED, not subtracted.
+		assertEqual(Math.abs(realReturnOf(0.08, 0.03) - 0.0485436893203883) < 1e-12, true,
+			"P82: 8% against 3% is 4.854%, the compounded figure");
+		assertEqual(realReturnOf(0.08, 0.03) < 0.05, true,
+			"P82: the real return must be BELOW the subtracted 5%, or it is the wrong formula");
+		assertEqual(realReturnOf(0.03, 0.03), 0, "P82: matching the index leaves nothing real");
+		// Deflation makes a flat market a real GAIN, which is the case a subtraction also gets right
+		// but for the wrong reason - check the magnitude, not just the sign.
+		assertEqual(Math.abs(realReturnOf(0, -0.01) - 0.010101010101010102) < 1e-12, true,
+			"P82: a flat market against -1% inflation is a +1.01% real gain");
+		assertEqual(realReturnOf(undefined, undefined), 0, "P82: missing rates read as zero, not NaN");
+	})();
+
+	// P82i: the stress tooltip's closing line is the one sentence the summary-bar tile and the
+	// Monte Carlo headline cannot share. The tile is visible from every tab and points AT the Monte
+	// Carlo tab; the headline is already on it, and shipped pointing readers at the page they were
+	// looking at. Nothing throws when this is wrong - it just reads as a dead end.
+	(() => {
+		console.log(" ");
+		console.log("=== P82i: stress tooltip by placement ===");
+		if (typeof stressTooltip !== "function") {
+			assertEqual(true, false, "P82i: stressTooltip must be defined");
+			return;
+		}
+		const s = { mode: "worst", total: 36, failures: 8, ruinYear: 2046 };
+		const tile = stressTooltip(s, "tile");
+		const head = stressTooltip(s, "headline");
+
+		assertEqual(tile.includes("See the Monte Carlo tab"), true,
+			"P82i: the summary-bar tile still points at the Monte Carlo tab");
+		assertEqual(head.includes("See the Monte Carlo tab"), false,
+			"P82i: the headline must NOT point at the tab it is already on");
+		assertEqual(head.includes("Expand this header"), true,
+			"P82i: the headline points at its own fold instead");
+		assertEqual(tile.includes("Expand this header"), false,
+			"P82i: the tile must not tell a reader on another tab to expand a header they cannot see");
+
+		// Everything BEFORE the closing line is shared, and must stay shared.
+		const body = t => t.slice(0, t.lastIndexOf("\n\n"));
+		assertEqual(body(tile), body(head),
+			"P82i: only the closing line differs between the two placements");
+		assertEqual(tile.includes("survives 28 of 36 and fails 8"), true,
+			"P82i: the counts survive the split");
+		assertEqual(head.includes("2046"), true, "P82i: the typical ruin year survives the split");
+
+		// An unknown placement closes with nothing rather than guessing at a destination.
+		const bare = stressTooltip(s, undefined);
+		assertEqual(bare.includes("Monte Carlo tab") || bare.includes("Expand this header"), false,
+			"P82i: an unnamed placement adds no destination at all");
+	})();
+
+	// P80: the Market Return tooltip heading. The year is a suffix on the WHOLE heading, once,
+	// because one source year covers the return bar, the inflation line and the real-return line
+	// alike - the banks index all of them with a single shared index.
+	(() => {
+		console.log(" ");
+		console.log("=== P80: market tooltip heading ===");
+		if (typeof marketTooltipTitle !== "function") {
+			assertEqual(true, false, "P80: marketTooltipTitle must be defined");
+			return;
+		}
+		const base = "2029  |  You: 69  Spouse: 77  |  Tax: 13.1%";
+		assertEqual(marketTooltipTitle(base, 1931), base + "  (from 1931)",
+			"P80: a sampled year is named at the end of the heading");
+		// Every way of having no year leaves the heading exactly as it was. A synthetic path, a
+		// reader without the nerdknob and no replay at all all arrive here as a null.
+		for (const none of [null, undefined, 0, NaN])
+			assertEqual(marketTooltipTitle(base, none), base,
+				"P80: with no source year the heading is untouched (" + String(none) + ")");
+		// The year is a suffix, not a replacement: the plan year, the ages and the tax rate all stay.
+		const withYear = marketTooltipTitle(base, 1931);
+		assertEqual(withYear.startsWith(base), true,
+			"P80: the heading keeps its plan year, ages and tax rate");
+		assertEqual(withYear.includes("drawn"), false,
+			"P80: the heading says 'from', not 'drawn from'");
+		assertEqual((withYear.match(/1931/g) || []).length, 1,
+			"P80: the source year is stated once, not once per series");
+	})();
+
     console.log('\n========================================');
     console.log(`   RESULTS: ${passed} passed, ${failed} failed`
 		+ (skippedUnsafe ? `, ${skippedUnsafe} unsafe suites skipped (add ?runtests)` : ''));
@@ -2571,7 +2722,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 335, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 340, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

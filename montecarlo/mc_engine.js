@@ -115,6 +115,10 @@ function sliceBankRowsForPath(banks, p, years, mode) {
         rows.intl   = row(multiAssetBank.intl);
         rows.bonds  = row(multiAssetBank.bonds);
         if (multiAssetBank.inflation) rows.inflation = row(multiAssetBank.inflation);
+        // P80. The historical year behind each of this path's years. Ships only for the two
+        // historical modes, because only they HAVE source years - a synthetic path is drawn, not
+        // sampled, and the page shows no year for one. ~2 bytes a year, so ~60B a path.
+        if (multiAssetBank.srcYears) rows.srcYears = row(multiAssetBank.srcYears);
     }
     if (synthInflationBank) rows.synthInflation = row(synthInflationBank);
     return rows;
@@ -349,6 +353,10 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
             medianAnnualReturn, minAnnualReturn, maxAnnualReturn, assetRanges, inflationStats } = banks;
 
     const varResults = [];
+    // P79. Which variation the survival chart may draw individual paths for: the same one whose
+    // replay rows ship below, i.e. the sidebar's own plan. Clamped here rather than after the loop
+    // so the loop can recognise its own variation while it still holds that variation's paths.
+    const captureVi = Math.min(Math.max(cfg.captureVariationIndex ?? 0, 0), varsToUse.length - 1);
 
     for (let vi = 0; vi < varsToUse.length; vi++) {
         if (h.shouldCancel()) return null;
@@ -448,6 +456,9 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
         const medianSpend = spendSorted[Math.floor(spendSorted.length / 2)] ?? null;
 
         const percentiles = computePercentiles(paths, years, numPaths);
+        // Selected once: both `captured` and P79's traces below describe the same set of paths, and
+        // calling the selector twice would let them drift apart.
+        const capturedSel = selectCapturePaths(metricPerPath, ruinYears, numPaths);
 
         // In stress mode, capture individual path traces for per-scenario chart rendering.
         let stressPaths = null;
@@ -492,7 +503,15 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
             // P69: the replay capture rows - worst-N plus rank-percentile samples, worst-first,
             // ~10 small objects per variation. Sequences are NOT attached here; the replay UI
             // gets them separately, for the one variation being replayed, not all of them.
-            captured: selectCapturePaths(metricPerPath, ruinYears, numPaths),
+            captured: capturedSel,
+            // P79. The balance trace of each captured path, for the survival chart to draw over
+            // its own percentile bands. ONE variation only - a Compare run has ~150 of them and
+            // 150 x 10 traces is both a wasted transfer and unreadable. Stress mode already ships
+            // every path as stressPaths, so it does not need these. ~10 x years x 8B, ~3KB.
+            capturedTraces: (vi === captureVi && mode !== 'stress')
+                ? capturedSel.map(r => Array.from({ length: years },
+                    (_, y) => paths[r.pathIndex * years + y]))
+                : null,
         });
 
         // Progress update every 5 variations and on the last one.
@@ -532,7 +551,6 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
         pathBankRows = Array.from({ length: numPaths },
             (_, p) => sliceBankRowsForPath(banks, p, years, mode));
     } else {
-        const captureVi = Math.min(Math.max(cfg.captureVariationIndex ?? 0, 0), varResults.length - 1);
         capturedBankRows = {};
         for (const r of varResults[captureVi]?.captured ?? []) {
             capturedBankRows[r.pathIndex] = sliceBankRowsForPath(banks, r.pathIndex, years, mode);

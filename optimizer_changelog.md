@@ -17,14 +17,63 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1671"></a>
+
+## 11.1671
+
+### Change the plan while replaying a path, and a COLA that is never a pay cut
+
+**Behavior change. Your Monte Carlo and Stress Test results may now differ from before, because the
+model behind them is more accurate.** Any path containing a deflationary year is affected.
+
+The main projection uses the fixed growth and inflation figures you supply, so the first two changes
+below show up only in the Monte Carlo, the Stress Test and a Replay, where every path carries its
+own returns and inflation. That is to say, those runs now account for real-world behavior of Social
+Security, tax brackets, pensions and the rest.
+
+**1. While reviewing a Monte Carlo path you can change the inputs and watch the result.** Replaying
+no longer ends when you touch the sidebar: change the spend, the withdrawal order, anything, and the
+same sequence runs again against the new plan, so you can test a change against the ruin in front of
+you and find out whether it survives. Starting a replay copies the run's own strategy and conversion
+settings into the sidebar, which is what is being replayed, and *Exit replay* keeps every edit you
+made. While a
+replay is on screen an edit redraws the path and leaves the Monte Carlo and Optimizer sweeps alone.
+
+The forward and back arrows run as one loop through every path the run kept, the ten captured Monte
+Carlo paths and all the stress scenarios, about 46 in total, so neither arrow ever dead-ends. Those
+kept paths are also drawn on the survival chart, five worst in red and the percentile samples in
+gray, and clicking one replays it. Picking one out there can be fiddly in the early years where
+several ruined paths run together, so the ▶️ Replay list beside the headline names them instead. Its
+tooltip now describes the single line under the pointer rather than listing everything at that year.
+
+**2. Social Security and a pension no longer shrink during deflation.** A cost-of-living raise can
+be nothing in a deflationary year, but it is never a pay cut. The two recover differently, because they are
+different instruments. Social Security measures each increase from the last one it actually paid,
+per 42 U.S.C. §415(i), so after prices recover the benefit picks up where it left off rather than
+being paid twice for the same recovery. A capped pension keeps what it was paid and starts again
+from there, which is what plan documents say.
+
+**3. The Market Return chart gains a real-return line**, the market change after inflation. Unlike
+the two above, this one shows on every projection rather than only in a replay, and it sits flat on
+a plan with fixed assumptions. The chart's key no longer shows a red swatch for bars that are mostly
+green. In nerdknob mode, replaying a Historical or Stress path adds the year each one came from to
+that chart's tooltip heading.
+
+Also on the Monte Carlo tab: Input Distributions shows a fold marker, so it reads as something you
+can open, and the Stress Test heading points at its own fold rather than at the tab you are already
+on.
+
+---
+
 <a id="11.1662"></a>
 
 ## 11.1662
 
 ### Taxes now follow the inflation your plan actually gets
 
-**Behavior change. Every Monte Carlo and Stress Test result moves, and your saved plan will not
-reproduce the numbers it showed before.**
+**Behavior change. More accurate tax modeling, so any Monte Carlo or Stress Test result you saw
+before this release will have changed.** A pension with a COLA also moves in the main projection,
+because it now follows CPI rather than general inflation.
 
 Each Monte Carlo and Stress Test path has always given your spending its own inflation, but the tax
 code stayed frozen at the CPI you typed. On a path whose inflation ran ABOVE that figure, your
@@ -165,8 +214,8 @@ sequences the run scored, never re-created approximations.
    volatility, and inflation that is more persistent, larger and more tightly tied to bad return
    years. *Default* puts everything back.
 
-**Behavior change.** A Synthetic plan will not reproduce a result you recorded before this release
-until you click *Fixed Inflation*; the returns are identical to the digit, inflation is what moved.
+**Behavior change.** A Synthetic result you saw before this release will not come back until
+you click *Fixed Inflation*: the returns are identical to the digit, inflation is what moved.
 Historical mode is unchanged.
 
 ### Also in this release

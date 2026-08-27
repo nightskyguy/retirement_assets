@@ -5011,3 +5011,311 @@ a capped pension both fall when the index falls. Different floor, different leve
 so it goes for both or neither.
 
 Counts: optimizer_core **335** (two floor tests plus the collision guard), page 661 gated.
+
+---
+
+## Session 2026-08-26 (later) - plan reconciliation, no code
+
+Working tree clean at `9ffa856` (PR #195 merged). No unsynced context from the catchup script.
+
+Three drifts between the NOW table and the Open Task Index, all fixed in `task_plan.md`:
+
+1. **P70 still carried an O0 row naming `P70b` as next.** Every sub-item `P70a`-`P70i` is checked
+   off and the phase merged in PR #195; the row now reads DONE with the version span and the two
+   things that actually shipped (the two-clock `fixedTaxIndexing` spread model, the five-way pension
+   COLA cap).
+2. **P81 had no index row at all** - it existed only in the NOW table, so anyone reading the index
+   would not have seen the one O0 item that is still open. Added with `P81c` as the next item.
+3. **P78/P79/P80 all listed "Blocked by P69 (PR #194)".** That PR merged at `30a2e38`, one commit
+   behind #195. All three are unblocked.
+
+Net open at O0: **P35** (`P35i`, the Phased engine) and **P81** (`P81c`, the zero-floor decision for
+Social Security and a capped pension, which goes for both or neither).
+
+---
+
+## Session 2026-08-26/27 - P81c: a COLA is a raise, never a pay cut  *(v11.1667)*
+
+**Decided both at once, as P70i required, and gave them DIFFERENT floors** - which was the part the
+question had not anticipated. They are different instruments and their real rules are not the same.
+
+**Measured before deciding.** The statutory index rate `cpi_t` goes NEGATIVE far more often than
+"deflation is rare" suggests, because the shipped spread is negative (cpi 2.8 against inflation 3.0)
+and the bootstrap pool is the full 1928-2025 record, Depression blocks included:
+
+| bank (shipped defaults) | path-years | `cpi_t` < 0 | paths with at least one |
+|---|---|---|---|
+| historical bootstrap, 1000 paths | 30,000 | 8.62% | 87.4% |
+| synthetic AR(1) at 3.0% | 30,000 | 13.99% | 92.5% |
+| synthetic AR(1) at 2.0% | 30,000 | 22.07% | 98.4% |
+| stress bank, combined windows | 780 | 4.87% | 26.9% |
+
+**Social Security got the high-water mark, not a per-year floor, and the statute is why.**
+42 U.S.C. 415(i) measures each increase from the last quarter that actually produced one, so a
+deflation year pays zero AND the shortfall is absorbed by the recovery: CPI-W fell in 2009, benefits
+held flat through 2010 and 2011, and the 3.6% paid in 2012 was measured against 2008 rather than
+against the trough. That is a running max over the index. It is also **15x cheaper** than the naive
+reading - over 1,000 bootstrap paths a per-year `max(0, .)` lifts the end-of-plan factor +2.07% mean
+and +10.57% worst, the high-water rule +0.14% and +4.31% - because the naive rule would ratchet up
+permanently and be paid twice for every recovery.
+
+SS could not simply stay on `cpiRate`: that same factor indexes brackets, the standard deduction,
+LTCG, IRMAA, the ACA multiple and the QCD limit, and none of those has a statutory floor. Hence a
+separate `sim.ssFactor`, seeded at `Math.max(1, cpiRate)` so a typed negative CPI holds the benefit
+flat over the gap years instead of shrinking it before the plan starts.
+
+**A capped pension got the per-year floor instead**, `max(0, min(cap, cpi_t))`. The cap has already
+severed it from the index LEVEL - that is exactly what makes a capped COLA fall permanently behind
+(P70i) - and plan language grants an adjustment of the lesser of the cap and the year's increase,
+then never claws back.
+
+**End-to-end, 400 bootstrap paths + the 26-sequence stress bank:** SS +0.12%, pension +0.99%, tax
++0.21%, after-tax wealth +0.19%, failure COUNT unchanged, 4 failing paths last one year longer.
+Nothing got worse on the stress bank at all.
+
+**The interesting result: it is NOT monotone in wealth. 9 of 400 paths end POORER**, worst -$20,735.
+Cause named rather than assumed - re-ran those paths against the pre-change engine year by year and
+the IRMAA column is the whole story. On the worst one a single 2043 tier breach costs $14,477 of
+surcharge against $1,174 of lifetime extra SS, and the gap compounds for the remaining eleven years.
+A cliff behaving like a cliff. Worth remembering the next time "more income" is assumed to be safe.
+
+**Both guards were checked against the pre-change engine before being trusted**: on the same
+deflating sequence SS fell in 4 years and the pension in 4 years there. A floor test that has never
+seen the floor bite proves nothing - the same discipline P81a/d used.
+
+**Browser-verified, not just node.** Page 771 green (351 in-page + 420 node), Monte Carlo re-run
+through the worker (385 of 500 paths, stress 8 of 36), no console errors, and the index walked by
+hand in the live page: 2028-2031 the index falls 1.018 -> 0.99575 while SS holds at $40,716, then
+2032 recovers to 1.06193 and SS steps to $42,473 - absorbed once, not paid twice. The pension holds
+at $30,540 through the same stretch and resumes from there, not from a high-water mark.
+
+Counts: optimizer_core **337** (up 2), taxPaymentPlanner 61, doclinks 22, page 771.
+
+---
+
+## Session 2026-08-27 - P78 and P79, the replay grows a memory and the chart grows paths  *(v11.1670)*
+
+Both shipped on the same branch as P81c, so the changelog entry was REWRITTEN in place rather than
+added to - one entry per branch, and its stamp moved 11.1667 -> 11.1670.
+
+### P78: the plan can now be edited without losing the path
+
+The banner carries "Keep path while editing". With it on, a sidebar edit re-runs against the same
+sequence instead of ending the replay.
+
+**The plan said hand the run's plan fields to the sidebar on the FIRST LOCKED EDIT. That is
+unimplementable as written, and writing it would have been the bug it was trying to prevent.** The
+exit listener is capture-phase on `input`, and by the time an `input` event fires `el.value` is
+ALREADY the user's new value. Handing off there means writing the run's `strategy` over the control
+the user just changed - the PF8 / P74 class from the other side. So the handoff happens when the
+lock goes ON. That is also the better behavior: the moment the reader opts in, the sidebar stops
+disagreeing with what is being replayed. Browser-verified - ticking the box flipped
+`convertExcessToRoth` false -> true, the swept row's own setting, previously invisible.
+
+**One item the plan did not have, and it was not optional.** `replayCarryOnStep()`: stepping
+prev/next builds a FRESH state carrying planFields, so without it the first step after an edit
+silently reverted the whole edited plan. Found by walking the step path, not by it failing.
+
+Both decision rules were extracted as pure functions - `replayBannerText()` and
+`replayCarryOnStep()` - and unit-tested in tier 1 rather than left inside DOM handlers. Ten
+assertions, including the case where the lock is on but the handoff has NOT happened yet, where
+stripping planFields would quietly replay a different plan.
+
+**End to end in the browser, which is the only place this feature exists:** worst path, ruin 2034,
+lock on, spend $140,000 -> $70,000. The replay survived the edit, the same 25-year sequence stayed
+injected, and the path that ruined in 2034 ended at **$1,564,443**. That is the question the
+feature was built to answer, answered. Stepping to the #2 worst kept the edited $70,000 and kept
+saying MODIFIED; lock off then edit ended the replay the old way.
+
+Note for anyone extending this: text inputs recalc on **blur**, selects and checkboxes on
+**change**, and the replay listener is on **input**. Three different events, and a test that fires
+only `input` will see the banner update while the numbers do not - which is exactly what happened
+here for one round.
+
+### P79: the ten captured paths, drawn and clickable
+
+Engine side is small, as the estimate said: `capturedTraces` sliced from the `paths` array the
+capture variation already holds, ~3KB. Two things worth keeping: `captureVariationIndex` is now
+clamped BEFORE the variation loop (the loop has to recognise its own variation while it still holds
+those paths), and `selectCapturePaths()` is called ONCE and shared, so the drawn traces and the
+replay rows cannot drift into describing different paths. Stress deliberately gets none - it
+already ships every path as `stressPaths`, and the test asserts it is not paying twice.
+
+**The real hazard was not the drawing, it was `% 5`.** The main chart is five datasets per
+variation, and the legend filter, the tooltip filter and the isolate handler ALL index on that.
+An appended trace whose index happened to land on 4 mod 5 would have shown up in the legend as a
+phantom strategy with a path's name. Traces are appended after every block and all three are now
+bounded by `nBlockDs`; isolate maps a trace to `_mcTraceGroup` so isolating the pinned strategy
+keeps its own paths rather than hiding them with the others.
+
+**Chart.js's own `options.onClick` never fired for these.** Hit detection was fine the whole time -
+`getElementsAtEventForMode` returned the right dataset - but the handler was never called, so the
+listener went on the canvas instead. Hooked ONCE: `renderMCChart` destroys and rebuilds the chart
+on the same canvas element, so a per-render listener would stack one more replay trigger onto every
+click.
+
+**Known limit, measured rather than assumed.** The click resolves to the NEAREST trace point. At
+year 4, where five ruined paths run within a few pixels of each other, clicking the worst path
+replayed the #3 worst. At year 18 the Rank 95% survivor sits 143px clear of its nearest neighbour
+and the click replayed exactly it. Nearest is the only answer available for overlapping hairlines.
+Recorded, not papered over.
+
+Scope default verified all three ways: 10 traces at plan scope, 0 at Compare, 10 at Compare once
+the reader ticks the box.
+
+Counts: optimizer_core **338** (up 1), tier 1 **361** (up 10), page **782** green. Screenshots were
+unavailable this session (the Browser pane was not compositing), so every check above is a DOM or
+engine assertion read back out of the live page rather than something looked at.
+
+---
+
+## Session 2026-08-27 (later) - P82, six things wrong with what shipped an hour ago  *(v11.1670)*
+
+All six from using P78/P79 for real. Same branch, so the changelog entry was rewritten in place
+again rather than added to - it now describes P81c, P78, P79 and P82 as one release.
+
+**The tooltip was the real complaint, and the number is stark.** Index mode listed every series at
+the hovered year: at one pixel, **11 lines**, tall enough to hide the ten paths it was describing.
+`nearest` + `intersect` was not enough on its own - it returns every element TIED at the nearest
+distance, and two overlapping hairlines are two rows - so the filter keeps only the first element
+that passes. Measured at the same pixel afterwards: **1 line**. Medians needed a `hitRadius` too;
+with `intersect: true` a zero-radius point has nothing to be on.
+
+**The ring landed on exactly the 46 the report predicted** (10 captured + 36 stress). Verified in
+all three directions rather than one: last captured -> first stress, last stress -> first captured,
+and backward from the first captured -> the last stress scenario. `ringStep` is pure and tested,
+including the double-modulo - a plain `%` in JavaScript keeps the sign, so a backward step from
+position 0 lands on -1 and the arrow silently does nothing.
+
+**Dropping the checkbox simplified more than the UI.** With the lock unconditional, the handoff had
+to move to replay ENTRY (there is no lock moment any more), and `replayCarryOnStep` lost its lock
+parameter: the question is now "is there a prev", not "is the flag on". One fewer state to get
+wrong.
+
+**P82f is worth more than the seconds it saves.** An edit during replay used to fire
+`mcInputsChanged()`, which would age out the very run the replay came from. Verified by counting
+calls, not by watching: both counters read **0** across an edit that did re-run the path.
+
+**The Market Return legend was a genuine Chart.js trap.** The bars carry a per-point color array,
+green up and red down, and Chart.js builds the legend swatch from `backgroundColor[0]` - so the key
+showed whatever the FIRST year happened to be. A red swatch beside mostly green bars, for one
+quantity. `generateLabels` pins the swatch and the label names the convention.
+
+The new real-return line is COMPOUNDED, `(1+r)/(1+i)-1`, not subtracted. At 6% against 3% it reads
+2.91% where a subtraction says 3.00%, and the gap widens exactly on the high-inflation paths that
+decide an outcome. Tested with the deflation case too, where a flat market is a real gain.
+
+**Testing note that cost time twice now:** a synthetic `MouseEvent` has `offsetX`/`offsetY` of 0,
+and Chart.js resolves pointer position from those when the event target is the canvas. So every
+hit test silently reported "nothing under the pointer" until the offsets were defined on the event.
+The canvas click listener is unaffected - it is a plain DOM listener - which is why click-to-replay
+tested fine while hover did not.
+
+Counts: optimizer_core **338** (unchanged - P82 is all tier 1), tier 1 **373** (up 12), page **794**
+green. Screenshots still unavailable (the Browser pane is not compositing), so the tooltip and
+legend fixes are verified by reading Chart.js's own hit tests and legend items out of the live page,
+not by looking at them. Worth one visual pass before merge.
+
+---
+
+## Session 2026-08-27 - P82h, two things still wrong on screen  *(v11.1670)*
+
+Both reported from a screenshot, which is the check I could not run myself this session.
+
+**The banner buttons were mine and the cause is worth remembering.** P82b shrank them with an inline
+style carrying only a background. The global `button` rule sets `color: white`, `width: 100%` AND a
+44px min-height, so what shipped was three wide blank cream boxes: white text on near-white, at full
+width. An inline background does not beat a stylesheet's `color`. They are a `.replay-btn` class
+now, overriding each of the three explicitly - and a class can carry a `:hover`, which is the other
+thing inline styles cannot do. Measured after: 53 / 55 / 70px, `#6b5310` on `#fffaf0`. The arrows
+also read "◀ Prev" and "Next ▶" now instead of bare glyphs; a 10.7px glyph alone was thin even when
+it was visible.
+
+Not changelog material: it never existed on main, so against main it nets to zero.
+
+**The Input Distributions fold was pre-existing, and I checked before saying so.** `git show
+main:retirement_optimizer.html` has the same summary with no chevron. `.mc-fold > summary` kills the
+native marker on purpose - the two headline folds draw their own `.mc-fold-chev` inside a colored
+banner - and this third, static summary was never given one. So it had no disclosure affordance at
+all since the fold shipped. That one IS reportable, and is in the entry.
+
+**Left alone, deliberately:** `.mc-fold[open] > summary .mc-fold-chev { transform: rotate(90deg) }`
+does not take. The rule is loaded (checked `document.styleSheets`), the selector matches, the
+`[open]` attribute is there, and the computed transform is still `none` - on all three folds, on
+main as well. Nobody reported it, the chevron marks the control either way, and it is a separate
+pre-existing quirk rather than part of what was asked for.
+
+**Method note.** Both of these were invisible to every check I ran last round, because both are
+about how the page LOOKS and every check was a DOM assertion. `getComputedStyle` would have caught
+the buttons - `color: rgb(255,255,255)` against `background: rgb(255,250,240)` is a contrast test a
+machine can do - and that is the check worth adding to the habit, not more assertions about state.
+
+---
+
+## Session 2026-08-27 - P82i, a tooltip pointing at the page you are on  *(v11.1670)*
+
+**The Stress Test tooltip was pre-existing, and the cause is a shared string with one unshareable
+sentence.** `stressTooltip()` on main takes no placement argument, and both callers get the same
+text: the summary-bar tile, which is visible from EVERY tab and for which "See the Monte Carlo tab
+for the full stress chart" is exactly right, and the Monte Carlo headline, where it points the
+reader at the page they are already looking at. The headline sits inside its own COLLAPSED fold, so
+what it should say is where the chart actually is - and the reader's own wording, "Expand this
+header to see the detailed chart", says it better than anything I drafted.
+
+`stressTooltip(s, where)` now closes with one of two lines, and an unnamed placement closes with
+neither rather than guessing at a destination. Eight tier-1 assertions, including one that the two
+strings are IDENTICAL up to the closing line - the point is one shared explanation with one
+placement-specific tail, and a future edit that drifts the bodies apart should fail.
+
+**The buttons went blue, and the shade was measured rather than picked.** The page's standard
+`#2980b9` carries white text at **4.3:1**, which is under AA, and these run at 0.85em. `#1f6391`,
+the darker end of the same blue, reads **6.46:1** on the text and **5.83:1** against the cream
+banner. Hover lifts to `#2980b9`, so the standard blue becomes the active state instead of the
+resting one.
+
+That contrast check is the habit the last round said was worth keeping, and this is the first time
+it changed a decision rather than confirming one: the obvious choice - match the page's button blue
+- was the wrong one, and only the number said so.
+
+Counts: optimizer_core **338** (unchanged, all tier 1), tier 1 **381** (up 8), page **802** green.
+
+---
+
+## Session 2026-08-27 - P80, the year behind the number  *(v11.1671)*
+
+Built to the estimate: about 60 lines and four tests. The scoping pass was worth doing, because it
+found that the interesting question in the plan had a false premise.
+
+**P80c is answered, and the answer is that the question did not arise.** I expected the Market
+return bar and the Inflation line to come from DIFFERENT historical years, which would have made
+"one year per column" dishonest and forced a per-series label. They do not:
+`buildBanks` sets `scenarioBank = multiAssetBank.equity` in Historical mode, so
+`bootstrapScenarioBank` is not used there at all, and `bootstrapMultiAssetBank` fills equity, bonds,
+intl and inflation from ONE shared block index. One source year is honest for all three series,
+which is why the label went on the tooltip HEADING rather than being repeated on each line.
+
+**The bear overlay was the trap, and it is a quarter of the paths.** `applyBearStartOverlay`
+rewrites the OPENING years of `bearFraction` of the paths after the bank is built. Without the same
+one-line update there, those cells would carry the years of the block the bootstrap drew and then
+discarded - and they are the first years a reader looks at. The test arms the overlay at its default
+rather than testing the clean path.
+
+**The wrap is why the years are recorded rather than derived.** A stress sequence that runs past the
+end of the record wraps to 1928. A 2007 start on a 25-year plan reads 2007..2025 then 1928..1933;
+`startYear + y` would have invented 2026..2031 and looked entirely plausible. The test asserts the
+fixture actually CONTAINS a wrapped scenario before checking the labels, so it cannot pass by never
+meeting the case.
+
+**The test is the claim, not the plumbing.** The tooltip asserts "this number came from that year",
+so the check compares the bank's VALUE against the historical record at the year named, for every
+cell: 0 mismatches over 40 bootstrap paths with the overlay armed, plus the whole stress bank. Live
+cross-check in the page agreed - 1930 to -25.12%, 1931 to -43.84%, 1972 to +18.98%.
+
+**Zero extra rng draws** is the other load-bearing property, since srcYears fills from an index
+already in hand: a draw added there would shift every path in every existing run and quietly change
+what a seed means. Pinned by running whole jobs in two modes, not by reading the code.
+
+The three ways to have no year - no replay, a synthetic path, no nerdknob - all produce the byte-
+identical year-free heading, checked in the page.
+
+Counts: optimizer_core **340** (up 2), tier 1 **389** (up 8), page **812** green.

@@ -4345,6 +4345,94 @@ test('P81: no index step falls below the floor, at any spread', () => {
     }
 });
 
+// A sequence that falls for a stretch and then recovers past where it started. Both P81c tests
+// need it: a COLA floor that is never exercised proves nothing, and the difference between the
+// two floor rules only shows up on the way back UP.
+const DEFLATE_SEQ = [0.02, -0.01, -0.01, 0.00, 0.01, 0.06, 0.03, 0.02, -0.01, 0.04,
+                     0.03, 0.02, 0.02, 0.03, 0.02, 0.02, 0.03, 0.02, 0.02, 0.03,
+                     0.02, 0.02, 0.03, 0.02, 0.02, 0.03, 0.02, 0.02, 0.03, 0.02,
+                     0.02, 0.03, 0.02, 0.02, 0.03, 0.02, 0.02, 0.03, 0.02, 0.02];
+// The step actually applied between two logged years: the drawn rate plus the spread, floored.
+const clockStep = (t, cpi, inflation) =>
+    Math.max(core.CPI_INDEX_FLOOR, DEFLATE_SEQ[t] + (cpi - inflation));
+
+test('P81c: Social Security never falls, and absorbs the deflation on the way back up', () => {
+    // 42 U.S.C. 415(i) measures each increase from the last quarter that PRODUCED one, so a
+    // deflation year pays zero and the shortfall is made up by the recovery rather than paid twice.
+    // The benefit therefore rides the running MAXIMUM of the index, not the index itself and not a
+    // per-year max(0, .) - which would ratchet up permanently and overstate every deflating path.
+    const inflation = 0.030, cpi = 0.028;
+    const rows = clockRows(simulate({ ...CLOCK_BASE, inflation, cpi,
+                                      returnSequence: CLOCK_RET, inflationSequence: DEFLATE_SEQ }));
+    const ss = rows.map(r => r.SSincome);
+    const cf = rows.map(r => r['-cpiFactor']);
+
+    // The premise: the index really does fall here, or nothing below is being tested.
+    assert(cf.some((v, i) => i > 0 && v < cf[i - 1] - 1e-12),
+        'the index must actually fall on this sequence, or this test proves nothing');
+
+    // 1. A benefit already being paid never goes down.
+    for (let t = 1; t < ss.length; t++)
+        assert(ss[t] >= ss[t - 1] - 1e-6,
+            `year ${t}: Social Security fell from ${ss[t - 1].toFixed(0)} to ${ss[t].toFixed(0)}`);
+
+    // 2. It is exactly the high-water mark of the index, year by year. Measured against the
+    //    benefit actually paid in year 0 rather than against inputs.ss1, because a single filer's
+    //    benefit comes back through the survivor branch, which works in whole monthly dollars.
+    let peak = 0, sawFlat = 0;
+    for (let t = 0; t < ss.length; t++) {
+        peak = Math.max(peak, cf[t]);
+        assertNear(ss[t], ss[0] * peak / cf[0], `year ${t}: SS pays the index high-water mark`, 1e-6);
+        if (t > 0 && Math.abs(ss[t] - ss[t - 1]) < 1e-6) sawFlat++;
+    }
+    assert(sawFlat >= 2, 'the deflation years must pay a FLAT benefit, not a reduced one');
+
+    // 3. And it is the cheaper of the two readings: a per-year floor would compound the recovery
+    //    on top of a deflation it never paid for, so by the end it pays strictly more.
+    let ratchet = 1;
+    for (let t = 0; t + 1 < ss.length; t++) ratchet *= (1 + Math.max(0, clockStep(t, cpi, inflation)));
+    const last = ss.length - 1;
+    assert(ss[0] * ratchet / cf[0] > ss[last] + 1,
+        'a per-year floor must pay MORE than the high-water rule here, or the two are indistinguishable');
+});
+
+test('P81c: a capped pension COLA is floored at zero per year, and does not claw back', () => {
+    // A capped plan is NOT on the high-water rule: the cap already severs it from the index level
+    // (P70i), and plan language grants an adjustment of the lesser of the cap and the year's CPI
+    // increase. So it floors year by year and keeps whatever it was paid.
+    const inflation = 0.030, cpi = 0.028, cap = 0.02;
+    const base = { ...CLOCK_BASE, inflation, cpi, pensionAnnual: 30000, pensionStartAge: 60,
+                   pensionCola: '2', returnSequence: CLOCK_RET, inflationSequence: DEFLATE_SEQ };
+    const rows = clockRows(simulate(base));
+    const pen  = rows.map(r => r.pension);
+    const cf   = rows.map(r => r['-cpiFactor']);
+
+    assert(DEFLATE_SEQ.some((_, t) => t + 1 < rows.length && clockStep(t, cpi, inflation) < 0),
+        'a negative index step must occur here, or the floor is never exercised');
+
+    // 1. Never falls.
+    for (let t = 1; t < pen.length; t++)
+        assert(pen[t] >= pen[t - 1] - 1e-6,
+            `year ${t}: the pension fell from ${pen[t - 1].toFixed(0)} to ${pen[t].toFixed(0)}`);
+
+    // 2. Exactly the per-year rule, compounded: max(0, min(cap, this year's index step)).
+    let want = 30000;
+    for (let t = 0; t < pen.length; t++) {
+        assertNear(pen[t], want, `year ${t}: the pension pays max(0, min(cap, CPI))`, 1e-6);
+        want *= (1 + Math.max(0, Math.min(cap, clockStep(t, cpi, inflation))));
+    }
+
+    // 3. The two rules are genuinely different: run the pension at a FULL COLA, where the cap
+    //    cannot be what separates them, and it still outpaces the index's high-water mark.
+    const full = clockRows(simulate({ ...base, pensionCola: 'full' })).map(r => r.pension);
+    let peak = 0, diverged = false;
+    for (let t = 0; t < full.length; t++) {
+        peak = Math.max(peak, cf[t]);
+        if (full[t] > 30000 * peak + 1) diverged = true;
+    }
+    assert(diverged, 'a full COLA must NOT follow the Social Security high-water rule');
+});
+
 test('P70i: a capped pension COLA pays the lesser of its cap and CPI, year by year', () => {
     // The cap bites PER YEAR, which is the whole point: a run of quiet years followed by a hot one
     // is not the same as the average, and a capped plan never catches up afterwards.
@@ -5967,6 +6055,119 @@ test('P69: the message ships replay rows, and a replayed path reproduces the run
             res.log[res.log.length - 1], baseInputs.futureIRATaxRate);
         assert(replayMetric === r.metric,
             `path ${r.pathIndex}: replay metric ${replayMetric} !== captured ${r.metric}`);
+    }
+});
+
+test('P79: the capture variation ships one balance trace per captured path', async () => {
+    // The traces the survival chart draws over its own bands. They must describe the SAME paths
+    // the replay rows do - a trace the reader clicks has to replay the path they were looking at -
+    // and they must agree with the percentile bands they are drawn on top of.
+    const cfg = _p71Cfg('bootstrap', { captureVariationIndex: 0, numPaths: 40 });
+    const msg = await _mcEngine.runJob(cfg);
+    assert(msg && !msg.error, `job failed: ${msg && msg.error}`);
+    const v = msg.variations[0];
+    assert(Array.isArray(v.capturedTraces), 'the capture variation shipped no traces');
+    assert(v.captured.length > 1, `only ${v.captured.length} captured paths - the length check below would be vacuous`);
+    assert(v.capturedTraces.length === v.captured.length,
+        `${v.capturedTraces.length} traces against ${v.captured.length} captured paths`);
+    for (let i = 0; i < v.captured.length; i++) {
+        const tr = v.capturedTraces[i], r = v.captured[i];
+        assert(tr.length === msg.years, `trace ${i} has ${tr.length} years, plan has ${msg.years}`);
+        assert(tr.every(x => Number.isFinite(x) && x >= 0),
+            `trace ${i} carries a negative or non-finite balance`);
+        // A ruined path is at zero from its ruin year on; a survivor never touches zero at the end.
+        if (r.ruinYear) {
+            assert(tr[tr.length - 1] === 0, `path ${r.pathIndex} ruined in ${r.ruinYear} but ends at ${tr[tr.length - 1]}`);
+        } else {
+            assert(tr[tr.length - 1] > 0, `path ${r.pathIndex} survived but ends at 0`);
+        }
+    }
+    // Every drawn trace must sit inside the band the same run reported, or the chart would show a
+    // path outside its own p5-p95 envelope. Checked at the last year, where the spread is widest.
+    const last = msg.years - 1;
+    const lo = v.percentiles.p5[last], hi = v.percentiles.p95[last];
+    assert(v.capturedTraces.some(tr => tr[last] <= lo + 1e-6),
+        'no captured trace is at or below p5, yet the worst paths are captured by construction');
+    assert(v.capturedTraces.every(tr => tr[last] <= Math.max(hi, ...v.capturedTraces.map(t => t[last])) + 1e-6),
+        'a captured trace exceeds every drawn value');
+    // Stress already ships every path as stressPaths, so it must not pay for these twice.
+    assert(msg.stress.variations[0].capturedTraces == null,
+        'the stress pass shipped capturedTraces as well as stressPaths');
+});
+
+test('P80: every sampled year is labelled with the year that actually produced it', () => {
+    // The claim the tooltip makes is "this number came from that year". So the test is not that
+    // srcYears is populated - it is that the VALUE in the bank equals the historical record at the
+    // year srcYears names. A label that is merely present but off by one block would pass any
+    // weaker check and mislead every reader.
+    const H = globalThis.HISTORICAL_RETURNS;
+    const base = H.equityStartYear ?? 1928;
+    const YEARS = 30;
+
+    const check = (bank, nPaths, tag) => {
+        assert(bank.srcYears && bank.srcYears.length === nPaths * YEARS,
+            `${tag}: srcYears is ${bank.srcYears ? bank.srcYears.length : 'missing'}, want ${nPaths * YEARS}`);
+        for (let i = 0; i < nPaths * YEARS; i++) {
+            const idx = bank.srcYears[i] - base;
+            assert(idx >= 0 && idx < H.equity.length,
+                `${tag}: cell ${i} names year ${bank.srcYears[i]}, outside the record`);
+            assert(bank.equity[i] === H.equity[idx],
+                `${tag}: cell ${i} says ${bank.srcYears[i]} but its equity return is not that year's`);
+            assert(bank.bonds[i] === H.bonds[idx],
+                `${tag}: cell ${i} bonds disagree with the year it names`);
+            // Inflation is floored on the way in, so compare against the floored value - and the
+            // ONE shared index is the whole reason a single year can label both series.
+            assert(bank.inflation[i] === Math.max(_mcPrng.INFLATION_FLOOR, H.inflation[idx]),
+                `${tag}: cell ${i} inflation disagrees with the year it names`);
+        }
+    };
+
+    // Bootstrap, with the bear overlay ON at its default - it REWRITES the opening years of a
+    // quarter of the paths after the bank is built, and those cells must be relabelled too.
+    const mb = _mcPrng.bootstrapMultiAssetBank(_mcPrng.mulberry32(99), 40, YEARS, 3);
+    _mcPrng.applyBearStartOverlay(mb, _mcPrng.mulberry32(7), 40, YEARS, 0.25);
+    check(mb, 40, 'bootstrap + bear overlay');
+
+    // Stress, which WRAPS off the end of the record - the reason the years are recorded rather
+    // than derived from startYears + y.
+    const sb = _mcPrng.buildStressBank(10, YEARS, 'combined');
+    check(sb, sb.labels.length, 'stress');
+    // And prove the wrap is really in play here, or the paragraph above is decoration: at least
+    // one scenario must run past the end of the record and come back.
+    assert(sb.realYears.some(r => r < YEARS),
+        'no stress scenario wraps, so this fixture cannot prove the wrap is handled');
+    const wrapped = sb.startYears.findIndex((_, k) => sb.realYears[k] < YEARS);
+    const naive = sb.startYears[wrapped] + (YEARS - 1);
+    assert(sb.srcYears[wrapped * YEARS + YEARS - 1] !== naive,
+        'a wrapped scenario must NOT be labelled start + y; that is the bug this guards');
+});
+
+test('P80: recording the source years changes no draw and no number', async () => {
+    // The load-bearing property. srcYears is filled from an index already in hand, so it must add
+    // ZERO rng() calls - otherwise every path in every existing run shifts and the seed stops
+    // meaning what it meant. Compared against the banks with the years stripped back out.
+    const strip = b => ({ equity: b.equity, bonds: b.bonds, intl: b.intl, inflation: b.inflation });
+    const a = strip(_mcPrng.bootstrapMultiAssetBank(_mcPrng.mulberry32(4242), 25, 20, 3));
+    const b = strip(_mcPrng.bootstrapMultiAssetBank(_mcPrng.mulberry32(4242), 25, 20, 3));
+    assert(JSON.stringify(a) === JSON.stringify(b), 'the bootstrap bank is not reproducible at all');
+
+    // The real check: a full job, end to end, still reports the same survival and the same paths.
+    for (const mode of ['bootstrap', 'gbm']) {
+        const msg = await _mcEngine.runJob(_p71Cfg(mode, { captureVariationIndex: 0 }));
+        assert(msg && !msg.error, `${mode}: ${msg && msg.error}`);
+        const v = msg.variations[0];
+        assert(Number.isFinite(v.survivalRate), `${mode}: no survival rate`);
+        // A synthetic path has nothing to name, and must not pretend otherwise.
+        const rows = msg.capturedBankRows[v.captured[0].pathIndex];
+        if (mode === 'gbm') {
+            assert(rows.srcYears === undefined,
+                'a synthetic path shipped source years, which it cannot have');
+        } else {
+            assert(Array.isArray(rows.srcYears) && rows.srcYears.length === msg.years,
+                `bootstrap shipped ${rows.srcYears ? rows.srcYears.length : 'no'} source years`);
+            assert(rows.srcYears.every(y => y >= 1928 && y <= 2025),
+                'a shipped source year is outside the record');
+        }
     }
 });
 

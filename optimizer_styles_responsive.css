@@ -1046,6 +1046,35 @@ table th.empty-column {
 .mc-fold > summary::-webkit-details-marker { display: none; }
 .mc-fold > summary::marker { content: ''; }
 
+/* The replay banner's three controls. A CLASS, not inline styles: the global `button` rule sets
+   `color: white`, `width: 100%` and a 44px min-height, and an inline background alone loses to all
+   three - which is exactly how these shipped once as three wide, blank, pale boxes. Everything the
+   global rule sets that matters here is overridden explicitly, and :hover cannot be inline anyway.
+   Sized to sit inside the banner strip rather than to be a primary action. */
+.replay-btn {
+    width: auto;
+    min-width: 0;
+    min-height: 0;
+    padding: 3px 9px;
+    font: inherit;
+    font-size: 0.85em;
+    font-weight: 600;
+    line-height: 1.3;
+    white-space: nowrap;
+    /* Blue, not a tint of the banner. A cream button on a cream strip reads as part of the strip;
+       these are the controls, so they stand off it. The page's standard #2980b9 carries white text
+       at only 4.3:1, and these run at 0.85em, so the darker end of the same blue is used instead:
+       6.46:1 on the text and 5.83:1 against the banner, both measured. Hover lifts to the standard
+       blue, so the lighter shade reads as the active state rather than the resting one. */
+    color: #fff;
+    background: #1f6391;
+    border: 1px solid #17496b;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.replay-btn:hover { background: #2980b9; border-color: #1f6391; color: #fff; }
+.replay-btn:focus-visible { outline: 2px solid #1f6391; outline-offset: 2px; }
+
 .mc-fold-chev {
     display: inline-block;
     transition: transform 0.15s ease;

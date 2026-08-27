@@ -1009,7 +1009,7 @@ Deliberately OUT of scope, each for a stated reason: `taxCreepFactor` (calendar-
 indexation - its own comment says so); `saltIndex` in taxengine (a statutory 1%/yr step-up written
 into the law, not CPI); `computeBETR` and the amortization helpers (returns, not indexation).
 
-- [ ] **P70b - the two clocks on ONE bracket table. Shipped, deterministic, no Monte Carlo needed.**
+- [x] **P70b DONE (v11.165D, `d0f27d0`) - the two clocks on ONE bracket table. Shipped, deterministic, no Monte Carlo needed.**
       `computeBracketCeiling` is handed `sim.inflation` as its `inflation` argument
       (`optimizer_core.js:1740`, `:1752`, `:1819`) and passes it to `calculateProgressive`, which
       indexes bracket limits with it. The ACTUAL tax call passes `sim.cpiRate` for the same purpose.
@@ -1039,7 +1039,7 @@ into the law, not CPI); `computeBETR` and the amortization helpers (returns, not
       repeat it; add a test asserting the average rate at a fixed ceiling is invariant across years
       for any (cpi, inflation) pair. That one invariant catches the whole class.
 
-- [ ] **P70c - flip `cpiFollowsPath` on, and decide the no-sequence fallback.** P70a measured the
+- [x] **P70c DONE (v11.165D) - built as the P70h SPREAD model instead, which dissolved the fallback question rather than deciding it: with no path, cpi_t IS inputs.cpi, so deterministic runs are byte-identical by construction. Flag renamed `fixedTaxIndexing`, default off.** P70a measured the
       case: -8.32% lifetime tax over 780 pairs, 38 scenarios rescued from ruin, 0 broken. The
       fallback is the trap recorded below: with no `inflationSequence`, `yr.yearInflation` falls back
       to `inputs.inflation`, NOT `inputs.cpi`, so flipping the default silently reindexes every
@@ -1048,7 +1048,7 @@ into the law, not CPI); `computeBETR` and the amortization helpers (returns, not
       which confines the change to paths and leaves P70b as the only thing that moves a deterministic
       plan. Decide explicitly; do not patch it quietly.
 
-- [ ] **P70d - the three quantities recomputing a factor from a scalar rate.**
+- [x] **P70d DONE (v11.165D) - propTaxFor reads sim.inflation; getQCDLimit takes the factor and its misleading parameter name is gone; the pension COLA moved to cpiRate; the IRA goal stays on cpiRate with the reasoning written down.**
       - `propTaxFor` (`:108`) does `base * Math.pow(1 + inputs.inflation, years)`. Property tax is a
         today's-dollars input like spendGoal, and spendGoal follows the path; this does not. Should
         read `sim.inflation`. Its `flat` and `custom` growth modes are user policy and stay.
@@ -1061,7 +1061,7 @@ into the law, not CPI); `computeBETR` and the amortization helpers (returns, not
         the grounds that the goal exists to manage indexed thresholds, which is arguable. Decide it
         explicitly rather than leaving it implicit; if it stays on `cpiRate`, say why.
 
-- [ ] **P70e - name the forecast boundary, and re-open the IRMAA margin default.** `irmaaFwdFactor`
+- [ ] **P70e - THE ONLY P70 ITEM STILL OPEN. Name the forecast boundary, and re-open the IRMAA margin default.** `irmaaFwdFactor`
       and the ACA lookahead stay on `inputs.cpi`. But once indexation follows the path, the plan's
       two-year forward projection stops being exact, and that changes a decision already taken:
       `irmaa_margin_harness.js` measured the margin's benefit as **exactly zero**, correctly, because
@@ -1072,7 +1072,7 @@ into the law, not CPI); `computeBETR` and the amortization helpers (returns, not
       could not matter.** Re-run `irmaa_default_harness.js` with `cpiFollowsPath` on and revisit
       `IRMAA_MARGIN_DEFAULT`. This is the concrete consequence of the caveat the user raised.
 
-- [ ] **P70f - one guard test for the whole class.** A single test that, for several (cpi, inflation)
+- [x] **P70f DONE (v11.165D) - one guard test for the whole class, plus the lag and the Medicare excess pinned separately.** A single test that, for several (cpi, inflation)
       pairs including unequal ones, asserts each indexed quantity tracks its declared clock: bracket
       limits, standard deduction, IRMAA thresholds, ACA multiple, QCD limit and SS COLA move with
       `cpiRate`; spendGoal, Cash Reserve, property tax and pension COLA move with `inflation`;
@@ -1080,10 +1080,23 @@ into the law, not CPI); `computeBETR` and the amortization helpers (returns, not
       next quantity added picks a clock by whatever is in scope, which is how every defect here
       arrived.
 
-- [ ] **P70g - release.** Behavior change touching every plan: changelog entry with a "your saved
+- [x] **P70g DONE (v11.165D) - release. NOTE: the v11.1657 caveat lives only inside that RELEASED changelog entry, which is history and was left alone; the new entry sits above it and supersedes it. No standing caveat exists elsewhere in README, optimizer_text.js or the page.** Behavior change touching every plan: changelog entry with a "your saved
       plan will not reproduce" consequence line, and the README caveat added in v11.1657 ("taxes and
       Social Security are not yet adjusted for variable inflation") retired, since it stops being
       true.
+
+- [ ] **P70i - capped and reduced pension COLAs (raised 2026-08-26, after P70d moved the pension to
+      CPI).** `pensionCola` is a plain on/off, so ON now means FULL CPI every year. That is right for
+      federal CSRS and military, and wrong for the two commonest cases: FERS pays a reduced "diet"
+      COLA above 2%, and most state and municipal plans cap at 2-3% or pay a flat contractual
+      percent. A high-inflation path now OVERSTATES those pensions.
+
+      This gap was created by making the model more realistic - under the old spending-clock code the
+      error ran the other way for some plans and the two partly cancelled. Private defined-benefit
+      plans usually have no COLA at all, which the OFF position already covers.
+
+      Smallest honest fix: a cap percentage beside the checkbox, defaulting to uncapped so nothing
+      changes for anyone who does not set it. A NOTE is the alternative if the input is not wanted.
 
 ### P70h - the CPI/inflation SPREAD is the model, not a discrepancy  *(user, 2026-08-26; supersedes how P70a's flag works)*
 

@@ -2648,6 +2648,34 @@ assertEqual(
 			"P82i: an unnamed placement adds no destination at all");
 	})();
 
+	// P80: the Market Return tooltip heading. The year is a suffix on the WHOLE heading, once,
+	// because one source year covers the return bar, the inflation line and the real-return line
+	// alike - the banks index all of them with a single shared index.
+	(() => {
+		console.log(" ");
+		console.log("=== P80: market tooltip heading ===");
+		if (typeof marketTooltipTitle !== "function") {
+			assertEqual(true, false, "P80: marketTooltipTitle must be defined");
+			return;
+		}
+		const base = "2029  |  You: 69  Spouse: 77  |  Tax: 13.1%";
+		assertEqual(marketTooltipTitle(base, 1931), base + "  (from 1931)",
+			"P80: a sampled year is named at the end of the heading");
+		// Every way of having no year leaves the heading exactly as it was. A synthetic path, a
+		// reader without the nerdknob and no replay at all all arrive here as a null.
+		for (const none of [null, undefined, 0, NaN])
+			assertEqual(marketTooltipTitle(base, none), base,
+				"P80: with no source year the heading is untouched (" + String(none) + ")");
+		// The year is a suffix, not a replacement: the plan year, the ages and the tax rate all stay.
+		const withYear = marketTooltipTitle(base, 1931);
+		assertEqual(withYear.startsWith(base), true,
+			"P80: the heading keeps its plan year, ages and tax rate");
+		assertEqual(withYear.includes("drawn"), false,
+			"P80: the heading says 'from', not 'drawn from'");
+		assertEqual((withYear.match(/1931/g) || []).length, 1,
+			"P80: the source year is stated once, not once per series");
+	})();
+
     console.log('\n========================================');
     console.log(`   RESULTS: ${passed} passed, ${failed} failed`
 		+ (skippedUnsafe ? `, ${skippedUnsafe} unsafe suites skipped (add ?runtests)` : ''));
@@ -2694,7 +2722,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 338, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 340, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

@@ -15,13 +15,13 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
-| **O1** | P80 | Nerdknob: the historical years behind each bootstrap block *(planned 2026-08-26)* | `P80a` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
-**P81, P78, P79 and P82 all COMPLETE on this branch, v11.1667-11.1670.** Social Security and a
-capped pension are no longer cut when prices fall; a replay survives editing and Exit keeps the
-edits; the survival chart draws the ten captured paths; prev/next is one 46-stop ring over captured
-paths and stress scenarios; the Market Return chart gained a real-return line. O0 is `P35i` alone.
+**P81, P78, P79, P82 and P80 all COMPLETE on this branch, v11.1667-11.1671.** Social Security and a
+capped pension are no longer cut when prices fall; a replay survives editing; the survival chart
+draws the ten captured paths; prev/next is one 46-stop ring; the Market Return chart gained a
+real-return line and, under nerdknob, names the historical year each replayed year was sampled
+from. O0 is `P35i` alone.
 
 **P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 
@@ -1026,7 +1026,7 @@ tooltip label of their rank ("Rank 25% path"). Worst-block paths red-tinted, sam
 
 ---
 
-## P80: Nerdknob - the historical years behind each bootstrap block  *(planned 2026-08-26, build later)*
+## P80: Nerdknob - the historical years behind each bootstrap block  *(COMPLETE v11.1671)*
 
 **Ask:** for the Historical (bootstrap) survival run, show which historical years each block of a
 path was drawn from.
@@ -1038,15 +1038,38 @@ parallel `srcYears` Int16Array (1928+idx per cell) built in the same loop - **no
 CRN and every existing output stay byte-identical; assert that**. Thread through `buildBanks`,
 ship per captured path via `sliceBankRowsForPath` (+~80B/path), and for stress paths the start
 years are already labels.
-- [ ] **P80a** - `srcYears` in `bootstrapMultiAssetBank` + regression test (outputs unchanged)
-- [ ] **P80b** - ship with captured rows; decide the surface, nerdknob-gated: leading candidates
-      are the Market chart tooltip title ("2031 - drawn from 1974") and a segments line in the
-      replay banner tooltip ("1973-75, 1929-31, ..."). Annual Details column is the fallback.
-- [ ] **P80c** - decide whether `bootstrapScenarioBank` (drives `yr.baseReturn` only) needs the
-      same treatment or whether the multi-asset bank's years are the honest answer (per-account
-      returns come from it; baseReturn is display). Document whichever way it lands.
-- **Status:** pending
-- **Independent:** Historical mode only; synthetic paths have no source years
+- [x] **P80a DONE (v11.1671)** - `srcYears` Int16Array in `bootstrapMultiAssetBank` AND in
+      `buildStressBank`, filled from the index already in hand, so **zero extra rng draws** and
+      every existing output unchanged. Guarded by a test that runs a whole job in two modes rather
+      than by the reasoning alone.
+      **`applyBearStartOverlay` needed the same line and it was not optional:** it rewrites the
+      OPENING years of a quarter of the paths after the bank is built, which is exactly where a
+      reader looks first, so without it those cells would have been labelled with the block the
+      bootstrap drew and then threw away.
+- [x] **P80b DONE (v11.1671)** - the Market Return tooltip's heading, nerdknob-gated, at the
+      reader's own wording: `2029  |  You: 69  Spouse: 77  |  Tax: 13.1%  (from 1972)`. On the
+      HEADING rather than per series, because one source year covers the return bar, the inflation
+      line and the real-return line alike - saying it three times adds nothing. `marketTooltipTitle`
+      is pure and tested; the lookup is separate and returns null three ways, all normal: no replay,
+      a synthetic path, or no nerdknob. Verified in the page that all three fall back to the
+      identical year-free heading.
+- [x] **P80c DECIDED: the multi-asset bank's years ARE the honest answer, and the question was
+      built on a false premise.** `bootstrapScenarioBank` is not used in Historical mode at all -
+      `buildBanks` sets `scenarioBank = multiAssetBank.equity`, so the return sequence and the
+      inflation sequence come from the SAME synchronized block draw. That is what makes one year
+      per path-year honest for both series, and it is why the label went on the heading rather than
+      on each line.
+- **VERIFIED, not assumed:** the claim the tooltip makes is "this number came from that year", so
+      the test compares the bank's VALUE against the historical record at the year named, for every
+      cell of every path - 0 mismatches over 40 bootstrap paths with the bear overlay armed and the
+      whole stress bank. Cross-checked live in the page too: 1930 -> -25.12%, 1931 -> -43.84%,
+      1972 -> +18.98%, each matching the record exactly.
+- **The wrap is why the years are RECORDED and not derived.** A stress sequence that runs off the
+      end of the record wraps to 1928, and a 2007 start on a 25-year plan reads
+      2007..2025 then 1928..1933 - where `startYear + y` would have invented 2026..2031. Pinned by
+      a test that first asserts the fixture actually contains a wrapped scenario.
+- **Status:** COMPLETE, v11.1671. Suite 340, tier 1 389, page 812.
+- **Independent:** Historical and Stress only; synthetic paths have no source years
 
 ---
 

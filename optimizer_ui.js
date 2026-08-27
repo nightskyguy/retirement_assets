@@ -724,6 +724,24 @@ function replayCarryOnStep(prev, next) {
     return next;
 }
 
+// P80. Which historical year the replayed path's year `i` was sampled from, or null. Three ways to
+// get nothing, all of them normal: no replay on screen, a synthetic path (GBM and AAM are drawn,
+// not sampled, so there is no year to name), or a reader without the nerdknob. The banks index
+// returns and inflation with ONE shared index, so this single year is honest for both.
+function replaySourceYear(i) {
+    if (typeof NERD_KNOBS === 'undefined' || !NERD_KNOBS) return null;
+    const y = _replayState?.rows?.srcYears?.[i];
+    return Number.isFinite(y) && y > 0 ? y : null;
+}
+
+// P80. The Market Return tooltip's heading. Kept separate from the lookup so the wording is
+// testable without a replay: the year is a suffix on the WHOLE heading rather than on each series,
+// because one source year covers the return bar, the inflation line and the real-return line
+// alike, and repeating it three times says nothing extra.
+function marketTooltipTitle(base, srcYear) {
+    return srcYear ? `${base}  (from ${srcYear})` : base;
+}
+
 // P82g. The market return after inflation. COMPOUNDED, not subtracted: 8% against 3% is 4.85%, not
 // 5%, and the gap widens exactly where it matters - the high-inflation paths. Both arguments and
 // the result are decimals, not percents.
@@ -4100,6 +4118,12 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
                 plugins: { ...sharedTooltip.plugins,
                     tooltip: { ...sharedTooltip.plugins.tooltip,
                         callbacks: { ...sharedTooltip.plugins.tooltip.callbacks,
+                            // P80. Only this chart names the historical year: it is the one that
+                            // shows the sampled rates themselves, so it is where the year explains
+                            // the number rather than decorating it.
+                            title: items => marketTooltipTitle(
+                                sharedTooltip.plugins.tooltip.callbacks.title(items),
+                                replaySourceYear(items[0]?.dataIndex)),
                             // The shared callback rounds to whole dollars; the two rate series are
                             // small percents ("Inflation: 3" is useless), so one decimal and a %
                             // sign - except the buying-power line, which really is dollars.

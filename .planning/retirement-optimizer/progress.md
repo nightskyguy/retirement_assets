@@ -5278,3 +5278,44 @@ it changed a decision rather than confirming one: the obvious choice - match the
 - was the wrong one, and only the number said so.
 
 Counts: optimizer_core **338** (unchanged, all tier 1), tier 1 **381** (up 8), page **802** green.
+
+---
+
+## Session 2026-08-27 - P80, the year behind the number  *(v11.1671)*
+
+Built to the estimate: about 60 lines and four tests. The scoping pass was worth doing, because it
+found that the interesting question in the plan had a false premise.
+
+**P80c is answered, and the answer is that the question did not arise.** I expected the Market
+return bar and the Inflation line to come from DIFFERENT historical years, which would have made
+"one year per column" dishonest and forced a per-series label. They do not:
+`buildBanks` sets `scenarioBank = multiAssetBank.equity` in Historical mode, so
+`bootstrapScenarioBank` is not used there at all, and `bootstrapMultiAssetBank` fills equity, bonds,
+intl and inflation from ONE shared block index. One source year is honest for all three series,
+which is why the label went on the tooltip HEADING rather than being repeated on each line.
+
+**The bear overlay was the trap, and it is a quarter of the paths.** `applyBearStartOverlay`
+rewrites the OPENING years of `bearFraction` of the paths after the bank is built. Without the same
+one-line update there, those cells would carry the years of the block the bootstrap drew and then
+discarded - and they are the first years a reader looks at. The test arms the overlay at its default
+rather than testing the clean path.
+
+**The wrap is why the years are recorded rather than derived.** A stress sequence that runs past the
+end of the record wraps to 1928. A 2007 start on a 25-year plan reads 2007..2025 then 1928..1933;
+`startYear + y` would have invented 2026..2031 and looked entirely plausible. The test asserts the
+fixture actually CONTAINS a wrapped scenario before checking the labels, so it cannot pass by never
+meeting the case.
+
+**The test is the claim, not the plumbing.** The tooltip asserts "this number came from that year",
+so the check compares the bank's VALUE against the historical record at the year named, for every
+cell: 0 mismatches over 40 bootstrap paths with the overlay armed, plus the whole stress bank. Live
+cross-check in the page agreed - 1930 to -25.12%, 1931 to -43.84%, 1972 to +18.98%.
+
+**Zero extra rng draws** is the other load-bearing property, since srcYears fills from an index
+already in hand: a draw added there would shift every path in every existing run and quietly change
+what a seed means. Pinned by running whole jobs in two modes, not by reading the code.
+
+The three ways to have no year - no replay, a synthetic path, no nerdknob - all produce the byte-
+identical year-free heading, checked in the page.
+
+Counts: optimizer_core **340** (up 2), tier 1 **389** (up 8), page **812** green.

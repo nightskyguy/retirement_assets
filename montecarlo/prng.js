@@ -151,6 +151,13 @@ function _realCagr(eqCagr, infCagr) {
 //
 // This rule was written out three times, in the stress bank, the bootstrap bank and the bear overlay.
 // One copy, so a correction cannot land in two of the three.
+// P80. The calendar year an index into the historical series refers to. Every series in
+// HISTORICAL_RETURNS starts at the same year (1928) and the banks index all four with one shared
+// index, which is what makes ONE source year per path-year honest for returns and inflation alike.
+function _yearAt(idx) {
+    return (HISTORICAL_RETURNS.equityStartYear ?? 1928) + idx;
+}
+
 function _intlAt(idx) {
     const off = HISTORICAL_RETURNS.intlStartYear - HISTORICAL_RETURNS.equityStartYear;   // 42
     const j   = idx - off;
@@ -332,6 +339,10 @@ function buildStressBank(count = 10, years, windowMode = 10) {
     const bdBank  = new Float64Array(nSeq * years);
     const itBank  = new Float64Array(nSeq * years);
     const infBank = new Float64Array(nSeq * years);
+    // P80. Which historical year each cell came from. Int16 because these are calendar years, and
+    // recorded rather than derived from startYears: a sequence that runs off the end of the record
+    // WRAPS back to 1928, so start + y is wrong for every year after the wrap.
+    const srcYears = new Int16Array(nSeq * years);
 
     const labels        = [];
     const startYears    = [];
@@ -362,6 +373,7 @@ function buildStressBank(count = 10, years, windowMode = 10) {
             bdBank [p * years + y] = bdY;
             infBank[p * years + y] = infY;
             itBank [p * years + y] = itY;
+            srcYears[p * years + y] = _yearAt(idx);
             pEq [y + 1] = pEq [y] + Math.log1p(eqY);
             pInf[y + 1] = pInf[y] + Math.log1p(infY);
             bdLogSum += Math.log1p(bdY);
@@ -390,7 +402,7 @@ function buildStressBank(count = 10, years, windowMode = 10) {
         labels.push(String(year));
     }
 
-    return { equity: eqBank, bonds: bdBank, intl: itBank, inflation: infBank,
+    return { equity: eqBank, bonds: bdBank, intl: itBank, inflation: infBank, srcYears,
              labels, startYears, realYears, nominatedBy,
              fullEqCAGRs, fullBondCAGRs, fullIntlCAGRs, fullInflCAGRs, fullRealCAGRs,
              worstRealCAGRs,
@@ -500,6 +512,10 @@ function applyBearStartOverlay(bank, rng, numPaths, years, bearFraction) {
             bank.bonds[dst]     = bd[idx];
             bank.intl[dst]      = _intlAt(idx);
             bank.inflation[dst] = Math.max(INFLATION_FLOOR, infSrc[idx]);
+            // P80. Not optional: this overwrites the OPENING years of a quarter of the paths by
+            // default, which is exactly where a reader looks first. Leaving the years behind would
+            // label those cells with the block the bootstrap drew and then discarded.
+            if (bank.srcYears) bank.srcYears[dst] = _yearAt(idx);
         }
     }
 }
@@ -519,6 +535,10 @@ function bootstrapMultiAssetBank(rng, numPaths, years, blockSize = 3) {
     const bdBank  = new Float64Array(numPaths * years);
     const itBank  = new Float64Array(numPaths * years);
     const infBank = new Float64Array(numPaths * years);
+    // P80. The historical year behind each cell. The index is already in hand at draw time, so
+    // this costs NO extra rng() calls - the draw sequence, and therefore every existing output, is
+    // unchanged. A node test asserts exactly that rather than trusting the reasoning.
+    const srcYears = new Int16Array(numPaths * years);
     for (let p = 0; p < numPaths; p++) {
         let y = 0;
         while (y < years) {
@@ -534,11 +554,12 @@ function bootstrapMultiAssetBank(rng, numPaths, years, blockSize = 3) {
                 // intl series — e.g. equity/inflation extended to 2025 before intl). Guarding the
                 // upper bound prevents an out-of-range undefined → NaN in the intl CAGR.
                 itBank [p * years + y + b] = _intlAt(idx);
+                srcYears[p * years + y + b] = _yearAt(idx);
             }
             y += len;
         }
     }
-    return { equity: eqBank, bonds: bdBank, intl: itBank, inflation: infBank };
+    return { equity: eqBank, bonds: bdBank, intl: itBank, inflation: infBank, srcYears };
 }
 
 // The worker loads this file with importScripts() and calls everything as bare globals; this tail

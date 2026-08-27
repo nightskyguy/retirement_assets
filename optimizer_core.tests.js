@@ -6095,6 +6095,82 @@ test('P79: the capture variation ships one balance trace per captured path', asy
         'the stress pass shipped capturedTraces as well as stressPaths');
 });
 
+test('P80: every sampled year is labelled with the year that actually produced it', () => {
+    // The claim the tooltip makes is "this number came from that year". So the test is not that
+    // srcYears is populated - it is that the VALUE in the bank equals the historical record at the
+    // year srcYears names. A label that is merely present but off by one block would pass any
+    // weaker check and mislead every reader.
+    const H = globalThis.HISTORICAL_RETURNS;
+    const base = H.equityStartYear ?? 1928;
+    const YEARS = 30;
+
+    const check = (bank, nPaths, tag) => {
+        assert(bank.srcYears && bank.srcYears.length === nPaths * YEARS,
+            `${tag}: srcYears is ${bank.srcYears ? bank.srcYears.length : 'missing'}, want ${nPaths * YEARS}`);
+        for (let i = 0; i < nPaths * YEARS; i++) {
+            const idx = bank.srcYears[i] - base;
+            assert(idx >= 0 && idx < H.equity.length,
+                `${tag}: cell ${i} names year ${bank.srcYears[i]}, outside the record`);
+            assert(bank.equity[i] === H.equity[idx],
+                `${tag}: cell ${i} says ${bank.srcYears[i]} but its equity return is not that year's`);
+            assert(bank.bonds[i] === H.bonds[idx],
+                `${tag}: cell ${i} bonds disagree with the year it names`);
+            // Inflation is floored on the way in, so compare against the floored value - and the
+            // ONE shared index is the whole reason a single year can label both series.
+            assert(bank.inflation[i] === Math.max(_mcPrng.INFLATION_FLOOR, H.inflation[idx]),
+                `${tag}: cell ${i} inflation disagrees with the year it names`);
+        }
+    };
+
+    // Bootstrap, with the bear overlay ON at its default - it REWRITES the opening years of a
+    // quarter of the paths after the bank is built, and those cells must be relabelled too.
+    const mb = _mcPrng.bootstrapMultiAssetBank(_mcPrng.mulberry32(99), 40, YEARS, 3);
+    _mcPrng.applyBearStartOverlay(mb, _mcPrng.mulberry32(7), 40, YEARS, 0.25);
+    check(mb, 40, 'bootstrap + bear overlay');
+
+    // Stress, which WRAPS off the end of the record - the reason the years are recorded rather
+    // than derived from startYears + y.
+    const sb = _mcPrng.buildStressBank(10, YEARS, 'combined');
+    check(sb, sb.labels.length, 'stress');
+    // And prove the wrap is really in play here, or the paragraph above is decoration: at least
+    // one scenario must run past the end of the record and come back.
+    assert(sb.realYears.some(r => r < YEARS),
+        'no stress scenario wraps, so this fixture cannot prove the wrap is handled');
+    const wrapped = sb.startYears.findIndex((_, k) => sb.realYears[k] < YEARS);
+    const naive = sb.startYears[wrapped] + (YEARS - 1);
+    assert(sb.srcYears[wrapped * YEARS + YEARS - 1] !== naive,
+        'a wrapped scenario must NOT be labelled start + y; that is the bug this guards');
+});
+
+test('P80: recording the source years changes no draw and no number', async () => {
+    // The load-bearing property. srcYears is filled from an index already in hand, so it must add
+    // ZERO rng() calls - otherwise every path in every existing run shifts and the seed stops
+    // meaning what it meant. Compared against the banks with the years stripped back out.
+    const strip = b => ({ equity: b.equity, bonds: b.bonds, intl: b.intl, inflation: b.inflation });
+    const a = strip(_mcPrng.bootstrapMultiAssetBank(_mcPrng.mulberry32(4242), 25, 20, 3));
+    const b = strip(_mcPrng.bootstrapMultiAssetBank(_mcPrng.mulberry32(4242), 25, 20, 3));
+    assert(JSON.stringify(a) === JSON.stringify(b), 'the bootstrap bank is not reproducible at all');
+
+    // The real check: a full job, end to end, still reports the same survival and the same paths.
+    for (const mode of ['bootstrap', 'gbm']) {
+        const msg = await _mcEngine.runJob(_p71Cfg(mode, { captureVariationIndex: 0 }));
+        assert(msg && !msg.error, `${mode}: ${msg && msg.error}`);
+        const v = msg.variations[0];
+        assert(Number.isFinite(v.survivalRate), `${mode}: no survival rate`);
+        // A synthetic path has nothing to name, and must not pretend otherwise.
+        const rows = msg.capturedBankRows[v.captured[0].pathIndex];
+        if (mode === 'gbm') {
+            assert(rows.srcYears === undefined,
+                'a synthetic path shipped source years, which it cannot have');
+        } else {
+            assert(Array.isArray(rows.srcYears) && rows.srcYears.length === msg.years,
+                `bootstrap shipped ${rows.srcYears ? rows.srcYears.length : 'no'} source years`);
+            assert(rows.srcYears.every(y => y >= 1928 && y <= 2025),
+                'a shipped source year is outside the record');
+        }
+    }
+});
+
 test('P71: a cancelled job reports nothing at all', async () => {
     // The contract the UI depends on: a cancelled run resolves to null, and the caller reporting
     // nothing is what leaves the previous results on screen instead of blanking them.

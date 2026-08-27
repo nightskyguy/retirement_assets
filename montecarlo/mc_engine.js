@@ -115,6 +115,10 @@ function sliceBankRowsForPath(banks, p, years, mode) {
         rows.intl   = row(multiAssetBank.intl);
         rows.bonds  = row(multiAssetBank.bonds);
         if (multiAssetBank.inflation) rows.inflation = row(multiAssetBank.inflation);
+        // P80. The historical year behind each of this path's years. Ships only for the two
+        // historical modes, because only they HAVE source years - a synthetic path is drawn, not
+        // sampled, and the page shows no year for one. ~2 bytes a year, so ~60B a path.
+        if (multiAssetBank.srcYears) rows.srcYears = row(multiAssetBank.srcYears);
     }
     if (synthInflationBank) rows.synthInflation = row(synthInflationBank);
     return rows;

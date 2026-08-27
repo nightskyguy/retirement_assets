@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1670"></a>
+<a id="11.1671"></a>
 
-## 11.1670
+## 11.1671
 
 ### Try a change against one bad path, and see the paths behind the odds
 
@@ -46,7 +46,9 @@ gray. Click one to replay it. Its tooltip names the single line under the pointe
 listing everything at that year.
 
 The Market Return chart gains a return-after-inflation line, and its key no longer shows a red
-swatch for bars that are mostly green. Input Distributions on the Monte Carlo tab shows a fold
+swatch for bars that are mostly green. In nerdknob mode, replaying a Historical or Stress path adds
+the year each one came from to that chart's tooltip heading, so a bad year on screen can be read
+back to the year on record that produced it. Input Distributions on the Monte Carlo tab shows a fold
 marker, so it reads as something you can open, and the Stress Test heading there points at its own
 fold rather than at the tab you are already on.
 

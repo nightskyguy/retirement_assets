@@ -2554,24 +2554,60 @@ assertEqual(
 			"P78: a state with no pathName falls back to its label rather than going blank");
 		assertEqual(replayBannerText(null), "", "P78: no state, no text");
 
-		// Lock OFF: the next path arrives with the run's plan fields intact.
-		const offNext = replayCarryOnStep({ planFields: null, modified: true }, st(), false);
-		assertEqual(offNext.planFields !== null, true,
-			"P78: with the lock off, stepping restores the run's own plan fields");
-		assertEqual(!!offNext.modified, false, "P78: with the lock off, nothing is marked modified");
+		// ENTRY (no prev): the fresh state keeps its plan fields, because replayPath is about to
+		// hand them to the sidebar. Stripping them here would replay a plan nobody chose.
+		const entry = replayCarryOnStep(null, st());
+		assertEqual(entry.planFields !== null, true,
+			"P78: entering a replay keeps the run's plan fields for the handoff");
 
-		// Lock ON after the handoff (prev has no planFields): the next path drops them and inherits.
-		const onNext = replayCarryOnStep({ planFields: null, modified: true }, st(), true);
+		// STEP after the handoff (prev has no planFields): drop them and inherit modified.
+		const onNext = replayCarryOnStep({ planFields: null, modified: true }, st());
 		assertEqual(onNext.planFields, null,
-			"P78: with the lock on, stepping must NOT re-impose the run's plan over the edited one");
+			"P78: stepping must NOT re-impose the run's plan over the edited one");
 		assertEqual(onNext.modified, true, "P78: the modified flag follows the step");
 
-		// Lock ON but BEFORE the handoff (prev still carries planFields): nothing has been handed to
-		// the sidebar yet, so the next path keeps its own - otherwise ticking the box and immediately
-		// stepping would strip the run's plan and quietly replay a different one.
-		const early = replayCarryOnStep(st(), st(), true);
+		// STEP while prev STILL carries fields - a state that never reached the sidebar. Nothing
+		// has been handed over, so the next path keeps its own rather than replaying a blank plan.
+		const early = replayCarryOnStep(st(), st());
 		assertEqual(early.planFields !== null, true,
 			"P78: before the handoff, stepping keeps the run's plan fields");
+	})();
+
+	// P82: the ring, and the real-return formula. Both are pure and both are silent when wrong -
+	// a ring that stops at the ends looks like a disabled button, and a real return computed by
+	// subtraction is off by a fraction of a point that grows exactly where it matters.
+	(() => {
+		console.log(" ");
+		console.log("=== P82: replay ring and real return ===");
+		if (typeof ringStep !== "function" || typeof realReturnOf !== "function") {
+			assertEqual(true, false, "P82: ringStep and realReturnOf must be defined");
+			return;
+		}
+		// Forward through the middle, and off the end back to the start.
+		assertEqual(ringStep(0, 1, 46), 1, "P82: forward steps forward");
+		assertEqual(ringStep(45, 1, 46), 0, "P82: forward past the last stop reaches the first");
+		// Backward off the front. The double-modulo form is what makes this 45 and not -1: a plain
+		// `% len` in JavaScript keeps the sign, and -1 indexes nothing.
+		assertEqual(ringStep(0, -1, 46), 45, "P82: back past the first stop reaches the last");
+		assertEqual(ringStep(45, -1, 46), 44, "P82: backward steps backward");
+		// A stop that has fallen out of the ring steps from the start rather than refusing to move.
+		assertEqual(ringStep(-1, 1, 46), 0, "P82: an off-ring position steps from the start");
+		assertEqual(ringStep(-1, -1, 46), 0, "P82: an off-ring position steps from the start either way");
+		// A one-stop ring stays put instead of going out of range.
+		assertEqual(ringStep(0, 1, 1), 0, "P82: a single-stop ring stays on its one stop");
+		assertEqual(ringStep(0, 1, 0), -1, "P82: an empty ring has nowhere to step");
+
+		// Real return is COMPOUNDED, not subtracted.
+		assertEqual(Math.abs(realReturnOf(0.08, 0.03) - 0.0485436893203883) < 1e-12, true,
+			"P82: 8% against 3% is 4.854%, the compounded figure");
+		assertEqual(realReturnOf(0.08, 0.03) < 0.05, true,
+			"P82: the real return must be BELOW the subtracted 5%, or it is the wrong formula");
+		assertEqual(realReturnOf(0.03, 0.03), 0, "P82: matching the index leaves nothing real");
+		// Deflation makes a flat market a real GAIN, which is the case a subtraction also gets right
+		// but for the wrong reason - check the magnitude, not just the sign.
+		assertEqual(Math.abs(realReturnOf(0, -0.01) - 0.010101010101010102) < 1e-12, true,
+			"P82: a flat market against -1% inflation is a +1.01% real gain");
+		assertEqual(realReturnOf(undefined, undefined), 0, "P82: missing rates read as zero, not NaN");
 	})();
 
     console.log('\n========================================');

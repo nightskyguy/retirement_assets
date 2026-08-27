@@ -5166,3 +5166,52 @@ the reader ticks the box.
 Counts: optimizer_core **338** (up 1), tier 1 **361** (up 10), page **782** green. Screenshots were
 unavailable this session (the Browser pane was not compositing), so every check above is a DOM or
 engine assertion read back out of the live page rather than something looked at.
+
+---
+
+## Session 2026-08-27 (later) - P82, six things wrong with what shipped an hour ago  *(v11.1670)*
+
+All six from using P78/P79 for real. Same branch, so the changelog entry was rewritten in place
+again rather than added to - it now describes P81c, P78, P79 and P82 as one release.
+
+**The tooltip was the real complaint, and the number is stark.** Index mode listed every series at
+the hovered year: at one pixel, **11 lines**, tall enough to hide the ten paths it was describing.
+`nearest` + `intersect` was not enough on its own - it returns every element TIED at the nearest
+distance, and two overlapping hairlines are two rows - so the filter keeps only the first element
+that passes. Measured at the same pixel afterwards: **1 line**. Medians needed a `hitRadius` too;
+with `intersect: true` a zero-radius point has nothing to be on.
+
+**The ring landed on exactly the 46 the report predicted** (10 captured + 36 stress). Verified in
+all three directions rather than one: last captured -> first stress, last stress -> first captured,
+and backward from the first captured -> the last stress scenario. `ringStep` is pure and tested,
+including the double-modulo - a plain `%` in JavaScript keeps the sign, so a backward step from
+position 0 lands on -1 and the arrow silently does nothing.
+
+**Dropping the checkbox simplified more than the UI.** With the lock unconditional, the handoff had
+to move to replay ENTRY (there is no lock moment any more), and `replayCarryOnStep` lost its lock
+parameter: the question is now "is there a prev", not "is the flag on". One fewer state to get
+wrong.
+
+**P82f is worth more than the seconds it saves.** An edit during replay used to fire
+`mcInputsChanged()`, which would age out the very run the replay came from. Verified by counting
+calls, not by watching: both counters read **0** across an edit that did re-run the path.
+
+**The Market Return legend was a genuine Chart.js trap.** The bars carry a per-point color array,
+green up and red down, and Chart.js builds the legend swatch from `backgroundColor[0]` - so the key
+showed whatever the FIRST year happened to be. A red swatch beside mostly green bars, for one
+quantity. `generateLabels` pins the swatch and the label names the convention.
+
+The new real-return line is COMPOUNDED, `(1+r)/(1+i)-1`, not subtracted. At 6% against 3% it reads
+2.91% where a subtraction says 3.00%, and the gap widens exactly on the high-inflation paths that
+decide an outcome. Tested with the deflation case too, where a flat market is a real gain.
+
+**Testing note that cost time twice now:** a synthetic `MouseEvent` has `offsetX`/`offsetY` of 0,
+and Chart.js resolves pointer position from those when the event target is the canvas. So every
+hit test silently reported "nothing under the pointer" until the offsets were defined on the event.
+The canvas click listener is unaffected - it is a plain DOM listener - which is why click-to-replay
+tested fine while hover did not.
+
+Counts: optimizer_core **338** (unchanged - P82 is all tier 1), tier 1 **373** (up 12), page **794**
+green. Screenshots still unavailable (the Browser pane is not compositing), so the tooltip and
+legend fixes are verified by reading Chart.js's own hit tests and legend items out of the live page,
+not by looking at them. Worth one visual pass before merge.

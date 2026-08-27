@@ -696,10 +696,9 @@ function applySuggestIraGoal() {
 let _replayState = null;   // { rows, mcMode, planFields, label, pathName, nav } from mc_tab.js, or null
 let _replayExitHooked = false;
 let _preReplayIncomeView = null;   // income-chart view to restore when replay ends
-// P78. "Keep path while editing": while on, a sidebar edit re-runs against the SAME sequences
-// instead of ending the replay. Lives here rather than on the state object so it survives a
-// prev/next step (which builds a fresh state) and dies with _clearReplay().
-let _replayKeepOnEdit = false;
+// P82d. Keeping the path while editing IS the behavior now, not a choice: a sidebar edit re-runs
+// against the SAME sequences instead of ending the replay. The checkbox that used to gate this is
+// gone, and with it the flag - every branch that read it now reads "always".
 
 // P78. What the banner says. Split out of syncReplayBanner so the rule is testable without a
 // live run: once the plan has been edited under the lock, the run's own outcome ("ruined 2035")
@@ -713,15 +712,23 @@ function replayBannerText(state) {
         : state.label;
 }
 
-// P78. Stepping to another path while the lock is on must not re-impose the RUN's plan over the
-// one the user has been editing: the lock's whole promise is that the plan stays put and only the
-// sequence changes. `prev` having no planFields is what says the handoff already happened. Mutates
+// P78. Stepping to another path must not re-impose the RUN's plan over the one the reader has been
+// editing: the whole promise is that the plan stays put and only the sequence changes. `prev`
+// having no planFields is what says the handoff already happened; with no prev at all this is an
+// ENTRY, and the fresh state keeps its fields so replayPath can hand them to the sidebar. Mutates
 // `next` in place, which is how replayPath receives it.
-function replayCarryOnStep(prev, next, keepOnEdit) {
-    if (!next || !keepOnEdit || !prev || prev.planFields) return next;
+function replayCarryOnStep(prev, next) {
+    if (!next || !prev || prev.planFields) return next;
     next.planFields = null;
     next.modified = !!(next.modified || prev.modified);
     return next;
+}
+
+// P82g. The market return after inflation. COMPOUNDED, not subtracted: 8% against 3% is 4.85%, not
+// 5%, and the gap widens exactly where it matters - the high-inflation paths. Both arguments and
+// the result are decimals, not percents.
+function realReturnOf(nominal, inflation) {
+    return (1 + (nominal || 0)) / (1 + (inflation || 0)) - 1;
 }
 
 function replayPath(state) {
@@ -733,7 +740,17 @@ function replayPath(state) {
         incomeChartView = 'market';
         syncIncomeViewControls();
     }
-    replayCarryOnStep(_replayState, state, _replayKeepOnEdit);
+    // P82d. On ENTRY, hand the run's own plan fields to the sidebar once: swept rows force
+    // conversions on, carry their own strategy and sometimes their own spend, and none of that was
+    // visible while the controls said something else. On a STEP, prev has already been handed off,
+    // so replayCarryOnStep drops the fresh state's fields instead - re-imposing them would revert
+    // every edit the reader has made, which is the PF8 / P74 class.
+    const entering = !_replayState;
+    replayCarryOnStep(_replayState, state);
+    if (entering && state.planFields && typeof applyMCVariationToSidebar === 'function') {
+        applyMCVariationToSidebar(state.planFields);
+        state.planFields = null;
+    }
     _replayState = state;
     if (!_replayExitHooked) {
         // A sidebar edit means the user is back to designing the plan; a replayed chart under an
@@ -741,9 +758,8 @@ function replayPath(state) {
         // input's own handler re-simulates.
         document.querySelector('.sidebar')?.addEventListener('input', () => {
             if (!_replayState) return;
-            if (!_replayKeepOnEdit) { _clearReplay(); syncReplayBanner(); return; }
-            // Locked: the path stays, the plan is now the user's. planFields were handed to the
-            // sidebar when the lock went on, so nothing overrides what they just typed. The
+            // The path stays; the plan is now the user's. planFields were handed to the sidebar
+            // when the replay started, so nothing here overrides what they just typed. The
             // baseline overlay is dropped so it recomputes against the edited plan rather than
             // still describing the plan the run scored.
             _replayState.modified = true;
@@ -761,7 +777,6 @@ function replayPath(state) {
 // income-chart view the user was on before the replay switched it to Market.
 function _clearReplay() {
     _replayState = null;
-    _replayKeepOnEdit = false;
     if (_preReplayIncomeView != null) {
         incomeChartView = _preReplayIncomeView;
         _preReplayIncomeView = null;
@@ -774,25 +789,6 @@ function exitReplay() {
     runSimulation();
 }
 
-// P78. Turning the lock ON hands the run's own plan fields to the sidebar, ONCE, so the controls
-// stop disagreeing with what the replay is running: swept rows force conversions on, carry their
-// own strategy and sometimes their own spend, and none of that was ever visible. Doing it here
-// rather than on the first edit is deliberate - on the first edit the user has already changed a
-// control, and writing the run's value over it is exactly the class of bug PF8 and P74 were.
-// After the handoff planFields are dropped, so every later edit is the user's alone.
-function toggleReplayKeepOnEdit(on) {
-    _replayKeepOnEdit = !!on;
-    if (!_replayState) return;
-    if (_replayKeepOnEdit && _replayState.planFields) {
-        const handed = typeof applyMCVariationToSidebar === 'function'
-            && applyMCVariationToSidebar(_replayState.planFields);
-        _replayState.planFields = null;
-        _replayState.baselineLog = null;
-        if (handed) { runSimulation(); return; }   // runSimulation calls syncReplayBanner
-    }
-    syncReplayBanner();
-}
-
 function syncReplayBanner() {
     const banner = document.getElementById('replay-banner');
     if (!banner) return;
@@ -800,8 +796,6 @@ function syncReplayBanner() {
     if (_replayState) {
         const txt = document.getElementById('replay-banner-text');
         if (txt) txt.textContent = replayBannerText(_replayState);
-        const keep = document.getElementById('replay-keep');
-        if (keep) keep.checked = _replayKeepOnEdit;
         // Prev/next enablement comes from mc_tab.js, which owns the lists and their order.
         const nav = (typeof replayNavState === 'function') ? replayNavState() : null;
         const prev = document.getElementById('replay-prev');
@@ -4072,14 +4066,24 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
         // the Current $ toggle must not touch them. On a deterministic run both series are flat,
         // which is itself informative next to a replayed path's jagged sequence.
         const pctRet = log.map(r => (r['return%'] ?? 0) * 100);
+        // P82g. What the market did after inflation, which is the number that decides whether the
+        // portfolio actually grew. Compounded, not subtracted: (1+r)/(1+i) - 1. At 8% against 3%
+        // that is 4.85%, not 5%, and the gap widens exactly where it matters, on the high-inflation
+        // paths. Drawn as a line on the same percent axis as the bars it is derived from.
+        const pctReal = log.map(r => realReturnOf(r['return%'], r['infl%']) * 100);
+        const MARKET_UP = '#27ae60B0', MARKET_DOWN = '#c0392bC0';
         incomeChart = new Chart(ctxI, {
             type: 'bar',
             data: { labels, datasets: [
-                { label: 'Market return', type: 'bar', order: 2,
-                  backgroundColor: pctRet.map(v => v >= 0 ? '#27ae60B0' : '#c0392bC0'),
+                { label: 'Market return', type: 'bar', order: 3,
+                  backgroundColor: pctRet.map(v => v >= 0 ? MARKET_UP : MARKET_DOWN),
                   data: pctRet },
+                { label: 'Return after inflation', data: pctReal, type: 'line', order: 1,
+                  borderColor: '#1565C0', backgroundColor: '#1565C0',
+                  pointBackgroundColor: '#1565C0', fill: false,
+                  pointRadius: 0, borderWidth: 2, borderDash: [6, 3] },
                 { ...mkLine('Inflation', '#e67e22', r => (r['infl%'] ?? 0) * 100),
-                  type: 'line', order: 1, pointRadius: 0, borderWidth: 2.5 },
+                  type: 'line', order: 2, pointRadius: 0, borderWidth: 2.5 },
                 // Cumulative inflation as a dollar figure rather than a percent: what day-one
                 // $10,000 still buys, on its own right-hand scale. A percent line climbing to 200%
                 // would crush the +-15% axis the other two series live on.
@@ -4103,8 +4107,23 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
                                 ? `${ctx.dataset.label}: $${Math.round(ctx.parsed.y).toLocaleString()}`
                                 : `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%` } },
                     // Plain legend: the hover-dim helper cannot dim the bars' per-point color
-                    // ARRAY, so with three series the default toggle-hide legend is the honest one.
-                    legend: { labels: legendLabels } } }
+                    // ARRAY, so with four series the default toggle-hide legend is the honest one.
+                    //
+                    // P82g. The bars carry a per-point color array - green in a year the market
+                    // rose, red in a year it fell - and Chart.js builds the legend swatch from
+                    // backgroundColor[0]. So the swatch showed whatever the FIRST year happened to
+                    // be: a red key beside a chart of mostly green bars, for one quantity. The
+                    // swatch is pinned to the up color and the label names the convention instead.
+                    legend: { labels: { ...legendLabels, generateLabels: (chart) => {
+                        const items = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                        const bar = items.find(i => i.text === 'Market return');
+                        if (bar) {
+                            bar.text = 'Market return (red = a losing year)';
+                            bar.fillStyle = MARKET_UP;
+                            bar.strokeStyle = MARKET_UP;
+                        }
+                        return items;
+                    } } } } }
         });
     }
 }
@@ -4440,6 +4459,11 @@ function setupAutoRecalc() {
             // buttons do, which is why clicking either one appeared to "fix" it. Always refresh the
             // single-scenario run; it is one simulate() against the optimizer's ~1.3s sweep.
             runSimulation();
+            // P82f. While a replay is on screen an edit re-runs the PATH and nothing else. The
+            // Optimizer and Monte Carlo both sweep from the sidebar, so refreshing them here would
+            // spend seconds recomputing a comparison the reader is not looking at, and the Monte
+            // Carlo refresh would age out the very run the replay came from.
+            if (_replayState) return;
             if (tab.includes('tab-opt')) runOptimizer();
             // Monte Carlo has the same staleness problem but cannot be handled the same way: its
             // main sweep is numPaths x variations simulations (measured 27.4s on the default

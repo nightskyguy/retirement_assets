@@ -30,13 +30,23 @@ but it is never a pay cut. The two recover differently: Social Security measures
 the last one it paid, so it picks up where it left off rather than being paid twice for the same
 recovery, while a capped pension keeps what it was paid and starts again from there.
 
-The replay banner now carries **Keep path while editing**. With it on, the path stays put and every
-change you make is re-run against that same sequence, so you can ask whether a lower spend or a
-different withdrawal order survives the run that ruined you. It also copies the run's own strategy
-and conversion settings into the sidebar, which is what was being replayed.
+Replaying a path no longer ends when you touch the sidebar. Change the spend, the withdrawal order,
+anything, and the same sequence of returns and inflation runs again against the new plan, so you can
+ask whether a change survives the run that ruined you. Starting a replay also copies the run's own
+strategy and conversion settings into the sidebar, which is what is being replayed. Exit replay
+keeps every edit you made. While a replay is on screen, an edit redraws the path and leaves the
+Monte Carlo and Optimizer sweeps alone.
 
-The survival chart can draw the ten captured paths over the bands, five worst in red, samples in
-gray. Click one to replay it. On for a single plan, off for Compare, with a checkbox to change it.
+The forward and back arrows now run as one loop through every path the run kept: the ten captured
+Monte Carlo paths and all the stress scenarios, about 46 of them, forward from the last stress
+scenario to the first captured path and round again.
+
+The survival chart draws those ten captured paths over the bands, five worst in red, samples in
+gray. Click one to replay it. Its tooltip names the single line under the pointer rather than
+listing everything at that year.
+
+The Market Return chart gains a return-after-inflation line, and its key no longer shows a red
+swatch for bars that are mostly green.
 
 ---
 

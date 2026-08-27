@@ -968,28 +968,56 @@ function _stressDisplayRanks() {
     return sortStressRows(buildStressRows(s)).map(r => r.rank);
 }
 
+// P82c. The captured Monte Carlo paths and the stress scenarios are ONE RING, in that order:
+// forward past the last stress scenario reaches the first captured path, and back past the first
+// captured path reaches the last stress scenario. At the defaults that is about 46 stops.
+//
+// A ring is why neither arrow is ever disabled. The alternative - grey them out at the ends - left
+// the reader at a dead end in the middle of comparing paths, having to go back to a table to cross
+// from one list to the other.
+//
+// Built fresh on every step rather than cached: the stress half is in the stress table's CURRENT
+// display order, which the reader can re-sort while a replay is on screen.
+function replayRing() {
+    const mc = mcReplayList().map((_, i) => ({ kind: 'mc', idx: i }));
+    const st = _stressDisplayRanks().map(rank => ({ kind: 'stress', rank }));
+    return [...mc, ...st];
+}
+
+// P82c. Where the ring lands after a step. Split out so the wrap is testable: an off-ring position
+// (-1, after a re-sort or a fresh run) must step from the START rather than off the end, and the
+// modulo has to be the double-modulo form or a backward step from position 0 lands on -1 and the
+// arrow does nothing.
+function ringStep(at, dir, len) {
+    if (!len) return -1;
+    const from = at < 0 ? 0 : at + dir;
+    return ((from % len) + len) % len;
+}
+
+function _ringPositionOf(nav, ring) {
+    if (!nav) return -1;
+    return ring.findIndex(e => e.kind === nav.kind
+        && (e.kind === 'mc' ? e.idx === nav.idx : e.rank === nav.rank));
+}
+
+// Both arrows stay live: with a ring there is always a next and always a previous. Kept returning
+// an object rather than null so the banner still shows the arrows at all.
 function replayNavState() {
-    const nav = _replayState?.nav;
-    if (!nav) return null;
-    if (nav.kind === 'mc') {
-        const n = mcReplayList().length;
-        return { hasPrev: nav.idx > 0, hasNext: nav.idx < n - 1 };
-    }
-    const order = _stressDisplayRanks();
-    const at = order.indexOf(nav.rank);
-    return { hasPrev: at > 0, hasNext: at >= 0 && at < order.length - 1 };
+    if (!_replayState?.nav) return null;
+    const n = replayRing().length;
+    return { hasPrev: n > 1, hasNext: n > 1 };
 }
 
 function replayStep(dir) {
     const nav = _replayState?.nav;
     if (!nav) return;
-    if (nav.kind === 'mc') {
-        replayCapturedPath(nav.idx + dir);
-        return;
-    }
-    const order = _stressDisplayRanks();
-    const at = order.indexOf(nav.rank);
-    if (at >= 0 && order[at + dir] !== undefined) replayStressPath(order[at + dir]);
+    const ring = replayRing();
+    if (!ring.length) return;
+    // A path that has fallen out of the ring (the stress table was re-sorted, or a fresh run
+    // replaced the list) steps from the start rather than refusing to move.
+    const next = ring[ringStep(_ringPositionOf(nav, ring), dir, ring.length)];
+    if (next.kind === 'mc') replayCapturedPath(next.idx);
+    else replayStressPath(next.rank);
 }
 
 // --- Rendering ------------------------------------------------------------
@@ -1815,6 +1843,14 @@ function syncMCTracesControl(msg) {
     box.checked = _mcShowTraces();
 }
 
+// P82a. Which series the tooltip is allowed to describe: a variation's median line, or one of the
+// drawn paths. Bounded by nBlockDs because everything before it is five datasets per variation and
+// a trace landing on 4 mod 5 would otherwise qualify as a median.
+function _mcTipKeep(item, nBlockDs) {
+    return (item.datasetIndex < nBlockDs && item.datasetIndex % 5 === 4)
+        || !!item.dataset?._traceLabel;
+}
+
 function renderMCChart(msg) {
     const canvas = document.getElementById('mc-chart');
     if (!canvas || !msg?.variations?.length) return;
@@ -1878,6 +1914,9 @@ function renderMCChart(msg) {
             data:  deflate(v.percentiles.p50),
             borderColor: c.solid, backgroundColor: 'transparent',
             borderWidth: isPinned ? 4 : 2.5, pointRadius: 0, fill: false, tension: 0.3,
+            // P82a. intersect:true means a series is only described when the pointer is actually
+            // on it, and a zero-radius point has nothing to be on. This is the hit area.
+            hitRadius: 8,
             order: ord,
         });
     });
@@ -1929,8 +1968,18 @@ function renderMCChart(msg) {
     const legendClick = _makeLegendClick();
 
     const tooltipCfg = {
-        filter: (item) => (item.datasetIndex < nBlockDs && item.datasetIndex % 5 === 4)
-                       || !!item.dataset?._traceLabel,
+        // Drawn well clear of the pointer, so it never sits on top of the hairline it is naming.
+        // It is painted on the canvas rather than being an element, so it cannot intercept the
+        // click either - the canvas listener sees every click, tooltip showing or not.
+        position: 'nearest',
+        yAlign: 'bottom',
+        caretPadding: 12,
+        // Exactly ONE line, never a list. `nearest` returns every element tied at the nearest
+        // distance, and where two hairlines overlap that is still two rows; keeping only the first
+        // element that passes the predicate leaves the series actually under the pointer - the
+        // same one the click resolves to.
+        filter: (item, index, array) => _mcTipKeep(item, nBlockDs)
+                                     && array.findIndex(i => _mcTipKeep(i, nBlockDs)) === index,
         callbacks: {
             title: (items) => `Year ${items[0]?.label ?? ''}`,
             label: (ctx) => {
@@ -1952,7 +2001,11 @@ function renderMCChart(msg) {
             animation: false,
             responsive: true,
             maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
+            // P82a. One line at a time. Index mode listed every visible series at that x, which
+            // with ten drawn paths grew a tooltip tall enough to hide the paths it was describing.
+            // `nearest` + `intersect` describes only what the pointer is actually on, which is also
+            // the same element the click resolves to, so what you read is what you replay.
+            interaction: { mode: 'nearest', intersect: true },
             plugins: {
                 legend: { labels: legendLabels, onClick: legendClick, ...datasetHoverHighlight(5) },
                 tooltip: tooltipCfg,

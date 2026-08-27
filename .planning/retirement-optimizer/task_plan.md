@@ -18,10 +18,10 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P80 | Nerdknob: the historical years behind each bootstrap block *(planned 2026-08-26)* | `P80a` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
-**P81 COMPLETE v11.1667; P78 and P79 COMPLETE v11.1670** - Social Security and a capped pension are
-no longer cut when prices fall; a replay now survives a sidebar edit, so a change can be tried
-against the sequence that ruined the plan; and the survival chart draws the ten captured paths,
-click one to replay it. Nothing at O0 but `P35i` now.
+**P81, P78, P79 and P82 all COMPLETE on this branch, v11.1667-11.1670.** Social Security and a
+capped pension are no longer cut when prices fall; a replay survives editing and Exit keeps the
+edits; the survival chart draws the ten captured paths; prev/next is one 46-stop ring over captured
+paths and stress scenarios; the Market Return chart gained a real-return line. O0 is `P35i` alone.
 
 **P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 
@@ -862,6 +862,46 @@ exiting restores the user's own plan unchanged.
 
 - **Status:** **COMPLETE 2026-08-26, v11.1657** - all eight sub-items shipped on branch `worktree-mc-path-replay`
 - **Independent:** no phase dependencies
+
+---
+
+## P82: replay and chart follow-ups  *(user-reported 2026-08-27, COMPLETE v11.1670)*
+
+Six items, all raised after using P78/P79 for real.
+
+- [x] **P82a DONE** - one line, never a list. `interaction` moved from `{mode:'index',
+      intersect:false}` to `{mode:'nearest', intersect:true}`, medians given a `hitRadius` (a
+      zero-radius point has nothing to intersect), and the tooltip filter keeps only the FIRST
+      element that passes - `nearest` returns every element tied at the nearest distance, and two
+      overlapping hairlines are still two rows. **Measured at the same pixel: 11 tooltip lines
+      before, 1 after.** Verified on overlapping traces, on a separated trace and on a median.
+      Clicking still works with the tooltip up: the tooltip is painted on the canvas, not an
+      element, so it never had the chance to swallow the click.
+- [x] **P82b DONE** - the three banner buttons at 0.85em / 2px 7px, measured at 10.71px.
+- [x] **P82c DONE** - `replayRing()`: captured Monte Carlo paths then stress scenarios in the stress
+      table's CURRENT display order, wrapping both ways. **46 stops at the defaults, exactly the
+      figure the report predicted.** Verified in all three directions: last captured -> first stress
+      (rank 16), last stress (rank 3) -> first captured, and back from the first captured -> rank 3.
+      Neither arrow is ever disabled, which answers the grey-out question by removing it. `ringStep`
+      is pure and tested, including the double-modulo that a plain `%` gets wrong on a backward step
+      from position 0.
+- [x] **P82d DONE** - the checkbox is gone and the behavior is unconditional. The handoff therefore
+      moved to replay ENTRY, and `replayCarryOnStep` lost its now-dead lock parameter: entry is
+      "no prev", not "the flag is off".
+- [x] **P82e DONE** - Exit replay keeps the edits. It already did once the handoff had happened,
+      because the sidebar IS the plan by then; verified rather than assumed - $82,000 survived the
+      exit and the sequence was gone.
+- [x] **P82f DONE** - `scheduleRecalc` returns before the Optimizer and Monte Carlo refreshes while
+      a replay is on screen. Verified by counting: both call counts were **0** across an edit that
+      did re-run the path. This matters beyond the wasted seconds - the Monte Carlo refresh would
+      have aged out the very run the replay came from.
+- [x] **P82g DONE** - two parts. The legend swatch: Chart.js builds it from `backgroundColor[0]`,
+      so a per-point green/red array showed whatever the FIRST year happened to be - a red key
+      beside mostly green bars. `generateLabels` pins it to the up color and the label names the
+      convention. And a new "Return after inflation" line, COMPOUNDED not subtracted: at 6% against
+      3% it reads 2.91%, where a subtraction would say 3.00%. `realReturnOf` is pure and tested.
+- **Status:** COMPLETE, v11.1670. Twelve more tier-1 assertions (373 in-page).
+- **Independent:** built on P78/P79 in this branch
 
 ---
 

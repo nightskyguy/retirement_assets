@@ -15,7 +15,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
-| **O0** | P81 | Inflation floor guards the DRAW, not the derived `cpi_t`; negative spread pushes through it *(2026-08-26, vs PR #195)* | `P81a` |
+| **O0** | P81 | Index floor: **a/b/d FIXED v11.1662**; `P81c` zero-floor for SS + pension still open | `P81c` |
 | **O1** | P78 | Edit the plan against a pinned replay path *(planned 2026-08-26, was briefly numbered P75)* | `P78a` |
 | **O1** | P79 | Draw the 10 captured paths on the survival chart *(planned 2026-08-26)* | `P79a` |
 | **O1** | P80 | Nerdknob: the historical years behind each bootstrap block *(planned 2026-08-26)* | `P80a` |
@@ -970,13 +970,13 @@ It only bites when CPI sits below Inflation, which is the normal configuration a
 - `sim.medicareRate *= (1 + cpi_t + inputs.inflation)` - small, since the excess spread dominates.
 - `sim.pensionFactor *= (1 + Math.min(cap, cpi_t))` - a capped pension is CUT below the floor.
 
-- [ ] **P81a** - decide WHERE the floor belongs. Two readings, and they are not equivalent:
+- [x] **P81a DONE (v11.1662)** - took reading (1), the literal one: `cpi_t = Math.max(CPI_INDEX_FLOOR, i_t + spread)`. Re-measured over the stress bank at three spreads: **0 of 650 index steps below the floor**, and it genuinely clamps (20 steps land exactly on it at the defaults, 31 at a 1.5pt spread). Original decision text: Two readings, and they are not equivalent:
       1. floor the derived index: `cpi_t = Math.max(INFLATION_FLOOR, i_t + spread)`. Simple, and
          guarantees the user's stated invariant everywhere downstream.
       2. floor the spread application so the gap cannot push a floored year further down:
          `cpi_t = i_t + spread` only while `i_t > FLOOR`, pinning `cpi_t = i_t` at the floor.
       (1) is the literal reading of "nothing below that number" and is recommended.
-- [ ] **P81b** - apply it once, where `cpi_t` is computed, so every consumer inherits it rather than
+- [x] **P81b DONE (v11.1662), and the first attempt broke the Monte Carlo tab.** Applied once where `cpi_t` is computed, so cpiRate, medicareRate and pensionFactor all inherit it. The constant is DUPLICATED in optimizer_core.js, because the engine has no montecarlo dependency and prng.js loads after it - importing would drag the MC data tables into the engine's load path. **Named `CPI_INDEX_FLOOR`, not `INFLATION_FLOOR`:** `montecarlo/worker.js` importScripts() taxengine, optimizer_core, prng, stats and mc_engine into ONE shared scope, so two top-level `const INFLATION_FLOOR` was a SyntaxError that killed the worker before it ran a single path. Node cannot see that - separate module scopes - and the in-page suite caught it. A new test scans all five files for top-level name collisions so the class cannot recur. Original text: so every consumer inherits it rather than
       each one flooring separately. `INFLATION_FLOOR` lives in `prng.js` and the engine does not
       currently import it; decide whether it moves or is duplicated with a pointer comment.
 - [ ] **P81c** - decide the SEPARATE and still-open question P70i left: real COLAs are floored at
@@ -984,7 +984,7 @@ It only bites when CPI sits below Inflation, which is the normal configuration a
       index falls. That is a different floor at a different level, and it affects SS too. Take it for
       both at once or neither - fixing the pension alone re-introduces the two-clock inconsistency
       P70 just removed.
-- [ ] **P81d** - a test pinning the invariant: for any (cpi, inflation) pair including a negative
+- [x] **P81d DONE (v11.1662)** - two tests: the engine floor equals prng's (which is what makes the duplicate safe), and no logged index step falls below it at any spread, with an assertion that the floor actually CLAMPS in the negative-spread cases so the test cannot pass vacuously. Original text: for any (cpi, inflation) pair including a negative
       spread, no logged `-cpiFactor` step is below `1 + INFLATION_FLOOR`.
 - **Status:** open. **Raised against PR #195, which is OPEN** - the defect ships with P70c unless it
   is fixed there. Filed rather than fixed at the user's instruction.

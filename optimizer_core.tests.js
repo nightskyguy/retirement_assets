@@ -4284,6 +4284,67 @@ test('P70: Medicare premium growth is the index plus a FIXED excess, not a doubl
         'the two readings must be far enough apart that this test can tell them apart');
 });
 
+test('P81: the engine floor matches the one the banks are drawn under', () => {
+    // optimizer_core carries its own copy because it has no montecarlo dependency and prng.js loads
+    // after it. This assertion is the whole reason that copy is allowed to exist.
+    const drawn = (typeof _mcPrng !== 'undefined' && _mcPrng) ? _mcPrng.INFLATION_FLOOR : undefined;
+    assert(drawn !== undefined, 'prng.js must export INFLATION_FLOOR for this comparison to mean anything');
+    assert(core.CPI_INDEX_FLOOR === drawn,
+        `the engine floor (${core.CPI_INDEX_FLOOR}) and the draw floor (${drawn}) have drifted apart`);
+});
+
+test('P81: no top-level name collides across the files the worker shares a scope with', () => {
+    // montecarlo/worker.js importScripts() taxengine.js, optimizer_core.js, prng.js, stats.js and
+    // mc_engine.js into ONE global scope. Two top-level `const` of the same name is a SyntaxError
+    // that kills the worker before it runs a path, and NODE CANNOT SEE IT - each file gets its own
+    // module scope there. A duplicated INFLATION_FLOOR shipped exactly this way and took the whole
+    // Monte Carlo tab down; only the in-page suite noticed.
+    if (!IS_NODE) return;   // the browser tier has already proven it by loading
+    const fs = require('fs'), path = require('path');
+    const FILES = ['taxengine.js', 'optimizer_core.js', 'montecarlo/prng.js',
+                   'montecarlo/historical_returns.js', 'montecarlo/stats.js', 'montecarlo/mc_engine.js'];
+    const topLevel = src => new Set(
+        [...src.matchAll(/^(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]));
+    const seen = new Map();   // name -> first file that declared it
+    const clashes = [];
+    for (const f of FILES) {
+        const p = path.join(__dirname, f);
+        if (!fs.existsSync(p)) continue;
+        for (const name of topLevel(fs.readFileSync(p, 'utf8'))) {
+            if (seen.has(name)) clashes.push(`${name}: ${seen.get(name)} and ${f}`);
+            else seen.set(name, f);
+        }
+    }
+    assert(clashes.length === 0,
+        'the worker shares one scope, so these top-level names collide: ' + clashes.join(' | '));
+});
+
+test('P81: no index step falls below the floor, at any spread', () => {
+    // The floor upstream guards the DRAW. cpi_t is DERIVED - inflation minus the CPI spread - and the
+    // shipped default spread is negative, so a year already at the floor used to be pushed through it.
+    // Walk the logged index factor step by step and assert none of them undershoots.
+    const N = CLOCK_N;
+    // A sequence that sits ON the floor for a stretch, which is where the defect lived.
+    const seq = Array.from({ length: N }, (_, i) => (i % 3 === 0 ? -0.01 : 0.02 + (i % 5) * 0.01));
+    for (const [inflation, cpi] of [[0.030, 0.028], [0.035, 0.020], [0.020, 0.035], [0.025, 0.025]]) {
+        const rows = clockRows(simulate({ ...CLOCK_BASE, inflation, cpi,
+                                          returnSequence: CLOCK_RET, inflationSequence: seq }));
+        const tag = `inflation ${inflation} / cpi ${cpi}`;
+        for (let t = 0; t + 1 < rows.length; t++) {
+            const step = rows[t + 1]['-cpiFactor'] / rows[t]['-cpiFactor'] - 1;
+            assert(step >= core.CPI_INDEX_FLOOR - 1e-12,
+                `${tag}: year ${t + 1} indexed at ${(step * 100).toFixed(3)}%, below the ${core.CPI_INDEX_FLOOR * 100}% floor`);
+        }
+        // And the floor must BITE on a negative spread rather than being a no-op assertion: with the
+        // sequence pinned at the floor every third year, the clamped step must equal the floor exactly.
+        if (cpi < inflation) {
+            const steps = rows.slice(1).map((r, t) => r['-cpiFactor'] / rows[t]['-cpiFactor'] - 1);
+            assert(steps.some(v => Math.abs(v - core.CPI_INDEX_FLOOR) < 1e-12),
+                `${tag}: the floor must actually clamp here, or this test proves nothing`);
+        }
+    }
+});
+
 test('P70i: a capped pension COLA pays the lesser of its cap and CPI, year by year', () => {
     // The cap bites PER YEAR, which is the whole point: a run of quiet years followed by a hot one
     // is not the same as the average, and a capped plan never catches up afterwards.

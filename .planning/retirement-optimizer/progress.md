@@ -4983,4 +4983,31 @@ be taken for both or neither.
 
 Method note: this was found by MEASURING the derived value across the stress bank rather than
 reasoning about the floor constant. The constant is correct and applied in four places; what was
-wrong was a quantity derived downstream of all four.
+wrong was a quantity derived downstream of all four.
+
+**P81a/b/d FIXED on the branch before merge, v11.1662.** `cpi_t = Math.max(CPI_INDEX_FLOOR, i_t + spread)`,
+applied once where `cpi_t` is computed so cpiRate, medicareRate and pensionFactor all inherit it.
+Re-measured over the stress bank at three spreads: **0 of 650 index steps below the floor**, and it
+genuinely clamps - 20 steps land exactly on it at the defaults, 31 at a 1.5pt spread.
+
+**The first attempt killed the Monte Carlo tab, and node could not see it.** I named the engine copy
+`INFLATION_FLOOR`, matching prng.js. `montecarlo/worker.js` importScripts() taxengine, optimizer_core,
+prng, stats and mc_engine into **ONE shared global scope**, so two top-level `const INFLATION_FLOOR`
+is a SyntaxError that kills the worker before it runs a single path. Node has separate module scopes
+and reported 334/334 green. **The in-page badge caught it** - 36 failures out of 660 - and the console
+named it exactly: "Identifier 'INFLATION_FLOOR' has already been declared".
+
+Renamed to `CPI_INDEX_FLOOR`, and added a test that scans all five worker-imported files for
+top-level name collisions so the class cannot recur. It found exactly one when written against the
+broken state, which is the only way to know a guard works.
+
+**Rule earned: any new top-level `const`/`function` in optimizer_core.js, taxengine.js or the
+montecarlo files must be unique across all five, because the worker shares one scope. Node will never
+tell you.** Same family as the earlier lessons this session - the page is not the file, node is not
+the browser - and this is the third time the browser tier caught something node could not.
+
+P81c stays open: real COLAs are floored at ZERO and never claw back, but modeled Social Security and
+a capped pension both fall when the index falls. Different floor, different level, and it touches SS,
+so it goes for both or neither.
+
+Counts: optimizer_core **335** (two floor tests plus the collision guard), page 661 gated.

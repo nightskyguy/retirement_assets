@@ -4949,4 +4949,8 @@ Deflation left as a genuine min, so a falling index reduces a capped pension the
 reduces modeled Social Security. Real COLAs are floored at zero; not modeled, noted in code, and
 flagged as a decision to take for both or neither.
 
-**P70 now has zero open items.** Suites 332 / 61 / 22, page 658 gated / 763 with ?runtests.
+**P70 now has zero open items.** Suites 332 / 61 / 22, page 658 gated / 763 with ?runtests.
+
+**PR #195 opened 2026-08-26** (worktree-p70-cpi-indexation -> main): the whole P70 phase, 17 commits,
+v11.1661. Body leads with the byte-identity gate, since that is the property a reviewer can check in
+one step and the one that proves the spread model is implemented right.

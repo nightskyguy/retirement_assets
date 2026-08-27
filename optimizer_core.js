@@ -1438,8 +1438,9 @@ function computeIncome(sim, yr) {
     const firstYear2 = yr.age2 === Math.ceil(inputs.ss2Age);
     const ssFrac1 = firstYear1 ? ssFirstYearFraction(inputs.birthmonth1) : 1;
     const ssFrac2 = firstYear2 ? ssFirstYearFraction(inputs.birthmonth2) : 1;
-    let potentialS1 = (yr.age1 >= inputs.ss1Age) ? inputs.ss1 * sim.cpiRate * ssReduction * ssFrac1 : 0;
-    let potentialS2 = (yr.age2 >= inputs.ss2Age) ? inputs.ss2 * sim.cpiRate * ssReduction * ssFrac2 : 0;
+    // P81c. sim.ssFactor, not sim.cpiRate: a benefit already being paid never falls. See advanceYear.
+    let potentialS1 = (yr.age1 >= inputs.ss1Age) ? inputs.ss1 * sim.ssFactor * ssReduction * ssFrac1 : 0;
+    let potentialS2 = (yr.age2 >= inputs.ss2Age) ? inputs.ss2 * sim.ssFactor * ssReduction * ssFrac2 : 0;
     yr.s1 = yr.alive1 ? potentialS1 : 0;
     yr.s2 = yr.alive2 ? potentialS2 : 0;
     yr.pension = (yr.age1 >= (inputs.pensionStartAge || 0))
@@ -1477,7 +1478,7 @@ function computeIncome(sim, yr) {
         const survivorFirstYear = survivorAge === Math.ceil(survivorStartAge);
         const survivorFrac = survivorFirstYear ? ssFirstYearFraction(survivorBirthMo) : 1;
         const survivorPay = survivorAge >= survivorStartAge
-            ? rawSurvivorMonthly * 12 * sim.cpiRate * ssReduction * survivorFrac
+            ? rawSurvivorMonthly * 12 * sim.ssFactor * ssReduction * survivorFrac
             : 0;
 
         // A single filer reaches this branch too (no spouse means alive2 is false from year one),
@@ -3100,10 +3101,22 @@ function endYear(sim, yr) {
     sim.inflation    *= (1 + yr.yearInflation);   // spending always follows the path
     sim.cpiRate      *= (1 + cpi_t);
     sim.medicareRate *= (1 + cpi_t + inputs.inflation);
-    // The cap is applied to THIS year's index rate, not to the compounded total, which is what
-    // makes a capped COLA fall permanently behind rather than catch up after a quiet stretch.
+    // P81c. A COLA is an INCREASE, never a decrease, and the two instruments floor differently.
+    //
+    // Social Security rides a HIGH-WATER MARK of the index. 42 U.S.C. 415(i) measures each
+    // increase from the last quarter that actually produced one, so a deflation year pays zero AND
+    // the shortfall is absorbed on the way back up: CPI-W fell in 2009, benefits held flat through
+    // 2010 and 2011, and the 3.6% paid in 2012 was measured against 2008, not against the trough.
+    // A running max is exactly that rule, and it is the CHEAPER of the two readings - a per-year
+    // max(0, .) would ratchet the benefit up permanently and overstate every deflating path.
+    sim.ssFactor = Math.max(sim.ssFactor, sim.cpiRate);
+    // A capped pension cannot use the high-water rule, because the cap already severs it from the
+    // index LEVEL - that is what makes a capped COLA fall permanently behind (P70i). Plan language
+    // grants an adjustment of the lesser of the cap and the year's CPI increase and never claws
+    // back, so this floors PER YEAR. The cap is applied to this year's rate, not to the compounded
+    // total, for the same reason.
     const colaCap = pensionColaCap(inputs);
-    if (colaCap !== null) sim.pensionFactor *= (1 + Math.min(colaCap, cpi_t));
+    if (colaCap !== null) sim.pensionFactor *= (1 + Math.max(0, Math.min(colaCap, cpi_t)));
 }
 
 /** SIMULATION ENGINE **/
@@ -3146,7 +3159,12 @@ function simulate(inputs) {
     // compounding factor, seeded over the gap years at the same capped rate.
     const _colaCap = pensionColaCap(inputs);
     let pensionFactor = _colaCap === null ? 1
-                      : Math.pow(1 + Math.min(_colaCap, inputs.cpi), gapYears);
+                      : Math.pow(1 + Math.max(0, Math.min(_colaCap, inputs.cpi)), gapYears);
+    // P81c. The Social Security clock: cpiRate's running maximum, so a benefit already being paid
+    // never falls. Seeded off cpiRate because the gap years compound at the typed CPI and a rising
+    // series is its own high-water mark; the max against 1 covers a typed NEGATIVE CPI, where the
+    // same rule says the benefit holds flat rather than shrinking before the plan even starts.
+    let ssFactor = Math.max(1, cpiRate);
     let fixedWithdrawal = 0;
     let spendDelta = 1 + inputs.spendChange;
     let spendGoal = inputs.spendGoal * Math.pow(1 + inputs.inflation, gapYears);
@@ -3232,7 +3250,7 @@ function simulate(inputs) {
     const sim = {
         inputs, balance, log, totals,
         birthyear1, birthmonth1, birthyear2, birthmonth2,
-        currentYear, cpiRate, inflation, medicareRate, pensionFactor,
+        currentYear, cpiRate, inflation, medicareRate, pensionFactor, ssFactor,
         fixedWithdrawal, spendDelta, spendGoal, cumulativeTaxes,
         nominalTaxRate, capitalGainsRate,
         subCycleIRAYears, prevPortfolio,

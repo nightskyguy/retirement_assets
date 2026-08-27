@@ -17,6 +17,29 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1667"></a>
+
+## 11.1667
+
+### Social Security and a capped pension no longer shrink when prices fall
+
+**Behavior change. Monte Carlo and Stress Test results move on any path that includes a year of
+falling prices, and a saved plan will not reproduce the numbers it showed before.**
+
+A cost-of-living raise is a raise. It can be nothing in a year prices fall, but it is never a pay
+cut, and neither Social Security nor a pension has ever taken one. Both now hold flat through such
+a year instead of paying less.
+
+The two make up the lost ground differently, because they are different instruments. Social
+Security measures each raise from the last one it actually paid, so after prices recover the
+benefit picks up where it left off rather than being paid for the same recovery twice. A capped
+pension keeps what it was paid and starts again from there, which is what plan documents say.
+
+The effect is small on most paths and largest on the ones that matter, where a long stretch of
+falling prices used to cut the one income a retiree cannot outlive.
+
+---
+
 <a id="11.1662"></a>
 
 ## 11.1662

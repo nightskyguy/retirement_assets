@@ -15,15 +15,15 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
-| **O0** | P81 | Index floor: **a/b/d FIXED v11.1662**; `P81c` zero-floor for SS + pension still open | `P81c` |
 | **O1** | P78 | Edit the plan against a pinned replay path *(planned 2026-08-26, was briefly numbered P75)* | `P78a` |
 | **O1** | P79 | Draw the 10 captured paths on the survival chart *(planned 2026-08-26)* | `P79a` |
 | **O1** | P80 | Nerdknob: the historical years behind each bootstrap block *(planned 2026-08-26)* | `P80a` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
-**P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed
-runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote
-prints an absolute cost, not extra-vs-Plan-Q.
+**P81 COMPLETE, v11.1667** - Social Security rides the index high-water mark and a capped pension
+floors per year, so neither is cut when prices fall. Nothing at O0 but `P35i` now.
+
+**P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Full index next.
 
@@ -105,11 +105,12 @@ first task. Every open item in the file now carries one.
 | ~~DONE~~ | ~~P23~~ | ~~MC arithmetic-mean returns + AR(1) variable inflation~~ - **COMPLETE 2026-08-23, v11.160F, merged with 7 addenda through v11.161B in PR #188.** Shipped as a THIRD mode (Synthetic-AAM) rather than a GBM replacement, both synthetic modes given calibrated AR(1) inflation correlated with returns. Suite 300 | - | - |
 | ~~DONE~~ | ~~P71~~ | ~~Dedup the MC engine: one runPass instead of two mirrors~~ - **COMPLETE 2026-08-23, v11.161C-F, committed `b7f8808` and merged.** 455+567 lines of mirror -> 42+203 lines of shell around one `mc_engine.js`; suite 300 -> 304. Maps caught up in `fb6675c` | - | - |
 | ~~DONE~~ | ~~P69~~ | ~~Replay: walk one MC or Stress sequence through the main model~~ - **COMPLETE 2026-08-26, v11.1657**, all of `P69a`-`P69h` | - | - |
-| **O0** | P70 | Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path. **Measured 2026-08-26: yes, -8.3% lifetime tax and 38 invented failures** | `P70b` (decide the default) | nothing |
+| ~~DONE~~ | ~~P70~~ | ~~Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path~~ - **COMPLETE 2026-08-26, `P70a`-`P70i`, v11.165D-11.1662, merged in PR #195.** Measured at -8.3% lifetime tax and 38 invented failures, then fixed with the two-clock spread model (`fixedTaxIndexing`, default off) and a five-way pension COLA cap | - | - |
+| ~~DONE~~ | ~~P81~~ | ~~The inflation floor guards the DRAW, not the derived index~~ - **COMPLETE.** `a`/`b`/`d` v11.1662 (PR #195) clamped `cpi_t` where it is computed; **`P81c` v11.1667** gave Social Security the statutory high-water rule and a capped pension a per-year zero floor | - | - |
 | **O1** | P75 | Year-by-year withdrawal/conversion optimization - income-target reframe, edge menu, coordinate descent *(new 2026-08-25)* | `P75a` (measure first, gates the phase) | nothing |
-| **O1** | P78 | Edit the plan against a pinned replay path *(new 2026-08-26; renumbered from a colliding P75)* | `P78a` | P69 (PR #194) |
-| **O1** | P79 | Draw the 10 captured paths on the survival chart *(new 2026-08-26)* | `P79a` | P69 (PR #194) |
-| **O1** | P80 | Nerdknob: the historical years behind each bootstrap block *(new 2026-08-26)* | `P80a` | P69 (PR #194) |
+| **O1** | P78 | Edit the plan against a pinned replay path *(new 2026-08-26; renumbered from a colliding P75)* | `P78a` | nothing (P69 merged in PR #194) |
+| **O1** | P79 | Draw the 10 captured paths on the survival chart *(new 2026-08-26)* | `P79a` | nothing (P69 merged in PR #194) |
+| **O1** | P80 | Nerdknob: the historical years behind each bootstrap block *(new 2026-08-26)* | `P80a` | nothing (P69 merged in PR #194) |
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
 | **O2** | P63 | State safe harbor generically — DEFERRED, but it exposed two live bugs *(section existed since 2026-08-18 with no index row)* | `P63a` (dead pro-rata flag) | `P63b` blocked on P63 proper |
@@ -979,16 +980,37 @@ It only bites when CPI sits below Inflation, which is the normal configuration a
 - [x] **P81b DONE (v11.1662), and the first attempt broke the Monte Carlo tab.** Applied once where `cpi_t` is computed, so cpiRate, medicareRate and pensionFactor all inherit it. The constant is DUPLICATED in optimizer_core.js, because the engine has no montecarlo dependency and prng.js loads after it - importing would drag the MC data tables into the engine's load path. **Named `CPI_INDEX_FLOOR`, not `INFLATION_FLOOR`:** `montecarlo/worker.js` importScripts() taxengine, optimizer_core, prng, stats and mc_engine into ONE shared scope, so two top-level `const INFLATION_FLOOR` was a SyntaxError that killed the worker before it ran a single path. Node cannot see that - separate module scopes - and the in-page suite caught it. A new test scans all five files for top-level name collisions so the class cannot recur. Original text: so every consumer inherits it rather than
       each one flooring separately. `INFLATION_FLOOR` lives in `prng.js` and the engine does not
       currently import it; decide whether it moves or is duplicated with a pointer comment.
-- [ ] **P81c** - decide the SEPARATE and still-open question P70i left: real COLAs are floored at
-      ZERO and never claw back, but modeled Social Security and a capped pension both fall when the
-      index falls. That is a different floor at a different level, and it affects SS too. Take it for
-      both at once or neither - fixing the pension alone re-introduces the two-clock inconsistency
-      P70 just removed.
+- [x] **P81c DONE (v11.1667). Taken for BOTH, and they got DIFFERENT floors, because they are
+      different instruments.** Measured first: at the shipped defaults the statutory index rate is
+      negative in **8.6% of bootstrap path-years**, and 87.4% of paths carry at least one such year,
+      so this was never a corner case. The Depression blocks in the 1928-2025 pool are what put it
+      there.
+      - **Social Security: the running MAX of `cpiRate`, in a new `sim.ssFactor`.** 42 U.S.C. 415(i)
+        measures each increase from the last quarter that PRODUCED one, so deflation is absorbed on
+        the way back up - CPI-W fell in 2009, benefits held through 2010 and 2011, and the 3.6% paid
+        in 2012 was measured against 2008 rather than the trough. A high-water mark is exactly that
+        rule. It is also the CHEAPER reading, by a factor of 15: a naive per-year `max(0, .)` raises
+        the end-of-plan SS factor **+2.07% mean / +10.57% worst** over 1,000 bootstrap paths, the
+        high-water rule **+0.14% / +4.31%**. SS could not stay on `cpiRate` because that factor also
+        indexes brackets, the standard deduction, LTCG, IRMAA, ACA and the QCD limit, none of which
+        have a statutory floor.
+      - **A capped pension: a per-year `Math.max(0, Math.min(cap, cpi_t))`, no absorption.** The cap
+        has already severed it from the index LEVEL - that is what makes a capped COLA fall
+        permanently behind (P70i) - and plan language grants an adjustment of the lesser of the cap
+        and the year's increase, then never claws back.
+      - **Measured end to end** on 400 bootstrap paths and the 26-sequence stress bank: SS +0.12%,
+        pension +0.99%, tax +0.21%, after-tax wealth +0.19%, failure COUNT unchanged, and 4 failing
+        paths now last one year longer. **Not monotone in wealth: 9 of 400 paths end POORER**, worst
+        -$20,735, and the cause is named rather than guessed - the extra COLA breaches an IRMAA tier.
+        On the worst of them a single 2043 breach costs $14,477 of surcharge against $1,174 of
+        lifetime SS gain, and the gap then compounds. That is the cliff behaving like a cliff, not a
+        defect in the floor.
 - [x] **P81d DONE (v11.1662)** - two tests: the engine floor equals prng's (which is what makes the duplicate safe), and no logged index step falls below it at any spread, with an assertion that the floor actually CLAMPS in the negative-spread cases so the test cannot pass vacuously. Original text: for any (cpi, inflation) pair including a negative
       spread, no logged `-cpiFactor` step is below `1 + INFLATION_FLOOR`.
-- **Status:** open. **Raised against PR #195, which is OPEN** - the defect ships with P70c unless it
-  is fixed there. Filed rather than fixed at the user's instruction.
-- **Blocks:** nothing, but it is worth deciding before #195 merges rather than after.
+- **Status:** COMPLETE. `P81a`/`b`/`d` shipped in PR #195 at v11.1662; `P81c` at **v11.1667**.
+  Suites 337 / 61 / 22, page 771 green, and both new guards were checked against the pre-change
+  engine first - SS fell in 4 years and the pension in 4 years there, so neither test is vacuous.
+- **Blocks:** nothing.
 
 
 ## P70: Do high-inflation paths overstate tax?

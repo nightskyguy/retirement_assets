@@ -5011,3 +5011,82 @@ a capped pension both fall when the index falls. Different floor, different leve
 so it goes for both or neither.
 
 Counts: optimizer_core **335** (two floor tests plus the collision guard), page 661 gated.
+
+---
+
+## Session 2026-08-26 (later) - plan reconciliation, no code
+
+Working tree clean at `9ffa856` (PR #195 merged). No unsynced context from the catchup script.
+
+Three drifts between the NOW table and the Open Task Index, all fixed in `task_plan.md`:
+
+1. **P70 still carried an O0 row naming `P70b` as next.** Every sub-item `P70a`-`P70i` is checked
+   off and the phase merged in PR #195; the row now reads DONE with the version span and the two
+   things that actually shipped (the two-clock `fixedTaxIndexing` spread model, the five-way pension
+   COLA cap).
+2. **P81 had no index row at all** - it existed only in the NOW table, so anyone reading the index
+   would not have seen the one O0 item that is still open. Added with `P81c` as the next item.
+3. **P78/P79/P80 all listed "Blocked by P69 (PR #194)".** That PR merged at `30a2e38`, one commit
+   behind #195. All three are unblocked.
+
+Net open at O0: **P35** (`P35i`, the Phased engine) and **P81** (`P81c`, the zero-floor decision for
+Social Security and a capped pension, which goes for both or neither).
+
+---
+
+## Session 2026-08-26/27 - P81c: a COLA is a raise, never a pay cut  *(v11.1667)*
+
+**Decided both at once, as P70i required, and gave them DIFFERENT floors** - which was the part the
+question had not anticipated. They are different instruments and their real rules are not the same.
+
+**Measured before deciding.** The statutory index rate `cpi_t` goes NEGATIVE far more often than
+"deflation is rare" suggests, because the shipped spread is negative (cpi 2.8 against inflation 3.0)
+and the bootstrap pool is the full 1928-2025 record, Depression blocks included:
+
+| bank (shipped defaults) | path-years | `cpi_t` < 0 | paths with at least one |
+|---|---|---|---|
+| historical bootstrap, 1000 paths | 30,000 | 8.62% | 87.4% |
+| synthetic AR(1) at 3.0% | 30,000 | 13.99% | 92.5% |
+| synthetic AR(1) at 2.0% | 30,000 | 22.07% | 98.4% |
+| stress bank, combined windows | 780 | 4.87% | 26.9% |
+
+**Social Security got the high-water mark, not a per-year floor, and the statute is why.**
+42 U.S.C. 415(i) measures each increase from the last quarter that actually produced one, so a
+deflation year pays zero AND the shortfall is absorbed by the recovery: CPI-W fell in 2009, benefits
+held flat through 2010 and 2011, and the 3.6% paid in 2012 was measured against 2008 rather than
+against the trough. That is a running max over the index. It is also **15x cheaper** than the naive
+reading - over 1,000 bootstrap paths a per-year `max(0, .)` lifts the end-of-plan factor +2.07% mean
+and +10.57% worst, the high-water rule +0.14% and +4.31% - because the naive rule would ratchet up
+permanently and be paid twice for every recovery.
+
+SS could not simply stay on `cpiRate`: that same factor indexes brackets, the standard deduction,
+LTCG, IRMAA, the ACA multiple and the QCD limit, and none of those has a statutory floor. Hence a
+separate `sim.ssFactor`, seeded at `Math.max(1, cpiRate)` so a typed negative CPI holds the benefit
+flat over the gap years instead of shrinking it before the plan starts.
+
+**A capped pension got the per-year floor instead**, `max(0, min(cap, cpi_t))`. The cap has already
+severed it from the index LEVEL - that is exactly what makes a capped COLA fall permanently behind
+(P70i) - and plan language grants an adjustment of the lesser of the cap and the year's increase,
+then never claws back.
+
+**End-to-end, 400 bootstrap paths + the 26-sequence stress bank:** SS +0.12%, pension +0.99%, tax
++0.21%, after-tax wealth +0.19%, failure COUNT unchanged, 4 failing paths last one year longer.
+Nothing got worse on the stress bank at all.
+
+**The interesting result: it is NOT monotone in wealth. 9 of 400 paths end POORER**, worst -$20,735.
+Cause named rather than assumed - re-ran those paths against the pre-change engine year by year and
+the IRMAA column is the whole story. On the worst one a single 2043 tier breach costs $14,477 of
+surcharge against $1,174 of lifetime extra SS, and the gap compounds for the remaining eleven years.
+A cliff behaving like a cliff. Worth remembering the next time "more income" is assumed to be safe.
+
+**Both guards were checked against the pre-change engine before being trusted**: on the same
+deflating sequence SS fell in 4 years and the pension in 4 years there. A floor test that has never
+seen the floor bite proves nothing - the same discipline P81a/d used.
+
+**Browser-verified, not just node.** Page 771 green (351 in-page + 420 node), Monte Carlo re-run
+through the worker (385 of 500 paths, stress 8 of 36), no console errors, and the index walked by
+hand in the live page: 2028-2031 the index falls 1.018 -> 0.99575 while SS holds at $40,716, then
+2032 recovers to 1.06193 and SS steps to $42,473 - absorbed once, not paid twice. The pension holds
+at $30,540 through the same stretch and resumes from there, not from a high-water mark.
+
+Counts: optimizer_core **337** (up 2), taxPaymentPlanner 61, doclinks 22, page 771.

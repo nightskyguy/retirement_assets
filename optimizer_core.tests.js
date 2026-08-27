@@ -4345,6 +4345,94 @@ test('P81: no index step falls below the floor, at any spread', () => {
     }
 });
 
+// A sequence that falls for a stretch and then recovers past where it started. Both P81c tests
+// need it: a COLA floor that is never exercised proves nothing, and the difference between the
+// two floor rules only shows up on the way back UP.
+const DEFLATE_SEQ = [0.02, -0.01, -0.01, 0.00, 0.01, 0.06, 0.03, 0.02, -0.01, 0.04,
+                     0.03, 0.02, 0.02, 0.03, 0.02, 0.02, 0.03, 0.02, 0.02, 0.03,
+                     0.02, 0.02, 0.03, 0.02, 0.02, 0.03, 0.02, 0.02, 0.03, 0.02,
+                     0.02, 0.03, 0.02, 0.02, 0.03, 0.02, 0.02, 0.03, 0.02, 0.02];
+// The step actually applied between two logged years: the drawn rate plus the spread, floored.
+const clockStep = (t, cpi, inflation) =>
+    Math.max(core.CPI_INDEX_FLOOR, DEFLATE_SEQ[t] + (cpi - inflation));
+
+test('P81c: Social Security never falls, and absorbs the deflation on the way back up', () => {
+    // 42 U.S.C. 415(i) measures each increase from the last quarter that PRODUCED one, so a
+    // deflation year pays zero and the shortfall is made up by the recovery rather than paid twice.
+    // The benefit therefore rides the running MAXIMUM of the index, not the index itself and not a
+    // per-year max(0, .) - which would ratchet up permanently and overstate every deflating path.
+    const inflation = 0.030, cpi = 0.028;
+    const rows = clockRows(simulate({ ...CLOCK_BASE, inflation, cpi,
+                                      returnSequence: CLOCK_RET, inflationSequence: DEFLATE_SEQ }));
+    const ss = rows.map(r => r.SSincome);
+    const cf = rows.map(r => r['-cpiFactor']);
+
+    // The premise: the index really does fall here, or nothing below is being tested.
+    assert(cf.some((v, i) => i > 0 && v < cf[i - 1] - 1e-12),
+        'the index must actually fall on this sequence, or this test proves nothing');
+
+    // 1. A benefit already being paid never goes down.
+    for (let t = 1; t < ss.length; t++)
+        assert(ss[t] >= ss[t - 1] - 1e-6,
+            `year ${t}: Social Security fell from ${ss[t - 1].toFixed(0)} to ${ss[t].toFixed(0)}`);
+
+    // 2. It is exactly the high-water mark of the index, year by year. Measured against the
+    //    benefit actually paid in year 0 rather than against inputs.ss1, because a single filer's
+    //    benefit comes back through the survivor branch, which works in whole monthly dollars.
+    let peak = 0, sawFlat = 0;
+    for (let t = 0; t < ss.length; t++) {
+        peak = Math.max(peak, cf[t]);
+        assertNear(ss[t], ss[0] * peak / cf[0], `year ${t}: SS pays the index high-water mark`, 1e-6);
+        if (t > 0 && Math.abs(ss[t] - ss[t - 1]) < 1e-6) sawFlat++;
+    }
+    assert(sawFlat >= 2, 'the deflation years must pay a FLAT benefit, not a reduced one');
+
+    // 3. And it is the cheaper of the two readings: a per-year floor would compound the recovery
+    //    on top of a deflation it never paid for, so by the end it pays strictly more.
+    let ratchet = 1;
+    for (let t = 0; t + 1 < ss.length; t++) ratchet *= (1 + Math.max(0, clockStep(t, cpi, inflation)));
+    const last = ss.length - 1;
+    assert(ss[0] * ratchet / cf[0] > ss[last] + 1,
+        'a per-year floor must pay MORE than the high-water rule here, or the two are indistinguishable');
+});
+
+test('P81c: a capped pension COLA is floored at zero per year, and does not claw back', () => {
+    // A capped plan is NOT on the high-water rule: the cap already severs it from the index level
+    // (P70i), and plan language grants an adjustment of the lesser of the cap and the year's CPI
+    // increase. So it floors year by year and keeps whatever it was paid.
+    const inflation = 0.030, cpi = 0.028, cap = 0.02;
+    const base = { ...CLOCK_BASE, inflation, cpi, pensionAnnual: 30000, pensionStartAge: 60,
+                   pensionCola: '2', returnSequence: CLOCK_RET, inflationSequence: DEFLATE_SEQ };
+    const rows = clockRows(simulate(base));
+    const pen  = rows.map(r => r.pension);
+    const cf   = rows.map(r => r['-cpiFactor']);
+
+    assert(DEFLATE_SEQ.some((_, t) => t + 1 < rows.length && clockStep(t, cpi, inflation) < 0),
+        'a negative index step must occur here, or the floor is never exercised');
+
+    // 1. Never falls.
+    for (let t = 1; t < pen.length; t++)
+        assert(pen[t] >= pen[t - 1] - 1e-6,
+            `year ${t}: the pension fell from ${pen[t - 1].toFixed(0)} to ${pen[t].toFixed(0)}`);
+
+    // 2. Exactly the per-year rule, compounded: max(0, min(cap, this year's index step)).
+    let want = 30000;
+    for (let t = 0; t < pen.length; t++) {
+        assertNear(pen[t], want, `year ${t}: the pension pays max(0, min(cap, CPI))`, 1e-6);
+        want *= (1 + Math.max(0, Math.min(cap, clockStep(t, cpi, inflation))));
+    }
+
+    // 3. The two rules are genuinely different: run the pension at a FULL COLA, where the cap
+    //    cannot be what separates them, and it still outpaces the index's high-water mark.
+    const full = clockRows(simulate({ ...base, pensionCola: 'full' })).map(r => r.pension);
+    let peak = 0, diverged = false;
+    for (let t = 0; t < full.length; t++) {
+        peak = Math.max(peak, cf[t]);
+        if (full[t] > 30000 * peak + 1) diverged = true;
+    }
+    assert(diverged, 'a full COLA must NOT follow the Social Security high-water rule');
+});
+
 test('P70i: a capped pension COLA pays the lesser of its cap and CPI, year by year', () => {
     // The cap bites PER YEAR, which is the whole point: a run of quiet years followed by a hot one
     // is not the same as the average, and a capped plan never catches up afterwards.

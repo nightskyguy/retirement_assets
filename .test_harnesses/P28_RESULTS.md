@@ -81,11 +81,16 @@ ship a control that changes no number in the tool.
 
 When the strategy's IRA draw does not cover spending, `fillSpendingGap` fills the rest:
 
-| `inputs.rothGapFill` | queue |
-|---|---|
-| unset (today) | Cash → Brokerage → **Roth** (last resort) |
-| `'fillRothThenCash'` | **Roth** → Cash → Brokerage |
-| `'fillCashThenRoth'` | Cash → **Roth** → Brokerage |
+| `inputs.rothGapFill` | short | queue |
+|---|---|---|
+| unset (today) | — | Cash → Brokerage → **Roth** (last resort) |
+| `'fillRothThenCash'` | **RtC** | **Roth** → Cash → Brokerage |
+| `'fillCashThenRoth'` | **CtR** | Cash → **Roth** → Brokerage |
+
+**The short forms read in queue order: CtR is Cash-then-Roth, RtC is Roth-then-Cash.** The tables
+below and the harness both use them. They replace the earlier `RC` / `RF` arm keys, which were
+unreadable in the one place they appeared - `RF` looked like it should mean the Cash-first mode
+and meant the opposite.
 
 Named for what they control — where Roth is *inserted*. Ordered-style letter codes were considered
 and rejected: today's default is already `CBRI`, so `CBRI` would name the current behavior rather
@@ -163,7 +168,7 @@ spend and is worth **+$1,200,484** at 6% in the same mix.
 
 Lifetime gap-fill draws in the **control** arm, against the payoff. The relationship is direct.
 
-| mix | family | rate | BrokWD (control) | realized LTCG | RC payoff |
+| mix | family | rate | BrokWD (control) | realized LTCG | CtR payoff |
 |---|---|---|---|---|---|
 | shipped defaults | IRA Draw 6% | 4% | **$0** | $0 | **$0** |
 | shipped defaults | IRA Draw 6% | 6% | $18,474 | $10,832 | $21,579 |
@@ -182,7 +187,7 @@ plan that funds its gap from Cash alone has nothing to gain and nothing to lose.
 
 ## 7. `fillCashThenRoth` vs `fillRothThenCash`
 
-| spend rate | RC ≥ RF | RC strictly wins | worst RF cell | worst RC cell | best RC cell |
+| spend rate | CtR ≥ RtC | CtR strictly wins | worst RtC cell | worst CtR cell | best CtR cell |
 |---|---|---|---|---|---|
 | 4% | 19/20 | 15/20 | −$244,689 | $0 | $1,064,527 |
 | 6% | 17/20 | 16/20 | −$119,701 | −$12,466 | $3,559,596 |
@@ -208,7 +213,7 @@ behind `gkSpendStable()`.
 From the round-2 sweep (one spend rate per mix). Δscore vs control; "interaction" = combined minus
 the sum of the separate effects.
 
-| mix | family | cash alone | RC alone | sum | RC+cash | interaction |
+| mix | family | cash alone | CtR alone | sum | CtR+cash | interaction |
 |---|---|---|---|---|---|---|
 | round-1 | Fill Bracket 24% | **−$218,645** | +$466,289 | +$247,644 | +$550,069 | **+$302,425** |
 | balanced thirds | Fill Bracket 24% | **−$162,569** | +$1,757,386 | +$1,594,818 | +$1,709,876 | +$115,058 |
@@ -222,6 +227,10 @@ the pair beats the sum of the parts every time. **"Use Cash" should not be judge
 ---
 
 ## 9. Does `convertExcessToRoth` ever lose on its own?
+
+> **SUPERSEDED for today's engine - see section 16 (2026-08-27, `P28ja`).** The numbers below are
+> the 2026-07-30 record and are kept as that. Re-run, the worst cell with timing pinned is
+> **-$8,658**, not -$297,195, and only **2 of 17** losses survive pinning rather than 7 of 28.
 
 **Yes — 28 of 75 cells, worst −$1,411,488. But only 7 of those survive holding withdrawal timing
 constant, and at 4% spend it is a very large win almost everywhere.**
@@ -433,3 +442,101 @@ P30b planned to reuse this ladder and to report against the zero-predicate. The 
 SCENARIO SET - the mixes and rates still span the space usefully - but no NUMBER above section 15 may
 be carried forward. The zero-predicate may be. The "displaces a Brokerage draw" mechanism may not,
 and a weight sweep must not assume that moving a draw from Brokerage to Cash is directionally good.
+
+---
+
+## 16. Re-baseline of section 9, 2026-08-27 (v11.1671 engine) — `P28ja`
+
+Section 9 is the 2026-07-30 record and it no longer reproduces. This section re-runs the same
+question — *does `convertExcessToRoth` ever lose on its own?* — against today's engine, for the same
+reason section 15 re-ran section 5: `P28j` was about to be built on section 9's numbers.
+
+Grid: the section-5 grid, 5 mixes x 3 spend rates x 5 families (Guyton-Klinger skipped, its spend
+drifts), **75 cells, 450 simulations**. A 90-cell variant including GK is reported beside it, because
+GK turns out to behave like the rest here and excluding it changes only the counts, not the answer.
+
+### 16.1 What moved
+
+Δscore, ON minus OFF. "free" uses the engine's own timing rule; "pinned" holds
+`forceWithdrawTiming: 'late'` on **both** sides, so the conversion is the only difference.
+
+| | 2026-07-30 (§9) | 2026-08-27 (§16) |
+|---|---|---|
+| cells that lose, timing free | 28 of 75 | **17 of 75** |
+| worst cell, timing free | −$1,411,488 | **−$616,067** |
+| cells that lose, timing pinned | 7 of 75 | **2 of 75** |
+| worst cell, timing pinned | −$297,195 | **−$8,658** |
+| losses that survive pinning | 7 of 28 (25%) | **2 of 17 (12%)** |
+| best cell, timing pinned | — | +$4,139,569 |
+
+90-cell (GK included): 54 live, **30** lose free, **2** lose pinned, same worst values. GK loses in
+9 cells with timing free and **zero** with it pinned — the most one-sided family in the grid.
+
+### 16.2 The answer to `P28j`'s headline question
+
+**Almost the entire loss is the timing flip, not the conversion.** 15 of 17 losing cells stop losing
+the moment withdrawal timing is held still, and the two survivors are Ordered CBIR at **−$8,658** and
+**−$221** — rounding dust beside the −$616,067 the same grid shows with timing free.
+
+The timing leg, measured directly as `Δfree − Δpinned` over the 39 live cells:
+
+| | value |
+|---|---|
+| median | **−$341,771** |
+| min | **−$919,444** |
+| max | **$0** |
+
+**It is never positive.** Not in one live cell of 39. Converting flips the following year's
+withdrawal to Early, and Early is a cost every time it is measurable. In 29 of 54 live cells
+(90-cell grid) the timing leg is larger in absolute terms than the conversion leg it is riding on —
+so for more than half the grid, the number section 9 attributed to `convertExcessToRoth` was mostly
+reporting *when the money left*, not *whether converting paid*.
+
+### 16.3 Q2 answered early: late beats early, and not narrowly
+
+Pinning `'early'` against `'late'` across all live cells:
+
+| | 75-cell | 90-cell |
+|---|---|---|
+| late better | **35 of 39** | **44 of 54** |
+| early better | 4 | 10 |
+| tie | 0 | 0 |
+
+The shipped rule sends conversion years to Early. On this grid that is the wrong side of the trade
+about nine times in ten.
+
+### 16.4 Q5 scored: **BROKEN**, and the residual is the interesting part
+
+The prediction written into `P28j` was that the timing leg is a compounding effect, so a zero-growth
+arm should collapse it to about $0. It does not. Same grid at three growth rates:
+
+| growth | live | loses free | loses pinned | timing leg min | median | max |
+|---|---|---|---|---|---|---|
+| 0% | 49 | 49 | 45 | −$52,866 | **−$16,480** | −$1,390 |
+| 2% | 52 | 38 | 5 | −$162,802 | −$51,158 | $0 |
+| 6% | 54 | 30 | 2 | −$919,444 | −$250,887 | $0 |
+
+The leg shrinks about **15x** from 6% to 0% growth, so it is *mostly* compounding — but at zero
+growth it is still negative in **every one of 49 live cells**, median −$16,480 and never once $0.
+Something other than compounding is charging for a month-1 withdrawal: dividends accrue on the
+**pre**-withdrawal balance (`optimizer_core.js:1152`, whose own comment calls it an approximate worst
+case) and cash yield runs on what is left, so the two timings do not face the same tax base. That
+residual is a separate finding and is not explained here.
+
+Also worth recording: at 0% growth the conversion itself loses in **45 of 90** cells with timing
+pinned. Converting pays tax now to buy tax-free growth later; with no growth there is nothing to buy.
+The arms are behaving.
+
+### 16.5 What this does to `P28j`
+
+The phase opened on section 9's "a default-facing switch that can cost >$1M". On today's engine the
+conversion's own worst case is **−$8,658**. The >$1M framing does not survive, and `P28j`'s scope
+narrows accordingly — but it does not shrink to nothing, because what replaced it is a rule that is
+measurably on the wrong side in 35 of 39 cells and never once helps.
+
+**The question changed from "is `convertExcessToRoth` dangerous" to "is the Early-on-conversion rule
+defensible at all".**
+
+Reproduce: `.test_harnesses/unifiedconv_harness.js` section 5 carries the free/pinned pair. The
+three-arm split, the timing-leg arithmetic and the growth ladder in 16.4 were run as a one-off beside
+it and are not yet in the harness; `P28jc` folds them in.

@@ -124,11 +124,11 @@ const FAMILIES = [
 const ARMS = [
     { key: 'A0', label: 'control',        flags: {} },
     // A1 ('routing', unifiedConvRouting: true) was removed with the flag itself -- see the header.
-    { key: 'RF', label: 'rothThenCash',   flags: { rothGapFill: 'fillRothThenCash' } },
-    { key: 'RC', label: 'cashThenRoth',   flags: { rothGapFill: 'fillCashThenRoth' } },
+    { key: 'RtC', label: 'RtC (fillRothThenCash)', flags: { rothGapFill: 'fillRothThenCash' } },
+    { key: 'CtR', label: 'CtR (fillCashThenRoth)', flags: { rothGapFill: 'fillCashThenRoth' } },
     { key: 'C',  label: 'cash-funded',    flags: { fundConversionWithCash: true } },
-    { key: 'RFC', label: 'rothThenCash+cash', flags: { rothGapFill: 'fillRothThenCash', fundConversionWithCash: true } },
-    { key: 'RCC', label: 'cashThenRoth+cash', flags: { rothGapFill: 'fillCashThenRoth', fundConversionWithCash: true } },
+    { key: 'RtC+C', label: 'RtC+cash', flags: { rothGapFill: 'fillRothThenCash', fundConversionWithCash: true } },
+    { key: 'CtR+C', label: 'CtR+cash', flags: { rothGapFill: 'fillCashThenRoth', fundConversionWithCash: true } },
 ];
 
 // Fields the routing flag relabels by design. `rothConv` is deliberately NOT here: it is engine
@@ -239,16 +239,16 @@ console.log('   ordered never moves in any arm        : ' + (orderedClean ? 'YES
 // ── 2. Roth-cashThenRoth payoff, spend rate as its own axis ────────────────────────────────────
 // Round 2's headline re-run with strain controlled. "!" marks a cell where delivered spending also
 // changed, so its delta mixes a wealth change with a spending change and is not like-for-like.
-console.log('\n2. Δscore for RC = fillCashThenRoth, by spend rate. "!" = delivered spend changed too.\n');
+console.log('\n2. Δscore for CtR = fillCashThenRoth, by spend rate. "!" = delivered spend changed too.\n');
 console.log(pad('mix', 30) + pad('family', 18) + SPEND_RATES.map(r => pad(pct(r), 16)).join(''));
 for (const s of SCENARIOS) {
     for (const f of FAMILIES) {
         if (f.key === 'ordered') continue;
         let live = false;
         const row = SPEND_RATES.map(r => {
-            const v = d(s.key, r, f.key, 'RC');
+            const v = d(s.key, r, f.key, 'CtR');
             if (Math.abs(v) > 1) live = true;
-            const moved = Math.abs(g(s.key, r, f.key, 'RC').m.spend - g(s.key, r, f.key, 'A0').m.spend) > 1;
+            const moved = Math.abs(g(s.key, r, f.key, 'CtR').m.spend - g(s.key, r, f.key, 'A0').m.spend) > 1;
             return pad(money(v).trim() + (moved ? ' !' : ''), 16);
         });
         if (!live) continue;
@@ -257,15 +257,15 @@ for (const s of SCENARIOS) {
 }
 
 // ── 3. Does cashThenRoth still beat first at every strain? ─────────────────────────────────────
-console.log('\n3. RC (cashThenRoth) vs RF (rothThenCash), per spend rate. RF is the one that ALSO displaces Cash,\n'
-          + '   which is the losing trade, so RC should win or tie everywhere.\n');
-console.log(pad('spend rate', 14) + pad('RC >= RF', 12) + pad('RC strictly wins', 20)
-    + pad('worst RF cell', 16) + pad('worst RC cell', 16) + 'best RC cell');
+console.log('\n3. CtR (fillCashThenRoth) vs RtC (fillRothThenCash), per spend rate. RtC also displaces Cash,\n'
+          + '   which is the losing trade, so CtR should win or tie everywhere.\n');
+console.log(pad('spend rate', 14) + pad('CtR >= RtC', 12) + pad('CtR strictly wins', 20)
+    + pad('worst RtC cell', 16) + pad('worst CtR cell', 16) + 'best CtR cell');
 for (const r of SPEND_RATES) {
     const cs = [];
     for (const s of SCENARIOS) for (const f of FAMILIES) {
         if (f.key === 'ordered' || f.key === 'gk') continue;
-        cs.push({ rf: d(s.key, r, f.key, 'RF'), rc: d(s.key, r, f.key, 'RC') });
+        cs.push({ rf: d(s.key, r, f.key, 'RtC'), rc: d(s.key, r, f.key, 'CtR') });
     }
     const ge = cs.filter(c => c.rc >= c.rf - 1).length;
     const wins = cs.filter(c => c.rc > c.rf + 1).length;
@@ -279,7 +279,7 @@ for (const r of SPEND_RATES) {
 console.log('\n4. MECHANISM -- lifetime gap-fill draws in the CONTROL arm. fillCashThenRoth can only act on\n'
           + '   a Brokerage draw, so a plan that never reaches Brokerage has no lever to pull.\n');
 console.log(pad('mix', 30) + pad('family', 18) + pad('rate', 8)
-    + pad('BrokWD (control)', 18) + pad('realized LTCG', 16) + 'RC payoff');
+    + pad('BrokWD (control)', 18) + pad('realized LTCG', 16) + 'CtR payoff');
 for (const s of SCENARIOS) {
     for (const f of FAMILIES) {
         if (f.key !== 'bracket' && f.key !== 'fixedpct') continue;
@@ -288,7 +288,7 @@ for (const s of SCENARIOS) {
             console.log(pad(r === SPEND_RATES[0] ? s.label : '', 30)
                 + pad(r === SPEND_RATES[0] ? f.label : '', 18) + pad(pct(r), 8)
                 + pad(money(m.brokWD).trim(), 18) + pad(money(m.capgains).trim(), 16)
-                + money(d(s.key, r, f.key, 'RC')).trim());
+                + money(d(s.key, r, f.key, 'CtR')).trim());
         }
     }
 }
@@ -340,16 +340,16 @@ const check = (l, ok, det) => console.log(`  ${ok ? 'HELD    ' : 'BROKEN  '} ${p
 const allCells = [];
 for (const s of SCENARIOS) for (const r of SPEND_RATES) for (const f of FAMILIES) {
     if (f.key === 'ordered' || f.key === 'gk') continue;
-    allCells.push({ s: s.label, f: f.label, r, rf: d(s.key, r, f.key, 'RF'), rc: d(s.key, r, f.key, 'RC') });
+    allCells.push({ s: s.label, f: f.label, r, rf: d(s.key, r, f.key, 'RtC'), rc: d(s.key, r, f.key, 'CtR') });
 }
 const rcLoses = allCells.filter(c => c.rc < c.rf - 1);
-check('A. cashThenRoth dominates rothThenCash', rcLoses.length === 0,
-    rcLoses.length === 0 ? `RC >= RF in all ${allCells.length} cells`
-        : `RC lost ${rcLoses.length}/${allCells.length}: `
+check('A. CtR dominates RtC', rcLoses.length === 0,
+    rcLoses.length === 0 ? `CtR >= RtC in all ${allCells.length} cells`
+        : `CtR lost ${rcLoses.length}/${allCells.length}: `
           + rcLoses.slice(0, 3).map(c => `${c.f}@${pct(c.r)}`).join(', '));
 
 const rcNeg = allCells.filter(c => c.rc < -1000);
-check('B. cashThenRoth never destroys value', rcNeg.length === 0,
+check('B. CtR never destroys value', rcNeg.length === 0,
     rcNeg.length === 0 ? `no cell worse than -$1k across ${allCells.length}`
         : `${rcNeg.length}/${allCells.length} negative, worst ${money(Math.min(...rcNeg.map(c => c.rc))).trim()}`);
 

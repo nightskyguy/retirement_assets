@@ -15,7 +15,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
-| **O0** | P70 | Inflation indexing: **P70a measured; P70b is a shipped two-clock bug, no MC needed** | `P70b` |
+| **O0** | P70 | Inflation indexing: **COMPLETE v11.1661** (a-i). Spread model, two-clock fix, capped pension COLAs | done, ready to merge |
 | **O1** | P78 | Edit the plan against a pinned replay path *(planned 2026-08-26, was briefly numbered P75)* | `P78a` |
 | **O1** | P79 | Draw the 10 captured paths on the survival chart *(planned 2026-08-26)* | `P79a` |
 | **O1** | P80 | Nerdknob: the historical years behind each bootstrap block *(planned 2026-08-26)* | `P80a` |
@@ -1061,7 +1061,7 @@ into the law, not CPI); `computeBETR` and the amortization helpers (returns, not
         the grounds that the goal exists to manage indexed thresholds, which is arguable. Decide it
         explicitly rather than leaving it implicit; if it stays on `cpiRate`, say why.
 
-- [ ] **P70e - THE ONLY P70 ITEM STILL OPEN. Name the forecast boundary, and re-open the IRMAA margin default.** `irmaaFwdFactor`
+- [x] **P70e DONE (v11.1661, `a27aaea`). IRMAA_MARGIN_DEFAULT = 'halfcpi' CONFIRMED.** Re-running the harness as it stood answered nothing - it never feeds a path, so its output is byte-identical to main. Its header premise (decisions are deterministic) stopped being true in general, so a native section was added: halfcpi prevents 8.5% of tier breaches under fixed indexation and **21.1% under path-following**. But surcharge DOLLARS move -0.09%; the wealth ranking is still driven by conversion sizing, the same P6 finding as before. The default holds for the reason it always did, not for the breach protection. `irmaaFwdFactor`
       and the ACA lookahead stay on `inputs.cpi`. But once indexation follows the path, the plan's
       two-year forward projection stops being exact, and that changes a decision already taken:
       `irmaa_margin_harness.js` measured the margin's benefit as **exactly zero**, correctly, because
@@ -1085,7 +1085,7 @@ into the law, not CPI); `computeBETR` and the amortization helpers (returns, not
       Social Security are not yet adjusted for variable inflation") retired, since it stops being
       true.
 
-- [ ] **P70i - capped and reduced pension COLAs (raised 2026-08-26, after P70d moved the pension to
+- [x] **P70i DONE (v11.1661). Five-way selector: no increase / 1% / 2% / 3% cap / full COLA, paying min(cap, that year's index rate) PER YEAR via its own compounding factor. `pensionColaCap()` accepts the old booleans so the golden, the tests and saved plans need no migration; `applyScenario` maps a stored boolean, since the generic loop would set a <select> to "true" and silently strip the COLA. Deflation left as a genuine min, noted in code, to be decided alongside Social Security or not at all.** ~~capped and reduced pension COLAs (raised 2026-08-26, after P70d moved the pension to
       CPI).** `pensionCola` is a plain on/off, so ON now means FULL CPI every year. That is right for
       federal CSRS and military, and wrong for the two commonest cases: FERS pays a reduced "diet"
       COLA above 2%, and most state and municipal plans cap at 2-3% or pay a flat contractual

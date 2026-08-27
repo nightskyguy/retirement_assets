@@ -4914,4 +4914,39 @@ default plan FAIL. It did not: my cache-busting URL param was `?g=1`, and **`g` 
 for Growth** - I was setting growth to 1%, then 2%. `s` is State, similarly exposed. The earlier
 probes (`?clean=1`, `?fix=1`, `?t=2`) did not collide, so the fixture finding stands. Rule:
 **never cache-bust this page with a short query param; the share scheme owns the short names.**
-Measuring the field directly found it in one step after grepping had found nothing.
+Measuring the field directly found it in one step after grepping had found nothing.
+
+**P70 COMPLETE, v11.1661, `a27aaea`.** Last two items closed.
+
+**P70e - the default holds, and re-running the harness was NOT the answer.** `irmaa_default_harness.js`
+never feeds simulate() a path, so with no inflationSequence the spread model reduces to the typed cpi
+and its output is byte-identical to main (verified by diff against a detached main worktree). What
+HAD changed was its header premise: "sim.cpiRate is built from the scalar inputs.cpi, so the ceiling,
+the conversions and the donations are deterministic". Added a native section instead, counting years
+charged ABOVE the targeted tier across the Stress bank:
+
+| | fixed indexation | path-following |
+|---|---|---|
+| halfcpi breaches prevented | 8.5% | **21.1%** |
+| surcharge dollars vs none | - | **-0.09%** |
+
+So the margin now absorbs a real forecast error, as `irmaa_cpi_risk_harness.js` predicted. The honest
+reading is narrower than that sounds: the DOLLARS are still noise, and the wealth ranking is driven by
+conversion sizing (the original P6), with halfcpi leading in both regimes. **`IRMAA_MARGIN_DEFAULT`
+confirmed for the reason it always had, not for the breach protection.**
+
+**P70i - the gap P70d created, now closed.** Five-way selector replacing the checkbox; a capped plan
+pays `min(cap, that year's index rate)` applied PER YEAR, which is why it needs its own compounding
+factor rather than being read off cpiRate - the cap has to bite each year for the pension to fall
+permanently behind instead of catching up. `pensionColaCap()` takes the old booleans so the golden,
+the tests and saved plans need no migration, and `applyScenario` maps a stored boolean because the
+generic restore loop would set a `<select>` to "true", match nothing, and silently strip the COLA.
+
+Sanity check worth keeping: at the default 2.8% CPI a 3% cap pays exactly what Full COLA pays, because
+the cap never binds. If those two ever differ on default inputs, the per-year min is wrong.
+
+Deflation left as a genuine min, so a falling index reduces a capped pension the way it already
+reduces modeled Social Security. Real COLAs are floored at zero; not modeled, noted in code, and
+flagged as a decision to take for both or neither.
+
+**P70 now has zero open items.** Suites 332 / 61 / 22, page 658 gated / 763 with ?runtests.

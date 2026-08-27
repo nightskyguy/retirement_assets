@@ -5249,3 +5249,32 @@ pre-existing quirk rather than part of what was asked for.
 about how the page LOOKS and every check was a DOM assertion. `getComputedStyle` would have caught
 the buttons - `color: rgb(255,255,255)` against `background: rgb(255,250,240)` is a contrast test a
 machine can do - and that is the check worth adding to the habit, not more assertions about state.
+
+---
+
+## Session 2026-08-27 - P82i, a tooltip pointing at the page you are on  *(v11.1670)*
+
+**The Stress Test tooltip was pre-existing, and the cause is a shared string with one unshareable
+sentence.** `stressTooltip()` on main takes no placement argument, and both callers get the same
+text: the summary-bar tile, which is visible from EVERY tab and for which "See the Monte Carlo tab
+for the full stress chart" is exactly right, and the Monte Carlo headline, where it points the
+reader at the page they are already looking at. The headline sits inside its own COLLAPSED fold, so
+what it should say is where the chart actually is - and the reader's own wording, "Expand this
+header to see the detailed chart", says it better than anything I drafted.
+
+`stressTooltip(s, where)` now closes with one of two lines, and an unnamed placement closes with
+neither rather than guessing at a destination. Eight tier-1 assertions, including one that the two
+strings are IDENTICAL up to the closing line - the point is one shared explanation with one
+placement-specific tail, and a future edit that drifts the bodies apart should fail.
+
+**The buttons went blue, and the shade was measured rather than picked.** The page's standard
+`#2980b9` carries white text at **4.3:1**, which is under AA, and these run at 0.85em. `#1f6391`,
+the darker end of the same blue, reads **6.46:1** on the text and **5.83:1** against the cream
+banner. Hover lifts to `#2980b9`, so the standard blue becomes the active state instead of the
+resting one.
+
+That contrast check is the habit the last round said was worth keeping, and this is the first time
+it changed a decision rather than confirming one: the obvious choice - match the page's button blue
+- was the wrong one, and only the number said so.
+
+Counts: optimizer_core **338** (unchanged, all tier 1), tier 1 **381** (up 8), page **802** green.

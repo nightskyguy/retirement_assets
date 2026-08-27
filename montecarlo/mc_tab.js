@@ -1279,13 +1279,23 @@ function stressTooltipBase(mode) {
     return (mode ?? stressWindowMode()) === 'all' ? STRESS_TOOLTIP_ALL : STRESS_TOOLTIP_WORST;
 }
 
-// Tooltip text shared by the summary-bar tile and the Monte Carlo headline.
-function stressTooltip(s) {
+// P82i. Where the tooltip is being shown, because the closing line is the one sentence that cannot
+// be shared. The summary-bar tile is visible from EVERY tab, so it points at the Monte Carlo tab;
+// the headline IS on that tab, and pointing a reader at the page they are already looking at reads
+// as a dead end. It sits inside its own collapsed fold, so it points there instead.
+const STRESS_TIP_WHERE = {
+    tile:     '\n\nSee the Monte Carlo tab for the full stress chart.',
+    headline: '\n\nExpand this header to see the detailed chart.',
+};
+
+// Tooltip text shared by the summary-bar tile and the Monte Carlo headline, apart from the last
+// line. `where` is 'tile' or 'headline'; anything else closes with nothing rather than guessing.
+function stressTooltip(s, where) {
     if (!s) return stressTooltipBase(null);
     return stressTooltipBase(s.mode)
         + `\n\nYour plan survives ${s.total - s.failures} of ${s.total} and fails ${s.failures}.`
         + (s.ruinYear ? `\nIn the runs that fail, the money typically runs out around ${s.ruinYear}.` : '')
-        + '\n\nSee the Monte Carlo tab for the full stress chart.';
+        + (STRESS_TIP_WHERE[where] ?? '');
 }
 
 // Headline block at the top of the (foldable) stress section, plus the same number mirrored into
@@ -1318,7 +1328,7 @@ function renderStressHeadline(stress) {
             ? `Your plan survives all ${s.total} of the worst historical periods on record.`
             : `Your plan runs out of money in ${s.failures} of the ${s.total} worst historical periods on record` + tail);
     el.innerHTML =
-        `<div title="${stressTooltip(s)}" style="display:flex;align-items:center;gap:12px;background:${s.bg};`
+        `<div title="${stressTooltip(s, 'headline')}" style="display:flex;align-items:center;gap:12px;background:${s.bg};`
         + `border-radius:6px;padding:10px 14px;margin-bottom:8px;">${chev}`
         + `<div style="font-size:1.9em;font-weight:700;line-height:1;color:${s.fg};white-space:nowrap;">${s.failures} / ${s.total}</div>`
         + `<div style="font-size:0.92em;color:#333;"><strong>Stress Test.</strong> ${sentence}</div></div>`;
@@ -1418,7 +1428,7 @@ function updateStressStat(stress) {
     }
     el.textContent = `${s.failures} of ${s.total} fail`;
     el.style.color = s.fg;
-    if (cell) cell.title = stressTooltip(s);
+    if (cell) cell.title = stressTooltip(s, 'tile');
 }
 
 // --- Time estimate --------------------------------------------------------

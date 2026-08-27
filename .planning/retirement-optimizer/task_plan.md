@@ -911,12 +911,25 @@ Six items, all raised after using P78/P79 for real.
         `git show main:` before claiming it: `.mc-fold > summary` suppresses the native marker
         because the two headline folds draw their own `.mc-fold-chev`, and this static summary never
         got one. Given one.
+- [x] **P82i (user-reported, third round)** - two more.
+      - **The Stress Test headline tooltip closed with "See the Monte Carlo tab for the full stress
+        chart" while being read ON the Monte Carlo tab.** PRE-EXISTING on main (`stressTooltip()`
+        there has no placement argument and both callers get the same string). One text is shared by
+        the summary-bar tile, which is visible from EVERY tab and for which the sentence is right,
+        and by the headline, for which it is a dead end. `stressTooltip(s, where)` now closes with
+        the tile's sentence or the headline's "Expand this header to see the detailed chart", the
+        reader's own wording; an unnamed placement adds no destination rather than guessing.
+      - **The banner buttons were readable but still cream on cream.** Now blue. Not the page's
+        standard `#2980b9`: at 0.85em that carries white text at only **4.3:1**, so the darker
+        `#1f6391` of the same family is used - **6.46:1** on the text and **5.83:1** against the
+        banner, both measured in the page rather than eyeballed. Hover lifts to the standard blue,
+        so the lighter shade reads as the active state.
 - **KNOWN, pre-existing, NOT fixed here:** `.mc-fold[open] > summary .mc-fold-chev` sets
       `transform: rotate(90deg)` and it does not take - computed transform is `none` on all three
       folds, open or closed, including on main. The rule is loaded and the selector matches. The
       chevron marks the control either way, and chasing it is not what was reported. Its own item
       if it ever matters.
-- **Status:** COMPLETE, v11.1670. Twelve more tier-1 assertions (373 in-page).
+- **Status:** COMPLETE, v11.1670. Twenty more tier-1 assertions (381 in-page).
 - **Independent:** built on P78/P79 in this branch
 
 ---

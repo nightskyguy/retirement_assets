@@ -1061,13 +1061,19 @@ table th.empty-column {
     font-weight: 600;
     line-height: 1.3;
     white-space: nowrap;
-    color: #6b5310;
-    background: #fffaf0;
-    border: 1px solid #cbb45f;
+    /* Blue, not a tint of the banner. A cream button on a cream strip reads as part of the strip;
+       these are the controls, so they stand off it. The page's standard #2980b9 carries white text
+       at only 4.3:1, and these run at 0.85em, so the darker end of the same blue is used instead:
+       6.46:1 on the text and 5.83:1 against the banner, both measured. Hover lifts to the standard
+       blue, so the lighter shade reads as the active state rather than the resting one. */
+    color: #fff;
+    background: #1f6391;
+    border: 1px solid #17496b;
     border-radius: 4px;
     cursor: pointer;
 }
-.replay-btn:hover { background: #fff3cd; border-color: #a8913f; color: #4a390a; }
+.replay-btn:hover { background: #2980b9; border-color: #1f6391; color: #fff; }
+.replay-btn:focus-visible { outline: 2px solid #1f6391; outline-offset: 2px; }
 
 .mc-fold-chev {
     display: inline-block;

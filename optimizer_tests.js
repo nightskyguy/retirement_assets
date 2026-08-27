@@ -2610,6 +2610,44 @@ assertEqual(
 		assertEqual(realReturnOf(undefined, undefined), 0, "P82: missing rates read as zero, not NaN");
 	})();
 
+	// P82i: the stress tooltip's closing line is the one sentence the summary-bar tile and the
+	// Monte Carlo headline cannot share. The tile is visible from every tab and points AT the Monte
+	// Carlo tab; the headline is already on it, and shipped pointing readers at the page they were
+	// looking at. Nothing throws when this is wrong - it just reads as a dead end.
+	(() => {
+		console.log(" ");
+		console.log("=== P82i: stress tooltip by placement ===");
+		if (typeof stressTooltip !== "function") {
+			assertEqual(true, false, "P82i: stressTooltip must be defined");
+			return;
+		}
+		const s = { mode: "worst", total: 36, failures: 8, ruinYear: 2046 };
+		const tile = stressTooltip(s, "tile");
+		const head = stressTooltip(s, "headline");
+
+		assertEqual(tile.includes("See the Monte Carlo tab"), true,
+			"P82i: the summary-bar tile still points at the Monte Carlo tab");
+		assertEqual(head.includes("See the Monte Carlo tab"), false,
+			"P82i: the headline must NOT point at the tab it is already on");
+		assertEqual(head.includes("Expand this header"), true,
+			"P82i: the headline points at its own fold instead");
+		assertEqual(tile.includes("Expand this header"), false,
+			"P82i: the tile must not tell a reader on another tab to expand a header they cannot see");
+
+		// Everything BEFORE the closing line is shared, and must stay shared.
+		const body = t => t.slice(0, t.lastIndexOf("\n\n"));
+		assertEqual(body(tile), body(head),
+			"P82i: only the closing line differs between the two placements");
+		assertEqual(tile.includes("survives 28 of 36 and fails 8"), true,
+			"P82i: the counts survive the split");
+		assertEqual(head.includes("2046"), true, "P82i: the typical ruin year survives the split");
+
+		// An unknown placement closes with nothing rather than guessing at a destination.
+		const bare = stressTooltip(s, undefined);
+		assertEqual(bare.includes("Monte Carlo tab") || bare.includes("Expand this header"), false,
+			"P82i: an unnamed placement adds no destination at all");
+	})();
+
     console.log('\n========================================');
     console.log(`   RESULTS: ${passed} passed, ${failed} failed`
 		+ (skippedUnsafe ? `, ${skippedUnsafe} unsafe suites skipped (add ?runtests)` : ''));

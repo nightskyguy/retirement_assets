@@ -71,9 +71,9 @@ on.
 
 ### Taxes now follow the inflation your plan actually gets
 
-**Behavior change. More accurate tax modeling, so any Monte Carlo or Stress Test result you
-recorded before this release will have changed.** A pension with a COLA also moves in the main
-projection, because it now follows CPI rather than general inflation.
+**Behavior change. More accurate tax modeling, so any Monte Carlo or Stress Test result you saw
+before this release will have changed.** A pension with a COLA also moves in the main projection,
+because it now follows CPI rather than general inflation.
 
 Each Monte Carlo and Stress Test path has always given your spending its own inflation, but the tax
 code stayed frozen at the CPI you typed. On a path whose inflation ran ABOVE that figure, your
@@ -214,7 +214,7 @@ sequences the run scored, never re-created approximations.
    volatility, and inflation that is more persistent, larger and more tightly tied to bad return
    years. *Default* puts everything back.
 
-**Behavior change.** A Synthetic result you recorded before this release will not come back until
+**Behavior change.** A Synthetic result you saw before this release will not come back until
 you click *Fixed Inflation*: the returns are identical to the digit, inflation is what moved.
 Historical mode is unchanged.
 

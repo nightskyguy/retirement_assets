@@ -23,8 +23,8 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ### Change the plan while replaying a path, and a COLA that is never a pay cut
 
-**Behavior change. Monte Carlo and Stress Test results move on any path with a year of falling
-prices, and a saved plan will not reproduce the numbers it showed before.**
+**Behavior change. Monte Carlo and Stress Test results move on any path containing a deflationary
+year, and a saved plan will not reproduce the numbers it showed before.**
 
 The main projection uses the fixed growth and inflation figures you supply, so the first two changes
 below show up only in the Monte Carlo, the Stress Test and a Replay, where every path carries its
@@ -45,8 +45,8 @@ gray, and clicking one replays it. Picking one out there can be fiddly in the ea
 several ruined paths run together, so the ▶️ Replay list beside the headline names them instead. Its
 tooltip now describes the single line under the pointer rather than listing everything at that year.
 
-**2. Social Security and a pension no longer shrink when prices fall.** A cost-of-living raise can
-be nothing in such a year, but it is never a pay cut. The two recover differently, because they are
+**2. Social Security and a pension no longer shrink during deflation.** A cost-of-living raise can
+be nothing in a deflationary year, but it is never a pay cut. The two recover differently, because they are
 different instruments. Social Security measures each increase from the last one it actually paid,
 per 42 U.S.C. §415(i), so after prices recover the benefit picks up where it left off rather than
 being paid twice for the same recovery. A capped pension keeps what it was paid and starts again

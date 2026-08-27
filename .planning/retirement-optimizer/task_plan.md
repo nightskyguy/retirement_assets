@@ -18,7 +18,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
 **P81, P78, P79, P82 and P80 all COMPLETE on this branch, v11.1667-11.1671.** Social Security and a
-capped pension are no longer cut when prices fall; a replay survives editing; the survival chart
+capped pension are no longer cut in a deflationary year; a replay survives editing; the survival chart
 draws the ten captured paths; prev/next is one 46-stop ring; the Market Return chart gained a
 real-return line and, under nerdknob, names the historical year each replayed year was sampled
 from. O0 is `P35i` alone.

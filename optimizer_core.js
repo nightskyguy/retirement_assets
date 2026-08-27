@@ -151,10 +151,10 @@ const CPI_INDEX_FLOOR = -0.01;
 // Accepts the old boolean as well as the new strings, so saved plans, the sweep golden and every
 // existing test keep their meaning without a migration: false is none, true is full.
 //
-// NOTE on deflation: the cap is a genuine MIN, so a year of falling prices reduces the pension,
-// the same way falling cpiRate already reduces modeled Social Security. Real COLAs are floored at
-// zero and never claw back. That floor is not modeled here, and it is a separate decision from
-// this one - it would change SS too, and should be taken for both at once or neither.
+// NOTE on deflation (P81c): the cap is a MIN against the year's index rate, and that rate can be
+// negative in a deflationary year. The zero floor that keeps a COLA from becoming a pay cut is
+// applied at the point the factor advances (advanceYear), not here, so this function returns the
+// CAP alone and says nothing about the floor.
 function pensionColaCap(inputs) {
     const v = inputs && inputs.pensionCola;
     if (v === true || v === 'full') return Infinity;

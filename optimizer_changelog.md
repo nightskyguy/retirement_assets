@@ -23,8 +23,8 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ### Change the plan while replaying a path, and a COLA that is never a pay cut
 
-**Behavior change. Monte Carlo and Stress Test results move on any path containing a deflationary
-year, and a saved plan will not reproduce the numbers it showed before.**
+**Behavior change. Your Monte Carlo and Stress Test results may now differ from before, because the
+model behind them is more accurate.** Any path containing a deflationary year is affected.
 
 The main projection uses the fixed growth and inflation figures you supply, so the first two changes
 below show up only in the Monte Carlo, the Stress Test and a Replay, where every path carries its

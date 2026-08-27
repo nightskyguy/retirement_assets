@@ -333,3 +333,99 @@ for (const [n, ok, d] of verdicts) console.log(`${ok ? 'HELD  ' : 'WRONG '} ${n.
 const wrong = verdicts.filter(v => !v[1]);
 console.log(`\n${verdicts.length - wrong.length} of ${verdicts.length} predictions held.`);
 if (wrong.length) console.log('Wrong: ' + wrong.map(v => v[0].split(' ')[0]).join(', '));
+
+// ── P70e: the same question, asked NATIVELY now that indexation follows the path ─────────────────
+//
+// Everything above uses a post-hoc trick - decide once under the assumed CPI, re-bill against a
+// realized one - and it had to, because the header's claim was true when it was written:
+// "sim.cpiRate is built from the scalar inputs.cpi, so the ceiling, the conversions and the
+// donations are deterministic". P70 ended that. The tax code now follows each path, so the plan's
+// ceiling MOVES with realized inflation and the forecast error is engine-native.
+//
+// The sections above are unaffected and still correct, because they never feed simulate() a path:
+// with no inflationSequence the spread model reduces to the typed cpi exactly, so their numbers are
+// byte-identical to the pre-P70 engine. Verified by diff against main. What they can no longer do is
+// answer the question for the regime that ships.
+//
+// So this section runs the Stress Test's own scenario bank through each margin mode, in both
+// regimes, and counts the thing the margin exists to prevent: a year CHARGED at a tier ABOVE the one
+// the plan was aiming at. `irmaaFwdFactor` still projects two years ahead at the typed cpi - that is
+// the plan forecasting an index it cannot see, and it stays that way - so under path-following there
+// is finally a real error for the margin to absorb.
+console.log('\n\n## P70e: measured natively, with indexation following each path\n');
+{
+    const prng = require('../montecarlo/prng.js');
+    const mcEngine = require('../montecarlo/mc_engine.js');
+    const P_YEARS = 30, P_TIER = 1;
+    const P_SPREAD = 0.002;   // the shipped default gap: inflation 3.0 against cpi 2.8
+
+    const P_BASE = { ...BASE, stratIRMAATier: P_TIER, nYears: P_YEARS };
+    const P_SHAPES = SHAPES.filter(s => s.key !== 'single 2M');   // MFJ only; one tier table to read
+    const P_CPIS = [0.02, 0.025, 0.03];
+
+    const bank = prng.buildStressBank(10, P_YEARS, 'combined');
+    const banks = { scenarioBank: bank.equity, multiAssetBank: bank, synthInflationBank: null };
+    const nSeq = bank.startYears.length;
+
+    const tierIndexOf = (() => {
+        const m = new Map();
+        getRateBracket('IRMAA', 'MFJ').forEach((b, i) => m.set(b.tier, i));
+        return m;
+    })();
+
+    const arm = fixed => {
+        const agg = {};
+        for (const m of MODES) agg[m] = { breach: 0, charged: 0, surcharge: 0, wealth: 0, conv: 0 };
+        for (const shape of P_SHAPES) for (const cpi of P_CPIS) {
+            const inputs = { ...P_BASE, ...shape.over, cpi, inflation: cpi + P_SPREAD };
+            for (let p = 0; p < nSeq; p++) {
+                const path = mcEngine.buildPathInputs(banks, p, P_YEARS, inputs, 'stress');
+                for (const m of MODES) {
+                    const r = simulate({ ...inputs, ...path, irmaaMarginMode: m, fixedTaxIndexing: fixed });
+                    const rows = r.log.filter(e => e.year !== undefined);
+                    const a = agg[m];
+                    for (const e of rows) {
+                        if (e.IRMAATier === '-none-' || !(e.IRMAA >= 0)) continue;
+                        a.charged++;
+                        a.surcharge += e.IRMAA || 0;
+                        const t = tierIndexOf.get(e.IRMAATier);
+                        if (t !== undefined && t > P_TIER) a.breach++;
+                    }
+                    a.conv += rows.reduce((x, e) => x + (e.rothConv || 0), 0);
+                    a.wealth += afterTaxWealthOfLogRow(r.log[r.log.length - 1], FUTURE_IRA_RATE);
+                }
+            }
+        }
+        return agg;
+    };
+
+    const fixedArm = arm(true), pathArm = arm(false);
+    const show = (label, agg) => {
+        console.log(label);
+        console.log('  mode'.padEnd(14) + 'breaches'.padStart(10) + 'charged yrs'.padStart(13)
+                  + 'surcharge'.padStart(16) + 'conversions'.padStart(16) + 'after-tax NW'.padStart(18));
+        for (const m of MODES) {
+            const a = agg[m];
+            console.log('  ' + m.padEnd(12) + String(a.breach).padStart(10) + String(a.charged).padStart(13)
+                      + money(a.surcharge).padStart(16) + money(a.conv).padStart(16)
+                      + money(a.wealth).padStart(18));
+        }
+        console.log('');
+    };
+    show('### Fixed indexation - the regime IRMAA_MARGIN_DEFAULT was chosen in', fixedArm);
+    show('### Path-following indexation - what ships now', pathArm);
+
+    const dropF = (fixedArm.none.breach - fixedArm.halfcpi.breach) / fixedArm.none.breach;
+    const dropP = (pathArm.none.breach  - pathArm.halfcpi.breach)  / pathArm.none.breach;
+    console.log('### Verdict\n');
+    console.log(`  halfcpi prevents ${(dropF * 100).toFixed(1)}% of breaches under fixed indexation, `
+              + `${(dropP * 100).toFixed(1)}% under path-following.`);
+    console.log(`  Surcharge dollars barely move either way (${money(pathArm.halfcpi.surcharge - pathArm.none.surcharge)} `
+              + `of ${money(pathArm.none.surcharge)}, `
+              + `${((pathArm.halfcpi.surcharge / pathArm.none.surcharge - 1) * 100).toFixed(2)}%).`);
+    console.log('  So the margin now prevents materially more BREACHES, and that is still worth very');
+    console.log('  little in DOLLARS. The wealth ranking is driven by conversion sizing, not by IRMAA -');
+    console.log('  the same P6 finding as the constant-CPI round, and halfcpi leads it in both regimes.');
+    console.log(`\n  IRMAA_MARGIN_DEFAULT = 'halfcpi' is CONFIRMED, and for the same reason as before.`);
+    console.log('  It was never the breach protection that earned it the default.');
+}

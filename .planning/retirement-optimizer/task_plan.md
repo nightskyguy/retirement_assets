@@ -15,7 +15,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
-| **O1** | P70 | Bracket indexation under variable inflation - **user-confirmed interest 2026-08-26** | `P70a` |
+| **O0** | P81 | Index floor: **a/b/d FIXED v11.1662**; `P81c` zero-floor for SS + pension still open | `P81c` |
 | **O1** | P78 | Edit the plan against a pinned replay path *(planned 2026-08-26, was briefly numbered P75)* | `P78a` |
 | **O1** | P79 | Draw the 10 captured paths on the survival chart *(planned 2026-08-26)* | `P79a` |
 | **O1** | P80 | Nerdknob: the historical years behind each bootstrap block *(planned 2026-08-26)* | `P80a` |
@@ -105,7 +105,7 @@ first task. Every open item in the file now carries one.
 | ~~DONE~~ | ~~P23~~ | ~~MC arithmetic-mean returns + AR(1) variable inflation~~ - **COMPLETE 2026-08-23, v11.160F, merged with 7 addenda through v11.161B in PR #188.** Shipped as a THIRD mode (Synthetic-AAM) rather than a GBM replacement, both synthetic modes given calibrated AR(1) inflation correlated with returns. Suite 300 | - | - |
 | ~~DONE~~ | ~~P71~~ | ~~Dedup the MC engine: one runPass instead of two mirrors~~ - **COMPLETE 2026-08-23, v11.161C-F, committed `b7f8808` and merged.** 455+567 lines of mirror -> 42+203 lines of shell around one `mc_engine.js`; suite 300 -> 304. Maps caught up in `fb6675c` | - | - |
 | ~~DONE~~ | ~~P69~~ | ~~Replay: walk one MC or Stress sequence through the main model~~ - **COMPLETE 2026-08-26, v11.1657**, all of `P69a`-`P69h` | - | - |
-| **O1** | P70 | Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path *(new 2026-08-23)* | `P70a` (measure first) | nothing |
+| **O0** | P70 | Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path. **Measured 2026-08-26: yes, -8.3% lifetime tax and 38 invented failures** | `P70b` (decide the default) | nothing |
 | **O1** | P75 | Year-by-year withdrawal/conversion optimization - income-target reframe, edge menu, coordinate descent *(new 2026-08-25)* | `P75a` (measure first, gates the phase) | nothing |
 | **O1** | P78 | Edit the plan against a pinned replay path *(new 2026-08-26; renumbered from a colliding P75)* | `P78a` | P69 (PR #194) |
 | **O1** | P79 | Draw the 10 captured paths on the survival chart *(new 2026-08-26)* | `P79a` | P69 (PR #194) |
@@ -935,6 +935,62 @@ years are already labels.
 
 ---
 
+## P81: the inflation floor guards the DRAW, not the derived index  *(user-raised 2026-08-26, O0)*
+
+**User's two conditions, checked:**
+
+| condition | holds? |
+|---|---|
+| Medicare/IRMAA growth is ADDITIVE | **YES.** `sim.medicareRate *= (1 + cpi_t + inputs.inflation)` (`optimizer_core.js:3076`) - the statutory index plus a constant excess-medical spread. |
+| Nothing goes below `INFLATION_FLOOR` (-0.01) | **NO.** The floor is applied to the DRAWN inflation only. |
+
+**Where the floor IS applied**, correctly, to every drawn series:
+`computeNextInflation` (`prng.js:61`, synthetic AR(1)), the stress bank (`:360`), the multi-asset
+bootstrap bank (`:502`) and the bootstrap inflation bank (`:531`). So `i_t >= -0.01` always, and the
+historical record's real -10.3% years are clamped before they ever reach the engine.
+
+**Where it is NOT applied**, and this is a defect P70c introduced: the statutory index is DERIVED,
+not drawn. `cpi_t = i_t + spread` (`advanceYear`), and the shipped default spread is NEGATIVE
+(-0.2 points, inflation 3.0 against cpi 2.8). So a year already sitting at the floor is pushed
+through it.
+
+Measured over the stress bank, 780 path-years:
+
+| typed rates | spread | min `i_t` | min `cpi_t` | years at floor | **years BELOW floor** |
+|---|---|---|---|---|---|
+| 3.0 / 2.8 (shipped defaults) | -0.20pt | -1.00% | **-1.20%** | 27 | **27** |
+| 3.5 / 2.0 | -1.50pt | -1.00% | **-2.50%** | 27 | **43** |
+| 2.0 / 3.5 (inverted) | +1.50pt | -1.00% | +0.50% | 27 | 0 |
+
+It only bites when CPI sits below Inflation, which is the normal configuration and the default.
+
+**Three quantities take the un-floored value:**
+- `sim.cpiRate *= (1 + cpi_t)` - brackets, the standard deduction, LTCG, IRMAA thresholds, the ACA
+  multiple, the QCD limit and Social Security COLA all deflate faster than the floor allows.
+- `sim.medicareRate *= (1 + cpi_t + inputs.inflation)` - small, since the excess spread dominates.
+- `sim.pensionFactor *= (1 + Math.min(cap, cpi_t))` - a capped pension is CUT below the floor.
+
+- [x] **P81a DONE (v11.1662)** - took reading (1), the literal one: `cpi_t = Math.max(CPI_INDEX_FLOOR, i_t + spread)`. Re-measured over the stress bank at three spreads: **0 of 650 index steps below the floor**, and it genuinely clamps (20 steps land exactly on it at the defaults, 31 at a 1.5pt spread). Original decision text: Two readings, and they are not equivalent:
+      1. floor the derived index: `cpi_t = Math.max(INFLATION_FLOOR, i_t + spread)`. Simple, and
+         guarantees the user's stated invariant everywhere downstream.
+      2. floor the spread application so the gap cannot push a floored year further down:
+         `cpi_t = i_t + spread` only while `i_t > FLOOR`, pinning `cpi_t = i_t` at the floor.
+      (1) is the literal reading of "nothing below that number" and is recommended.
+- [x] **P81b DONE (v11.1662), and the first attempt broke the Monte Carlo tab.** Applied once where `cpi_t` is computed, so cpiRate, medicareRate and pensionFactor all inherit it. The constant is DUPLICATED in optimizer_core.js, because the engine has no montecarlo dependency and prng.js loads after it - importing would drag the MC data tables into the engine's load path. **Named `CPI_INDEX_FLOOR`, not `INFLATION_FLOOR`:** `montecarlo/worker.js` importScripts() taxengine, optimizer_core, prng, stats and mc_engine into ONE shared scope, so two top-level `const INFLATION_FLOOR` was a SyntaxError that killed the worker before it ran a single path. Node cannot see that - separate module scopes - and the in-page suite caught it. A new test scans all five files for top-level name collisions so the class cannot recur. Original text: so every consumer inherits it rather than
+      each one flooring separately. `INFLATION_FLOOR` lives in `prng.js` and the engine does not
+      currently import it; decide whether it moves or is duplicated with a pointer comment.
+- [ ] **P81c** - decide the SEPARATE and still-open question P70i left: real COLAs are floored at
+      ZERO and never claw back, but modeled Social Security and a capped pension both fall when the
+      index falls. That is a different floor at a different level, and it affects SS too. Take it for
+      both at once or neither - fixing the pension alone re-introduces the two-clock inconsistency
+      P70 just removed.
+- [x] **P81d DONE (v11.1662)** - two tests: the engine floor equals prng's (which is what makes the duplicate safe), and no logged index step falls below it at any spread, with an assertion that the floor actually CLAMPS in the negative-spread cases so the test cannot pass vacuously. Original text: for any (cpi, inflation) pair including a negative
+      spread, no logged `-cpiFactor` step is below `1 + INFLATION_FLOOR`.
+- **Status:** open. **Raised against PR #195, which is OPEN** - the defect ships with P70c unless it
+  is fixed there. Filed rather than fixed at the user's instruction.
+- **Blocks:** nothing, but it is worth deciding before #195 merges rather than after.
+
+
 ## P70: Do high-inflation paths overstate tax?
 **Why:** `sim.inflation` advances at the per-path `yr.yearInflation`, but `sim.cpiRate` - which
 indexes federal and state brackets, IRMAA thresholds, the ACA FPL multiple and the IRA goal -
@@ -961,10 +1017,217 @@ P70a stays measure-first: stress scenarios with `cpiRate` (and therefore SS) fol
 inflation vs today's fixed rate; per-scenario lifetime-tax and ruin-year deltas; no default change
 in the measuring phase.
 
-- [ ] **P70a** - run the existing stress scenarios with `cpiRate` following realized inflation
-      against today's fixed rate; report lifetime-tax and ruin-year deltas per scenario. Small effect
-      means a NOTE; flipped ruin years mean an engine fix. **No default change in this phase.**
-- **Status:** pending
+- [x] **P70a DONE 2026-08-26** - measured. `cpiFollowsPath` (opt-in input, default OFF, in
+      `advanceYear`) plus `.test_harnesses/cpi_index_harness.js`: the Stress Test's own scenario set
+      (`buildStressBank` + `buildPathInputs`, not a new one), 30 plans x 26 scenarios x 2 arms.
+      Full tables in [`CPI_INDEX_RESULTS.md`](../../.test_harnesses/CPI_INDEX_RESULTS.md).
+
+      **The gate opened: this is an engine fix, not a NOTE.** Lifetime tax is **8.32% lower** under
+      path-following across 780 pairs; **38 scenarios go from ruined to surviving and 0 go the other
+      way**. Worst single scenario -36.7%. The sign tracks realized-minus-assumed CPI monotonically
+      over five buckets (+1.4% cold, -11.9% when the path ran >3pt hot), and the drift is the
+      mechanism: a 1966 start reaches cpiFactor 4.70 on the path against 1.78 fixed, 2.65x.
+
+      Three things worth carrying into P70b:
+      1. **The lower the CPI a user types, the worse the distortion** - every family's delta shrinks
+         monotonically from cpi 2.0% to 3.0%. Typing a conservative rate buys the most distorted answer.
+      2. **IRMAA dollars moved only half as far as IRMAA tier-years** (-6.5% vs -10.6%), because
+         `medicareRate` follows the same clock in the test arm and reprices the surcharges that remain.
+         Do not quote the tier-year saving as a dollar saving.
+      3. **Zero ACA breaches in either arm** across 78 ACA-capped runs, and those plans still carry the
+         largest mean delta (-12.3%). The ACA effect is a moved ceiling, not a breach count.
+
+      Forecasting (`irmaaFwdFactor`, the ACA one-year lookahead) stayed on `inputs.cpi` in BOTH arms
+      and is a separate question: a plan cannot know next year's CPI.
+      Suites 324 / 61 / 22 (`slowInCore` 3); `TestTiers.EXPECTED` and `.githooks/README.md` updated.
+### The frame: THREE clocks, and every defect is a quantity reading the wrong one
+
+The audit (2026-08-26) found the bug class is not "inflation is fixed". It is that the engine has
+three distinct time-varying factors and no vocabulary separating them, so quantities read whichever
+was in scope.
+
+| clock | what it is | what rides it | should follow |
+|---|---|---|---|
+| `sim.cpiRate` | the **statutory index** | federal + state bracket limits, standard deduction, LTCG brackets, IRMAA thresholds, ACA FPL multiple, QCD limit, Social Security COLA | REALIZED inflation MINUS the CPI spread - see P70h. IRS indexes by realized chained CPI, SSA by CPI-W, and both run BELOW felt inflation |
+| `sim.inflation` | the **price level** | spendGoal, Cash Reserve, property tax, pension COLA, deflation to today's dollars | REALIZED inflation. Already does |
+| forecast factors | the plan's **assumption about a year it cannot see** | `irmaaFwdFactor` (2 years forward), the ACA one-year lookahead, `gapYears` pre-compounding | `inputs.cpi`, permanently. A plan does not get clairvoyance |
+
+The third row is the user's caveat, and it is the one that must NOT be "fixed". Under fixed
+inflation a forward projection is exact by construction, so today it is always right and looks like
+realized indexation. Under a variable path it is a genuine forecast that can miss in both
+directions. That is correct behavior, but it changes what the IRMAA safety margin is for (P70e).
+
+**Rule for the whole phase:** anything doing `Math.pow(1 + <a rate>, <years>)` inside the loop is
+suspect, because a compounding factor already exists for every clock and recomputing one from a
+scalar rate is exactly how a quantity ends up on the wrong clock, or on no path at all.
+
+Deliberately OUT of scope, each for a stated reason: `taxCreepFactor` (calendar-year tax POLICY, not
+indexation - its own comment says so); `saltIndex` in taxengine (a statutory 1%/yr step-up written
+into the law, not CPI); `computeBETR` and the amortization helpers (returns, not indexation).
+
+- [x] **P70b DONE (v11.165D, `d0f27d0`) - the two clocks on ONE bracket table. Shipped, deterministic, no Monte Carlo needed.**
+      `computeBracketCeiling` is handed `sim.inflation` as its `inflation` argument
+      (`optimizer_core.js:1740`, `:1752`, `:1819`) and passes it to `calculateProgressive`, which
+      indexes bracket limits with it. The ACTUAL tax call passes `sim.cpiRate` for the same purpose.
+      So the strategy prices its accounts against brackets placed on the spending clock and is then
+      taxed on brackets placed on the statutory clock.
+
+      Invisible whenever `cpi === inflation`, which is why it survived. But the two are separate BY
+      DESIGN (user, 2026-08-26): CPI-W/chained-CPI indexes brackets and SS COLA and runs BELOW felt
+      inflation, which for seniors carries medical weight CPI-E was invented to track. Defaults are
+      inflation 3.0 / cpi 2.8, so the gap is live for EVERY user, not only those who edit the fields.
+
+      **Corrected 2026-08-26.** An earlier draft of this entry quoted -31%, measured at cpi 2.0 /
+      inflation 5.0 - a 3-point gap nobody types. At the SHIPPED DEFAULTS the average rate at a 24%
+      ceiling is off by:
+
+      | year | correct | shipped | error |
+      |---|---|---|---|
+      | 10 | fed 0.20332 | 0.20260 | -0.35% |
+      | 30 | fed 0.20332 | 0.20111 | **-1.08%** |
+      | 30 | state 0.07586 | 0.07483 | **-1.36%** |
+
+      So: a real defect, monotone and one-directional, but a correctness cleanup at ~1% rather than
+      an emergency. The correct column is constant across every year, which is the proof - a fixed
+      ceiling is the same REAL position in the bracket table every year, so its average rate cannot
+      drift. The shipped column drifts only because the two clocks disagree.
+      Fix: pass `sim.cpiRate` at all three call sites; rename the parameter so the next reader cannot
+      repeat it; add a test asserting the average rate at a fixed ceiling is invariant across years
+      for any (cpi, inflation) pair. That one invariant catches the whole class.
+
+- [x] **P70c DONE (v11.165D) - built as the P70h SPREAD model instead, which dissolved the fallback question rather than deciding it: with no path, cpi_t IS inputs.cpi, so deterministic runs are byte-identical by construction. Flag renamed `fixedTaxIndexing`, default off.** P70a measured the
+      case: -8.32% lifetime tax over 780 pairs, 38 scenarios rescued from ruin, 0 broken. The
+      fallback is the trap recorded below: with no `inflationSequence`, `yr.yearInflation` falls back
+      to `inputs.inflation`, NOT `inputs.cpi`, so flipping the default silently reindexes every
+      deterministic plan whose two rates differ. **Recommend `inputs.cpi` as the no-sequence
+      fallback** - `cpi` is the user's stated indexation rate, `inflation` is their spending rate -
+      which confines the change to paths and leaves P70b as the only thing that moves a deterministic
+      plan. Decide explicitly; do not patch it quietly.
+
+- [x] **P70d DONE (v11.165D) - propTaxFor reads sim.inflation; getQCDLimit takes the factor and its misleading parameter name is gone; the pension COLA moved to cpiRate; the IRA goal stays on cpiRate with the reasoning written down.**
+      - `propTaxFor` (`:108`) does `base * Math.pow(1 + inputs.inflation, years)`. Property tax is a
+        today's-dollars input like spendGoal, and spendGoal follows the path; this does not. Should
+        read `sim.inflation`. Its `flat` and `custom` growth modes are user policy and stay.
+      - `getQCDLimit(sim.currentYear, inputs.cpi)` (`taxengine.js:1598`) does
+        `AMOUNT * Math.pow(1 + cpi, simYear - YEAR)` instead of reading `sim.cpiRate`. Its parameter
+        is NAMED `cpiRate` but receives a RATE, while `cpiRate` everywhere else in this codebase is a
+        cumulative FACTOR. The arithmetic is right today and the name is a live trap; fix both.
+      - `yr.iraGoalNominal = inputs.iraBaseGoal * sim.cpiRate` (`:1160`). The IRA Goal is a WEALTH
+        target in today's dollars, not a tax threshold. Its comment justifies the statutory clock on
+        the grounds that the goal exists to manage indexed thresholds, which is arguable. Decide it
+        explicitly rather than leaving it implicit; if it stays on `cpiRate`, say why.
+
+- [x] **P70e DONE (v11.1661, `a27aaea`). IRMAA_MARGIN_DEFAULT = 'halfcpi' CONFIRMED.** Re-running the harness as it stood answered nothing - it never feeds a path, so its output is byte-identical to main. Its header premise (decisions are deterministic) stopped being true in general, so a native section was added: halfcpi prevents 8.5% of tier breaches under fixed indexation and **21.1% under path-following**. But surcharge DOLLARS move -0.09%; the wealth ranking is still driven by conversion sizing, the same P6 finding as before. The default holds for the reason it always did, not for the breach protection. `irmaaFwdFactor`
+      and the ACA lookahead stay on `inputs.cpi`. But once indexation follows the path, the plan's
+      two-year forward projection stops being exact, and that changes a decision already taken:
+      `irmaa_margin_harness.js` measured the margin's benefit as **exactly zero**, correctly, because
+      under a constant CPI the engine hits its ceiling to the dollar and there is no error to absorb.
+      `irmaa_cpi_risk_harness.js` then showed the answer REVERSES once realized CPI can differ: only
+      undershoots breach, overshoots are free, and the rate-shaped modes (`halfcpi`, `cpiminus1`)
+      beat the dollar-shaped ones. **The current default was chosen in the regime where the margin
+      could not matter.** Re-run `irmaa_default_harness.js` with `cpiFollowsPath` on and revisit
+      `IRMAA_MARGIN_DEFAULT`. This is the concrete consequence of the caveat the user raised.
+
+- [x] **P70f DONE (v11.165D) - one guard test for the whole class, plus the lag and the Medicare excess pinned separately.** A single test that, for several (cpi, inflation)
+      pairs including unequal ones, asserts each indexed quantity tracks its declared clock: bracket
+      limits, standard deduction, IRMAA thresholds, ACA multiple, QCD limit and SS COLA move with
+      `cpiRate`; spendGoal, Cash Reserve, property tax and pension COLA move with `inflation`;
+      forecast factors move with neither. The clock table above is the specification. Without it the
+      next quantity added picks a clock by whatever is in scope, which is how every defect here
+      arrived.
+
+- [x] **P70g DONE (v11.165D) - release. NOTE: the v11.1657 caveat lives only inside that RELEASED changelog entry, which is history and was left alone; the new entry sits above it and supersedes it. No standing caveat exists elsewhere in README, optimizer_text.js or the page.** Behavior change touching every plan: changelog entry with a "your saved
+      plan will not reproduce" consequence line, and the README caveat added in v11.1657 ("taxes and
+      Social Security are not yet adjusted for variable inflation") retired, since it stops being
+      true.
+
+- [x] **P70i DONE (v11.1661). Five-way selector: no increase / 1% / 2% / 3% cap / full COLA, paying min(cap, that year's index rate) PER YEAR via its own compounding factor. `pensionColaCap()` accepts the old booleans so the golden, the tests and saved plans need no migration; `applyScenario` maps a stored boolean, since the generic loop would set a <select> to "true" and silently strip the COLA. Deflation left as a genuine min, noted in code, to be decided alongside Social Security or not at all.** ~~capped and reduced pension COLAs (raised 2026-08-26, after P70d moved the pension to
+      CPI).** `pensionCola` is a plain on/off, so ON now means FULL CPI every year. That is right for
+      federal CSRS and military, and wrong for the two commonest cases: FERS pays a reduced "diet"
+      COLA above 2%, and most state and municipal plans cap at 2-3% or pay a flat contractual
+      percent. A high-inflation path now OVERSTATES those pensions.
+
+      This gap was created by making the model more realistic - under the old spending-clock code the
+      error ran the other way for some plans and the two partly cancelled. Private defined-benefit
+      plans usually have no COLA at all, which the OFF position already covers.
+
+      Smallest honest fix: a cap percentage beside the checkbox, defaulting to uncapped so nothing
+      changes for anyone who does not set it. A NOTE is the alternative if the input is not wanted.
+
+### P70h - the CPI/inflation SPREAD is the model, not a discrepancy  *(user, 2026-08-26; supersedes how P70a's flag works)*
+
+CPI and Inflation are two inputs on purpose, and the tooltips already say so:
+
+> Cost-of-living index. Drives federal & IRMAA bracket indexing and Social Security COLA
+> adjustments. Often differs from general inflation, so it is entered separately. **Medicare/IRMAA
+> dollar amounts grow at CPI + Inflation combined, not CPI alone.**
+
+The statutory index (CPI-W for COLA, chained CPI-U for brackets since TCJA) runs BELOW felt
+inflation, and for a senior household the gap is mostly medical weighting - the thing CPI-E was
+invented to track. Defaults are `inflation 3.0` / `cpi 2.8`. The user expects the drift to widen
+under current congressional plans.
+
+**This breaks `cpiFollowsPath` as P70a wrote it.** That flag sets `idxRate = yr.yearInflation`,
+collapsing the spread to zero, which would hand a default user thresholds about 6% higher by year 30
+- `(1.03/1.028)^30` - purely as an artifact, in the SAME direction as the effect being measured.
+P70a's published numbers survive only because its harness set `inflation: cpi` in every plan, so the
+spread was zero by construction there. That is a configuration no default user runs, so **P70a must
+be re-run carrying the 0.2 point gap** before its -8.32% is quoted again.
+
+**The formulation to build instead:**
+
+```
+spread = inputs.cpi - inputs.inflation      // -0.002 by default; a POLICY assumption, not a draw
+i_t    = the drawn general inflation for year t
+cpi_t  = i_t + spread
+
+sim.inflation    *= (1 + i_t)
+sim.cpiRate      *= (1 + cpi_t)
+sim.medicareRate *= (1 + cpi_t + i_t)       // matches the tooltip exactly
+```
+
+The property that settles it: in a deterministic run `i_t = inputs.inflation`, so
+`cpi_t = inputs.cpi` **exactly**. Byte-identical by construction, with no special case. That
+dissolves P70c's fallback fork entirely - the `inputs.cpi` vs `inputs.inflation` question was a
+symptom of the wrong model, not a real decision.
+
+**Three open details, each a deliberate call rather than a detail to discover later:**
+
+1. **Provenance.** `historical_returns.js:3` says the series is BLS **CPI-U**, Dec-over-Dec
+   1928-2025, and the AR(1) synthetic is calibrated to it. So the drawn path IS CPI-U, not general
+   felt inflation. Anchoring the offset at `inputs.inflation` declares the drawn CPI-U series to be
+   the felt path, which misplaces both ends: felt senior inflation sits above CPI-U, chained CPI-U
+   sits below it. Three real series, two inputs. Not worth a third input - the CPI-U/CPI-E gap is
+   well under a 30-year bootstrap's sampling noise - but it must be DOCUMENTED that way rather than
+   implying CPI-E is modeled.
+2. **Additive vs multiplicative.** Additive preserves the point gap the two boxes literally mean and
+   the tooltips describe. Multiplicative (`i_t * 0.9333`) preserves the proportion, which better
+   matches the chained-CPI substitution effect (it bites harder when prices move more): in a 12%
+   year, 11.8% vs 11.2%. Recommend additive; record that the choice was made.
+3. **Floor.** Drawn inflation is already clamped at `INFLATION_FLOOR = -0.01`, and the record itself
+   reaches -10.3%. Decide whether the spread applies before or after that clamp. Only matters in
+   deflation years, but should be deliberate.
+
+**Follow-on worth considering:** make `spread` a visible input rather than the silent difference of
+two boxes. Someone who believes chained-CPI drift will widen currently has no way to say so except
+by nudging two fields in opposite directions and hoping they remember why.
+- [x] **The no-sequence fallback, measured 2026-08-26. This is what P70c must decide.** A deterministic run has no
+      `inflationSequence`, so `yr.yearInflation` falls back to `inputs.inflation` - **not** to
+      `inputs.cpi`. Measured on a plain sidebar run with no path at all:
+
+      | typed rates | flag on vs off | lifetime tax |
+      |---|---|---|
+      | cpi 2.5% = inflation 2.5% | byte-identical | 1,641,473 both |
+      | cpi 2.0% < inflation 3.5% | **differs** | 1,832,405 -> 1,665,452 (-9.1%) |
+      | cpi 3.5% > inflation 2.0% | **differs** | 1,535,319 -> 1,630,461 (+6.2%) |
+
+      Different CPI and inflation rates is a legal, ordinary sidebar state. So flipping the default
+      would silently reindex every such deterministic plan, not only Monte Carlo runs. P70b must
+      decide explicitly whether the no-sequence fallback is `inputs.inflation` (what the flag does
+      today) or `inputs.cpi` (which would leave deterministic plans untouched and confine the change
+      to paths). The second is probably right - `cpi` is the user's stated indexation rate and
+      `inflation` is their spending rate - but it is a decision, not an oversight to patch quietly.
+- **Status:** P70a done and committed (89c26d7). P70b..P70g planned 2026-08-26 from a full audit of every inflation-linked quantity. **P70b is a shipped bug needing no Monte Carlo and can ship on its own.**
 - **Independent:** no phase dependencies
 
 ---

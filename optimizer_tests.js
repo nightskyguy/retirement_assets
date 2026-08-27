@@ -7,6 +7,46 @@ function runTests() {
     
     let passed = 0;
     let failed = 0;
+    let skippedUnsafe = 0;
+
+	/**
+	 * UNSAFE TESTS: the ones that write to live page state.
+	 *
+	 * runTests() is called at TOP LEVEL from retirement_optimizer.html (the DOMContentLoaded
+	 * registration next to it is commented out), so this whole suite runs BEFORE the boot sequence:
+	 * before captureDefaults(), before loadScenarioByName('default'), and before loadFromURL().
+	 * Anything a test leaves behind is therefore not a cosmetic smudge - it is the state the page
+	 * then treats as pristine:
+	 *
+	 *   - captureDefaults() snapshots it as OPT_DEFAULTS, which Share uses to decide which fields
+	 *     it may OMIT from a share link. A polluted snapshot silently drops real fields from a
+	 *     shared URL, or carries junk into one.
+	 *   - a saved scenario and a URL both merge ONTO the live controls; a field the incoming data
+	 *     does not mention keeps whatever the test left.
+	 *   - the reader simply sees a plan they never entered.
+	 *
+	 * That last one shipped: v11.165B added a ceiling test calling applyScenario(), whose fixture
+	 * (birth years 1958/1959, strategy bracket) became the page's apparent defaults on every load,
+	 * and the default plan appeared to run out of money. Restoring in a finally is necessary but is
+	 * not sufficient - a test that throws before its finally, or restores an incomplete set of
+	 * fields, does the same damage more quietly.
+	 *
+	 * So mutating tests are OPT-IN. They run only with ?runtests on the URL, which is the same flag
+	 * that opts into the node tiers, and are counted and reported when skipped rather than vanishing.
+	 *
+	 * Marking one: put `if (!unsafeTest('name')) return;` as the FIRST line inside it, and give it a
+	 * banner saying WHAT it mutates. Restoring in a finally is still required - the gate limits the
+	 * blast radius to readers who asked for it, it does not license leaving a mess.
+	 */
+	const UNSAFE_ALLOWED = (() => {
+		try { return new URLSearchParams(location.search).has('runtests'); } catch (e) { return false; }
+	})();
+	function unsafeTest(name) {
+		if (UNSAFE_ALLOWED) return true;
+		skippedUnsafe++;
+		console.log(`⏭  SKIPPED (mutates live page state; add ?runtests to include): ${name}`);
+		return false;
+	}
 	
 	/**
 	 * Converts all numeric values in an object/array to fixed decimal places
@@ -2166,7 +2206,11 @@ assertEqual(
 	// retirement_optimizer.html calls runTests?.() at top level, which runs BEFORE the
 	// DOMContentLoaded handler that builds the dropdown. Build it explicitly so the assertion is
 	// about the builder rather than about when the suite happened to run.
+	// ⚠ UNSAFE - MUTATES: the #stratRate <option> list (rebuilt), and the selection with it, since
+	// refreshStratRateOptions() ends in clampStratRateSelection(). It has to build the list: this
+	// suite runs before the DOMContentLoaded handler that would, so there is nothing to read yet.
 	(function acaOptionsUngated() {
+		if (!unsafeTest('acaOptionsUngated')) return;   // rebuilds the #stratRate option list
 		const sel = document.getElementById('stratRate');
 		if (!sel || typeof refreshStratRateOptions !== 'function') return;   // shared suite; not every page has these
 		refreshStratRateOptions();
@@ -2187,7 +2231,10 @@ assertEqual(
 	// The predicates are exercised directly, by writing the boxes, rather than by clicking the
 	// preset functions - those re-run the simulation as a side effect, which a test has no business
 	// doing to someone's page. Every value is put back afterwards.
+	// ⚠ UNSAFE - MUTATES: every Monte Carlo parameter input (MC_PARAMS). Restores them in a finally,
+	// and those fields ride along in saved scenarios and share links, so a leak is not cosmetic.
 	(function mcPresetStateFollowsTheParameters() {
+		if (!unsafeTest('mcPresetStateFollowsTheParameters')) return;   // writes every Monte Carlo parameter input
 		if (typeof updateMCPresetState !== 'function' || !document.getElementById('mc-preset-default')) return;
 		const ids = Object.keys(MC_PARAMS);
 		const saved = ids.map(id => [id, document.getElementById(id)?.value]);
@@ -2225,6 +2272,113 @@ assertEqual(
 		}
 	})();
 
+	// ===== The ceiling dropdown: unbounded bands are markers, and a saved rate lands on itself =====
+	// Two defects, both of which left a plan running a strategy nobody chose.
+	//
+	// The top federal bracket was offered as a fill target. It has no upper limit, so there was no
+	// ceiling to fill to, and every figure on the page came out $NaN. It is now listed disabled at
+	// the income where it BEGINS, as is the top IRMAA tier, which is unbounded for the same reason.
+	//
+	// And a saved plan's stratRate was written to the <select> as "24.000" while the option values
+	// are whole percents, so it matched nothing, the select cleared, and the rebuild landed on its
+	// default. Every saved Fill Bracket plan reloaded as "Below IRMAA".
+	// ⚠ UNSAFE - MUTATES: the ENTIRE sidebar. applyScenario() writes every control it is handed and
+	// restores nothing. This is the test whose fixture shipped as the page's apparent defaults in
+	// v11.165B; it now snapshots and restores every input, select and textarea, dataset.numVal
+	// included, and is gated on top of that.
+	(function ceilingDropdownEndsAtTheLastRealCeiling() {
+		if (!unsafeTest('ceilingDropdownEndsAtTheLastRealCeiling')) return;   // applyScenario() writes the WHOLE sidebar
+		const sel = document.getElementById('stratRate');
+		if (!sel || typeof refreshStratRateOptions !== 'function'
+		         || typeof clampStratRateSelection !== 'function') return;
+		// applyScenario() below writes the WHOLE sidebar and does not put it back. runTests()
+		// runs at page load, so a test that leaves its fixture behind hands the reader a plan
+		// they never entered - reported as "the defaults changed and now my plan runs out of
+		// money". Snapshot every control first and restore it in the finally, the way the MC
+		// preset test already does for its own parameters.
+		const controls = [...document.querySelectorAll('input, select, textarea')];
+		const snapshot = controls.map(el => [el, el.type === 'checkbox' || el.type === 'radio'
+		                                          ? el.checked : el.value,
+		                                      el.dataset ? el.dataset.numVal : undefined]);
+		try {
+			refreshStratRateOptions();
+			const opts = [...sel.options];
+
+			// Exactly two reference-only entries: the top federal bracket and the top IRMAA tier.
+			const off = opts.filter(o => o.disabled);
+			assertEqual(off.length, 2, 'two unbounded bands are listed but not selectable');
+			assertEqual(off.every(o => /\+$/.test(o.textContent.trim())), true,
+				'a reference-only entry names the income where it begins, with a trailing +');
+			assertEqual(off.some(o => o.value === '37') && off.some(o => o.value.startsWith('IRMAA')), true,
+				'the two are the top federal bracket and the top IRMAA tier');
+			// No entry may still claim to have no limit; that was the label that read as a target.
+			assertEqual(opts.some(o => /no limit/i.test(o.textContent)), false,
+				'no entry is labelled "no limit"');
+
+			// Each reference entry sorts directly above the ceiling it succeeds, and shows that
+			// ceiling plus a dollar - so the ladder reads continuously.
+			for (const o of off) {
+				const prev = opts[opts.indexOf(o) - 1];
+				assertEqual(!!prev && !prev.disabled, true, 'a reference entry follows a selectable ceiling');
+				const dollars = t => +(String(t).match(/\$([\d,]+)/) || [0, '0'])[1].replace(/,/g, '');
+				assertEqual(dollars(o.textContent), dollars(prev.textContent) + 1,
+					'a reference entry begins one dollar above the ceiling below it');
+			}
+
+			// The clamp: a value the menu disables drops to the nearest ceiling BELOW it, not to
+			// the bottom of the list. A selectable value is left exactly where it is.
+			for (const o of off) {
+				sel.value = o.value;
+				assertEqual(clampStratRateSelection(sel), true, `${o.value} is clamped off`);
+				assertEqual(sel.value, opts[opts.indexOf(o) - 1].value,
+					`${o.value} clamps to the ceiling directly below it`);
+			}
+			for (const o of opts.filter(x => !x.disabled)) {
+				sel.value = o.value;
+				assertEqual(clampStratRateSelection(sel), false, `${o.value} is left alone`);
+				assertEqual(sel.value, o.value, `${o.value} stays selected`);
+			}
+
+			// A saved plan's rate has to land on its own option. This is the "24.000" defect.
+			if (typeof applyScenario === 'function' && typeof getInputs === 'function') {
+				const scen = { strategy: 'bracket', stratIRMAATier: -1, stratACAMultiple: 0,
+				               hasSpouse: true, birthyear1: 1958, birthyear2: 1959 };
+				for (const o of opts.filter(x => !x.disabled && /^\d+$/.test(x.value))) {
+					const rate = +o.value / 100;
+					applyScenario({ ...scen, stratRate: rate });
+					assertEqual(sel.value, o.value, `a saved plan at ${o.value}% reloads at ${o.value}%`);
+					assertEqual(getInputs().stratRate, rate, `and the engine is handed ${rate}`);
+				}
+				// A saved plan on the unbounded bracket lands on the highest real ceiling.
+				const topFed = off.find(o => o.value === '37');
+				const below  = opts[opts.indexOf(topFed) - 1];
+				applyScenario({ ...scen, stratRate: +topFed.value / 100 });
+				assertEqual(sel.value, below.value,
+					'a saved plan on the unbounded top bracket reloads at the highest real ceiling');
+			}
+		} finally {
+			for (const [el, val, numVal] of snapshot) {
+				if (el.type === 'checkbox' || el.type === 'radio') el.checked = val;
+				else el.value = val;
+				if (el.dataset) {
+					if (numVal === undefined) delete el.dataset.numVal;
+					else el.dataset.numVal = numVal;
+				}
+			}
+			// The dropdown's OPTIONS were rebuilt too, so put the list back before restoring
+			// the selection - and rebuild the derived readouts applyScenario() recomputed.
+			refreshStratRateOptions();
+			for (const [el, val] of snapshot) {
+				if (el.id === 'stratRate' && [...el.options].some(o => o.value === val)) el.value = val;
+			}
+			toggleStrategyUI?.();
+			updateGrowthDisplay?.();
+			updateCpiSpreadDisplay?.();
+			updateProfileAgeDisplay?.();
+			updateBracketFeedback?.();
+		}
+	})();
+
 	// ===== Annual Details: one cell per column, in every row =====
 	// The header row and the body rows are built from the same key list but used to apply DIFFERENT
 	// filters to it - the body skipped `inflationFactor` and the header did not. From that column
@@ -2235,7 +2389,11 @@ assertEqual(
 	//
 	// A count comparison catches the whole class: any future key filtered in one place and not the
 	// other shifts the table silently, and nothing else in the page would notice.
+	// ⚠ UNSAFE - MUTATES: #main-table, replaced wholesale by updateTable(). Not a plan input, but it
+	// renders a table from a simulate() of the CURRENT inputs before the page has run its own, so a
+	// reader can see a table that is not their plan until the first real render lands.
 	(function annualDetailsCellsAlignWithHeaders() {
+		if (!unsafeTest('annualDetailsCellsAlignWithHeaders')) return;   // updateTable() replaces #main-table
 		// The suite runs BEFORE the page's first runSimulation(), so there is no table yet - render
 		// one here from a real log. updateTable() replaces #main-table in place, and runSimulation()
 		// rebuilds it moments later, so this leaves nothing behind. Checking the real render rather
@@ -2305,7 +2463,11 @@ assertEqual(
 	// the first assertion below is the one that catches a renamed or reordered column descriptor.
 	// getOptimizerColumns() is safe to call here with no sweep in state: inC() is a closure and the
 	// getValue functions are never invoked.
+	// ⚠ UNSAFE - MUTATES: the live OptimizerState (objective, showAllColumns, sortState, compareRow,
+	// relativeView). Restores them in a finally. Gated because this suite runs before
+	// renderObjectiveBlurb(), which reads that state to describe the starting goal.
 	(function objectiveColumnSets() {
+		if (!unsafeTest('objectiveColumnSets')) return;   // mutates the live OptimizerState
 		if (typeof getOptimizerColumns !== 'function' || typeof OPT_OBJECTIVE_COLUMNS === 'undefined') return;
 		const saved = {
 			objective: OptimizerState.objective,
@@ -2364,12 +2526,13 @@ assertEqual(
 	})();
 
     console.log('\n========================================');
-    console.log(`   RESULTS: ${passed} passed, ${failed} failed`);
+    console.log(`   RESULTS: ${passed} passed, ${failed} failed`
+		+ (skippedUnsafe ? `, ${skippedUnsafe} unsafe suites skipped (add ?runtests)` : ''));
 	console.log(`   chart.js version ${Chart.version}`);
     console.log('========================================');
 	
     // Tier 1 result is published so the deferred tier can combine with it rather than overwrite it.
-    window.TIER1_RESULT = { passed, failed };
+    window.TIER1_RESULT = { passed, failed, skippedUnsafe };
 
     const statusElement = document.getElementById('testsFailed');
     if (failed > 0) {
@@ -2408,7 +2571,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 322, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 335, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];
@@ -2468,6 +2631,9 @@ window.TestTiers = {
             el.textContent = '🟢';
             el.title = `All ${passed} tests passed (${t1.passed} in-page + ${passed - t1.passed} node)`
                      + (skipped ? `.\n${skipped} slow test${skipped !== 1 ? 's' : ''} skipped - add ?runtests=all to include them.` : '.')
+                     // Say so when the mutating suites sat out. Otherwise the in-page count drops by
+                     // a hundred with no explanation, which reads as tests having gone missing.
+                     + (t1.skippedUnsafe ? `\n${t1.skippedUnsafe} suite${t1.skippedUnsafe !== 1 ? 's' : ''} that write to the live page were skipped - add ?runtests to include them.` : '')
                      + (crit.passed ? `\n★ ${crit.passed} critical regression guards passed (dividend/interest double-count, state retirement-income exemptions, no-tax states).` : '');
         }
     },

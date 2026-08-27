@@ -4681,3 +4681,333 @@ slices in Table 6, "iteratively" as the only nonconvexity hint) is recorded in t
 Ragsdale/Seila/Little 1994 added as the published predecessor formulation.
 
 ---
+
+---
+
+## Session 2026-08-26 (worktree-p70-cpi-indexation) - P70a measured: fixed bracket indexation invents plan failures
+
+Branch off main. One engine change, one harness, two tests, one results doc.
+
+**The change.** `advanceYear` gained `cpiFollowsPath`, an opt-in input, default OFF. It picks the
+rate that advances `sim.cpiRate` (and `sim.medicareRate`): the fixed `inputs.cpi` as today, or the
+path's `yr.yearInflation`. Deliberately left alone, with a comment saying why: the gapYears
+pre-compounding (those years precede the simulation), `irmaaFwdFactor()` and the ACA one-year
+lookahead (a plan forecasting an index it cannot know - path-aware indexation is not clairvoyance),
+`taxCreepFactor` (calendar-year by design) and `propTax` (rides `inputs.inflation`).
+
+**The harness.** `.test_harnesses/cpi_index_harness.js`. Scenarios come from `buildStressBank` and
+`buildPathInputs` rather than a second copy - that is the Stress tab's own set. 30 plans (4 household
+shapes x 2 ceilings, plus an early-retiree shape x brk/ACA, crossed with assumed cpi 2.0/2.5/3.0) x
+26 stress windows x 2 arms = 1,560 sims in about a second.
+
+**The answer, and it opened the gate the phase spec set.** Lifetime tax is **8.32% lower** under
+path-following across 780 pairs. **38 scenarios go from ruined to surviving; 0 go the other way.**
+Worst single scenario -36.7%. The sign tracks realized-minus-assumed CPI monotonically over five
+buckets (+1.4% when the path came in cold, -11.9% when it ran >3pt hot; 107 of 110 cheaper in that
+tail). Mechanism visible in the drift: a 1966 start reaches cpiFactor 4.70 on the path against 1.78
+fixed - every threshold sitting at 38% of where the path's own price level put it. So P70 is an
+engine fix, not a NOTE. Full tables in `.test_harnesses/CPI_INDEX_RESULTS.md`.
+
+**Three things the write-up carries into P70b.** (1) The lower the CPI a user types, the worse the
+distortion - every family's delta shrinks monotonically 2.0% -> 3.0%, so typing a conservative rate
+buys the most distorted answer. (2) IRMAA dollars moved only half as far as IRMAA tier-years (-6.5%
+vs -10.6%), because `medicareRate` follows the same clock and reprices the surcharges that remain;
+do not quote the tier-year saving as a dollar saving. (3) Zero ACA breaches in either arm across 78
+ACA-capped runs, and those plans still carry the largest mean delta (-12.3%) - the ACA effect is a
+moved ceiling, not a breach count. A study reporting only breaches would have concluded the opposite.
+
+**P70c answered early, and it is the trap for P70b.** A deterministic run has no
+`inflationSequence`, so `yearInflation` falls back to `inputs.inflation`, NOT `inputs.cpi`. With the
+flag on and the two typed differently - ordinary, legal sidebar state - lifetime tax moves 9.1% one
+way and 6.2% the other on a plain run with no path at all. Flipping the default would silently
+reindex those plans too. Whether the no-sequence fallback should be `inflation` or `cpi` is now an
+explicit P70b decision.
+
+**Three corrections made mid-session, all mine.** (1) The first ladder inherited
+`stratRate: 0` from `irmaa_cpi_risk_harness.js`'s BASE, which is a degenerate config - no IRMAA
+tier, no ACA multiple, no rate for `computeBracketCeiling` to find a limit for. The engine returns
+NaN totals and a log of nulls rather than throwing, and my `control.taxReal ? ... : 0` guard turned
+every NaN into a 0.00% delta, so the harness printed a full page of plausible zeros. It now asserts
+every arm's totals are finite. (2) The ACA column could only ever print zero: every household
+started at 70/71, past Medicare, where `acaCapLapsed` retires the cap. Added an early-retiree shape.
+(3) Ruin-year deltas mixed survivors in, printing "-2046" for a rescue; split into RESCUED / BROKEN /
+MOVED.
+
+**Counts.** optimizer_core 322 -> **324** (two `cpiFollowsPath` tests: byte-identity with the flag
+off, and the indexation/SS/bracket-limit assertions with it on). `TestTiers.EXPECTED` and the
+`.githooks/README.md` suite table both updated in the same commit. taxPaymentPlanner 61, doclinks 22,
+`slowInCore` 3, all unchanged. Verified the control arm is genuinely inert: both arms flag-off gives
+exactly 0.00% on every aggregate.
+
+**No changelog entry, no version bump.** The flag defaults off and reaches no UI, so nothing in
+`git diff main...HEAD` is visible to a user. That changes with P70b, which will need a "your saved
+plan will not reproduce" consequence line - every Monte Carlo and Stress result moves.
+
+Note: the task_plan header still said suites 305/61/22; the real baseline was 322. Left the header
+alone rather than editing history above the line-30 marker.
+
+**Addendum, same session: the NaN turned out to be shipped, and it was hiding a second defect.**
+v11.165B, commit `7c9a7fc`, folded into this branch at the user's direction.
+
+The `stratRate: 0` NaN I filed as a background task was programmatic-only, exactly as the user said
+- the dropdown is built from `fedBrks[i].r` (lowest 10%) and `bracketRates` from the same table, and
+the IRMAA family always pairs `stratRate: 0` with a tier. The user also rejected "throw": `limit: 0`
+for the top of the 0% bracket and `limit: Infinity` for a no-tax state are both correct answers. Both
+points stood up. But the same unguarded division is reachable from the sidebar at the OTHER end of
+the table, and that one is on `main`: pick Fill Bracket + "37% Fed - no limit" and the stat tiles
+render `$NaN`. `l` is the Infinity sentinel, so the average-rate divisions came out
+`Infinity/Infinity`, or `0/0` once `Math.min(stateLimit, limit)` collapsed the ceiling to zero.
+`nominalStateTaxAtLimit` carried it into the Brokerage draw price and out to every number.
+
+Then, testing the clamp the user asked for, a bigger one: the restore loop writes stratRate as
+`(value*100).toFixed(3)` = `"24.000"` while option values are whole percents, so it matched nothing,
+the select cleared, and the rebuild landed on its default. **Every saved or shared Fill Bracket plan
+reloaded as "Below IRMAA" and ran that instead.** Pre-existing on `main`, untouched by this branch,
+and it blocked the clamp - so it was in scope rather than a separate filing. It leads the changelog
+entry: it affects far more people than the 37% row.
+
+Shipped: menu ends at the highest bracket with a top; both unbounded bands stay listed, disabled and
+greyed, labelled at their FLOOR ("37% Fed - $790,225+", "IRMAA Tier 5 - $771,000+") per the user's
+spec, a dollar above the ceiling below them. `clampStratRateSelection()` moves off a disabled option
+to the nearest ceiling BELOW, never to the first enabled entry - those plans were aiming high and
+dropping them to 10% would be a quiet re-plan. `nominalRateAtLimit()` in the engine as defense in
+depth, one definition replacing three (two had `/(limit || 1)`, which handles 0/0 but not
+Infinity/Infinity; the third had neither). IRMAA's top tier is now derived from table length instead
+of five hardcoded labels.
+
+Method note worth keeping: three browser probes mid-session ran against a prototype still loaded in
+the page after I had reverted the file on disk, and produced a confident wrong finding ("IRMAA tier
+5 works"). A reload reversed it. **Check what the page actually has loaded before reading a browser
+measurement as evidence** - the page does not reload when the file does.
+
+Counts: optimizer_core 324 -> **326**, in-page 296 -> 351 (one new section: menu shape, clamp
+behavior, saved-plan round trip for every selectable rate). `TestTiers.EXPECTED` and
+`.githooks/README.md` updated. Page reports 757 passed. P70a's harness numbers are unchanged by
+this - its plans all use bounded ceilings.
+
+**P70b-P70g BUILT, v11.165D, commit `d0f27d0`.** The user's A-E spec, evaluated and implemented.
+
+Two items of A-E turned out to be already true and are now PINNED rather than written: spending has
+always ridden `sim.inflation` (A), and the one-year indexation lag (C) was already structural,
+because `advanceYear` compounds at the END of the year. That lag was one line from being silently
+lost and nothing would have caught it; there is now a test walking the whole trajectory.
+
+Shipped: the offset model (`cpi_t = i_t + spread`, additive, spread held as policy); the
+two-clock fix (`computeBracketCeiling` lost its `inflation` parameter outright - deleted rather than
+renamed, since one bracket table has one correct index); `propTaxFor`, `getQCDLimit` and the pension
+COLA moved onto the clocks they belong on; the spread readout under the two inputs (`#cpi` had no
+`oninput` handler at all); and the `fixedTaxIndexing` nerdknob, which freezes BOTH statutory clocks.
+
+**The byte-identity property is the thing to remember.** With no `inflationSequence`, `i_t` IS
+`inputs.inflation`, so `cpi_t` is `inputs.cpi` exactly - every deterministic run is unchanged by
+construction, no special case. It also dissolved the fallback fork the earlier plan was going to
+make the user decide.
+
+**Two corrections to my own earlier work, both mine to own.** P70a's `cpiFollowsPath` set the index
+to the BARE path, collapsing the deliberate CPI/inflation spread - about 6% higher thresholds by
+year 30 as a pure artifact, in the same direction as the effect being measured. Its numbers survived
+only because the harness set `inflation: cpi` in every plan. Re-run carrying the default 0.2 pt gap:
+lifetime tax **-5.72%** (was -8.32%), **36** rescued (was 38), 0 broken. And I had overstated the
+two-clock bug at -31%; that was a 3-point gap nobody types. At the shipped defaults it is -1.1% fed
+/ -1.4% state by year 30.
+
+**OPEN, and the user's call: IRMAA dollars REVERSED sign, -6.5% -> +29%.** Surcharge years still
+fall 9%, but `medicareRate` compounds `cpi_t + i_t` and both terms now follow the path, so a
+high-inflation window inflates the premium each remaining surcharge is priced against far faster.
+That is the tooltip read literally ("CPI + Inflation combined"), but the `+ Inflation` term was
+calibrated as ~3 points of excess medical cost on a ~3% CPI; proportional turns a 12% year into ~24%
+premium growth. `cpi_t + inputs.inflation` would hold the excess at 3 points. One line, NOT taken.
+
+**Still open: P70e.** `IRMAA_MARGIN_DEFAULT` was chosen when a forward projection was exact by
+construction and the margin measured as worthless. Under path-following the projection is a real
+forecast, and `irmaa_cpi_risk_harness.js` already showed the answer reverses. `irmaa_default_harness.js`
+needs re-running before that default can be trusted.
+
+Two method notes worth keeping. A browser byte-identity check reported the model NOT inert; the only
+differing field was `loopMs`, wall-clock timing, which node stubs to 0 - **diff the fields, not the
+JSON blob.** And the in-page changelog guard caught a real convention break: `<b>` is reserved for
+the version stamp, and a second `<b>` for emphasis breaks the li/stamp count test.
+
+Counts: optimizer_core 326 -> **329**, page reports 760 passed.
+
+**Medicare excess spread RESOLVED, commit `20c1280`.** User chose `cpi_t + inputs.inflation` - the
+statutory index plus a CONSTANT excess-medical spread - over the doubled `cpi_t + i_t`. Three arms,
+all measured:
+
+| | no spread | doubled Medicare | fixed excess (shipped) |
+|---|---|---|---|
+| lifetime tax | -8.32% | -5.72% | **-7.80%** |
+| rescued / broken | 38 / 0 | 36 / 0 | **36 / 0** |
+| IRMAA surcharge years | -10.56% | -9.15% | **-9.21%** |
+| IRMAA dollars | -6.51% | **+29.05%** | **-6.06%** |
+
+Dollars fall again and the original P3 reading is restored: surcharge YEARS move further than
+surcharge DOLLARS, because rising thresholds lift years off the ladder while premiums still grow.
+Direction and asymmetry never moved across any arm. Pinned by a test that walks Medicare year-over-
+year growth on a steady 12% path, so the doubled form cannot return as a simplification. Written as
+`cpi_t + inputs.inflation` for intent; it reduces to `i_t + inputs.cpi`, same number, reads as less.
+
+README revisions by the repo owner included in the same commit - notably a new paragraph on what
+happens when a tool models fixed inflation but not bracket indexation (a 9% year against an assumed
+3% misplaces the 22% bracket top by ~$6.4k and compounds), which is the same defect this branch
+fixes in the engine. Counts: optimizer_core **330**, page 761.
+
+**Remaining on this branch: P70e only** - re-run `irmaa_default_harness.js` under path-following and
+revisit `IRMAA_MARGIN_DEFAULT`, which was chosen when a forward projection was exact by construction
+and the margin measured as worthless.
+
+**USER-REPORTED REGRESSION, fixed `fd65644`. Entirely mine, and the diagnosis went the long way.**
+
+Three reports, one cause: default strategy showed Fill/Below IRMAA instead of Proportional 20%;
+birth years and retirement age were not the defaults; and the default plan now faced ruin.
+
+The in-page ceiling test added in 11.165B calls `applyScenario()` to prove a saved Fill Bracket plan
+reloads at its own ceiling. **`applyScenario()` writes the WHOLE sidebar and does not put it back,
+and `runTests()` runs at page load** - so every load left the reader looking at the test fixture.
+Its `finally` restored only the stratRate selection, which was the part I had been thinking about.
+
+The tell was `birthyear1: 1958 / birthyear2: 1959`, values that appear nowhere in the HTML. They are
+the fixture. Once I diffed the live DOM against the markup defaults instead of chasing the
+mechanism, it was immediate.
+
+**Diagnostic path worth not repeating.** I spent several rounds on the wrong layer: grepping for
+writes to `#strategy`, checking `loadScenarioByName`, then installing a `defineProperty` trap on the
+select. The trap never fired and reported itself uninstalled, which was confusing rather than
+informative. What settled it in one command was serving `main` from a detached worktree on a second
+port and comparing a fresh tab against a fresh tab - and then diffing the HTML `value=` attributes,
+which were byte-identical, proving the markup was innocent and the runtime was not.
+**Compare against a known-good build EARLY; it is one `git worktree add` away.**
+
+Also: I twice reported browser findings from a tab whose page predated the file on disk. Between
+that and this, the rule is the same - **the page is not the file, and a fresh tab is not a reload.**
+
+The plan "facing ruin" was the fixture running, not a modeling change. Restored, the default plan on
+this branch is identical to main to the dollar: tax 551,192, final NW 637,024, 25 years funded, no
+ruin - exactly what the byte-identity property predicts for a deterministic run. The test now
+snapshots every input/select/textarea (including `dataset.numVal`, which the dollar fields read
+instead of `.value`) and restores them, the way the MC preset test already does for its parameters.
+
+**Unsafe in-page tests gated, `c877f63`.** User's call after the fixture leak: any test that writes
+live page state is opt-in behind `?runtests`, marked in source, and counted when skipped.
+
+The reason is boot ORDER, and it is worse than "a test left a mess". `runTests?.()` is called at TOP
+LEVEL in retirement_optimizer.html (the DOMContentLoaded registration beside it is commented out),
+so the in-page suite runs BEFORE `captureDefaults()`, `loadScenarioByName('default')` and
+`loadFromURL()`. A mutating test therefore poisons the snapshot Share uses to decide which fields it
+may OMIT from a link, and any field an incoming scenario or URL does not mention keeps the test's
+value.
+
+| suite | mutates |
+|---|---|
+| `acaOptionsUngated` | the `#stratRate` option list, rebuilt, and the selection with it |
+| `mcPresetStateFollowsTheParameters` | every Monte Carlo parameter input |
+| `ceilingDropdownEndsAtTheLastRealCeiling` | the ENTIRE sidebar, via `applyScenario()` |
+| `annualDetailsCellsAlignWithHeaders` | `#main-table`, replaced by `updateTable()` |
+| `objectiveColumnSets` | the live `OptimizerState` |
+
+Each carries a `⚠ UNSAFE - MUTATES:` banner naming what it touches plus a one-line
+`if (!unsafeTest('name')) return;` guard. Gated: 246 passed / 5 skipped. `?runtests`: 351 passed.
+Badge title states the skip count so the drop is explained rather than reading as missing tests.
+
+**Method note, and it cost a detour again.** Mid-verification the gated build appeared to make the
+default plan FAIL. It did not: my cache-busting URL param was `?g=1`, and **`g` is the share-URL key
+for Growth** - I was setting growth to 1%, then 2%. `s` is State, similarly exposed. The earlier
+probes (`?clean=1`, `?fix=1`, `?t=2`) did not collide, so the fixture finding stands. Rule:
+**never cache-bust this page with a short query param; the share scheme owns the short names.**
+Measuring the field directly found it in one step after grepping had found nothing.
+
+**P70 COMPLETE, v11.1661, `a27aaea`.** Last two items closed.
+
+**P70e - the default holds, and re-running the harness was NOT the answer.** `irmaa_default_harness.js`
+never feeds simulate() a path, so with no inflationSequence the spread model reduces to the typed cpi
+and its output is byte-identical to main (verified by diff against a detached main worktree). What
+HAD changed was its header premise: "sim.cpiRate is built from the scalar inputs.cpi, so the ceiling,
+the conversions and the donations are deterministic". Added a native section instead, counting years
+charged ABOVE the targeted tier across the Stress bank:
+
+| | fixed indexation | path-following |
+|---|---|---|
+| halfcpi breaches prevented | 8.5% | **21.1%** |
+| surcharge dollars vs none | - | **-0.09%** |
+
+So the margin now absorbs a real forecast error, as `irmaa_cpi_risk_harness.js` predicted. The honest
+reading is narrower than that sounds: the DOLLARS are still noise, and the wealth ranking is driven by
+conversion sizing (the original P6), with halfcpi leading in both regimes. **`IRMAA_MARGIN_DEFAULT`
+confirmed for the reason it always had, not for the breach protection.**
+
+**P70i - the gap P70d created, now closed.** Five-way selector replacing the checkbox; a capped plan
+pays `min(cap, that year's index rate)` applied PER YEAR, which is why it needs its own compounding
+factor rather than being read off cpiRate - the cap has to bite each year for the pension to fall
+permanently behind instead of catching up. `pensionColaCap()` takes the old booleans so the golden,
+the tests and saved plans need no migration, and `applyScenario` maps a stored boolean because the
+generic restore loop would set a `<select>` to "true", match nothing, and silently strip the COLA.
+
+Sanity check worth keeping: at the default 2.8% CPI a 3% cap pays exactly what Full COLA pays, because
+the cap never binds. If those two ever differ on default inputs, the per-year min is wrong.
+
+Deflation left as a genuine min, so a falling index reduces a capped pension the way it already
+reduces modeled Social Security. Real COLAs are floored at zero; not modeled, noted in code, and
+flagged as a decision to take for both or neither.
+
+**P70 now has zero open items.** Suites 332 / 61 / 22, page 658 gated / 763 with ?runtests.
+
+**PR #195 opened 2026-08-26** (worktree-p70-cpi-indexation -> main): the whole P70 phase, 17 commits,
+v11.1661. Body leads with the byte-identity gate, since that is the property a reviewer can check in
+one step and the one that proves the spread model is implemented right.
+
+**P81 filed 2026-08-26, O0.** User asked to confirm two invariants. One holds, one does not, and the
+one that does not is a defect P70c introduced and PR #195 currently ships.
+
+**Medicare/IRMAA is additive: CONFIRMED.** `sim.medicareRate *= (1 + cpi_t + inputs.inflation)`.
+
+**Nothing below INFLATION_FLOOR: FALSE.** The floor guards the DRAWN series - `computeNextInflation`,
+the stress bank, the multi-asset bank and the bootstrap bank all clamp `i_t` at -1%, so the record's
+real -10.3% years never reach the engine. But the statutory index is DERIVED, not drawn:
+`cpi_t = i_t + spread`, and the shipped default spread is NEGATIVE (-0.2pt). A year already sitting
+on the floor gets pushed through it.
+
+| typed | spread | min `i_t` | min `cpi_t` | years below floor |
+|---|---|---|---|---|
+| 3.0 / 2.8 (defaults) | -0.20pt | -1.00% | **-1.20%** | **27 of 780** |
+| 3.5 / 2.0 | -1.50pt | -1.00% | **-2.50%** | **43 of 780** |
+| 2.0 / 3.5 (inverted) | +1.50pt | -1.00% | +0.50% | 0 |
+
+Only bites when CPI sits below Inflation - the normal configuration and the default. Three consumers
+take the un-floored value: `cpiRate` (so every bracket-shaped threshold), `medicareRate`, and
+`pensionFactor` (a capped pension gets CUT below the floor).
+
+Filed rather than fixed, per instruction. Worth deciding before #195 merges rather than after -
+the fix is one `Math.max` at the point `cpi_t` is computed, so every consumer inherits it. P81c
+carries the separate zero-floor question P70i left open, which affects Social Security too and must
+be taken for both or neither.
+
+Method note: this was found by MEASURING the derived value across the stress bank rather than
+reasoning about the floor constant. The constant is correct and applied in four places; what was
+wrong was a quantity derived downstream of all four.
+
+**P81a/b/d FIXED on the branch before merge, v11.1662.** `cpi_t = Math.max(CPI_INDEX_FLOOR, i_t + spread)`,
+applied once where `cpi_t` is computed so cpiRate, medicareRate and pensionFactor all inherit it.
+Re-measured over the stress bank at three spreads: **0 of 650 index steps below the floor**, and it
+genuinely clamps - 20 steps land exactly on it at the defaults, 31 at a 1.5pt spread.
+
+**The first attempt killed the Monte Carlo tab, and node could not see it.** I named the engine copy
+`INFLATION_FLOOR`, matching prng.js. `montecarlo/worker.js` importScripts() taxengine, optimizer_core,
+prng, stats and mc_engine into **ONE shared global scope**, so two top-level `const INFLATION_FLOOR`
+is a SyntaxError that kills the worker before it runs a single path. Node has separate module scopes
+and reported 334/334 green. **The in-page badge caught it** - 36 failures out of 660 - and the console
+named it exactly: "Identifier 'INFLATION_FLOOR' has already been declared".
+
+Renamed to `CPI_INDEX_FLOOR`, and added a test that scans all five worker-imported files for
+top-level name collisions so the class cannot recur. It found exactly one when written against the
+broken state, which is the only way to know a guard works.
+
+**Rule earned: any new top-level `const`/`function` in optimizer_core.js, taxengine.js or the
+montecarlo files must be unique across all five, because the worker shares one scope. Node will never
+tell you.** Same family as the earlier lessons this session - the page is not the file, node is not
+the browser - and this is the third time the browser tier caught something node could not.
+
+P81c stays open: real COLAs are floored at ZERO and never claw back, but modeled Social Security and
+a capped pension both fall when the index falls. Different floor, different level, and it touches SS,
+so it goes for both or neither.
+
+Counts: optimizer_core **335** (two floor tests plus the collision guard), page 661 gated.

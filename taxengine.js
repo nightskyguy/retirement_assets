@@ -1594,10 +1594,19 @@ function getIRMAATier(magi, status, cpiRate) {
 	return idx === -1 ? (brks[0].tier ?? '-') : (brks[idx].tier ?? '-');
 }
 
-// Returns the CPI-adjusted per-person annual QCD limit for the given simulation year.
-function getQCDLimit(simYear, cpiRate) {
-	const { YEAR, AMOUNT } = TAXData.QCD;
-	return AMOUNT * Math.pow(1 + cpiRate, simYear - YEAR);
+// Returns the CPI-adjusted per-person annual QCD limit.
+//
+// P70d. `cpiFactor` is the CUMULATIVE index factor (sim.cpiRate), the same thing every bracket
+// lookup in this file multiplies by. It used to take the simulation year and a scalar RATE and
+// exponentiate - and the parameter was NAMED cpiRate while receiving a rate, in a codebase where
+// cpiRate means a factor everywhere else. The arithmetic happened to be right; the name was a
+// trap, and recomputing from a scalar meant this limit could not follow a Monte Carlo path once
+// the rest of the tax code started to.
+//
+// AMOUNT is stated in TAXData.QCD.YEAR dollars and cpiFactor is anchored at the real current
+// year. Keep QCD.YEAR in step with the rest of the table when the data is refreshed.
+function getQCDLimit(cpiFactor) {
+	return TAXData.QCD.AMOUNT * (cpiFactor ?? 1);
 }
 
 // Returns true if a person is QCD-eligible (age 70½+) during simYear.

@@ -17,6 +17,48 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1662"></a>
+
+## 11.1662
+
+### Taxes now follow the inflation your plan actually gets
+
+**Behavior change. Every Monte Carlo and Stress Test result moves, and your saved plan will not
+reproduce the numbers it showed before.**
+
+Each Monte Carlo and Stress Test path has always given your spending its own inflation, but the tax
+code stayed frozen at the CPI you typed. On a path whose inflation ran ABOVE that figure, your
+income climbed while the brackets stood still, so the plan paid tax at rates it would not really
+have faced. On a path BELOW it the error ran the other way: brackets kept climbing past prices, and
+the plan looked less taxed than it would have been.
+
+Brackets, IRMAA tiers, the ACA cap, the QCD limit and Social Security COLA now follow each path,
+indexed one year behind the inflation that sets them, the way the IRS and Social Security actually
+do it. Both errors were real, and neither was small. What changes most are the high-inflation paths,
+because history hands them inflation far above any CPI you would type while rarely handing them
+inflation far below it, and those are the paths where a plan runs out of money. Plans that showed
+money running out in a high-inflation path may now survive it.
+
+CPI and Inflation stay separate, and the gap between them now does real work: the tax code is
+indexed at each path's inflation less that gap. A new line under the two fields names it, so you
+can see which way it runs and by how much.
+
+**Pension COLA is now a choice of five, not a checkbox:** no increase, a 1%, 2% or 3% cap, or full
+COLA. A capped pension pays the lesser of its cap and that year's CPI, so it falls permanently
+behind in a high-inflation stretch instead of catching up later. That is how federal FERS and most
+state and municipal plans actually pay, and a checkbox could only call them uncapped or nothing. A
+pension also follows CPI now rather than general inflation, as Social Security already did. Plans
+saved with the box ticked load as Full COLA; unticked loads as No increase.
+
+Also fixed: choosing **Fill Bracket** at the top federal bracket produced no plan at all, with every
+figure reading `$NaN`. That bracket has no upper limit, so there was nothing to fill up to. The
+ceiling menu now ends at the highest bracket that has a top; the top federal bracket and the top
+IRMAA tier stay listed, greyed, showing the income where they begin. And a saved plan using Fill
+Bracket came back with its ceiling reset to "Below IRMAA" instead of the bracket you chose, so it
+ran a different strategy than the one you saved. Reload any such plan to get your own ceiling back.
+
+---
+
 <a id="11.1657"></a>
 
 ## 11.1657

@@ -74,6 +74,8 @@ const findUpperLimitByAmount = taxengine.findUpperLimitByAmount;
 const getRateBracket = taxengine.getRateBracket;
 const TAXData = taxengine.TAXData;
 const getLTCGBracketRoom = core.getLTCGBracketRoom;
+const nominalRateAtLimit = core.nominalRateAtLimit;
+const pensionColaCap = core.pensionColaCap;
 const compactNum = core.compactNum;
 const diagnoseConvBreakEvenFailure = core.diagnoseConvBreakEvenFailure;
 const bestConversionStopYear = core.bestConversionStopYear;
@@ -4106,6 +4108,350 @@ test('tax creep: reaches Monte Carlo and is path-independent', () => {
         'different inflation paths should still produce different tax totals');
     assert(sumCol(pathA, 'FedTax') > sumCol(flat, 'FedTax'), 'MC path pays the federal creep');
     assert(sumCol(pathA, 'StateTax') > sumCol(flat, 'StateTax'), 'MC path pays the state creep');
+});
+
+// ── An unbounded ceiling must not produce NaN ─────────────────────────────────
+// "Fill Bracket" at the top federal bracket rendered $NaN across the whole page. Every field
+// computeBracketCeiling returns is a quantity measured AT the ceiling, and the top bracket's `l` is
+// the Infinity sentinel, so the average-rate divisions came out 0/0 or Infinity/Infinity. The top
+// bracket is no longer selectable, but the engine has to hold up on its own: a saved plan, a shared
+// URL and a programmatic caller can all still hand it that rate.
+
+test('nominalRateAtLimit: defined at both ends of a bracket table', () => {
+    assert(nominalRateAtLimit('FEDERAL', 'MFJ', 0, 1, 1) === 0, 'no income means no average rate, not 0/0');
+    assert(nominalRateAtLimit('FEDERAL', 'MFJ', -5, 1, 1) === 0, 'a negative ceiling is treated as no income');
+    // As income grows without bound, tax/income converges on the top marginal rate.
+    const fedBrks = getRateBracket('FEDERAL', 'MFJ');
+    const topRate = fedBrks[fedBrks.length - 1].r;
+    assertNear(nominalRateAtLimit('FEDERAL', 'MFJ', Infinity, 1, 1), topRate,
+        'an unbounded ceiling reports the top marginal rate', 1e-12);
+    assertNear(nominalRateAtLimit('FEDERAL', 'MFJ', Infinity, 1, 1.5), topRate * 1.5,
+        'rate creep applies to the unbounded answer too', 1e-12);
+    // A no-tax state's table is a single Infinity row with no rate at all.
+    assert(nominalRateAtLimit('TX', 'MFJ', Infinity, 1, 1) === 0,
+        'a no-tax state charges nothing, at any ceiling');
+    // The ordinary case is the plain division, untouched.
+    const lim = 400000;
+    assertNear(nominalRateAtLimit('FEDERAL', 'MFJ', lim, 1, 1),
+        calculateProgressive('FEDERAL', 'MFJ', lim, 1, 1).cumulative / lim,
+        'a finite ceiling still reports tax/limit exactly', 1e-12);
+});
+
+test('unbounded ceilings simulate instead of returning NaN', () => {
+    const base = { ...CREEP_BASE, IRA1: 2000000, spendGoal: 120000,
+                   strategy: 'bracket', stratACAMultiple: 0, stratIRMAATier: -1 };
+    const finiteOf = o => {
+        const r = simulate({ ...base, ...o });
+        return Number.isFinite(r.totals.tax) && Number.isFinite(r.finalNW)
+            && r.log.every(e => e.year === undefined || Number.isFinite(e.totalTax));
+    };
+    // The top FEDERAL bracket: l is Infinity, and for a state whose table runs out first the
+    // Math.min then collapses the ceiling to 0. Both routes used to end in NaN.
+    assert(finiteOf({ stratRate: 0.37 }), 'the top federal bracket must not produce NaN (CA)');
+    assert(finiteOf({ stratRate: 0.37, STATEname: 'TX' }), 'the top federal bracket must not produce NaN (no-tax state)');
+    // Below every bracket in the table. No UI offers it; a programmatic caller can still ask.
+    assert(finiteOf({ stratRate: 0 }), 'a ceiling below the lowest bracket must not produce NaN');
+    // The top IRMAA tier, whose ceiling is the Infinity sentinel row. The IRMAA branch has no
+    // state-min step, so this one stays infinite rather than collapsing to zero.
+    const topTier = getRateBracket('IRMAA', 'MFJ').length - 2;
+    assert(finiteOf({ stratRate: 0, stratIRMAATier: topTier }),
+        `the top IRMAA tier (${topTier}) must not produce NaN`);
+    // Every bounded ceiling the dropdown offers still works, which is the regression half.
+    for (const rate of [0.10, 0.12, 0.22, 0.24, 0.32, 0.35])
+        assert(finiteOf({ stratRate: rate }), `bracket ${rate} still simulates`);
+    for (let t = 0; t < topTier; t++)
+        assert(finiteOf({ stratRate: 0, stratIRMAATier: t }), `IRMAA tier ${t} still simulates`);
+});
+
+// ── P70: the inflation model - two clocks, an offset, and a one-year lag ──────
+//
+// CPI and Inflation are separate inputs ON PURPOSE. The statutory index (CPI-W for COLA, chained
+// CPI-U for brackets) runs below felt inflation; defaults are inflation 3.0 / cpi 2.8. So a Monte
+// Carlo path supplies GENERAL inflation and the statutory index is that path less the typed spread.
+//
+// CREEP_BASE inherits BASE's cpi 0 / ss1 0, which would make every factor a constant 1 and leave the
+// SS assertions with nothing to measure.
+const CLOCK_BASE = { ...CREEP_BASE, cpi: 0.028, inflation: 0.030, ss1: 40000, ss1Age: 67, die1: 95 };
+const CLOCK_N    = 40;
+const CLOCK_RET  = Array.from({ length: CLOCK_N }, (_, i) => 0.04 + (i % 5) * 0.01);
+// Lumpy on purpose: 1% to 13%, so a wrong clock cannot hide behind a smooth series.
+const CLOCK_INFL = Array.from({ length: CLOCK_N }, (_, i) => 0.01 + ((i * 7) % 11) * 0.012);
+const clockRows  = res => res.log.filter(e => e.year !== undefined);
+
+test('P70: a deterministic run is inert under the spread model, at any (cpi, inflation)', () => {
+    // THE load-bearing property. With no inflationSequence the drawn inflation IS inputs.inflation,
+    // so cpi_t = inputs.inflation + (cpi - inflation) = inputs.cpi exactly. Every deterministic plan
+    // must therefore be untouched, with no special case - and fixedTaxIndexing must be a no-op there
+    // rather than a second code path that happens to agree.
+    for (const [inflation, cpi] of [[0.030, 0.028], [0.025, 0.025], [0.020, 0.035], [0.050, 0.020]]) {
+        const args = { ...CLOCK_BASE, inflation, cpi };
+        const bare  = simulate({ ...args });
+        const onFix = simulate({ ...args, fixedTaxIndexing: true });
+        const offFix= simulate({ ...args, fixedTaxIndexing: false });
+        const tag = `inflation ${inflation} / cpi ${cpi}`;
+        assert(JSON.stringify(bare.log) === JSON.stringify(onFix.log),
+            `${tag}: fixedTaxIndexing:true must not move a deterministic run`);
+        assert(JSON.stringify(bare.log) === JSON.stringify(offFix.log),
+            `${tag}: fixedTaxIndexing:false must not move a deterministic run`);
+        // And the index really is the typed cpi compounded, not the typed inflation.
+        let cum = 1;
+        for (const r of clockRows(bare)) {
+            assertNear(r['-cpiFactor'], cum, `${tag}: cpiFactor tracks the typed cpi`, 1e-9);
+            cum *= (1 + cpi);
+        }
+    }
+});
+
+test('P70: under a path the index follows inflation MINUS the spread, never the bare path', () => {
+    const inflation = 0.030, cpi = 0.028, spread = cpi - inflation;
+    const res = simulate({ ...CLOCK_BASE, inflation, cpi,
+                           returnSequence: CLOCK_RET, inflationSequence: CLOCK_INFL });
+    const rows = clockRows(res);
+
+    let want = 1, bare = 1;
+    for (let i = 0; i < rows.length; i++) {
+        assertNear(rows[i]['-cpiFactor'], want, `year ${i}: cpiFactor is the path plus the spread`, 1e-9);
+        want *= (1 + CLOCK_INFL[i] + spread);
+        bare *= (1 + CLOCK_INFL[i]);
+    }
+    // The spread must SURVIVE. An earlier flag set the index to the bare path, which silently threw
+    // away the CPI/inflation gap and handed every plan higher thresholds as an artifact.
+    assert(Math.abs(rows[rows.length - 1]['-cpiFactor'] - bare) > 1e-6,
+        'the index must not collapse onto the bare path - that discards the typed spread');
+    assert(rows[rows.length - 1]['-cpiFactor'] < bare,
+        'with cpi below inflation the index must run BELOW the price level');
+});
+
+test('P70: the indexation lag - year t+1 is set from year t inflation', () => {
+    // Not incidental. The IRS sets a year's brackets from a 12-month average ending the PREVIOUS
+    // August, and SSA from the previous Q3. Compounding at the top of the year instead of the bottom
+    // would hand the tax code a year of foresight, and nothing else here would notice.
+    const inflation = 0.030, cpi = 0.028, spread = cpi - inflation;
+    const rows = clockRows(simulate({ ...CLOCK_BASE, inflation, cpi,
+                                      returnSequence: CLOCK_RET, inflationSequence: CLOCK_INFL }));
+    assertNear(rows[0]['-cpiFactor'], 1, 'year 0 runs on unindexed, present-day brackets', 1e-12);
+    for (let t = 0; t + 1 < rows.length; t++) {
+        assertNear(rows[t + 1]['-cpiFactor'], rows[t]['-cpiFactor'] * (1 + CLOCK_INFL[t] + spread),
+            `year ${t + 1} is indexed by year ${t}'s inflation, not its own`, 1e-9);
+    }
+});
+
+test('P70: fixedTaxIndexing pins the tax code while spending still follows the path', () => {
+    const args = { ...CLOCK_BASE, returnSequence: CLOCK_RET, inflationSequence: CLOCK_INFL };
+    const path  = simulate({ ...args });
+    const fixed = simulate({ ...args, fixedTaxIndexing: true });
+    const pr = clockRows(path), fr = clockRows(fixed);
+
+    // Frozen: the index is the typed cpi compounded, whatever the path did.
+    let cum = 1;
+    for (const r of fr) { assertNear(r['-cpiFactor'], cum, 'fixed mode pins the index', 1e-9); cum *= (1 + CLOCK_BASE.cpi); }
+    // Not frozen: spending rides the path in BOTH arms, so the two runs share an inflation history.
+    for (let i = 0; i < Math.min(pr.length, fr.length); i++) {
+        assert(pr[i]['infl%'] === fr[i]['infl%'] && pr[i]['infl%'] === CLOCK_INFL[i],
+            `year ${i}: spending inflation follows the path in both arms`);
+        assertNear(pr[i].inflationFactor, fr[i].inflationFactor, `year ${i}: the price level is untouched by the mode`, 1e-9);
+    }
+    // And it is a real diagnostic, not a no-op: the tax outcome moves.
+    assert(sumCol(path, 'totalTax') !== sumCol(fixed, 'totalTax'),
+        'pinning the tax code must change the tax paid under a variable path');
+});
+
+test('P70: Medicare premium growth is the index plus a FIXED excess, not a doubled path', () => {
+    // A deliberate modeling choice, pinned so it cannot be "simplified" back. Medicare grows at
+    // cpi_t + inputs.inflation: the statutory index plus a constant excess-medical spread. At the
+    // shipped defaults that is 2.8 + 3.0 = 5.8%, i.e. about 3 points of excess over the index.
+    //
+    // Making the excess path-following too (cpi_t + i_t) reads the tooltip literally but implies
+    // 12 points of excess medical cost in a 12% inflation year, and swung measured IRMAA dollars
+    // from -6.5% to +29%.
+    const inflation = 0.030, cpi = 0.028;
+    const flat = 0.12;                                   // a steady 12% path, so the arithmetic is checkable by hand
+    const seq  = Array.from({ length: CLOCK_N }, () => flat);
+    const rows = clockRows(simulate({ ...CLOCK_BASE, inflation, cpi,
+                                      returnSequence: CLOCK_RET, inflationSequence: seq }));
+    // Medicare is logged as onMedicare * (standard premiums) * 12 * medicareRate, so consecutive
+    // years give the growth rate directly once both are on Medicare.
+    const med = rows.map(r => r.Medicare).filter(v => v > 0);
+    assert(med.length > 3, 'the fixture must actually reach Medicare age');
+    const cpi_t    = flat + (cpi - inflation);           // the index under this path
+    const expected = 1 + cpi_t + inflation;              // index + FIXED excess
+    const doubled  = 1 + cpi_t + flat;                   // the rejected reading
+    for (let i = 1; i < med.length; i++) {
+        assertNear(med[i] / med[i - 1], expected,
+            `year ${i}: Medicare grows at the index plus a fixed excess`, 1e-9);
+    }
+    assert(Math.abs(expected - doubled) > 0.05,
+        'the two readings must be far enough apart that this test can tell them apart');
+});
+
+test('P81: the engine floor matches the one the banks are drawn under', () => {
+    // optimizer_core carries its own copy because it has no montecarlo dependency and prng.js loads
+    // after it. This assertion is the whole reason that copy is allowed to exist.
+    const drawn = (typeof _mcPrng !== 'undefined' && _mcPrng) ? _mcPrng.INFLATION_FLOOR : undefined;
+    assert(drawn !== undefined, 'prng.js must export INFLATION_FLOOR for this comparison to mean anything');
+    assert(core.CPI_INDEX_FLOOR === drawn,
+        `the engine floor (${core.CPI_INDEX_FLOOR}) and the draw floor (${drawn}) have drifted apart`);
+});
+
+test('P81: no top-level name collides across the files the worker shares a scope with', () => {
+    // montecarlo/worker.js importScripts() taxengine.js, optimizer_core.js, prng.js, stats.js and
+    // mc_engine.js into ONE global scope. Two top-level `const` of the same name is a SyntaxError
+    // that kills the worker before it runs a path, and NODE CANNOT SEE IT - each file gets its own
+    // module scope there. A duplicated INFLATION_FLOOR shipped exactly this way and took the whole
+    // Monte Carlo tab down; only the in-page suite noticed.
+    if (!IS_NODE) return;   // the browser tier has already proven it by loading
+    const fs = require('fs'), path = require('path');
+    const FILES = ['taxengine.js', 'optimizer_core.js', 'montecarlo/prng.js',
+                   'montecarlo/historical_returns.js', 'montecarlo/stats.js', 'montecarlo/mc_engine.js'];
+    const topLevel = src => new Set(
+        [...src.matchAll(/^(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]));
+    const seen = new Map();   // name -> first file that declared it
+    const clashes = [];
+    for (const f of FILES) {
+        const p = path.join(__dirname, f);
+        if (!fs.existsSync(p)) continue;
+        for (const name of topLevel(fs.readFileSync(p, 'utf8'))) {
+            if (seen.has(name)) clashes.push(`${name}: ${seen.get(name)} and ${f}`);
+            else seen.set(name, f);
+        }
+    }
+    assert(clashes.length === 0,
+        'the worker shares one scope, so these top-level names collide: ' + clashes.join(' | '));
+});
+
+test('P81: no index step falls below the floor, at any spread', () => {
+    // The floor upstream guards the DRAW. cpi_t is DERIVED - inflation minus the CPI spread - and the
+    // shipped default spread is negative, so a year already at the floor used to be pushed through it.
+    // Walk the logged index factor step by step and assert none of them undershoots.
+    const N = CLOCK_N;
+    // A sequence that sits ON the floor for a stretch, which is where the defect lived.
+    const seq = Array.from({ length: N }, (_, i) => (i % 3 === 0 ? -0.01 : 0.02 + (i % 5) * 0.01));
+    for (const [inflation, cpi] of [[0.030, 0.028], [0.035, 0.020], [0.020, 0.035], [0.025, 0.025]]) {
+        const rows = clockRows(simulate({ ...CLOCK_BASE, inflation, cpi,
+                                          returnSequence: CLOCK_RET, inflationSequence: seq }));
+        const tag = `inflation ${inflation} / cpi ${cpi}`;
+        for (let t = 0; t + 1 < rows.length; t++) {
+            const step = rows[t + 1]['-cpiFactor'] / rows[t]['-cpiFactor'] - 1;
+            assert(step >= core.CPI_INDEX_FLOOR - 1e-12,
+                `${tag}: year ${t + 1} indexed at ${(step * 100).toFixed(3)}%, below the ${core.CPI_INDEX_FLOOR * 100}% floor`);
+        }
+        // And the floor must BITE on a negative spread rather than being a no-op assertion: with the
+        // sequence pinned at the floor every third year, the clamped step must equal the floor exactly.
+        if (cpi < inflation) {
+            const steps = rows.slice(1).map((r, t) => r['-cpiFactor'] / rows[t]['-cpiFactor'] - 1);
+            assert(steps.some(v => Math.abs(v - core.CPI_INDEX_FLOOR) < 1e-12),
+                `${tag}: the floor must actually clamp here, or this test proves nothing`);
+        }
+    }
+});
+
+test('P70i: a capped pension COLA pays the lesser of its cap and CPI, year by year', () => {
+    // The cap bites PER YEAR, which is the whole point: a run of quiet years followed by a hot one
+    // is not the same as the average, and a capped plan never catches up afterwards.
+    const inflation = 0.030, cpi = 0.028, spread = cpi - inflation;
+    const seq = CLOCK_INFL;                       // lumpy, 1% to 13%
+    const base = { ...CLOCK_BASE, inflation, cpi, pensionAnnual: 30000, pensionStartAge: 60,
+                   returnSequence: CLOCK_RET, inflationSequence: seq };
+    const pens = o => clockRows(simulate({ ...base, ...o })).map(r => r.pension);
+
+    // No increase: flat nominal, forever.
+    for (const off of [{ pensionCola: 'none' }, { pensionCola: false }, {}]) {
+        const p = pens(off);
+        assert(p.every(v => Math.abs(v - p[0]) < 1e-9),
+            `${JSON.stringify(off)}: a pension with no COLA must not move`);
+    }
+    // Full COLA rides the index exactly, so it equals cpiFactor times the base.
+    const full = clockRows(simulate({ ...base, pensionCola: 'full' }));
+    for (const r of full)
+        assertNear(r.pension, 30000 * r['-cpiFactor'], 'a full COLA tracks the index exactly', 1e-6);
+    // The old boolean still means what it meant.
+    assert(JSON.stringify(pens({ pensionCola: true })) === JSON.stringify(pens({ pensionCola: 'full' })),
+        'pensionCola:true must still mean a full COLA');
+
+    // Capped: each year grows by min(cap, that year's index rate), compounded.
+    for (const cap of [1, 2, 3]) {
+        const p = pens({ pensionCola: String(cap) });
+        let want = 30000;
+        for (let i = 0; i < p.length; i++) {
+            assertNear(p[i], want, `cap ${cap}%: year ${i} pays the lesser of the cap and CPI`, 1e-6);
+            want *= (1 + Math.min(cap / 100, seq[i] + spread));
+        }
+    }
+    // And the ordering holds: more cap is never less pension, and full is the ceiling.
+    const last = o => { const p = pens(o); return p[p.length - 1]; };
+    const none = last({ pensionCola: 'none' }), c1 = last({ pensionCola: '1' });
+    const c2 = last({ pensionCola: '2' }), c3 = last({ pensionCola: '3' }), f = last({ pensionCola: 'full' });
+    assert(none < c1 && c1 < c2 && c2 < c3 && c3 < f,
+        `each step up the cap must pay more: ${[none, c1, c2, c3, f].map(Math.round).join(' < ')}`);
+});
+
+test('P70i: pensionColaCap reads every shape the input can arrive in', () => {
+    assert(pensionColaCap({ pensionCola: false }) === null, 'false is no COLA');
+    assert(pensionColaCap({ pensionCola: 'none' }) === null, "'none' is no COLA");
+    assert(pensionColaCap({ pensionCola: '' }) === null, 'blank is no COLA');
+    assert(pensionColaCap({}) === null, 'absent is no COLA - the safe default for a pension');
+    assert(pensionColaCap({ pensionCola: true }) === Infinity, 'true is uncapped');
+    assert(pensionColaCap({ pensionCola: 'full' }) === Infinity, "'full' is uncapped");
+    assertNear(pensionColaCap({ pensionCola: '2' }), 0.02, "'2' is a 2% cap", 1e-12);
+    assertNear(pensionColaCap({ pensionCola: 2 }), 0.02, 'a bare number is a percent cap', 1e-12);
+    assert(pensionColaCap({ pensionCola: 'garbage' }) === null, 'anything unreadable is no COLA');
+});
+
+test('P70: every indexed quantity tracks its declared clock', () => {
+    // The guard for the whole class. Each quantity below is on the STATUTORY clock or the PRICE
+    // LEVEL, and the way to tell them apart is to run two plans whose typed rates differ and check
+    // which number moved. Without this the next quantity added picks a clock by whatever is in
+    // scope, which is how every defect in this phase arrived.
+    const base = { ...CLOCK_BASE, IRA1: 2000000, spendGoal: 120000,
+                   pensionAnnual: 30000, pensionCola: true, pensionStartAge: 60,
+                   CashReserve: 50000, propTax: 12000, qcdHHMax: 20000 };
+    // Same felt inflation, different statutory index. Anything that moves is on cpiRate.
+    const lowCpi  = simulate({ ...base, inflation: 0.03, cpi: 0.01 });
+    const highCpi = simulate({ ...base, inflation: 0.03, cpi: 0.05 });
+    // Same statutory index, different felt inflation. Anything that moves is on sim.inflation.
+    const lowInf  = simulate({ ...base, inflation: 0.01, cpi: 0.03 });
+    const highInf = simulate({ ...base, inflation: 0.05, cpi: 0.03 });
+
+    const last = res => clockRows(res)[clockRows(res).length - 1];
+    const movesWithCpi  = f => f(last(lowCpi))  !== f(last(highCpi));
+    const movesWithInfl = f => f(last(lowInf))  !== f(last(highInf));
+
+    // ── statutory clock ──
+    assert(movesWithCpi(r => r['-cpiFactor']), 'the index itself moves with CPI');
+    assert(!movesWithInfl(r => r['-cpiFactor']),
+        'the index must NOT move with felt inflation - that is the two-clock defect');
+    assert(movesWithCpi(r => r.SSincome), 'Social Security COLA is on CPI');
+    assert(!movesWithInfl(r => r.SSincome), 'Social Security COLA is NOT on felt inflation');
+    assert(movesWithCpi(r => r.pension), 'a pension COLA is on CPI');
+    assert(!movesWithInfl(r => r.pension),
+        'a pension COLA must not ride felt inflation - Social Security does not');
+
+    // The bracket ceiling needs a strategy that computes one; CLOCK_BASE inherits 'fixed'. Read
+    // BracketTarget, the ceiling the strategy actually aims at - goalFedBracketLimit is a `yr`
+    // object and never reaches the log, so asserting on it compares undefined to undefined and
+    // passes for the wrong reason.
+    const brk = o => {
+        const rows = clockRows(simulate({ ...base, strategy: 'bracket', stratRate: 0.22,
+                                          stratIRMAATier: -1, stratACAMultiple: 0, ...o }));
+        return rows[rows.length - 1].BracketTarget;
+    };
+    const brkLowCpi = brk({ inflation: 0.03, cpi: 0.01 });
+    assert(Number.isFinite(brkLowCpi) && brkLowCpi > 0, 'the bracket-strategy fixture must actually report a ceiling');
+    assert(brkLowCpi !== brk({ inflation: 0.03, cpi: 0.05 }), 'bracket limits are on CPI');
+    assert(brk({ inflation: 0.01, cpi: 0.03 }) === brk({ inflation: 0.05, cpi: 0.03 }),
+        'bracket limits must NOT move with felt inflation - that is the two-clock defect');
+
+    // ── both clocks, by design ──
+    // The sidebar tooltip promises Medicare/IRMAA dollars grow at "CPI + Inflation combined, not
+    // CPI alone", so this is the one quantity that must respond to each of them.
+    assert(movesWithCpi(r => r.Medicare) && movesWithInfl(r => r.Medicare),
+        'Medicare premium growth rides CPI + Inflation together');
+
+    // ── price level ──
+    assert(movesWithInfl(r => r.spendGoal), 'the spending goal is on felt inflation');
+    assert(!movesWithCpi(r => r.spendGoal), 'the spending goal is NOT on CPI');
+    assert(movesWithInfl(r => r.inflationFactor), 'the price level is on felt inflation');
+    assert(!movesWithCpi(r => r.inflationFactor), 'the price level is NOT on CPI');
 });
 
 // ── PR1: break-even heirs rate + time-limited conversions ─────────────────────

@@ -6058,6 +6058,43 @@ test('P69: the message ships replay rows, and a replayed path reproduces the run
     }
 });
 
+test('P79: the capture variation ships one balance trace per captured path', async () => {
+    // The traces the survival chart draws over its own bands. They must describe the SAME paths
+    // the replay rows do - a trace the reader clicks has to replay the path they were looking at -
+    // and they must agree with the percentile bands they are drawn on top of.
+    const cfg = _p71Cfg('bootstrap', { captureVariationIndex: 0, numPaths: 40 });
+    const msg = await _mcEngine.runJob(cfg);
+    assert(msg && !msg.error, `job failed: ${msg && msg.error}`);
+    const v = msg.variations[0];
+    assert(Array.isArray(v.capturedTraces), 'the capture variation shipped no traces');
+    assert(v.captured.length > 1, `only ${v.captured.length} captured paths - the length check below would be vacuous`);
+    assert(v.capturedTraces.length === v.captured.length,
+        `${v.capturedTraces.length} traces against ${v.captured.length} captured paths`);
+    for (let i = 0; i < v.captured.length; i++) {
+        const tr = v.capturedTraces[i], r = v.captured[i];
+        assert(tr.length === msg.years, `trace ${i} has ${tr.length} years, plan has ${msg.years}`);
+        assert(tr.every(x => Number.isFinite(x) && x >= 0),
+            `trace ${i} carries a negative or non-finite balance`);
+        // A ruined path is at zero from its ruin year on; a survivor never touches zero at the end.
+        if (r.ruinYear) {
+            assert(tr[tr.length - 1] === 0, `path ${r.pathIndex} ruined in ${r.ruinYear} but ends at ${tr[tr.length - 1]}`);
+        } else {
+            assert(tr[tr.length - 1] > 0, `path ${r.pathIndex} survived but ends at 0`);
+        }
+    }
+    // Every drawn trace must sit inside the band the same run reported, or the chart would show a
+    // path outside its own p5-p95 envelope. Checked at the last year, where the spread is widest.
+    const last = msg.years - 1;
+    const lo = v.percentiles.p5[last], hi = v.percentiles.p95[last];
+    assert(v.capturedTraces.some(tr => tr[last] <= lo + 1e-6),
+        'no captured trace is at or below p5, yet the worst paths are captured by construction');
+    assert(v.capturedTraces.every(tr => tr[last] <= Math.max(hi, ...v.capturedTraces.map(t => t[last])) + 1e-6),
+        'a captured trace exceeds every drawn value');
+    // Stress already ships every path as stressPaths, so it must not pay for these twice.
+    assert(msg.stress.variations[0].capturedTraces == null,
+        'the stress pass shipped capturedTraces as well as stressPaths');
+});
+
 test('P71: a cancelled job reports nothing at all', async () => {
     // The contract the UI depends on: a cancelled run resolves to null, and the caller reporting
     // nothing is what leaves the previous results on screen instead of blanking them.

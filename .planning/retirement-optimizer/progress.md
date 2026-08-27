@@ -5090,3 +5090,79 @@ hand in the live page: 2028-2031 the index falls 1.018 -> 0.99575 while SS holds
 at $30,540 through the same stretch and resumes from there, not from a high-water mark.
 
 Counts: optimizer_core **337** (up 2), taxPaymentPlanner 61, doclinks 22, page 771.
+
+---
+
+## Session 2026-08-27 - P78 and P79, the replay grows a memory and the chart grows paths  *(v11.1670)*
+
+Both shipped on the same branch as P81c, so the changelog entry was REWRITTEN in place rather than
+added to - one entry per branch, and its stamp moved 11.1667 -> 11.1670.
+
+### P78: the plan can now be edited without losing the path
+
+The banner carries "Keep path while editing". With it on, a sidebar edit re-runs against the same
+sequence instead of ending the replay.
+
+**The plan said hand the run's plan fields to the sidebar on the FIRST LOCKED EDIT. That is
+unimplementable as written, and writing it would have been the bug it was trying to prevent.** The
+exit listener is capture-phase on `input`, and by the time an `input` event fires `el.value` is
+ALREADY the user's new value. Handing off there means writing the run's `strategy` over the control
+the user just changed - the PF8 / P74 class from the other side. So the handoff happens when the
+lock goes ON. That is also the better behavior: the moment the reader opts in, the sidebar stops
+disagreeing with what is being replayed. Browser-verified - ticking the box flipped
+`convertExcessToRoth` false -> true, the swept row's own setting, previously invisible.
+
+**One item the plan did not have, and it was not optional.** `replayCarryOnStep()`: stepping
+prev/next builds a FRESH state carrying planFields, so without it the first step after an edit
+silently reverted the whole edited plan. Found by walking the step path, not by it failing.
+
+Both decision rules were extracted as pure functions - `replayBannerText()` and
+`replayCarryOnStep()` - and unit-tested in tier 1 rather than left inside DOM handlers. Ten
+assertions, including the case where the lock is on but the handoff has NOT happened yet, where
+stripping planFields would quietly replay a different plan.
+
+**End to end in the browser, which is the only place this feature exists:** worst path, ruin 2034,
+lock on, spend $140,000 -> $70,000. The replay survived the edit, the same 25-year sequence stayed
+injected, and the path that ruined in 2034 ended at **$1,564,443**. That is the question the
+feature was built to answer, answered. Stepping to the #2 worst kept the edited $70,000 and kept
+saying MODIFIED; lock off then edit ended the replay the old way.
+
+Note for anyone extending this: text inputs recalc on **blur**, selects and checkboxes on
+**change**, and the replay listener is on **input**. Three different events, and a test that fires
+only `input` will see the banner update while the numbers do not - which is exactly what happened
+here for one round.
+
+### P79: the ten captured paths, drawn and clickable
+
+Engine side is small, as the estimate said: `capturedTraces` sliced from the `paths` array the
+capture variation already holds, ~3KB. Two things worth keeping: `captureVariationIndex` is now
+clamped BEFORE the variation loop (the loop has to recognise its own variation while it still holds
+those paths), and `selectCapturePaths()` is called ONCE and shared, so the drawn traces and the
+replay rows cannot drift into describing different paths. Stress deliberately gets none - it
+already ships every path as `stressPaths`, and the test asserts it is not paying twice.
+
+**The real hazard was not the drawing, it was `% 5`.** The main chart is five datasets per
+variation, and the legend filter, the tooltip filter and the isolate handler ALL index on that.
+An appended trace whose index happened to land on 4 mod 5 would have shown up in the legend as a
+phantom strategy with a path's name. Traces are appended after every block and all three are now
+bounded by `nBlockDs`; isolate maps a trace to `_mcTraceGroup` so isolating the pinned strategy
+keeps its own paths rather than hiding them with the others.
+
+**Chart.js's own `options.onClick` never fired for these.** Hit detection was fine the whole time -
+`getElementsAtEventForMode` returned the right dataset - but the handler was never called, so the
+listener went on the canvas instead. Hooked ONCE: `renderMCChart` destroys and rebuilds the chart
+on the same canvas element, so a per-render listener would stack one more replay trigger onto every
+click.
+
+**Known limit, measured rather than assumed.** The click resolves to the NEAREST trace point. At
+year 4, where five ruined paths run within a few pixels of each other, clicking the worst path
+replayed the #3 worst. At year 18 the Rank 95% survivor sits 143px clear of its nearest neighbour
+and the click replayed exactly it. Nearest is the only answer available for overlapping hairlines.
+Recorded, not papered over.
+
+Scope default verified all three ways: 10 traces at plan scope, 0 at Compare, 10 at Compare once
+the reader ticks the box.
+
+Counts: optimizer_core **338** (up 1), tier 1 **361** (up 10), page **782** green. Screenshots were
+unavailable this session (the Browser pane was not compositing), so every check above is a DOM or
+engine assertion read back out of the live page rather than something looked at.

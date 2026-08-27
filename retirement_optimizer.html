@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1667</title>
+    <title>Retirement Optimizer 11.1670</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,12 +59,12 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=111662"></script>
-	<script src="optimizer_core.js?v=111667"></script>
+	<script src="optimizer_core.js?v=111670"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=111662"></script>
-	<script src="optimizer_tests.js?v=111667"></script>
+	<script src="optimizer_ui.js?v=111670"></script>
+	<script src="optimizer_tests.js?v=111670"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -499,6 +499,8 @@
 		<div id="replay-banner" style="display:none;align-items:center;gap:10px;margin:6px 0;padding:6px 12px;background:#fff3cd;border:1px solid #e0c268;border-radius:6px;font-size:0.9em;">
 			<span style="font-size:1.1em;">▶️</span>
 			<span id="replay-banner-text" style="flex:1;min-width:0;"></span>
+			<label id="replay-keep-wrap" style="white-space:nowrap;display:flex;align-items:center;gap:4px;cursor:pointer;" title="Off: changing anything in the sidebar ends the replay and returns to your plan's own projection. On: the path stays and every change is re-run against this same sequence, so you can see whether a change survives it. Switching it on also copies the run's own strategy and conversion settings into the sidebar, so the controls show what is actually being replayed.">
+				<input type="checkbox" id="replay-keep" onchange="toggleReplayKeepOnEdit(this.checked)">Keep path while editing</label>
 			<button id="replay-prev" onclick="replayStep(-1)" style="white-space:nowrap;" title="Replay the previous path in the list.">◀</button>
 			<button id="replay-next" onclick="replayStep(1)" style="white-space:nowrap;" title="Replay the next path in the list.">▶</button>
 			<button onclick="exitReplay()" style="white-space:nowrap;" title="Return to the plan's own projection.">Exit replay</button>
@@ -751,6 +753,8 @@
 				<div id="mc-chart-desc" style="font-size:0.8em;color:#888;margin-bottom:4px;">
 					Shaded areas: outer = p5–p95, inner = p25–p75. Solid line = median (p50). Paths that hit ruin stay at $0.
 				</div>
+				<label id="mc-traces-wrap" style="display:none;font-size:0.8em;color:#666;margin-bottom:6px;align-items:center;gap:5px;cursor:pointer;" title="Draws the ten paths this run captured for replay on top of the bands: the five worst in red, the percentile samples in gray. Click one to replay it year by year. On by default for a single-plan run, off for Compare, where ten more lines compete with the strategies being compared.">
+					<input type="checkbox" id="mc-traces" onchange="onMCTracesToggle(this.checked)">Show the ten captured paths (click one to replay it)</label>
 				<div style="position:relative;height:420px;">
 					<canvas id="mc-chart"></canvas>
 				</div>
@@ -833,7 +837,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.1667</b> <strong>Social Security and a capped pension no longer shrink when prices fall.</strong> <strong>Monte Carlo and Stress Test results move on any path that includes a year of falling prices, and a saved plan will not reproduce the numbers it showed before.</strong> A cost-of-living raise is a raise. It can be nothing in a year prices fall, but it is never a pay cut, and neither Social Security nor a pension has ever taken one. Both now hold flat through such a year instead of paying less. The two make up the lost ground differently, because they are different instruments. Social Security measures each raise from the last one it actually paid, so after prices recover the benefit picks up where it left off rather than being paid for the same recovery twice. A capped pension keeps what it was paid and starts again from there, which is what plan documents say. The effect is small on most paths and largest on the ones that matter, where a long stretch of falling prices used to cut the one income a retiree cannot outlive. <a href="optimizer_changelog.md#11.1667" target="_blank" rel="noopener">Details</a></li>
+				<li data-flag="behavior"><b>11.1670</b> <strong>Try a change against one bad path, and see the paths behind the odds.</strong> <strong>Behavior change: Social Security and a capped pension no longer shrink when prices fall.</strong> Monte Carlo and Stress Test results move on any path with a year of falling prices, and a saved plan will not reproduce the numbers it showed before. A cost-of-living raise can be nothing in such a year, but it is never a pay cut. The two recover differently: Social Security measures each raise from the last one it paid, so it picks up where it left off rather than being paid twice for the same recovery, while a capped pension keeps what it was paid and starts again from there. The replay banner now carries <i>Keep path while editing</i>. With it on, the path stays put and every change you make is re-run against that same sequence, so you can ask whether a lower spend or a different withdrawal order survives the run that ruined you. It also copies the run’s own strategy and conversion settings into the sidebar, which is what was being replayed. The survival chart can draw the ten captured paths over the bands, five worst in red, samples in gray. Click one to replay it. On for a single plan, off for Compare, with a checkbox to change it. <a href="optimizer_changelog.md#11.1670" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.1662</b> <strong>Taxes now follow the inflation your plan actually gets.</strong> <strong>Every Monte Carlo and Stress Test result moves, and your saved plan will not reproduce the numbers it showed before.</strong> Each path has always given your spending its own inflation, but the tax code stayed frozen at the CPI you typed. On a path whose inflation ran ABOVE that figure, your income climbed while the brackets stood still, so the plan paid tax at rates it would not really have faced; on a path BELOW it, brackets kept climbing past prices and the plan looked less taxed than it would have been. Brackets, IRMAA tiers, the ACA cap, the QCD limit and Social Security COLA now follow each path, indexed one year behind the inflation that sets them, the way the IRS and Social Security actually do it. What changes most are the high-inflation paths, because history hands them inflation far above any CPI you would type while rarely handing them inflation far below it, and those are the paths where a plan runs out of money. CPI and Inflation stay separate, and the gap between them now does real work: the tax code is indexed at each path's inflation less that gap, and a new line under the two fields names it. A pension COLA is now a choice of five rather than a checkbox: no increase, a 1%, 2% or 3% cap, or full COLA. A capped pension pays the lesser of its cap and that year's CPI, so it falls permanently behind in a high-inflation stretch instead of catching up later - which is how federal FERS and most state and municipal plans actually pay. It follows CPI now rather than general inflation, as Social Security already did; plans saved with the box ticked load as Full COLA, unticked as No increase. Also fixed: <i>Fill Bracket</i> at the top federal bracket produced no plan at all, every figure reading <code>$NaN</code> - that bracket has no upper limit, so there was nothing to fill up to. The ceiling menu now ends at the highest bracket that has a top, with the top federal bracket and top IRMAA tier listed greyed at the income where they begin. And a saved plan using Fill Bracket came back with its ceiling reset to "Below IRMAA" instead of the bracket you chose; reload any such plan to get your own ceiling back. <a href="optimizer_changelog.md#11.1662" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.1657</b> <strong>Walk one Monte Carlo path through your plan.</strong> Every Monte Carlo run now captures ten of its paths, from the worst outcome to the best, and the Stress Test keeps every scenario. A ▶️ Replay picker beside the survival headline lets you choose any captured path, and each Stress Test row has its own ▶️. The chosen sequence plays through Charts and Annual Details: your own plan and settings, but that path's market returns and inflation applied year by year. The balance chart overlays a dashed "Plan (steady assumptions)" line so you can see where the path pulls away from the plan's expected trajectory, and a new Market chart view shows the year-by-year returns and inflation behind it, with what day-one $10,000 still buys. A banner names what is playing and steps to the previous or next path with ◀ ▶. Exit with the banner's button; editing any input or leaving Charts and Annual Details also returns you to your plan's own projection. Note: taxes and Social Security are not yet adjusted for variable inflation - tax brackets, IRMAA tiers, and the Social Security COLA all still index at the fixed CPI input, so a high-inflation path overstates tax and understates Social Security income. <a href="optimizer_changelog.md#11.1657" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.1642</b> <strong>Roth can fill a spending shortfall, Ordered offers three more draw orders, and Monte Carlo always runs yours.</strong> A new switch, <i>Roth before Brokerage</i>, sits under Cycle Brokerage. Off by default, which is what the tool has always done: a year needing more than your strategy withdraws fills the gap from Cash, then Brokerage, then Roth. On, Roth is taken ahead of the brokerage account, with Cash still first either way. That avoids realizing capital gains but spends the account that grows tax-free, and it cuts both ways: across 60 test plans it gained as much as $471,000 and lost as much as $634,000, and it was negative in 26 of them. Your numbers do not move until you turn it on, and the <i>Ordered</i> strategy greys it out because it draws in the sequence you chose. The Optimizer sweeps both, so every strategy except <i>Ordered</i> appears a second time in the table marked 🅡, whenever you hold Roth. The <i>Ordered</i> strategy adds three draw sequences - <i>Cash→Brok→Roth→IRA</i>, <i>Cash→IRA→Brok→Roth</i> and <i>Brok→Cash→IRA→Roth</i> - and lists the six with the ones that most often came out ahead in testing first; Cash→Brok→Roth→IRA was the best sequence in more test plans than any of the three previously on offer, and in one plan it was worth $858,000 more than the best of them. <i>Monte Carlo</i> now always runs your own plan and marks it: <i>Compare every strategy</i> could leave it out of the run and emphasize a different one in the chart, which affected the <i>Ordered</i> sequences, <i>Guyton-Klinger</i>, and any plan set to an IRMAA tier or an ACA cliff. Your plan is now always in the table, pinned to the top and drawn in the chart, even when the sweep does not cover that strategy, and clicking a row loads what the row says. Separately, the Optimizer now tries five <i>Reduce IRA</i> lengths (3, 7, 11, 17 and 23 years) instead of sixteen and five <i>IRA Draw</i> percentages (5, 7, 9, 11 and 13%) instead of eight, which makes a run about a third shorter and the table easier to read; your own setting is still scored whichever you pick. <a href="optimizer_changelog.md#11.1642" target="_blank" rel="noopener">Details</a></li>
@@ -1236,9 +1240,9 @@
 <script src="montecarlo/stats.js?v=11161f"></script>
 <!-- The Monte Carlo model itself. The worker importScripts() the same file; on file://, where a
      worker cannot load its scripts, mc_controller.js runs it here on the main thread. -->
-<script src="montecarlo/mc_engine.js?v=111644"></script>
+<script src="montecarlo/mc_engine.js?v=111670"></script>
 <script src="montecarlo/mc_controller.js?v=11161e"></script>
-<script src="montecarlo/mc_tab.js?v=111657"></script>
+<script src="montecarlo/mc_tab.js?v=111670"></script>
 
 <script type="text/javascript">
 function clampIntlInput(intlId, equityPct) {
@@ -1430,7 +1434,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111667';
+    const V = '?v=111670';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

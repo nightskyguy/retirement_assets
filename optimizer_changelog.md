@@ -17,26 +17,26 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1667"></a>
+<a id="11.1670"></a>
 
-## 11.1667
+## 11.1670
 
-### Social Security and a capped pension no longer shrink when prices fall
+### Try a change against one bad path, and see the paths behind the odds
 
-**Behavior change. Monte Carlo and Stress Test results move on any path that includes a year of
-falling prices, and a saved plan will not reproduce the numbers it showed before.**
+**Behavior change. Social Security and a capped pension no longer shrink when prices fall.** Monte
+Carlo and Stress Test results move on any path with a year of falling prices, and a saved plan will
+not reproduce the numbers it showed before. A cost-of-living raise can be nothing in such a year,
+but it is never a pay cut. The two recover differently: Social Security measures each raise from
+the last one it paid, so it picks up where it left off rather than being paid twice for the same
+recovery, while a capped pension keeps what it was paid and starts again from there.
 
-A cost-of-living raise is a raise. It can be nothing in a year prices fall, but it is never a pay
-cut, and neither Social Security nor a pension has ever taken one. Both now hold flat through such
-a year instead of paying less.
+The replay banner now carries **Keep path while editing**. With it on, the path stays put and every
+change you make is re-run against that same sequence, so you can ask whether a lower spend or a
+different withdrawal order survives the run that ruined you. It also copies the run's own strategy
+and conversion settings into the sidebar, which is what was being replayed.
 
-The two make up the lost ground differently, because they are different instruments. Social
-Security measures each raise from the last one it actually paid, so after prices recover the
-benefit picks up where it left off rather than being paid for the same recovery twice. A capped
-pension keeps what it was paid and starts again from there, which is what plan documents say.
-
-The effect is small on most paths and largest on the ones that matter, where a long stretch of
-falling prices used to cut the one income a retiree cannot outlive.
+The survival chart can draw the ten captured paths over the bands, five worst in red, samples in
+gray. Click one to replay it. On for a single plan, off for Compare, with a checkbox to change it.
 
 ---
 

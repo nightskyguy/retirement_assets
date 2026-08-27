@@ -693,9 +693,36 @@ function applySuggestIraGoal() {
 // sequences are rebuilt from the shipped bank rows through the engine's own pathInputsFromBankRows,
 // never regenerated from the seed. Exit paths: the banner's button, editing any sidebar input
 // (delegated listener below), or leaving the Charts / Annual Details tabs.
-let _replayState = null;   // { rows, mcMode, planFields, label, nav } from mc_tab.js, or null
+let _replayState = null;   // { rows, mcMode, planFields, label, pathName, nav } from mc_tab.js, or null
 let _replayExitHooked = false;
 let _preReplayIncomeView = null;   // income-chart view to restore when replay ends
+// P78. "Keep path while editing": while on, a sidebar edit re-runs against the SAME sequences
+// instead of ending the replay. Lives here rather than on the state object so it survives a
+// prev/next step (which builds a fresh state) and dies with _clearReplay().
+let _replayKeepOnEdit = false;
+
+// P78. What the banner says. Split out of syncReplayBanner so the rule is testable without a
+// live run: once the plan has been edited under the lock, the run's own outcome ("ruined 2035")
+// describes a plan that is no longer on screen, so the banner names the PATH and says the plan is
+// modified. A state with no pathName (an older cached mc_tab.js) keeps its full label rather than
+// losing the text entirely.
+function replayBannerText(state) {
+    if (!state) return '';
+    return (state.modified && state.pathName)
+        ? `Replaying ${state.pathName} through your MODIFIED plan.`
+        : state.label;
+}
+
+// P78. Stepping to another path while the lock is on must not re-impose the RUN's plan over the
+// one the user has been editing: the lock's whole promise is that the plan stays put and only the
+// sequence changes. `prev` having no planFields is what says the handoff already happened. Mutates
+// `next` in place, which is how replayPath receives it.
+function replayCarryOnStep(prev, next, keepOnEdit) {
+    if (!next || !keepOnEdit || !prev || prev.planFields) return next;
+    next.planFields = null;
+    next.modified = !!(next.modified || prev.modified);
+    return next;
+}
 
 function replayPath(state) {
     // Only the normal->replay transition force-switches the lower chart to the Market view (the
@@ -706,13 +733,24 @@ function replayPath(state) {
         incomeChartView = 'market';
         syncIncomeViewControls();
     }
+    replayCarryOnStep(_replayState, state, _replayKeepOnEdit);
     _replayState = state;
     if (!_replayExitHooked) {
         // A sidebar edit means the user is back to designing the plan; a replayed chart under an
         // edited plan would look like the edit's effect. Capture phase, so this runs before the
         // input's own handler re-simulates.
         document.querySelector('.sidebar')?.addEventListener('input', () => {
-            if (_replayState) { _clearReplay(); syncReplayBanner(); }
+            if (!_replayState) return;
+            if (!_replayKeepOnEdit) { _clearReplay(); syncReplayBanner(); return; }
+            // Locked: the path stays, the plan is now the user's. planFields were handed to the
+            // sidebar when the lock went on, so nothing overrides what they just typed. The
+            // baseline overlay is dropped so it recomputes against the edited plan rather than
+            // still describing the plan the run scored.
+            _replayState.modified = true;
+            _replayState.baselineLog = null;
+            syncReplayBanner();
+            // No runSimulation() here: this is the capture phase of the user's own edit, and the
+            // input's own handler re-runs a moment later. Calling it would double-run.
         }, true);
         _replayExitHooked = true;
     }
@@ -723,6 +761,7 @@ function replayPath(state) {
 // income-chart view the user was on before the replay switched it to Market.
 function _clearReplay() {
     _replayState = null;
+    _replayKeepOnEdit = false;
     if (_preReplayIncomeView != null) {
         incomeChartView = _preReplayIncomeView;
         _preReplayIncomeView = null;
@@ -735,13 +774,34 @@ function exitReplay() {
     runSimulation();
 }
 
+// P78. Turning the lock ON hands the run's own plan fields to the sidebar, ONCE, so the controls
+// stop disagreeing with what the replay is running: swept rows force conversions on, carry their
+// own strategy and sometimes their own spend, and none of that was ever visible. Doing it here
+// rather than on the first edit is deliberate - on the first edit the user has already changed a
+// control, and writing the run's value over it is exactly the class of bug PF8 and P74 were.
+// After the handoff planFields are dropped, so every later edit is the user's alone.
+function toggleReplayKeepOnEdit(on) {
+    _replayKeepOnEdit = !!on;
+    if (!_replayState) return;
+    if (_replayKeepOnEdit && _replayState.planFields) {
+        const handed = typeof applyMCVariationToSidebar === 'function'
+            && applyMCVariationToSidebar(_replayState.planFields);
+        _replayState.planFields = null;
+        _replayState.baselineLog = null;
+        if (handed) { runSimulation(); return; }   // runSimulation calls syncReplayBanner
+    }
+    syncReplayBanner();
+}
+
 function syncReplayBanner() {
     const banner = document.getElementById('replay-banner');
     if (!banner) return;
     banner.style.display = _replayState ? 'flex' : 'none';
     if (_replayState) {
         const txt = document.getElementById('replay-banner-text');
-        if (txt) txt.textContent = _replayState.label;
+        if (txt) txt.textContent = replayBannerText(_replayState);
+        const keep = document.getElementById('replay-keep');
+        if (keep) keep.checked = _replayKeepOnEdit;
         // Prev/next enablement comes from mc_tab.js, which owns the lists and their order.
         const nav = (typeof replayNavState === 'function') ? replayNavState() : null;
         const prev = document.getElementById('replay-prev');

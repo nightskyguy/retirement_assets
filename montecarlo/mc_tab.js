@@ -22,6 +22,9 @@ let _mcPinIdx            = -1;
 // Variation indices in the order renderMCChart drew them (pinned plan first). The chart tooltip
 // maps datasetIndex -> variation through this; it must not be re-derived from _mcSelected.
 let _mcDrawOrder         = [];
+// P79. Which block the drawn paths belong to, so isolating that strategy keeps its own paths
+// visible instead of hiding them with the other strategies.
+let _mcTraceGroup        = -1;
 let _inputEquityChart    = null;
 let _inputInflationChart = null;
 
@@ -888,6 +891,7 @@ function mcReplayList() {
         return {
             rows:   m.capturedBankRows[r.pathIndex],
             mcMode: m.simulationMode,
+            pathIndex: r.pathIndex,
             planFields: _replayPlanFields(v),
             short:  (r.rank < CAPTURE_WORST_N_LOCAL
                         ? (r.rank === 0 ? 'Worst path' : `#${r.rank + 1} worst`)
@@ -895,6 +899,10 @@ function mcReplayList() {
                   + ' · ' + (r.ruinYear ? `ruin ${r.ruinYear}` : 'survives'),
             label:  `Replaying ${who} of ${m.numPaths} through your plan: ${outcome}`
                   + ` (${_mcModeLabel(m.simulationMode)}, seed ${_mcFanMeta?.seed ?? '?'}).`,
+            // P78. The path's IDENTITY, with no claim about the outcome. Once the plan has been
+            // edited under the replay lock, the run's survival rate and ruin year describe a plan
+            // that is no longer on screen, so the banner falls back to this.
+            pathName: `${who} of ${m.numPaths} (${_mcModeLabel(m.simulationMode)})`,
         };
     });
 }
@@ -919,6 +927,7 @@ function stressReplayState(rank) {
         planFields: _replayPlanFields(sv ?? {}),
         label:  `Replaying the ${startYear ?? '?'} historical sequence through your plan`
               + (ruinYear ? `: money runs out in ${ruinYear}.` : ': it survives the whole plan.'),
+        pathName: `the ${startYear ?? '?'} historical sequence`,
     };
 }
 
@@ -1603,7 +1612,17 @@ function renderSurvivalTable(variations, numPaths) {
 }
 
 function loadMCVariation(v) {
-    if (!v.strategy) return;
+    if (!applyMCVariationToSidebar(v)) return;
+    runSimulation();
+    showTab('tab-chart');
+}
+
+// The field-writing half of loadMCVariation, without the re-run or the tab switch. P78's replay
+// lock hands a run's plan fields to the sidebar with it, so that what the sidebar SHOWS is what
+// the locked replay runs; the click-a-row path keeps its old behavior by calling it and then
+// re-running. Returns false when there is nothing to apply.
+function applyMCVariationToSidebar(v) {
+    if (!v || !v.strategy) return false;
     document.getElementById('strategy').value = v.strategy;
     if (v.strategy === 'propwd'    && v.propWithdraw   != null) document.getElementById('propWithdraw').value   = Math.round(v.propWithdraw * 100);
     if (v.strategy === 'fixed'     && v.nYears         != null) document.getElementById('nYears').value          = v.nYears;
@@ -1643,8 +1662,7 @@ function loadMCVariation(v) {
     if (cyclicOrderEl) cyclicOrderEl.value = v.cyclicOrder ?? 'ira-first';
     if (v.spendGoal != null) DisplayHelpers.setDollarValue('spendGoal', Math.round(v.spendGoal));
     toggleStrategyUI();
-    runSimulation();
-    showTab('tab-chart');
+    return true;
 }
 
 function syncTableCheckboxes() {
@@ -1758,14 +1776,43 @@ function _makeLegendClick() {
             for (let i = 0; i < total; i++) chart.setDatasetVisibility(i, true);
             _legendIsolatedKey = null;
         } else {
-            // Isolate: hide everything except the clicked item's group
+            // Isolate: hide everything except the clicked item's group. A drawn path belongs to
+            // the block it was captured from, not to the block its dataset index lands in, or
+            // isolating the pinned strategy would hide that strategy's own paths.
+            const want = Math.floor(clickedDs / 5);
             for (let i = 0; i < total; i++) {
-                chart.setDatasetVisibility(i, Math.floor(i / 5) === Math.floor(clickedDs / 5));
+                const ds = chart.data.datasets[i];
+                const grp = ds?._traceLabel ? _mcTraceGroup : Math.floor(i / 5);
+                chart.setDatasetVisibility(i, grp === want);
             }
             _legendIsolatedKey = key;
         }
         chart.update();
     };
+}
+
+// P79. Whether to draw the captured paths. Default follows the run's scope: on for a plan-only
+// run, where the chart has one band and the paths are the interesting thing; off for Compare,
+// where the reader is comparing strategies and ten more lines is noise. The checkbox overrides it
+// once the reader touches it, and the override lives only as long as the page.
+let _mcTracesPref = null;   // null = follow the scope, true/false = the reader has decided
+function _mcShowTraces() {
+    return _mcTracesPref === null ? (_mcScope === 'plan') : _mcTracesPref;
+}
+function onMCTracesToggle(on) {
+    _mcTracesPref = !!on;
+    if (_mcResults) renderMCChart(_mcResults);
+}
+// Keeps the checkbox showing the state actually in force, including the scope-derived default.
+function syncMCTracesControl(msg) {
+    const wrap = document.getElementById('mc-traces-wrap');
+    const box  = document.getElementById('mc-traces');
+    if (!wrap || !box) return;
+    const v = msg?.variations?.[_mcPinIdx];
+    // Nothing to offer when the pinned variation carries no traces (a cached worker from before
+    // P79, or a stress-only refresh).
+    wrap.style.display = v?.capturedTraces?.length ? 'inline-flex' : 'none';
+    box.checked = _mcShowTraces();
 }
 
 function renderMCChart(msg) {
@@ -1835,19 +1882,61 @@ function renderMCChart(msg) {
         });
     });
 
+    // P79. The captured paths of the pinned variation, drawn over its own bands. Everything above
+    // is a group of five per variation and several filters below index on that, so these go AFTER
+    // all of the blocks and every one of those filters is bounded by nBlockDs. `_mcTraceGroup` is
+    // the block the traces belong to, so isolating the pinned strategy keeps its own paths.
+    const nBlockDs = datasets.length;
+    if (_mcShowTraces()) {
+        const pinnedAt = _mcDrawOrder.indexOf(_mcPinIdx);
+        const pv = pinnedAt >= 0 ? msg.variations[_mcPinIdx] : null;
+        const traces = pv?.capturedTraces;
+        if (traces?.length) {
+            _mcTraceGroup = pinnedAt;
+            (pv.captured ?? []).forEach((r, i) => {
+                if (!traces[i]) return;
+                // Two vocabularies, the same ones the replay picker and the banner use.
+                const name = r.rank < CAPTURE_WORST_N_LOCAL
+                    ? (r.rank === 0 ? 'Worst path' : `#${r.rank + 1} worst`)
+                    : `Rank ${Math.round(r.rankPct)}%`;
+                datasets.push({
+                    label: name,
+                    data: deflate(Array.from(traces[i])),
+                    // Red for the worst block, gray for the percentile samples: the reader is
+                    // looking for the shape of a bad path, not for one more strategy color.
+                    borderColor: r.rank < CAPTURE_WORST_N_LOCAL
+                        ? 'rgba(200,40,40,0.55)' : 'rgba(90,90,90,0.40)',
+                    backgroundColor: 'transparent',
+                    borderWidth: 1, pointRadius: 0, pointHoverRadius: 4, hitRadius: 6,
+                    fill: false, tension: 0.3,
+                    // Above the bands, below the medians.
+                    order: 0.5,
+                    _traceLabel: name + (r.ruinYear ? ` · ruin ${r.ruinYear}` : ' · survives'),
+                    _tracePathIndex: r.pathIndex,
+                });
+            });
+        }
+    }
+
     if (_mcChart) {
         _mcChart.destroy();
         _mcChart = null;
     }
 
-    const legendLabels = { filter: (item) => item.datasetIndex % 5 === 4, font: { size: 12 }, usePointStyle: true, pointStyle: 'line', boxWidth: 24 };
+    // Bounded by nBlockDs: without it a trace whose index happens to be congruent to 4 mod 5 would
+    // appear in the legend as a phantom strategy.
+    const legendLabels = { filter: (item) => item.datasetIndex < nBlockDs && item.datasetIndex % 5 === 4, font: { size: 12 }, usePointStyle: true, pointStyle: 'line', boxWidth: 24 };
     const legendClick = _makeLegendClick();
 
     const tooltipCfg = {
-        filter: (item) => item.datasetIndex % 5 === 4,
+        filter: (item) => (item.datasetIndex < nBlockDs && item.datasetIndex % 5 === 4)
+                       || !!item.dataset?._traceLabel,
         callbacks: {
             title: (items) => `Year ${items[0]?.label ?? ''}`,
             label: (ctx) => {
+                // A drawn path names itself and its outcome; it has no percentile to read.
+                if (ctx.dataset?._traceLabel)
+                    return `  ${ctx.dataset._traceLabel}  $${fmt(ctx.parsed?.y)}`;
                 const v = _mcResults?.variations[_mcDrawOrder[Math.floor(ctx.datasetIndex / 5)]];
                 const val = v?.percentiles?.p50?.[ctx.dataIndex];
                 const name = v ? v.label : ctx.dataset.label;
@@ -1883,6 +1972,33 @@ function renderMCChart(msg) {
     });
 
     document.getElementById('mc-chart-wrap').style.display = '';
+    syncMCTracesControl(msg);
+    _hookTraceClicks(canvas);
+}
+
+// P79c. Clicking a drawn path replays it. On the canvas rather than through Chart.js's own
+// options.onClick, which never fired for these: hit detection resolves the dataset correctly
+// (getElementsAtEventForMode returns it), but the click never reached the chart's handler.
+// Hooked ONCE - renderMCChart destroys and rebuilds the chart on the same canvas element, so a
+// listener added per render would stack one more replay trigger onto every click. It reads the
+// live _mcChart rather than closing over one.
+let _mcTraceClickHooked = false;
+function _hookTraceClicks(canvas) {
+    if (_mcTraceClickHooked || !canvas) return;
+    _mcTraceClickHooked = true;
+    canvas.addEventListener('click', (evt) => {
+        if (!_mcChart) return;
+        // intersect: true, not the chart's index mode - a click anywhere on the plot would
+        // otherwise pick up whatever dataset shares that x and replay a path nobody pointed at.
+        const hit = _mcChart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+        for (const el of hit) {
+            const pathIndex = _mcChart.data.datasets[el.datasetIndex]?._tracePathIndex;
+            if (pathIndex == null) continue;
+            const k = mcReplayList().findIndex(r => r.pathIndex === pathIndex);
+            if (k >= 0) replayCapturedPath(k);
+            return;
+        }
+    });
 }
 
 // Stress-test chart — auto-computed alongside Historical mode (Item 7). `stress` is msg.stress

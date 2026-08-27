@@ -15,13 +15,13 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
-| **O1** | P78 | Edit the plan against a pinned replay path *(planned 2026-08-26, was briefly numbered P75)* | `P78a` |
-| **O1** | P79 | Draw the 10 captured paths on the survival chart *(planned 2026-08-26)* | `P79a` |
 | **O1** | P80 | Nerdknob: the historical years behind each bootstrap block *(planned 2026-08-26)* | `P80a` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
-**P81 COMPLETE, v11.1667** - Social Security rides the index high-water mark and a capped pension
-floors per year, so neither is cut when prices fall. Nothing at O0 but `P35i` now.
+**P81 COMPLETE v11.1667; P78 and P79 COMPLETE v11.1670** - Social Security and a capped pension are
+no longer cut when prices fall; a replay now survives a sidebar edit, so a change can be tried
+against the sequence that ruined the plan; and the survival chart draws the ten captured paths,
+click one to replay it. Nothing at O0 but `P35i` now.
 
 **P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 
@@ -108,8 +108,8 @@ first task. Every open item in the file now carries one.
 | ~~DONE~~ | ~~P70~~ | ~~Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path~~ - **COMPLETE 2026-08-26, `P70a`-`P70i`, v11.165D-11.1662, merged in PR #195.** Measured at -8.3% lifetime tax and 38 invented failures, then fixed with the two-clock spread model (`fixedTaxIndexing`, default off) and a five-way pension COLA cap | - | - |
 | ~~DONE~~ | ~~P81~~ | ~~The inflation floor guards the DRAW, not the derived index~~ - **COMPLETE.** `a`/`b`/`d` v11.1662 (PR #195) clamped `cpi_t` where it is computed; **`P81c` v11.1667** gave Social Security the statutory high-water rule and a capped pension a per-year zero floor | - | - |
 | **O1** | P75 | Year-by-year withdrawal/conversion optimization - income-target reframe, edge menu, coordinate descent *(new 2026-08-25)* | `P75a` (measure first, gates the phase) | nothing |
-| **O1** | P78 | Edit the plan against a pinned replay path *(new 2026-08-26; renumbered from a colliding P75)* | `P78a` | nothing (P69 merged in PR #194) |
-| **O1** | P79 | Draw the 10 captured paths on the survival chart *(new 2026-08-26)* | `P79a` | nothing (P69 merged in PR #194) |
+| ~~DONE~~ | ~~P78~~ | ~~Edit the plan against a pinned replay path~~ - **COMPLETE v11.1670.** "Keep path while editing" on the banner; the handoff lands at lock time rather than on the first edit, for a reason the plan had not seen | - | - |
+| ~~DONE~~ | ~~P79~~ | ~~Draw the 10 captured paths on the survival chart~~ - **COMPLETE v11.1670**, click one to replay it; the `% 5` dataset grouping had to be bounded first | - | - |
 | **O1** | P80 | Nerdknob: the historical years behind each bootstrap block *(new 2026-08-26)* | `P80a` | nothing (P69 merged in PR #194) |
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
@@ -884,12 +884,34 @@ survives THAT sequence, not exit replay and lose the path.
   path's sequence", "the 1973 sequence") plus "modified plan". The dashed baseline recomputes per
   edit (drop `baselineLog` on each locked re-run) so overlay = current plan on steady assumptions.
 - Date edits still force an exit via the existing length guard in `startReplay`/`runSimulation`.
-- [ ] **P78a** - banner control + suppressed auto-exit + planFields handoff-then-drop
-- [ ] **P78b** - banner relabel under modification; ruin mark recomputes (it already reads the log)
-- [ ] **P78c** - baseline invalidation per locked edit; verify overlay tracks the edited plan
-- [ ] **P78d** - browser matrix: edit spend, edit strategy, edit dates (forced exit), then unlock
-- **Status:** pending
-- **Independent:** builds on P69 (merged branch or same worktree)
+- [x] **P78a DONE (v11.1670)** - "Keep path while editing" on the replay banner, off by default.
+      While on, the capture-phase `.sidebar` listener marks the state modified instead of ending the
+      replay, and the input's own blur/change handler re-runs against the same sequences.
+      **DEVIATION, deliberate: the planFields handoff happens when the LOCK GOES ON, not on the
+      first edit.** The plan said first edit; that is unimplementable as written. The capture-phase
+      listener fires with `el.value` ALREADY updated, so writing the run's `strategy` over the
+      control the user just changed is exactly the PF8 / P74 bug from the other side - the thing the
+      plan's own note was trying to prevent. Handing off at lock time also stops the sidebar
+      disagreeing with what is being replayed the moment the reader opts in. Verified in the
+      browser: ticking the box flipped `convertExcessToRoth` false -> true, which is the swept row's
+      own setting and was previously invisible.
+- [x] **P78b DONE (v11.1670)** - `replayBannerText()`, pure and unit-tested. Once modified the
+      banner names the path and says MODIFIED, and does NOT repeat the run's ruin year. A state
+      with no `pathName` (an older cached mc_tab.js) falls back to its full label rather than going
+      blank.
+- [x] **P78c DONE (v11.1670)** - `baselineLog` dropped on every locked edit, so the dashed overlay
+      is the CURRENT plan on steady assumptions rather than the plan the run scored.
+- [x] **P78d DONE (v11.1670), browser-verified end to end.** Worst path (ruin 2034) replayed, lock
+      on, spend $140,000 -> $70,000: the replay survived the edit, the same 25-year sequence stayed
+      injected, and the path that ruined in 2034 ended at **$1,564,443** - which is the whole point
+      of the feature. Stepping to the #2 worst kept the edited $70,000 and kept saying MODIFIED.
+      Lock off then edit ended the replay the old way. Date edits still exit through `startReplay`'s
+      existing length guard, untouched.
+- [x] **P78e (new)** - `replayCarryOnStep()`: prev/next under the lock must not re-impose the run's
+      plan over the edited one. Not in the original plan and not optional - without it the first
+      step silently reverted every edit. Pure, and unit-tested including the before-handoff case.
+- **Status:** COMPLETE, v11.1670. Ten tier-1 assertions cover the two pure rules.
+- **Independent:** built on P69 (merged in PR #194)
 
 ---
 
@@ -903,12 +925,35 @@ varResult (`capturedTraces`), same shape `stressPaths` already uses for stress. 
 thin line datasets on `renderMCChart` (~40 points each) - rendering cost negligible; the REAL cost
 is legend/tooltip clutter, so they ship with no legend entries, no points, low alpha, and a single
 tooltip label of their rank ("Rank 25% path"). Worst-block paths red-tinted, sampled ranks gray.
-- [ ] **P79a** - engine: `capturedTraces` on the capture variation's varResult; ship both passes
-- [ ] **P79b** - `renderMCChart`: draw them for the pinned variation behind a small toggle
-      (default on for plan scope, off for compare - 150 variations x 10 lines is noise)
-- [ ] **P79c** - click a drawn trace replays that path (the capture list already knows its index)
-- **Status:** pending
-- **Independent:** transport rides P69's capture plumbing
+- [x] **P79a DONE (v11.1670)** - `capturedTraces` on the capture variation's varResult, sliced from
+      the `paths` array that variation already holds. `captureVariationIndex` is clamped BEFORE the
+      variation loop so the loop can recognise its own variation while it still has those paths;
+      the post-loop clamp that did the same job for the replay rows is gone. `selectCapturePaths()`
+      is now called once and shared, so the traces and the replay rows cannot describe different
+      paths. **Stress does NOT get them** - it already ships every path as `stressPaths`, and the
+      test asserts it is not paying twice. ~3KB.
+- [x] **P79b DONE (v11.1670)** - drawn for the pinned variation, five worst red, samples gray, no
+      legend entries, hairline width, `order: 0.5` so they sit above the bands and below the
+      medians. **The `% 5` grouping was the hazard**: the legend filter, the tooltip filter and the
+      isolate handler all indexed on "five datasets per variation", so an appended trace whose index
+      landed on 4 mod 5 would have appeared in the legend as a phantom strategy. Traces go after all
+      blocks and every one of those filters is now bounded by `nBlockDs`; isolate maps a trace to
+      `_mcTraceGroup`, the block it was captured from, so isolating the pinned strategy keeps its
+      own paths instead of hiding them. Default follows scope, verified both ways in the browser:
+      10 traces at plan scope, 0 at compare, 10 at compare once the reader ticks the box.
+- [x] **P79c DONE (v11.1670)** - a click replays that path. **Chart.js's own `options.onClick`
+      never fired for these**: hit detection resolves the dataset correctly, so the listener is on
+      the canvas instead, hooked ONCE (renderMCChart destroys and rebuilds the chart on the same
+      canvas element, so a per-render listener would stack a replay trigger onto every click).
+      `hitRadius: 6` makes a hairline clickable.
+- **KNOWN LIMIT, measured not assumed:** the click resolves to the NEAREST trace point, so where
+      several ruined paths run within a few pixels of each other - the early years, before they
+      separate - the reader can get a neighbour. Verified both ways in the browser: clicking at year
+      4, where five ruined paths are bunched, replayed the #3 worst rather than the worst; clicking
+      the Rank 95% survivor at year 18, 143px clear of its nearest neighbour, replayed exactly it.
+      Nearest is the only answer available for overlapping lines; worth a note, not a fix.
+- **Status:** COMPLETE, v11.1670. One node test (338) covers the transport.
+- **Independent:** transport rode P69's capture plumbing
 
 ---
 

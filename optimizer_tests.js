@@ -2525,6 +2525,55 @@ assertEqual(
 		}
 	})();
 
+	// P78: the replay lock's two decision rules. Both live in optimizer_ui.js and are pure, so they
+	// are checked here rather than by driving a real run: the wrong answer to either is silent, and
+	// both are the class of bug that has shipped before - a banner claiming an outcome that belongs
+	// to a plan no longer on screen, and a step re-imposing the run's strategy over the plan the
+	// user just edited (the PF8 / P74 class).
+	(() => {
+		console.log(" ");
+		console.log("=== P78: replay lock ===");
+		if (typeof replayBannerText !== "function" || typeof replayCarryOnStep !== "function") {
+			assertEqual(true, false, "P78: replayBannerText and replayCarryOnStep must be defined");
+			return;
+		}
+		const RUN_LABEL = "Replaying the worst path of 500 through your plan: money runs out in 2041.";
+		const st = () => ({ label: RUN_LABEL, pathName: "the worst path of 500 (Historical)",
+		                    planFields: { strategy: "fixed" } });
+
+		// Unmodified: the run's own sentence, outcome and all.
+		assertEqual(replayBannerText(st()), RUN_LABEL,
+			"P78: an unedited replay keeps the run's own label");
+		// Modified: names the path, claims no outcome. The ruin year must not survive into it.
+		const mod = replayBannerText({ ...st(), modified: true });
+		assertEqual(mod.includes("MODIFIED"), true, "P78: an edited replay says the plan is modified");
+		assertEqual(mod.includes("2041"), false,
+			"P78: an edited replay must NOT repeat the run's ruin year");
+		// A state with no pathName still says something.
+		assertEqual(replayBannerText({ label: RUN_LABEL, modified: true }), RUN_LABEL,
+			"P78: a state with no pathName falls back to its label rather than going blank");
+		assertEqual(replayBannerText(null), "", "P78: no state, no text");
+
+		// Lock OFF: the next path arrives with the run's plan fields intact.
+		const offNext = replayCarryOnStep({ planFields: null, modified: true }, st(), false);
+		assertEqual(offNext.planFields !== null, true,
+			"P78: with the lock off, stepping restores the run's own plan fields");
+		assertEqual(!!offNext.modified, false, "P78: with the lock off, nothing is marked modified");
+
+		// Lock ON after the handoff (prev has no planFields): the next path drops them and inherits.
+		const onNext = replayCarryOnStep({ planFields: null, modified: true }, st(), true);
+		assertEqual(onNext.planFields, null,
+			"P78: with the lock on, stepping must NOT re-impose the run's plan over the edited one");
+		assertEqual(onNext.modified, true, "P78: the modified flag follows the step");
+
+		// Lock ON but BEFORE the handoff (prev still carries planFields): nothing has been handed to
+		// the sidebar yet, so the next path keeps its own - otherwise ticking the box and immediately
+		// stepping would strip the run's plan and quietly replay a different one.
+		const early = replayCarryOnStep(st(), st(), true);
+		assertEqual(early.planFields !== null, true,
+			"P78: before the handoff, stepping keeps the run's plan fields");
+	})();
+
     console.log('\n========================================');
     console.log(`   RESULTS: ${passed} passed, ${failed} failed`
 		+ (skippedUnsafe ? `, ${skippedUnsafe} unsafe suites skipped (add ?runtests)` : ''));
@@ -2571,7 +2620,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 337, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 338, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

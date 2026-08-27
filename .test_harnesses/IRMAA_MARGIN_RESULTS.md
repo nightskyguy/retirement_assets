@@ -118,6 +118,14 @@ follow-up this work has earned twice over.
 
 ## 5. The limit no sweep can lift
 
+> **SUPERSEDED 2026-08-27 - the limit was lifted. See `IRMAA_MARGIN_PATHS_RESULTS.md` (P83).**
+> The line of engine code quoted below no longer exists. P70 replaced it with
+> `cpi_t = yr.yearInflation + (inputs.cpi - inputs.inflation)`, so the IRMAA threshold now follows
+> each path while `irmaaFwdFactor()` stays on the scalar `inputs.cpi`. Realized and assumed CPI
+> diverge, the margin has something to be safe against, and measured against all three Monte Carlo
+> modes `halfcpi` prevents 17.5% to 20.3% of tier breaches. The section is kept as the record of
+> what was true before that change.
+
 [optimizer_core.js:2774](../optimizer_core.js#L2774):
 
 ```js
@@ -150,6 +158,13 @@ Recorded because two of the three were defects in the measurement, not findings 
    the denominator moves too. Now reported as a rate, and attributed in section 4.
 
 ## 7. What to do
+
+> **Items 2 and 3 are SUPERSEDED 2026-08-27 by `IRMAA_MARGIN_PATHS_RESULTS.md` (P83).** Item 2's
+> "no wider sweep will change that" was correct for the engine of the day and is not correct now.
+> Item 3 is REVERSED: `halfcpi` and `cpiminus1` are the two BEST modes once the threshold is
+> uncertain, and `halfstep` is the deletion candidate instead. Item 4's second follow-up - give CPI
+> a realized-vs-assumed split so the margin can be evaluated - was delivered by P70, which is what
+> made P83 possible.
 
 1. **Keep the forward projection.** It is a correctness fix, and on the QCD arm it is worth real
    money in the right direction.

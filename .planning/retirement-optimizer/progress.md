@@ -5319,3 +5319,321 @@ The three ways to have no year - no replay, a synthetic path, no nerdknob - all 
 identical year-free heading, checked in the page.
 
 Counts: optimizer_core **340** (up 2), tier 1 **389** (up 8), page **812** green.
+
+---
+
+## Session 2026-08-27 - planning pass, P28j gets a phase  *(no code, no version bump)*
+
+Branch `worktrees/planning-with-files-f28470`, clean, 0 commits ahead of `main` at `93e1fab`.
+
+**User asked to settle P28 and P30 before `P35i`. Most of that was already done, and saying so is
+the first result of the session.** P30 is COMPLETE, `P30a`-`P30g`, shipped through v11.163F: the
+Ordered menu grew to six sequences and BOTH `[40,60]`-family constants were measured and then
+deliberately left alone, with the reasons written into `P30g` so they are not re-derived. P28's
+`f`/`g`/`h` shipped 2026-08-24. So the ordering `P35i`'s gap-fill arm would be written against is
+already settled; the note in P35 that says otherwise predates those merges.
+
+**What was actually open is `P28j`**, spun off on 2026-07-30 with the words "needs its own phase" and
+never given one. It now has one, at `task_plan.md:2031`, with `P28ja`-`P28jf` and five scored
+questions.
+
+**Scoping found the phase's own premise half wrong.** `P28j` was filed as "invisible and
+uncontrollable from the UI". It is not invisible: the `timing` column ships in Annual Details as
+`Early(Conv)` / `Late(Spend)` (`optimizer_core.js:1168`) and carries a tooltip that explains both legs
+(`optimizer_ui.js:2862`). It IS uncontrollable - `forceWithdrawTiming` has no UI, no URL key, and is
+absent from `getInputs()`. Visible-and-uncontrollable is a different product problem than invisible,
+and the correction is recorded in the phase rather than silently applied.
+
+**The constant nobody chose turns out to be a third one, not a second.** The rule at
+`optimizer_core.js:1274-1275` is `_prevConv > 1000`: a bare literal, same species as P30's `[40,60]`
+and `resolveOrderedSeq`'s three-entry map. One dollar either side of it moves a whole year's
+withdrawal from month 11 to month 1. P30's discipline applies unchanged - make it a research input
+with the current value as the default, verify bit-identical when unset, and only then sweep.
+
+**The re-baseline warning carries to round 3.** P28's own tables stopped reproducing after P32; the
+13-of-25 and the -$1,095,454 in `P28i` were measured on the same pre-P32 engine and must be re-run
+before they are quoted. `P28ja` is that task, and it writes a NEW numbered section of
+`P28_RESULTS.md` rather than editing the 2026-07-30 tables, which is what P30 did.
+
+Files touched: `task_plan.md` only - P28j phase inserted, P28's Status line repointed, one row added
+to the NOW table with the header re-flowed so the LINE-30 BOUNDARY marker stays on line 30.
+
+**Same session, second pass - P80 and P32 audited at the user's prompting.**
+
+**P80 needed nothing.** Header, all three sub-tasks, Status line and the code all agree: COMPLETE at
+v11.1671, `srcYears` present at `prng.js:345`/`:541` with the overlay line at `:518`, threaded at
+`mc_engine.js:121`, page title 11.1671, and `git branch --contains HEAD` returns `main`.
+
+**P32 had zero unchecked boxes and a Status line that said the opposite.** It read "Open: Q2-Q5 and
+the build/decision tail" - written when that was true and never revisited, while `P32d` answered Q2,
+`P32e` Q3/Q4, `P32f` Q5, `P32i` Q6 and `P32h` shipped the tail at v11.15e3 in PR #185. Every one of
+those wrote its result INTO the phase without touching the Status line four screens below. Replaced
+with PHASE COMPLETE and the three merged PRs named.
+
+**The real find is the item that had no checkbox at all.** `P32h` decision (4) - flip the
+`cycleHarvestMode` default from `maxbracket` to `spendonly` - ends with "Give it its own item when
+someone picks it up", and nobody did. `cycleHarvestMode` appeared exactly twice in the whole plan,
+both inside prose in P32. Now filed as **`P32j`**, unprioritized, carrying the re-baseline warning
+that P28 and P30 both earned the hard way: Q5's 108-of-2,514 is 2026-08-10, and the engine has moved
+twice since (v11.15e3's third pass, P30's ordering).
+
+Decision (3), `cycleCoexist`, says "its own phase" too but is SETTLED as "stays research-only" - a
+decision, not an open task. Deliberately not filed.
+
+**A prose deferral is invisible to every check the repo has.** A checkbox is greppable and a status
+line is read; "give it its own item" inside a sub-bullet is neither. Swept the whole plan for the
+same shape - phases with every box checked and no completion word in the Status line - and found
+three (`P49`, `P66`, `P52`) that have no Status line but say SHIPPED/DONE in their headers, so P32
+was the only true one.
+
+Files touched: `task_plan.md` only.
+
+**Same session, third pass - `P28ja` RUN. The re-baseline reframed the phase it was written for.**
+
+450 sims, 75 cells, v11.1671 engine. Written up as `P28_RESULTS.md` **section 16**, with section 9
+left intact under a SUPERSEDED pointer - the pattern P30 set, and the third time in this repo a
+research table has failed to reproduce after an engine change.
+
+**The number that opened the phase is gone.** `P28j` existed because round 3 measured a
+default-facing checkbox losing over $1M. Re-run, `convertExcessToRoth`'s own worst case is
+**-$8,658**. Section 9's 28-of-75 / -$1,411,488 / 7-surviving-the-pin is now **17 / -$616,067 / 2**,
+and both survivors are Ordered CBIR at -$8,658 and -$221.
+
+**Q1 was answered by the re-baseline itself, which was not the plan.** `P28ja` was scoped as
+measurement to be handed to `P28jd`; splitting the delta into its legs turned out to require no extra
+arms, because the harness's own section 5 already ran free-vs-pinned. 15 of 17 losing cells stop
+losing the moment timing is held still. The timing leg is **never positive in any of 39 live cells** -
+median -$341,771, min -$919,444 - and in 29 of 54 it is larger than the conversion leg it rides on.
+So section 9's headline was mostly reporting WHEN the money left, not WHETHER converting paid.
+
+**Q2 fell out of the same run: late beats early 35 of 39, zero ties.** The shipped
+Early-on-conversion rule is on the wrong side about nine times in ten.
+
+**Q5 scored BROKEN, and the break is the finding.** I predicted a zero-growth arm collapses the
+timing leg to ~$0, which would have made it a pure compounding artifact. It shrinks ~15x
+(median -$250,887 -> -$16,480) and then stops: still negative in **all 49** live cells, never once
+$0. Something other than compounding charges for a month-1 withdrawal. The dividend accrual on the
+PRE-withdrawal balance (`optimizer_core.js:1152`, whose own comment calls itself an approximate worst
+case) is the suspect, recorded as a suspect and not as a conclusion.
+
+**Scoring a prediction I wrote hours earlier is why the growth ladder got run at all.** The obvious
+stopping point was "timing explains it, done". The prediction forced one more arm, and that arm found
+a residual that "timing explains it" would have hidden.
+
+**A control worth naming:** at 0% growth the conversion loses in 45 of 90 cells with timing pinned.
+Converting buys tax-free growth; with no growth there is nothing to buy. That the arms produce the
+textbook answer where the answer is known is the reason to trust the rest.
+
+**The phase is not dead, it is a different phase.** From "a checkbox that can cost >$1M" to "the
+Early-on-conversion rule never pays and nobody can turn it off". Priority should be re-decided rather
+than inherited - flagged in the Status line rather than changed unilaterally.
+
+Files touched: `.test_harnesses/P28_RESULTS.md` (section 16 + the section 9 pointer, normalized back
+to CRLF), `task_plan.md`. No engine code, no version bump, no changelog - nothing a user can see.
+
+**Same session, fourth pass - P83, the IRMAA margin re-run the user asked for.** New harness, ~31s,
+research complete the same day. No engine change, no version bump, no changelog.
+
+**The premise was right and both existing documents were wrong about it.**
+`IRMAA_MARGIN_RESULTS.md` section 5 is titled "The limit no sweep can lift" and proves its case by
+quoting `sim.cpiRate *= (1 + inputs.cpi)`. **That line has not existed since P70.** It is now
+`cpi_t = yr.yearInflation + (inputs.cpi - inputs.inflation)`, so the threshold follows each path,
+while `irmaaFwdFactor()` deliberately stays on the scalar `inputs.cpi` because a plan forecasting the
+index two years out is not clairvoyant. The realized-vs-assumed split that section 7 listed as a
+follow-up SHIPPED, and neither margin document was revisited. Checking the code before accepting a
+document's own statement of its limits is the whole reason this run happened at all.
+
+**Answer: `halfcpi`, the shipped default, and the ordering is identical in all four path sources** -
+halfcpi, cpiminus1, flat2000, halfstep, none. Breach drop -17.5% bootstrap, -20.1% GBM, -20.3% AAM,
+-21.4% stress. Four independently generated inflation processes agreeing on a five-way ranking is the
+strongest thing in the run.
+
+**The default does not change; the reason it is defensible does.** P70e confirmed halfcpi on the
+conversion-sizing side effect and said explicitly it was NOT the breach protection. The
+`fixedTaxIndexing` control - where the forward projection is exact by construction, so no benefit
+there can be forecast absorption - comes in at 2.4-2.5x smaller in every source. About 60% of the
+effect is genuine absorption. It now earns its name.
+
+**Why it wins is a size argument.** The error is the threshold times the CPI miss, ~$9,200 at the p10.
+Setbacks: halfcpi $5,518, halfstep $2,435, cpiminus1 $2,180, flat2000 $2,000. Only halfcpi is sized to
+the error. **And `halfstep` kills the pure size ranking** - second largest setback, smallest benefit,
+a third of what flat2000 buys for $435 less. Recorded as unexplained rather than given a story.
+
+**P1 broke backwards, which is the finding.** I predicted bootstrap would generate the most error and
+so the most benefit, reasoning from regime shifts against a mean-reverting AR(1). Bootstrap does lead
+the undershoot RATE (47.2% vs 46.4%) and shows the SMALLEST benefit. Depth beats frequency: its p10
+undershoot is -3.66% against the synthetic -4.99%, because the 1970-2025 record runs hot against a
+2-3% assumption (mean error +1.85%, usually an OVERshoot), so its undershoots are shallow. The
+reasoning was about the frequency of error; the margin is paid out of its depth.
+
+**A scoring near-miss worth keeping, because it printed the wrong verdict first.** P1's original
+predicate tested only the undershoot rate - which bootstrap leads - and printed **HELD** for a
+prediction the benefit numbers refute. A predicate that reaches for the nearest convenient statistic
+instead of the claim will confirm whatever it is pointed at. Rewritten to score the claim, and the
+comment in the harness says why. This is the second scoring defect in two sessions (P30f's vacuous
+zero-predicate was the first), and both were caught by reading the printed verdict against the table
+above it rather than trusting the word.
+
+**P3 broke narrowly, 0.66% against a 0.5% line, but the SIGN is the result.** Path-following, every
+margin REDUCES surcharge dollars; fixed-indexation, every margin INCREASES them. The margin flips from
+a cost to a saving the moment the threshold becomes uncertain - exactly the reversal
+`irmaa_cpi_risk_harness.js` predicted from hand-built CPI worlds, now seen on generated paths.
+
+**Two properties pinned in passing, both load-bearing.** GBM and AAM produce IDENTICAL inflation, and
+that is correct: the AR(1) correlates with `z1`, and `drawSyntheticBank` turns the same `z1` into
+different returns without touching `z1`. If they ever diverge, the inflation stream has been made
+mode-dependent and GBM's bit-identity guarantee is gone. And the -7.62% worst case shared by all four
+sources is `0.99^2 / 1.03^2 - 1` exactly - `CPI_INDEX_FLOOR` against a 3% assumption, a hard bound,
+not a coincidence.
+
+**One measurement bug caught by disagreement, not by review.** The setback ladder first reported
+`halfstep` at $0 while the sweep beside it showed halfstep preventing 2.1% of breaches. I had passed
+`irmaaMarginDollars` a RATE (0.025) where it wants a cpiRate FACTOR, which scaled every bracket to a
+fortieth of itself and put both `calcIRMAA` probes in the same tier. A number that contradicts the
+arm printed next to it is the cheapest defect detector in a harness, and it only works because both
+numbers are on the same page.
+
+**GOTCHA for anyone reusing mc_engine from node:** it reads the bank builders as bare globals the way
+`importScripts` supplies them in the worker, so `Object.assign(globalThis, prng)` is required before
+the require, or bootstrap mode throws `bootstrapMultiAssetBank is not defined`.
+
+**Open and filed, not guessed:** `P83d`, whether the menu is truncated below its own optimum. The
+curve has not turned - cpiminus1 to halfcpi more than doubles the reduction, and halfcpi's $5,518 is
+still below the $9,200 p10 error. Same shape as P30's `[40,60]`. Needs a continuous forward-factor
+knob, which is an engine change. And `P83e`: `halfstep` is now the deletion candidate the old document
+had nominated halfcpi and cpiminus1 for.
+
+Files: `.test_harnesses/irmaa_margin_paths_harness.js` (new), `IRMAA_MARGIN_PATHS_RESULTS.md` (new),
+`HARNESSES.md` (registered), `IRMAA_MARGIN_RESULTS.md` (sections 5 and 7 marked SUPERSEDED in place),
+`task_plan.md` (P83 filed). Suites unchanged at 340 / 61 / 22 - no tests added, so no
+`TestTiers.EXPECTED` reconciliation.
+
+**Same session, fifth pass - the `RC` / `RF` arm keys renamed to `CtR` / `RtC`, at the user's request.**
+Cosmetic, no numbers moved.
+
+**The user's stated mapping was backwards, and that IS the bug being reported.** They assumed
+`fillCashThenRoth` was `RF`; it was `RC`, and `RF` was `fillRothThenCash`. `RF` reads as "Roth First"
+only once you already know the answer, and reads as "Roth-Free" or "Cash-first" to anyone who does
+not. A code that a careful reader decodes backwards is not a shorthand, it is a trap. Corrected the
+premise rather than silently applying the requested substitution to the wrong letters, which would
+have inverted every table it touched.
+
+**Renamed in BOTH the document and the harness, deliberately.** The ask named only
+`P28_RESULTS.md`, but the harness PRINTS those column headers, so fixing the document alone would
+have left a results file whose labels disagree with the output that reproduces it - the same
+confusion, one layer down, and harder to spot. Arm keys are map lookups and are never printed, so
+`RF`->`RtC`, `RC`->`CtR`, `RFC`->`RtC+C`, `RCC`->`CtR+C` is invisible in the output; only the literal
+header strings and two prediction labels changed.
+
+**Verified by diffing the numbers, not by reading the diff.** Extracted every dollar figure from the
+before and after runs and compared them: identical. The textual diff is 6 label lines and nothing
+else.
+
+The short forms read in queue order - CtR is Cash-then-Roth, RtC is Roth-then-Cash - and the mode
+table now carries them so they are defined once rather than inferred from a column heading. The old
+keys survive in one sentence explaining the rename, which is why a grep for them is not empty.
+
+Checked the rest of `.test_harnesses/` for the old keys: nothing else used them.
+
+Files: `.test_harnesses/P28_RESULTS.md`, `.test_harnesses/unifiedconv_harness.js`. Suites 340 / 61 / 22.
+
+**Same session, sixth pass - P83f. User asked HOW the threshold forecast is made under variable
+inflation, and what margin is right if that forecast is as good as it reasonably can be.**
+
+**First half is a code fact:** the TYPED `inputs.cpi`, constant, at all three `irmaaFwdFactor` call
+sites. No sim state reaches it. A path running 9% for six years still projects forward at 2.8%. The
+P70 comment justifies this as "path-aware indexation is not clairvoyance", which is right about the
+future and says nothing about the PAST - and the function ignores the realized history too.
+
+**Second half inverted the question, which is why it was worth measuring rather than reasoning about.**
+I expected an adaptive forecast to beat the constant, because AR(1) persistence is 0.67 and last
+year's inflation obviously carries signal. **Every adaptive rule is WORSE on the downside tail, in all
+four path sources.** p10 undershoot roughly doubles under `lastyear` on bootstrap (-3.60% -> -7.42%)
+and on stress (-2.91% -> -9.16%).
+
+**The constant wins because it is biased in the safe direction.** Mean error +1.86% on bootstrap,
++3.70% on stress: realized index growth usually EXCEEDS the projection, so the plan aims low and the
+ceiling turns out conservative - the harmless side. Every adaptive rule is conditionally unbiased
+(+0.12% to +0.32%), and removing the bias necessarily fattens the downside tail. **An unbiased
+forecast is the wrong objective when the loss function is one-sided:** an overshoot costs nothing, an
+undershoot hits a surcharge cliff. That is the sentence I would not have written before running it.
+
+**Persistence also helps less than 0.67 suggests.** The forecast is of a TWO-year compounded value
+against a 3.1% shock SD, so two years of fresh shocks dominate one year of carried signal - `lastyear`
+cuts GBM's sd only from 4.42% to 4.33%, and on bootstrap it makes it WORSE (5.70% -> 7.06%), because a
+block bootstrap resets the regime at every block boundary.
+
+**I gave the adaptive rules the generous information set and they still lost.** `lastyear` uses c[y],
+which the engine does have when the ceiling is computed but a household would not, since CPI for year y
+is not published until it ends. The honest `lastyear-lag` on c[y-1] is the WORST rule everywhere. The
+conclusion holds under either reading, which is the only reason to report both.
+
+**Recommended setting: `halfcpi`, and the menu is still short.** p10 undershoot needs a $6,338-$10,890
+setback; halfcpi supplies $5,518. Under-sized in every source. Sharpens `P83d` from "the curve has not
+turned" to a number.
+
+**An engine change was scoped and then NOT built.** A forecast hook - research input, default off,
+bit-identical unset - would have cost tests, a version bump and four bump sites. The analytic pass
+costs seconds and showed all three candidate rules lose to the constant already shipping. Building it
+would have measured, expensively, that the current behavior is right.
+
+**Correction folded in, found while writing the forecast rules.** P83 section 1 described the window
+as the one ENDING at year y. The forecast is FORWARD - the plan caps year y's MAGI, charged at y+2
+against the y+2 threshold, so it projects y+1 and y+2. Checked rather than assumed whether it matters:
+pooled over a stationary process the two windows agree to within noise (GBM forward mean +0.72% / p10
+-5.02% / undershoot 46.5%, backward +0.74% / -4.96% / 46.0%). Section 1's numbers stand; only the
+wording was wrong, and the correction says so rather than quietly restating them.
+
+Files: `irmaa_margin_paths_harness.js` (section 3b added), `IRMAA_MARGIN_PATHS_RESULTS.md` (section 8,
+section 1 window correction, section 7 cross-reference), `task_plan.md` (P83f). Suites 340 / 61 / 22.
+
+**Same session, seventh pass - P30h. User asked whether the `[40,60]` blend is a candidate for
+deletion in favor of the shortfall cascade. Answer: NO on this evidence, and the current default is
+not defensible either.**
+
+**The reframing is what made it worth running.** `w=0` is not "Cash only" - `calculateWithdrawals`
+cascades the shortfall, so `[0,100]` drains Cash and then draws Brokerage, which is exactly the
+sequence the bracket branch already runs. Verified in the log rather than argued: Cash covers year 1
+in full, hits $0, Brokerage carries every year after. So the question was never "which weight", it
+was "should the blend exist at all" - and if w=0 had won outright, two branches would collapse into
+one and one could be deleted.
+
+**It did not win outright. The seven objectives split 3-3, AT THE ENDPOINTS.** `networth`,
+`balanced`, `maxroth` want w=0; `taxflex`, `mintax`, `widowrmd` want w=100; `maxspend` is genuinely
+inert. **`w=40` wins ZERO cells on every objective.** Every winner is a boundary - no interior weight
+wins more than one cell of anything - so this is not "40 is nearly right", it is "no single number is
+right", which is a different sentence and a better reason to leave it alone than the one `P30g` had.
+
+**Liquidity, the thing `P30g` said the harness could not see, is real and small.** Cash-zero years:
+31.9% at w=0, 29.8% at the shipped w=40, 19.9% at w=100. Monotone. But 40 -> 0 costs only 2.1 points,
+and 40 is not even the midpoint of the trade - so liquidity does not justify 40 specifically.
+
+**Reserve damps 3.9x here against `P30b`'s 16x, and that is NOT a contradiction:** P30b quoted the
+WIDEST cell, this is the MEAN. Checked before writing it down, because "the earlier number was wrong"
+and "it was a different statistic" look identical until you look.
+
+**TWO SCORING DEFECTS, both caught by a number disagreeing with the one beside it, both of which
+flipped the recommendation.**
+
+1. **Ties awarded to the first weight in the list.** First run printed `taxflex: w=0 wins 31 of 31`
+   and `maxspend: w=0 wins 30 of 31` - for objectives whose spread across all six weights was **$0**.
+   `maxspend` was the tell: clean cells are DEFINED by equal delivered spend, so it can only ever
+   tie, and a column claiming it as a landslide had to be wrong.
+2. **A shared $1 tie threshold applied to a metric measured in fractions.** `taxflex` returns a
+   spread in [0,1]; a $1 epsilon made it tie in every cell mechanically, whatever the data said. After
+   fix 1 that read as "the weight does not move it" - a plausible, publishable, wrong finding.
+   Per-objective epsilon now. taxflex turns out to be one of the objectives that prefers w=100.
+
+Between them: W1 HELD -> BROKEN, W5 BROKEN -> HELD, recommendation "delete the blend" -> "do not".
+**The first version of this would have recommended a default behavior change on a tie-breaking
+artifact.** Third scoring-predicate defect in this session - P83's P1 tested the nearest convenient
+statistic, P30f's zero-predicate was vacuous, these two. The pattern is that the SCORER is where the
+bugs live, not the measurement, because a wrong scorer still prints a confident verdict.
+
+**Prediction W5 was written as an escape hatch and became the headline.** It said "if they all agree
+on w=0, the case for deleting the blend is much stronger than P30g assumed". They do not agree. P30g
+declined for reasons it could not check; those reasons were right, for a reason it did not state.
+
+Files: `.test_harnesses/gapfill_objectives_harness.js` (new), `GAPFILL_OBJECTIVES_RESULTS.md` (new),
+`HARNESSES.md` (registered), `task_plan.md` (P30h, P30 status now P30a-P30h). No engine change, no
+version bump, no changelog. Suites 340 / 61 / 22.

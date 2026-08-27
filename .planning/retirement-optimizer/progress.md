@@ -5215,3 +5215,37 @@ Counts: optimizer_core **338** (unchanged - P82 is all tier 1), tier 1 **373** (
 green. Screenshots still unavailable (the Browser pane is not compositing), so the tooltip and
 legend fixes are verified by reading Chart.js's own hit tests and legend items out of the live page,
 not by looking at them. Worth one visual pass before merge.
+
+---
+
+## Session 2026-08-27 - P82h, two things still wrong on screen  *(v11.1670)*
+
+Both reported from a screenshot, which is the check I could not run myself this session.
+
+**The banner buttons were mine and the cause is worth remembering.** P82b shrank them with an inline
+style carrying only a background. The global `button` rule sets `color: white`, `width: 100%` AND a
+44px min-height, so what shipped was three wide blank cream boxes: white text on near-white, at full
+width. An inline background does not beat a stylesheet's `color`. They are a `.replay-btn` class
+now, overriding each of the three explicitly - and a class can carry a `:hover`, which is the other
+thing inline styles cannot do. Measured after: 53 / 55 / 70px, `#6b5310` on `#fffaf0`. The arrows
+also read "◀ Prev" and "Next ▶" now instead of bare glyphs; a 10.7px glyph alone was thin even when
+it was visible.
+
+Not changelog material: it never existed on main, so against main it nets to zero.
+
+**The Input Distributions fold was pre-existing, and I checked before saying so.** `git show
+main:retirement_optimizer.html` has the same summary with no chevron. `.mc-fold > summary` kills the
+native marker on purpose - the two headline folds draw their own `.mc-fold-chev` inside a colored
+banner - and this third, static summary was never given one. So it had no disclosure affordance at
+all since the fold shipped. That one IS reportable, and is in the entry.
+
+**Left alone, deliberately:** `.mc-fold[open] > summary .mc-fold-chev { transform: rotate(90deg) }`
+does not take. The rule is loaded (checked `document.styleSheets`), the selector matches, the
+`[open]` attribute is there, and the computed transform is still `none` - on all three folds, on
+main as well. Nobody reported it, the chevron marks the control either way, and it is a separate
+pre-existing quirk rather than part of what was asked for.
+
+**Method note.** Both of these were invisible to every check I ran last round, because both are
+about how the page LOOKS and every check was a DOM assertion. `getComputedStyle` would have caught
+the buttons - `color: rgb(255,255,255)` against `background: rgb(255,250,240)` is a contrast test a
+machine can do - and that is the check worth adding to the habit, not more assertions about state.

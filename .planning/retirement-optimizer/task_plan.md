@@ -900,6 +900,22 @@ Six items, all raised after using P78/P79 for real.
       beside mostly green bars. `generateLabels` pins it to the up color and the label names the
       convention. And a new "Return after inflation" line, COMPOUNDED not subtracted: at 6% against
       3% it reads 2.91%, where a subtraction would say 3.00%. `realReturnOf` is pure and tested.
+- [x] **P82h (user-reported, second round)** - two things the first round left on screen.
+      - **The three banner buttons rendered as blank pale boxes.** Mine, introduced by P82b: the
+        global `button` rule sets `color: white`, `width: 100%` and a 44px min-height, and an inline
+        `background` alone loses to all three - white text on a cream background, stretched wide.
+        Replaced with a `.replay-btn` CLASS that overrides each of those explicitly (and can carry a
+        :hover, which an inline style cannot). Measured after: 53 / 55 / 70px wide, text `#6b5310`
+        on `#fffaf0`. The arrows now read **"◀ Prev"** and **"Next ▶"** rather than bare glyphs.
+      - **Input Distributions had no disclosure marker.** PRE-EXISTING on main, confirmed against
+        `git show main:` before claiming it: `.mc-fold > summary` suppresses the native marker
+        because the two headline folds draw their own `.mc-fold-chev`, and this static summary never
+        got one. Given one.
+- **KNOWN, pre-existing, NOT fixed here:** `.mc-fold[open] > summary .mc-fold-chev` sets
+      `transform: rotate(90deg)` and it does not take - computed transform is `none` on all three
+      folds, open or closed, including on main. The rule is loaded and the selector matches. The
+      chevron marks the control either way, and chasing it is not what was reported. Its own item
+      if it ever matters.
 - **Status:** COMPLETE, v11.1670. Twelve more tier-1 assertions (373 in-page).
 - **Independent:** built on P78/P79 in this branch
 

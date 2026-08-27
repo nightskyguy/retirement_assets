@@ -46,7 +46,8 @@ gray. Click one to replay it. Its tooltip names the single line under the pointe
 listing everything at that year.
 
 The Market Return chart gains a return-after-inflation line, and its key no longer shows a red
-swatch for bars that are mostly green.
+swatch for bars that are mostly green. Input Distributions on the Monte Carlo tab shows a fold
+marker, so it reads as something you can open.
 
 ---
 

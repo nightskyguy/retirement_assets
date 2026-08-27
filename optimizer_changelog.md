@@ -33,9 +33,10 @@ Security, tax brackets, pensions and the rest.
 
 **1. While reviewing a Monte Carlo path you can change the inputs and watch the result.** Replaying
 no longer ends when you touch the sidebar: change the spend, the withdrawal order, anything, and the
-same sequence runs again against the new plan, so you can ask whether a change prevents the ruin you
-are looking at. Starting a replay copies the run's own strategy and conversion settings into the
-sidebar, which is what is being replayed, and *Exit replay* keeps every edit you made. While a
+same sequence runs again against the new plan, so you can test a change against the ruin in front of
+you and find out whether it survives. Starting a replay copies the run's own strategy and conversion
+settings into the sidebar, which is what is being replayed, and *Exit replay* keeps every edit you
+made. While a
 replay is on screen an edit redraws the path and leaves the Monte Carlo and Optimizer sweeps alone.
 
 The forward and back arrows run as one loop through every path the run kept, the ten captured Monte

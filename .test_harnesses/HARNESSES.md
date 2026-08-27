@@ -28,6 +28,8 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `irmaa_cpi_risk_harness.js` | **node** | Same question with the CPI allowed to come out different from the one the plan assumed. Reverses the answer. |
 | `irmaa_default_harness.js` | **node** | Which margin setting should be the DEFAULT, and which of the six can be deleted. Separates the IRMAA effect from the conversion-sizing side effect that dwarfs it. |
 | `cpi_index_harness.js` | **node** | P70a: does indexing the tax code at a FIXED CPI, while spending follows the path, overstate tax on high-inflation paths? Yes, by 8% overall, and it invents plan failures. |
+| `irmaa_margin_paths_harness.js` | **node** | P83: which IRMAA safety margin is best once the threshold is UNCERTAIN? Reruns the margin question against all three Monte Carlo modes, now that realized and assumed CPI diverge. |
+| `gapfill_objectives_harness.js` | **node** | P30h: should the `[40,60]` gap-fill blend be deleted and unified on the Cash-first cascade? Scores every OPTIMIZER_OBJECTIVES key plus a liquidity measure. |
 
 ## betr_harness.js  (node)
 

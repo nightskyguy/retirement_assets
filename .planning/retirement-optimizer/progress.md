@@ -4953,4 +4953,34 @@ flagged as a decision to take for both or neither.
 
 **PR #195 opened 2026-08-26** (worktree-p70-cpi-indexation -> main): the whole P70 phase, 17 commits,
 v11.1661. Body leads with the byte-identity gate, since that is the property a reviewer can check in
-one step and the one that proves the spread model is implemented right.
+one step and the one that proves the spread model is implemented right.
+
+**P81 filed 2026-08-26, O0.** User asked to confirm two invariants. One holds, one does not, and the
+one that does not is a defect P70c introduced and PR #195 currently ships.
+
+**Medicare/IRMAA is additive: CONFIRMED.** `sim.medicareRate *= (1 + cpi_t + inputs.inflation)`.
+
+**Nothing below INFLATION_FLOOR: FALSE.** The floor guards the DRAWN series - `computeNextInflation`,
+the stress bank, the multi-asset bank and the bootstrap bank all clamp `i_t` at -1%, so the record's
+real -10.3% years never reach the engine. But the statutory index is DERIVED, not drawn:
+`cpi_t = i_t + spread`, and the shipped default spread is NEGATIVE (-0.2pt). A year already sitting
+on the floor gets pushed through it.
+
+| typed | spread | min `i_t` | min `cpi_t` | years below floor |
+|---|---|---|---|---|
+| 3.0 / 2.8 (defaults) | -0.20pt | -1.00% | **-1.20%** | **27 of 780** |
+| 3.5 / 2.0 | -1.50pt | -1.00% | **-2.50%** | **43 of 780** |
+| 2.0 / 3.5 (inverted) | +1.50pt | -1.00% | +0.50% | 0 |
+
+Only bites when CPI sits below Inflation - the normal configuration and the default. Three consumers
+take the un-floored value: `cpiRate` (so every bracket-shaped threshold), `medicareRate`, and
+`pensionFactor` (a capped pension gets CUT below the floor).
+
+Filed rather than fixed, per instruction. Worth deciding before #195 merges rather than after -
+the fix is one `Math.max` at the point `cpi_t` is computed, so every consumer inherits it. P81c
+carries the separate zero-floor question P70i left open, which affects Social Security too and must
+be taken for both or neither.
+
+Method note: this was found by MEASURING the derived value across the stress bank rather than
+reasoning about the floor constant. The constant is correct and applied in four places; what was
+wrong was a quantity derived downstream of all four.

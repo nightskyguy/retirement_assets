@@ -15,7 +15,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
-| **O0** | P70 | Inflation indexing: **COMPLETE v11.1661** (a-i). Spread model, two-clock fix, capped pension COLAs | done, ready to merge |
+| **O0** | P81 | Inflation floor guards the DRAW, not the derived `cpi_t`; negative spread pushes through it *(2026-08-26, vs PR #195)* | `P81a` |
 | **O1** | P78 | Edit the plan against a pinned replay path *(planned 2026-08-26, was briefly numbered P75)* | `P78a` |
 | **O1** | P79 | Draw the 10 captured paths on the survival chart *(planned 2026-08-26)* | `P79a` |
 | **O1** | P80 | Nerdknob: the historical years behind each bootstrap block *(planned 2026-08-26)* | `P80a` |
@@ -934,6 +934,62 @@ years are already labels.
 - **Independent:** Historical mode only; synthetic paths have no source years
 
 ---
+
+## P81: the inflation floor guards the DRAW, not the derived index  *(user-raised 2026-08-26, O0)*
+
+**User's two conditions, checked:**
+
+| condition | holds? |
+|---|---|
+| Medicare/IRMAA growth is ADDITIVE | **YES.** `sim.medicareRate *= (1 + cpi_t + inputs.inflation)` (`optimizer_core.js:3076`) - the statutory index plus a constant excess-medical spread. |
+| Nothing goes below `INFLATION_FLOOR` (-0.01) | **NO.** The floor is applied to the DRAWN inflation only. |
+
+**Where the floor IS applied**, correctly, to every drawn series:
+`computeNextInflation` (`prng.js:61`, synthetic AR(1)), the stress bank (`:360`), the multi-asset
+bootstrap bank (`:502`) and the bootstrap inflation bank (`:531`). So `i_t >= -0.01` always, and the
+historical record's real -10.3% years are clamped before they ever reach the engine.
+
+**Where it is NOT applied**, and this is a defect P70c introduced: the statutory index is DERIVED,
+not drawn. `cpi_t = i_t + spread` (`advanceYear`), and the shipped default spread is NEGATIVE
+(-0.2 points, inflation 3.0 against cpi 2.8). So a year already sitting at the floor is pushed
+through it.
+
+Measured over the stress bank, 780 path-years:
+
+| typed rates | spread | min `i_t` | min `cpi_t` | years at floor | **years BELOW floor** |
+|---|---|---|---|---|---|
+| 3.0 / 2.8 (shipped defaults) | -0.20pt | -1.00% | **-1.20%** | 27 | **27** |
+| 3.5 / 2.0 | -1.50pt | -1.00% | **-2.50%** | 27 | **43** |
+| 2.0 / 3.5 (inverted) | +1.50pt | -1.00% | +0.50% | 27 | 0 |
+
+It only bites when CPI sits below Inflation, which is the normal configuration and the default.
+
+**Three quantities take the un-floored value:**
+- `sim.cpiRate *= (1 + cpi_t)` - brackets, the standard deduction, LTCG, IRMAA thresholds, the ACA
+  multiple, the QCD limit and Social Security COLA all deflate faster than the floor allows.
+- `sim.medicareRate *= (1 + cpi_t + inputs.inflation)` - small, since the excess spread dominates.
+- `sim.pensionFactor *= (1 + Math.min(cap, cpi_t))` - a capped pension is CUT below the floor.
+
+- [ ] **P81a** - decide WHERE the floor belongs. Two readings, and they are not equivalent:
+      1. floor the derived index: `cpi_t = Math.max(INFLATION_FLOOR, i_t + spread)`. Simple, and
+         guarantees the user's stated invariant everywhere downstream.
+      2. floor the spread application so the gap cannot push a floored year further down:
+         `cpi_t = i_t + spread` only while `i_t > FLOOR`, pinning `cpi_t = i_t` at the floor.
+      (1) is the literal reading of "nothing below that number" and is recommended.
+- [ ] **P81b** - apply it once, where `cpi_t` is computed, so every consumer inherits it rather than
+      each one flooring separately. `INFLATION_FLOOR` lives in `prng.js` and the engine does not
+      currently import it; decide whether it moves or is duplicated with a pointer comment.
+- [ ] **P81c** - decide the SEPARATE and still-open question P70i left: real COLAs are floored at
+      ZERO and never claw back, but modeled Social Security and a capped pension both fall when the
+      index falls. That is a different floor at a different level, and it affects SS too. Take it for
+      both at once or neither - fixing the pension alone re-introduces the two-clock inconsistency
+      P70 just removed.
+- [ ] **P81d** - a test pinning the invariant: for any (cpi, inflation) pair including a negative
+      spread, no logged `-cpiFactor` step is below `1 + INFLATION_FLOOR`.
+- **Status:** open. **Raised against PR #195, which is OPEN** - the defect ships with P70c unless it
+  is fixed there. Filed rather than fixed at the user's instruction.
+- **Blocks:** nothing, but it is worth deciding before #195 merges rather than after.
+
 
 ## P70: Do high-inflation paths overstate tax?
 **Why:** `sim.inflation` advances at the per-path `yr.yearInflation`, but `sim.cpiRate` - which

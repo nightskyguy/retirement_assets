@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.165D"></a>
+<a id="11.1661"></a>
 
-## 11.165D
+## 11.1661
 
 ### Taxes now follow the inflation your plan actually gets
 
@@ -41,8 +41,14 @@ money running out in a high-inflation path may now survive it.
 
 CPI and Inflation stay separate, and the gap between them now does real work: the tax code is
 indexed at each path's inflation less that gap. A new line under the two fields names it, so you
-can see which way it runs and by how much. A pension COLA now follows CPI, as Social Security
-already did.
+can see which way it runs and by how much.
+
+**Pension COLA is now a choice of five, not a checkbox:** no increase, a 1%, 2% or 3% cap, or full
+COLA. A capped pension pays the lesser of its cap and that year's CPI, so it falls permanently
+behind in a high-inflation stretch instead of catching up later. That is how federal FERS and most
+state and municipal plans actually pay, and a checkbox could only call them uncapped or nothing. A
+pension also follows CPI now rather than general inflation, as Social Security already did. Plans
+saved with the box ticked load as Full COLA; unticked loads as No increase.
 
 Also fixed: choosing **Fill Bracket** at the top federal bracket produced no plan at all, with every
 figure reading `$NaN`. That bracket has no upper limit, so there was nothing to fill up to. The

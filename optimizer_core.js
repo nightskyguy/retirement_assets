@@ -119,6 +119,30 @@ function propTaxFor(inputs, currentYear, baseYear, inflationFactor = null) {
     return base * Math.pow(1 + g, Math.max(0, currentYear - baseYear));
 }
 
+// P70i. What a pension's cost-of-living adjustment is worth in a given year.
+//
+// Returns null for a pension that never rises, Infinity for one that tracks the index in full, or
+// a decimal CAP - the plan pays the LESSER of that cap and the year's CPI, which is how a capped
+// public plan actually reads. FERS pays a reduced 'diet' COLA above 2%, and most state and
+// municipal plans cap at 2-3%; a flat on/off switch had to call all of those either uncapped or
+// nothing, and after P70d moved the pension onto the CPI clock, 'on' meant FULL CPI every year -
+// which overstates every capped plan on exactly the high-inflation paths that decide an outcome.
+//
+// Accepts the old boolean as well as the new strings, so saved plans, the sweep golden and every
+// existing test keep their meaning without a migration: false is none, true is full.
+//
+// NOTE on deflation: the cap is a genuine MIN, so a year of falling prices reduces the pension,
+// the same way falling cpiRate already reduces modeled Social Security. Real COLAs are floored at
+// zero and never claw back. That floor is not modeled here, and it is a separate decision from
+// this one - it would change SS too, and should be taken for both at once or neither.
+function pensionColaCap(inputs) {
+    const v = inputs && inputs.pensionCola;
+    if (v === true || v === 'full') return Infinity;
+    if (v === false || v === 'none' || v === '' || v === undefined || v === null) return null;
+    const n = parseFloat(v);
+    return Number.isFinite(n) && n > 0 ? n / 100 : null;
+}
+
 // ── IRMAA targeting: this year's MAGI is judged two years from now ────────────────────────────
 // IRMAA charges the premium in year Y against MAGI from year Y + LOOKBACK (LOOKBACK is -2), and
 // SSA indexes the thresholds to the PREMIUM year. So any ceiling that caps THIS year's MAGI has to
@@ -1399,10 +1423,11 @@ function computeIncome(sim, yr) {
     yr.s1 = yr.alive1 ? potentialS1 : 0;
     yr.s2 = yr.alive2 ? potentialS2 : 0;
     yr.pension = (yr.age1 >= (inputs.pensionStartAge || 0))
-        // P70d. sim.cpiRate, not sim.inflation. A COLA is an adjustment tied to a PUBLISHED
-        // index, which is what the CPI input represents here - and Social Security, the other
-        // COLA in this plan, has always ridden cpiRate. Two COLAs on two clocks had no reason.
-        ? inputs.pensionAnnual * (inputs.pensionCola ? sim.cpiRate : 1)
+        // P70d/P70i. The CPI clock, not the spending clock: a COLA is tied to a PUBLISHED index,
+        // which is what the CPI input represents here, and Social Security has always ridden
+        // cpiRate. sim.pensionFactor is that clock with this plan's cap applied year by year, so
+        // an uncapped pension tracks cpiRate exactly and a capped one falls behind it.
+        ? inputs.pensionAnnual * sim.pensionFactor
         : 0;
 
     // One is deceased (if both decease, it won't get here)
@@ -3049,6 +3074,10 @@ function endYear(sim, yr) {
     sim.inflation    *= (1 + yr.yearInflation);   // spending always follows the path
     sim.cpiRate      *= (1 + cpi_t);
     sim.medicareRate *= (1 + cpi_t + inputs.inflation);
+    // The cap is applied to THIS year's index rate, not to the compounded total, which is what
+    // makes a capped COLA fall permanently behind rather than catch up after a quiet stretch.
+    const colaCap = pensionColaCap(inputs);
+    if (colaCap !== null) sim.pensionFactor *= (1 + Math.min(colaCap, cpi_t));
 }
 
 /** SIMULATION ENGINE **/
@@ -3086,6 +3115,12 @@ function simulate(inputs) {
     let cpiRate      = Math.pow(1 + inputs.cpi,      gapYears);
     let inflation    = Math.pow(1 + inputs.inflation, gapYears);
     let medicareRate = Math.pow(1 + inputs.cpi + inputs.inflation, gapYears);
+    // P70i. A capped COLA cannot be read off cpiRate, because the cap bites YEAR BY YEAR: a run
+    // of 1% years followed by a 9% year is not the same as the average. So it carries its own
+    // compounding factor, seeded over the gap years at the same capped rate.
+    const _colaCap = pensionColaCap(inputs);
+    let pensionFactor = _colaCap === null ? 1
+                      : Math.pow(1 + Math.min(_colaCap, inputs.cpi), gapYears);
     let fixedWithdrawal = 0;
     let spendDelta = 1 + inputs.spendChange;
     let spendGoal = inputs.spendGoal * Math.pow(1 + inputs.inflation, gapYears);
@@ -3171,7 +3206,7 @@ function simulate(inputs) {
     const sim = {
         inputs, balance, log, totals,
         birthyear1, birthmonth1, birthyear2, birthmonth2,
-        currentYear, cpiRate, inflation, medicareRate,
+        currentYear, cpiRate, inflation, medicareRate, pensionFactor,
         fixedWithdrawal, spendDelta, spendGoal, cumulativeTaxes,
         nominalTaxRate, capitalGainsRate,
         subCycleIRAYears, prevPortfolio,
@@ -4773,7 +4808,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, pensionColaCap, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -4781,7 +4816,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, pensionColaCap, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

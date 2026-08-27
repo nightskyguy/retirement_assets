@@ -530,7 +530,10 @@ function getInputs() {
         pensionAnnual: +val('pensionAnnual'),
         pensionStartAge: +val('pensionStartAge') || 0,
         survivorPct: +val('survivorPct'),
-        pensionCola: !!valChecked('pensionCola'),
+        // P70i. A selector now, not a checkbox: 'none' | '1' | '2' | '3' | 'full'. The engine's
+        // pensionColaCap() still accepts the old booleans, so a saved plan carrying true or false
+        // keeps its meaning without a migration step.
+        pensionCola: val('pensionCola') || 'none',
         spendGoal: +val('spendGoal'),
         spendChange: (spendChange / 100.0),
         iraBaseGoal: +val('iraBaseGoal'),
@@ -4870,6 +4873,14 @@ function applyScenario(data) {
         data = { ...data, convertExcessToRoth: data.maxConversion };
     }
 
+    // P70i. Pension COLA was a checkbox and is now a selector, so a scenario saved before that
+    // carries a BOOLEAN. The generic loop below would set a <select> to "true", match no option and
+    // leave the control blank - which reads as "No increase" and silently strips a COLA the plan was
+    // saved with. Map it here, the way the IRMAA/ACA stratRate values are mapped just below.
+    if (typeof data.pensionCola === 'boolean') {
+        data = { ...data, pensionCola: data.pensionCola ? 'full' : 'none' };
+    }
+
     // Handle IRMAA / ACA stratRate values that don't map to a plain numeric key
     if ((data.stratIRMAATier ?? -1) >= 0) {
         const el = document.getElementById('stratRate');
@@ -4939,7 +4950,7 @@ function applyScenario(data) {
                 // the highest real ceiling rather than sitting on an option the menu disables.
                 clampStratRateSelection(element);
             } else {
-                if (['convertExcessToRoth', 'fundConversionWithCash', 'pensionCola', 'dividendReinvest', 'cyclicEnabled', 'fixedTaxIndexing'].includes(key)) {
+                if (['convertExcessToRoth', 'fundConversionWithCash', 'dividendReinvest', 'cyclicEnabled', 'fixedTaxIndexing'].includes(key)) {
                     element.checked = !!value;
                 } else if (DOLLAR_INPUT_IDS.has(key)) {
                     DisplayHelpers.setDollarValue(key, value);

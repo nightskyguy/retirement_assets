@@ -75,6 +75,7 @@ const getRateBracket = taxengine.getRateBracket;
 const TAXData = taxengine.TAXData;
 const getLTCGBracketRoom = core.getLTCGBracketRoom;
 const nominalRateAtLimit = core.nominalRateAtLimit;
+const pensionColaCap = core.pensionColaCap;
 const compactNum = core.compactNum;
 const diagnoseConvBreakEvenFailure = core.diagnoseConvBreakEvenFailure;
 const bestConversionStopYear = core.bestConversionStopYear;
@@ -4281,6 +4282,58 @@ test('P70: Medicare premium growth is the index plus a FIXED excess, not a doubl
     }
     assert(Math.abs(expected - doubled) > 0.05,
         'the two readings must be far enough apart that this test can tell them apart');
+});
+
+test('P70i: a capped pension COLA pays the lesser of its cap and CPI, year by year', () => {
+    // The cap bites PER YEAR, which is the whole point: a run of quiet years followed by a hot one
+    // is not the same as the average, and a capped plan never catches up afterwards.
+    const inflation = 0.030, cpi = 0.028, spread = cpi - inflation;
+    const seq = CLOCK_INFL;                       // lumpy, 1% to 13%
+    const base = { ...CLOCK_BASE, inflation, cpi, pensionAnnual: 30000, pensionStartAge: 60,
+                   returnSequence: CLOCK_RET, inflationSequence: seq };
+    const pens = o => clockRows(simulate({ ...base, ...o })).map(r => r.pension);
+
+    // No increase: flat nominal, forever.
+    for (const off of [{ pensionCola: 'none' }, { pensionCola: false }, {}]) {
+        const p = pens(off);
+        assert(p.every(v => Math.abs(v - p[0]) < 1e-9),
+            `${JSON.stringify(off)}: a pension with no COLA must not move`);
+    }
+    // Full COLA rides the index exactly, so it equals cpiFactor times the base.
+    const full = clockRows(simulate({ ...base, pensionCola: 'full' }));
+    for (const r of full)
+        assertNear(r.pension, 30000 * r['-cpiFactor'], 'a full COLA tracks the index exactly', 1e-6);
+    // The old boolean still means what it meant.
+    assert(JSON.stringify(pens({ pensionCola: true })) === JSON.stringify(pens({ pensionCola: 'full' })),
+        'pensionCola:true must still mean a full COLA');
+
+    // Capped: each year grows by min(cap, that year's index rate), compounded.
+    for (const cap of [1, 2, 3]) {
+        const p = pens({ pensionCola: String(cap) });
+        let want = 30000;
+        for (let i = 0; i < p.length; i++) {
+            assertNear(p[i], want, `cap ${cap}%: year ${i} pays the lesser of the cap and CPI`, 1e-6);
+            want *= (1 + Math.min(cap / 100, seq[i] + spread));
+        }
+    }
+    // And the ordering holds: more cap is never less pension, and full is the ceiling.
+    const last = o => { const p = pens(o); return p[p.length - 1]; };
+    const none = last({ pensionCola: 'none' }), c1 = last({ pensionCola: '1' });
+    const c2 = last({ pensionCola: '2' }), c3 = last({ pensionCola: '3' }), f = last({ pensionCola: 'full' });
+    assert(none < c1 && c1 < c2 && c2 < c3 && c3 < f,
+        `each step up the cap must pay more: ${[none, c1, c2, c3, f].map(Math.round).join(' < ')}`);
+});
+
+test('P70i: pensionColaCap reads every shape the input can arrive in', () => {
+    assert(pensionColaCap({ pensionCola: false }) === null, 'false is no COLA');
+    assert(pensionColaCap({ pensionCola: 'none' }) === null, "'none' is no COLA");
+    assert(pensionColaCap({ pensionCola: '' }) === null, 'blank is no COLA');
+    assert(pensionColaCap({}) === null, 'absent is no COLA - the safe default for a pension');
+    assert(pensionColaCap({ pensionCola: true }) === Infinity, 'true is uncapped');
+    assert(pensionColaCap({ pensionCola: 'full' }) === Infinity, "'full' is uncapped");
+    assertNear(pensionColaCap({ pensionCola: '2' }), 0.02, "'2' is a 2% cap", 1e-12);
+    assertNear(pensionColaCap({ pensionCola: 2 }), 0.02, 'a bare number is a percent cap', 1e-12);
+    assert(pensionColaCap({ pensionCola: 'garbage' }) === null, 'anything unreadable is no COLA');
 });
 
 test('P70: every indexed quantity tracks its declared clock', () => {

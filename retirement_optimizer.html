@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1671</title>
+    <title>Retirement Optimizer 11.168e</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,12 +59,12 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=111662"></script>
-	<script src="optimizer_core.js?v=111670"></script>
+	<script src="optimizer_core.js?v=11168e"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=111671"></script>
-	<script src="optimizer_tests.js?v=111671"></script>
+	<script src="optimizer_ui.js?v=11168e"></script>
+	<script src="optimizer_tests.js?v=11168e"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -336,6 +336,32 @@
             <div><label title="Combined liquid cash balance (HYSA, money market, etc.). Shared between both spouses - the simulation draws from this to cover spending shortfalls before tapping investments.">Cash Balance<input type="text" id="Cash" value="50000"></label></div>
             <div><label title="Target cash buffer, in today's dollars (inflation-adjusted each year). Controls where money withdrawn beyond your spending needs (surplus, mostly forced RMDs) goes, and protects a cash cushion. Enter Off for the original behavior: all surplus stays in Cash earning the cash yield. Enter 0 to keep no cash buffer and reinvest ALL surplus into your Brokerage (market growth, dividends can compound). Enter a positive amount to keep that much in Cash and reinvest only the surplus above it; spending will not draw the buffer below that level unless every other account is exhausted. For the most benefit, also turn on Dividend Reinvestment, so your dividends compound in the Brokerage at the market growth rate instead of collecting in Cash at the lower cash yield.">Cash Reserve<input type="text" id="CashReserve" value="Off" placeholder="Off"></label></div>
         </div>
+        <!-- P84. Advisor fee. Sits in Assets because every option in the accounts dropdown names
+             a balance typed in this same section. UNGATED as of 2026-08-28: it sat behind the
+             nerdknob only while it was being proven out, and it is a fact about the plan rather
+             than a diagnostic, which is the rule at optimizer_ui.js:141-149. Ungating it costs
+             nobody a number, because the scope defaults to "none".
+             Amount is data-plain and stored RAW as typed: its meaning switches between % and $, so
+             it must stay out of the x100 list and out of DOLLAR_INPUT_IDS, and the engine does the
+             division. The readout below is a SIBLING of the .row, not a child of the amount's own
+             cell, so it spans the whole panel instead of wrapping inside one flex column. -->
+        <div id="advisorFeeAmount-wrap">
+        <div class="row">
+            <div><label style="font-size:0.9em;" title="Annual advisor or fund fee. One field, read two ways: a small number is a percentage of the billed accounts, a large one is a flat dollar amount that grows with your CPI. Add a % or a $ to say which you meant. Shorthand works, so 20k is 20,000. It is charged at the start of each year against the previous December 31 balances, the way advisors actually bill. Money taken from an IRA to pay it is NOT a taxable distribution. Cash is never billed and never pays. Leave at 0 for no fee.">Advisor Fee
+                <input type="text" id="advisorFeeAmount" value="0" data-plain oninput="updateAdvisorFeeHint()" onchange="updateAdvisorFeeHint()" style="width:80px;font-size:14px;"></label></div>
+            <div><label style="font-size:0.9em;" title="Which accounts the fee is charged against, and which pay it. Defaults to None, so no fee is charged until you pick accounts. Leave an amount typed and switch between None and a real choice to compare a plan with and without the fee. Cash is never included in either. Choose &quot;All but Cash, paid from IRA&quot; to bill every other account but take the money from the larger IRA, which is a common arrangement and shrinks future required distributions.">Fee applies to
+                <select id="advisorFeeScope" onchange="updateAdvisorFeeHint()" style="font-size:14px;">
+                    <option value="none" selected>None (no fee)</option>
+                    <option value="all">All but Cash</option>
+                    <option value="brokerage">Brokerage only</option>
+                    <option value="roths">Roths only</option>
+                    <option value="iras">IRAs only</option>
+                    <option value="rothira">Roths and IRAs</option>
+                    <option value="allfromira">All but Cash, paid from IRA</option>
+                </select></label></div>
+        </div>
+        <div id="advisorFeeRead" style="font-size:0.78em;color:#666;margin:2px 0 0;">No fee.</div>
+        </div>
         </details>
 
         <details class="section" open>
@@ -459,6 +485,7 @@
                 <div title="Lifetime tax rate: total taxes paid ÷ total gross income. Lower is better."><small>Tax Rate</small><br><strong id="stat-rate">0%</strong><div id="stat-rate-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Total tax paid over the entire simulation: federal (incl. NIIT), state, and Medicare IRMAA surcharges."><small>All Taxes</small><br><strong id="stat-tax">$0</strong><div id="stat-tax-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Total Required Minimum Distributions taken. Sub-label shows RMDs' share of lifetime taxes."><small>All RMDs</small><br><strong id="stat-rmd">$0</strong><div id="stat-rmd-pct" style="font-size:0.75em;min-height:1em;color:#888;"></div></div>
+                <div id="stat-advisorfee-tile" style="display:none;" title="Total advisor or fund fees paid across the whole plan. Charged each year on the previous December 31 balances. Fee money taken from an IRA is not a taxable distribution, so it never appears in your income or your tax."><small>Advisor Fees</small><br><strong id="stat-advisorfee">$0</strong><div id="stat-advisorfee-sub" style="font-size:0.75em;min-height:1em;color:#888;"></div></div>
                 <div title="Total after-tax spendable income produced across all years."><small>Spendable</small><br><strong id="stat-spend">$0</strong><div id="stat-spend-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Total portfolio value (after-tax) remaining at the end of the final simulation year."><small>End Wealth</small><br><strong id="stat-nw">$0</strong><div id="stat-nw-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="First year the plan's after-tax portfolio value permanently overtakes what it would have been with no Roth conversions, and stays ahead for the rest of the plan, or &quot;--&quot; if that never happens (including a brief lead that doesn't hold). Computed by re-running the entire plan without the conversions. Only shown when conversions actually occur. See Documentation for details."><small>Break Even</small><br><strong id="stat-conv-be" style="font-size:0.9em;"> - </strong><span id="stat-conv-be-diagnose" onclick="toggleBreakEvenDiagnosis()" style="display:none;cursor:pointer;font-size:0.85em;margin-left:3px;color:#2980b9;">ⓘ</span>
@@ -835,6 +862,14 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="behavior"><b>11.168e</b>
+					<strong>An advisor fee you can model, and required distributions figured the way the tax rules define them.</strong>
+					<ol>
+					<li>A yearly advisor or fund fee. One field takes either a percentage or a flat CPI-indexed dollar amount and tells you which way it read what you typed. Choose which accounts are billed and which pay. Starts at None, so nothing is charged until you pick accounts; switch back to None to compare a plan with and without it. Money taken from an IRA to pay it is not a taxable distribution.</li>
+					<li>Required minimum distributions now come off your December 31 balance, so they are no longer inflated by part of the current year's growth and no longer shift with the month a withdrawal leaves.</li>
+					</ol>
+					<a href="optimizer_changelog.md#11.168e" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="behavior"><b>11.1671</b>
 					<strong>Your Monte Carlo and Stress Test results may now differ from before, because the model behind them is more accurate.</strong>
 					The main projection uses the fixed growth and inflation figures you supply, so the first two changes below show up only in the Monte Carlo, the Stress Test and a Replay, where every path carries its own returns and inflation. That is to say, those runs now account for real-world behavior of Social Security, tax brackets, pensions and the rest.
@@ -1441,7 +1476,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111671';
+    const V = '?v=11168e';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

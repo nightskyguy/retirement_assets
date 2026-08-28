@@ -142,7 +142,7 @@ function applyNerdKnobVisibility() {
     // more: both graduated out of nerdknob once they were finished and tested, so their markup
     // carries no display:none and nothing hides them. Same treatment as convAdvanced-wrap above.
     // IRMAA safety margin below a projected tier threshold - experimental, still being measured
-    // (.test_harnesses/IRMAA_MARGIN_RESULTS.md). The FORWARD PROJECTION it sits on is NOT gated:
+    // (research/IRMAA_MARGIN_RESULTS.md). The FORWARD PROJECTION it sits on is NOT gated:
     // that is a correctness fix and applies to every user. Only the choice of margin is hidden,
     // and hiding it leaves the default (IRMAA_MARGIN_DEFAULT, 'halfcpi') in force, not "no margin".
     // P70e. Fixed tax indexing - a DIAGNOSTIC, not a modeling choice, so it stays behind the knob.
@@ -150,6 +150,14 @@ function applyNerdKnobVisibility() {
     // inflation, as the IRS and SSA do), not a fallback.
     const fixedIdxWrap = document.getElementById('fixedTaxIndexing-wrap');
     if (fixedIdxWrap) fixedIdxWrap.style.display = NERD_KNOBS ? '' : 'none';
+    // P84. Advisor fee - gated by the user's 2026-08-28 decision. Hiding it leaves the field at
+    // whatever it holds, which is 0 by default and therefore no fee; but a plan LOADED from a URL
+    // carrying ?af= keeps its fee and still computes it, because the input is only hidden, never
+    // cleared. That is the whole reason the URL keys are not gated with the field.
+    // P84. The advisor fee is NOT gated: it is a fact about the plan, not a diagnostic, which is
+    // the rule written just above. It sat behind the knob only while it was being proven out.
+    // Ungating costs nobody a number, because the scope defaults to "none".
+    updateAdvisorFeeHint();
     const irmaaMarginWrap = document.getElementById('irmaaMarginMode-wrap');
     if (irmaaMarginWrap) irmaaMarginWrap.style.display = NERD_KNOBS ? '' : 'none';
     // 💵 legend - only meaningful once nerdknob is sweeping the cash-funded arm
@@ -537,6 +545,16 @@ function getInputs() {
         spendGoal: +val('spendGoal'),
         spendChange: (spendChange / 100.0),
         iraBaseGoal: +val('iraBaseGoal'),
+        // P84. The amount is one field carrying two meanings, so it is parsed here rather than
+        // read. `val()` returns dataset.numVal when set and the literal text otherwise, and this is
+        // a data-plain field so numVal is NEVER set - `+val(...)` on "20k" was NaN, which fell to 0
+        // and silently charged no fee at all. Shorthand, commas, a '%' suffix and a '$' prefix are
+        // all handled; the mode is then resolved and passed EXPLICITLY so the share URL pins it.
+        ...(() => {
+            const p = parseAdvisorFeeAmount(val('advisorFeeAmount'));
+            return { advisorFeeAmount: p.amount, advisorFeeMode: p.mode };
+        })(),
+        advisorFeeScope: val('advisorFeeScope') || 'none',
         inflation: +val('inflation') / 100.0,
         cpi: +val('cpi') / 100.0,
         growth: +val('growth') / 100.0,
@@ -2517,6 +2535,8 @@ const columnCategories = {
 
     // Cash Changes - balance, withdrawals, growth
     'CashWD': ['Cash Δ', 'Income', 'Spending'],
+    'AdvisorFee': ['Summary', 'Spending', 'Balances'],
+    'SumAdvisorFees': ['Balances'],
     'cashG': ['Cash Δ'],
     'surplusCash': ['Cash Δ', 'Income', 'Spending'],
     // Phase 27: inflows/outflows + withdrawal rate
@@ -2562,6 +2582,7 @@ const columnGroupDefs = {
     'RMD1-': 'Withdrawals', 'RMD2-': 'Withdrawals',
     'Brokerage-': 'Withdrawals', 'RothWD': 'Withdrawals',
     'CashWD': 'Withdrawals', 'rothConv': 'Withdrawals', 'surplusCash': 'Withdrawals',
+    'AdvisorFee': 'Withdrawals', 'SumAdvisorFees': 'Withdrawals',
     'FedRate%': 'Taxes', 'StateRate%': 'Taxes', 'IRMAATier': 'Taxes',
     'IRMAA': 'Taxes', 'Medicare': 'Taxes', 'totalTax': 'Taxes', 'FedTax': 'Taxes', 'StateTax': 'Taxes',
     'CapGains': 'Taxes', 'MAGI': 'Taxes', 'NominalRate%': 'Taxes',
@@ -2841,6 +2862,8 @@ function updateTable(log) {
         'MAGI': 'Modified Adjusted Gross Income - determines future IRMAA',
         'totalTax': 'Federal, State, IRMAA, NIIT, and CapGains taxes - in total.',
         'SumTaxes': 'Running total of Federal, State, IRMAA, NIIT, and CapGains taxes.',
+        'AdvisorFee': 'Advisor or fund fee charged this year, on the previous December 31 balances. Money taken from an IRA to pay it is not a taxable distribution.',
+        'SumAdvisorFees': 'Running total of advisor and fund fees paid.',
         'shortfall': 'How much income is missing, that is: spendGoal - (totalIncome - totalTax). Normally it means the plan ran out of money: every other account was spent and the IRA could not cover the rest. Two strategies report it by design instead. ACA Cliff will not cross its income cap while that cap is in force, because crossing it forfeits the premium subsidy. Ordered will not step outside the account sequence you chose, so it can leave a small residual while a later account still holds money.',
         'totalIncome': 'Funds from all sources, taxable and tax-free.',
         'NominalRate%': 'TotalTax/TotalGrossIncome for all taxes - Fed, State, IRMAA',
@@ -3141,6 +3164,28 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     document.getElementById('stat-spend').innerText = '$' + Math.round(dispSpend).toLocaleString();
     document.getElementById('stat-tax').innerText   = '$' + Math.round(dispTax).toLocaleString();
     document.getElementById('stat-nw').innerText    = '$' + Math.round(dispNW).toLocaleString();
+    // P84. Self-hiding: a plan with no fee shows no tile, so the row does not grow a permanent $0
+    // for the many users who never set one.
+    const feeTile = document.getElementById('stat-advisorfee-tile');
+    if (feeTile) {
+        const fees = totals.advisorFees || 0;
+        feeTile.style.display = fees > 0 ? '' : 'none';
+        if (fees > 0) {
+            const dispFees = inCD ? (totals.advisorFeesCurrentDollars || 0) : fees;
+            document.getElementById('stat-advisorfee').innerText = '$' + Math.round(dispFees).toLocaleString();
+            const sub = document.getElementById('stat-advisorfee-sub');
+            // The average yearly fee, which needs nothing this function does not already have.
+            // DELIBERATELY NOT a ratio against end wealth: the fee's real cost is larger than the
+            // fee, because the money it removed would have compounded. On the shipped defaults a
+            // 1% fee charges $212,267 and lowers the ending balance by $433,490. Any single-number
+            // ratio here would understate that by roughly half while looking authoritative; the
+            // honest version needs a second simulation, the way Break Even does, and that belongs
+            // in a phase of its own rather than in a tile sub-label.
+            const yrs = totals.yearstested || 0;
+            if (sub) sub.innerText = yrs > 0
+                ? '$' + Math.round(fees / yrs).toLocaleString() + '/yr average' : '';
+        }
+    }
     const rmdEl = document.getElementById('stat-rmd');
     const rmdPctEl = document.getElementById('stat-rmd-pct');
     if (rmdEl) rmdEl.innerText = '$' + Math.round(totals.rmd ?? 0).toLocaleString();
@@ -4361,6 +4406,44 @@ function updateCharts(log) {
 function val(id) { const el = document.getElementById(id); if (!el) return undefined; return el.dataset.numVal !== undefined ? el.dataset.numVal : el.value; }
 function valChecked(id) { return document.getElementById(id)?.checked; }
 
+// P84. One field, two meanings. Returns { amount, mode, explicit } from whatever was typed.
+//
+// An explicit marker always wins over the magnitude: "0.9%" is a percent even though a bare 0.9
+// would be too, and "$15" is fifteen dollars a year even though a bare 15 would read as 15%.
+// Everything else falls to the engine's own threshold, so the rule lives in ONE place.
+function parseAdvisorFeeAmount(raw) {
+    const txt = (raw ?? '').toString().trim();
+    if (!txt) return { amount: 0, mode: 'pct', explicit: false };
+    const hasPct = /%\s*$/.test(txt);
+    const hasDollar = /^\s*\$/.test(txt);
+    const body = txt.replace(/^\s*\$/, '').replace(/%\s*$/, '').replace(/,/g, '').trim();
+    // parseShorthand carries the k/m suffixes every other dollar field on this page accepts.
+    const n = DisplayHelpers.parseShorthand(body);
+    const amount = (n == null || Number.isNaN(n)) ? (Number.isFinite(+body) ? +body : 0) : n;
+    const explicit = hasPct ? 'pct' : hasDollar ? 'flat' : null;
+    return {
+        amount: Math.max(0, amount),
+        mode: OptimizerCore.inferAdvisorFeeMode(amount, explicit),
+        explicit: !!explicit,
+    };
+}
+
+// Says out loud which way the number was read, directly under the field. A single field carrying
+// two meanings is only honest if it tells you which one it picked.
+function updateAdvisorFeeHint() {
+    const el = document.getElementById('advisorFeeRead');
+    if (!el) return;
+    const p = parseAdvisorFeeAmount(document.getElementById('advisorFeeAmount')?.value);
+    const scope = document.getElementById('advisorFeeScope')?.value || 'none';
+    if (!(p.amount > 0)) { el.textContent = 'No fee.'; return; }
+    const reading = p.mode === 'pct'
+        ? `${(+p.amount.toFixed(4))}% per year`
+        : `$${Math.round(p.amount).toLocaleString()} per year`;
+    el.textContent = scope === 'none'
+        ? `${reading}, but not applied - "Fee applies to" is None.`
+        : `${reading}.`;
+}
+
 
 function showTab(id) {
     // P69: replay is confined to Charts and Annual Details. Any other destination ends it - the
@@ -4454,6 +4537,7 @@ function setupAutoRecalc() {
         spendGoal: 'Spend Goal', spendChange: 'Spend Δ%', strategy: 'Strategy',
         nYears: 'N Years', stratRate: 'Bracket', propWithdraw: 'Boost%',
         iraBaseGoal: 'IRA Goal', maximizeConversions: 'Max Conversions',
+        advisorFeeAmount: 'Advisor Fee', advisorFeeMode: 'Fee Mode', advisorFeeScope: 'Fee Applies To',
         convertExcessToRoth: 'Convert Excess', fundConversionWithCash: 'Fund w/ Cash',
         extraConversionAmount: 'Extra Conversion', convEndYear: 'Stop Conversions', convEndMode: 'Stop Scope',
         birthyear1: 'Your Birth', die1: 'Your Life Exp',
@@ -4596,6 +4680,7 @@ const OPT_LONG_TO_SHORT = {
     propWithdraw:'pw', stratRate:'sr', iraWithdrawPct:'iwp', orderedSeq:'os', rothGapFill:'rgf',
     convertExcessToRoth:'mc', fundConversionWithCash:'fcc', extraConversionAmount:'eca', iraBaseGoal:'ibg',
     convEndYear:'cey', convEndMode:'cem', irmaaMarginMode:'imm', fixedTaxIndexing:'fti',
+    advisorFeeAmount:'af', advisorFeeMode:'afm', advisorFeeScope:'afs',
     birthyear1:'by1', birthmonth1:'bm1', die1:'d1', startAge:'sa',
     birthyear2:'by2', birthmonth2:'bm2', die2:'d2', hasSpouse:'hs',
     IRA1:'i1', IRA2:'i2', Roth:'ro', Roth2:'ro2',
@@ -4663,6 +4748,11 @@ function buildShareURL() {
             params.set(short, el.value);
         }
     });
+    // P84. `afm` is NOT emitted, and pinning it here was over-engineering on my part. buildShareURL
+    // emits each field's own TEXT, so an explicit "$15" or "15%" already travels in `af` verbatim
+    // and reproduces exactly; a bare "15" means what the inference says, which is what the user
+    // typed and saw. A second parameter carrying the same fact could only ever disagree with it.
+    // Incoming `afm` is still ACCEPTED by loadFromURL, so links already generated keep working.
     // P64e: these have no DOM field, so the loop above cannot see them. Re-emit them or a shared
     // link silently drops a figure the recipient never had a way to re-enter.
     if (PROP_TAX_STATE) {
@@ -4723,6 +4813,18 @@ function loadFromURL() {
     // is deliberately NOT implied - old links predate it and must keep their exact behavior.
     if (params.has('maxConversion') && !params.has('convertExcessToRoth')) {
         params.set('convertExcessToRoth', params.get('maxConversion'));
+    }
+    // P84. `advisorFeeMode` has no element to load into. Rather than carry hidden state, fold it back
+    // into the amount's own text as a marker - "$20000" or "1.2%" - which is exactly what a user
+    // would have typed to mean the same thing. Everything downstream then reads one field, and a
+    // link that says 15 means 15% while one that says afm=flat means fifteen dollars.
+    if (params.has('advisorFeeMode') && params.has('advisorFeeAmount')) {
+        const m = params.get('advisorFeeMode');
+        const a = (params.get('advisorFeeAmount') || '').toString().trim();
+        if (a && (m === 'pct' || m === 'flat')) {
+            params.set('advisorFeeAmount', m === 'flat' ? '$' + a : a + '%');
+        }
+        params.delete('advisorFeeMode');
     }
     params.forEach((value, key) => {
         const el = document.getElementById(key);

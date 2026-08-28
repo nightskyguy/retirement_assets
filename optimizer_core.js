@@ -277,7 +277,7 @@ function computeAnnualQCDs(inputs, balance, simYear, qcdLimit, provisionalMAGI, 
         // against, and every other setting lost on the same trade. The asymmetry is structural - a
         // surcharge is a few thousand a year while the MAGI needed to clear a threshold is tens of
         // thousands - so no setting could ever pay for itself here.
-        //   See .test_harnesses/IRMAA_DEFAULT_RESULTS.md.
+        //   See research/IRMAA_DEFAULT_RESULTS.md.
         const effCpi = cpiRate * irmaaFwdFactor({ ...inputs, irmaaMarginMode: 'none' });
         const tierTarget = getIRMAATierTargetMAGI(provisionalMAGI, status, effCpi, 2);
         // 0 means the household is already clear of every surcharge, so there is nothing to escape
@@ -1072,6 +1072,15 @@ function buildSimYearLogRecord(p) {
         'Brokerage-': p.netWithdrawals.Brokerage,
         'RothWD': (p.netWithdrawals.Roth1 ?? 0) + (p.netWithdrawals.Roth2 ?? 0),
         'CashWD': p.netWithdrawals.Cash,
+        // P84, four keys kept ADJACENT on purpose: rebuildGroupRow colSpans runs of consecutive
+        // same-group columns, so a visible key dropped into the middle of another run shears the
+        // Annual Details banner. Emitted unconditionally with ?? 0 because the _logSansTiming
+        // identity tests stringify whole rows. Neither visible key contains '%', 'yr' or 'year', so
+        // the name-driven formatter prints both as dollars and deflates both under Current-$.
+        'AdvisorFee': p.advisorFee ?? 0,
+        'SumAdvisorFees': p.cumulativeAdvisorFees ?? 0,
+        '-advisorFeeBasis': p.advisorFeeBasis ?? 0,
+        '-advisorFeeFromIRA': p.advisorFeeFromIRA ?? 0,
         // DO NOT write a reframed figure here. `rothConv` is read back out of the log by the
         // NEXT year (beginYear: `log[y-1].rothConv > 1000` picks early-vs-late withdrawal timing),
         // so it is engine state wearing a display field's clothes. Reporting P28's unified figure
@@ -1207,6 +1216,39 @@ function acaCapLapsed(age1, age2, alive1, alive2) {
 
 // Start-of-year setup: amortized IRA target, growth rates, withdrawal-timing auto-select, pre-withdrawal growth, and the withdrawal accumulators (netWithdrawals aliases withdrawals).
 function beginYear(sim, yr) {
+    // P84l. THE PRIOR DECEMBER 31 IRA BALANCE, captured before anything in this year touches it.
+    //
+    // 26 CFR 1.401(a)(9)-5 sets the year's required distribution as the prior December 31 balance
+    // over the life-expectancy divisor. Nothing that happens during the year -- growth, a
+    // withdrawal, a conversion, a fee -- can change the amount required for that year.
+    //
+    // At this point `balance` IS that position: last year's growAndSettle applied `postMonths` and
+    // nothing has moved since. A few lines below, `applyGrowth` adds this year's pre-withdrawal
+    // growth, and the RMD block used to read `balance.IRA1` AFTER that -- which was wrong twice.
+    // It overstated every RMD by roughly `preMonths/12 x growth`, and, far worse, it made the RMD
+    // depend on `preMonths`, which is 1 or 11 depending on whether LAST year converted more than
+    // $1,000. Two otherwise identical plans got different RMDs because one of them converted.
+    // Measured before the fix (`.test_harnesses/rmdbasis_harness.js`): 22 of 30 plans had a timing-dependent RMD,
+    // median 6.21% and max 58.62% -- far above the 5.49% one-year stub, because an inflated RMD
+    // forces out more, which shrinks the balance, which re-bases every later RMD.
+    //
+    // YEAR 0 IS NOT CLEAN and must not be described as though it were. The snapshot seeds from the
+    // typed IRA balance, which is a December 31 balance only for a plan that starts in January.
+    // P72 owns `startMonth` and therefore owns the fix; P84o pins the limitation with a test
+    // instead of papering over it with a growth-based back-out.
+    //
+    // WIDENED FOR P84: the advisory fee bills on prior-period value, and `P84` adopted this exact
+    // snapshot as its base rather than reading `balance` at its own call site. That was not a tidy
+    // reuse, it was the fix for a second instance of the same defect: ANYTHING computed off
+    // `balance` between beginYear's growth call and growAndSettle inherits the 1-vs-11 `preMonths`
+    // dependency, so a fee struck there would have moved with whether last year converted, exactly
+    // as the RMD did. One snapshot, captured once, read by both.
+    sim.priorYearEnd = {
+        IRA1: sim.balance.IRA1, IRA2: sim.balance.IRA2,
+        Roth1: sim.balance.Roth1, Roth2: sim.balance.Roth2,
+        Brokerage: sim.balance.Brokerage,
+    };
+
     const { inputs, balance, log } = sim;
     const y = yr.y;
     yr.loopStart = performance.now();
@@ -1554,8 +1596,10 @@ function computeIncome(sim, yr) {
     // 3. RMDs and QCDs
     yr.rmd1Pct = getRMDPercentage(sim.currentYear, birthyear1);
     let rmd2Pct = getRMDPercentage(sim.currentYear, birthyear2);
-    yr.rmd1 = yr.alive1 ? balance.IRA1 * yr.rmd1Pct || 0 : 0;
-    yr.rmd2 = yr.alive2 ? balance.IRA2 * rmd2Pct || 0 : 0;
+    // P84l: struck off the PRIOR DECEMBER 31 balance, not the current mid-year one. See the
+    // snapshot in beginYear for the regulation and for what reading `balance` here used to cost.
+    yr.rmd1 = yr.alive1 ? (sim.priorYearEnd?.IRA1 ?? balance.IRA1) * yr.rmd1Pct || 0 : 0;
+    yr.rmd2 = yr.alive2 ? (sim.priorYearEnd?.IRA2 ?? balance.IRA2) * rmd2Pct || 0 : 0;
     yr.rmd1Pct = Math.max(yr.rmd1Pct, rmd2Pct, 0);
     yr.rmd1Pct = Math.max(yr.rmd1Pct, rmd2Pct, 0);
 
@@ -1573,19 +1617,28 @@ function computeIncome(sim, yr) {
     yr.totalQCD = _qcds.totalQCD;
 
     // QCDs leave the IRA first (charitable transfer, excluded from income)
+    // P84m. Every debit below floors at zero, but totalRMD / taxableRMD used to be computed from
+    // the REQUIREMENT rather than from what actually moved -- so an IRA drained below the required
+    // amount was taxed on a distribution that never happened. Reachable today via a large QCD, and
+    // reachable more often once P84l stops the balance being inflated before the RMD is struck.
+    // The pre-debit balances are captured so each leg reports its realized outflow.
+    const _preQcd1 = balance.IRA1, _preQcd2 = balance.IRA2;
     balance.IRA1 = Math.max(0, balance.IRA1 - yr.qcd1);
     balance.IRA2 = Math.max(0, balance.IRA2 - yr.qcd2);
+    const _qcdOut1 = _preQcd1 - balance.IRA1, _qcdOut2 = _preQcd2 - balance.IRA2;
 
     // Remaining RMD (after QCD satisfies part/all) is taken as taxable IRA distribution
     const remainingRmd1 = Math.max(0, yr.rmd1 - yr.qcd1);
     const remainingRmd2 = Math.max(0, yr.rmd2 - yr.qcd2);
+    const _preRmd1 = balance.IRA1, _preRmd2 = balance.IRA2;
     balance.IRA1 = Math.max(0, balance.IRA1 - remainingRmd1);
     balance.IRA2 = Math.max(0, balance.IRA2 - remainingRmd2);
+    const _rmdOut1 = _preRmd1 - balance.IRA1, _rmdOut2 = _preRmd2 - balance.IRA2;
     yr.curIRA = Math.max(0, balance.IRA1 + balance.IRA2 - yr.iraGoalNominal);
 
-    yr.totalRMD = yr.rmd1 + yr.rmd2;                                    // required distributions (for stats)
-    yr.taxableRMD = remainingRmd1 + remainingRmd2;              // taxable portion (excludes QCDs)
-    yr.totalIRAForcedWithdrawals = yr.qcd1 + remainingRmd1 + yr.qcd2 + remainingRmd2; // actual IRA outflow
+    yr.totalRMD = _qcdOut1 + _rmdOut1 + _qcdOut2 + _rmdOut2;    // realized, not merely required
+    yr.taxableRMD = _rmdOut1 + _rmdOut2;                        // taxable portion (excludes QCDs)
+    yr.totalIRAForcedWithdrawals = _qcdOut1 + _rmdOut1 + _qcdOut2 + _rmdOut2; // actual IRA outflow
     yr.taxableInc += yr.taxableRMD;                                       // only non-QCD RMDs are income
     // SPENDABLE income only. Dividends and interest are taxable (they reach calculateTaxes through
     // qualifiedDiv and earnedIncome) but they are NOT counted here, because growAndSettle credits
@@ -2243,7 +2296,7 @@ function resolveResidualAndForcedIRA(sim, yr) {
             // promised and could not pay, against $1,711 of new unfunded spending from allowing it.
             // Every scenario it rescued was an IRMAA Ceiling (`minlimit`) plan, the case this was
             // pinned on - Brokerage the only money left, and the engine refusing to touch it.
-            // See `.test_harnesses/P32_RESULTS.md`, section Q2.
+            // See `research/P32_RESULTS.md`, section Q2.
             // P28 flag: only 'fillRothThenCash' changes the third pass. The pass is already Cash then
             // Roth, which IS the 'fillCashThenRoth' order, so that mode leaves it untouched.
             // Neither carries cap gains, so this only picks which tax-free account drains first.
@@ -2466,13 +2519,21 @@ function _convEndReached(inputs, y) {
 // Route the year's surplus: refund unneeded Roth draws, convert IRA-sourced surplus to
 // True if the SURPLUS conversion path (convertExcessToRoth) should be suppressed for year y --
 // the existing all-years counterfactual flag, the from-year-onward cutoff used by
-// diagnoseConvBreakEvenFailure / bestConversionStopYear to test truncated schedules, or (new)
-// the user's public Conversion End Year when the End Year stops ALL conversions (convEndMode
-// !== 'extra'). Purely additive: with all three unset (every existing caller), this is exactly
-// !!inputs._cfSuppressConversions, zero behavior change.
+// diagnoseConvBreakEvenFailure / bestConversionStopYear to test truncated schedules, the
+// before-year cutoff that is its mirror (P85), or the user's public Conversion End Year when the
+// End Year stops ALL conversions (convEndMode !== 'extra'). Purely additive: with all four unset
+// (every existing caller), this is exactly !!inputs._cfSuppressConversions, zero behavior change.
+//
+// _cfSuppressConversionsBeforeYear is research-only and has no UI, no URL key and no getInputs()
+// entry, exactly like _cfSuppressConversionsFromYear beside it. It exists because the engine could
+// express "stop converting in year k" but not "start converting in year k", so a delayed-conversion
+// arm was inexpressible for the bracket and ACA families -- their conversions come out of the
+// surplus branch, not out of extraConversionAmount, whose per-year array form can already carry any
+// shape. P85 needs both ends to ask whether WHEN a conversion happens matters.
 function _convSuppressedThisYear(inputs, y) {
     return !!inputs._cfSuppressConversions
         || (inputs._cfSuppressConversionsFromYear != null && y >= inputs._cfSuppressConversionsFromYear)
+        || (inputs._cfSuppressConversionsBeforeYear != null && y < inputs._cfSuppressConversionsBeforeYear)
         || (inputs.convEndMode !== 'extra' && _convEndReached(inputs, y));
 }
 
@@ -2560,7 +2621,7 @@ function routeSurplusAndConvert(sim, yr) {
     // Roth gains X - T - S either way -- so it could only ever re-label, and 630 simulations
     // confirmed it: 0 money fields moved in 90 cells. A view that wants the two legs told
     // separately does not need an engine flag, because `-iraSpend` and `-iraConvGrossTot` are
-    // already in every log row. Reasoning and measurements: .test_harnesses/P28_RESULTS.md.
+    // already in every log row. Reasoning and measurements: research/P28_RESULTS.md.
 
     // If there is still a surplus, replace any excess Cash withdrawal.
     yr.surplus.Cash = Math.min(yr.surplus.Total, yr.netWithdrawals.Cash);
@@ -2743,6 +2804,155 @@ function applyExtraConversion(sim, yr) {
 // take the whole amount from the larger-balance IRA, spilling to the smaller only when the larger
 // cannot cover it. Keeps a real-world-sensible plan (no converting a token slice out of a tiny IRA)
 // and changes per-account balances (hence downstream per-spouse RMDs) - combined totals unchanged.
+// ── P84: the annual advisor fee ───────────────────────────────────────────────
+// Named "advisor fee" throughout, not "AUM fee": AUM (assets under management) describes the
+// percentage arrangement only, and this models a flat annual fee just as happily.
+// The tool models every drag on a portfolio except the one most retirees actually pay. A 1% fee on
+// $2M is ~$20,000 in year one and compounds for the whole horizon - larger than several of the
+// levers this tool argues about, so a plan that ignores it is wrong by more than the margins it
+// reports.
+//
+// THE THREE THINGS THAT ARE EASY TO BREAK HERE, all of them load-bearing:
+//
+// 1. FEE DOLLARS TAKEN FROM AN IRA ARE NOT TAXABLE DISTRIBUTIONS. This function writes `balance`
+//    and `yr.advisorFee*` and NEVER `yr.netWithdrawals`. Every calculateTaxes() call site reads
+//    `yr.netWithdrawals.IRA` as both earnedIncome and iraIncome, so a debit that never enters that
+//    accumulator cannot reach any tax pass, any MAGI, or the TaxPlanner handoff. Same technique the
+//    QCD already uses. If you ever route the fee through netWithdrawals to "keep the books tidy",
+//    you have silently made it a taxable distribution.
+//
+// 2. THE BASE IS THE PRIOR DECEMBER 31 SNAPSHOT, not the live balance. Advisors bill on prior-period
+//    value, and reading `balance` here would inherit the 1-vs-11 `preMonths` dependency - the fee
+//    would move with whether last year converted, which is the same defect P84l removed from the
+//    RMD. See the snapshot in beginYear.
+//
+// 3. NO `_cfRun` GUARD, DELIBERATELY. The counterfactual runs spread the whole inputs object, so
+//    both arms pay the same fee and the Opportunity Cost comparison stays purely about the
+//    CONVERSION. Adding a guard would make every OC number nonsense. A test forbids it.
+//
+// Charged at the start of the year, before computeIncome, so the fee lands inside the withdrawal
+// cascade and a plan can actually FAIL because of it - which is most of the point of modeling it.
+// End-of-year and quarterly were both considered and rejected; the reasoning is in the P84 plan.
+const ADVISOR_FEE_MODES  = Object.freeze(['pct', 'flat']);
+
+// Percent-vs-dollars is INFERRED from what you typed, not chosen from a second control. A real
+// advisory fee is a fraction of a percent to about two percent; a real flat fee is thousands. The
+// two ranges do not overlap anywhere near this threshold, so one number can carry both meanings.
+//
+// 20 is the boundary and it belongs to FLAT: `20` reads as $20 a year, which is a harmless number
+// to model, where reading it as 20% would quietly destroy a plan. The asymmetry of being wrong is
+// the whole reason the boundary sits on this side. An explicit '%' or '$' in the text always wins
+// over the magnitude, so `50%` and `$15` both do what they say.
+const ADVISOR_FEE_PCT_MAX = 20;
+
+// `explicit` is 'pct' or 'flat' when the user (or a shared link) said so, and anything else means
+// "work it out". Kept here rather than in the UI so the ENGINE is safe on its own: a URL carrying
+// `af=20000` with no `afm` must not be read as a 20,000% fee.
+function inferAdvisorFeeMode(amount, explicit) {
+    if (explicit === 'pct' || explicit === 'flat') return explicit;
+    return (+amount || 0) >= ADVISOR_FEE_PCT_MAX ? 'flat' : 'pct';
+}
+// 'none' is FIRST and is the DEFAULT: a plan charges no fee until you say which accounts it applies
+// to. It is also the off switch for a comparison - leave the amount typed and flip the dropdown, so
+// "with fee" and "without fee" differ by one control rather than by clearing and retyping a number.
+const ADVISOR_FEE_SCOPES = Object.freeze(['none', 'brokerage', 'roths', 'iras', 'rothira', 'all', 'allfromira']);
+
+// What the percentage is charged ON. Cash is in no row: it is the spending buffer the Cash Reserve
+// protects, and billing it fights the reserve refill every single year.
+const ADVISOR_FEE_BASIS = Object.freeze({
+    none:       Object.freeze([]),
+    brokerage:  Object.freeze(['Brokerage']),
+    roths:      Object.freeze(['Roth1', 'Roth2']),
+    iras:       Object.freeze(['IRA1', 'IRA2']),
+    rothira:    Object.freeze(['IRA1', 'IRA2', 'Roth1', 'Roth2']),
+    all:        Object.freeze(['IRA1', 'IRA2', 'Roth1', 'Roth2', 'Brokerage']),
+    allfromira: Object.freeze(['IRA1', 'IRA2', 'Roth1', 'Roth2', 'Brokerage']),
+});
+
+// Where the money COMES FROM. Identical to the basis for five of the six; `allfromira` charges
+// against everything but pays out of the larger IRA first, which is the whole reason it exists.
+// Once the source is dry the remainder spills in this order. Roth last, matching fillSpendingGap.
+// CASH IS NEVER A SOURCE, for the same reason it is never a basis.
+const ADVISOR_FEE_SPILL = Object.freeze(['Brokerage', 'IRA1', 'IRA2', 'Roth1', 'Roth2']);
+
+// Debit one account, returning what was actually taken. A brokerage debit cuts value and basis by
+// the same fraction, so the basis/value ratio - and therefore yr.capGainsPercentage - is unchanged,
+// and the fee cannot perturb an IRMAA/ACA/LTCG cliff or trip the third pass.
+function _debitAdvisorFee(balance, acct, want) {
+    if (!(want > 0)) return 0;
+    const avail = Math.max(0, balance[acct] || 0);
+    const paid = Math.min(want, avail);
+    if (!(paid > 0)) return 0;
+    if (acct === 'Brokerage') {
+        balance.BrokerageBasis = Math.max(0, (balance.BrokerageBasis || 0) * (1 - paid / avail));
+        balance.Brokerage = avail - paid;
+        clampBrokerageBasis(balance);
+    } else {
+        balance[acct] = avail - paid;
+    }
+    return paid;
+}
+
+function applyAdvisorFee(sim, yr) {
+    const { inputs, balance } = sim;
+    // Emitted unconditionally, fee or no fee: the log record writes all four keys and the
+    // _logSansTiming identity tests JSON.stringify whole rows, so a conditionally-present key breaks
+    // them.
+    yr.advisorFee = 0; yr.advisorFeeBasis = 0; yr.advisorFeeFromIRA = 0; yr.advisorFeeUnpaid = 0;
+
+    const amount = +inputs.advisorFeeAmount || 0;
+    if (!(amount > 0)) return;                      // amount 0 = OFF, bit-identical to no fee
+    const mode  = inferAdvisorFeeMode(amount, inputs.advisorFeeMode);
+    // DEFAULT IS 'none', so an unset or unrecognized scope charges NOTHING rather than quietly
+    // billing everything. Returning here rather than leaning on ADVISOR_FEE_BASIS.none being empty:
+    // the flat-mode branch never reads the basis at all, so an empty array would not stop it.
+    const scope = ADVISOR_FEE_BASIS[inputs.advisorFeeScope] ? inputs.advisorFeeScope : 'none';
+    if (scope === 'none') return;
+    const prior = sim.priorYearEnd || balance;
+
+    // The amount is stored RAW as typed and the engine does the /100, because a field whose meaning
+    // switches between % and $ cannot live in the UI's x100 list - which list applies would depend
+    // on a SECOND field. A flat fee is CPI-indexed, per the user's "indexed by CPI".
+    let want;
+    if (mode === 'flat') {
+        want = amount * sim.cpiRate;
+    } else {
+        yr.advisorFeeBasis = ADVISOR_FEE_BASIS[scope].reduce((a, k) => a + Math.max(0, prior[k] || 0), 0);
+        want = yr.advisorFeeBasis * (amount / 100);
+    }
+    if (!(want > 0)) return;
+
+    const before1 = Math.max(0, balance.IRA1 || 0), before2 = Math.max(0, balance.IRA2 || 0);
+    let paid = 0;
+
+    if (scope === 'allfromira') {
+        const sp = splitPreferLarger(want, Math.max(0, balance.IRA1), Math.max(0, balance.IRA2));
+        paid += _debitAdvisorFee(balance, 'IRA1', sp.i1);
+        paid += _debitAdvisorFee(balance, 'IRA2', sp.i2);
+    } else {
+        // Pro-rata across the source accounts: each pays the share of the fee its own balance
+        // generated, which is what "the percentage comes out of the impacted accounts" means.
+        const src = ADVISOR_FEE_BASIS[scope];
+        const tot = src.reduce((a, k) => a + Math.max(0, balance[k] || 0), 0);
+        if (tot > 0) for (const k of src) {
+            paid += _debitAdvisorFee(balance, k, want * (Math.max(0, balance[k] || 0) / tot));
+        }
+    }
+    // Spill whatever the source could not cover.
+    for (const k of ADVISOR_FEE_SPILL) {
+        if (paid >= want - 1e-9) break;
+        paid += _debitAdvisorFee(balance, k, want - paid);
+    }
+
+    yr.advisorFee = paid;
+    // An unpayable remainder is DROPPED, never carried and never turned into a shortfall - the
+    // floor-at-0 posture applyWithdrawals already takes.
+    yr.advisorFeeUnpaid = Math.max(0, want - paid);
+    yr.advisorFeeFromIRA = Math.max(0, before1 - Math.max(0, balance.IRA1 || 0))
+                     + Math.max(0, before2 - Math.max(0, balance.IRA2 || 0));
+    sim.cumulativeAdvisorFees = (sim.cumulativeAdvisorFees || 0) + paid;
+}
+
 function splitPreferLarger(amount, ira1Avail, ira2Avail) {
     if (ira1Avail >= ira2Avail) {
         const f1 = Math.min(amount, Math.max(0, ira1Avail));
@@ -2902,6 +3112,8 @@ function growAndSettle(sim, yr) {
     // Estimate tax attributable to RMDs proportionally (RMD / totalIncome × totalTax)
     totals.rmdTax += yr.totalIncome > 0 ? (yr.taxableRMD / yr.totalIncome) * yr.totalTax : 0;
     totals.qcd = (totals.qcd || 0) + yr.totalQCD;
+    totals.advisorFees = (totals.advisorFees || 0) + (yr.advisorFee || 0);
+    totals.advisorFeesCurrentDollars = (totals.advisorFeesCurrentDollars || 0) + (yr.advisorFee || 0) / sim.inflation;
     balance.Roth1 += yr.surplus.Roth1;
     balance.Roth2 += yr.surplus.Roth2;
     totals.shortfall += yr.surplus.Shortfall;
@@ -2998,6 +3210,8 @@ function logYear(sim, yr) {
         gains: yr.gains, rmd1Pct: yr.rmd1Pct, subCycleLabel: yr.subCycleLabel, convNetValue: null, excessNetValue: null,
         incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,
         extraConvGross: yr.extraConvGross,
+        advisorFee: yr.advisorFee, advisorFeeBasis: yr.advisorFeeBasis, advisorFeeFromIRA: yr.advisorFeeFromIRA,
+        cumulativeAdvisorFees: sim.cumulativeAdvisorFees,
         surplusToBrokerage: yr.surplusToBrokerage, cashBreach: yr.cashBreach,
         grossUpIRA: yr.grossUpIRA, grossUpTax: yr.grossUpTax, extraConvCashTax: yr.extraConvCashTax,
         fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep,
@@ -3069,7 +3283,7 @@ function endYear(sim, yr) {
     // excess at 3 points whatever the path does. Making BOTH terms path-following instead was
     // tried and rejected: it turns a 12% inflation year into ~24% premium growth, which implies
     // 12 points of excess medical cost in that year, and it swung measured IRMAA dollars from
-    // -6.5% to +29% (.test_harnesses/CPI_INDEX_RESULTS.md).
+    // -6.5% to +29% (research/CPI_INDEX_RESULTS.md).
     //
     // Written as cpi_t + inputs.inflation because that is the INTENT - index plus a fixed excess.
     // It reduces algebraically to i_t + inputs.cpi, which is the same thing and reads as less.
@@ -3251,7 +3465,7 @@ function simulate(inputs) {
         inputs, balance, log, totals,
         birthyear1, birthmonth1, birthyear2, birthmonth2,
         currentYear, cpiRate, inflation, medicareRate, pensionFactor, ssFactor,
-        fixedWithdrawal, spendDelta, spendGoal, cumulativeTaxes,
+        fixedWithdrawal, spendDelta, spendGoal, cumulativeTaxes, cumulativeAdvisorFees: 0,
         nominalTaxRate, capitalGainsRate,
         subCycleIRAYears, prevPortfolio,
         gkIWR, gkPriorReturn, gkAdjLabel,
@@ -3269,6 +3483,12 @@ function simulate(inputs) {
         const yr = { y };
         beginYear(sim, yr);
         if (!resolveHousehold(sim, yr)) break;   // both spouses deceased
+        // P84. After resolveHousehold because that can end the loop, and a fee must not debit a
+        // year that never gets a log row. Before computeIncome so the fee is inside the withdrawal
+        // cascade and can genuinely break a plan. Note it does NOT move this year's RMD: P84l keys
+        // that off the prior December 31 balance, which is the legally correct answer and the
+        // reason P84's original placement caveat (R11) was retired.
+        applyAdvisorFee(sim, yr);
         computeIncome(sim, yr);
         resolveSpendTarget(sim, yr);
         planPrimaryWithdrawals(sim, yr);
@@ -4494,7 +4714,7 @@ function lowestBreakEvenHeirsRate(baseInputs, candidates = [], opts = {}) {
 // always a sequence the sweeps score, and vice versa.
 //
 // Four accounts permute 24 ways. These six are the ones that ever came out ahead in the P30d
-// sweep (.test_harnesses/GAPFILL_RESULTS.md sections 10 and 15), ordered by how often each was
+// sweep (research/GAPFILL_RESULTS.md sections 10 and 15), ordered by how often each was
 // the best of all 24 and, on a tie, by how much was at stake when it won. CBRI and CIBR win most
 // and were not offered at all before v11.163F. RIBC and BIRC won nothing anywhere in that grid
 // and are kept because they are the Roth-first and brokerage-first stress tests they were added
@@ -4852,7 +5072,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -4860,7 +5080,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

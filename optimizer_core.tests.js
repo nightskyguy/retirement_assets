@@ -62,6 +62,8 @@ const core = IS_NODE ? require('./optimizer_core.js') : window.OptimizerCore;
 if (IS_NODE) require('./displayhelpers.js');
 
 const simulate = core.simulate;
+const ADVISOR_FEE_PCT_MAX = core.ADVISOR_FEE_PCT_MAX;
+const inferAdvisorFeeMode = core.inferAdvisorFeeMode;
 const optimizeSpend = core.optimizeSpend;
 const suggestSustainableSpend = core.suggestSustainableSpend;
 const suggestSpendMenu = core.suggestSpendMenu;
@@ -860,9 +862,15 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
         spendGoal: 140000, inflation: 0.025, cpi: 0.025, growth: 0.06,
         cashYield: 0.02, dividendRate: 0.02,
     });
-    assertNear(gk.totals.spend, 7393024.075002, 'GK total spend', 0.01);
-    assertNear(gk.totals.tax, 2027748.557723, 'GK total tax', 0.01);
-    assertNear(gk.finalNW, 9021151.610458, 'GK final net worth', 0.01);
+    // Re-pinned at P84l. All three moved the way the RMD-basis characterization predicted: the RMD
+    // now keys off the prior December 31 balance rather than that balance plus this year's
+    // pre-withdrawal growth, so less is forced out as ordinary income. Tax falls (-$102,100, -5.0%),
+    // spend rises (+$30,640) because the plan keeps more of what it draws, and the guardrail count
+    // is unchanged at 3 - the same signature this test's own comment above describes for a
+    // valuation fix rather than a behavior change in the withdrawal engine.
+    assertNear(gk.totals.spend, 7423663.892587773, 'GK total spend', 0.01);
+    assertNear(gk.totals.tax, 1925648.9171145353, 'GK total tax', 0.01);
+    assertNear(gk.finalNW, 9188056.866411952, 'GK final net worth', 0.01);
     assert(gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length === 3,
         `Expected 3 guardrail adjustments, got ${gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length}`);
 });
@@ -2033,6 +2041,294 @@ test('funding invariant: the fixture actually drains (guards a vacuous green)', 
     }
 });
 
+// ── P84a-P84f: the annual advisor fee ─────────────────────────────────────────
+// A 1% fee on $2M is ~$20,000 in year one and compounds for the whole horizon, which is larger than
+// several of the levers this tool argues about. The three invariants worth guarding are all easy to
+// break by "tidying up": fee dollars taken from an IRA are NOT taxable distributions, the base is
+// the prior December 31 snapshot rather than the live balance, and both counterfactual arms pay the
+// fee so Opportunity Cost stays about the conversion.
+const _ADVISOR_BASE = {
+    STATEname: 'TX', strategy: 'propwd', propWithdraw: 0.05,
+    nYears: 25, birthyear1: 1950, birthmonth1: 6, die1: 95,
+    birthyear2: 0, birthmonth2: 0, die2: 0, hasSpouse: false,
+    IRA1: 1500000, IRA2: 0, Roth: 200000, Roth2: 0,
+    Brokerage: 400000, BrokerageBasis: 200000, Cash: 100000, CashReserve: null,
+    ss1: 30000, ss1Age: 70, ss2: 0, ss2Age: 0,
+    pensionAnnual: 0, pensionStartAge: 0, survivorPct: 0, pensionCola: false,
+    spendGoal: 90000, spendChange: 0, iraBaseGoal: 0,
+    inflation: 0.025, cpi: 0.025, growth: 0.06, cashYield: 0.02, dividendRate: 0.0,
+    ssFailYear: 2099, ssFailPct: 1.0, convertExcessToRoth: false,
+    extraConversionAmount: 0, iraWithdrawPct: 0.05,
+    startAge: 76, startInYear: 2026, dividendReinvest: false,
+};
+// Pre-RMD throughout, spending fully covered by Cash then Brokerage, IRA last in the sequence, all
+// rates zero. Any IRA withdrawal or any tax at all in this fixture can ONLY be the fee leaking.
+// `nYears` is the amortization horizon, NOT the run length - the plan runs to `die1`, and an earlier
+// draft of this fixture read a 45-year run as a 10-year one and mistook compounding for a leak.
+const _ADVISOR_QUIET = {
+    STATEname: 'TX', strategy: 'ordered', orderedSeq: 'CBRI', nYears: 10,
+    birthyear1: 1975, birthmonth1: 6, die1: 60,
+    birthyear2: 0, birthmonth2: 0, die2: 0, hasSpouse: false,
+    IRA1: 1000000, IRA2: 0, Roth: 0, Roth2: 0,
+    Brokerage: 600000, BrokerageBasis: 600000, Cash: 400000, CashReserve: null,
+    ss1: 0, ss1Age: 70, ss2: 0, ss2Age: 0,
+    pensionAnnual: 0, pensionStartAge: 0, survivorPct: 0, pensionCola: false,
+    spendGoal: 40000, spendChange: 0, iraBaseGoal: 0,
+    inflation: 0, cpi: 0, growth: 0, cashYield: 0, dividendRate: 0,
+    ssFailYear: 2099, ssFailPct: 1.0, convertExcessToRoth: false,
+    extraConversionAmount: 0, startAge: 51, startInYear: 2026, dividendReinvest: false,
+};
+const _sumKey = (log, k) => log.reduce((a, r) => a + (r[k] || 0), 0);
+
+test('P84a: the fee OFF is bit-identical to the field being absent', () => {
+    const absent = simulate({ ..._ADVISOR_BASE });
+    const zero = simulate({ ..._ADVISOR_BASE, advisorFeeAmount: 0, advisorFeeMode: 'pct', advisorFeeScope: 'all' });
+    assert(_logSansTiming(absent.log) === _logSansTiming(zero.log),
+        'a zero fee must not move a single logged number');
+    assertNear(zero.totals.advisorFees || 0, 0, 'lifetime fees at amount 0', 1e-9);
+});
+
+test('P84b: every scope charges the right basis and pays from the right accounts', () => {
+    // basis is a fraction of the PRIOR Dec 31 balances, which in year 0 are the typed inputs.
+    const cases = [
+        { scope: 'brokerage',  basis: 400000,  fromIRA: 0 },
+        { scope: 'roths',      basis: 200000,  fromIRA: 0 },
+        { scope: 'iras',       basis: 1500000, fromIRA: 15000 },
+        { scope: 'rothira',    basis: 1700000, fromIRA: 15000 },
+        { scope: 'all',        basis: 2100000, fromIRA: 15000 },
+        // charges against everything, but pays entirely out of the larger IRA - the whole point
+        { scope: 'allfromira', basis: 2100000, fromIRA: 21000 },
+    ];
+    for (const c of cases) {
+        const r = simulate({ ..._ADVISOR_BASE, advisorFeeAmount: 1, advisorFeeMode: 'pct', advisorFeeScope: c.scope });
+        const y0 = r.log[0];
+        assertNear(y0['-advisorFeeBasis'], c.basis, `${c.scope}: year-0 basis`, 1);
+        assertNear(y0.AdvisorFee, c.basis * 0.01, `${c.scope}: year-0 fee at 1%`, 1);
+        assertNear(y0['-advisorFeeFromIRA'], c.fromIRA, `${c.scope}: year-0 paid out of the IRAs`, 1);
+    }
+});
+
+test('P84b: scope "none" is the default, and it is a real off switch', () => {
+    // 'none' exists so a comparison is one control away: leave the amount typed and flip the
+    // dropdown, rather than clearing and retyping a number. It must therefore be EXACTLY equal to
+    // having no fee at all, not merely close.
+    const absent = simulate({ ..._ADVISOR_BASE });
+    const none = simulate({ ..._ADVISOR_BASE, advisorFeeAmount: 1.5, advisorFeeMode: 'pct', advisorFeeScope: 'none' });
+    assert(_logSansTiming(absent.log) === _logSansTiming(none.log),
+        'scope "none" with a live amount must not move a single logged number');
+    assertNear(none.totals.advisorFees || 0, 0, 'lifetime fees at scope none', 1e-9);
+
+    // Unset and unrecognized both FAIL SAFE to none. The alternative -- defaulting to 'all' -- would
+    // mean a plan that never mentioned a scope silently bills every account.
+    for (const scope of [undefined, '', 'nonsense']) {
+        const r = simulate({ ..._ADVISOR_BASE, advisorFeeAmount: 1.5, advisorFeeMode: 'pct', advisorFeeScope: scope });
+        assertNear(r.totals.advisorFees || 0, 0, `an unset/unknown scope (${String(scope)}) must charge nothing`, 1e-9);
+    }
+    // And flat mode must respect it too: that branch never reads the basis, so an empty basis array
+    // alone would not have stopped it.
+    const flatNone = simulate({ ..._ADVISOR_BASE, advisorFeeAmount: 20000, advisorFeeMode: 'flat', advisorFeeScope: 'none' });
+    assertNear(flatNone.totals.advisorFees || 0, 0, 'a flat fee at scope none', 1e-9);
+
+    // The off switch is only useful if the on position actually differs.
+    const on = simulate({ ..._ADVISOR_BASE, advisorFeeAmount: 1.5, advisorFeeMode: 'pct', advisorFeeScope: 'all' });
+    assert(on.totals.advisorFees > 1000, 'the same amount at a real scope must charge a real fee');
+});
+
+test('P84b: Cash is never a basis and never a source', () => {
+    // An all-Cash portfolio billed at the widest scope must pay nothing at all. Cash is the
+    // spending buffer the Cash Reserve protects; billing it would fight the refill every year.
+    const r = simulate({
+        ..._ADVISOR_BASE, IRA1: 0, IRA2: 0, Roth: 0, Roth2: 0, Brokerage: 0, BrokerageBasis: 0,
+        Cash: 2000000, advisorFeeAmount: 1, advisorFeeMode: 'pct', advisorFeeScope: 'all',
+    });
+    assertNear(r.totals.advisorFees || 0, 0, 'fees charged to an all-Cash portfolio', 1e-9);
+});
+
+test.critical('P84c: fee dollars taken from an IRA are NOT taxable distributions', () => {
+    const off = simulate({ ..._ADVISOR_QUIET });
+    const fee = simulate({ ..._ADVISOR_QUIET, advisorFeeAmount: 2, advisorFeeMode: 'pct', advisorFeeScope: 'iras' });
+    assert(fee.totals.advisorFees > 100000,
+        `the fixture must actually charge a large fee, got ${Math.round(fee.totals.advisorFees)}`);
+    assertNear(_sumKey(fee.log, 'IRAwd'), 0, 'IRA withdrawals with a large IRA fee', 1e-6);
+    assertNear(_sumKey(fee.log, 'totalTax'), _sumKey(off.log, 'totalTax'),
+        'lifetime tax must not move when the fee is paid from the IRA', 1e-6);
+    assertNear(off.totals.terminal.ira - fee.totals.terminal.ira, fee.totals.advisorFees,
+        'the IRA must fall by exactly the fees charged', 1);
+});
+
+test.critical('P84c: the fee never enters netWithdrawals, in any scope', () => {
+    // The mechanism behind the test above, asserted directly: every calculateTaxes() call site reads
+    // yr.netWithdrawals.IRA as both earnedIncome and iraIncome, so this accumulator IS the boundary.
+    for (const scope of ['iras', 'rothira', 'all', 'allfromira']) {
+        const off = simulate({ ..._ADVISOR_QUIET });
+        const fee = simulate({ ..._ADVISOR_QUIET, advisorFeeAmount: 2, advisorFeeMode: 'pct', advisorFeeScope: scope });
+        assertNear(_sumKey(fee.log, 'IRAwd'), _sumKey(off.log, 'IRAwd'),
+            `${scope}: IRA withdrawals must be untouched by the fee`, 1e-6);
+    }
+});
+
+test('P84c: a mid-year fee does not move the SAME year\'s RMD, only later ones', () => {
+    // This is R11 retired. Before P84l the RMD was struck off the live balance, so charging the fee
+    // first shrank that year's RMD by the fee rate. Now the RMD keys off the prior December 31
+    // balance, which is the legally correct answer: this year's obligation is already fixed, and the
+    // fee shows up in NEXT year's basis because it really did leave the account.
+    const off = simulate({ ..._ADVISOR_BASE });
+    const fee = simulate({ ..._ADVISOR_BASE, advisorFeeAmount: 1, advisorFeeMode: 'pct', advisorFeeScope: 'iras' });
+    assertNear(fee.log[0]['RMD1-'], off.log[0]['RMD1-'],
+        'year-0 RMD must be identical with and without the fee', 1e-6);
+    assert(fee.log[1]['RMD1-'] < off.log[1]['RMD1-'] - 1,
+        'year-1 RMD should be lower, because the December 31 balance now reflects the fee');
+});
+
+test('P84d: percent vs dollars is inferred from the amount, and 20 belongs to FLAT', () => {
+    // One field carries both meanings. A real advisory fee is a fraction of a percent to about 2%;
+    // a real flat fee is thousands. The ranges do not overlap near the threshold.
+    assert(ADVISOR_FEE_PCT_MAX === 20, 'the documented threshold is 20');
+    for (const [amt, want] of [[0.5, 'pct'], [1, 'pct'], [1.25, 'pct'], [19.99, 'pct'],
+                               [20, 'flat'], [20.01, 'flat'], [12000, 'flat'], [20000, 'flat']]) {
+        assert(inferAdvisorFeeMode(amt, null) === want,
+            `${amt} should infer ${want}, got ${inferAdvisorFeeMode(amt, null)}`);
+    }
+    // THE BOUNDARY BELONGS TO FLAT ON PURPOSE. Reading a bare 20 as $20/yr is harmless; reading it
+    // as 20% would quietly destroy a plan. The asymmetry of being wrong picks the side.
+    assert(inferAdvisorFeeMode(20, null) === 'flat', '20 must read as dollars, not as 20 percent');
+
+    // An explicit marker always wins over the magnitude, in both directions.
+    assert(inferAdvisorFeeMode(50, 'pct') === 'pct', 'an explicit percent survives a large number');
+    assert(inferAdvisorFeeMode(15, 'flat') === 'flat', 'an explicit dollar survives a small number');
+
+    // And the ENGINE must be safe on its own: a shared link carrying af=20000 with no afm must not
+    // be read as a 20,000% fee. This is the case that made inference an engine concern, not a UI one.
+    const r = simulate({ ..._ADVISOR_BASE, advisorFeeAmount: 20000, advisorFeeScope: 'all' });
+    assertNear(r.log[0].AdvisorFee, 20000, 'a bare 20000 is twenty thousand dollars, not 20000 percent', 1);
+});
+
+test('P84d: a flat fee is CPI-indexed, and a percent fee is not', () => {
+    // cpi and inflation deliberately differ, so a wrong clock is visible rather than plausible.
+    const r = simulate({ ..._ADVISOR_BASE, cpi: 0.03, inflation: 0.06,
+                         advisorFeeAmount: 12000, advisorFeeMode: 'flat', advisorFeeScope: 'all' });
+    assertNear(r.log[0].AdvisorFee, 12000, 'year-0 flat fee', 1);
+    assertNear(r.log[10].AdvisorFee, 12000 * Math.pow(1.03, 10), 'year-10 flat fee, indexed at CPI', 1);
+    // In flat mode the basis is unused, so it stays 0 rather than reporting a number nobody used.
+    assertNear(r.log[0]['-advisorFeeBasis'], 0, 'flat mode reports no basis', 1e-9);
+});
+
+test('P84e: the fee is tracked in the totals, the cumulative scalar and four log keys', () => {
+    const r = simulate({ ..._ADVISOR_BASE, advisorFeeAmount: 1, advisorFeeMode: 'pct', advisorFeeScope: 'all' });
+    assertNear(r.totals.advisorFees, _sumKey(r.log, 'AdvisorFee'), 'totals.advisorFees equals the per-year sum', 1);
+    assert(r.totals.advisorFeesCurrentDollars > 0 && r.totals.advisorFeesCurrentDollars < r.totals.advisorFees,
+        'the current-dollar total must be positive and smaller than the nominal one');
+    const last = r.log[r.log.length - 1];
+    assertNear(last.SumAdvisorFees, r.totals.advisorFees, 'the running total ends at the lifetime total', 1);
+    for (const k of ['AdvisorFee', 'SumAdvisorFees', '-advisorFeeBasis', '-advisorFeeFromIRA']) {
+        assert(k in r.log[0], `log rows must carry ${k}`);
+        assert(k in simulate({ ..._ADVISOR_BASE }).log[0],
+            `log rows must carry ${k} even with no fee, or the identity tests break`);
+    }
+});
+
+test('P84f: BOTH counterfactual arms pay the fee, so Opportunity Cost stays about the conversion', () => {
+    // The docblock forbids a _cfRun guard. If one is ever added, the two arms diverge by the whole
+    // fee stream and every OC number becomes nonsense. This catches that.
+    const withOC = simulate({ ..._ADVISOR_BASE, convertExcessToRoth: true, computeOC: true,
+                              advisorFeeAmount: 1, advisorFeeMode: 'pct', advisorFeeScope: 'all' });
+    assert(withOC.totals.advisorFees > 0, 'the fixture must charge a fee for this to mean anything');
+    const src = String(simulate);
+    assert(!/_cfRun[^;]{0,120}advisorFee/.test(src) && !/advisorFee[^;]{0,120}_cfRun/.test(src),
+        'applyAdvisorFee must not be gated on _cfRun');
+});
+
+// ── P84l/m/o: the RMD basis is the prior December 31 balance ──────────────────
+// 26 CFR 1.401(a)(9)-5 sets the year's required distribution as the prior December 31 account
+// balance over the life-expectancy divisor. Before P84l the engine struck it off `balance.IRA1`
+// AFTER beginYear applied this year's pre-withdrawal growth, which overstated every RMD and -- far
+// worse -- coupled it to `preMonths`, which is 1 or 11 depending on whether LAST year converted
+// more than $1,000. Two otherwise identical plans got different RMDs because one converted.
+const _RMD_BASE = {
+    STATEname: 'TX', strategy: 'propwd', propWithdraw: 0.05,
+    nYears: 25, birthyear1: 1950, birthmonth1: 6, die1: 95,
+    birthyear2: 0, birthmonth2: 0, die2: 0, hasSpouse: false,
+    IRA1: 1500000, IRA2: 0, Roth: 0, Roth2: 0,
+    Brokerage: 200000, BrokerageBasis: 100000, Cash: 100000, CashReserve: null,
+    ss1: 30000, ss1Age: 70, ss2: 0, ss2Age: 0,
+    pensionAnnual: 0, pensionStartAge: 0, survivorPct: 0, pensionCola: false,
+    spendGoal: 90000, spendChange: 0, iraBaseGoal: 0,
+    inflation: 0.025, cpi: 0.025, growth: 0.06, cashYield: 0.02, dividendRate: 0.0,
+    ssFailYear: 2099, ssFailPct: 1.0, convertExcessToRoth: false,
+    extraConversionAmount: 0, iraWithdrawPct: 0.05,
+    startAge: 76, startInYear: 2026, dividendReinvest: false,
+};
+
+// Per ACCOUNT, deliberately. Each spouse carries their own divisor, so `(rmd1+rmd2)` over the
+// combined prior balance is a blend weighted by the IRA1/IRA2 split -- and that split moves between
+// arms, so the blended ratio differs even when the basis is exactly right. Measuring the blend
+// instead of the quantity claimed is how this very test was first written wrong.
+const _rmdRatios = (log) => {
+    const out = [];
+    for (let y = 1; y < log.length; y++) {
+        const rmd = log[y]['RMD1-'] || 0, prior = log[y - 1].IRA1 || 0;
+        if (rmd > 1 && prior > 1) out.push(rmd / prior);
+    }
+    return out;
+};
+
+test('P84l: the RMD is struck off the PRIOR December 31 balance, not a mid-year one', () => {
+    const r = simulate({ ..._RMD_BASE });
+    const ratios = _rmdRatios(r.log);
+    assert(ratios.length >= 5, `fixture must produce RMD years, got ${ratios.length}`);
+    // Every ratio must be a clean IRS divisor reciprocal: 1/x for x the life-expectancy factor,
+    // which is a one-decimal number. If the basis carried a growth stub the ratio would be
+    // (1/x) * (1+g)^(preMonths/12) and 1/ratio would not land on a tenth.
+    for (const q of ratios) {
+        const factor = 1 / q;
+        assertNear(factor, Math.round(factor * 10) / 10,
+            `1/(RMD ÷ prior year-end IRA) must be a life-expectancy factor to one decimal, got ${factor}`,
+            1e-6);
+    }
+});
+
+test('P84l: the RMD basis does not depend on the withdrawal-timing rule', () => {
+    // THE COUPLING TEST. This is the one that fails on main: preMonths is 1 or 11, so the old basis
+    // moved by (1+g)^(10/12) between the arms. Note this pins the BASIS, not the lifetime total --
+    // timing legitimately changes the balance PATH, so later RMDs may still differ in level.
+    const late  = _rmdRatios(simulate({ ..._RMD_BASE, forceWithdrawTiming: 'late'  }).log);
+    const early = _rmdRatios(simulate({ ..._RMD_BASE, forceWithdrawTiming: 'early' }).log);
+    const n = Math.min(late.length, early.length);
+    assert(n >= 5, `both arms must produce RMD years, got ${late.length} and ${early.length}`);
+    for (let i = 0; i < n; i++) {
+        assertNear(late[i], early[i],
+            `year ${i}: the RMD divisor must not move with withdrawal timing`, 1e-12);
+    }
+});
+
+test('P84m: a drained IRA is not taxed on a distribution that never happened', () => {
+    // The debits floor at zero, but totalRMD/taxableRMD used to be computed from the REQUIREMENT.
+    // A QCD large enough to empty the account is the path that reaches this today.
+    const r = simulate({ ..._RMD_BASE, qcdHHMax: 5000000, qcdMode: 'max' });
+    for (const row of r.log) {
+        const outflow = (row['RMD1-'] || 0) + (row['RMD2-'] || 0);
+        assert((row.taxableRMD ?? 0) <= outflow + 1,
+            `taxable RMD ${row.taxableRMD} exceeds the realized outflow ${outflow} in ${row.year}`);
+    }
+    const anyIRA = r.log.some(row => (row.IRA1 || 0) + (row.IRA2 || 0) > 1);
+    assert(anyIRA || r.log.length > 0, 'fixture must actually run');
+});
+
+test('P84o: year 0 keys off the balance AS TYPED, and that limitation is pinned not hidden', () => {
+    // P84l is exact for every year after the first: the simulation knows its own December 31
+    // balance. Year 0 seeds from the typed IRA balance, which IS a December 31 balance only for a
+    // plan starting in January. P72 owns startMonth and therefore owns the fix. Until then the
+    // limitation is pinned here so it cannot drift, and stated in the UI, rather than papered over
+    // with a growth-based back-out that would be a guess wearing a number's clothes.
+    const typed = 900000;
+    const r = simulate({ ..._RMD_BASE, IRA1: typed, startAge: 80, birthyear1: 1946 });
+    const first = r.log.find(row => (row['RMD1-'] || 0) > 1);
+    assert(first, 'fixture must take an RMD in year 0');
+    const factor = typed / first['RMD1-'];
+    assertNear(factor, Math.round(factor * 10) / 10,
+        `year 0's RMD must be the TYPED balance over a divisor, got factor ${factor}`, 1e-6);
+});
+
 // ── P38 PR 3: the primary draw is sized net of the tax on guaranteed income ───
 // PR 2 widened the forced-IRA backstop so the shortfall stopped stranding. That treated the
 // symptom: the backstop was making up, year after year, for a first-pass draw that was too small
@@ -2054,7 +2350,15 @@ test('P38: the primary draw funds the tax on guaranteed income, not the backstop
     // ceiling is funded from the taxable account instead. Forced IRA going DOWN is the intended
     // direction: the measurement this test exists for (the primary draw sizing the tax on
     // guaranteed income) is unchanged, and the remaining gap is smaller than it was.
-    assertNear(_sumForcedIRA(r.log), 18719.301, 'forced-IRA total once the draw is sized correctly', 1);
+    //
+    // 18,719 -> 33,744 at P84l, and this one goes UP, which is the right direction here and is
+    // worth spelling out because it looks like a regression. This fixture sets propWithdraw: 0, so
+    // there is no primary draw at all: spending is funded by Social Security plus whatever the RMD
+    // forces out, and the backstop covers the rest. P84l strikes the RMD off the prior December 31
+    // balance instead of the same balance after this year's pre-withdrawal growth, so every RMD is
+    // smaller. Less income arrives on its own, and the backstop -- which is what ForcedIRA counts --
+    // has to reach further. Smaller RMDs and a larger backstop are the SAME finding seen twice.
+    assertNear(_sumForcedIRA(r.log), 33743.833, 'forced-IRA total once the draw is sized correctly', 1);
 });
 
 test('P38: sizing by a flat nominal rate would badly over-draw an SS-heavy household', () => {

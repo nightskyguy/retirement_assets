@@ -17,11 +17,11 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 | **O1** | P28j | Withdrawal timing keys off conversion; the $1,000 nobody chose | `P28ja` |
+| **O0** | P86 | Current-$ basis: a lifetime total must be the sum of deflated years | `P86a` |
 
-**P81, P78, P79, P82 and P80 all COMPLETE on this branch, v11.1667-11.1671.** Social Security and a
-capped pension survive a deflationary year; a replay survives editing; the survival chart draws the
-ten captured paths; prev/next is one 46-stop ring; the Market Return chart names the year replayed.
-**P28j scoped 2026-08-27** - user picked it as the settle-first step ahead of `P35i`. O0 stays `P35i`.
+**P81, P78, P79, P82 and P80 all COMPLETE on this branch, v11.1667-11.1671.** Social Security and a capped pension survive a deflationary year; a replay survives editing; the survival chart draws
+the ten captured paths; prev/next is one 46-stop ring; the Market Return chart names the year replayed.
+**P84 COMPLETE, SHIPPED v11.168d** - advisor/AUM fee + RMDs off the prior Dec 31 balance; suites **353**/61/22. **P85 RE-RUN**: earlier still wins 353 of 499, but the RMD claim BROKE (124 counterexamples, all bracket at a live IRA Goal). O0 stays `P35i`; `P72` still pending.
 
 **P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 
@@ -30,6 +30,171 @@ User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Fu
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
+
+## P86: the Current-$ basis - a lifetime total is the SUM OF DEFLATED YEARS, not a deflated total  *(NEW 2026-08-28, user-raised, O0)*
+
+**The rule, stated once because everything here follows from it:**
+
+| kind | correct Current-$ form | example |
+|---|---|---|
+| **stock** - a balance at a point in time | divide by THAT DATE's factor | terminal net worth, any account balance |
+| **flow accumulated over time** | `SUM(flow_y / factor_y)` | lifetime tax, lifetime spend, lifetime fees, lifetime RMDs |
+
+Deflating an accumulated nominal total by the FINAL year's factor is wrong, and wrong in a way that
+looks plausible: it charges the whole stack the last year's inflation. It can make a running total
+**fall**, which is what surfaced this - the user reported `SumAUMfees` dropping from 80,672 to 79,371
+between 2049 and 2050 on `?af=0.8&afs=rothira`. Reproduced exactly.
+
+**Most of the app is ALREADY on the right basis, and that is worth stating so this phase is not
+mis-scoped into a rewrite.** `totals.taxCurrentDollars` and `totals.spendCurrentDollars`
+(`optimizer_core.js:3107-3108`) are built as the sum of deflated years. The summary bar's All Taxes,
+Spendable and Advisor Fees read those. End Wealth reads a stock deflated at its own date. The
+Optimizer's ranking objectives already use the Current-$ variants - `mintax` ->
+`totals.taxCurrentDollars`, `maxspend` -> `totals.spendCurrentDollars`, `networth` ->
+`afterTaxNWCurrentDollars`. **The comparison basis is consistent where it has been thought about.**
+
+### The two confirmed defects
+
+**D1. "All RMDs" ignores the Current-$ toggle entirely.** `optimizer_ui.js:3188` writes
+`totals.rmd` unconditionally; there is no `rmdCurrentDollars` anywhere in the engine. So in Current-$
+mode a NOMINAL lifetime flow sits directly beside All Taxes, which is deflated. Not a wrong basis -
+**no** basis, adjacent to a correct one. The QCD figure in the same tile's sub-label has the same
+problem. **This is the one that matters most, because it is on the summary bar and it is the number
+a reader compares against the tax tile.**
+
+**D2. The two running-total COLUMNS in Annual Details.** `SumTaxes` and `SumAUMfees` are divided by
+the row's own factor by the generic renderer (`optimizer_ui.js:3014`), which is correct for every
+other column and wrong for these two, because they are accumulations rather than stocks.
+
+**Measured, not eyeballed:** every numeric log column was tested for nominal monotonicity and then
+for decline under the renderer's per-row division. Exactly two columns are genuine running totals
+that break: `SumTaxes` and `SumAUMfees`.
+
+### The trap a "clever" fix walks into
+
+The same measurement flags `spendGoal` and `netIncome` as declining under Current-$. **Those are
+correct** - they are per-year flows genuinely losing real value, and "fixing" them would be a
+regression. **So the fix MUST be a named list of accumulator columns, never a monotonicity
+heuristic.** A heuristic here would silently rebase two legitimate columns.
+
+### Tasks
+
+- [ ] **P86a** - audit FIRST, and write the inventory down before changing anything. Every displayed
+      dollar in the summary bar, Annual Details, the Optimizer table, the Monte Carlo tab and the
+      Break Even panel, classified stock vs accumulated flow, with its current basis. The two known
+      defects are the ones found so far, not a claim that the list is complete. Gate for P86b.
+- [ ] **P86b** - `totals.rmdCurrentDollars` and `totals.qcdCurrentDollars` in the engine beside the
+      existing pair, same `SUM(x / sim.inflation)` idiom; the All RMDs tile reads them under `inCD`.
+- [ ] **P86c** - a named `ACCUMULATOR_COLUMNS` map in the UI, accumulator key -> its per-year source
+      column, and the Annual Details renderer builds the Current-$ running total as the running sum
+      of deflated per-year values. Covers `SumTaxes` and `SumAUMfees` in one mechanism.
+- [ ] **P86d** - tests: a running total is NON-DECREASING under Current-$ for every accumulator;
+      `spendGoal` and `netIncome` still DO decline (the anti-regression guard for the heuristic
+      trap); each accumulator equals the sum of its own per-year column in both bases; the All RMDs
+      tile moves with the toggle.
+- [ ] **P86e** - whatever the P86a audit turns up.
+
+**Why O0 rather than a quick patch:** the arithmetic is easy and the audit is not. A wrong basis
+produces a plausible number, so nothing fails loudly, and this tool's entire purpose is comparing
+dollar figures against each other. One number on the summary bar is already on no basis at all.
+
+**Explicitly NOT in scope:** changing what the Current-$ toggle MEANS, or its default. This phase
+makes every figure honor the existing definition.
+
+## P85: when conversions happen — earlier wins, but not for the reason it looks like  *(DONE 2026-08-28, user-raised)*
+
+**Why it exists.** The user asked whether converting earlier beats converting later, reasoning that
+(a) the dollars compound tax-free for longer and (b) a smaller IRA grows less, so lifetime RMDs and
+their consequences shrink. **Nothing in this repo had tested either half.** `betr_harness.js` asks
+convert-vs-not; `stopyear_harness.js` / `bestConversionStopYear()` ask when to STOP, and a later
+stop converts MORE in total, so a cutoff sweep confounds timing with amount and cannot answer it.
+`RMD` appeared 1-2 times across all twelve existing `*_RESULTS.md` files.
+
+**The question arrived attached to P28j and is NOT P28j.** P28j is the intra-year withdrawal MONTH
+(`preMonths` 1 vs 11, `optimizer_core.js:1275-1285`); its `Early(Conv)` / `Late(Spend)` column names
+invite exactly this confusion. Orthogonal axes. Worth remembering the next time the two get merged.
+
+**SUPERSEDED IN PART, same day, at the user's prompting.** The run below was measured on the
+pre-`P84l` RMD basis and at `iraBaseGoal: 0`. Both were wrong and both mattered. **Re-run headline:
+earlier still wins (353 of 499), but the RMD claim is BROKEN - 375 of 499 with 124 counterexamples,
+every one of them the bracket family at a live IRA Goal.** Front-loading eats the above-goal
+headroom early, `curIRA` (`optimizer_core.js:1584`, gating `:1914`) throttles the strategy's own
+withdrawals for the rest of the plan, and the bigger surviving IRA throws bigger RMDs. Measured on
+one cell at equal $210,000 gross: FRONT draws $204,656 LESS voluntarily, ends with $218,861 MORE
+IRA and takes $229,381 MORE in RMDs than BACK.
+
+**Two things the first run got wrong for the same reason - it inherited a fixture without asking
+what was in it.** `iraBaseGoal: 0` came from `gapfill_harness.js`'s COMMON; the shipped page default
+is **$750,000** and the page also offers a computed suggestion (`computeSuggestedIraGoal`,
+`optimizer_ui.js:665`). At goal 0 the bracket family drains the IRA to nothing and takes **$0 of
+lifetime RMDs** - so the first run asked what conversions do to RMDs of plans that have none. It is
+also the entire explanation for N3's "flat at zero" failure in 48 of 60 arms; with the goal live,
+N3 has signal (18 of 60 usable) and FRONT keeps its lead, which is the decomposition the first run
+could not produce.
+
+**Found on the way, and undecided: conversions ignore the IRA Goal.** `applyExtraConversion` caps at
+`_availIRA` (`:2694`), never at `curIRA`, so a conversion can drive the IRA below a floor that
+voluntary withdrawals may not cross. Either the goal floors the IRA or it does not; today it floors
+withdrawals only.
+
+**Original answer, kept because the parts that survived are the useful ones: earlier wins about two
+thirds of the time, and the RMD channel is not what pays.**
+
+- FRONT ahead of BACK on after-tax net worth in **125 of 186** clean comparisons; outright winner
+  in 109, LEVEL 39, BACK 38. **The extreme is not uniformly best** - relevant to `P5`, which should
+  not be seeded with "convert the maximum now".
+- **Lifetime RMDs lower under FRONT in 186 of 186**, median gap $548,035, no counterexample.
+- **Zero the growth and 96% of the advantage disappears** (paired on 24: $454,700 -> $18,349). The
+  RMD gap is the compounding effect seen from the other side, not an independent payoff. A small
+  residual survives - FRONT still ahead in 24 of 24 at zero growth - and is pure tax timing.
+- **At an 8% spend rate the sign FLIPS** (median -$8,954): the liquidity cost of the early tax bill
+  beats the compounding gain. CA's advantage is 9x smaller than TX's.
+- **The conversion tax rate is not the lever**: off an identical gross, the net landing in Roth is a
+  coin flip (median -$360). "Convert while the bracket is empty" is not what is paying here.
+- **522 of 720 comparisons were UNDELIVERED** - the IRA does not hold an aggressive front-loaded
+  program. That is a real constraint on front-loading, not a harness limitation.
+
+**Engine change, the only one: `_cfSuppressConversionsBeforeYear`** in `_convSuppressedThisYear`
+(`optimizer_core.js`), the mirror of the existing `_cfSuppressConversionsFromYear`. Research-only,
+no UI / URL key / `getInputs()` entry. The engine could express "stop converting in year k" but not
+"start in year k", so a delayed arm was inexpressible for the bracket and ACA families, whose
+conversions come out of the surplus branch rather than `extraConversionAmount`. Unset it is a no-op;
+suites unchanged at 340 / 61 / 22.
+
+**Could not be measured, and said so rather than fudged:**
+- **N2 (equal lifetime tax): 2 of 30 usable.** Not a bisection failure - **lifetime tax is not
+  monotone in the conversion amount and usually FALLS as conversions rise** ($796,324 -> $572,130 ->
+  $427,589 at requests of $0 / $420k / $1.68M). An arm that converts nothing carries a bigger IRA
+  into RMD age and pays more tax overall.
+- **N3 (equal terminal IRA): 6 of 30, split 2/2/2, no signal.** 48 of 60 arms were flat-at-zero -
+  the IRA ends empty whether or not you convert, so the target is already equal. **The intended
+  decomposition was carried by the zero-growth arm instead, which is a weaker construction.**
+  A version that holds the lifetime RMD STREAM equal, not the terminal balance, would answer it
+  directly. Open.
+- **C4 UNTESTED, not BROKEN** - N2 gave 2 usable cells, and a direction read off 2 cells is not a
+  direction.
+
+**FOUR scorer defects, all caught before publication** - the fourth session running where the scorer,
+not the measurement, is where the bugs were. Full accounting in `CONVTIMING_RESULTS.md` section 7.
+The two worth carrying forward:
+1. **The timing-pin assertion was VACUOUS.** It read `r.useEarly`, which does not exist on a log row
+   (the row carries `timing` as a rendered string, `optimizer_core.js:1168`). It was `false`
+   everywhere, so it would have reported "pin HELD" whatever the engine did. Caught only because
+   self-check F also requires the UNPINNED run to differ. Same species as P30f.
+2. **C3 compared two different samples** - median of 29 cells against median of 4. Pairing it moved
+   the headline from "17.6% survives" to "4.0% survives", a factor of four, on identical data.
+
+**Files:** `.test_harnesses/convtiming_harness.js` (new), `CONVTIMING_RESULTS.md` (new),
+`HARNESSES.md` (registered), `optimizer_core.js` (one research flag). No version bump, no changelog -
+nothing here is user-visible.
+
+**Follow-ups, not scheduled:**
+- [ ] **P85a** - hold the lifetime RMD STREAM equal rather than the terminal balance, and settle the
+      decomposition N3 could not.
+- [ ] **P85b** - the zero-growth residual: FRONT ahead in 24 of 24 with no compounding at all. Which
+      tax mechanism? Same open shape as P28ja's Q5.
+- [ ] **P85c** - feed the 8% reversal and the delivery cap into `P5`'s objective before the greedy
+      search is built.
 
 ## P74: Monte Carlo lost half the strategy identity in transit  *(fixed v11.1642 2026-08-25, user-reported)*
 
@@ -1180,7 +1345,7 @@ in the measuring phase.
 - [x] **P70a DONE 2026-08-26** - measured. `cpiFollowsPath` (opt-in input, default OFF, in
       `advanceYear`) plus `.test_harnesses/cpi_index_harness.js`: the Stress Test's own scenario set
       (`buildStressBank` + `buildPathInputs`, not a new one), 30 plans x 26 scenarios x 2 arms.
-      Full tables in [`CPI_INDEX_RESULTS.md`](../../.test_harnesses/CPI_INDEX_RESULTS.md).
+      Full tables in [`CPI_INDEX_RESULTS.md`](../../`research/CPI_INDEX_RESULTS.md`).
 
       **The gate opened: this is an engine fix, not a NOTE.** Lifetime tax is **8.32% lower** under
       path-following across 780 pairs; **38 scenarios go from ruined to surviving and 0 go the other
@@ -2001,7 +2166,7 @@ timing. See `findings.md`, "A log field the next iteration reads is engine state
 - [x] **P28i** — **ROUND 3 (2026-07-30):** answered "does `convertExcessToRoth` ever lose on its own?" — **yes,
       13 of 25 cells, worst -$1,095,454**, for the same Cash-buffer reason plus a hidden
       withdrawal-timing flip. Added `forceWithdrawTiming` (research input, default off) to separate
-      the two. Full write-up now lives at `.test_harnesses/P28_RESULTS.md`.
+      the two. Full write-up now lives at `research/P28_RESULTS.md`.
 - [ ] **P28j** — **SPUN OFF, needs its own phase:** `convertExcessToRoth` is a DEFAULT-FACING switch that can
       cost >$1M in plausible account mixes, and part of that is the early/late withdrawal-timing rule
       keying off `rothConv` — invisible and uncontrollable from the UI. Decide whether timing should
@@ -2182,7 +2347,7 @@ $2,435, cpiminus1 $2,180, flat2000 $2,000. Only halfcpi is sized to the error. `
 exception that kills a pure size ranking - second largest setback, smallest benefit, a third of what
 `flat2000` buys for $435 less. **Unexplained, and recorded as unexplained.**
 
-**Full write-up:** `.test_harnesses/IRMAA_MARGIN_PATHS_RESULTS.md`. Old document's sections 5 and 7
+**Full write-up:** `research/IRMAA_MARGIN_PATHS_RESULTS.md`. Old document's sections 5 and 7
 marked SUPERSEDED in place, the P28/P30 pattern.
 
 - [x] **P83a** - `.test_harnesses/irmaa_margin_paths_harness.js`. Banks from
@@ -2255,7 +2420,100 @@ marked SUPERSEDED in place, the P28/P30 pattern.
 
 ---
 
-## P84: annual advisor / AUM fee, and RMDs off the prior December 31 balance  *(NEW 2026-08-28, user-raised, O1)*
+## P84: annual advisor / AUM fee, and RMDs off the prior December 31 balance  *(COMPLETE, SHIPPED v11.168c + v11.168d, 2026-08-28)*
+
+**STATUS: COMPLETE.** `P84k/l/m/n/o` (the RMD basis) shipped as v11.168c; `P84a`-`P84j` (the fee
+itself) shipped as v11.168d. Suites **353 / 61 / 22**, `slowInCore` 3, `TestTiers.EXPECTED` and
+`.githooks/README.md` reconciled.
+
+**What the fee ended up being.** TWO controls, not three - an amount and a scope. `applyAUMFee(sim,
+yr)` between `resolveHousehold` and `computeIncome`, six billing scopes plus `none` over a frozen
+basis/source/spill table, brokerage debited pro-rata against basis so `capGainsPercentage` is
+unchanged, unpayable remainder dropped to `yr.aumFeeUnpaid`. Eleven node tests including two
+`test.critical` non-taxability guards and the no-`_cfRun`-guard proof.
+
+**The %/$ dropdown was REPLACED by inference, user request 2026-08-28.** One field: a `%` suffix or
+`$` prefix wins outright, otherwise `>= AUM_FEE_PCT_MAX` (20) is dollars and below it is percent.
+**The boundary belongs to FLAT deliberately** - a bare `20` read as $20/yr is harmless, read as 20%
+it destroys a plan, and the asymmetry of being wrong picks the side. `inferAUMFeeMode` lives in the
+ENGINE, not the UI, so a link carrying `af=20000` with no `afm` cannot be read as a 20,000% fee.
+A line under the field says which way it read what you typed.
+
+**And it fixed a real defect the dropdown was hiding.** `aumFeeAmount` is `data-plain`, so
+`el.dataset.numVal` is never set and `val()` returns the literal text - `+val('aumFeeAmount')` on
+`"20k"` was `NaN`, fell through `|| 0`, and charged NOTHING while looking like it had been accepted.
+The field now runs through `parseShorthand` like every other dollar input on the page.
+
+**`aumFeeMode` stopped being an element, which broke the URL round trip in both directions**, since
+`buildShareURL` iterates elements and `loadFromURL` does `getElementById`. Fixed without hidden
+state: the share URL pins the RESOLVED mode, and an incoming `afm` is folded back into the amount's
+own TEXT as `$15` or `15%` - exactly what a user would have typed to mean the same thing, so one
+field stays the single source of truth.
+
+**Renamed AUM -> Advisor throughout, user request 2026-08-28.** "AUM" (assets under management)
+describes the percentage arrangement only, and this models a flat annual fee just as happily. The
+log columns are `AdvisorFee` and `SumAdvisorFees`; every identifier, element id and stat-tile id
+moved with them. URL short keys `af`/`afs` are unchanged, so links keep working.
+
+**UNGATED from the nerdknob, user request 2026-08-28.** It sat behind the knob only while it was
+being proven out. It is a fact about the plan rather than a diagnostic - the rule at
+`optimizer_ui.js:141-149` - and ungating costs nobody a number because the scope defaults to `none`.
+The leak-guard argument that made gating awkward is now moot.
+
+**`afm` is no longer emitted in the share URL, and pinning it was over-engineering.**
+`buildShareURL` emits each field's own TEXT, so an explicit `$15` or `15%` already travels in `af`
+verbatim; a bare `15` means what the inference says, which is what the user typed and saw. A second
+parameter carrying the same fact could only ever disagree with it. Incoming `afm` is still ACCEPTED,
+so links generated during development keep working - verified.
+
+**`none` is the DEFAULT scope, added on the user's request 2026-08-28 after the first fee build.**
+It is the off switch for a comparison: leave the amount typed and flip one dropdown, rather than
+clearing and retyping a number. Unset and unrecognized scopes both fail safe to it, so a plan that
+never mentions a scope charges nothing instead of silently billing every account. The engine RETURNS
+on `none` rather than leaning on an empty basis array - flat mode never reads the basis, so an empty
+array alone would not have stopped it. Verified in the browser that the round trip is exact:
+finalNW 638,557 -> 205,067 -> 638,557.
+
+**The base is `sim.priorYearEnd`, the SAME snapshot the RMD uses**, widened from two IRA fields to
+all five billable accounts. That was not tidiness: anything read off `balance` between `beginYear`'s
+growth call and `growAndSettle` inherits the 1-vs-11 `preMonths` dependency, so a fee struck at its
+own call site would have moved with whether last year converted - the exact defect `P84l` removed
+from the RMD. One snapshot, captured once, read by both.
+
+**R11 is retired and PINNED by a test**: a mid-year fee no longer moves the same year's RMD, only
+later ones, which is the legally correct answer.
+
+**Two things found while verifying, both corrected before shipping.** The stat tile first carried a
+sub-label reading "% of end wealth" while computing `fees / (fees + finalNW)`, which is neither.
+Worse, the honest number is bigger than either: on the shipped defaults a 1% fee CHARGES $212,267
+and lowers the ending balance by **$433,490**, because the money it removed would have compounded.
+Any single-number ratio in a tile understates that by roughly half while looking authoritative, so
+the sub-label is now the average annual fee and the real figure is left to a future phase that can
+afford the second simulation Break Even already runs. And the Annual Details banner was checked for
+shearing by counting VISIBLE header cells only - a first pass counted hidden ones and appeared to
+show a 21-against-82 mismatch that did not exist.
+
+**Open, deliberately:** the true lifetime cost of the fee (charged plus foregone compounding) is not
+reported anywhere. It needs a counterfactual run. Candidate for its own phase.
+
+**STATUS 2026-08-28: `P84k`, `P84l`, `P84m`, `P84n` and `P84o` are DONE and shipped as v11.168c.**
+The RMD now keys off the prior December 31 balance. `rmdbasis_harness.js` + `RMDBASIS_RESULTS.md`
+carry the characterization and the scoring; four new node tests (340 -> **344**), `TestTiers.EXPECTED`
+and `.githooks/README.md` reconciled; three GK pins and one P38 pin re-baselined, **each checked
+against the characterization's predicted direction rather than accepted because it moved** (R12).
+**Risk R11 and placement reason 3 are RETIRED**, exactly as this plan predicted they would be: a
+mid-year fee can no longer move the same year's RMD. **`P84a` through `P84j`, the fee itself, are
+untouched.**
+
+Measured before: **22 of 30 plans had a timing-dependent RMD**, median 6.21%, max 58.62% - far above
+the 5.49% an 11-month growth stub explains, because an inflated RMD forces out more, which re-bases
+every later RMD. After: **0 of 30**, to 7e-18.
+
+**The P84k prediction R2 was written wrong twice and both wrong versions are recorded** in
+`rmdbasis_harness.js`'s header, because the first one - "the two timing arms give identical LIFETIME
+RMDs" - condemns a CORRECT fix. Timing legitimately changes the balance path; the regulation
+constrains the basis, not the trajectory.
+
 
 **Why:** the tool models every drag on a portfolio except the one most retirees actually pay. A 1%
 advisory fee on a $2M portfolio is ~$20,000 in year one, compounding for the whole horizon. That is
@@ -2278,7 +2536,8 @@ against every account but pays out of the larger IRA.
 | flat mode and the dropdown | dropdown drives the withdrawal SOURCE | keeps the non-taxable-IRA benefit for flat fees, and one meaning for the dropdown in both modes |
 | flat-fee index clock | `sim.cpiRate` | user said "indexed by CPI" and the sidebar field is labeled CPI/COLA. Alternative on the record: the purpose test at `optimizer_core.js:1231-1238` puts prices the household PAYS on `sim.inflation`, as `CashReserve` does at `:1693`. One-token change if revisited |
 | counts toward `wdRate%` | **no** | `wdRate%` keeps meaning "portfolio draws that funded spending and taxes" and stays comparable to the 4% rule; PF14's definition holds. `totals.avgNetDepletion` already reflects the fee, being computed off `portfolioBalance` deltas |
-| nerd-gated | **no** | it is a fact about the plan, not a diagnostic - the rule written at `optimizer_ui.js:141-149`. Default 0 costs nobody a number, and gating it would strand a shared `?af=` link the recipient cannot see or clear |
+| nerd-gated | **YES - user decision 2026-08-28, reversing the row below. Do not re-litigate.** | the fee input sits behind the nerdknob |
+| ~~nerd-gated~~ | ~~no~~ | *superseded.* The argument was: it is a fact about the plan, not a diagnostic - the rule written at `optimizer_ui.js:141-149`; default 0 costs nobody a number, and gating it would strand a shared `?af=` link the recipient cannot see or clear. **The leak-guard problem it names is real and does not go away by gating: it becomes a REQUIREMENT.** Follow the `convEndYear` precedent (`P24b`) - a gated input whose URL key still loads, so a shared link reproduces its own numbers whether or not the recipient has the nerdknob on. `P84h` owns this; a plan carrying a nonzero fee must never silently drop it for a reader who cannot see the field |
 
 **Three inputs keys**, element id === engine key so `applyScenario`'s generic loop
 (`optimizer_ui.js:5028-5070`) round-trips them for free: `aumFeeAmount` (number, **raw as typed,
@@ -3092,7 +3351,7 @@ selected" is whether cyclic ever wins. Splitting them would make each half read 
         ever produces a capped year, the re-check is still the right move and the reasoning is in
         findings.md.
   - [x] **P32d-5 - written up. DONE 2026-08-21.** New Q2 section in
-        `.test_harnesses/P32_RESULTS.md` (title, run header, predictions table, Coverage and Scope
+        `research/P32_RESULTS.md` (title, run header, predictions table, Coverage and Scope
         Limits all updated); `.test_harnesses/HARNESSES.md` now records that q2 printed SKIPPED for
         months and why. **P5 RIGHT**, **P6 RIGHT** - P6 named the third-pass arm, so it is scored
         per arm instead of on the pooled total, which had let `brokFirst` print "MIXED" for an arm
@@ -3102,7 +3361,7 @@ selected" is whether cyclic ever wins. Splitting them would make each half read 
     **set-identical** to `bounded`'s 9, so the third-pass arm strictly dominates it on funded years.
   - **Do NOT re-run Q1.** `P32e` already re-measured it post-dividend-fix ("three families UP,
     cyclic -0.8pt, never-draw still 0/55").
-- [x] **P32e** — Q3/Q4 DONE 2026-08-10 (`.test_harnesses/P32_RESULTS.md`). Q3: cyclic wins 26/45
+- [x] **P32e** — Q3/Q4 DONE 2026-08-10 (`research/P32_RESULTS.md`). Q3: cyclic wins 26/45
   cells as shipped but HALF is the surplus-routing confound — a `CashReserve: 0` control still wins
   23/45 at half the magnitude ($891k max). Q4 INVERTED: `cycleLTCGTarget 0.20` moves 898/2,576
   pairs and wins 53 — the nerdknob gate is protecting users, not hiding a lever; 0.15 confirmed.
@@ -3222,7 +3481,7 @@ selected" is whether cyclic ever wins. Splitting them would make each half read 
   tail shipped at **v11.15e3, PR #185**. Merged: PR #155 (third-pass state tax), PR #156 (brokerage
   research + the dividend over-credit fix), PR #185 (the third-pass re-scope). The only thing carried
   forward is `P32j` above, which `P32h` deferred on purpose rather than left undone.
-  **Harness:** `.test_harnesses/brokerage_harness.js` (node), results in `.test_harnesses/P32_RESULTS.md`
+  **Harness:** `.test_harnesses/brokerage_harness.js` (node), results in `research/P32_RESULTS.md`
 - **Depends on:** shares the gap-fill path with P30. Sequencing preference, not a hard dependency: run
   P30 first so the `[40,60]` question is settled before the third-pass arms move the same numbers.
 
@@ -3573,7 +3832,7 @@ unlike oracle foresight). An "endgame grid" (scenarios STARTING at IRA=goal, RMD
 Brok/Roth/Cash mix x basis 20/50/80 x spend) can measure this TODAY without `P35i`, using the
 existing ordered arms + the oracle for the ceiling. → new sub-item `P35n`.
 
-- [x] **P35n** — DONE 2026-08-10 (`.test_harnesses/ENDGAME_RESULTS.md`, endgame_harness.js,
+- [x] **P35n** — DONE 2026-08-10 (`research/ENDGAME_RESULTS.md`, endgame_harness.js,
       144 cells). **The PR-5 BALANCED fill spec is refuted: balance-proportional is the WORST
       arm (median −$223k, wins 1/108). Winner: the SEQUENCE Cash → Roth → Brokerage with IRA as
       last-resort backstop (88/108 cells; conversions-insensitive 36/36).** Mechanism: §1014
@@ -3964,7 +4223,7 @@ as a default.
 - [x] **P36c** — The three reporting tables produced; `conveffect` exclusion stated with its reason.
   GK caveat mandatory when reading them: survivorship (eligible arms 160→37 across spend rates) +
   spend drift (+38%/−12%) inflate every GK number.
-- [x] **P36d** — `.test_harnesses/PHASED_RESULTS.md` + a row in `.test_harnesses/HARNESSES.md`
+- [x] **P36d** — `research/PHASED_RESULTS.md` + a row in `.test_harnesses/HARNESSES.md`
 - [ ] **P36e** — Decide P35's shipped arm count and `survivorSpendPct` default from the output
   (needs round 2)
 - **Status:** round 1 DONE (2026-08-10); round 2 waits on `P35i`. Runs as P35's PR 7.
@@ -4516,7 +4775,7 @@ schedule column is ever productized.
       oracle in defaults @6% (menu cannot express surplus routing), so the descent+menu result
       is a lower bound on the true ceiling — the cross-check should bound how far below it sits.
       Also open: GK-base cells at 6-8% spend need a survivable fixed-spend base for family gaps.
-- [x] **P51e** — DONE 2026-08-10 → `.test_harnesses/ORACLE_RESULTS.md`. **"propwd
+- [x] **P51e** — DONE 2026-08-10 → `research/ORACLE_RESULTS.md`. **"propwd
       default-optimal" REFUTED on the absolute half too**: gap-to-oracle 2.3-11.6% where
       measurable (pre-declared bar was <1%), IRA Draw ahead in every cell. Attribution:
       conversion timing >> withdrawal split (defaults3x @4%: +$1.08M conv vs +$36k split); flat

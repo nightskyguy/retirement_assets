@@ -17,6 +17,42 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.168e"></a>
+
+## 11.168e
+
+### An advisor fee you can model, and required distributions figured the way the tax rules define them
+
+**Behavior change. Any plan that reaches the age for required distributions will show different
+numbers, and a saved scenario or a shared link can give a different answer than it did before.**
+
+**1. Advisor and fund fees.** A new field in Assets takes the fee as a single number, plus a choice
+of which accounts are billed and which pay, including billing every account except Cash but taking
+the money from the larger IRA. **A small number is read as a percentage and a large one
+as a flat dollar amount that grows with your CPI**, and the line under the field says which way it
+read what you typed; add a % or a $ if you want to say so outright, and shorthand like 20k works.
+**It starts at None, so no fee is charged until you pick accounts**, and switching back to None is
+how you compare a plan with and without the fee without retyping the amount. It is charged at
+the start of each year against the previous December 31 balances, the way advisors bill. **Money
+taken from an IRA to pay the fee is not a taxable distribution**, so it never reaches your income or
+your tax. Cash is never billed and never pays. A tile shows the lifetime total, and appears only
+once you set a fee. At 1% of $2M that is roughly $20,000 in the first year, compounding for the
+whole plan, which is larger than several of the differences this tool is used to weigh.
+
+**2. Required minimum distributions** are now figured from your December 31 balance divided by the
+IRS life expectancy factor. The tool was adding part of the current year's growth to that balance
+first, which made every distribution larger than the amount actually required, and made it move with
+the month a withdrawal happened to leave. Two otherwise identical plans could show different
+distributions purely because one of them had done a Roth conversion the year before. Expect lower
+distributions, lower taxable income, and usually a lower lifetime tax bill and a larger ending
+balance.
+
+**One limit worth knowing.** For a plan's first year the tool uses the IRA balance exactly as you
+typed it. If that is a mid-year figure rather than the previous December 31, the first year's
+distribution is an estimate. Every later year is exact.
+
+---
+
 <a id="11.1671"></a>
 
 ## 11.1671
@@ -847,10 +883,10 @@ What was added, and why:
 - **Four engine research inputs**, used only by the offline study harnesses.
 - **Five research studies were run and recorded** (results live beside the harnesses). The
   highlights below will shape future releases:
-  [Brokerage Research](https://github.com/nightskyguy/retirement_assets/blob/main/.test_harnesses/P32_RESULTS.md), 
-  [Proportional Draw Research](https://github.com/nightskyguy/retirement_assets/blob/main/.test_harnesses/PHASED_RESULTS.md)
+  [Brokerage Research](research/P32_RESULTS.md), 
+  [Proportional Draw Research](research/PHASED_RESULTS.md)
   (it's not as optimal as thought), and 
-  ["EndGame" Research](https://github.com/nightskyguy/retirement_assets/blob/main/.test_harnesses/ENDGAME_RESULTS.md) -
+  ["EndGame" Research](research/ENDGAME_RESULTS.md) -
   what is the best strategy once the IRA is under control. 
 
 ---

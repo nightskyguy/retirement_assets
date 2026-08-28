@@ -1,14 +1,28 @@
 # Test harnesses
 
+Index of the investigative / audit scripts for the retirement optimizer engine, and of the reports
+they produce. These are **not** part of the regular unit-test suite (`optimizer_core.tests.js`); they
+are kept so a finding can be re-derived on demand.
+
 This file was `README.md` until 2026-08-24. It is a catalog, not an introduction, and the name now
 says so - which also stops it colliding with the repo's real README in search results and in
 conversation.
 
-Investigative / audit scripts for the retirement optimizer engine. These are **not** part of the
-regular unit-test suite (`optimizer_core.tests.js`); they are kept here so a finding can be
-re-derived on demand.
+**Two directories, and the split is deliberate.** The **scripts** live in `.test_harnesses/` and the
+**reports** live here in `research/`, one `<NAME>_RESULTS.md` per study. Until 2026-08-28 both sat in
+`.test_harnesses/`, which was hard to scan and also hid the half worth reading: Jekyll skips
+dot-directories, so nothing under `.test_harnesses/` is reachable on the deployed site, and every
+report was invisible with it. `research/` is published, so each report is readable at
+`/research/<NAME>_RESULTS.html`.
 
-**What does not belong here:** anything the suite needs in order to pass. `sweep_golden.js` and its
+The consequence to remember when writing one: **a link from a report back to its script must be an
+absolute GitHub blob URL, not a relative path.** A relative `../.test_harnesses/x.js` resolves fine
+in a local checkout and 404s on the site.
+
+A new harness therefore lands as two files: the script in `.test_harnesses/`, its report here, and a
+row in the table below.
+
+**What does not belong in either:** anything the suite needs in order to pass. `sweep_golden.js` and its
 two regenerators live at the repo root next to `optimizer_core.tests.js`, which `require`s the golden
 at load time — they are fixtures, not studies. The rule and the reasoning are in
 [`ARCHITECTURE.md`](../ARCHITECTURE.md#where-a-test-file-belongs).
@@ -30,6 +44,8 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `cpi_index_harness.js` | **node** | P70a: does indexing the tax code at a FIXED CPI, while spending follows the path, overstate tax on high-inflation paths? Yes, by 8% overall, and it invents plan failures. |
 | `irmaa_margin_paths_harness.js` | **node** | P83: which IRMAA safety margin is best once the threshold is UNCERTAIN? Reruns the margin question against all three Monte Carlo modes, now that realized and assumed CPI diverge. |
 | `gapfill_objectives_harness.js` | **node** | P30h: should the `[40,60]` gap-fill blend be deleted and unified on the Cash-first cascade? Scores every OPTIMIZER_OBJECTIVES key plus a liquidity measure. |
+| `convtiming_harness.js` | **node** | P85: does it matter WHICH YEARS a conversion program lands in, and is RMD suppression the reason? Front-load vs level vs back-load at equal lifetime gross. |
+| `rmdbasis_harness.js` | **node** | P84k/P84n: how wrong was the RMD basis, and did fixing it move what the characterization predicted? Run before and after `P84l`. |
 
 ## betr_harness.js  (node)
 
@@ -281,3 +297,74 @@ CPI, -11.4% where it ran more than 3 points ABOVE), and the lower the CPI the us
 the distortion. Two surprises:
 IRMAA surcharge YEARS move further than surcharge DOLLARS (-9.2% against -6.1%),
 and the ACA effect shows up as a moved ceiling with zero breaches in either arm.
+
+## convtiming_harness.js  (node)
+
+```bash
+node .test_harnesses/convtiming_harness.js
+```
+
+**Full results, tables and reasoning live in [`CONVTIMING_RESULTS.md`](CONVTIMING_RESULTS.md).**
+This entry is the index; that file is the reference.
+
+Answers a user question nothing else here could: converting *earlier* is supposed to beat converting
+later, both because the dollars compound tax-free for longer and because a smaller IRA produces
+smaller RMDs. `betr_harness.js` asks convert-vs-not; `stopyear_harness.js` asks when to STOP, and a
+later stop converts more in total, so a cutoff sweep confounds timing with amount. Neither can
+answer it.
+
+Holds the lifetime **gross** conversion fixed and varies only its shape - FRONT (first k years),
+LEVEL (every year), BACK (last k years) - across the standing 5-mix x 3-spend-rate ladder, 2 states,
+2 Cash Reserve settings and 2 families, at 2 program sizes and 3 block widths. Every arm is pinned
+to `forceWithdrawTiming: 'late'`, because P28ja measured the withdrawal-timing leg as larger than
+the conversion leg in 29 of 54 cells and an unpinned run measures P28j's defect instead.
+
+This is **not** P28j. P28j is the intra-year withdrawal month; its `Early(Conv)` / `Late(Spend)`
+column names invite exactly this confusion.
+
+Headline findings:
+
+**Re-run 2026-08-28 after `P84l` and after adding the IRA Goal axis. The first run's headline RMD
+finding did not survive either change; the numbers below are the second run.**
+
+1. **Earlier wins about two thirds of the time, not always.** FRONT ahead of BACK in 353 of 499
+   clean comparisons; FRONT the outright winner in 304, LEVEL in 102, BACK in 93.
+2. **The RMD claim is NOT universal.** FRONT has lower lifetime RMDs in 375 of 499, with **124
+   counterexamples, every one of them the bracket family at a live IRA Goal.** Front-loading eats
+   the above-goal headroom early, `curIRA` throttles the strategy's own withdrawals for the rest of
+   the plan, and the bigger surviving IRA throws bigger RMDs. Conversions ignore the goal
+   (`_availIRA`, not `curIRA`); withdrawals respect it.
+3. **Compounding is what pays.** Zero out growth and the advantage collapses to 4.8% of itself
+   (paired on 72: $449,889 -> $21,724). N3, which holds terminal pre-tax IRA equal, now has signal
+   (18 of 60 usable) and FRONT still leads - so the advantage survives with the RMD stock held flat.
+4. **At an 8% spend rate the sign flips**, and in 750 of 1,440 comparisons an aggressive front-loaded
+   schedule is not even deliverable - the IRA does not hold it. Both are real constraints on P5.
+5. **The conversion tax rate is not the lever**: off an identical gross, the net landing in Roth is
+   a coin flip (median -$464).
+
+Requires the research-only `_cfSuppressConversionsBeforeYear` flag added to
+`_convSuppressedThisYear` for the bracket family's start-year arm. Unset it is a no-op.
+
+## rmdbasis_harness.js  (node)
+
+```bash
+node .test_harnesses/rmdbasis_harness.js
+```
+
+**Full results in [`RMDBASIS_RESULTS.md`](RMDBASIS_RESULTS.md).**
+
+The characterization behind `P84l`, written to be run BEFORE the fix and again after. 26 CFR
+1.401(a)(9)-5 sets the year's required distribution from the prior December 31 balance; the engine
+struck it off that balance plus this year's pre-withdrawal growth, which overstated every RMD and
+coupled it to `preMonths` - 1 or 11 depending on whether last year converted more than $1,000.
+
+Before: **22 of 30 plans had a timing-dependent RMD**, median 6.21% and max 58.62%. After: **0 of
+30**, agreeing to 7e-18.
+
+It exists separately from the fix because of risk R12: `P84l` moves numbers in almost every suite, so
+a genuinely broken assertion could be "fixed" by accepting whatever new value appeared. Recording the
+predicted direction and size first makes each re-baseline a check rather than a shrug.
+
+Its own R2 prediction was written wrong twice - once as a lifetime total, which condemns a correct
+fix, and once as a two-spouse blended ratio. Both are documented in the file header, because the
+wrong versions are more instructive than the right one.

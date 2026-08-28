@@ -42,6 +42,78 @@ that exits 0. Sweeping it in would print a permanent green for zero tests run, o
 publishing is checked against. `_tests.js` does not match `*.tests.js`, which is what keeps the two
 sets disjoint - and is the reason that suffix was chosen.
 
+## The markdown preview gate
+
+After the suites, the hook runs `node .githooks/md-html-scan.js` over **every tracked `.md`**, and
+blocks on raw HTML that hides the rest of the file.
+
+On 2026-08-28 the VS Code preview of `task_plan.md` stopped rendering at line 1304 of 5,734. Not
+truncation and not a setting: that line held a bare, unquoted `<select>` in prose. VS Code's preview
+passes raw HTML through **without sanitizing**, so the browser parsed it as a real element, and a
+`<select>` paints nothing except `<option>` children. Never being closed, all 4,430 following lines
+became its children and were silently not painted. `progress.md` had the same class of defect at
+line 3695 via a bare `<details>`, hiding about 1,944 lines - an unclosed `<details>` is **closed**
+by default, so everything after it collapses inside it.
+
+Both survived for weeks because **GitHub sanitizes markdown HTML** and drops non-allowlisted tags,
+so the files rendered perfectly everywhere they were normally reviewed. There is no error, no
+artifact at the break point, and no clue in the source - the document just appears to end early,
+which reads as file corruption or an editor limit rather than a typo.
+
+**A blanket "no raw HTML" rule was measured and rejected.** The 27 tracked `.md` files hold 181 bare
+tags and 172 are legitimate `<a>` anchors in the changelog. `<a>`, `<b>`, `<span>`, `<li>`,
+`<details>`, `<img>`, `<br>` and `<kbd>` all render their children normally and are none of the
+gate's business, closed or not.
+
+Two rules, because there are two failure modes and the second was missed at first.
+
+**Rule A, hides.** The eleven elements that actually make following content vanish: `select`,
+`textarea`, `title`, `style`, `script`, `noscript`, `iframe`, `template`, `details`, `object`,
+`dialog`. Blocked on sight, closed or not - even a properly paired `<select>...</select>` paints
+nothing but its options.
+
+**Rule B, corrupts.** Any element whose open and close counts differ within a file. An unclosed
+`<b>` bolds the rest of the document, an unclosed `<a>` makes the remainder one hyperlink, an
+unclosed `<li>` emits a stray bullet and pulls what follows into a list item.
+
+Rule B exists because rule A could not have caught the real case that produced it: two unclosed
+`<b>` at `progress.md:4447-4448` left every following line bold. Nothing was hidden, so the
+measurement behind rule A - "did the text disappear from `innerText`" - returned clean. A reader
+found it. **The check was asking one question about a problem that has two.**
+
+Balance, not presence, is what makes rule B usable: the 172 `<a>` anchors in
+`optimizer_changelog.md` are all correctly paired, so genuine markup passes untouched and only
+unclosed markup fails. Void elements (`<br>`, `<img>`, `<hr>`, ...) and self-closing tags are exempt,
+since they never take a closing tag.
+
+**That list is measured, not reasoned, because reasoning it produced a wrong list.** The first
+version was written from the HTML spec and was wrong in both directions - it blocked `option`,
+`optgroup`, `xmp`, `plaintext` and `listing`, none of which hide anything, and it missed `details`,
+`object` and `dialog`, all of which do. A bare `<details>` was live in `progress.md` at the time, so
+the gate shipped with a false negative already in the tree. Guessing content models is precisely the
+mistake this check exists to catch someone else making.
+
+The list was re-derived by rendering all 57 candidate elements in a browser and recording which ones
+made following content vanish. The re-derivation snippet is in the header of `md-html-scan.js`; run
+it rather than editing the set by hand. `<option>`, `<optgroup>`, `<table>`, `<tr>`, `<li>`, `<b>`,
+`<span>`, `<a>`, `<summary>` and `<pre>` are all safe and are deliberately left alone.
+
+It is a denylist rather than a parser because deciding "unclosed" properly needs a real HTML parse,
+while naming the elements that can swallow a document needs none.
+
+Fenced blocks and inline code spans are skipped. Indented four-space code blocks are **not**
+detected, deliberately - telling one from a wrapped list item needs a real markdown parse. A tag
+inside an indented block is therefore reported; fence it instead, which is clearer anyway and is
+what `p71_probe/README.md` was converted to.
+
+**The fix is always the same: wrap it in backticks.** `` `<select>` `` renders the tag visibly
+instead of executing it, and matches the convention every other code identifier in these docs
+already follows. Run it standalone on specific files while editing:
+
+```sh
+node .githooks/md-html-scan.js .planning/retirement-optimizer/task_plan.md
+```
+
 `git commit --no-verify` skips it. That is the deliberate escape hatch for a commit you know does
 not touch code. It is not the way past a red suite.
 

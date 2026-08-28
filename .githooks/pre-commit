@@ -1,6 +1,7 @@
 #!/bin/sh
 #
-# pre-commit - run the three node-only test suites, block the commit on any failure.
+# pre-commit - run the three node-only test suites and the markdown preview gate,
+#              block the commit on any failure.
 #
 # WHY THIS EXISTS (P39, work item 1). Release gating relies on the Red X badge that
 # `optimizer_tests.js` renders at page load, and that badge covers only the 245 in-page tests.
@@ -99,4 +100,17 @@ if [ -n "$failed" ]; then
 fi
 
 echo "pre-commit: all three node suites passed in ${elapsed}s."
+
+# Markdown that silently hides the rest of itself. A bare <select> in task_plan.md cost 4,430
+# lines of VS Code preview on 2026-08-28, and a bare <details> cost progress.md ~1,944.
+# GitHub sanitizes the tag away so the files review perfectly; only an unsanitized preview
+# reproduces it, and it looks like file corruption rather than a typo. Scans every tracked .md,
+# not just the staged ones - the check is milliseconds and the failure is silent by nature.
+# Rationale, the denylist and why a blanket no-raw-HTML rule was rejected: the header comment
+# of .githooks/md-html-scan.js.
+if ! node .githooks/md-html-scan.js; then
+	echo "            Run it directly for the list: node .githooks/md-html-scan.js" >&2
+	exit 1
+fi
+
 exit 0

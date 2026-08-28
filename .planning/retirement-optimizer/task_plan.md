@@ -17,9 +17,9 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 | **O1** | P28j | Withdrawal timing keys off conversion; the $1,000 nobody chose | `P28ja` |
-| **O0** | P86 | Current-$ basis: a lifetime total must be the sum of deflated years | `P86b` |
 
-**P81, P78, P79, P82 and P80 all COMPLETE on this branch, v11.1667-11.1671.** Social Security and a capped pension survive a deflationary year; a replay survives editing; the survival chart draws
+**P86 COMPLETE on this branch, v11.1690, commits bd2c875..976452e.** Every displayed dollar honors the Future-$/Current-$ toggle: running totals are UI-computed sums of deflated years (Spendable renamed SumSpendable), RMD/QCD/fee-average/ConvTax/BreakEven follow, and the whole MC tab deflates each path by its OWN inflation (flat-CAGR kept only as stale-worker fallback). Suites **358**/61/22.
+**P81, P78, P79, P82 and P80 all COMPLETE on this branch, v11.1667-v11.1671.** Social Security and a capped pension survive a deflationary year; a replay survives editing; the survival chart draws
 the ten captured paths; prev/next is one 46-stop ring; the Market Return chart names the year replayed.
 **P84 COMPLETE, SHIPPED v11.168d** - advisor/AUM fee + RMDs off the prior Dec 31 balance; suites **353**/61/22. **P85 RE-RUN**: earlier still wins 353 of 499, but the RMD claim BROKE (124 counterexamples, all bracket at a live IRA Goal). O0 stays `P35i`; `P72` still pending.
 
@@ -31,7 +31,7 @@ User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Fu
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
 
-## P86: the Current-$ basis - a lifetime total is the SUM OF DEFLATED YEARS, not a deflated total  *(NEW 2026-08-28, user-raised, O0)*
+## P86: the Current-$ basis - a lifetime total is the SUM OF DEFLATED YEARS, not a deflated total  *(DONE 2026-08-28, user-raised; b-f shipped v11.1690, commits bd2c875..976452e)*
 
 **The rule, stated once because everything here follows from it:**
 
@@ -97,25 +97,25 @@ basis (any kept stored sum would have been Current-$). (2) MC gets EXACT per-pat
       builder; delivered spend = `spendGoal + shortfall` (shortfall <= 0); no CSV export and no
       column-name persistence, so the rename is safe. Perf baseline captured (114.0 ms median /
       106.7 best per 200 simulate() runs).
-- [ ] **P86b** - drop the stored running totals from the engine log (`SumTaxes` :1125,
+- [x] **P86b** - drop the stored running totals from the engine log (`SumTaxes` :1125,
       `SumAdvisorFees` :1081, `Spendable` :1147 + their counters); UI computes displayed running
       totals on demand via a named `ANNUAL_RUNNING_TOTALS` map (never a heuristic - `spendGoal` and
       `netIncome` legitimately decline), spliced at the old positions so group banners hold;
       Future-$ = running nominal sum, Current-$ = running sum of deflated years; rename
       `Spendable` -> `SumSpendable`. Tests: P84e rework, :5914, new running-total identities; perf
       gate <0.5% recorded in progress.md + commit message.
-- [ ] **P86c** - `totals.rmdCurrentDollars` + `totals.qcdCurrentDollars` (same idiom, :3111/:3114);
+- [x] **P86c** - `totals.rmdCurrentDollars` + `totals.qcdCurrentDollars` (same idiom, :3111/:3114);
       All RMDs tile + QCD sub-label (ui:3189-3196) and Optimizer `rmd` column (ui:1807-1812) honor
       the toggle. Tests: twins equal sums of deflated per-year columns; tile/column move with toggle.
-- [ ] **P86d** - small toggle fixes: Advisor /yr sub-label uses dispFees (ui:3186); Conv Tax gets
+- [x] **P86d** - small toggle fixes: Advisor /yr sub-label uses dispFees (ui:3186); Conv Tax gets
       `_convSavingsCurrent` from taxCurrentDollars (ui:1495, 1825-1842); Break Even (i) dollars
       deflated by the TERMINAL factor at format time (they are terminal-wealth differences = stocks;
       decision thresholds stay nominal so the suggestion never flips).
-- [ ] **P86e** - MC engine dual basis (mc_engine.js): per-path factor array (engine-side only, not
+- [x] **P86e** - MC engine dual basis (mc_engine.js): per-path factor array (engine-side only, not
       shipped), `percentilesReal` via existing computePercentiles, `medianTaxReal`,
       `medianSpendNominal`, `capturedTracesReal`, `stressPathsReal`; crashed paths keep factor 1;
       years past the log extend by the path's own inflationSequence. Node tests via _mcEngine.runJob.
-- [ ] **P86f** - MC UI wiring (mc_tab.js + updateCurrentDollarsView): charts/traces/stress use the
+- [x] **P86f** - MC UI wiring (mc_tab.js + updateCurrentDollarsView): charts/traces/stress use the
       real sets when toggled (flat-CAGR only as stale-worker fallback); survival table renders AND
       sorts on the selected basis; headline follows; median-line tooltip reads ctx.parsed.y; fix the
       'Total Spendable' tooltip that claims always-real; wire renderSurvivalTable + renderPlanHeadline

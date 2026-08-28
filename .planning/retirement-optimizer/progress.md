@@ -6097,3 +6097,29 @@ bases (factor 1, correct, not a bug).
 
 Suites 357/61/22, in-page 399 with ?runtests, badge green through all three commits. Remaining:
 P86e (MC engine dual basis), P86f (MC UI wiring).
+
+**Same session, P86e + P86f - the Monte Carlo half, commits 9c4b743 / 976452e. P86 COMPLETE.**
+
+**P86e.** mc_engine keeps a per-path-per-year factor bank (engine-side only): row.inflationFactor
+for logged years, extended past the log by the path's OWN inflationSequence (a persisted
+after-death balance keeps deflating), 1 for crashed paths. percentilesReal is percentiles OF
+deflated paths, never rescaled curves. medianTaxReal + medianSpendNominal fill the table's missing
+twins; the naming trap (medianTax nominal, medianSpend real) is documented at the push site.
+Exactness proven through the replay contract on a single-path run; float32 tolerance needed because
+computePercentiles rounds through Float32Array.
+
+**P86f.** Chart bands/traces/stress/table/headline all pick real fields when toggled, flat-CAGR
+only as stale-worker fallback; survival table sorts on what it displays; median tooltip reads
+ctx.parsed.y (was re-reading nominal percentiles under a deflated line).
+
+**The stale-cache lesson repeated itself in miniature during verification:** the worker busts with
+Date.now() (APP_VERSION is undefined), so the ENGINE was fresh and shipping twins while the PAGE
+ran cached mc_tab.js and ignored them - the exact mid-deploy skew the fallbacks exist for, observed
+live. mc_tab/mc_engine stamps bumped to 111690.
+
+**Measured, the reason the exact deflation matters:** on a 156-variation compare run, per-path real
+vs flat-CAGR differs +4.9% at the median, +9.0% on the best captured trace. Pinned row: Future $
+1,597,080 / 463,476 / 4,529,641 -> Current $ 716,644 / 352,454 / 3,110,501, headline follows,
+stress Final Balance 5,681,737 -> 2,815,865.
+
+Suites **358 / 61 / 22**, in-page 399, badge green. P86 complete; O0 queue is back to `P35i`.

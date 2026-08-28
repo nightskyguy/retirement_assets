@@ -28,7 +28,9 @@ numbers, and a saved scenario or a shared link can give a different answer than 
 
 **1. Advisor and fund fees.** A new field under Advanced options in Assets takes a yearly
 percentage, or a flat dollar amount that grows with your CPI, and a choice of which accounts are
-billed and which pay, including billing everything but paying from the larger IRA. It is charged at
+billed and which pay, including billing everything but paying from the larger IRA. **It starts at
+None, so no fee is charged until you pick accounts**, and switching back to None is how you compare
+a plan with and without the fee without retyping the amount. It is charged at
 the start of each year against the previous December 31 balances, the way advisors bill. **Money
 taken from an IRA to pay the fee is not a taxable distribution**, so it never reaches your income or
 your tax. Cash is never billed and never pays. A tile shows the lifetime total, and appears only

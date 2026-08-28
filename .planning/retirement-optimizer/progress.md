@@ -5914,3 +5914,31 @@ keys, exports), `optimizer_core.tests.js` (+9), `optimizer_tests.js`, `.githooks
 own `const V`, in-page entry), `optimizer_changelog.md` (the branch's ONE entry rewritten in place
 to cover both halves, stamp refreshed to 11.168d), `ARCHITECTURE.md`, `FILE_DIRECTORY.md`,
 `task_plan.md`. Suites **353 / 61 / 22**; `md-html-scan` clean on 29 tracked `.md`.
+
+
+---
+
+**Same session 2026-08-28, fifth pass - `none` added to the fee scope dropdown and made the default,
+at the user's request.**
+
+The fee shipped with `all` as the fallback scope. The user asked for a `none` option so the fee can
+be toggled for comparison, and for it to be the default. Both done; the branch is not merged or
+deployed, so changing the fallback carried no compatibility burden.
+
+**`none` is a real off switch, not a cosmetic entry.** The engine RETURNS on it rather than relying
+on `AUM_FEE_BASIS.none` being an empty array: the flat-mode branch never reads the basis, so an
+empty array would have let a flat fee through. Unset and unrecognized scopes now fail safe to
+`none` as well - the previous fallback of `all` meant a plan that never mentioned a scope would
+silently bill every account.
+
+Guarded by a new test (353 -> **354**) that pins four things: `none` with a live amount is
+bit-identical to no fee at all by whole-log comparison, undefined/empty/garbage scopes all charge
+nothing, a FLAT fee at `none` charges nothing, and the same amount at a real scope does charge - an
+off switch is only meaningful if the on position differs.
+
+Browser-verified as the workflow the user described: type 1%, leave the scope at None, still off;
+flip to All accounts, $212,267 and finalNW 638,557 -> 205,067; flip back, tile hides and finalNW
+returns to 638,557 **exactly**.
+
+Changelog entry and the in-page `<li>` updated in place to say it starts at None. Version stamp
+stays 11.168d - same hour, and the scheme is hour-granular. Suites **354 / 61 / 22**.

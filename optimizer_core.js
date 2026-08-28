@@ -2832,11 +2832,15 @@ function applyExtraConversion(sim, yr) {
 // cascade and a plan can actually FAIL because of it - which is most of the point of modeling it.
 // End-of-year and quarterly were both considered and rejected; the reasoning is in the P84 plan.
 const AUM_FEE_MODES  = Object.freeze(['pct', 'flat']);
-const AUM_FEE_SCOPES = Object.freeze(['brokerage', 'roths', 'iras', 'rothira', 'all', 'allfromira']);
+// 'none' is FIRST and is the DEFAULT: a plan charges no fee until you say which accounts it applies
+// to. It is also the off switch for a comparison - leave the amount typed and flip the dropdown, so
+// "with fee" and "without fee" differ by one control rather than by clearing and retyping a number.
+const AUM_FEE_SCOPES = Object.freeze(['none', 'brokerage', 'roths', 'iras', 'rothira', 'all', 'allfromira']);
 
 // What the percentage is charged ON. Cash is in no row: it is the spending buffer the Cash Reserve
 // protects, and billing it fights the reserve refill every single year.
 const AUM_FEE_BASIS = Object.freeze({
+    none:       Object.freeze([]),
     brokerage:  Object.freeze(['Brokerage']),
     roths:      Object.freeze(['Roth1', 'Roth2']),
     iras:       Object.freeze(['IRA1', 'IRA2']),
@@ -2877,9 +2881,13 @@ function applyAUMFee(sim, yr) {
     yr.aumFee = 0; yr.aumFeeBasis = 0; yr.aumFeeFromIRA = 0; yr.aumFeeUnpaid = 0;
 
     const amount = +inputs.aumFeeAmount || 0;
-    if (!(amount > 0)) return;                      // default 0 = OFF, bit-identical to no fee
+    if (!(amount > 0)) return;                      // amount 0 = OFF, bit-identical to no fee
     const mode  = inputs.aumFeeMode === 'flat' ? 'flat' : 'pct';
-    const scope = AUM_FEE_BASIS[inputs.aumFeeScope] ? inputs.aumFeeScope : 'all';
+    // DEFAULT IS 'none', so an unset or unrecognized scope charges NOTHING rather than quietly
+    // billing everything. Returning here rather than leaning on AUM_FEE_BASIS.none being empty:
+    // the flat-mode branch never reads the basis at all, so an empty array would not stop it.
+    const scope = AUM_FEE_BASIS[inputs.aumFeeScope] ? inputs.aumFeeScope : 'none';
+    if (scope === 'none') return;
     const prior = sim.priorYearEnd || balance;
 
     // The amount is stored RAW as typed and the engine does the /100, because a field whose meaning

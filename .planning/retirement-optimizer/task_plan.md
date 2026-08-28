@@ -2357,10 +2357,18 @@ itself) shipped as v11.168d. Suites **353 / 61 / 22**, `slowInCore` 3, `TestTier
 `.githooks/README.md` reconciled.
 
 **What the fee ended up being.** Three inputs (`aumFeeAmount` raw-as-typed, `aumFeeMode`,
-`aumFeeScope`), `applyAUMFee(sim, yr)` between `resolveHousehold` and `computeIncome`, six scopes
-over a frozen basis/source/spill table, brokerage debited pro-rata against basis so
-`capGainsPercentage` is unchanged, unpayable remainder dropped to `yr.aumFeeUnpaid`. Nine node tests
-including two `test.critical` non-taxability guards and the no-`_cfRun`-guard proof.
+`aumFeeScope`), `applyAUMFee(sim, yr)` between `resolveHousehold` and `computeIncome`, six billing
+scopes plus `none` over a frozen basis/source/spill table, brokerage debited pro-rata against basis
+so `capGainsPercentage` is unchanged, unpayable remainder dropped to `yr.aumFeeUnpaid`. Ten node
+tests including two `test.critical` non-taxability guards and the no-`_cfRun`-guard proof.
+
+**`none` is the DEFAULT scope, added on the user's request 2026-08-28 after the first fee build.**
+It is the off switch for a comparison: leave the amount typed and flip one dropdown, rather than
+clearing and retyping a number. Unset and unrecognized scopes both fail safe to it, so a plan that
+never mentions a scope charges nothing instead of silently billing every account. The engine RETURNS
+on `none` rather than leaning on an empty basis array - flat mode never reads the basis, so an empty
+array alone would not have stopped it. Verified in the browser that the round trip is exact:
+finalNW 638,557 -> 205,067 -> 638,557.
 
 **The base is `sim.priorYearEnd`, the SAME snapshot the RMD uses**, widened from two IRA fields to
 all five billable accounts. That was not tidiness: anything read off `balance` between `beginYear`'s

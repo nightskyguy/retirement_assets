@@ -548,7 +548,7 @@ function getInputs() {
         // applyScenario's x100 list or in DOLLAR_INPUT_IDS.
         aumFeeAmount: +val('aumFeeAmount') || 0,
         aumFeeMode: val('aumFeeMode') || 'pct',
-        aumFeeScope: val('aumFeeScope') || 'all',
+        aumFeeScope: val('aumFeeScope') || 'none',
         inflation: +val('inflation') / 100.0,
         cpi: +val('cpi') / 100.0,
         growth: +val('growth') / 100.0,

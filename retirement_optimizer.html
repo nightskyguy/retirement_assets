@@ -350,10 +350,11 @@
                     <option value="pct" selected>% / yr</option>
                     <option value="flat">$ / yr</option>
                 </select></label>
-                <div style="font-size:0.78em;color:#666;margin-top:2px;">Charged on the prior year-end balance. Never a taxable distribution.</div></div>
-            <div><label style="font-size:0.9em;" title="Which accounts the fee is charged against, and which pay it. Cash is never included in either. Choose &quot;All, paid from IRA&quot; to bill every account but take the money from the larger IRA, which is a common arrangement and shrinks future required distributions.">Fee applies to
+                <div style="font-size:0.78em;color:#666;margin-top:2px;">Charged on the prior year-end balance. Never a taxable distribution. Off unless "Fee applies to" names accounts.</div></div>
+            <div><label style="font-size:0.9em;" title="Which accounts the fee is charged against, and which pay it. Defaults to None, so no fee is charged until you pick accounts. Leave an amount typed and switch between None and a real choice to compare a plan with and without the fee. Cash is never included in either. Choose &quot;All, paid from IRA&quot; to bill every account but take the money from the larger IRA, which is a common arrangement and shrinks future required distributions.">Fee applies to
                 <select id="aumFeeScope" style="font-size:14px;">
-                    <option value="all" selected>All accounts</option>
+                    <option value="none" selected>None (no fee)</option>
+                    <option value="all">All accounts</option>
                     <option value="brokerage">Brokerage only</option>
                     <option value="roths">Roths only</option>
                     <option value="iras">IRAs only</option>
@@ -864,7 +865,7 @@
 				<li data-flag="behavior"><b>11.168d</b>
 					<strong>An advisor fee you can model, and required distributions figured the way the tax rules define them.</strong>
 					<ol>
-					<li>A yearly advisor or fund fee, as a percentage or a flat CPI-indexed amount, with a choice of which accounts are billed and which pay. Money taken from an IRA to pay it is not a taxable distribution. Under Advanced options.</li>
+					<li>A yearly advisor or fund fee, as a percentage or a flat CPI-indexed amount, with a choice of which accounts are billed and which pay. Starts at None, so nothing is charged until you pick accounts; switch back to None to compare a plan with and without it. Money taken from an IRA to pay it is not a taxable distribution. Under Advanced options.</li>
 					<li>Required minimum distributions now come off your December 31 balance, so they are no longer inflated by part of the current year's growth and no longer shift with the month a withdrawal leaves.</li>
 					</ol>
 					<a href="optimizer_changelog.md#11.168d" target="_blank" rel="noopener">Details</a>

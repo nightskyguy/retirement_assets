@@ -2106,6 +2106,32 @@ test('P84b: every scope charges the right basis and pays from the right accounts
     }
 });
 
+test('P84b: scope "none" is the default, and it is a real off switch', () => {
+    // 'none' exists so a comparison is one control away: leave the amount typed and flip the
+    // dropdown, rather than clearing and retyping a number. It must therefore be EXACTLY equal to
+    // having no fee at all, not merely close.
+    const absent = simulate({ ..._AUM_BASE });
+    const none = simulate({ ..._AUM_BASE, aumFeeAmount: 1.5, aumFeeMode: 'pct', aumFeeScope: 'none' });
+    assert(_logSansTiming(absent.log) === _logSansTiming(none.log),
+        'scope "none" with a live amount must not move a single logged number');
+    assertNear(none.totals.aumFees || 0, 0, 'lifetime fees at scope none', 1e-9);
+
+    // Unset and unrecognized both FAIL SAFE to none. The alternative -- defaulting to 'all' -- would
+    // mean a plan that never mentioned a scope silently bills every account.
+    for (const scope of [undefined, '', 'nonsense']) {
+        const r = simulate({ ..._AUM_BASE, aumFeeAmount: 1.5, aumFeeMode: 'pct', aumFeeScope: scope });
+        assertNear(r.totals.aumFees || 0, 0, `an unset/unknown scope (${String(scope)}) must charge nothing`, 1e-9);
+    }
+    // And flat mode must respect it too: that branch never reads the basis, so an empty basis array
+    // alone would not have stopped it.
+    const flatNone = simulate({ ..._AUM_BASE, aumFeeAmount: 20000, aumFeeMode: 'flat', aumFeeScope: 'none' });
+    assertNear(flatNone.totals.aumFees || 0, 0, 'a flat fee at scope none', 1e-9);
+
+    // The off switch is only useful if the on position actually differs.
+    const on = simulate({ ..._AUM_BASE, aumFeeAmount: 1.5, aumFeeMode: 'pct', aumFeeScope: 'all' });
+    assert(on.totals.aumFees > 1000, 'the same amount at a real scope must charge a real fee');
+});
+
 test('P84b: Cash is never a basis and never a source', () => {
     // An all-Cash portfolio billed at the widest scope must pay nothing at all. Cash is the
     // spending buffer the Cash Reserve protects; billing it would fight the refill every year.

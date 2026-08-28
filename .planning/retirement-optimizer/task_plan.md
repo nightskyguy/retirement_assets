@@ -1301,7 +1301,7 @@ into the law, not CPI); `computeBETR` and the amortization helpers (returns, not
       Social Security are not yet adjusted for variable inflation") retired, since it stops being
       true.
 
-- [x] **P70i DONE (v11.1661). Five-way selector: no increase / 1% / 2% / 3% cap / full COLA, paying min(cap, that year's index rate) PER YEAR via its own compounding factor. `pensionColaCap()` accepts the old booleans so the golden, the tests and saved plans need no migration; `applyScenario` maps a stored boolean, since the generic loop would set a <select> to "true" and silently strip the COLA. Deflation left as a genuine min, noted in code, to be decided alongside Social Security or not at all.** ~~capped and reduced pension COLAs (raised 2026-08-26, after P70d moved the pension to
+- [x] **P70i DONE (v11.1661). Five-way selector: no increase / 1% / 2% / 3% cap / full COLA, paying min(cap, that year's index rate) PER YEAR via its own compounding factor. `pensionColaCap()` accepts the old booleans so the golden, the tests and saved plans need no migration; `applyScenario` maps a stored boolean, since the generic loop would set a `<select>` to "true" and silently strip the COLA. Deflation left as a genuine min, noted in code, to be decided alongside Social Security or not at all.** ~~capped and reduced pension COLAs (raised 2026-08-26, after P70d moved the pension to
       CPI).** `pensionCola` is a plain on/off, so ON now means FULL CPI every year. That is right for
       federal CSRS and military, and wrong for the two commonest cases: FERS pays a reduced "diet"
       COLA above 2%, and most state and municipal plans cap at 2-3% or pay a flat contractual

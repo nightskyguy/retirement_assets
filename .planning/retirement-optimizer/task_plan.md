@@ -1643,6 +1643,23 @@ the month, both defaulting to 0:
 - [ ] **P72h** - UI: start-month input, auto-detect on fresh load when the plan starts this calendar year, `sm` URL param, save/share pins the resolved month
 - [ ] **P72i** - Annual Details marks the first row as a partial year and names the months; tooltip says what is and is not prorated
 - [ ] **P72j** - tests (`startMonth = 1` reproduces a known run exactly; `startMonth = 9` scales growth/spend/pension/dividends by 4/12; RMD and the standard deduction unchanged at `startMonth = 9`; SS claim-year and stub-year fractions compose; `endYear` advances by `f`), then `TestTiers.EXPECTED` across all three suites, the `.githooks/README.md` table, the changelog entry and the four version-bump sites
+- [ ] **P72k** *(added 2026-08-28 from `P84`, user-raised)* - **the year-0 RMD BASIS, which is a
+      different question from whether the RMD is prorated.** The table row above is right and stands:
+      the RMD is a full-year obligation and owes nothing to the stub fraction. But `P84l` makes the
+      RMD key off the prior December 31 balance, and in year 0 that balance is seeded from the typed
+      IRA input - which is a December 31 figure only when `startMonth = 1`. A plan opened in September
+      types a September balance and overstates year-0's RMD by roughly eight months of growth,
+      reintroducing in year 0 the exact error `P84` exists to remove. `P84o` pins and declares the
+      limitation; the fix is here, because only this phase has `startMonth`.
+      **Recommended: a year-0-only "this year's RMD, as your custodian stated it" dollar input.**
+      Better than asking for the December 31 balance - the custodian already computed it and puts it
+      on the January statement, it is exact with no divisor or growth assumption, and it absorbs
+      inherited-IRA schedules and aggregation shapes this tool cannot model. Blank falls back to
+      `priorDec31 ~= typedBalance / (1 + growth x elapsedMonths/12)`, which is the identity at
+      `startMonth = 1`, so nothing changes for a January plan.
+      **Out of scope, named so it is a decision:** the first RMD year may be deferred to April 1 of
+      the following year, taking two distributions in year two. Real lever, real tax consequence, not
+      modeled anywhere. Its own phase if it is ever wanted.
 - **Status:** pending
 - **Independent:** no phase dependencies
 
@@ -2331,6 +2348,51 @@ wrapper id `aumFeeAmount-wrap`. URL short keys `af`/`afm`/`afs`, checked against
 `buildShareURL` or `loadFromURL` needed. One self-hiding stat tile, shown only when
 `totals.aumFees > 0`.
 
+### Fee timing: end-of-year and quarterly were considered and rejected  *(user asked 2026-08-28)*
+
+**Rejected: charge at the END of the year.** It fixes one real thing and breaks a bigger one.
+
+- **What it would fix, and this is a genuine defect in the start-of-year design as first written.**
+  Charging between `resolveHousehold` and `computeIncome` means the fee is struck off a balance that
+  already carries `preMonths` of this year's growth (`beginYear:1288`), and `preMonths` is **1 or 11**
+  depending on whether last year converted. **The fee base inherited exactly the coupling the RMD
+  goal exists to remove.** The generalization is worth stating once: *anything* computed off `balance`
+  between `beginYear` and `growAndSettle` picks up the 1-vs-11 conversion dependency. That window now
+  has two known casualties, the RMD and the fee base.
+- **What it would break.** At start-of-year the fee debits `balance` before `resolveSpendTarget`
+  snapshots `yr.curBalances` (`:1685`), so every downstream pass sees a portfolio already net of the
+  fee and the engine RESPONDS to it - draws more, records a shortfall, or trips `totals.success`. At
+  end-of-year the fee lands after `applyWithdrawals` (`:2578`) and all three tax passes, so the year's
+  spending was planned against money the fee was about to take. **The fee could no longer cause a
+  shortfall in the year it is charged.** It would shrink the closing balance silently and surface a
+  year late. `evaluateYearOutcome` reads `yr.portfolioBalance` at `:2950-2952`: debit before it and a
+  plan is failed for a fee it was never given a chance to fund; debit after and failure detection runs
+  a year stale. Neither is right, and for a planning tool "the model notices the fee broke the plan"
+  is most of the point of modeling the fee at all.
+- **Two smaller ones.** The Cash Reserve refill at `:2601-2604` would run against a pre-fee surplus
+  and over-refill every year, systematically. And terminal wealth (`:2943`) plus the IRC-1014 step-up
+  would absorb a final-year fee with no offsetting year of service, shifting every terminal-scored
+  comparison - Break Even, `finalNW`, the `networth` objective.
+
+**Rejected: quarterly.** The engine has exactly two growth applications per year, `preMonths`
+(`:1288`) and `postMonths` (`:2877`), split 1/11 or 11/1. There is no quarterly grid to hang four
+debits on; building one would touch `applyGrowth`, the early/late rule, and every test that pins a
+balance. The prize does not justify it: annual-vs-quarterly on a percent fee is second order, on the
+order of `rate^2 * 3/8 * balance`, which at 1% on $2M is roughly **$75/yr against a $20,000 fee**.
+Rounding error on the fee itself. *(Order-of-magnitude estimate, not a measurement.)*
+
+**ADOPTED instead: keep the charge at the start of the year, and take the BASE from the same prior
+December 31 snapshot `P84l` builds for the RMD.** This is strictly better than either alternative and
+costs nothing extra:
+
+- No timing coupling. The anchor is captured before `:1288` runs, so it predates `preMonths` entirely.
+- The fee stays inside the withdrawal cascade, so solvency detection keeps working.
+- It matches how advisors actually bill, on prior-period value.
+- Next year's RMD is struck off a December 31 balance that already reflects this year's fee, which is
+  what really happens.
+
+One snapshot, captured once, read by both goals. **This is why the two goals share a branch.**
+
 ### Second goal, added by the user 2026-08-28: RMDs must key off the PRIOR YEAR December 31 balance
 
 **The rule:** 26 CFR 1.401(a)(9)-5 sets the year's required distribution as the **prior December 31**
@@ -2373,6 +2435,57 @@ R11 and reason 3 when `P84k` lands.**
 actually moved. If the fee - or a large QCD, which is the latent path today - drains the IRA below
 the required amount, the engine taxes money that never left the account. Cap both at the realized
 outflow.
+
+### Two follow-on questions the user raised 2026-08-28, and the answers
+
+**Q1. The actual timing of the RMD withdrawal is variable. Does that need modeling?**
+
+**No, and the P84l fix is what makes it safe to say so.** Under 26 CFR 1.401(a)(9)-5 the required
+AMOUNT is fixed by the prior December 31 balance and the divisor. It does not matter whether the money
+comes out in January or December - the obligation is identical. So once the basis is right, the
+withdrawal date has **zero** effect on the amount, and the question separates cleanly from the defect.
+
+What is left is pure growth attribution: dollars leaving in January miss the year's return, dollars
+leaving in December do not. That is roughly `RMD x growth x monthsHeld/12` - on a $40,000 RMD at 6%,
+about $2,400 between the two extremes. Real, but it is the SAME question the engine already answers
+once, globally, with the `preMonths`/`postMonths` split, and `P28j` is already scoped to settle that
+one rule. **Recommendation: let the RMD ride the existing timing split; do not give it a third knob.**
+A separate RMD-timing input would multiply the state space against a rule that is itself under review.
+
+**One genuine lever deliberately left out of scope:** the first RMD year may be deferred to April 1 of
+the following year, taking two distributions in year two. That is a real planning choice with a real
+tax consequence, it is not modeled, and it is not in `P84`. Named here so it is a decision rather than
+an omission. Candidate for its own phase.
+
+**Q2. A plan launched after January does not know its prior December 31 balance. What then?**
+
+**This is `P72`'s problem, not `P84`'s, and the seam is clean.** For every year after the first, the
+simulation knows its own December 31 balance exactly - `P84l` is correct with no help from anywhere.
+The gap is year 0 only, and it exists only when the plan starts mid-year, which is precisely the
+condition `P72` introduces `startMonth` to describe.
+
+The failure is specific: a plan opened in September types a SEPTEMBER IRA balance, and `P84l` would
+use it as the prior-December-31 anchor. That overstates year-0's RMD by roughly eight months of
+growth - **reintroducing, in year 0, the exact error the phase exists to remove.** `P72` already
+records why reconstructing the January figure by hand is impractical: the change since January mixes
+growth, taxable events, withdrawals and deposits.
+
+**Recommended fix, and it is better than asking for the December 31 balance: ask for the year's RMD
+DOLLAR AMOUNT directly, year 0 only.**
+
+- **The custodian already computed it.** Fidelity, Schwab and Vanguard all state the year's RMD on the
+  January statement and on an account page. It is one of the easiest retirement numbers to obtain -
+  far easier than a December 31 balance, which the user would have to dig a statement out for.
+- **It is exact.** No divisor lookup, no balance reconstruction, no growth assumption layered on top.
+- **It absorbs cases the engine cannot model anyway** - inherited IRAs on their own schedules, accounts
+  aggregated differently than the tool's two-IRA shape, the still-working exception.
+- **It degrades gracefully.** Blank falls back to a derived estimate,
+  `priorDec31 ~= typedBalance / (1 + growth x elapsedMonths/12)`, sized by `P72`'s `startMonth`. At
+  `startMonth = 1` the correction is the identity and nothing changes for the common case.
+
+**This REFINES `P72`'s existing "RMD is NOT prorated" decision rather than contradicting it.** That
+row is right: the RMD is a full-year obligation and owes nothing to the stub fraction. What `P72`
+should add is that the year-0 RMD **basis** is not the typed balance either. Recorded as `P72k`.
 
 **Blast radius: this changes EVERY plan, not only plans that use the fee.**
 - The fee-OFF byte-identity test (`P84a`) is scoped to *fee-off vs field-absent under the new RMD
@@ -2423,9 +2536,11 @@ it retires placement reason 3 and risk R11 before the fee code is written to dep
       changelog sentence is written from**, and a null result here would mean the fix is invisible
       and the re-baseline risk is not worth taking. Gate for `P84l`.
 - [ ] **P84l** *(S)* - `sim.priorYearEndIRA1` / `priorYearEndIRA2` snapshotted at the top of
-      `beginYear` before the growth call (`:1288`), read at `:1557-1558`. Year 0 seeds from the typed
-      input, which is what the top-of-`beginYear` balance already holds - so no year-0 special case
-      should be needed. **Assert that rather than assuming it.**
+      `beginYear` before the growth call (`:1288`), read at `:1557-1558`. The same snapshot is the
+      AUM fee's base, per the timing decision above - captured once, read twice.
+      **Year 0 is NOT clean, and an earlier draft of this task wrongly said it was.** The snapshot
+      seeds from the typed IRA balance, which is only a December 31 balance for a plan that starts in
+      January. See the year-0 section below; `P84o` puts a guard on it and `P72` owns the fix.
 - [ ] **P84m** *(S)* - cap `yr.totalRMD` and `yr.taxableRMD` at the realized IRA outflow, so a
       drained IRA cannot be taxed on a distribution that never happened. Reachable today via a large
       QCD; the fee widens the path.
@@ -2434,6 +2549,13 @@ it retires placement reason 3 and risk R11 before the fee code is written to dep
       is the one that fails on `main`); a mid-year fee does not move the same year's RMD; the drained
       IRA case. Then re-run all three suites, re-baseline whatever moved, and reconcile **all four**
       numbers in `TestTiers.EXPECTED` plus `.githooks/README.md`.
+- [ ] **P84o** *(S)* - **year-0 honesty guard, and the `P72` handoff.** `P84l` is exact for every year
+      after the first and for any January-start plan; year 0 of a mid-year plan uses a balance that is
+      not a December 31 balance. Until `P72k` lands: assert in a test that year 0's RMD basis is the
+      typed input (so the limitation is pinned, not drifting), and say plainly in the RMD column
+      tooltip and the changelog that the first year's RMD is estimated from the balance as entered.
+      **Do not paper over it with a growth-based back-out here** - that guess belongs with `startMonth`,
+      which only `P72` has. Declaring the limitation is the deliverable; fixing it is `P72k`.
 
 **Risks, and the specific mechanism each one breaks through:**
 
@@ -2453,7 +2575,7 @@ it retires placement reason 3 and risk R11 before the fee code is written to dep
 | R12 | the re-baseline hides a real regression | `P84l` moves numbers in almost every suite, so a genuinely broken assertion can be "fixed" by accepting the new value | `P84k` characterizes the expected direction and size FIRST, so each moved number is checked against a prediction rather than accepted because it moved |
 
 - **Status:** filed 2026-08-28, not started. Second goal (RMD basis) added by the user the same day.
-  **Estimate: 8 files, ~20 new tests (`optimizer_core` 340 -> ~360), 14 sub-tasks - 9 S, 5 M, no L.**
+  **Estimate: 8 files, ~21 new tests (`optimizer_core` 340 -> ~361), 15 sub-tasks - 10 S, 5 M, no L.**
   The fee half is additive and hides behind a `0` default; **the RMD half is a behavior change for
   every existing plan** and carries the only re-baseline risk in the phase, which is why `P84k`
   measures before `P84l` moves anything. Nearest shipped comparable for the fee: **P2 Cash Reserve**.
@@ -2466,8 +2588,12 @@ it retires placement reason 3 and risk R11 before the fee code is written to dep
 - **Test fixture:** a local `AUM_BASE = {...BASE, growth: 0, inflation: 0, cpi: 0, ...}` with a
   non-zero balance in every account, so each scope has something to bite and the arithmetic is
   checkable by hand.
-- **Independent:** no phase dependencies. Touches `beginYear`'s neighbourhood only, so it does not
-  collide with `P35i`'s `fillSpendingGap` arm or with `P28j`'s `beginYear` timing rule.
+- **Independent, with one declared seam:** no blocking dependency. Touches `beginYear`'s
+  neighbourhood only, so it does not collide with `P35i`'s `fillSpendingGap` arm. **`P72k` finishes
+  year 0** for a mid-year plan - `P84o` declares that limitation rather than hiding it, and nothing
+  in `P84` waits on `P72`. **`P28j` is the other neighbour:** it owns the `preMonths` 1-vs-11 rule
+  whose contamination of this window is what `P84l` routes around, and the RMD withdrawal-timing
+  question in Q1 above resolves to "let `P28j` settle it", not to a knob here.
 
 ---
 

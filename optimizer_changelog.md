@@ -37,6 +37,12 @@ Future $/Current $ switch the same way. They always showed future dollars, even 
 sitting beside an All Taxes figure that converted; the two could not honestly be compared. The
 Optimizer's All RMDs column also sorts on the figure it displays.
 
+Three more readouts join them: the Advisor Fees tile's per-year average now averages the figure the
+tile shows, the Optimizer's Conv Tax column converts (and sorts on what it shows), and the dollar
+amounts in the Break Even explanation are stated in the dollars the switch selects. The Break Even
+suggestion itself, which year to stop converting or whether to convert at all, never changes with
+the switch; only the dollars that describe it do.
+
 ---
 
 <a id="11.168e"></a>

@@ -1493,6 +1493,9 @@ function _runOptimizerNow() {
                 _optConvAmt: optConv,
                 _convEndYear: convEndYear,
                 _convSavings: (baseRow.totals.tax - beResult.totals.tax),
+                // P86: the Current-$ twin is a difference of sum-of-deflated-years totals, so the
+                // Conv Tax column can follow the toggle like the taxes it is made from.
+                _convSavingsCurrent: (baseRow.totals.taxCurrentDollars - beResult.totals.taxCurrentDollars),
                 _convBEYear: beResult.totals.convBEYear,
                 _convOCFinal: lastEntry?.convOC ?? null,
                 totals: beResult.totals,
@@ -1834,11 +1837,11 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             // other money column in this table is bare, and the heading already says what it is.
             getValue: r => {
                 if (r._convSavings == null) return '—';
-                const v = Math.round(r._convSavings);
+                const v = Math.round(inC() ? (r._convSavingsCurrent ?? r._convSavings) : r._convSavings);
                 const c = v > 0 ? '#1a7f37' : v < 0 ? '#cf222e' : '#57606a';
                 return `<span style="color:${c}">${v > 0 ? '+' : ''}${v.toLocaleString()}</span>`;
             },
-            getSortValue: r => r._convSavings ?? -Infinity
+            getSortValue: r => (inC() ? (r._convSavingsCurrent ?? r._convSavings) : r._convSavings) ?? -Infinity
         }
     ];
     // Display order comes from OPT_COLUMN_KEYS, not from the order these descriptors happen to be
@@ -3237,8 +3240,10 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
             // honest version needs a second simulation, the way Break Even does, and that belongs
             // in a phase of its own rather than in a tile sub-label.
             const yrs = totals.yearstested || 0;
+            // P86: the average divides the DISPLAYED total, so the sub-label and the tile above it
+            // are always on the same basis.
             if (sub) sub.innerText = yrs > 0
-                ? '$' + Math.round(fees / yrs).toLocaleString() + '/yr average' : '';
+                ? '$' + Math.round(dispFees / yrs).toLocaleString() + '/yr average' : '';
         }
     }
     const rmdEl = document.getElementById('stat-rmd');
@@ -3281,13 +3286,22 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
             try {
                 const mode = lastSimInputs.convEndMode === 'extra' ? 'extra' : 'all';
                 const sugg = bestConversionStopYear(lastSimInputs, { mode });
+                // P86: the ⓘ dollars honor the toggle at FORMAT time only - the search and its
+                // thresholds stay nominal, so the suggestion itself never flips with the view.
+                // Stop-year gains are after-tax terminal-wealth differences (stocks at the final
+                // date), so they deflate by the terminal factor; a named conversion amount is a
+                // flow in its own year and deflates by that year's factor.
+                const _beDeflTerm = inCD
+                    ? 1 / (lastSimulationLog?.[lastSimulationLog.length - 1]?.inflationFactor || 1) : 1;
+                const _beDeflAtYear = (y) => inCD
+                    ? 1 / (lastSimulationLog?.find(r => r.year === y)?.inflationFactor || 1) : 1;
                 // Secondary color, only when Break Even is blank: which conversion erased the lead.
                 let boundaryNote = '';
                 if (totals.convBEYear == null) {
                     const diag = diagnoseConvBreakEvenFailure(lastSimInputs, lastSimulationLog);
-                    if (diag) boundaryNote = formatBreakEvenDiagnosis(diag);
+                    if (diag) boundaryNote = formatBreakEvenDiagnosis(diag, _beDeflAtYear);
                 }
-                const built = formatStopYearMessage(sugg, boundaryNote, mode);
+                const built = formatStopYearMessage(sugg, boundaryNote, mode, _beDeflTerm);
                 _beDiagnosisMsg = built.msg;
                 _beStopSuggestion = built.suggestion;
             } catch (e) {
@@ -3364,13 +3378,15 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
 // RMD divisors come from RMD_TABLE in taxengine.js (full table, ages 72–120).
 // Reads IRA balances, birth years, and growth rate from DOM inputs - no totals arg needed.
 // Formats a diagnoseConvBreakEvenFailure() result as a plain-English explanation.
-function formatBreakEvenDiagnosis(diag) {
-    const _fmt = (n) => '$' + Math.round(n).toLocaleString();
+// `deflAtYear` (P86) converts a named year's conversion amount to the displayed basis - a flow in
+// its own year deflates by that year's factor. Defaults to identity for Future $.
+function formatBreakEvenDiagnosis(diag, deflAtYear = () => 1) {
+    const _fmt = (n, y) => '$' + Math.round(n * deflAtYear(y)).toLocaleString();
     let msg;
     if (diag.outcome === 'neverSustains') {
-        msg = `The first conversion, in ${diag.breakingYear} (${_fmt(diag.breakingAmount)}), never earns back its own tax cost by the end of the plan.`;
+        msg = `The first conversion, in ${diag.breakingYear} (${_fmt(diag.breakingAmount, diag.breakingYear)}), never earns back its own tax cost by the end of the plan.`;
     } else {
-        msg = `Conversions through ${diag.lastSustainableYear} would have broken even in ${diag.lastSustainableBEYear}. The ${diag.breakingYear} conversion (${_fmt(diag.breakingAmount)}) is the one that erases the lead for good.`;
+        msg = `Conversions through ${diag.lastSustainableYear} would have broken even in ${diag.lastSustainableBEYear}. The ${diag.breakingYear} conversion (${_fmt(diag.breakingAmount, diag.breakingYear)}) is the one that erases the lead for good.`;
     }
     if (diag.futureIRATaxRateUnset) {
         msg += ' (Valued at each year\'s own tax bracket -- set a Marginal Heirs Tax Rate in Assumptions for a steadier comparison.)';
@@ -3385,9 +3401,12 @@ function formatBreakEvenDiagnosis(diag) {
 // blank. Returns { msg, suggestion } where suggestion is { year, mode } for the one-click apply,
 // or null when there is nothing actionable to click (converting through the end is already best,
 // or converting nothing is best -- the latter has no natural "stop after YEAR" the field expresses).
-function formatStopYearMessage(sugg, boundaryNote, mode) {
+// `deflTerm` (P86) converts the terminal-wealth gains to the displayed basis; the `> 1` decision
+// thresholds below deliberately stay on the NOMINAL values so the toggle never changes which
+// suggestion is made, only the dollars that describe it.
+function formatStopYearMessage(sugg, boundaryNote, mode, deflTerm = 1) {
     if (!sugg) return { msg: boundaryNote || '', suggestion: null };
-    const _m = (n) => '$' + Math.round(n).toLocaleString();
+    const _m = (n) => '$' + Math.round(n * deflTerm).toLocaleString();
     const scopeWord = mode === 'extra' ? 'the extra conversion' : 'conversions';
     let msg = '', suggestion = null;
     if (sugg.stopYearCalendar != null && sugg.gainVsFull > 1) {

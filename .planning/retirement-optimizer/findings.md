@@ -2907,3 +2907,95 @@ would have landed on, and coordinate descent over it keeps `simulate()`'s noncon
 cliffs, the Social Security torpedo, the widow transition, the state engine - which an LP cannot
 represent honestly. Only the P75e stretch (convexify the cliffs to get a provable ceiling) would
 pull in a solver, and HiGHS-WASM is then the only browser-compatible candidate.
+
+---
+
+## P86a audit - every displayed dollar, classified (2026-08-28, three-agent sweep, all file:line verified)
+
+**The rule.** Stocks (balances) deflate by their own date's factor. Accumulated flows are
+`SUM(flow_y / factor_y)`. Deflating a nominal running total by one row's factor is wrong and can
+make the total FALL (the reported SumAdvisorFees 80,672 -> 79,371 on `?af=0.8&afs=rothira`).
+
+### Engine totals (optimizer_core.js, init :3362)
+
+| field | line | kind | CD twin? |
+|---|---|---|---|
+| tax | 3105 | flow acc | YES taxCurrentDollars :3109 |
+| spend | 3108 | flow acc | YES spendCurrentDollars :3110 |
+| advisorFees | 3115 | flow acc | YES advisorFeesCurrentDollars :3116 |
+| gross | 3107 | flow acc | no (only used in nominal/nominal ratio) |
+| medicare | 3106 | flow acc | no (not displayed as $) |
+| rmd | 3111 | flow acc | **no - DEFECT D1** |
+| rmdTax | 3113 | flow acc | no (ratio only) |
+| qcd | 3114 | flow acc | **no - DEFECT D1** |
+| shortfall :3119, forcedIRATotal :2480 | | flow acc | no (not displayed as $) |
+| terminal.* :3644-3650, finalNW :3654 | | stocks | UI derives finalNWCurrentDollars (ui:871) - correct idiom for a stock |
+
+Deflator: `sim.inflation`, advanced :3315 AFTER logging, so every log row's `inflationFactor`
+(:1191) is the START-of-year price level; consistent with the totals accrual (:3105-3119).
+Distinct clocks: cpiRate (statutory), medicareRate, ssFactor, pensionFactor - never deflators.
+
+### The three broken Annual Details running totals
+
+`SumTaxes` (core:1125 <- sim.cumulativeTaxes), `SumAdvisorFees` (core:1081 <-
+sim.cumulativeAdvisorFees), `Spendable` (core:1147 <- totals.spend via :3209). All nominal
+sums-to-date; the generic renderer (ui:3014-3015) divides EVERY numeric cell by that row's factor.
+Right for flows and stocks, wrong for these three. **Counters have zero readers outside the log
+builder** (verified whole repo): accrues :2482/:2953, adjusts :2724/:2797/:3028, inits :3385/:3468,
+pass-throughs :3207/:3209/:3214 - all removable. Invariant holds today:
+`log[y].SumTaxes === SUM(i<=y) log[i].totalTax`.
+
+**Trap:** `spendGoal` and `netIncome` legitimately DECLINE under Current-$ (real value of a nominal
+flow). Fix must be a NAMED map, never a monotonicity heuristic.
+**Delivered spend from log columns:** `spendGoal + shortfall` (shortfall <= 0 by construction,
+core:2570 `Math.min(0, ...)`); matches totals.spend accrual exactly, GK included.
+
+### Summary bar (updateStats ui:3156-3302)
+
+| tile | source | honors CD? |
+|---|---|---|
+| All Taxes / Spendable / End Wealth / Advisor Fees | CD-twin picks :3158-3160, :3174 | yes |
+| **All RMDs + QCD sub-label** | totals.rmd/.qcd unconditional :3189-3196 | **NO - D1** |
+| **Advisor /yr sub-label** | nominal fees/yrs :3184-3186 even in CD | **NO** |
+| **Break Even (i) dollars** | nominal strings, _fmt :3309, _m :3331 | **NO** (terminal-wealth DIFFS = stocks; terminal-factor deflation correct) |
+| Tax Rate, Withdrawal Rate, Funded Yrs | ratios/counts | n/a, correct |
+
+### Optimizer table (getOptimizerColumns ui:1654-1877)
+
+Correct: tax/spend/afterTaxNW/finalIRA/finalRoth + deltas all pick CD twins. **Defects:** `rmd`
+column nominal unconditional (:1807-1812); `convSaved` = `_convSavings` (ui:1495, nominal diff of
+nominal lifetime taxes) ignores toggle. `spendGoal` column is today's-$ input by definition.
+Ranking objectives (core:4143-4182) are FIXED-basis deliberately (mostly Current-$); ranking must
+not flip with a display toggle; deterministic runs make nominal-vs-real stock ranking identical
+anyway. NOT a defect. `opt-note` "all Spendable identical" reads nominal spend (:2235) - harmless
+(same inflation path across rows), leave.
+
+### Monte Carlo
+
+- Survival table: **nominal** medianTax (mc_engine:406 totals.tax) beside **always-real**
+  medianSpend (:407 totals.spendCurrentDollars); Final Balance + plan headline nominal always;
+  none re-rendered on toggle (updateCurrentDollarsView :894-912 only calls renderMCChart /
+  renderStressChart).
+- Fan + stress charts deflate by ONE flat cross-path CAGR (`inflationStats.cagr`,
+  mc_tab:1871-1876, 2088-2093). Each path's true `inflationFactor` exists inside simulate() and is
+  **discarded** at the engine boundary (mc_engine:406-439) - only the rate sequences survive.
+- Median-line tooltip (mc_tab:1999-2002) reads raw nominal percentiles under a deflated line;
+  trace tooltip (:1998) reads ctx.parsed.y and is right.
+- Replay/Main Path: fully correct - re-runs simulate(), all single-plan renderers use the path's
+  own inflationFactor and honor the toggle.
+
+### Misc verified
+
+- No CSV export of Annual Details; column visibility NOT persisted by name anywhere (only fold
+  state + scenarios in localStorage) - renaming Spendable is safe.
+- No shared output money formatter exists; each surface inlines `'$'+Math.round(x).toLocaleString()`.
+- Known consumers of the three log keys needing edits: columnCategories ui:2495/:2505/:2539,
+  columnGroupDefs :2585+, tooltips :2864/:2866, core.tests P84e :2216-2228, :5914.
+- mc_engine IS node-testable (`_mcEngine.runJob`, core.tests:6164+).
+
+### Perf gate baseline (pre-change, node 26.2.0, this machine)
+
+simulate() 40yr couple, fee armed, growth+inflation on: 5 batches x 200 runs after warm-up:
+106.7 / 110.7 / **114.0 median** / 121.6 / 135.2 ms; per-run 0.570 ms; totals.totalTime 0.511 ms.
+Bench script: scratchpad `bench_simulate.js` (batch noise ~10x the 0.5% gate, so compare BEST-of-5
+too: baseline best 106.7 ms).

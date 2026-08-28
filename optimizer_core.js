@@ -1072,13 +1072,13 @@ function buildSimYearLogRecord(p) {
         'Brokerage-': p.netWithdrawals.Brokerage,
         'RothWD': (p.netWithdrawals.Roth1 ?? 0) + (p.netWithdrawals.Roth2 ?? 0),
         'CashWD': p.netWithdrawals.Cash,
-        // P84, four keys kept ADJACENT on purpose: rebuildGroupRow colSpans runs of consecutive
+        // P84, three keys kept ADJACENT on purpose: rebuildGroupRow colSpans runs of consecutive
         // same-group columns, so a visible key dropped into the middle of another run shears the
         // Annual Details banner. Emitted unconditionally with ?? 0 because the _logSansTiming
-        // identity tests stringify whole rows. Neither visible key contains '%', 'yr' or 'year', so
-        // the name-driven formatter prints both as dollars and deflates both under Current-$.
+        // identity tests stringify whole rows. P86: the SumAdvisorFees running total that sat here
+        // is now a UI-computed column (ANNUAL_RUNNING_TOTALS) - a stored nominal sum-to-date
+        // divided by one row's factor was the wrong Current-$ number.
         'AdvisorFee': p.advisorFee ?? 0,
-        'SumAdvisorFees': p.cumulativeAdvisorFees ?? 0,
         '-advisorFeeBasis': p.advisorFeeBasis ?? 0,
         '-advisorFeeFromIRA': p.advisorFeeFromIRA ?? 0,
         // DO NOT write a reframed figure here. `rothConv` is read back out of the log by the
@@ -1122,7 +1122,6 @@ function buildSimYearLogRecord(p) {
         'NominalRate%': p.nominalTaxRate,
         'FedCap': p.tax.fedLimit,
         'StateCap': p.tax.stLimit,
-        'SumTaxes': p.cumulativeTaxes,
         'BracketTarget': p.bracketTarget,
         'BracketOverage': p.bracketOverage,
         'ForcedIRA': p.forcedIRA,
@@ -1144,7 +1143,6 @@ function buildSimYearLogRecord(p) {
         totalWealth: p.totalWealth,
         portfolioBalance: p.portfolioBalance,
         guaranteedIncome: p.guaranteedIncome,
-        Spendable: p.totalsSpend,
         brokerageG: p.gains.Brokerage,
         cashG: p.gains.Cash,
         rothG: (p.gains.Roth1 || 0) + (p.gains.Roth2 || 0),
@@ -2479,8 +2477,6 @@ function resolveResidualAndForcedIRA(sim, yr) {
     if (yr.acaBreach) totals.acaBreachYears += 1;
     totals.forcedIRATotal += yr.forcedIRA;
 
-    sim.cumulativeTaxes += yr.totalTax;
-
 
     // TWO income figures, and the difference between them is load-bearing.
     //
@@ -2721,7 +2717,6 @@ function cfRefundIRA(sim, yr, netTarget) {
     yr.netWithdrawals.IRA -= G;
     yr.tax = t2;
     const _newTotalTax = t2.totalTax + yr.IRMAA;
-    sim.cumulativeTaxes -= (yr.totalTax - _newTotalTax);
     const _netRemoved = G - (yr.totalTax - _newTotalTax);
     yr.totalTax = _newTotalTax;
     yr.totalIncome = Math.max(1, yr.totalIncome - G);
@@ -2794,7 +2789,6 @@ function applyExtraConversion(sim, yr) {
             // FedTax + StateTax + IRMAA reconcile to totalTax. capGainsTax is unchanged (ordinary income).
             yr.tax.federalTax = _exTaxCalc.federalTax;
             yr.tax.stateTax   = _exTaxCalc.stateTax;
-            sim.cumulativeTaxes += incrementalExtraConvTax;
             yr._extraIRAIncome = (yr._extraIRAIncome ?? 0) + _gross;   // keep the basis consistent for any later consumer
         }
     }
@@ -2950,7 +2944,6 @@ function applyAdvisorFee(sim, yr) {
     yr.advisorFeeUnpaid = Math.max(0, want - paid);
     yr.advisorFeeFromIRA = Math.max(0, before1 - Math.max(0, balance.IRA1 || 0))
                      + Math.max(0, before2 - Math.max(0, balance.IRA2 || 0));
-    sim.cumulativeAdvisorFees = (sim.cumulativeAdvisorFees || 0) + paid;
 }
 
 function splitPreferLarger(amount, ira1Avail, ira2Avail) {
@@ -3025,7 +3018,6 @@ function applyConversionGrossUp(sim, yr) {
       const fedFrac = tot > 0 ? fm / tot : 1;
       yr.tax.federalTax += taxCost * fedFrac;
       yr.tax.stateTax   += taxCost * (1 - fedFrac); }
-    sim.cumulativeTaxes += taxCost;
     // This IRA income is NOT in yr.netWithdrawals.IRA (it's an extra draw applied straight to
     // balance), but its tax IS now in yr.totalTax. Any later mechanism that isolates its own
     // marginal tax by subtracting yr.totalTax must therefore include this in its income basis,
@@ -3204,14 +3196,12 @@ function logYear(sim, yr) {
         surplus: yr.surplus, totalRMD: yr.totalRMD, qcd1: yr.qcd1, qcd2: yr.qcd2, taxableDividends: yr.taxableDividends, taxableInterest: yr.taxableInterest,
         netWithdrawals: yr.netWithdrawals, rmd1: yr.rmd1, rmd2: yr.rmd2, totalConverted: yr.totalConverted, tax: yr.tax, IRMAA: yr.IRMAA, IRMAATier: yr.IRMAATier, medicareBase: yr.medicareBase, cpiRate: sim.cpiRate,
         iraVolSpend1: yr.iraVolSpend1, iraVolSpend2: yr.iraVolSpend2, iraConvGross1: yr.iraConvGross1, iraConvGross2: yr.iraConvGross2,
-        totalTax: yr.totalTax, capitalGains: yr.capitalGains, cumulativeTaxes: sim.cumulativeTaxes, bracketTarget: yr.bracketTarget, bracketOverage: yr.bracketOverage, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
+        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, bracketOverage: yr.bracketOverage, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
         balance: balance, nominalTaxRate: sim.nominalTaxRate, totalWealth: yr.totalWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
-        totalsSpend: totals.spend,
         gains: yr.gains, rmd1Pct: yr.rmd1Pct, subCycleLabel: yr.subCycleLabel, convNetValue: null, excessNetValue: null,
         incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,
         extraConvGross: yr.extraConvGross,
         advisorFee: yr.advisorFee, advisorFeeBasis: yr.advisorFeeBasis, advisorFeeFromIRA: yr.advisorFeeFromIRA,
-        cumulativeAdvisorFees: sim.cumulativeAdvisorFees,
         surplusToBrokerage: yr.surplusToBrokerage, cashBreach: yr.cashBreach,
         grossUpIRA: yr.grossUpIRA, grossUpTax: yr.grossUpTax, extraConvCashTax: yr.extraConvCashTax,
         fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep,
@@ -3382,7 +3372,6 @@ function simulate(inputs) {
     let fixedWithdrawal = 0;
     let spendDelta = 1 + inputs.spendChange;
     let spendGoal = inputs.spendGoal * Math.pow(1 + inputs.inflation, gapYears);
-    let cumulativeTaxes = 0;
     let nominalTaxRate = 0.20; // Just a guess.
     let capitalGainsRate = 0.15; // A guess.
 
@@ -3465,7 +3454,7 @@ function simulate(inputs) {
         inputs, balance, log, totals,
         birthyear1, birthmonth1, birthyear2, birthmonth2,
         currentYear, cpiRate, inflation, medicareRate, pensionFactor, ssFactor,
-        fixedWithdrawal, spendDelta, spendGoal, cumulativeTaxes, cumulativeAdvisorFees: 0,
+        fixedWithdrawal, spendDelta, spendGoal,
         nominalTaxRate, capitalGainsRate,
         subCycleIRAYears, prevPortfolio,
         gkIWR, gkPriorReturn, gkAdjLabel,

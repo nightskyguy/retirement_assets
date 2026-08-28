@@ -2213,17 +2213,50 @@ test('P84d: a flat fee is CPI-indexed, and a percent fee is not', () => {
     assertNear(r.log[0]['-advisorFeeBasis'], 0, 'flat mode reports no basis', 1e-9);
 });
 
-test('P84e: the fee is tracked in the totals, the cumulative scalar and four log keys', () => {
+test('P84e: the fee is tracked in the totals and three log keys; the running total is P86-computed', () => {
     const r = simulate({ ..._ADVISOR_BASE, advisorFeeAmount: 1, advisorFeeMode: 'pct', advisorFeeScope: 'all' });
     assertNear(r.totals.advisorFees, _sumKey(r.log, 'AdvisorFee'), 'totals.advisorFees equals the per-year sum', 1);
     assert(r.totals.advisorFeesCurrentDollars > 0 && r.totals.advisorFeesCurrentDollars < r.totals.advisorFees,
         'the current-dollar total must be positive and smaller than the nominal one');
-    const last = r.log[r.log.length - 1];
-    assertNear(last.SumAdvisorFees, r.totals.advisorFees, 'the running total ends at the lifetime total', 1);
-    for (const k of ['AdvisorFee', 'SumAdvisorFees', '-advisorFeeBasis', '-advisorFeeFromIRA']) {
+    assertNear(r.totals.advisorFeesCurrentDollars,
+        r.log.reduce((a, e) => a + (e.AdvisorFee || 0) / (e.inflationFactor || 1), 0),
+        'the current-dollar total is the sum of each year deflated by its own factor', 1);
+    for (const k of ['AdvisorFee', '-advisorFeeBasis', '-advisorFeeFromIRA']) {
         assert(k in r.log[0], `log rows must carry ${k}`);
         assert(k in simulate({ ..._ADVISOR_BASE }).log[0],
             `log rows must carry ${k} even with no fee, or the identity tests break`);
+    }
+    // P86: the stored running totals left the engine log; the UI computes them on demand. If one
+    // reappears here the wrong-basis Current-$ bug it caused comes back with it.
+    for (const k of ['SumAdvisorFees', 'SumTaxes', 'Spendable']) {
+        assert(!(k in r.log[0]), `${k} must NOT be a stored log key (P86 computes it in the UI)`);
+    }
+});
+
+test('P86: running-total identities - every lifetime total is the sum of its per-year column, in both bases', () => {
+    // Inflation is live in this base, so a wrong deflation basis is visible rather than plausible.
+    const r = simulate({ ..._ADVISOR_BASE, advisorFeeAmount: 0.8, advisorFeeMode: 'pct', advisorFeeScope: 'all' });
+    const sumCD = (log, f) => log.reduce((a, e) => a + f(e) / (e.inflationFactor || 1), 0);
+    // Nominal identities: the totals the tiles read equal the per-year columns the table shows.
+    assertNear(r.totals.tax, _sumKey(r.log, 'totalTax'), 'totals.tax = sum of totalTax', 1);
+    assertNear(r.totals.spend,
+        r.log.reduce((a, e) => a + (e.spendGoal || 0) + (e.shortfall || 0), 0),
+        'totals.spend = sum of delivered spend (spendGoal + shortfall)', 1);
+    // Current-$ identities: the CD twins are the sum of each year deflated by its OWN factor -
+    // never a nominal total deflated by one year's factor.
+    assertNear(r.totals.taxCurrentDollars, sumCD(r.log, e => e.totalTax || 0),
+        'taxCurrentDollars = sum of per-year deflated tax', 1);
+    assertNear(r.totals.spendCurrentDollars,
+        sumCD(r.log, e => (e.spendGoal || 0) + (e.shortfall || 0)),
+        'spendCurrentDollars = sum of per-year deflated delivered spend', 1);
+    // Each accumulator's per-year source is non-negative (delivered spend = min(goal, netIncome)),
+    // so ANY running sum of them - either basis - is non-decreasing. This is the engine-side half
+    // of the guarantee; the browser tier checks the rendered cells.
+    for (const e of r.log) {
+        assert((e.totalTax || 0) >= 0, 'per-year tax never negative');
+        assert((e.AdvisorFee || 0) >= 0, 'per-year fee never negative');
+        assert(((e.spendGoal || 0) + (e.shortfall || 0)) >= -1e-6,
+            'per-year delivered spend never negative');
     }
 });
 
@@ -5911,7 +5944,10 @@ test.critical('a no-tax state reports honest spend and honest failure', () => {
     for (const st of ['NV', 'TX', 'IL']) {
         const r = simulate({ ...base, STATEname: st });
         assert(r.totals.spend > 0, `${st}: total spend must be positive, got ${Math.round(r.totals.spend)}`);
-        assert(r.log[2].Spendable > 0, `${st}: year 2 spendable must be positive, got ${r.log[2].Spendable}`);
+        // P86: the stored Spendable running total left the log; delivered spend per year is
+        // spendGoal + shortfall (shortfall <= 0), the same quantity totals.spend accumulates.
+        const _delivered2 = r.log.slice(0, 3).reduce((a, e) => a + (e.spendGoal || 0) + (e.shortfall || 0), 0);
+        assert(_delivered2 > 0, `${st}: cumulative delivered spend through year 2 must be positive, got ${_delivered2}`);
         assert(r.totals.success === false,
             `${st}: a $400k goal on a $600k portfolio must fail, not report success`);
     }

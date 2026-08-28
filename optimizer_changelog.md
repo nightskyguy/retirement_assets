@@ -17,6 +17,23 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1690"></a>
+
+## 11.1690
+
+### Current $ view now converts running totals correctly
+
+**Display fix. No plan produces different totals; what changes is how the running-total columns in
+Annual Details read when the Future $/Current $ switch is set to Current $.**
+
+The running-total columns (SumTaxes, SumAdvisorFees, and Spendable, renamed SumSpendable) could
+fall from one year to the next in Current $ view, which a lifetime total should never do. Each is
+now built the right way for that view: every year's amount is converted to today's purchasing power
+first, then added, so the total only grows. Future $ view and every per-year column are unchanged.
+Hover over any of the three column headers for what each total includes.
+
+---
+
 <a id="11.168e"></a>
 
 ## 11.168e

@@ -2492,7 +2492,7 @@ const columnCategories = {
     'Roth': ['Balances', 'Roth Δ'],
     'Brokerage': ['Balances', 'Brokerage Δ'],
     'Basis': ['Balances', 'Brokerage Δ'],
-    'Spendable': ['Balances'],
+    'SumSpendable': ['Balances'],
 
     // Taxation
     'MAGI': ['Taxation'],
@@ -2591,7 +2591,7 @@ const columnGroupDefs = {
     'IRA1': 'Balances', 'IRA2': 'Balances', 'TotalIRA': 'Balances',
     'Roth1': 'Balances', 'Roth2': 'Balances',
     'Cash': 'Balances', 'Roth': 'Balances', 'Brokerage': 'Balances',
-    'Basis': 'Balances', 'totalWealth': 'Balances', 'Spendable': 'Balances',
+    'Basis': 'Balances', 'totalWealth': 'Balances', 'SumSpendable': 'Balances',
     'brokerageG': 'Balances', 'cashG': 'Balances', 'rothG': 'Balances', 'RMD%': 'Balances',
     'convOC': 'Opp. Cost', 'excessOC': 'Opp. Cost', 'convTax': 'Opp. Cost', 'excessTax': 'Opp. Cost',
     'BETR%': 'Opp. Cost', 'betrFlag': 'Opp. Cost', 'extraConv': 'Opp. Cost',
@@ -2604,6 +2604,50 @@ const columnGroupDefs = {
     'gkSpend': 'Income', 'gkAdj': 'Income',
     'infl%': 'Market', 'inflCum%': 'Market', 'return%': 'Market',
 };
+
+// P86: the running-total columns are COMPUTED HERE, not stored in the engine log. A stored nominal
+// sum-to-date divided by one row's inflation factor is the wrong Current-$ number (it can even
+// fall year over year); the right one is the running sum of each year's deflated flow. This is a
+// NAMED list on purpose - never infer accumulators by monotonicity: per-year flows like spendGoal
+// and netIncome legitimately DECLINE under Current-$ and must keep doing so.
+// `after` = the log key each computed column is spliced after; these are the columns' historical
+// positions, and rebuildGroupRow colSpans runs of consecutive same-group columns, so moving one
+// into the middle of another run shears the Annual Details banner (the P84 lesson).
+const ANNUAL_RUNNING_TOTALS = {
+    'SumTaxes':       { after: 'StateCap',         source: r => r.totalTax ?? 0 },
+    'SumAdvisorFees': { after: 'AdvisorFee',       source: r => r.AdvisorFee ?? 0 },
+    // Delivered spend = goal + shortfall (shortfall is <= 0 by construction), the same per-year
+    // quantity totals.spend accumulates in the engine, Guyton-Klinger included.
+    'SumSpendable':   { after: 'guaranteedIncome', source: r => (r.spendGoal ?? 0) + (r.shortfall ?? 0) },
+};
+
+// ONE key list for the Annual Details header row, body rows and content scan: the engine log's own
+// keys with the computed running-total columns spliced in. Three consumers, one list - the docblock
+// above isTableColumnKey explains what happened last time two of them disagreed.
+function annualDetailsKeys(log) {
+    const keys = Object.keys(log[0]);
+    for (const [key, def] of Object.entries(ANNUAL_RUNNING_TOTALS)) {
+        const at = keys.indexOf(def.after);
+        keys.splice(at >= 0 ? at + 1 : keys.length, 0, key);
+    }
+    return keys;
+}
+
+// One pass per render: each computed column's per-row value in the basis the toggle selects.
+// Future $ = running sum of the nominal per-year flow; Current $ = running sum of each year's
+// flow deflated by THAT year's factor (the totals.*CurrentDollars idiom).
+function computeRunningTotals(log, inCurrentDollars) {
+    const out = {};
+    for (const [key, def] of Object.entries(ANNUAL_RUNNING_TOTALS)) {
+        let sum = 0;
+        out[key] = log.map(row => {
+            const flow = def.source(row);
+            sum += inCurrentDollars ? flow / (row.inflationFactor || 1) : flow;
+            return sum;
+        });
+    }
+    return out;
+}
 
 // Get active categories based on checkbox state
 function getActiveCategories() {
@@ -2661,14 +2705,16 @@ function isTableColumnKey(key) {
 function analyzeColumnContent(log) {
     if (!log || log.length === 0) return {};
 
-    const keys = Object.keys(log[0]).filter(isTableColumnKey);
+    const keys = annualDetailsKeys(log).filter(isTableColumnKey);
     const columnStatus = {};
 
     keys.forEach(key => {
         let hasNonZeroValue = false;
 
         for (const row of log) {
-            const value = row[key];
+            // A computed running total has content iff any year's SOURCE flow is non-zero
+            // (keeps "no advisor fee -> SumAdvisorFees hidden" working).
+            const value = ANNUAL_RUNNING_TOTALS[key] ? ANNUAL_RUNNING_TOTALS[key].source(row) : row[key];
 
             // Check if value exists and is non-zero
             if (value != null && value !== '' && value !== '—') {
@@ -2816,7 +2862,11 @@ function updateTable(log) {
     table.border = '1';
     table.id = 'main-table';
 
-    const keys = Object.keys(log[0]);
+    const keys = annualDetailsKeys(log);
+    // P86: computed running-total columns, already in the basis the toggle selects - their cells
+    // must NOT go through the generic per-row deflation below.
+    const _inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
+    const _runningTotals = computeRunningTotals(log, _inCurrentDollars);
 
     // Create header - row 0 is the group banner, row 1 is the column names
     const thead = table.createTHead();
@@ -2861,9 +2911,10 @@ function updateTable(log) {
         'cashD+I': 'Dividends (from brokerage) and interest from Cash (deposits)',
         'MAGI': 'Modified Adjusted Gross Income - determines future IRMAA',
         'totalTax': 'Federal, State, IRMAA, NIIT, and CapGains taxes - in total.',
-        'SumTaxes': 'Running total of Federal, State, IRMAA, NIIT, and CapGains taxes.',
+        'SumTaxes': 'Running total of Federal, State, IRMAA, NIIT, and CapGains taxes. In Current $ mode each year is converted to today\'s purchasing power before it is added, so the total never falls.',
         'AdvisorFee': 'Advisor or fund fee charged this year, on the previous December 31 balances. Money taken from an IRA to pay it is not a taxable distribution.',
-        'SumAdvisorFees': 'Running total of advisor and fund fees paid.',
+        'SumAdvisorFees': 'Running total of advisor and fund fees paid. In Current $ mode each year is converted to today\'s purchasing power before it is added, so the total never falls.',
+        'SumSpendable': 'Running total of after-tax money actually delivered for spending (the spending goal minus any shortfall). In Current $ mode each year is converted to today\'s purchasing power before it is added.',
         'shortfall': 'How much income is missing, that is: spendGoal - (totalIncome - totalTax). Normally it means the plan ran out of money: every other account was spent and the IRA could not cover the rest. Two strategies report it by design instead. ACA Cliff will not cross its income cap while that cap is in force, because crossing it forfeits the premium subsidy. Ordered will not step outside the account sequence you chose, so it can leave a small residual while a later account still holds money.',
         'totalIncome': 'Funds from all sources, taxable and tax-free.',
         'NominalRate%': 'TotalTax/TotalGrossIncome for all taxes - Fed, State, IRMAA',
@@ -2962,7 +3013,8 @@ function updateTable(log) {
         keys.forEach(key => {
             if (isTableColumnKey(key)) {
                 const td = tr.insertCell();
-                const value = row[key];
+                const isRunningTotal = !!ANNUAL_RUNNING_TOTALS[key];
+                const value = isRunningTotal ? _runningTotals[key][i] : row[key];
 
                 if (tierEntry && !incomeShortfall && _IRMAACols.includes(key)) {
                     td.style.backgroundColor = tierEntry[0];
@@ -3011,8 +3063,11 @@ function updateTable(log) {
                         if (isYear) {
                             td.textContent = value;
                         } else {
-                            const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
-                            const displayValue = inCurrentDollars ? value / (row.inflationFactor || 1) : value;
+                            // Running totals are already in the selected basis (a running sum of
+                            // deflated years); dividing that sum by this row's factor would be
+                            // the exact mistake P86 removed.
+                            const displayValue = (_inCurrentDollars && !isRunningTotal)
+                                ? value / (row.inflationFactor || 1) : value;
                             td.textContent = Math.round(displayValue).toLocaleString();
                         }
                     }

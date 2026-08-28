@@ -42,6 +42,47 @@ that exits 0. Sweeping it in would print a permanent green for zero tests run, o
 publishing is checked against. `_tests.js` does not match `*.tests.js`, which is what keeps the two
 sets disjoint - and is the reason that suffix was chosen.
 
+## The markdown preview gate
+
+After the suites, the hook runs `node .githooks/md-html-scan.js` over **every tracked `.md`**, and
+blocks on raw HTML that hides the rest of the file.
+
+On 2026-08-28 the VS Code preview of `task_plan.md` stopped rendering at line 1304 of 5,734. Not
+truncation and not a setting: that line held a bare, unquoted `<select>` in prose. VS Code's preview
+passes raw HTML through **without sanitizing**, so the browser parsed it as a real element, and a
+`<select>` paints nothing except `<option>` children. Never being closed, all 4,430 following lines
+became its children and were silently not painted. `progress.md` had the identical defect via a bare
+`<option>`, hiding about 4,665 lines.
+
+Both survived for weeks because **GitHub sanitizes markdown HTML** and drops non-allowlisted tags,
+so the files rendered perfectly everywhere they were normally reviewed. There is no error, no
+artifact at the break point, and no clue in the source - the document just appears to end early,
+which reads as file corruption or an editor limit rather than a typo.
+
+**A blanket "no raw HTML" rule was measured and rejected.** The 27 tracked `.md` files hold 181 bare
+tags and 172 are legitimate `<a>` anchors in the changelog. `<a>`, `<b>`, `<span>`, `<li>`,
+`<details>`, `<img>`, `<br>` and `<kbd>` all render their children normally and are none of the
+gate's business, closed or not.
+
+What is blocked is exactly the elements whose **content model excludes flow content** - `select`,
+`option`, `optgroup`, `textarea`, `title`, `style`, `script`, `noscript`, `iframe`, `template`,
+`xmp`, `plaintext`, `listing`. An unclosed one of those does not merely look wrong; it makes
+everything after it invisible. That is the whole failure class, and it is why the check is a
+denylist rather than a parser: deciding "unclosed" properly needs a real HTML parse, while naming
+the elements that can swallow a document needs none and has no false positives on this corpus.
+
+Fenced blocks and inline code spans are skipped. Indented four-space code blocks are **not**
+detected, deliberately - telling one from a wrapped list item needs a real markdown parse. If a
+denylisted tag ever belongs in an indented block, fence it or backtick it.
+
+**The fix is always the same: wrap it in backticks.** `` `<select>` `` renders the tag visibly
+instead of executing it, and matches the convention every other code identifier in these docs
+already follows. Run it standalone on specific files while editing:
+
+```sh
+node .githooks/md-html-scan.js .planning/retirement-optimizer/task_plan.md
+```
+
 `git commit --no-verify` skips it. That is the deliberate escape hatch for a commit you know does
 not touch code. It is not the way past a red suite.
 

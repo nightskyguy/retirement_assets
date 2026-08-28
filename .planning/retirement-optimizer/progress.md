@@ -971,7 +971,7 @@ User feedback on the baseline-accounting UI:
 
 ## Session: 2026-07-20 (cont) — PF13 round 3: terminology, labels, docs, control placement (v11.12f7)
 - Terminology: normalized EVERY variant ("nerd knob(s)", "nerd-knob", "nerd mode", "nerd-mode") to "nerdknob", the switch's actual name, across retirement_optimizer.html / optimizer_ui.js / optimizer_core.js / montecarlo/mc_tab.js. Verified zero remaining variants in the rendered DOM. The surviving nerdknob references are all for features that ARE still gated (MC Simulation Parameters panel, 💵 optimizer sweep dimension), so they were renamed rather than deleted.
-- Objective labels made parallel (noun/gerund phrases): Maximize Net Wealth -> Maximum Net Wealth; Avoid Widow & RMD Tax -> Avoiding Widow & RMD Tax; Minimize Lifetime Taxes -> Minimum Lifetime Taxes. Updated in BOTH the HTML <option> list and OPT_OBJECTIVE_LABELS; verified the two match exactly at runtime.
+- Objective labels made parallel (noun/gerund phrases): Maximize Net Wealth -> Maximum Net Wealth; Avoid Widow & RMD Tax -> Avoiding Widow & RMD Tax; Minimize Lifetime Taxes -> Minimum Lifetime Taxes. Updated in BOTH the HTML `<option>` list and OPT_OBJECTIVE_LABELS; verified the two match exactly at runtime.
 - "Optimize for" control moved to the top of the Optimizer tab, directly below the two search switches (DOM order verified: opt-search-options -> opt-objective-wrap -> opt-perf...), and made prominent: own panel with light-blue background/border, 14px vs the 11.9px search row, bold 1.05em label, larger select.
 - New Documentation entry "What does 'Optimize for' do?" placed after the Break Even explainer: explains that it changes ranking only (not the underlying numbers), that the ⚓ baseline and Rank column follow it, that a column click overrides until the goal changes, plus a sub-bullet per objective including why Tax Flexibility needs the wealth gate and why Minimum Lifetime Taxes and Avoiding Widow & RMD Tax can disagree.
 - **Real bug caught by screenshot, not by the earlier item-2 fix:** the ⚓ "Best w/o Conv" row was still showing an infeasible `Fill Bracket (no conv) ⚠️`. Item 2 had filtered only the per-metric winner pool; `recomputeBaselineForObjective` had no feasibility filter, so an infeasible no-conv row could be pinned as the baseline AND listed in the Best summary. Fixed by preferring feasible no-conv rows, falling back to the unfiltered set only if every one is infeasible (so Δ columns still work). Verified the baseline is feasible under all 7 non-conversion objectives.
@@ -4829,188 +4829,188 @@ JSON blob.** And the in-page changelog guard caught a real convention break: `<b
 the version stamp, and a second `<b>` for emphasis breaks the li/stamp count test.
 
 Counts: optimizer_core 326 -> **329**, page reports 760 passed.
-
-**Medicare excess spread RESOLVED, commit `20c1280`.** User chose `cpi_t + inputs.inflation` - the
-statutory index plus a CONSTANT excess-medical spread - over the doubled `cpi_t + i_t`. Three arms,
-all measured:
-
-| | no spread | doubled Medicare | fixed excess (shipped) |
-|---|---|---|---|
-| lifetime tax | -8.32% | -5.72% | **-7.80%** |
-| rescued / broken | 38 / 0 | 36 / 0 | **36 / 0** |
-| IRMAA surcharge years | -10.56% | -9.15% | **-9.21%** |
-| IRMAA dollars | -6.51% | **+29.05%** | **-6.06%** |
-
-Dollars fall again and the original P3 reading is restored: surcharge YEARS move further than
-surcharge DOLLARS, because rising thresholds lift years off the ladder while premiums still grow.
-Direction and asymmetry never moved across any arm. Pinned by a test that walks Medicare year-over-
-year growth on a steady 12% path, so the doubled form cannot return as a simplification. Written as
-`cpi_t + inputs.inflation` for intent; it reduces to `i_t + inputs.cpi`, same number, reads as less.
-
-README revisions by the repo owner included in the same commit - notably a new paragraph on what
-happens when a tool models fixed inflation but not bracket indexation (a 9% year against an assumed
-3% misplaces the 22% bracket top by ~$6.4k and compounds), which is the same defect this branch
-fixes in the engine. Counts: optimizer_core **330**, page 761.
-
-**Remaining on this branch: P70e only** - re-run `irmaa_default_harness.js` under path-following and
-revisit `IRMAA_MARGIN_DEFAULT`, which was chosen when a forward projection was exact by construction
+
+**Medicare excess spread RESOLVED, commit `20c1280`.** User chose `cpi_t + inputs.inflation` - the
+statutory index plus a CONSTANT excess-medical spread - over the doubled `cpi_t + i_t`. Three arms,
+all measured:
+
+| | no spread | doubled Medicare | fixed excess (shipped) |
+|---|---|---|---|
+| lifetime tax | -8.32% | -5.72% | **-7.80%** |
+| rescued / broken | 38 / 0 | 36 / 0 | **36 / 0** |
+| IRMAA surcharge years | -10.56% | -9.15% | **-9.21%** |
+| IRMAA dollars | -6.51% | **+29.05%** | **-6.06%** |
+
+Dollars fall again and the original P3 reading is restored: surcharge YEARS move further than
+surcharge DOLLARS, because rising thresholds lift years off the ladder while premiums still grow.
+Direction and asymmetry never moved across any arm. Pinned by a test that walks Medicare year-over-
+year growth on a steady 12% path, so the doubled form cannot return as a simplification. Written as
+`cpi_t + inputs.inflation` for intent; it reduces to `i_t + inputs.cpi`, same number, reads as less.
+
+README revisions by the repo owner included in the same commit - notably a new paragraph on what
+happens when a tool models fixed inflation but not bracket indexation (a 9% year against an assumed
+3% misplaces the 22% bracket top by ~$6.4k and compounds), which is the same defect this branch
+fixes in the engine. Counts: optimizer_core **330**, page 761.
+
+**Remaining on this branch: P70e only** - re-run `irmaa_default_harness.js` under path-following and
+revisit `IRMAA_MARGIN_DEFAULT`, which was chosen when a forward projection was exact by construction
 and the margin measured as worthless.
-
-**USER-REPORTED REGRESSION, fixed `fd65644`. Entirely mine, and the diagnosis went the long way.**
-
-Three reports, one cause: default strategy showed Fill/Below IRMAA instead of Proportional 20%;
-birth years and retirement age were not the defaults; and the default plan now faced ruin.
-
-The in-page ceiling test added in 11.165B calls `applyScenario()` to prove a saved Fill Bracket plan
-reloads at its own ceiling. **`applyScenario()` writes the WHOLE sidebar and does not put it back,
-and `runTests()` runs at page load** - so every load left the reader looking at the test fixture.
-Its `finally` restored only the stratRate selection, which was the part I had been thinking about.
-
-The tell was `birthyear1: 1958 / birthyear2: 1959`, values that appear nowhere in the HTML. They are
-the fixture. Once I diffed the live DOM against the markup defaults instead of chasing the
-mechanism, it was immediate.
-
-**Diagnostic path worth not repeating.** I spent several rounds on the wrong layer: grepping for
-writes to `#strategy`, checking `loadScenarioByName`, then installing a `defineProperty` trap on the
-select. The trap never fired and reported itself uninstalled, which was confusing rather than
-informative. What settled it in one command was serving `main` from a detached worktree on a second
-port and comparing a fresh tab against a fresh tab - and then diffing the HTML `value=` attributes,
-which were byte-identical, proving the markup was innocent and the runtime was not.
-**Compare against a known-good build EARLY; it is one `git worktree add` away.**
-
-Also: I twice reported browser findings from a tab whose page predated the file on disk. Between
-that and this, the rule is the same - **the page is not the file, and a fresh tab is not a reload.**
-
-The plan "facing ruin" was the fixture running, not a modeling change. Restored, the default plan on
-this branch is identical to main to the dollar: tax 551,192, final NW 637,024, 25 years funded, no
-ruin - exactly what the byte-identity property predicts for a deterministic run. The test now
-snapshots every input/select/textarea (including `dataset.numVal`, which the dollar fields read
+
+**USER-REPORTED REGRESSION, fixed `fd65644`. Entirely mine, and the diagnosis went the long way.**
+
+Three reports, one cause: default strategy showed Fill/Below IRMAA instead of Proportional 20%;
+birth years and retirement age were not the defaults; and the default plan now faced ruin.
+
+The in-page ceiling test added in 11.165B calls `applyScenario()` to prove a saved Fill Bracket plan
+reloads at its own ceiling. **`applyScenario()` writes the WHOLE sidebar and does not put it back,
+and `runTests()` runs at page load** - so every load left the reader looking at the test fixture.
+Its `finally` restored only the stratRate selection, which was the part I had been thinking about.
+
+The tell was `birthyear1: 1958 / birthyear2: 1959`, values that appear nowhere in the HTML. They are
+the fixture. Once I diffed the live DOM against the markup defaults instead of chasing the
+mechanism, it was immediate.
+
+**Diagnostic path worth not repeating.** I spent several rounds on the wrong layer: grepping for
+writes to `#strategy`, checking `loadScenarioByName`, then installing a `defineProperty` trap on the
+select. The trap never fired and reported itself uninstalled, which was confusing rather than
+informative. What settled it in one command was serving `main` from a detached worktree on a second
+port and comparing a fresh tab against a fresh tab - and then diffing the HTML `value=` attributes,
+which were byte-identical, proving the markup was innocent and the runtime was not.
+**Compare against a known-good build EARLY; it is one `git worktree add` away.**
+
+Also: I twice reported browser findings from a tab whose page predated the file on disk. Between
+that and this, the rule is the same - **the page is not the file, and a fresh tab is not a reload.**
+
+The plan "facing ruin" was the fixture running, not a modeling change. Restored, the default plan on
+this branch is identical to main to the dollar: tax 551,192, final NW 637,024, 25 years funded, no
+ruin - exactly what the byte-identity property predicts for a deterministic run. The test now
+snapshots every input/select/textarea (including `dataset.numVal`, which the dollar fields read
 instead of `.value`) and restores them, the way the MC preset test already does for its parameters.
-
-**Unsafe in-page tests gated, `c877f63`.** User's call after the fixture leak: any test that writes
-live page state is opt-in behind `?runtests`, marked in source, and counted when skipped.
-
-The reason is boot ORDER, and it is worse than "a test left a mess". `runTests?.()` is called at TOP
-LEVEL in retirement_optimizer.html (the DOMContentLoaded registration beside it is commented out),
-so the in-page suite runs BEFORE `captureDefaults()`, `loadScenarioByName('default')` and
-`loadFromURL()`. A mutating test therefore poisons the snapshot Share uses to decide which fields it
-may OMIT from a link, and any field an incoming scenario or URL does not mention keeps the test's
-value.
-
-| suite | mutates |
-|---|---|
-| `acaOptionsUngated` | the `#stratRate` option list, rebuilt, and the selection with it |
-| `mcPresetStateFollowsTheParameters` | every Monte Carlo parameter input |
-| `ceilingDropdownEndsAtTheLastRealCeiling` | the ENTIRE sidebar, via `applyScenario()` |
-| `annualDetailsCellsAlignWithHeaders` | `#main-table`, replaced by `updateTable()` |
-| `objectiveColumnSets` | the live `OptimizerState` |
-
-Each carries a `⚠ UNSAFE - MUTATES:` banner naming what it touches plus a one-line
-`if (!unsafeTest('name')) return;` guard. Gated: 246 passed / 5 skipped. `?runtests`: 351 passed.
-Badge title states the skip count so the drop is explained rather than reading as missing tests.
-
-**Method note, and it cost a detour again.** Mid-verification the gated build appeared to make the
-default plan FAIL. It did not: my cache-busting URL param was `?g=1`, and **`g` is the share-URL key
-for Growth** - I was setting growth to 1%, then 2%. `s` is State, similarly exposed. The earlier
-probes (`?clean=1`, `?fix=1`, `?t=2`) did not collide, so the fixture finding stands. Rule:
-**never cache-bust this page with a short query param; the share scheme owns the short names.**
+
+**Unsafe in-page tests gated, `c877f63`.** User's call after the fixture leak: any test that writes
+live page state is opt-in behind `?runtests`, marked in source, and counted when skipped.
+
+The reason is boot ORDER, and it is worse than "a test left a mess". `runTests?.()` is called at TOP
+LEVEL in retirement_optimizer.html (the DOMContentLoaded registration beside it is commented out),
+so the in-page suite runs BEFORE `captureDefaults()`, `loadScenarioByName('default')` and
+`loadFromURL()`. A mutating test therefore poisons the snapshot Share uses to decide which fields it
+may OMIT from a link, and any field an incoming scenario or URL does not mention keeps the test's
+value.
+
+| suite | mutates |
+|---|---|
+| `acaOptionsUngated` | the `#stratRate` option list, rebuilt, and the selection with it |
+| `mcPresetStateFollowsTheParameters` | every Monte Carlo parameter input |
+| `ceilingDropdownEndsAtTheLastRealCeiling` | the ENTIRE sidebar, via `applyScenario()` |
+| `annualDetailsCellsAlignWithHeaders` | `#main-table`, replaced by `updateTable()` |
+| `objectiveColumnSets` | the live `OptimizerState` |
+
+Each carries a `⚠ UNSAFE - MUTATES:` banner naming what it touches plus a one-line
+`if (!unsafeTest('name')) return;` guard. Gated: 246 passed / 5 skipped. `?runtests`: 351 passed.
+Badge title states the skip count so the drop is explained rather than reading as missing tests.
+
+**Method note, and it cost a detour again.** Mid-verification the gated build appeared to make the
+default plan FAIL. It did not: my cache-busting URL param was `?g=1`, and **`g` is the share-URL key
+for Growth** - I was setting growth to 1%, then 2%. `s` is State, similarly exposed. The earlier
+probes (`?clean=1`, `?fix=1`, `?t=2`) did not collide, so the fixture finding stands. Rule:
+**never cache-bust this page with a short query param; the share scheme owns the short names.**
 Measuring the field directly found it in one step after grepping had found nothing.
-
-**P70 COMPLETE, v11.1661, `a27aaea`.** Last two items closed.
-
-**P70e - the default holds, and re-running the harness was NOT the answer.** `irmaa_default_harness.js`
-never feeds simulate() a path, so with no inflationSequence the spread model reduces to the typed cpi
-and its output is byte-identical to main (verified by diff against a detached main worktree). What
-HAD changed was its header premise: "sim.cpiRate is built from the scalar inputs.cpi, so the ceiling,
-the conversions and the donations are deterministic". Added a native section instead, counting years
-charged ABOVE the targeted tier across the Stress bank:
-
-| | fixed indexation | path-following |
-|---|---|---|
-| halfcpi breaches prevented | 8.5% | **21.1%** |
-| surcharge dollars vs none | - | **-0.09%** |
-
-So the margin now absorbs a real forecast error, as `irmaa_cpi_risk_harness.js` predicted. The honest
-reading is narrower than that sounds: the DOLLARS are still noise, and the wealth ranking is driven by
-conversion sizing (the original P6), with halfcpi leading in both regimes. **`IRMAA_MARGIN_DEFAULT`
-confirmed for the reason it always had, not for the breach protection.**
-
-**P70i - the gap P70d created, now closed.** Five-way selector replacing the checkbox; a capped plan
-pays `min(cap, that year's index rate)` applied PER YEAR, which is why it needs its own compounding
-factor rather than being read off cpiRate - the cap has to bite each year for the pension to fall
-permanently behind instead of catching up. `pensionColaCap()` takes the old booleans so the golden,
-the tests and saved plans need no migration, and `applyScenario` maps a stored boolean because the
-generic restore loop would set a `<select>` to "true", match nothing, and silently strip the COLA.
-
-Sanity check worth keeping: at the default 2.8% CPI a 3% cap pays exactly what Full COLA pays, because
-the cap never binds. If those two ever differ on default inputs, the per-year min is wrong.
-
-Deflation left as a genuine min, so a falling index reduces a capped pension the way it already
-reduces modeled Social Security. Real COLAs are floored at zero; not modeled, noted in code, and
-flagged as a decision to take for both or neither.
-
+
+**P70 COMPLETE, v11.1661, `a27aaea`.** Last two items closed.
+
+**P70e - the default holds, and re-running the harness was NOT the answer.** `irmaa_default_harness.js`
+never feeds simulate() a path, so with no inflationSequence the spread model reduces to the typed cpi
+and its output is byte-identical to main (verified by diff against a detached main worktree). What
+HAD changed was its header premise: "sim.cpiRate is built from the scalar inputs.cpi, so the ceiling,
+the conversions and the donations are deterministic". Added a native section instead, counting years
+charged ABOVE the targeted tier across the Stress bank:
+
+| | fixed indexation | path-following |
+|---|---|---|
+| halfcpi breaches prevented | 8.5% | **21.1%** |
+| surcharge dollars vs none | - | **-0.09%** |
+
+So the margin now absorbs a real forecast error, as `irmaa_cpi_risk_harness.js` predicted. The honest
+reading is narrower than that sounds: the DOLLARS are still noise, and the wealth ranking is driven by
+conversion sizing (the original P6), with halfcpi leading in both regimes. **`IRMAA_MARGIN_DEFAULT`
+confirmed for the reason it always had, not for the breach protection.**
+
+**P70i - the gap P70d created, now closed.** Five-way selector replacing the checkbox; a capped plan
+pays `min(cap, that year's index rate)` applied PER YEAR, which is why it needs its own compounding
+factor rather than being read off cpiRate - the cap has to bite each year for the pension to fall
+permanently behind instead of catching up. `pensionColaCap()` takes the old booleans so the golden,
+the tests and saved plans need no migration, and `applyScenario` maps a stored boolean because the
+generic restore loop would set a `<select>` to "true", match nothing, and silently strip the COLA.
+
+Sanity check worth keeping: at the default 2.8% CPI a 3% cap pays exactly what Full COLA pays, because
+the cap never binds. If those two ever differ on default inputs, the per-year min is wrong.
+
+Deflation left as a genuine min, so a falling index reduces a capped pension the way it already
+reduces modeled Social Security. Real COLAs are floored at zero; not modeled, noted in code, and
+flagged as a decision to take for both or neither.
+
 **P70 now has zero open items.** Suites 332 / 61 / 22, page 658 gated / 763 with ?runtests.
-
-**PR #195 opened 2026-08-26** (worktree-p70-cpi-indexation -> main): the whole P70 phase, 17 commits,
-v11.1661. Body leads with the byte-identity gate, since that is the property a reviewer can check in
+
+**PR #195 opened 2026-08-26** (worktree-p70-cpi-indexation -> main): the whole P70 phase, 17 commits,
+v11.1661. Body leads with the byte-identity gate, since that is the property a reviewer can check in
 one step and the one that proves the spread model is implemented right.
-
-**P81 filed 2026-08-26, O0.** User asked to confirm two invariants. One holds, one does not, and the
-one that does not is a defect P70c introduced and PR #195 currently ships.
-
-**Medicare/IRMAA is additive: CONFIRMED.** `sim.medicareRate *= (1 + cpi_t + inputs.inflation)`.
-
-**Nothing below INFLATION_FLOOR: FALSE.** The floor guards the DRAWN series - `computeNextInflation`,
-the stress bank, the multi-asset bank and the bootstrap bank all clamp `i_t` at -1%, so the record's
-real -10.3% years never reach the engine. But the statutory index is DERIVED, not drawn:
-`cpi_t = i_t + spread`, and the shipped default spread is NEGATIVE (-0.2pt). A year already sitting
-on the floor gets pushed through it.
-
-| typed | spread | min `i_t` | min `cpi_t` | years below floor |
-|---|---|---|---|---|
-| 3.0 / 2.8 (defaults) | -0.20pt | -1.00% | **-1.20%** | **27 of 780** |
-| 3.5 / 2.0 | -1.50pt | -1.00% | **-2.50%** | **43 of 780** |
-| 2.0 / 3.5 (inverted) | +1.50pt | -1.00% | +0.50% | 0 |
-
-Only bites when CPI sits below Inflation - the normal configuration and the default. Three consumers
-take the un-floored value: `cpiRate` (so every bracket-shaped threshold), `medicareRate`, and
-`pensionFactor` (a capped pension gets CUT below the floor).
-
-Filed rather than fixed, per instruction. Worth deciding before #195 merges rather than after -
-the fix is one `Math.max` at the point `cpi_t` is computed, so every consumer inherits it. P81c
-carries the separate zero-floor question P70i left open, which affects Social Security too and must
-be taken for both or neither.
-
-Method note: this was found by MEASURING the derived value across the stress bank rather than
-reasoning about the floor constant. The constant is correct and applied in four places; what was
+
+**P81 filed 2026-08-26, O0.** User asked to confirm two invariants. One holds, one does not, and the
+one that does not is a defect P70c introduced and PR #195 currently ships.
+
+**Medicare/IRMAA is additive: CONFIRMED.** `sim.medicareRate *= (1 + cpi_t + inputs.inflation)`.
+
+**Nothing below INFLATION_FLOOR: FALSE.** The floor guards the DRAWN series - `computeNextInflation`,
+the stress bank, the multi-asset bank and the bootstrap bank all clamp `i_t` at -1%, so the record's
+real -10.3% years never reach the engine. But the statutory index is DERIVED, not drawn:
+`cpi_t = i_t + spread`, and the shipped default spread is NEGATIVE (-0.2pt). A year already sitting
+on the floor gets pushed through it.
+
+| typed | spread | min `i_t` | min `cpi_t` | years below floor |
+|---|---|---|---|---|
+| 3.0 / 2.8 (defaults) | -0.20pt | -1.00% | **-1.20%** | **27 of 780** |
+| 3.5 / 2.0 | -1.50pt | -1.00% | **-2.50%** | **43 of 780** |
+| 2.0 / 3.5 (inverted) | +1.50pt | -1.00% | +0.50% | 0 |
+
+Only bites when CPI sits below Inflation - the normal configuration and the default. Three consumers
+take the un-floored value: `cpiRate` (so every bracket-shaped threshold), `medicareRate`, and
+`pensionFactor` (a capped pension gets CUT below the floor).
+
+Filed rather than fixed, per instruction. Worth deciding before #195 merges rather than after -
+the fix is one `Math.max` at the point `cpi_t` is computed, so every consumer inherits it. P81c
+carries the separate zero-floor question P70i left open, which affects Social Security too and must
+be taken for both or neither.
+
+Method note: this was found by MEASURING the derived value across the stress bank rather than
+reasoning about the floor constant. The constant is correct and applied in four places; what was
 wrong was a quantity derived downstream of all four.
-
-**P81a/b/d FIXED on the branch before merge, v11.1662.** `cpi_t = Math.max(CPI_INDEX_FLOOR, i_t + spread)`,
-applied once where `cpi_t` is computed so cpiRate, medicareRate and pensionFactor all inherit it.
-Re-measured over the stress bank at three spreads: **0 of 650 index steps below the floor**, and it
-genuinely clamps - 20 steps land exactly on it at the defaults, 31 at a 1.5pt spread.
-
-**The first attempt killed the Monte Carlo tab, and node could not see it.** I named the engine copy
-`INFLATION_FLOOR`, matching prng.js. `montecarlo/worker.js` importScripts() taxengine, optimizer_core,
-prng, stats and mc_engine into **ONE shared global scope**, so two top-level `const INFLATION_FLOOR`
-is a SyntaxError that kills the worker before it runs a single path. Node has separate module scopes
-and reported 334/334 green. **The in-page badge caught it** - 36 failures out of 660 - and the console
-named it exactly: "Identifier 'INFLATION_FLOOR' has already been declared".
-
-Renamed to `CPI_INDEX_FLOOR`, and added a test that scans all five worker-imported files for
-top-level name collisions so the class cannot recur. It found exactly one when written against the
-broken state, which is the only way to know a guard works.
-
-**Rule earned: any new top-level `const`/`function` in optimizer_core.js, taxengine.js or the
-montecarlo files must be unique across all five, because the worker shares one scope. Node will never
-tell you.** Same family as the earlier lessons this session - the page is not the file, node is not
-the browser - and this is the third time the browser tier caught something node could not.
-
-P81c stays open: real COLAs are floored at ZERO and never claw back, but modeled Social Security and
-a capped pension both fall when the index falls. Different floor, different level, and it touches SS,
-so it goes for both or neither.
-
-Counts: optimizer_core **335** (two floor tests plus the collision guard), page 661 gated.
+
+**P81a/b/d FIXED on the branch before merge, v11.1662.** `cpi_t = Math.max(CPI_INDEX_FLOOR, i_t + spread)`,
+applied once where `cpi_t` is computed so cpiRate, medicareRate and pensionFactor all inherit it.
+Re-measured over the stress bank at three spreads: **0 of 650 index steps below the floor**, and it
+genuinely clamps - 20 steps land exactly on it at the defaults, 31 at a 1.5pt spread.
+
+**The first attempt killed the Monte Carlo tab, and node could not see it.** I named the engine copy
+`INFLATION_FLOOR`, matching prng.js. `montecarlo/worker.js` importScripts() taxengine, optimizer_core,
+prng, stats and mc_engine into **ONE shared global scope**, so two top-level `const INFLATION_FLOOR`
+is a SyntaxError that kills the worker before it runs a single path. Node has separate module scopes
+and reported 334/334 green. **The in-page badge caught it** - 36 failures out of 660 - and the console
+named it exactly: "Identifier 'INFLATION_FLOOR' has already been declared".
+
+Renamed to `CPI_INDEX_FLOOR`, and added a test that scans all five worker-imported files for
+top-level name collisions so the class cannot recur. It found exactly one when written against the
+broken state, which is the only way to know a guard works.
+
+**Rule earned: any new top-level `const`/`function` in optimizer_core.js, taxengine.js or the
+montecarlo files must be unique across all five, because the worker shares one scope. Node will never
+tell you.** Same family as the earlier lessons this session - the page is not the file, node is not
+the browser - and this is the third time the browser tier caught something node could not.
+
+P81c stays open: real COLAs are floored at ZERO and never claw back, but modeled Social Security and
+a capped pension both fall when the index falls. Different floor, different level, and it touches SS,
+so it goes for both or neither.
+
+Counts: optimizer_core **335** (two floor tests plus the collision guard), page 661 gated.
 
 ---
 

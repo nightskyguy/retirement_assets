@@ -164,7 +164,8 @@ flowchart TD
     LOOP --> B["beginYear<br/>ages, year counters"]
     B --> H{"resolveHousehold<br/>alive? filing status?"}
     H -->|both deceased| DONE["exit loop"]
-    H -->|alive| INC["computeIncome<br/>SS, pension, survivor benefit,<br/>RMD, QCD"]
+    H -->|alive| FEE["applyAUMFee<br/>advisor fee on the PRIOR Dec 31<br/>balances; never a taxable distribution"]
+    FEE --> INC["computeIncome<br/>SS, pension, survivor benefit,<br/>RMD, QCD"]
     INC --> SPT["resolveSpendTarget<br/>spend goal, inflation, spendDelta"]
     SPT --> PLAN["planPrimaryWithdrawals<br/>strategy dispatch:<br/>propwd / fixed / bracket / fixedpct<br/>ordered / GK"]
     PLAN --> P1["applyPrimaryAndTaxPass1<br/>calculateTaxes, calcIRMAA"]

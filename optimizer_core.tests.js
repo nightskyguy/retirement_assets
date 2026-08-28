@@ -2039,6 +2039,154 @@ test('funding invariant: the fixture actually drains (guards a vacuous green)', 
     }
 });
 
+// ── P84a-P84f: the annual advisory / AUM fee ──────────────────────────────────
+// A 1% fee on $2M is ~$20,000 in year one and compounds for the whole horizon, which is larger than
+// several of the levers this tool argues about. The three invariants worth guarding are all easy to
+// break by "tidying up": fee dollars taken from an IRA are NOT taxable distributions, the base is
+// the prior December 31 snapshot rather than the live balance, and both counterfactual arms pay the
+// fee so Opportunity Cost stays about the conversion.
+const _AUM_BASE = {
+    STATEname: 'TX', strategy: 'propwd', propWithdraw: 0.05,
+    nYears: 25, birthyear1: 1950, birthmonth1: 6, die1: 95,
+    birthyear2: 0, birthmonth2: 0, die2: 0, hasSpouse: false,
+    IRA1: 1500000, IRA2: 0, Roth: 200000, Roth2: 0,
+    Brokerage: 400000, BrokerageBasis: 200000, Cash: 100000, CashReserve: null,
+    ss1: 30000, ss1Age: 70, ss2: 0, ss2Age: 0,
+    pensionAnnual: 0, pensionStartAge: 0, survivorPct: 0, pensionCola: false,
+    spendGoal: 90000, spendChange: 0, iraBaseGoal: 0,
+    inflation: 0.025, cpi: 0.025, growth: 0.06, cashYield: 0.02, dividendRate: 0.0,
+    ssFailYear: 2099, ssFailPct: 1.0, convertExcessToRoth: false,
+    extraConversionAmount: 0, iraWithdrawPct: 0.05,
+    startAge: 76, startInYear: 2026, dividendReinvest: false,
+};
+// Pre-RMD throughout, spending fully covered by Cash then Brokerage, IRA last in the sequence, all
+// rates zero. Any IRA withdrawal or any tax at all in this fixture can ONLY be the fee leaking.
+// `nYears` is the amortization horizon, NOT the run length - the plan runs to `die1`, and an earlier
+// draft of this fixture read a 45-year run as a 10-year one and mistook compounding for a leak.
+const _AUM_QUIET = {
+    STATEname: 'TX', strategy: 'ordered', orderedSeq: 'CBRI', nYears: 10,
+    birthyear1: 1975, birthmonth1: 6, die1: 60,
+    birthyear2: 0, birthmonth2: 0, die2: 0, hasSpouse: false,
+    IRA1: 1000000, IRA2: 0, Roth: 0, Roth2: 0,
+    Brokerage: 600000, BrokerageBasis: 600000, Cash: 400000, CashReserve: null,
+    ss1: 0, ss1Age: 70, ss2: 0, ss2Age: 0,
+    pensionAnnual: 0, pensionStartAge: 0, survivorPct: 0, pensionCola: false,
+    spendGoal: 40000, spendChange: 0, iraBaseGoal: 0,
+    inflation: 0, cpi: 0, growth: 0, cashYield: 0, dividendRate: 0,
+    ssFailYear: 2099, ssFailPct: 1.0, convertExcessToRoth: false,
+    extraConversionAmount: 0, startAge: 51, startInYear: 2026, dividendReinvest: false,
+};
+const _sumKey = (log, k) => log.reduce((a, r) => a + (r[k] || 0), 0);
+
+test('P84a: the fee OFF is bit-identical to the field being absent', () => {
+    const absent = simulate({ ..._AUM_BASE });
+    const zero = simulate({ ..._AUM_BASE, aumFeeAmount: 0, aumFeeMode: 'pct', aumFeeScope: 'all' });
+    assert(_logSansTiming(absent.log) === _logSansTiming(zero.log),
+        'a zero fee must not move a single logged number');
+    assertNear(zero.totals.aumFees || 0, 0, 'lifetime fees at amount 0', 1e-9);
+});
+
+test('P84b: every scope charges the right basis and pays from the right accounts', () => {
+    // basis is a fraction of the PRIOR Dec 31 balances, which in year 0 are the typed inputs.
+    const cases = [
+        { scope: 'brokerage',  basis: 400000,  fromIRA: 0 },
+        { scope: 'roths',      basis: 200000,  fromIRA: 0 },
+        { scope: 'iras',       basis: 1500000, fromIRA: 15000 },
+        { scope: 'rothira',    basis: 1700000, fromIRA: 15000 },
+        { scope: 'all',        basis: 2100000, fromIRA: 15000 },
+        // charges against everything, but pays entirely out of the larger IRA - the whole point
+        { scope: 'allfromira', basis: 2100000, fromIRA: 21000 },
+    ];
+    for (const c of cases) {
+        const r = simulate({ ..._AUM_BASE, aumFeeAmount: 1, aumFeeMode: 'pct', aumFeeScope: c.scope });
+        const y0 = r.log[0];
+        assertNear(y0['-aumFeeBasis'], c.basis, `${c.scope}: year-0 basis`, 1);
+        assertNear(y0.AUMfee, c.basis * 0.01, `${c.scope}: year-0 fee at 1%`, 1);
+        assertNear(y0['-aumFeeFromIRA'], c.fromIRA, `${c.scope}: year-0 paid out of the IRAs`, 1);
+    }
+});
+
+test('P84b: Cash is never a basis and never a source', () => {
+    // An all-Cash portfolio billed at the widest scope must pay nothing at all. Cash is the
+    // spending buffer the Cash Reserve protects; billing it would fight the refill every year.
+    const r = simulate({
+        ..._AUM_BASE, IRA1: 0, IRA2: 0, Roth: 0, Roth2: 0, Brokerage: 0, BrokerageBasis: 0,
+        Cash: 2000000, aumFeeAmount: 1, aumFeeMode: 'pct', aumFeeScope: 'all',
+    });
+    assertNear(r.totals.aumFees || 0, 0, 'fees charged to an all-Cash portfolio', 1e-9);
+});
+
+test.critical('P84c: fee dollars taken from an IRA are NOT taxable distributions', () => {
+    const off = simulate({ ..._AUM_QUIET });
+    const fee = simulate({ ..._AUM_QUIET, aumFeeAmount: 2, aumFeeMode: 'pct', aumFeeScope: 'iras' });
+    assert(fee.totals.aumFees > 100000,
+        `the fixture must actually charge a large fee, got ${Math.round(fee.totals.aumFees)}`);
+    assertNear(_sumKey(fee.log, 'IRAwd'), 0, 'IRA withdrawals with a large IRA fee', 1e-6);
+    assertNear(_sumKey(fee.log, 'totalTax'), _sumKey(off.log, 'totalTax'),
+        'lifetime tax must not move when the fee is paid from the IRA', 1e-6);
+    assertNear(off.totals.terminal.ira - fee.totals.terminal.ira, fee.totals.aumFees,
+        'the IRA must fall by exactly the fees charged', 1);
+});
+
+test.critical('P84c: the fee never enters netWithdrawals, in any scope', () => {
+    // The mechanism behind the test above, asserted directly: every calculateTaxes() call site reads
+    // yr.netWithdrawals.IRA as both earnedIncome and iraIncome, so this accumulator IS the boundary.
+    for (const scope of ['iras', 'rothira', 'all', 'allfromira']) {
+        const off = simulate({ ..._AUM_QUIET });
+        const fee = simulate({ ..._AUM_QUIET, aumFeeAmount: 2, aumFeeMode: 'pct', aumFeeScope: scope });
+        assertNear(_sumKey(fee.log, 'IRAwd'), _sumKey(off.log, 'IRAwd'),
+            `${scope}: IRA withdrawals must be untouched by the fee`, 1e-6);
+    }
+});
+
+test('P84c: a mid-year fee does not move the SAME year\'s RMD, only later ones', () => {
+    // This is R11 retired. Before P84l the RMD was struck off the live balance, so charging the fee
+    // first shrank that year's RMD by the fee rate. Now the RMD keys off the prior December 31
+    // balance, which is the legally correct answer: this year's obligation is already fixed, and the
+    // fee shows up in NEXT year's basis because it really did leave the account.
+    const off = simulate({ ..._AUM_BASE });
+    const fee = simulate({ ..._AUM_BASE, aumFeeAmount: 1, aumFeeMode: 'pct', aumFeeScope: 'iras' });
+    assertNear(fee.log[0]['RMD1-'], off.log[0]['RMD1-'],
+        'year-0 RMD must be identical with and without the fee', 1e-6);
+    assert(fee.log[1]['RMD1-'] < off.log[1]['RMD1-'] - 1,
+        'year-1 RMD should be lower, because the December 31 balance now reflects the fee');
+});
+
+test('P84d: a flat fee is CPI-indexed, and a percent fee is not', () => {
+    // cpi and inflation deliberately differ, so a wrong clock is visible rather than plausible.
+    const r = simulate({ ..._AUM_BASE, cpi: 0.03, inflation: 0.06,
+                         aumFeeAmount: 12000, aumFeeMode: 'flat', aumFeeScope: 'all' });
+    assertNear(r.log[0].AUMfee, 12000, 'year-0 flat fee', 1);
+    assertNear(r.log[10].AUMfee, 12000 * Math.pow(1.03, 10), 'year-10 flat fee, indexed at CPI', 1);
+    // In flat mode the basis is unused, so it stays 0 rather than reporting a number nobody used.
+    assertNear(r.log[0]['-aumFeeBasis'], 0, 'flat mode reports no basis', 1e-9);
+});
+
+test('P84e: the fee is tracked in the totals, the cumulative scalar and four log keys', () => {
+    const r = simulate({ ..._AUM_BASE, aumFeeAmount: 1, aumFeeMode: 'pct', aumFeeScope: 'all' });
+    assertNear(r.totals.aumFees, _sumKey(r.log, 'AUMfee'), 'totals.aumFees equals the per-year sum', 1);
+    assert(r.totals.aumFeesCurrentDollars > 0 && r.totals.aumFeesCurrentDollars < r.totals.aumFees,
+        'the current-dollar total must be positive and smaller than the nominal one');
+    const last = r.log[r.log.length - 1];
+    assertNear(last.SumAUMfees, r.totals.aumFees, 'the running total ends at the lifetime total', 1);
+    for (const k of ['AUMfee', 'SumAUMfees', '-aumFeeBasis', '-aumFeeFromIRA']) {
+        assert(k in r.log[0], `log rows must carry ${k}`);
+        assert(k in simulate({ ..._AUM_BASE }).log[0],
+            `log rows must carry ${k} even with no fee, or the identity tests break`);
+    }
+});
+
+test('P84f: BOTH counterfactual arms pay the fee, so Opportunity Cost stays about the conversion', () => {
+    // The docblock forbids a _cfRun guard. If one is ever added, the two arms diverge by the whole
+    // fee stream and every OC number becomes nonsense. This catches that.
+    const withOC = simulate({ ..._AUM_BASE, convertExcessToRoth: true, computeOC: true,
+                              aumFeeAmount: 1, aumFeeMode: 'pct', aumFeeScope: 'all' });
+    assert(withOC.totals.aumFees > 0, 'the fixture must charge a fee for this to mean anything');
+    const src = String(simulate);
+    assert(!/_cfRun[^;]{0,120}aumFee/.test(src) && !/aumFee[^;]{0,120}_cfRun/.test(src),
+        'applyAUMFee must not be gated on _cfRun');
+});
+
 // ── P84l/m/o: the RMD basis is the prior December 31 balance ──────────────────
 // 26 CFR 1.401(a)(9)-5 sets the year's required distribution as the prior December 31 account
 // balance over the life-expectancy divisor. Before P84l the engine struck it off `balance.IRA1`

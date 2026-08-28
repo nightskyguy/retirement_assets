@@ -21,7 +21,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 **P81, P78, P79, P82 and P80 all COMPLETE on this branch, v11.1667-11.1671.** Social Security and a
 capped pension survive a deflationary year; a replay survives editing; the survival chart draws the
 ten captured paths; prev/next is one 46-stop ring; the Market Return chart names the year replayed.
-**P84k/l/m/n/o SHIPPED v11.168c** - RMDs now key off the prior Dec 31 balance; suites 344/61/22. **P85 RE-RUN on it**: earlier still wins 353 of 499, but the RMD claim BROKE (124 counterexamples, all bracket at a live IRA Goal). `P84a`-`P84j` (the AUM fee) still open; O0 stays `P35i`.
+**P84 COMPLETE, SHIPPED v11.168d** - advisor/AUM fee + RMDs off the prior Dec 31 balance; suites **353**/61/22. **P85 RE-RUN**: earlier still wins 353 of 499, but the RMD claim BROKE (124 counterexamples, all bracket at a live IRA Goal). O0 stays `P35i`; `P72` still pending.
 
 **P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 
@@ -2350,7 +2350,39 @@ marked SUPERSEDED in place, the P28/P30 pattern.
 
 ---
 
-## P84: annual advisor / AUM fee, and RMDs off the prior December 31 balance  *(RMD HALF SHIPPED v11.168c 2026-08-28; the fee, P84a-P84j, is still open)*
+## P84: annual advisor / AUM fee, and RMDs off the prior December 31 balance  *(COMPLETE, SHIPPED v11.168c + v11.168d, 2026-08-28)*
+
+**STATUS: COMPLETE.** `P84k/l/m/n/o` (the RMD basis) shipped as v11.168c; `P84a`-`P84j` (the fee
+itself) shipped as v11.168d. Suites **353 / 61 / 22**, `slowInCore` 3, `TestTiers.EXPECTED` and
+`.githooks/README.md` reconciled.
+
+**What the fee ended up being.** Three inputs (`aumFeeAmount` raw-as-typed, `aumFeeMode`,
+`aumFeeScope`), `applyAUMFee(sim, yr)` between `resolveHousehold` and `computeIncome`, six scopes
+over a frozen basis/source/spill table, brokerage debited pro-rata against basis so
+`capGainsPercentage` is unchanged, unpayable remainder dropped to `yr.aumFeeUnpaid`. Nine node tests
+including two `test.critical` non-taxability guards and the no-`_cfRun`-guard proof.
+
+**The base is `sim.priorYearEnd`, the SAME snapshot the RMD uses**, widened from two IRA fields to
+all five billable accounts. That was not tidiness: anything read off `balance` between `beginYear`'s
+growth call and `growAndSettle` inherits the 1-vs-11 `preMonths` dependency, so a fee struck at its
+own call site would have moved with whether last year converted - the exact defect `P84l` removed
+from the RMD. One snapshot, captured once, read by both.
+
+**R11 is retired and PINNED by a test**: a mid-year fee no longer moves the same year's RMD, only
+later ones, which is the legally correct answer.
+
+**Two things found while verifying, both corrected before shipping.** The stat tile first carried a
+sub-label reading "% of end wealth" while computing `fees / (fees + finalNW)`, which is neither.
+Worse, the honest number is bigger than either: on the shipped defaults a 1% fee CHARGES $212,267
+and lowers the ending balance by **$433,490**, because the money it removed would have compounded.
+Any single-number ratio in a tile understates that by roughly half while looking authoritative, so
+the sub-label is now the average annual fee and the real figure is left to a future phase that can
+afford the second simulation Break Even already runs. And the Annual Details banner was checked for
+shearing by counting VISIBLE header cells only - a first pass counted hidden ones and appeared to
+show a 21-against-82 mismatch that did not exist.
+
+**Open, deliberately:** the true lifetime cost of the fee (charged plus foregone compounding) is not
+reported anywhere. It needs a counterfactual run. Candidate for its own phase.
 
 **STATUS 2026-08-28: `P84k`, `P84l`, `P84m`, `P84n` and `P84o` are DONE and shipped as v11.168c.**
 The RMD now keys off the prior December 31 balance. `rmdbasis_harness.js` + `RMDBASIS_RESULTS.md`

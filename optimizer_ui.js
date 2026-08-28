@@ -150,6 +150,12 @@ function applyNerdKnobVisibility() {
     // inflation, as the IRS and SSA do), not a fallback.
     const fixedIdxWrap = document.getElementById('fixedTaxIndexing-wrap');
     if (fixedIdxWrap) fixedIdxWrap.style.display = NERD_KNOBS ? '' : 'none';
+    // P84. Advisor fee - gated by the user's 2026-08-28 decision. Hiding it leaves the field at
+    // whatever it holds, which is 0 by default and therefore no fee; but a plan LOADED from a URL
+    // carrying ?af= keeps its fee and still computes it, because the input is only hidden, never
+    // cleared. That is the whole reason the URL keys are not gated with the field.
+    const aumFeeWrap = document.getElementById('aumFeeAmount-wrap');
+    if (aumFeeWrap) aumFeeWrap.style.display = NERD_KNOBS ? '' : 'none';
     const irmaaMarginWrap = document.getElementById('irmaaMarginMode-wrap');
     if (irmaaMarginWrap) irmaaMarginWrap.style.display = NERD_KNOBS ? '' : 'none';
     // 💵 legend - only meaningful once nerdknob is sweeping the cash-funded arm
@@ -537,6 +543,12 @@ function getInputs() {
         spendGoal: +val('spendGoal'),
         spendChange: (spendChange / 100.0),
         iraBaseGoal: +val('iraBaseGoal'),
+        // P84. RAW as typed - never /100 here. The engine divides, because which scaling applies
+        // depends on aumFeeMode, and a field whose meaning depends on a SECOND field cannot live in
+        // applyScenario's x100 list or in DOLLAR_INPUT_IDS.
+        aumFeeAmount: +val('aumFeeAmount') || 0,
+        aumFeeMode: val('aumFeeMode') || 'pct',
+        aumFeeScope: val('aumFeeScope') || 'all',
         inflation: +val('inflation') / 100.0,
         cpi: +val('cpi') / 100.0,
         growth: +val('growth') / 100.0,
@@ -2517,6 +2529,8 @@ const columnCategories = {
 
     // Cash Changes - balance, withdrawals, growth
     'CashWD': ['Cash Δ', 'Income', 'Spending'],
+    'AUMfee': ['Summary', 'Spending', 'Balances'],
+    'SumAUMfees': ['Balances'],
     'cashG': ['Cash Δ'],
     'surplusCash': ['Cash Δ', 'Income', 'Spending'],
     // Phase 27: inflows/outflows + withdrawal rate
@@ -2562,6 +2576,7 @@ const columnGroupDefs = {
     'RMD1-': 'Withdrawals', 'RMD2-': 'Withdrawals',
     'Brokerage-': 'Withdrawals', 'RothWD': 'Withdrawals',
     'CashWD': 'Withdrawals', 'rothConv': 'Withdrawals', 'surplusCash': 'Withdrawals',
+    'AUMfee': 'Withdrawals', 'SumAUMfees': 'Withdrawals',
     'FedRate%': 'Taxes', 'StateRate%': 'Taxes', 'IRMAATier': 'Taxes',
     'IRMAA': 'Taxes', 'Medicare': 'Taxes', 'totalTax': 'Taxes', 'FedTax': 'Taxes', 'StateTax': 'Taxes',
     'CapGains': 'Taxes', 'MAGI': 'Taxes', 'NominalRate%': 'Taxes',
@@ -2841,6 +2856,8 @@ function updateTable(log) {
         'MAGI': 'Modified Adjusted Gross Income - determines future IRMAA',
         'totalTax': 'Federal, State, IRMAA, NIIT, and CapGains taxes - in total.',
         'SumTaxes': 'Running total of Federal, State, IRMAA, NIIT, and CapGains taxes.',
+        'AUMfee': 'Advisor or fund fee charged this year, on the previous December 31 balances. Money taken from an IRA to pay it is not a taxable distribution.',
+        'SumAUMfees': 'Running total of advisor and fund fees paid.',
         'shortfall': 'How much income is missing, that is: spendGoal - (totalIncome - totalTax). Normally it means the plan ran out of money: every other account was spent and the IRA could not cover the rest. Two strategies report it by design instead. ACA Cliff will not cross its income cap while that cap is in force, because crossing it forfeits the premium subsidy. Ordered will not step outside the account sequence you chose, so it can leave a small residual while a later account still holds money.',
         'totalIncome': 'Funds from all sources, taxable and tax-free.',
         'NominalRate%': 'TotalTax/TotalGrossIncome for all taxes - Fed, State, IRMAA',
@@ -3141,6 +3158,28 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     document.getElementById('stat-spend').innerText = '$' + Math.round(dispSpend).toLocaleString();
     document.getElementById('stat-tax').innerText   = '$' + Math.round(dispTax).toLocaleString();
     document.getElementById('stat-nw').innerText    = '$' + Math.round(dispNW).toLocaleString();
+    // P84. Self-hiding: a plan with no fee shows no tile, so the row does not grow a permanent $0
+    // for the many users who never set one.
+    const feeTile = document.getElementById('stat-aumfee-tile');
+    if (feeTile) {
+        const fees = totals.aumFees || 0;
+        feeTile.style.display = fees > 0 ? '' : 'none';
+        if (fees > 0) {
+            const dispFees = inCD ? (totals.aumFeesCurrentDollars || 0) : fees;
+            document.getElementById('stat-aumfee').innerText = '$' + Math.round(dispFees).toLocaleString();
+            const sub = document.getElementById('stat-aumfee-sub');
+            // The average yearly fee, which needs nothing this function does not already have.
+            // DELIBERATELY NOT a ratio against end wealth: the fee's real cost is larger than the
+            // fee, because the money it removed would have compounded. On the shipped defaults a
+            // 1% fee charges $212,267 and lowers the ending balance by $433,490. Any single-number
+            // ratio here would understate that by roughly half while looking authoritative; the
+            // honest version needs a second simulation, the way Break Even does, and that belongs
+            // in a phase of its own rather than in a tile sub-label.
+            const yrs = totals.yearstested || 0;
+            if (sub) sub.innerText = yrs > 0
+                ? '$' + Math.round(fees / yrs).toLocaleString() + '/yr average' : '';
+        }
+    }
     const rmdEl = document.getElementById('stat-rmd');
     const rmdPctEl = document.getElementById('stat-rmd-pct');
     if (rmdEl) rmdEl.innerText = '$' + Math.round(totals.rmd ?? 0).toLocaleString();
@@ -4454,6 +4493,7 @@ function setupAutoRecalc() {
         spendGoal: 'Spend Goal', spendChange: 'Spend Δ%', strategy: 'Strategy',
         nYears: 'N Years', stratRate: 'Bracket', propWithdraw: 'Boost%',
         iraBaseGoal: 'IRA Goal', maximizeConversions: 'Max Conversions',
+        aumFeeAmount: 'Advisor Fee', aumFeeMode: 'Fee Mode', aumFeeScope: 'Fee Applies To',
         convertExcessToRoth: 'Convert Excess', fundConversionWithCash: 'Fund w/ Cash',
         extraConversionAmount: 'Extra Conversion', convEndYear: 'Stop Conversions', convEndMode: 'Stop Scope',
         birthyear1: 'Your Birth', die1: 'Your Life Exp',
@@ -4596,6 +4636,7 @@ const OPT_LONG_TO_SHORT = {
     propWithdraw:'pw', stratRate:'sr', iraWithdrawPct:'iwp', orderedSeq:'os', rothGapFill:'rgf',
     convertExcessToRoth:'mc', fundConversionWithCash:'fcc', extraConversionAmount:'eca', iraBaseGoal:'ibg',
     convEndYear:'cey', convEndMode:'cem', irmaaMarginMode:'imm', fixedTaxIndexing:'fti',
+    aumFeeAmount:'af', aumFeeMode:'afm', aumFeeScope:'afs',
     birthyear1:'by1', birthmonth1:'bm1', die1:'d1', startAge:'sa',
     birthyear2:'by2', birthmonth2:'bm2', die2:'d2', hasSpouse:'hs',
     IRA1:'i1', IRA2:'i2', Roth:'ro', Roth2:'ro2',

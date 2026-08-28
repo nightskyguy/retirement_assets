@@ -17,34 +17,35 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.168c"></a>
+<a id="11.168d"></a>
 
-## 11.168c
+## 11.168d
 
-### Required minimum distributions are figured the way the tax rules define them
+### An advisor fee you can model, and required distributions figured the way the tax rules define them
 
-**Behavior change. Any plan that reaches RMD age will show different numbers, and a saved scenario
-or a shared link can give a different answer than it did before this release.**
+**Behavior change. Any plan that reaches the age for required distributions will show different
+numbers, and a saved scenario or a shared link can give a different answer than it did before.**
 
-A required minimum distribution is set by your account balance on December 31 of the previous year,
-divided by an IRS life expectancy factor. The tool was applying part of the current year's growth to
-that balance first, which made every RMD larger than the amount actually required.
+**1. Advisor and fund fees.** A new field under Advanced options in Assets takes a yearly
+percentage, or a flat dollar amount that grows with your CPI, and a choice of which accounts are
+billed and which pay, including billing everything but paying from the larger IRA. It is charged at
+the start of each year against the previous December 31 balances, the way advisors bill. **Money
+taken from an IRA to pay the fee is not a taxable distribution**, so it never reaches your income or
+your tax. Cash is never billed and never pays. A tile shows the lifetime total, and appears only
+once you set a fee. At 1% of $2M that is roughly $20,000 in the first year, compounding for the
+whole plan, which is larger than several of the differences this tool is used to weigh.
 
-It also made the RMD move with something it has no business depending on. The tool decides, year by
-year, whether a withdrawal leaves in January or in November, and that choice fed straight into the
-RMD. Two identical plans could show different required distributions purely because one of them had
-done a Roth conversion the year before. That is gone.
+**2. Required minimum distributions** are now figured from your December 31 balance divided by the
+IRS life expectancy factor. The tool was adding part of the current year's growth to that balance
+first, which made every distribution larger than the amount actually required, and made it move with
+the month a withdrawal happened to leave. Two otherwise identical plans could show different
+distributions purely because one of them had done a Roth conversion the year before. Expect lower
+distributions, lower taxable income, and usually a lower lifetime tax bill and a larger ending
+balance.
 
-**What you will see.** Lower required distributions, and with them lower taxable income and usually
-a lower lifetime tax bill and a larger ending balance. On the plans measured for this release the
-required distributions moved by anywhere from a fraction of a percent to well over a third,
-depending on how long the plan runs and how much of it sits in a traditional IRA.
-
-**One limit worth knowing.** For the first year of a plan the tool uses the IRA balance exactly as
-you typed it. If you enter a balance from partway through the year rather than the previous December
-31, that first year's distribution is an estimate. Every later year is exact.
-
-A drained IRA is also no longer taxed on a distribution larger than the money that actually left it.
+**One limit worth knowing.** For a plan's first year the tool uses the IRA balance exactly as you
+typed it. If that is a mid-year figure rather than the previous December 31, the first year's
+distribution is an estimate. Every later year is exact.
 
 ---
 

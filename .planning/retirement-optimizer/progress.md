@@ -5849,3 +5849,68 @@ live URL key, so a shared plan reproduces its own numbers either way.
 
 Suites **344 / 61 / 22**; `md-html-scan` clean on **29** tracked `.md` (27 before - the two new
 reports are now counted).
+
+
+---
+
+**Same session 2026-08-28, fourth pass - P84 COMPLETE. The advisor/AUM fee shipped as v11.168d, and
+the fee turned out to share the RMD fix's snapshot for a reason, not for tidiness.**
+
+**Committed the prior increment first** (`4df83b8`): RMD basis fix, P85 re-run, the published
+`research/` split. Pre-commit gate green, 12 files recorded as renames.
+
+**`P84a`-`P84j`: the fee.** Three inputs (`aumFeeAmount` stored RAW as typed because its meaning
+switches between % and $, so it cannot live in `applyScenario`'s x100 list or `DOLLAR_INPUT_IDS`;
+`aumFeeMode`; `aumFeeScope`), `applyAUMFee(sim, yr)` between `resolveHousehold` and `computeIncome`,
+six scopes over a frozen basis/source/spill table with Cash in no row, brokerage debited pro-rata
+against basis so `capGainsPercentage` prices identically, unpayable remainder dropped rather than
+carried. Nine node tests, 344 -> **353**.
+
+**THE BASE IS THE PRIOR-DEC-31 SNAPSHOT, WIDENED FROM TWO FIELDS TO FIVE, AND THAT IS THE WHOLE
+POINT.** The spec called for reusing `P84l`'s snapshot and it reads like housekeeping; it is not.
+Anything computed off `balance` between `beginYear`'s growth call and `growAndSettle` inherits the
+1-vs-11 `preMonths` dependency, so a fee struck at its own call site would have moved with whether
+LAST YEAR CONVERTED - the exact defect `P84l` had just removed from the RMD. That window now has two
+known casualties and the generalization is written into the code. **R11 is retired and pinned by a
+test**: a mid-year fee no longer moves the same year's RMD, only later ones.
+
+**Non-taxability took three attempts to test correctly, and the first two were my errors, not the
+engine's.**
+1. First check asserted "tax is IDENTICAL in the charge year". It was not, by -$3 - because
+   `propwd` draws 5% of a now-smaller IRA. **The predicate was wrong, not the code.** A fee that
+   WERE taxable would have moved tax by thousands, not three dollars.
+2. Second fixture set `nYears: 10` and I read the run as ten years. **It ran 45** - `nYears` is the
+   amortization horizon, the plan runs to `die1` - so $473,814 of compounding fees looked like a
+   leak. Caught because the number was impossible for a $1M IRA at 2%, not because a test failed.
+3. Third fixture: pre-RMD throughout, spending covered by Cash then Brokerage, IRA last in the
+   sequence, all rates zero. $182,927 leaves the IRA, `IRAwd` stays 0, tax stays 0, terminal IRA
+   falls by exactly the fees. That one is now `test.critical`, twice - once on the outcome and once
+   on the mechanism (`netWithdrawals` is the tax boundary).
+
+**A misleading stat tile caught in the browser, and the honest number is worse than the one I was
+about to print.** The sub-label read "% of end wealth" while computing `fees / (fees + finalNW)`,
+which is neither. Measured on the shipped defaults: a 1% fee CHARGES $212,267 and lowers the ending
+balance by **$433,490** - the removed money would have compounded, so the true cost is roughly twice
+the fee. Any single-number ratio in a tile understates that while looking authoritative. Replaced
+with the average annual fee; the real figure needs a counterfactual run like Break Even's and is
+recorded as an open phase rather than approximated.
+
+**Nerdknob gating verified against its own requirement.** The user's reversal made the leak-guard a
+REQUIREMENT rather than an objection: a shared plan must reproduce its own numbers for a recipient
+who cannot see the field. Verified in the browser - `?af=1&afs=allfromira` with NO `?nerdknob` loads
+hidden, still charges $214,984, and still shows the tile, so the recipient can see a fee they cannot
+edit. `convEndYear` precedent, working as intended.
+
+**One more measurement error of mine, worth recording because it nearly became a bug report.** The
+Annual Details group banner appeared to span 21 columns against 82 - I was counting HIDDEN header
+cells. Visible-only: 21 against 21, intact. And a one-column group fragment is already normal here
+(`Balances/1` for `totalWealth` sits in the same row), so `Withdrawals/1` for the fee is consistent,
+not a wart.
+
+Files: `optimizer_core.js` (scope tables, `applyAUMFee`, widened snapshot, totals, four adjacent log
+keys, exports), `optimizer_core.tests.js` (+9), `optimizer_tests.js`, `.githooks/README.md`,
+`optimizer_ui.js` (getInputs, LABELS, URL keys af/afm/afs, nerdknob gate, columns, tooltips, tile),
+`retirement_optimizer.html` (sidebar row, tile, title, three cache-bust stamps + the tier-2 loader's
+own `const V`, in-page entry), `optimizer_changelog.md` (the branch's ONE entry rewritten in place
+to cover both halves, stamp refreshed to 11.168d), `ARCHITECTURE.md`, `FILE_DIRECTORY.md`,
+`task_plan.md`. Suites **353 / 61 / 22**; `md-html-scan` clean on 29 tracked `.md`.

@@ -1077,10 +1077,10 @@ function buildSimYearLogRecord(p) {
         // Annual Details banner. Emitted unconditionally with ?? 0 because the _logSansTiming
         // identity tests stringify whole rows. Neither visible key contains '%', 'yr' or 'year', so
         // the name-driven formatter prints both as dollars and deflates both under Current-$.
-        'AUMfee': p.aumFee ?? 0,
-        'SumAUMfees': p.cumulativeAUMFees ?? 0,
-        '-aumFeeBasis': p.aumFeeBasis ?? 0,
-        '-aumFeeFromIRA': p.aumFeeFromIRA ?? 0,
+        'AdvisorFee': p.advisorFee ?? 0,
+        'SumAdvisorFees': p.cumulativeAdvisorFees ?? 0,
+        '-advisorFeeBasis': p.advisorFeeBasis ?? 0,
+        '-advisorFeeFromIRA': p.advisorFeeFromIRA ?? 0,
         // DO NOT write a reframed figure here. `rothConv` is read back out of the log by the
         // NEXT year (beginYear: `log[y-1].rothConv > 1000` picks early-vs-late withdrawal timing),
         // so it is engine state wearing a display field's clothes. Reporting P28's unified figure
@@ -2804,7 +2804,9 @@ function applyExtraConversion(sim, yr) {
 // take the whole amount from the larger-balance IRA, spilling to the smaller only when the larger
 // cannot cover it. Keeps a real-world-sensible plan (no converting a token slice out of a tiny IRA)
 // and changes per-account balances (hence downstream per-spouse RMDs) - combined totals unchanged.
-// ── P84: the annual advisory / AUM fee ────────────────────────────────────────
+// ── P84: the annual advisor fee ───────────────────────────────────────────────
+// Named "advisor fee" throughout, not "AUM fee": AUM (assets under management) describes the
+// percentage arrangement only, and this models a flat annual fee just as happily.
 // The tool models every drag on a portfolio except the one most retirees actually pay. A 1% fee on
 // $2M is ~$20,000 in year one and compounds for the whole horizon - larger than several of the
 // levers this tool argues about, so a plan that ignores it is wrong by more than the margins it
@@ -2813,7 +2815,7 @@ function applyExtraConversion(sim, yr) {
 // THE THREE THINGS THAT ARE EASY TO BREAK HERE, all of them load-bearing:
 //
 // 1. FEE DOLLARS TAKEN FROM AN IRA ARE NOT TAXABLE DISTRIBUTIONS. This function writes `balance`
-//    and `yr.aumFee*` and NEVER `yr.netWithdrawals`. Every calculateTaxes() call site reads
+//    and `yr.advisorFee*` and NEVER `yr.netWithdrawals`. Every calculateTaxes() call site reads
 //    `yr.netWithdrawals.IRA` as both earnedIncome and iraIncome, so a debit that never enters that
 //    accumulator cannot reach any tax pass, any MAGI, or the TaxPlanner handoff. Same technique the
 //    QCD already uses. If you ever route the fee through netWithdrawals to "keep the books tidy",
@@ -2831,7 +2833,7 @@ function applyExtraConversion(sim, yr) {
 // Charged at the start of the year, before computeIncome, so the fee lands inside the withdrawal
 // cascade and a plan can actually FAIL because of it - which is most of the point of modeling it.
 // End-of-year and quarterly were both considered and rejected; the reasoning is in the P84 plan.
-const AUM_FEE_MODES  = Object.freeze(['pct', 'flat']);
+const ADVISOR_FEE_MODES  = Object.freeze(['pct', 'flat']);
 
 // Percent-vs-dollars is INFERRED from what you typed, not chosen from a second control. A real
 // advisory fee is a fraction of a percent to about two percent; a real flat fee is thousands. The
@@ -2841,23 +2843,23 @@ const AUM_FEE_MODES  = Object.freeze(['pct', 'flat']);
 // to model, where reading it as 20% would quietly destroy a plan. The asymmetry of being wrong is
 // the whole reason the boundary sits on this side. An explicit '%' or '$' in the text always wins
 // over the magnitude, so `50%` and `$15` both do what they say.
-const AUM_FEE_PCT_MAX = 20;
+const ADVISOR_FEE_PCT_MAX = 20;
 
 // `explicit` is 'pct' or 'flat' when the user (or a shared link) said so, and anything else means
 // "work it out". Kept here rather than in the UI so the ENGINE is safe on its own: a URL carrying
 // `af=20000` with no `afm` must not be read as a 20,000% fee.
-function inferAUMFeeMode(amount, explicit) {
+function inferAdvisorFeeMode(amount, explicit) {
     if (explicit === 'pct' || explicit === 'flat') return explicit;
-    return (+amount || 0) >= AUM_FEE_PCT_MAX ? 'flat' : 'pct';
+    return (+amount || 0) >= ADVISOR_FEE_PCT_MAX ? 'flat' : 'pct';
 }
 // 'none' is FIRST and is the DEFAULT: a plan charges no fee until you say which accounts it applies
 // to. It is also the off switch for a comparison - leave the amount typed and flip the dropdown, so
 // "with fee" and "without fee" differ by one control rather than by clearing and retyping a number.
-const AUM_FEE_SCOPES = Object.freeze(['none', 'brokerage', 'roths', 'iras', 'rothira', 'all', 'allfromira']);
+const ADVISOR_FEE_SCOPES = Object.freeze(['none', 'brokerage', 'roths', 'iras', 'rothira', 'all', 'allfromira']);
 
 // What the percentage is charged ON. Cash is in no row: it is the spending buffer the Cash Reserve
 // protects, and billing it fights the reserve refill every single year.
-const AUM_FEE_BASIS = Object.freeze({
+const ADVISOR_FEE_BASIS = Object.freeze({
     none:       Object.freeze([]),
     brokerage:  Object.freeze(['Brokerage']),
     roths:      Object.freeze(['Roth1', 'Roth2']),
@@ -2871,12 +2873,12 @@ const AUM_FEE_BASIS = Object.freeze({
 // against everything but pays out of the larger IRA first, which is the whole reason it exists.
 // Once the source is dry the remainder spills in this order. Roth last, matching fillSpendingGap.
 // CASH IS NEVER A SOURCE, for the same reason it is never a basis.
-const AUM_FEE_SPILL = Object.freeze(['Brokerage', 'IRA1', 'IRA2', 'Roth1', 'Roth2']);
+const ADVISOR_FEE_SPILL = Object.freeze(['Brokerage', 'IRA1', 'IRA2', 'Roth1', 'Roth2']);
 
 // Debit one account, returning what was actually taken. A brokerage debit cuts value and basis by
 // the same fraction, so the basis/value ratio - and therefore yr.capGainsPercentage - is unchanged,
 // and the fee cannot perturb an IRMAA/ACA/LTCG cliff or trip the third pass.
-function _debitAUMFee(balance, acct, want) {
+function _debitAdvisorFee(balance, acct, want) {
     if (!(want > 0)) return 0;
     const avail = Math.max(0, balance[acct] || 0);
     const paid = Math.min(want, avail);
@@ -2891,20 +2893,20 @@ function _debitAUMFee(balance, acct, want) {
     return paid;
 }
 
-function applyAUMFee(sim, yr) {
+function applyAdvisorFee(sim, yr) {
     const { inputs, balance } = sim;
     // Emitted unconditionally, fee or no fee: the log record writes all four keys and the
     // _logSansTiming identity tests JSON.stringify whole rows, so a conditionally-present key breaks
     // them.
-    yr.aumFee = 0; yr.aumFeeBasis = 0; yr.aumFeeFromIRA = 0; yr.aumFeeUnpaid = 0;
+    yr.advisorFee = 0; yr.advisorFeeBasis = 0; yr.advisorFeeFromIRA = 0; yr.advisorFeeUnpaid = 0;
 
-    const amount = +inputs.aumFeeAmount || 0;
+    const amount = +inputs.advisorFeeAmount || 0;
     if (!(amount > 0)) return;                      // amount 0 = OFF, bit-identical to no fee
-    const mode  = inferAUMFeeMode(amount, inputs.aumFeeMode);
+    const mode  = inferAdvisorFeeMode(amount, inputs.advisorFeeMode);
     // DEFAULT IS 'none', so an unset or unrecognized scope charges NOTHING rather than quietly
-    // billing everything. Returning here rather than leaning on AUM_FEE_BASIS.none being empty:
+    // billing everything. Returning here rather than leaning on ADVISOR_FEE_BASIS.none being empty:
     // the flat-mode branch never reads the basis at all, so an empty array would not stop it.
-    const scope = AUM_FEE_BASIS[inputs.aumFeeScope] ? inputs.aumFeeScope : 'none';
+    const scope = ADVISOR_FEE_BASIS[inputs.advisorFeeScope] ? inputs.advisorFeeScope : 'none';
     if (scope === 'none') return;
     const prior = sim.priorYearEnd || balance;
 
@@ -2915,8 +2917,8 @@ function applyAUMFee(sim, yr) {
     if (mode === 'flat') {
         want = amount * sim.cpiRate;
     } else {
-        yr.aumFeeBasis = AUM_FEE_BASIS[scope].reduce((a, k) => a + Math.max(0, prior[k] || 0), 0);
-        want = yr.aumFeeBasis * (amount / 100);
+        yr.advisorFeeBasis = ADVISOR_FEE_BASIS[scope].reduce((a, k) => a + Math.max(0, prior[k] || 0), 0);
+        want = yr.advisorFeeBasis * (amount / 100);
     }
     if (!(want > 0)) return;
 
@@ -2925,30 +2927,30 @@ function applyAUMFee(sim, yr) {
 
     if (scope === 'allfromira') {
         const sp = splitPreferLarger(want, Math.max(0, balance.IRA1), Math.max(0, balance.IRA2));
-        paid += _debitAUMFee(balance, 'IRA1', sp.i1);
-        paid += _debitAUMFee(balance, 'IRA2', sp.i2);
+        paid += _debitAdvisorFee(balance, 'IRA1', sp.i1);
+        paid += _debitAdvisorFee(balance, 'IRA2', sp.i2);
     } else {
         // Pro-rata across the source accounts: each pays the share of the fee its own balance
         // generated, which is what "the percentage comes out of the impacted accounts" means.
-        const src = AUM_FEE_BASIS[scope];
+        const src = ADVISOR_FEE_BASIS[scope];
         const tot = src.reduce((a, k) => a + Math.max(0, balance[k] || 0), 0);
         if (tot > 0) for (const k of src) {
-            paid += _debitAUMFee(balance, k, want * (Math.max(0, balance[k] || 0) / tot));
+            paid += _debitAdvisorFee(balance, k, want * (Math.max(0, balance[k] || 0) / tot));
         }
     }
     // Spill whatever the source could not cover.
-    for (const k of AUM_FEE_SPILL) {
+    for (const k of ADVISOR_FEE_SPILL) {
         if (paid >= want - 1e-9) break;
-        paid += _debitAUMFee(balance, k, want - paid);
+        paid += _debitAdvisorFee(balance, k, want - paid);
     }
 
-    yr.aumFee = paid;
+    yr.advisorFee = paid;
     // An unpayable remainder is DROPPED, never carried and never turned into a shortfall - the
     // floor-at-0 posture applyWithdrawals already takes.
-    yr.aumFeeUnpaid = Math.max(0, want - paid);
-    yr.aumFeeFromIRA = Math.max(0, before1 - Math.max(0, balance.IRA1 || 0))
+    yr.advisorFeeUnpaid = Math.max(0, want - paid);
+    yr.advisorFeeFromIRA = Math.max(0, before1 - Math.max(0, balance.IRA1 || 0))
                      + Math.max(0, before2 - Math.max(0, balance.IRA2 || 0));
-    sim.cumulativeAUMFees = (sim.cumulativeAUMFees || 0) + paid;
+    sim.cumulativeAdvisorFees = (sim.cumulativeAdvisorFees || 0) + paid;
 }
 
 function splitPreferLarger(amount, ira1Avail, ira2Avail) {
@@ -3110,8 +3112,8 @@ function growAndSettle(sim, yr) {
     // Estimate tax attributable to RMDs proportionally (RMD / totalIncome × totalTax)
     totals.rmdTax += yr.totalIncome > 0 ? (yr.taxableRMD / yr.totalIncome) * yr.totalTax : 0;
     totals.qcd = (totals.qcd || 0) + yr.totalQCD;
-    totals.aumFees = (totals.aumFees || 0) + (yr.aumFee || 0);
-    totals.aumFeesCurrentDollars = (totals.aumFeesCurrentDollars || 0) + (yr.aumFee || 0) / sim.inflation;
+    totals.advisorFees = (totals.advisorFees || 0) + (yr.advisorFee || 0);
+    totals.advisorFeesCurrentDollars = (totals.advisorFeesCurrentDollars || 0) + (yr.advisorFee || 0) / sim.inflation;
     balance.Roth1 += yr.surplus.Roth1;
     balance.Roth2 += yr.surplus.Roth2;
     totals.shortfall += yr.surplus.Shortfall;
@@ -3208,8 +3210,8 @@ function logYear(sim, yr) {
         gains: yr.gains, rmd1Pct: yr.rmd1Pct, subCycleLabel: yr.subCycleLabel, convNetValue: null, excessNetValue: null,
         incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,
         extraConvGross: yr.extraConvGross,
-        aumFee: yr.aumFee, aumFeeBasis: yr.aumFeeBasis, aumFeeFromIRA: yr.aumFeeFromIRA,
-        cumulativeAUMFees: sim.cumulativeAUMFees,
+        advisorFee: yr.advisorFee, advisorFeeBasis: yr.advisorFeeBasis, advisorFeeFromIRA: yr.advisorFeeFromIRA,
+        cumulativeAdvisorFees: sim.cumulativeAdvisorFees,
         surplusToBrokerage: yr.surplusToBrokerage, cashBreach: yr.cashBreach,
         grossUpIRA: yr.grossUpIRA, grossUpTax: yr.grossUpTax, extraConvCashTax: yr.extraConvCashTax,
         fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep,
@@ -3463,7 +3465,7 @@ function simulate(inputs) {
         inputs, balance, log, totals,
         birthyear1, birthmonth1, birthyear2, birthmonth2,
         currentYear, cpiRate, inflation, medicareRate, pensionFactor, ssFactor,
-        fixedWithdrawal, spendDelta, spendGoal, cumulativeTaxes, cumulativeAUMFees: 0,
+        fixedWithdrawal, spendDelta, spendGoal, cumulativeTaxes, cumulativeAdvisorFees: 0,
         nominalTaxRate, capitalGainsRate,
         subCycleIRAYears, prevPortfolio,
         gkIWR, gkPriorReturn, gkAdjLabel,
@@ -3486,7 +3488,7 @@ function simulate(inputs) {
         // cascade and can genuinely break a plan. Note it does NOT move this year's RMD: P84l keys
         // that off the prior December 31 balance, which is the legally correct answer and the
         // reason P84's original placement caveat (R11) was retired.
-        applyAUMFee(sim, yr);
+        applyAdvisorFee(sim, yr);
         computeIncome(sim, yr);
         resolveSpendTarget(sim, yr);
         planPrimaryWithdrawals(sim, yr);
@@ -5070,7 +5072,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, AUM_FEE_MODES, AUM_FEE_SCOPES, AUM_FEE_BASIS, AUM_FEE_PCT_MAX, inferAUMFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -5078,7 +5080,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, AUM_FEE_MODES, AUM_FEE_SCOPES, AUM_FEE_BASIS, AUM_FEE_PCT_MAX, inferAUMFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

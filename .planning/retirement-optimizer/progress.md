@@ -6024,3 +6024,39 @@ trap, not left for the implementer to rediscover.
 audit is not: a wrong basis produces a plausible number, nothing fails loudly, and comparing dollar
 figures is the tool's whole purpose. The user's item 3 is folded into it rather than patched in
 isolation. LINE-30 boundary held by compressing three lines of completed-phase prose to two.
+
+
+---
+
+**Same session 2026-08-28, eighth pass - four user-reported items on the advisor fee: readout width,
+AUM -> Advisor rename, the redundant `afm` URL key, and ungating. Item 3 went to P86 instead.**
+
+**Rename (item 2).** "AUM" describes the percentage arrangement only, and the feature models a flat
+annual fee just as happily, so the name was wrong for half of what it does. 106 occurrences across
+four files, replaced longest-first so nothing was half-substituted - `SumAUMfees` HAD to precede
+`AUMfee`, and every camel form had to precede the bare `aumFee` catch-all. Log columns are now
+`AdvisorFee` / `SumAdvisorFees`; identifiers, element ids and stat-tile ids all moved. URL short keys
+`af`/`afs` deliberately unchanged, so links keep working. One `AUM` survives on purpose: a comment
+saying why the name was dropped.
+
+**`afm` removed from the share URL (item 4), and the user was right that it was redundant.** I had
+added it to "pin the resolved mode", reasoning that the inference threshold might change. But
+`buildShareURL` emits each field's own TEXT, so an explicit `$15` or `15%` ALREADY travels in `af`
+verbatim, and a bare `15` means exactly what the user typed and saw. The second parameter carried no
+information the first did not, and could only ever disagree with it. Incoming `afm` is still
+accepted, so links generated during development keep working - verified that `?af=15&afm=flat` still
+loads as `$15` and re-emits as `af=%2415`.
+
+**Ungated (item 5).** It was behind the knob only while being proven out. The rule at
+`optimizer_ui.js:141-149` says a fact about the plan is not a diagnostic; ungating costs nobody a
+number because the scope defaults to `none`. The leak-guard problem that made gating awkward is moot.
+
+**Readout width (item 1).** The hint was a child of the amount's own flex cell, so it wrapped at 129px
+inside a 265px panel. Moved to be a SIBLING of the `.row`. Measured after: hint 265px == row 265px.
+
+**Two stale claims caught while finishing, both mine.** The changelog and the in-page entry still
+said the fee lives "under Advanced options", which stopped being true the moment it was ungated -
+documentation describing a gate that no longer exists. Fixed in the same pass rather than left to be
+found by a reader.
+
+Version stays 11.168e (same hour; the scheme is hour-granular). Suites **355 / 61 / 22**.

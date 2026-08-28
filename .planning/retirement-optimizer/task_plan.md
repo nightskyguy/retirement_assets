@@ -2450,6 +2450,22 @@ state: the share URL pins the RESOLVED mode, and an incoming `afm` is folded bac
 own TEXT as `$15` or `15%` - exactly what a user would have typed to mean the same thing, so one
 field stays the single source of truth.
 
+**Renamed AUM -> Advisor throughout, user request 2026-08-28.** "AUM" (assets under management)
+describes the percentage arrangement only, and this models a flat annual fee just as happily. The
+log columns are `AdvisorFee` and `SumAdvisorFees`; every identifier, element id and stat-tile id
+moved with them. URL short keys `af`/`afs` are unchanged, so links keep working.
+
+**UNGATED from the nerdknob, user request 2026-08-28.** It sat behind the knob only while it was
+being proven out. It is a fact about the plan rather than a diagnostic - the rule at
+`optimizer_ui.js:141-149` - and ungating costs nobody a number because the scope defaults to `none`.
+The leak-guard argument that made gating awkward is now moot.
+
+**`afm` is no longer emitted in the share URL, and pinning it was over-engineering.**
+`buildShareURL` emits each field's own TEXT, so an explicit `$15` or `15%` already travels in `af`
+verbatim; a bare `15` means what the inference says, which is what the user typed and saw. A second
+parameter carrying the same fact could only ever disagree with it. Incoming `afm` is still ACCEPTED,
+so links generated during development keep working - verified.
+
 **`none` is the DEFAULT scope, added on the user's request 2026-08-28 after the first fee build.**
 It is the off switch for a comparison: leave the amount typed and flip one dropdown, rather than
 clearing and retyping a number. Unset and unrecognized scopes both fail safe to it, so a plan that

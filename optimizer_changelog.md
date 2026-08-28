@@ -26,9 +26,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 **Behavior change. Any plan that reaches the age for required distributions will show different
 numbers, and a saved scenario or a shared link can give a different answer than it did before.**
 
-**1. Advisor and fund fees.** A new field under Advanced options in Assets takes the fee as a
-single number, plus a choice of which accounts are billed and which pay, including billing
-everything but paying from the larger IRA. **A small number is read as a percentage and a large one
+**1. Advisor and fund fees.** A new field in Assets takes the fee as a single number, plus a choice
+of which accounts are billed and which pay, including billing every account except Cash but taking
+the money from the larger IRA. **A small number is read as a percentage and a large one
 as a flat dollar amount that grows with your CPI**, and the line under the field says which way it
 read what you typed; add a % or a $ if you want to say so outright, and shorthand like 20k works.
 **It starts at None, so no fee is charged until you pick accounts**, and switching back to None is

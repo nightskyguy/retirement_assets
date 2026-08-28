@@ -6060,3 +6060,40 @@ documentation describing a gate that no longer exists. Fixed in the same pass ra
 found by a reader.
 
 Version stays 11.168e (same hour; the scheme is hour-granular). Suites **355 / 61 / 22**.
+
+---
+
+**Session 2026-08-28 (second half) - P86 build, phases a-d, commits bd2c875 / fe11ca2 / 767074a,
+v11.1690.**
+
+**P86a folded into findings.md** ("P86a audit - every displayed dollar, classified"): three-agent
+sweep, every claim file:line verified. The audit found the scope the user predicted: Spendable was a
+THIRD broken running total, the MC survival table shows nominal taxes beside always-real spend, and
+each path's true inflation factor is computed inside simulate() then discarded at the mc_engine
+boundary.
+
+**P86b - the stored running totals are GONE, not fixed in place.** User decision: any kept stored
+sum would be Current-$; if on-demand costs <0.5%, drop them. Measured first: simulate() 114.0 ms
+median per 200 runs before, 113.8 after (the engine LOST three property writes per row);
+updateTable 24.7-28.7 ms with the running-sum pass being 3 additions/row. The counters
+(sim.cumulativeTaxes, sim.cumulativeAdvisorFees, totalsSpend pass-through) had zero readers outside
+the log builder - deleted whole. UI computes the displayed columns from ANNUAL_RUNNING_TOTALS, a
+NAMED map (the monotonicity-heuristic trap is written into the map's comment), spliced at the
+columns' historical positions so rebuildGroupRow's banner runs hold (group row 21 spans == 21
+visible columns, measured). Spendable renamed SumSpendable. Repro case killed: SumAdvisorFees
+monotone on ?af=0.8&afs=rothira in Current-$.
+
+**P86c - rmdCurrentDollars/qcdCurrentDollars twins** beside the tax/spend/fee trio, same
+start-of-year-factor idiom. Tile + QCD sub-label + Optimizer rmd column all pick by the toggle, and
+the column SORTS on what it displays. Browser: All RMDs $435,178 -> $322,064 beside All Taxes
+$477,083 -> $365,661.
+
+**P86d - the three stragglers.** Fee /yr average divides the displayed total. Conv Tax carries
+_convSavingsCurrent. Break Even (i) deflates at FORMAT time with two different deflators - terminal
+factor for the stop-year gains (stocks at the final date), the naming year's own factor for a named
+conversion amount - while the >1 decision thresholds stay nominal so the suggestion never flips
+with the view. Verified: gain $218,562 -> $107,518, year-0 conversion amount identical in both
+bases (factor 1, correct, not a bug).
+
+Suites 357/61/22, in-page 399 with ?runtests, badge green through all three commits. Remaining:
+P86e (MC engine dual basis), P86f (MC UI wiring).

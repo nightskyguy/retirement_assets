@@ -6451,6 +6451,52 @@ test('P79: the capture variation ships one balance trace per captured path', asy
         'the stress pass shipped capturedTraces as well as stressPaths');
 });
 
+test('P86e: the MC message carries dual-basis twins, and real = each path deflated by ITS OWN inflation', async () => {
+    // Shape on a normal-size run: every twin present, same dimensions as its nominal sibling.
+    const cfg = _p71Cfg('gbm', { captureVariationIndex: 0 });
+    const msg = await _mcEngine.runJob(cfg);
+    assert(msg && !msg.error, `job failed: ${msg && msg.error}`);
+    const v = msg.variations[0];
+    for (const k of ['p5', 'p25', 'p50', 'p75', 'p95']) {
+        assert(Array.isArray(v.percentilesReal?.[k]) && v.percentilesReal[k].length === msg.years,
+            `percentilesReal.${k} missing or wrong length`);
+    }
+    assert(Number.isFinite(v.medianTaxReal) && v.medianTaxReal < v.medianTax,
+        'medianTaxReal must exist and sit below the nominal median under positive inflation');
+    assert(Number.isFinite(v.medianSpendNominal) && v.medianSpendNominal > v.medianSpend,
+        'medianSpendNominal must exist and sit above the real median under positive inflation');
+    assert(v.capturedTracesReal && v.capturedTracesReal.length === v.capturedTraces.length,
+        'capturedTracesReal must pair one-to-one with capturedTraces');
+    assert(Array.isArray(msg.stress.variations[0].stressPathsReal)
+        && msg.stress.variations[0].stressPathsReal.length === msg.stress.numPaths,
+        'the stress pass must ship stressPathsReal beside stressPaths');
+    // Exactness, proven through the replay contract on a single-path run: with one path, every
+    // aggregate IS that path, so the twins must equal the replayed simulate()'s own totals and the
+    // real curve must be the nominal curve divided year by year by the path's own inflationFactor.
+    const cfg1 = _p71Cfg('gbm', { captureVariationIndex: 0, numPaths: 1 });
+    const one = await _mcEngine.runJob(cfg1);
+    assert(one && !one.error, `single-path job failed: ${one && one.error}`);
+    const v1 = one.variations[0];
+    const baseInputs = cfg1.variations[0];
+    const pathIdx = v1.captured[0].pathIndex;
+    const inputs = _mcEngine.pathInputsFromBankRows(
+        one.capturedBankRows[pathIdx], baseInputs, one.simulationMode);
+    const res = core.simulate({ ...baseInputs, ...inputs });
+    assertNear(v1.medianTax, res.totals.tax, 'one path: medianTax is that path\'s nominal tax', 1);
+    assertNear(v1.medianTaxReal, res.totals.taxCurrentDollars,
+        'one path: medianTaxReal is that path\'s sum-of-deflated-years tax', 1);
+    assertNear(v1.medianSpend, res.totals.spendCurrentDollars,
+        'one path: medianSpend is that path\'s real spend', 1);
+    assertNear(v1.medianSpendNominal, res.totals.spend,
+        'one path: medianSpendNominal is that path\'s nominal spend', 1);
+    for (let y = 0; y < Math.min(one.years, res.log.length); y++) {
+        const want = v1.percentiles.p50[y] / (res.log[y].inflationFactor || 1);
+        // Relative tolerance: the percentile arrays round through float32 inside computePercentiles.
+        assert(Math.abs(v1.percentilesReal.p50[y] - want) <= Math.max(1, Math.abs(want)) * 1e-6,
+            `year ${y}: real p50 ${v1.percentilesReal.p50[y]} !== nominal/ownFactor ${want}`);
+    }
+});
+
 test('P80: every sampled year is labelled with the year that actually produced it', () => {
     // The claim the tooltip makes is "this number came from that year". So the test is not that
     // srcYears is populated - it is that the VALUE in the bank equals the historical record at the

@@ -366,9 +366,14 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
 
         // paths[p * years + y] = portfolio balance (0 once ruined, kept at last value after death)
         const paths        = new Float64Array(numPaths * years);
+        // P86: each path's own cumulative inflation factor, year by year - the exact deflator its
+        // balances need. Filled with 1 so a crashed path (balance 0) divides by 1, never by 0.
+        const factors      = new Float64Array(numPaths * years).fill(1);
         const ruinYears    = new Uint16Array(numPaths);    // 0 = survived to end of plan
         const taxPerPath   = new Float64Array(numPaths);   // lifetime taxes for each path
+        const taxCDPerPath = new Float64Array(numPaths);   // lifetime real (current-$) taxes
         const spendPerPath = new Float64Array(numPaths);   // lifetime real (current-$) delivered spend
+        const spendNomPerPath = new Float64Array(numPaths); // lifetime nominal delivered spend
         // P69: one whole-run outcome per path, so the capture selector has a total order to rank
         // on. After-tax terminal wealth, the same basis Break Even and the stop-year search score.
         const metricPerPath = new Float64Array(numPaths);
@@ -404,13 +409,18 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
             }
 
             taxPerPath[p]   = result.totals.tax ?? 0;
+            taxCDPerPath[p] = result.totals.taxCurrentDollars ?? 0;
             spendPerPath[p] = result.totals.spendCurrentDollars ?? 0;
+            spendNomPerPath[p] = result.totals.spend ?? 0;
             const log = result.log;
             const lastRow = log[log.length - 1];
             metricPerPath[p] = lastRow
                 ? afterTaxWealthOfLogRow(lastRow, baseInputs.futureIRATaxRate)
                 : -Infinity;
             let ruined = false;
+            // P86: the path's cumulative inflation, carried past the log's end so a balance that
+            // persists after both deaths keeps deflating by the path's OWN inflation draws.
+            let lastFactor = 1;
 
             for (let y = 0; y < years; y++) {
                 if (ruined) {
@@ -420,11 +430,15 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
 
                 if (y >= log.length) {
                     // Both persons deceased before plan horizon - persist last balance.
+                    lastFactor *= 1 + (pathInputs.inflationSequence?.[y] ?? baseInputs.inflation ?? 0);
+                    factors[p * years + y] = lastFactor;
                     paths[p * years + y] = y > 0 ? paths[p * years + y - 1] : 0;
                     continue;
                 }
 
                 const row      = log[y];
+                lastFactor = row.inflationFactor || 1;
+                factors[p * years + y] = lastFactor;
                 const required = Math.max(0, row.spendGoal - (row.guaranteedIncome ?? 0));
                 const balance  = row.portfolioBalance ?? 0;
 
@@ -454,18 +468,32 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
         const medianTax = taxSorted[Math.floor(taxSorted.length / 2)] ?? null;
         const spendSorted = Array.from(spendPerPath).sort((a, b) => a - b);
         const medianSpend = spendSorted[Math.floor(spendSorted.length / 2)] ?? null;
+        // P86: the missing twins - real taxes (medianTax is nominal) and nominal spend (medianSpend
+        // is real; the name is a trap, see the comment on the push below).
+        const taxCDSorted = Array.from(taxCDPerPath).sort((a, b) => a - b);
+        const medianTaxReal = taxCDSorted[Math.floor(taxCDSorted.length / 2)] ?? null;
+        const spendNomSorted = Array.from(spendNomPerPath).sort((a, b) => a - b);
+        const medianSpendNominal = spendNomSorted[Math.floor(spendNomSorted.length / 2)] ?? null;
 
         const percentiles = computePercentiles(paths, years, numPaths);
+        // P86: real percentiles = deflate each path-year by that path's OWN factor, THEN take
+        // percentiles. Deflating the nominal percentile curves by one average rate is not the same
+        // thing - a high-inflation path and a low-inflation path do not share a deflator.
+        const pathsReal = new Float64Array(numPaths * years);
+        for (let i = 0; i < pathsReal.length; i++) pathsReal[i] = paths[i] / factors[i];
+        const percentilesReal = computePercentiles(pathsReal, years, numPaths);
         // Selected once: both `captured` and P79's traces below describe the same set of paths, and
         // calling the selector twice would let them drift apart.
         const capturedSel = selectCapturePaths(metricPerPath, ruinYears, numPaths);
 
         // In stress mode, capture individual path traces for per-scenario chart rendering.
-        let stressPaths = null;
+        let stressPaths = null, stressPathsReal = null;
         if (mode === 'stress') {
             stressPaths = [];
+            stressPathsReal = [];
             for (let p = 0; p < numPaths; p++) {
                 stressPaths.push(Array.from({ length: years }, (_, y) => paths[p * years + y]));
+                stressPathsReal.push(Array.from({ length: years }, (_, y) => pathsReal[p * years + y]));
             }
         }
 
@@ -488,6 +516,12 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
             medianRuinYear,
             medianTax,
             medianSpend,
+            // P86 naming trap, stated once where both live: medianTax is NOMINAL and medianTaxReal
+            // is its current-$ twin, but medianSpend is already REAL (it always was) and
+            // medianSpendNominal is ITS twin. The UI picks one of each by the Future $/Current $
+            // toggle; a stale cached worker ships neither twin, so every consumer null-checks.
+            medianTaxReal,
+            medianSpendNominal,
             percentiles: {
                 p5:  Array.from(percentiles.p5),
                 p25: Array.from(percentiles.p25),
@@ -495,7 +529,16 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
                 p75: Array.from(percentiles.p75),
                 p95: Array.from(percentiles.p95),
             },
+            // P86: same five curves with every path deflated by its own realized inflation first.
+            percentilesReal: {
+                p5:  Array.from(percentilesReal.p5),
+                p25: Array.from(percentilesReal.p25),
+                p50: Array.from(percentilesReal.p50),
+                p75: Array.from(percentilesReal.p75),
+                p95: Array.from(percentilesReal.p95),
+            },
             stressPaths,
+            stressPathsReal,
             // Per-scenario ruin years, stress only. The array is built for every mode but was
             // previously collapsed to medianRuinYear and discarded; the stress table needs the
             // individual years to color and sort by. At <= 20 entries the transfer is free.
@@ -511,6 +554,11 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
             capturedTraces: (vi === captureVi && mode !== 'stress')
                 ? capturedSel.map(r => Array.from({ length: years },
                     (_, y) => paths[r.pathIndex * years + y]))
+                : null,
+            // P86: the same traces on each path's own current-$ basis, same gate.
+            capturedTracesReal: (vi === captureVi && mode !== 'stress')
+                ? capturedSel.map(r => Array.from({ length: years },
+                    (_, y) => pathsReal[r.pathIndex * years + y]))
                 : null,
         });
 

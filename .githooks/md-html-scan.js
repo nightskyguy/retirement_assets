@@ -7,7 +7,8 @@
  * <select> in prose. VS Code's preview passes raw HTML through WITHOUT sanitizing, so the browser
  * parsed it as a real element - and a <select> paints nothing except <option> children. Never
  * being closed, all 4,430 following lines became its children and were silently not painted.
- * progress.md had the same defect at line 974 via a bare <option>, hiding ~4,665 lines.
+ * progress.md had the same class of defect at line 3695 via a bare <details>, hiding ~1,944 lines:
+ * an unclosed <details> is CLOSED by default, so everything after it collapses into it.
  *
  * Both survived for weeks because GITHUB SANITIZES markdown HTML and drops non-allowlisted tags,
  * so the files rendered perfectly everywhere they were normally reviewed. Only an unsanitized
@@ -41,12 +42,28 @@
 const fs = require('fs');
 const { execSync } = require('child_process');
 
-// Elements that hide their children. <title>/<style>/<script>/<textarea>/<xmp>/<plaintext> take
-// raw text, <option>/<optgroup> take text only, <select> paints only options, <iframe> and
-// <template> never render inline children at all.
+// MEASURED, not reasoned. The first version of this list was written from the HTML spec and was
+// wrong in BOTH directions: it blocked option/optgroup/xmp/plaintext/listing, which do NOT hide
+// anything, and it missed details/object/dialog, which do - and a bare <details> was live in
+// progress.md at the time. Guessing content models is exactly the mistake this file exists to
+// catch someone else making.
+//
+// Re-derive rather than edit by hand. Paste into any browser console; every tag whose following
+// content disappears belongs here:
+//
+//   for (const tag of ['select','details','yourTagHere']) {
+//     const f = document.createElement('iframe'); document.body.appendChild(f);
+//     const d = f.contentDocument; d.open();
+//     d.write('<p>BEFORE <' + tag + '> here.</p><p>SENT</p>'); d.close();
+//     console.log(tag, (d.body.innerText||'').includes('SENT') ? 'safe' : 'HIDES');
+//     f.remove();
+//   }
+//
+// Run 2026-08-28 over 57 candidate elements; these 11 hid their following content. <option>,
+// <optgroup>, <table>, <tr>, <li>, <b>, <span>, <a>, <summary>, <pre> and 36 others did not.
 const SWALLOWS = new Set([
-    'select', 'option', 'optgroup', 'textarea', 'title', 'style',
-    'script', 'noscript', 'iframe', 'template', 'xmp', 'plaintext', 'listing',
+    'select', 'textarea', 'title', 'style', 'script', 'noscript',
+    'iframe', 'template', 'details', 'object', 'dialog',
 ]);
 
 const TAG = /<\/?([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/g;

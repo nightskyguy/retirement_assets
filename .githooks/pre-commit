@@ -102,7 +102,7 @@ fi
 echo "pre-commit: all three node suites passed in ${elapsed}s."
 
 # Markdown that silently hides the rest of itself. A bare <select> in task_plan.md cost 4,430
-# lines of VS Code preview on 2026-08-28, and progress.md had the same defect via <option>.
+# lines of VS Code preview on 2026-08-28, and a bare <details> cost progress.md ~1,944.
 # GitHub sanitizes the tag away so the files review perfectly; only an unsanitized preview
 # reproduces it, and it looks like file corruption rather than a typo. Scans every tracked .md,
 # not just the staged ones - the check is milliseconds and the failure is silent by nature.

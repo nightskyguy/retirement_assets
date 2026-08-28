@@ -51,8 +51,9 @@ On 2026-08-28 the VS Code preview of `task_plan.md` stopped rendering at line 13
 truncation and not a setting: that line held a bare, unquoted `<select>` in prose. VS Code's preview
 passes raw HTML through **without sanitizing**, so the browser parsed it as a real element, and a
 `<select>` paints nothing except `<option>` children. Never being closed, all 4,430 following lines
-became its children and were silently not painted. `progress.md` had the identical defect via a bare
-`<option>`, hiding about 4,665 lines.
+became its children and were silently not painted. `progress.md` had the same class of defect at
+line 3695 via a bare `<details>`, hiding about 1,944 lines - an unclosed `<details>` is **closed**
+by default, so everything after it collapses inside it.
 
 Both survived for weeks because **GitHub sanitizes markdown HTML** and drops non-allowlisted tags,
 so the files rendered perfectly everywhere they were normally reviewed. There is no error, no
@@ -64,12 +65,24 @@ tags and 172 are legitimate `<a>` anchors in the changelog. `<a>`, `<b>`, `<span
 `<details>`, `<img>`, `<br>` and `<kbd>` all render their children normally and are none of the
 gate's business, closed or not.
 
-What is blocked is exactly the elements whose **content model excludes flow content** - `select`,
-`option`, `optgroup`, `textarea`, `title`, `style`, `script`, `noscript`, `iframe`, `template`,
-`xmp`, `plaintext`, `listing`. An unclosed one of those does not merely look wrong; it makes
-everything after it invisible. That is the whole failure class, and it is why the check is a
-denylist rather than a parser: deciding "unclosed" properly needs a real HTML parse, while naming
-the elements that can swallow a document needs none and has no false positives on this corpus.
+What is blocked is the eleven elements that actually hide their following content: `select`,
+`textarea`, `title`, `style`, `script`, `noscript`, `iframe`, `template`, `details`, `object`,
+`dialog`.
+
+**That list is measured, not reasoned, because reasoning it produced a wrong list.** The first
+version was written from the HTML spec and was wrong in both directions - it blocked `option`,
+`optgroup`, `xmp`, `plaintext` and `listing`, none of which hide anything, and it missed `details`,
+`object` and `dialog`, all of which do. A bare `<details>` was live in `progress.md` at the time, so
+the gate shipped with a false negative already in the tree. Guessing content models is precisely the
+mistake this check exists to catch someone else making.
+
+The list was re-derived by rendering all 57 candidate elements in a browser and recording which ones
+made following content vanish. The re-derivation snippet is in the header of `md-html-scan.js`; run
+it rather than editing the set by hand. `<option>`, `<optgroup>`, `<table>`, `<tr>`, `<li>`, `<b>`,
+`<span>`, `<a>`, `<summary>` and `<pre>` are all safe and are deliberately left alone.
+
+It is a denylist rather than a parser because deciding "unclosed" properly needs a real HTML parse,
+while naming the elements that can swallow a document needs none.
 
 Fenced blocks and inline code spans are skipped. Indented four-space code blocks are **not**
 detected, deliberately - telling one from a wrapped list item needs a real markdown parse. If a

@@ -3692,7 +3692,7 @@ last full run: Synthetic - Arithmetic (AAM) - 500 paths - seed 42 - mu 6.0% - si
 itself so caption and selector cannot disagree. Meta is stashed at DISPATCH (_mcFanMeta), so the
 caption describes the run that produced the fan, not whatever the boxes say now.
 
-Trap caught before shipping: non-demo users now get the fan rendered inside a CLOSED <details>,
+Trap caught before shipping: non-demo users now get the fan rendered inside a CLOSED `<details>`,
 where the canvas has no box - the one case Chart.js's resize observer is worst at. The existing
 .mc-fold toggle-resize handler now covers the two fan charts, and the details gained the class.
 

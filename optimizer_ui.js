@@ -1806,9 +1806,9 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
         },
         {
             key: 'rmd', label: 'All RMDs',
-            title: 'Total Required Minimum Distributions forced out of traditional IRAs over the plan. Lower means the strategy drew down or converted the IRA earlier, shrinking later forced withdrawals.',
-            getValue: r => Math.round(r.totals.rmd).toLocaleString(),
-            getSortValue: r => r.totals.rmd
+            title: 'Total Required Minimum Distributions forced out of traditional IRAs over the plan, in the dollars the Future $/Current $ switch selects. Lower means the strategy drew down or converted the IRA earlier, shrinking later forced withdrawals.',
+            getValue: r => Math.round(inC() ? (r.totals.rmdCurrentDollars ?? r.totals.rmd) : r.totals.rmd).toLocaleString(),
+            getSortValue: r => inC() ? (r.totals.rmdCurrentDollars ?? r.totals.rmd) : r.totals.rmd
         },
         {
             key: 'rmdtax', label: 'RMD Tax%',
@@ -3243,10 +3243,14 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     }
     const rmdEl = document.getElementById('stat-rmd');
     const rmdPctEl = document.getElementById('stat-rmd-pct');
-    if (rmdEl) rmdEl.innerText = '$' + Math.round(totals.rmd ?? 0).toLocaleString();
+    // P86: lifetime RMD and QCD are accumulated flows like All Taxes beside them, so they follow
+    // the toggle through the engine's sum-of-deflated-years twins.
+    const dispRmd = inCD ? (totals.rmdCurrentDollars ?? totals.rmd) : totals.rmd;
+    const dispQcd = inCD ? (totals.qcdCurrentDollars ?? totals.qcd) : totals.qcd;
+    if (rmdEl) rmdEl.innerText = '$' + Math.round(dispRmd ?? 0).toLocaleString();
     if (rmdPctEl) {
         const rmdPctStr = totals.tax > 0 ? `${((totals.rmdTax ?? 0) / totals.tax * 100).toFixed(0)}% of taxes` : '';
-        const qcdStr = (totals.qcd ?? 0) > 0 ? ` | QCD $${Math.round(totals.qcd).toLocaleString()}` : '';
+        const qcdStr = (dispQcd ?? 0) > 0 ? ` | QCD $${Math.round(dispQcd).toLocaleString()}` : '';
         rmdPctEl.innerText = rmdPctStr + qcdStr;
     }
     const yearsEl = document.getElementById('stat-years');

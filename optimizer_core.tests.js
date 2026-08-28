@@ -2260,6 +2260,22 @@ test('P86: running-total identities - every lifetime total is the sum of its per
     }
 });
 
+test('P86c: lifetime RMD and QCD carry Current-$ twins built the tax/spend way', () => {
+    // Inflation is live, so a twin that merely copied the nominal total would fail loudly here.
+    const r = simulate({ ..._ADVISOR_BASE, qcdHHMax: 20000 });
+    const sumCD = (log, f) => log.reduce((a, e) => a + f(e) / (e.inflationFactor || 1), 0);
+    assert(r.totals.rmd > 0, 'fixture must produce RMDs');
+    assert(r.totals.qcd > 0, 'fixture must produce QCDs');
+    assert(r.totals.rmdCurrentDollars > 0 && r.totals.rmdCurrentDollars < r.totals.rmd,
+        'rmdCurrentDollars must be positive and smaller than the nominal total');
+    assert(r.totals.qcdCurrentDollars > 0 && r.totals.qcdCurrentDollars < r.totals.qcd,
+        'qcdCurrentDollars must be positive and smaller than the nominal total');
+    assertNear(r.totals.rmdCurrentDollars, sumCD(r.log, e => e.RMDwd || 0),
+        'rmdCurrentDollars = sum of per-year deflated RMDs', 1);
+    assertNear(r.totals.qcdCurrentDollars, sumCD(r.log, e => (e.QCD1 || 0) + (e.QCD2 || 0)),
+        'qcdCurrentDollars = sum of per-year deflated QCDs', 1);
+});
+
 test('P84f: BOTH counterfactual arms pay the fee, so Opportunity Cost stays about the conversion', () => {
     // The docblock forbids a _cfRun guard. If one is ever added, the two arms diverge by the whole
     // fee stream and every OC number becomes nonsense. This catches that.

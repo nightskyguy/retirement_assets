@@ -3101,9 +3101,11 @@ function growAndSettle(sim, yr) {
     totals.taxCurrentDollars += yr.totalTax / sim.inflation;
     totals.spendCurrentDollars += (yr.targetSpend + yr.surplus.Shortfall) / sim.inflation;
     totals.rmd += yr.totalRMD;
+    totals.rmdCurrentDollars += yr.totalRMD / sim.inflation;
     // Estimate tax attributable to RMDs proportionally (RMD / totalIncome × totalTax)
     totals.rmdTax += yr.totalIncome > 0 ? (yr.taxableRMD / yr.totalIncome) * yr.totalTax : 0;
     totals.qcd = (totals.qcd || 0) + yr.totalQCD;
+    totals.qcdCurrentDollars = (totals.qcdCurrentDollars || 0) + yr.totalQCD / sim.inflation;
     totals.advisorFees = (totals.advisorFees || 0) + (yr.advisorFee || 0);
     totals.advisorFeesCurrentDollars = (totals.advisorFeesCurrentDollars || 0) + (yr.advisorFee || 0) / sim.inflation;
     balance.Roth1 += yr.surplus.Roth1;
@@ -3349,7 +3351,7 @@ function simulate(inputs) {
     let birthmonth2 = inputs.birthmonth2 ?? 12;
 
     let maxYears = Math.max(inputs.birthyear1 + inputs.die1, inputs.birthyear2 + inputs.die2) - currentYear + 1;
-    let totals = { tax: 0, gross: 0, spend: 0, yearsfunded: 0, success: true, yearstested: 0, failedInYear: [], shortfall: 0, taxCurrentDollars: 0, spendCurrentDollars: 0, rmd: 0, rmdTax: 0, thirdPassCount: 0, thirdPassTime: 0, totalTime: 0, acaBreachYears: 0, forcedIRATotal: 0 };
+    let totals = { tax: 0, gross: 0, spend: 0, yearsfunded: 0, success: true, yearstested: 0, failedInYear: [], shortfall: 0, taxCurrentDollars: 0, spendCurrentDollars: 0, rmd: 0, rmdCurrentDollars: 0, rmdTax: 0, thirdPassCount: 0, thirdPassTime: 0, totalTime: 0, acaBreachYears: 0, forcedIRATotal: 0 };
 
     // Pre-compound rates for any gap between today and the simulation start year.
     // This ensures brackets, SS COLA, and IRMAA are in the correct future-dollar terms

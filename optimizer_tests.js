@@ -2474,6 +2474,28 @@ assertEqual(
 		}
 	})();
 
+	// ===== P86c: the All RMDs optimizer column sorts on the basis the toggle selects =====
+	// Lifetime RMDs are an accumulated flow like All Taxes beside them; sorting nominal while
+	// displaying Current-$ (or vice versa) would order the table by a number the reader cannot see.
+	// ⚠ UNSAFE - MUTATES: #show-current-dollars (restored).
+	(function rmdColumnFollowsToggle() {
+		if (!unsafeTest('rmdColumnFollowsToggle')) return;
+		if (typeof getOptimizerColumns !== 'function') return;
+		const cdBox = document.getElementById('show-current-dollars');
+		if (!cdBox) return;
+		const was = cdBox.checked;
+		try {
+			const stub = { totals: { rmd: 1000, rmdCurrentDollars: 700 } };
+			const col = () => getOptimizerColumns(true).find(c => c.key === 'rmd');
+			cdBox.checked = false;
+			assertEqual(col().getSortValue(stub), 1000, 'Future $: All RMDs sorts on the nominal lifetime total');
+			cdBox.checked = true;
+			assertEqual(col().getSortValue(stub), 700, 'Current $: All RMDs sorts on the sum of deflated years');
+		} finally {
+			cdBox.checked = was;
+		}
+	})();
+
 	// ===== An unclosed inline tag in the changelog eats the rest of the page =====
 	// v11.15a2 shipped an <li> whose <strong> was never closed. Nothing threw and nothing looked
 	// wrong in the source, but the HTML parser's recovery re-parented the two entries BELOW it
@@ -2775,7 +2797,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 356, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 357, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

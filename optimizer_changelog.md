@@ -32,6 +32,11 @@ now built the right way for that view: every year's amount is converted to today
 first, then added, so the total only grows. Future $ view and every per-year column are unchanged.
 Hover over any of the three column headers for what each total includes.
 
+The All RMDs figure and its QCD note, on the summary bar and in the Optimizer table, now follow the
+Future $/Current $ switch the same way. They always showed future dollars, even in Current $ view,
+sitting beside an All Taxes figure that converted; the two could not honestly be compared. The
+Optimizer's All RMDs column also sorts on the figure it displays.
+
 ---
 
 <a id="11.168e"></a>

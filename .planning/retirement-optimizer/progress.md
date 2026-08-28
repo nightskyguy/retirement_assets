@@ -5981,3 +5981,46 @@ the charged-on-prior-year-end wording moved into the field tooltip, where most o
 
 New test pins the rule and the boundary (354 -> **355**). Shipped v11.168e; changelog entry edited in
 place per the one-entry-per-branch rule. Suites **355 / 61 / 22**.
+
+
+---
+
+**Same session 2026-08-28, seventh pass - the user stopped a fix mid-flight to ask whether the
+Current-$ basis is wrong app-wide. Analysis says: right principle, real defect, narrower than a
+rewrite. Filed as P86 at O0 rather than patched.**
+
+The trigger was a reported anomaly: `SumAUMfees` DECLINING from 80,672 to 79,371 between 2049 and
+2050 on `?af=0.8&afs=rothira`. Reproduced exactly against the page's own defaults, after my first
+attempt with a hand-built fixture failed to reproduce it - a reminder that "reproduce with the user's
+actual inputs" is not optional.
+
+**The rule this all reduces to.** A STOCK (a balance) is deflated by its own date's factor. A FLOW
+ACCUMULATED over time must be `SUM(flow_y / factor_y)`. Deflating an accumulated nominal total by
+the FINAL factor charges the whole stack the last year's inflation, which is how a running total
+ends up falling.
+
+**The user's premise was that the summary bar is on the wrong basis. Mostly it is not** -
+`taxCurrentDollars` and `spendCurrentDollars` are already built as the sum of deflated years, and
+the tax / spend / fee tiles read them; End Wealth is a stock deflated at its own date; the Optimizer
+objectives already use the Current-$ variants. Saying so plainly matters, because scoping this as a
+rewrite would have been wrong.
+
+**But the premise found a defect I had not been looking for, and it IS on the summary bar.** "All
+RMDs" ignores the Current-$ toggle entirely - `optimizer_ui.js:3188` writes nominal `totals.rmd`
+unconditionally and there is no `rmdCurrentDollars` in the engine at all. So a nominal lifetime flow
+sits directly beside a deflated one. Not a wrong basis, NO basis. The QCD sub-label too.
+
+**Measured rather than eyeballed.** Every numeric log column was tested for nominal monotonicity and
+then for decline under the renderer's per-row division. Exactly two columns are genuine running
+totals that break: `SumTaxes` and `SumAUMfees`.
+
+**And the measurement exposed the trap a clever fix would fall into.** The same test flags
+`spendGoal` and `netIncome` as declining under Current-$ - and those are CORRECT, being per-year
+flows genuinely losing real value. So the fix must be a NAMED accumulator list, never a monotonicity
+heuristic; a heuristic would silently rebase two legitimate columns. That is written into P86 as the
+trap, not left for the implementer to rediscover.
+
+**P86 filed at O0** with an audit-first gate (`P86a`), because the arithmetic is trivial and the
+audit is not: a wrong basis produces a plausible number, nothing fails loudly, and comparing dollar
+figures is the tool's whole purpose. The user's item 3 is folded into it rather than patched in
+isolation. LINE-30 boundary held by compressing three lines of completed-phase prose to two.

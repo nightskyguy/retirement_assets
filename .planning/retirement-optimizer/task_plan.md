@@ -17,10 +17,10 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 | **O1** | P28j | Withdrawal timing keys off conversion; the $1,000 nobody chose | `P28ja` |
+| **O0** | P86 | Current-$ basis: a lifetime total must be the sum of deflated years | `P86a` |
 
-**P81, P78, P79, P82 and P80 all COMPLETE on this branch, v11.1667-11.1671.** Social Security and a
-capped pension survive a deflationary year; a replay survives editing; the survival chart draws the
-ten captured paths; prev/next is one 46-stop ring; the Market Return chart names the year replayed.
+**P81, P78, P79, P82 and P80 all COMPLETE on this branch, v11.1667-11.1671.** Social Security and a capped pension survive a deflationary year; a replay survives editing; the survival chart draws
+the ten captured paths; prev/next is one 46-stop ring; the Market Return chart names the year replayed.
 **P84 COMPLETE, SHIPPED v11.168d** - advisor/AUM fee + RMDs off the prior Dec 31 balance; suites **353**/61/22. **P85 RE-RUN**: earlier still wins 353 of 499, but the RMD claim BROKE (124 counterexamples, all bracket at a live IRA Goal). O0 stays `P35i`; `P72` still pending.
 
 **P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
@@ -30,6 +30,76 @@ User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Fu
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
+
+## P86: the Current-$ basis - a lifetime total is the SUM OF DEFLATED YEARS, not a deflated total  *(NEW 2026-08-28, user-raised, O0)*
+
+**The rule, stated once because everything here follows from it:**
+
+| kind | correct Current-$ form | example |
+|---|---|---|
+| **stock** - a balance at a point in time | divide by THAT DATE's factor | terminal net worth, any account balance |
+| **flow accumulated over time** | `SUM(flow_y / factor_y)` | lifetime tax, lifetime spend, lifetime fees, lifetime RMDs |
+
+Deflating an accumulated nominal total by the FINAL year's factor is wrong, and wrong in a way that
+looks plausible: it charges the whole stack the last year's inflation. It can make a running total
+**fall**, which is what surfaced this - the user reported `SumAUMfees` dropping from 80,672 to 79,371
+between 2049 and 2050 on `?af=0.8&afs=rothira`. Reproduced exactly.
+
+**Most of the app is ALREADY on the right basis, and that is worth stating so this phase is not
+mis-scoped into a rewrite.** `totals.taxCurrentDollars` and `totals.spendCurrentDollars`
+(`optimizer_core.js:3107-3108`) are built as the sum of deflated years. The summary bar's All Taxes,
+Spendable and Advisor Fees read those. End Wealth reads a stock deflated at its own date. The
+Optimizer's ranking objectives already use the Current-$ variants - `mintax` ->
+`totals.taxCurrentDollars`, `maxspend` -> `totals.spendCurrentDollars`, `networth` ->
+`afterTaxNWCurrentDollars`. **The comparison basis is consistent where it has been thought about.**
+
+### The two confirmed defects
+
+**D1. "All RMDs" ignores the Current-$ toggle entirely.** `optimizer_ui.js:3188` writes
+`totals.rmd` unconditionally; there is no `rmdCurrentDollars` anywhere in the engine. So in Current-$
+mode a NOMINAL lifetime flow sits directly beside All Taxes, which is deflated. Not a wrong basis -
+**no** basis, adjacent to a correct one. The QCD figure in the same tile's sub-label has the same
+problem. **This is the one that matters most, because it is on the summary bar and it is the number
+a reader compares against the tax tile.**
+
+**D2. The two running-total COLUMNS in Annual Details.** `SumTaxes` and `SumAUMfees` are divided by
+the row's own factor by the generic renderer (`optimizer_ui.js:3014`), which is correct for every
+other column and wrong for these two, because they are accumulations rather than stocks.
+
+**Measured, not eyeballed:** every numeric log column was tested for nominal monotonicity and then
+for decline under the renderer's per-row division. Exactly two columns are genuine running totals
+that break: `SumTaxes` and `SumAUMfees`.
+
+### The trap a "clever" fix walks into
+
+The same measurement flags `spendGoal` and `netIncome` as declining under Current-$. **Those are
+correct** - they are per-year flows genuinely losing real value, and "fixing" them would be a
+regression. **So the fix MUST be a named list of accumulator columns, never a monotonicity
+heuristic.** A heuristic here would silently rebase two legitimate columns.
+
+### Tasks
+
+- [ ] **P86a** - audit FIRST, and write the inventory down before changing anything. Every displayed
+      dollar in the summary bar, Annual Details, the Optimizer table, the Monte Carlo tab and the
+      Break Even panel, classified stock vs accumulated flow, with its current basis. The two known
+      defects are the ones found so far, not a claim that the list is complete. Gate for P86b.
+- [ ] **P86b** - `totals.rmdCurrentDollars` and `totals.qcdCurrentDollars` in the engine beside the
+      existing pair, same `SUM(x / sim.inflation)` idiom; the All RMDs tile reads them under `inCD`.
+- [ ] **P86c** - a named `ACCUMULATOR_COLUMNS` map in the UI, accumulator key -> its per-year source
+      column, and the Annual Details renderer builds the Current-$ running total as the running sum
+      of deflated per-year values. Covers `SumTaxes` and `SumAUMfees` in one mechanism.
+- [ ] **P86d** - tests: a running total is NON-DECREASING under Current-$ for every accumulator;
+      `spendGoal` and `netIncome` still DO decline (the anti-regression guard for the heuristic
+      trap); each accumulator equals the sum of its own per-year column in both bases; the All RMDs
+      tile moves with the toggle.
+- [ ] **P86e** - whatever the P86a audit turns up.
+
+**Why O0 rather than a quick patch:** the arithmetic is easy and the audit is not. A wrong basis
+produces a plausible number, so nothing fails loudly, and this tool's entire purpose is comparing
+dollar figures against each other. One number on the summary bar is already on no basis at all.
+
+**Explicitly NOT in scope:** changing what the Current-$ toggle MEANS, or its default. This phase
+makes every figure honor the existing definition.
 
 ## P85: when conversions happen — earlier wins, but not for the reason it looks like  *(DONE 2026-08-28, user-raised)*
 

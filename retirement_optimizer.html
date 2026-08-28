@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1671</title>
+    <title>Retirement Optimizer 11.168c</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,12 +59,12 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=111662"></script>
-	<script src="optimizer_core.js?v=111670"></script>
+	<script src="optimizer_core.js?v=11168c"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
 	<script src="optimizer_ui.js?v=111671"></script>
-	<script src="optimizer_tests.js?v=111671"></script>
+	<script src="optimizer_tests.js?v=11168c"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -835,6 +835,12 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="behavior"><b>11.168c</b>
+					Required minimum distributions are now figured from your December 31 balance
+					the way the tax rules define them, so they no longer change with the month a
+					withdrawal happens to leave.
+					<a href="optimizer_changelog.md#11.168c" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="behavior"><b>11.1671</b>
 					<strong>Your Monte Carlo and Stress Test results may now differ from before, because the model behind them is more accurate.</strong>
 					The main projection uses the fixed growth and inflation figures you supply, so the first two changes below show up only in the Monte Carlo, the Stress Test and a Replay, where every path carries its own returns and inflation. That is to say, those runs now account for real-world behavior of Social Security, tax brackets, pensions and the rest.
@@ -1441,7 +1447,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111671';
+    const V = '?v=11168c';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

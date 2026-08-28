@@ -9,7 +9,7 @@
  * moved 0 money fields in 90 cells, and the two-leg view it existed for is already in every log row
  * as `-iraSpend` and `-iraConvGrossTot`. Its arm (A1) is gone from this harness with it, because an
  * arm setting a flag nothing reads would report as the control and look like a finding. The numbers
- * it produced are kept in P28_RESULTS.md. `rothGapFill` SHIPPED, as the "Roth in shortfall
+ * it produced are kept in research/P28_RESULTS.md. `rothGapFill` SHIPPED, as the "Roth in shortfall
  * withdrawals" control and the Optimizer's 🅡 rows.
  *
  * THE PROPOSAL, AS TWO SEPARABLE ENGINE FLAGS (both default off, no UI sets either)
@@ -223,7 +223,7 @@ for (const s of SCENARIOS) {
 
 // ── 1. Regression guards ────────────────────────────────────────────────────────────────────
 // The routing guard that stood here compared A0 against A1 and went with the flag. What it
-// asserted -- routing is label-only in all 90 cells -- is recorded in P28_RESULTS.md, and it can
+// asserted -- routing is label-only in all 90 cells -- is recorded in research/P28_RESULTS.md, and it can
 // no longer regress because there is no longer any code to regress.
 let orderedClean = true, cellCount = 0;
 for (const s of SCENARIOS) for (const r of SPEND_RATES) for (const f of FAMILIES) {

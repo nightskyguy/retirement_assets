@@ -17,6 +17,37 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.168c"></a>
+
+## 11.168c
+
+### Required minimum distributions are figured the way the tax rules define them
+
+**Behavior change. Any plan that reaches RMD age will show different numbers, and a saved scenario
+or a shared link can give a different answer than it did before this release.**
+
+A required minimum distribution is set by your account balance on December 31 of the previous year,
+divided by an IRS life expectancy factor. The tool was applying part of the current year's growth to
+that balance first, which made every RMD larger than the amount actually required.
+
+It also made the RMD move with something it has no business depending on. The tool decides, year by
+year, whether a withdrawal leaves in January or in November, and that choice fed straight into the
+RMD. Two identical plans could show different required distributions purely because one of them had
+done a Roth conversion the year before. That is gone.
+
+**What you will see.** Lower required distributions, and with them lower taxable income and usually
+a lower lifetime tax bill and a larger ending balance. On the plans measured for this release the
+required distributions moved by anywhere from a fraction of a percent to well over a third,
+depending on how long the plan runs and how much of it sits in a traditional IRA.
+
+**One limit worth knowing.** For the first year of a plan the tool uses the IRA balance exactly as
+you typed it. If you enter a balance from partway through the year rather than the previous December
+31, that first year's distribution is an estimate. Every later year is exact.
+
+A drained IRA is also no longer taxed on a distribution larger than the money that actually left it.
+
+---
+
 <a id="11.1671"></a>
 
 ## 11.1671
@@ -847,10 +878,10 @@ What was added, and why:
 - **Four engine research inputs**, used only by the offline study harnesses.
 - **Five research studies were run and recorded** (results live beside the harnesses). The
   highlights below will shape future releases:
-  [Brokerage Research](https://github.com/nightskyguy/retirement_assets/blob/main/.test_harnesses/P32_RESULTS.md), 
-  [Proportional Draw Research](https://github.com/nightskyguy/retirement_assets/blob/main/.test_harnesses/PHASED_RESULTS.md)
+  [Brokerage Research](research/P32_RESULTS.md), 
+  [Proportional Draw Research](research/PHASED_RESULTS.md)
   (it's not as optimal as thought), and 
-  ["EndGame" Research](https://github.com/nightskyguy/retirement_assets/blob/main/.test_harnesses/ENDGAME_RESULTS.md) -
+  ["EndGame" Research](research/ENDGAME_RESULTS.md) -
   what is the best strategy once the IRA is under control. 
 
 ---

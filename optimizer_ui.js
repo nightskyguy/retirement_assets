@@ -142,7 +142,7 @@ function applyNerdKnobVisibility() {
     // more: both graduated out of nerdknob once they were finished and tested, so their markup
     // carries no display:none and nothing hides them. Same treatment as convAdvanced-wrap above.
     // IRMAA safety margin below a projected tier threshold - experimental, still being measured
-    // (.test_harnesses/IRMAA_MARGIN_RESULTS.md). The FORWARD PROJECTION it sits on is NOT gated:
+    // (research/IRMAA_MARGIN_RESULTS.md). The FORWARD PROJECTION it sits on is NOT gated:
     // that is a correctness fix and applies to every user. Only the choice of margin is hidden,
     // and hiding it leaves the default (IRMAA_MARGIN_DEFAULT, 'halfcpi') in force, not "no margin".
     // P70e. Fixed tax indexing - a DIAGNOSTIC, not a modeling choice, so it stays behind the knob.

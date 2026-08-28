@@ -860,9 +860,15 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
         spendGoal: 140000, inflation: 0.025, cpi: 0.025, growth: 0.06,
         cashYield: 0.02, dividendRate: 0.02,
     });
-    assertNear(gk.totals.spend, 7393024.075002, 'GK total spend', 0.01);
-    assertNear(gk.totals.tax, 2027748.557723, 'GK total tax', 0.01);
-    assertNear(gk.finalNW, 9021151.610458, 'GK final net worth', 0.01);
+    // Re-pinned at P84l. All three moved the way the RMD-basis characterization predicted: the RMD
+    // now keys off the prior December 31 balance rather than that balance plus this year's
+    // pre-withdrawal growth, so less is forced out as ordinary income. Tax falls (-$102,100, -5.0%),
+    // spend rises (+$30,640) because the plan keeps more of what it draws, and the guardrail count
+    // is unchanged at 3 - the same signature this test's own comment above describes for a
+    // valuation fix rather than a behavior change in the withdrawal engine.
+    assertNear(gk.totals.spend, 7423663.892587773, 'GK total spend', 0.01);
+    assertNear(gk.totals.tax, 1925648.9171145353, 'GK total tax', 0.01);
+    assertNear(gk.finalNW, 9188056.866411952, 'GK final net worth', 0.01);
     assert(gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length === 3,
         `Expected 3 guardrail adjustments, got ${gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length}`);
 });
@@ -2033,6 +2039,97 @@ test('funding invariant: the fixture actually drains (guards a vacuous green)', 
     }
 });
 
+// ── P84l/m/o: the RMD basis is the prior December 31 balance ──────────────────
+// 26 CFR 1.401(a)(9)-5 sets the year's required distribution as the prior December 31 account
+// balance over the life-expectancy divisor. Before P84l the engine struck it off `balance.IRA1`
+// AFTER beginYear applied this year's pre-withdrawal growth, which overstated every RMD and -- far
+// worse -- coupled it to `preMonths`, which is 1 or 11 depending on whether LAST year converted
+// more than $1,000. Two otherwise identical plans got different RMDs because one converted.
+const _RMD_BASE = {
+    STATEname: 'TX', strategy: 'propwd', propWithdraw: 0.05,
+    nYears: 25, birthyear1: 1950, birthmonth1: 6, die1: 95,
+    birthyear2: 0, birthmonth2: 0, die2: 0, hasSpouse: false,
+    IRA1: 1500000, IRA2: 0, Roth: 0, Roth2: 0,
+    Brokerage: 200000, BrokerageBasis: 100000, Cash: 100000, CashReserve: null,
+    ss1: 30000, ss1Age: 70, ss2: 0, ss2Age: 0,
+    pensionAnnual: 0, pensionStartAge: 0, survivorPct: 0, pensionCola: false,
+    spendGoal: 90000, spendChange: 0, iraBaseGoal: 0,
+    inflation: 0.025, cpi: 0.025, growth: 0.06, cashYield: 0.02, dividendRate: 0.0,
+    ssFailYear: 2099, ssFailPct: 1.0, convertExcessToRoth: false,
+    extraConversionAmount: 0, iraWithdrawPct: 0.05,
+    startAge: 76, startInYear: 2026, dividendReinvest: false,
+};
+
+// Per ACCOUNT, deliberately. Each spouse carries their own divisor, so `(rmd1+rmd2)` over the
+// combined prior balance is a blend weighted by the IRA1/IRA2 split -- and that split moves between
+// arms, so the blended ratio differs even when the basis is exactly right. Measuring the blend
+// instead of the quantity claimed is how this very test was first written wrong.
+const _rmdRatios = (log) => {
+    const out = [];
+    for (let y = 1; y < log.length; y++) {
+        const rmd = log[y]['RMD1-'] || 0, prior = log[y - 1].IRA1 || 0;
+        if (rmd > 1 && prior > 1) out.push(rmd / prior);
+    }
+    return out;
+};
+
+test('P84l: the RMD is struck off the PRIOR December 31 balance, not a mid-year one', () => {
+    const r = simulate({ ..._RMD_BASE });
+    const ratios = _rmdRatios(r.log);
+    assert(ratios.length >= 5, `fixture must produce RMD years, got ${ratios.length}`);
+    // Every ratio must be a clean IRS divisor reciprocal: 1/x for x the life-expectancy factor,
+    // which is a one-decimal number. If the basis carried a growth stub the ratio would be
+    // (1/x) * (1+g)^(preMonths/12) and 1/ratio would not land on a tenth.
+    for (const q of ratios) {
+        const factor = 1 / q;
+        assertNear(factor, Math.round(factor * 10) / 10,
+            `1/(RMD ÷ prior year-end IRA) must be a life-expectancy factor to one decimal, got ${factor}`,
+            1e-6);
+    }
+});
+
+test('P84l: the RMD basis does not depend on the withdrawal-timing rule', () => {
+    // THE COUPLING TEST. This is the one that fails on main: preMonths is 1 or 11, so the old basis
+    // moved by (1+g)^(10/12) between the arms. Note this pins the BASIS, not the lifetime total --
+    // timing legitimately changes the balance PATH, so later RMDs may still differ in level.
+    const late  = _rmdRatios(simulate({ ..._RMD_BASE, forceWithdrawTiming: 'late'  }).log);
+    const early = _rmdRatios(simulate({ ..._RMD_BASE, forceWithdrawTiming: 'early' }).log);
+    const n = Math.min(late.length, early.length);
+    assert(n >= 5, `both arms must produce RMD years, got ${late.length} and ${early.length}`);
+    for (let i = 0; i < n; i++) {
+        assertNear(late[i], early[i],
+            `year ${i}: the RMD divisor must not move with withdrawal timing`, 1e-12);
+    }
+});
+
+test('P84m: a drained IRA is not taxed on a distribution that never happened', () => {
+    // The debits floor at zero, but totalRMD/taxableRMD used to be computed from the REQUIREMENT.
+    // A QCD large enough to empty the account is the path that reaches this today.
+    const r = simulate({ ..._RMD_BASE, qcdHHMax: 5000000, qcdMode: 'max' });
+    for (const row of r.log) {
+        const outflow = (row['RMD1-'] || 0) + (row['RMD2-'] || 0);
+        assert((row.taxableRMD ?? 0) <= outflow + 1,
+            `taxable RMD ${row.taxableRMD} exceeds the realized outflow ${outflow} in ${row.year}`);
+    }
+    const anyIRA = r.log.some(row => (row.IRA1 || 0) + (row.IRA2 || 0) > 1);
+    assert(anyIRA || r.log.length > 0, 'fixture must actually run');
+});
+
+test('P84o: year 0 keys off the balance AS TYPED, and that limitation is pinned not hidden', () => {
+    // P84l is exact for every year after the first: the simulation knows its own December 31
+    // balance. Year 0 seeds from the typed IRA balance, which IS a December 31 balance only for a
+    // plan starting in January. P72 owns startMonth and therefore owns the fix. Until then the
+    // limitation is pinned here so it cannot drift, and stated in the UI, rather than papered over
+    // with a growth-based back-out that would be a guess wearing a number's clothes.
+    const typed = 900000;
+    const r = simulate({ ..._RMD_BASE, IRA1: typed, startAge: 80, birthyear1: 1946 });
+    const first = r.log.find(row => (row['RMD1-'] || 0) > 1);
+    assert(first, 'fixture must take an RMD in year 0');
+    const factor = typed / first['RMD1-'];
+    assertNear(factor, Math.round(factor * 10) / 10,
+        `year 0's RMD must be the TYPED balance over a divisor, got factor ${factor}`, 1e-6);
+});
+
 // ── P38 PR 3: the primary draw is sized net of the tax on guaranteed income ───
 // PR 2 widened the forced-IRA backstop so the shortfall stopped stranding. That treated the
 // symptom: the backstop was making up, year after year, for a first-pass draw that was too small
@@ -2054,7 +2151,15 @@ test('P38: the primary draw funds the tax on guaranteed income, not the backstop
     // ceiling is funded from the taxable account instead. Forced IRA going DOWN is the intended
     // direction: the measurement this test exists for (the primary draw sizing the tax on
     // guaranteed income) is unchanged, and the remaining gap is smaller than it was.
-    assertNear(_sumForcedIRA(r.log), 18719.301, 'forced-IRA total once the draw is sized correctly', 1);
+    //
+    // 18,719 -> 33,744 at P84l, and this one goes UP, which is the right direction here and is
+    // worth spelling out because it looks like a regression. This fixture sets propWithdraw: 0, so
+    // there is no primary draw at all: spending is funded by Social Security plus whatever the RMD
+    // forces out, and the backstop covers the rest. P84l strikes the RMD off the prior December 31
+    // balance instead of the same balance after this year's pre-withdrawal growth, so every RMD is
+    // smaller. Less income arrives on its own, and the backstop -- which is what ForcedIRA counts --
+    // has to reach further. Smaller RMDs and a larger backstop are the SAME finding seen twice.
+    assertNear(_sumForcedIRA(r.log), 33743.833, 'forced-IRA total once the draw is sized correctly', 1);
 });
 
 test('P38: sizing by a flat nominal rate would badly over-draw an SS-heavy household', () => {

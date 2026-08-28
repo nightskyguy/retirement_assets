@@ -1,6 +1,6 @@
 # P70a: bracket indexation under variable inflation
 
-Harness: [`cpi_index_harness.js`](cpi_index_harness.js). Run `node .test_harnesses/cpi_index_harness.js`.
+Harness: [`cpi_index_harness.js`](https://github.com/nightskyguy/retirement_assets/blob/main/.test_harnesses/cpi_index_harness.js). Run `node .test_harnesses/cpi_index_harness.js`.
 Measured 2026-08-26. 30 plans x 26 stress scenarios x 2 arms = 1,560 simulations, about 1 second.
 
 > **The figures in the next three sections are ROUND ONE**, measured with `inflation` set equal to

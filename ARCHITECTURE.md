@@ -332,7 +332,8 @@ size to zero and still makes the draw.
 | `taxPaymentPlanner.js` | engine | `TaxPaymentPlanner.computePaymentPlan`, `getStateInfo`, `dueDateFor`, `restoreDateFor`, holiday/business-day helpers. Same no-DOM contract as the other two engine files |
 | `optimizer_changelog.md` | docs | full release history; the 5 newest entries are duplicated inline in the HTML |
 | `_includes/head-custom.html` | docs | Jekyll theme hook: CSS + `doclinks.js` for rendered `.md` pages |
-| `.test_harnesses/` | research | investigative scripts that are **not** part of any suite - see the note below and that directory's `HARNESSES.md` |
+| `.test_harnesses/` | research | investigative **scripts** that are **not** part of any suite - see the note below. Holds `.js` only. A dot-directory, so Jekyll never publishes it |
+| `research/` | research | the **write-ups** those scripts produce: [`HARNESSES.md`](research/HARNESSES.md) (the index) and one `*_RESULTS.md` per study. Split out of `.test_harnesses/` on 2026-08-28 - a directory holding both the scripts and their prose was hard to scan, and the prose is worth publishing while the scripts are not |
 | `.githooks/pre-commit` | test gate | runs all three `node` suites, blocks the commit on a failure or a missing suite. Install once with `sh .githooks/install` - see below |
 
 ### Where a test file belongs
@@ -349,10 +350,20 @@ Two directories, one rule, because the distinction has been asked about:
 - **`.test_harnesses/`** - scripts that answer a *research question* once and are kept only so a
   finding can be re-derived (BETR trustworthiness, conversion stop-year, unified-conversion routing).
   They are not run by CI or by any `.test.js`, several run only in a browser console, and their
-  output is prose in `findings.md` / `P28_RESULTS.md` rather than a pass/fail.
+  output is prose rather than a pass/fail. **This directory holds `.js` only.**
+- **`research/`** - where that prose lands: `research/HARNESSES.md` indexes every harness, and each
+  study gets one `research/<NAME>_RESULTS.md`. A new harness writes its report here, never beside
+  the script.
+
+**Why one of these two carries a leading dot and the other does not.** Jekyll skips dot-directories
+entirely, so nothing under `.test_harnesses/` is reachable on the deployed site - which is right for
+a script nobody should run from a browser. The reports are the opposite: they are the deliverable, so
+`research/` is published and every report is readable at `/research/<NAME>_RESULTS.html`. A link from
+a published report back to its script therefore has to be an absolute GitHub blob URL, not a relative
+path, or it lands on a 404.
 
 The test that decides it: **would the suite fail without this file?** Yes goes at root; no goes in
-`.test_harnesses/`.
+`.test_harnesses/` (the script) and `research/` (its report).
 
 ### The pre-commit gate, and what it is compensating for
 

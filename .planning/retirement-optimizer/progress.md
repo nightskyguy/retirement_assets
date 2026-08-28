@@ -4444,8 +4444,8 @@ run however the matching behaved. Verified in the browser: Ordered CIBR pins and
 and an IRMAA Tier 2 plan appears as row 157 of 157, pinned and drawn.
 
 Two node tests, one of which fails on the pre-fix engine and names the wrong row. Suite 317/61/22,
-badge green at 693. One self-inflicted detour: the changelog `<li>` I wrote used <b> for emphasis,
-and an in-page test counts <b> tags to detect a swallowed entry - it caught it, which is the test
+badge green at 693. One self-inflicted detour: the changelog `<li>` I wrote used `<b>` for emphasis,
+and an in-page test counts `<b>` tags to detect a swallowed entry - it caught it, which is the test
 doing its job.
 
 
@@ -4499,7 +4499,7 @@ Three node tests: hand-built 10-path array where the right order is checkable by
 ordering, dedup to 8 rows, rankPct 0..100 honest), a 100-survivor run plus a 3-path dedup edge, and
 an e2e runJob asserting every variation of both passes carries in-range capture rows whose worst
 row agrees with survivalRate. Suites 320/61/22, badge green at 696. No changelog entry - nothing
-user-visible until the replay UI; title bumped to 11.1643, first <li> stays 11.1642 deliberately
+user-visible until the replay UI; title bumped to 11.1643, first `<li>` stays 11.1642 deliberately
 (that entry belongs to a merged branch; this branch writes its own entry when the UI ships).
 
 ---

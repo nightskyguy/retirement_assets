@@ -15,10 +15,21 @@
  * renderer reproduces it. There is no error, no artifact at the break, and no clue in the source -
  * the document simply appears to end early, which reads as file corruption or an editor limit.
  *
+ * TWO FAILURE MODES, and the second was missed on the first pass. An unclosed <b> at
+ * progress.md:4447 did not HIDE anything - every following line was still there, just bold. The
+ * original check only ever asked "did the text disappear", so no amount of that measurement could
+ * have caught it. The user found it by reading. Hence rule B.
+ *
+ *   A. HIDES     - a bare hiding element, closed or not. Balance is irrelevant here: even a
+ *                  properly paired <select>...</select> paints nothing but its options.
+ *   B. CORRUPTS  - any element whose open and close counts differ within a file. An unclosed <b>
+ *                  bolds the rest of the document, an unclosed <a> makes the remainder one link,
+ *                  an unclosed <li> emits a stray bullet and pulls what follows into a list item.
+ *
  * WHAT IS AND IS NOT BLOCKED. A blanket "no raw HTML" rule was measured and rejected: the 27
- * tracked .md files hold 181 bare tags, and 172 are legitimate <a> anchors in the changelog.
- * <a>, <b>, <span>, <li>, <details>, <img>, <br>, <kbd> all render their children normally and
- * are none of this script's business, closed or not.
+ * tracked .md files hold 181 bare tags, and 172 are legitimate <a> anchors in the changelog -
+ * every one of them correctly PAIRED, which is exactly why rule B tests balance and not presence.
+ * Real markup passes untouched; only unclosed markup fails.
  *
  * The denylist below is exactly the elements whose CONTENT MODEL EXCLUDES FLOW CONTENT. An
  * unclosed one does not merely look wrong, it makes everything after it invisible. That is the
@@ -31,9 +42,10 @@
  * planning docs is already backticked.
  *
  * SCOPE. Fenced blocks and inline code spans are skipped. Indented (4-space) code blocks are NOT
- * detected, deliberately: distinguishing one from a wrapped list item needs a real markdown parse.
- * If a denylisted tag ever belongs in an indented block, fence it or backtick it - both are
- * clearer anyway, and the error message says so.
+ * detected, deliberately: telling one from a wrapped list item needs a real markdown parse. A tag
+ * inside an indented block is therefore reported - fence it instead, which is clearer anyway and
+ * is what p71_probe/README.md was converted to. Void elements (<br>, <img>, <hr>, ...) and
+ * self-closing tags are exempt from rule B, since they never take a closing tag.
  *
  * Run standalone:  node .githooks/md-html-scan.js [file.md ...]
  * With no arguments it scans every tracked *.md. Exit 1 on any hit.
@@ -66,7 +78,13 @@ const SWALLOWS = new Set([
     'iframe', 'template', 'details', 'object', 'dialog',
 ]);
 
-const TAG = /<\/?([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/g;
+const TAG = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*?(\/?)>/g;
+
+// Never take a closing tag, so they can never be "unbalanced" under rule B.
+const VOID = new Set([
+    'br', 'img', 'hr', 'input', 'meta', 'link', 'source',
+    'area', 'base', 'col', 'embed', 'param', 'track', 'wbr',
+]);
 
 function scan(file) {
     let text;
@@ -74,16 +92,26 @@ function scan(file) {
     catch { return []; }                       // deleted/renamed in this commit; not our problem
 
     const hits = [];
+    const open = {}, close = {}, firstAt = {};
     let inFence = false;
     text.split(/\r?\n/).forEach((line, i) => {
         if (/^\s*(```|~~~)/.test(line)) { inFence = !inFence; return; }
         if (inFence) return;
         const bare = line.replace(/`[^`]*`/g, '');   // inline code spans are already safe
         for (const m of bare.matchAll(TAG)) {
-            const name = m[1].toLowerCase();
-            if (SWALLOWS.has(name)) hits.push({ file, line: i + 1, tag: m[0], name });
+            const name = m[2].toLowerCase();
+            // Rule A - hides everything after it, whether or not it is closed.
+            if (SWALLOWS.has(name) && !m[1]) hits.push({ kind: 'hides', file, line: i + 1, tag: m[0], name });
+            // Rule B bookkeeping. Void and self-closed tags never pair, so they cannot be unbalanced.
+            if (VOID.has(name) || m[3]) continue;
+            if (m[1]) close[name] = (close[name] || 0) + 1;
+            else { open[name] = (open[name] || 0) + 1; if (!firstAt[name]) firstAt[name] = i + 1; }
         }
     });
+    for (const name of new Set([...Object.keys(open), ...Object.keys(close)])) {
+        const o = open[name] || 0, c = close[name] || 0;
+        if (o !== c) hits.push({ kind: 'unbalanced', file, line: firstAt[name] || 1, name, open: o, close: c });
+    }
     return hits;
 }
 
@@ -101,15 +129,20 @@ if (!files.length) {
 const hits = files.flatMap(scan);
 
 if (hits.length) {
-    console.error(`md-html-scan: BLOCKED - ${hits.length} raw HTML tag(s) that hide the rest of the file:`);
-    for (const h of hits) console.error(`    ${h.file}:${h.line}  ${h.tag}`);
+    console.error(`md-html-scan: BLOCKED - ${hits.length} raw HTML problem(s) in markdown:`);
+    for (const h of hits.filter(x => x.kind === 'hides'))
+        console.error(`    ${h.file}:${h.line}  ${h.tag}  HIDES everything after it`);
+    for (const h of hits.filter(x => x.kind === 'unbalanced'))
+        console.error(`    ${h.file}:${h.line}  <${h.name}> UNBALANCED (open=${h.open} close=${h.close})`);
     console.error('');
-    console.error('    A <' + hits[0].name + '> renders none of its children, and these are not closed, so every');
-    console.error('    line after it vanishes from any UNSANITIZED preview (VS Code). GitHub strips the');
-    console.error('    tag and looks fine, which is why this kind of break hides for weeks.');
+    console.error('    VS Code previews markdown WITHOUT sanitizing, so a raw tag is parsed as a real');
+    console.error('    element. A hiding element paints none of its children; an unclosed one styles or');
+    console.error('    wraps every line after it. GitHub strips these and looks perfect, which is why');
+    console.error('    such a break survives review.');
     console.error('');
-    console.error('    FIX: wrap it in backticks - `<' + hits[0].name + '>` - matching the convention every');
-    console.error('    other code identifier in these docs already follows.');
+    console.error('    FIX: wrap the tag in backticks - matching the convention every other code identifier');
+    console.error('    in these docs already follows. Real PAIRED markup is fine and is never reported; a');
+    console.error('    tag inside an INDENTED code block is - fence it instead.');
     process.exit(1);
 }
 

@@ -65,9 +65,26 @@ tags and 172 are legitimate `<a>` anchors in the changelog. `<a>`, `<b>`, `<span
 `<details>`, `<img>`, `<br>` and `<kbd>` all render their children normally and are none of the
 gate's business, closed or not.
 
-What is blocked is the eleven elements that actually hide their following content: `select`,
+Two rules, because there are two failure modes and the second was missed at first.
+
+**Rule A, hides.** The eleven elements that actually make following content vanish: `select`,
 `textarea`, `title`, `style`, `script`, `noscript`, `iframe`, `template`, `details`, `object`,
-`dialog`.
+`dialog`. Blocked on sight, closed or not - even a properly paired `<select>...</select>` paints
+nothing but its options.
+
+**Rule B, corrupts.** Any element whose open and close counts differ within a file. An unclosed
+`<b>` bolds the rest of the document, an unclosed `<a>` makes the remainder one hyperlink, an
+unclosed `<li>` emits a stray bullet and pulls what follows into a list item.
+
+Rule B exists because rule A could not have caught the real case that produced it: two unclosed
+`<b>` at `progress.md:4447-4448` left every following line bold. Nothing was hidden, so the
+measurement behind rule A - "did the text disappear from `innerText`" - returned clean. A reader
+found it. **The check was asking one question about a problem that has two.**
+
+Balance, not presence, is what makes rule B usable: the 172 `<a>` anchors in
+`optimizer_changelog.md` are all correctly paired, so genuine markup passes untouched and only
+unclosed markup fails. Void elements (`<br>`, `<img>`, `<hr>`, ...) and self-closing tags are exempt,
+since they never take a closing tag.
 
 **That list is measured, not reasoned, because reasoning it produced a wrong list.** The first
 version was written from the HTML spec and was wrong in both directions - it blocked `option`,
@@ -85,8 +102,9 @@ It is a denylist rather than a parser because deciding "unclosed" properly needs
 while naming the elements that can swallow a document needs none.
 
 Fenced blocks and inline code spans are skipped. Indented four-space code blocks are **not**
-detected, deliberately - telling one from a wrapped list item needs a real markdown parse. If a
-denylisted tag ever belongs in an indented block, fence it or backtick it.
+detected, deliberately - telling one from a wrapped list item needs a real markdown parse. A tag
+inside an indented block is therefore reported; fence it instead, which is clearer anyway and is
+what `p71_probe/README.md` was converted to.
 
 **The fix is always the same: wrap it in backticks.** `` `<select>` `` renders the tag visibly
 instead of executing it, and matches the convention every other code identifier in these docs

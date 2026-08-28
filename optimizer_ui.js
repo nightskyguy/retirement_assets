@@ -907,6 +907,15 @@ function updateCurrentDollarsView() {
         : (typeof _mcStress !== 'undefined' ? _mcStress : null);
     if (typeof _mcResults !== 'undefined' && _mcResults) {
         if (typeof renderMCChart === 'function') renderMCChart(_mcResults);
+        // P86: the survival table and the plan headline carry dollar figures too (final balance,
+        // taxes, spendable) and were never re-rendered here, so they sat on a fixed basis while
+        // the chart above them switched. Plan scope never renders the table (renderMCResults hides
+        // and empties it), so the same gate applies here.
+        if (typeof renderSurvivalTable === 'function' && _mcResults.variations
+            && (typeof _mcScope === 'undefined' || _mcScope !== 'plan')) {
+            renderSurvivalTable(_mcResults.variations, _mcResults.numPaths);
+        }
+        if (typeof renderPlanHeadline === 'function') renderPlanHeadline(_mcResults);
     }
     if (_stress && typeof renderStressChart === 'function') renderStressChart(_stress);
 }

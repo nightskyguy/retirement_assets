@@ -43,6 +43,17 @@ amounts in the Break Even explanation are stated in the dollars the switch selec
 suggestion itself, which year to stop converting or whether to convert at all, never changes with
 the switch; only the dollars that describe it do.
 
+The Monte Carlo tab is the largest change. The survival table's Final Balance, Total Taxes and
+Total Spendable columns, and the "Median ending balance" in the plan headline, each showed one
+fixed basis regardless of the switch; taxes were future dollars while Spendable beside them was
+today's dollars, so the two could not honestly be read together. All of them now follow the switch,
+and the table sorts on the figures it displays. The percentile bands, the drawn worst-to-best
+paths, and the Stress Test chart and table also follow the switch, and their Current $ figures are
+now exact: every simulated path is deflated by the inflation that path actually lived through,
+rather than every path sharing one average rate. High-inflation futures now look as poor in today's
+dollars as they are; with the old average-rate conversion the difference reached several percent.
+Hover over a line to read the value as drawn.
+
 ---
 
 <a id="11.168e"></a>

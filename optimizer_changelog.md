@@ -17,20 +17,22 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.168d"></a>
+<a id="11.168e"></a>
 
-## 11.168d
+## 11.168e
 
 ### An advisor fee you can model, and required distributions figured the way the tax rules define them
 
 **Behavior change. Any plan that reaches the age for required distributions will show different
 numbers, and a saved scenario or a shared link can give a different answer than it did before.**
 
-**1. Advisor and fund fees.** A new field under Advanced options in Assets takes a yearly
-percentage, or a flat dollar amount that grows with your CPI, and a choice of which accounts are
-billed and which pay, including billing everything but paying from the larger IRA. **It starts at
-None, so no fee is charged until you pick accounts**, and switching back to None is how you compare
-a plan with and without the fee without retyping the amount. It is charged at
+**1. Advisor and fund fees.** A new field under Advanced options in Assets takes the fee as a
+single number, plus a choice of which accounts are billed and which pay, including billing
+everything but paying from the larger IRA. **A small number is read as a percentage and a large one
+as a flat dollar amount that grows with your CPI**, and the line under the field says which way it
+read what you typed; add a % or a $ if you want to say so outright, and shorthand like 20k works.
+**It starts at None, so no fee is charged until you pick accounts**, and switching back to None is
+how you compare a plan with and without the fee without retyping the amount. It is charged at
 the start of each year against the previous December 31 balances, the way advisors bill. **Money
 taken from an IRA to pay the fee is not a taxable distribution**, so it never reaches your income or
 your tax. Cash is never billed and never pays. A tile shows the lifetime total, and appears only

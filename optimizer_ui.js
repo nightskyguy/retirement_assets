@@ -156,6 +156,7 @@ function applyNerdKnobVisibility() {
     // cleared. That is the whole reason the URL keys are not gated with the field.
     const aumFeeWrap = document.getElementById('aumFeeAmount-wrap');
     if (aumFeeWrap) aumFeeWrap.style.display = NERD_KNOBS ? '' : 'none';
+    updateAUMFeeHint();
     const irmaaMarginWrap = document.getElementById('irmaaMarginMode-wrap');
     if (irmaaMarginWrap) irmaaMarginWrap.style.display = NERD_KNOBS ? '' : 'none';
     // 💵 legend - only meaningful once nerdknob is sweeping the cash-funded arm
@@ -543,11 +544,15 @@ function getInputs() {
         spendGoal: +val('spendGoal'),
         spendChange: (spendChange / 100.0),
         iraBaseGoal: +val('iraBaseGoal'),
-        // P84. RAW as typed - never /100 here. The engine divides, because which scaling applies
-        // depends on aumFeeMode, and a field whose meaning depends on a SECOND field cannot live in
-        // applyScenario's x100 list or in DOLLAR_INPUT_IDS.
-        aumFeeAmount: +val('aumFeeAmount') || 0,
-        aumFeeMode: val('aumFeeMode') || 'pct',
+        // P84. The amount is one field carrying two meanings, so it is parsed here rather than
+        // read. `val()` returns dataset.numVal when set and the literal text otherwise, and this is
+        // a data-plain field so numVal is NEVER set - `+val(...)` on "20k" was NaN, which fell to 0
+        // and silently charged no fee at all. Shorthand, commas, a '%' suffix and a '$' prefix are
+        // all handled; the mode is then resolved and passed EXPLICITLY so the share URL pins it.
+        ...(() => {
+            const p = parseAUMFeeAmount(val('aumFeeAmount'));
+            return { aumFeeAmount: p.amount, aumFeeMode: p.mode };
+        })(),
         aumFeeScope: val('aumFeeScope') || 'none',
         inflation: +val('inflation') / 100.0,
         cpi: +val('cpi') / 100.0,
@@ -4400,6 +4405,44 @@ function updateCharts(log) {
 function val(id) { const el = document.getElementById(id); if (!el) return undefined; return el.dataset.numVal !== undefined ? el.dataset.numVal : el.value; }
 function valChecked(id) { return document.getElementById(id)?.checked; }
 
+// P84. One field, two meanings. Returns { amount, mode, explicit } from whatever was typed.
+//
+// An explicit marker always wins over the magnitude: "0.9%" is a percent even though a bare 0.9
+// would be too, and "$15" is fifteen dollars a year even though a bare 15 would read as 15%.
+// Everything else falls to the engine's own threshold, so the rule lives in ONE place.
+function parseAUMFeeAmount(raw) {
+    const txt = (raw ?? '').toString().trim();
+    if (!txt) return { amount: 0, mode: 'pct', explicit: false };
+    const hasPct = /%\s*$/.test(txt);
+    const hasDollar = /^\s*\$/.test(txt);
+    const body = txt.replace(/^\s*\$/, '').replace(/%\s*$/, '').replace(/,/g, '').trim();
+    // parseShorthand carries the k/m suffixes every other dollar field on this page accepts.
+    const n = DisplayHelpers.parseShorthand(body);
+    const amount = (n == null || Number.isNaN(n)) ? (Number.isFinite(+body) ? +body : 0) : n;
+    const explicit = hasPct ? 'pct' : hasDollar ? 'flat' : null;
+    return {
+        amount: Math.max(0, amount),
+        mode: OptimizerCore.inferAUMFeeMode(amount, explicit),
+        explicit: !!explicit,
+    };
+}
+
+// Says out loud which way the number was read, directly under the field. A single field carrying
+// two meanings is only honest if it tells you which one it picked.
+function updateAUMFeeHint() {
+    const el = document.getElementById('aumFeeRead');
+    if (!el) return;
+    const p = parseAUMFeeAmount(document.getElementById('aumFeeAmount')?.value);
+    const scope = document.getElementById('aumFeeScope')?.value || 'none';
+    if (!(p.amount > 0)) { el.textContent = 'No fee.'; return; }
+    const reading = p.mode === 'pct'
+        ? `Read as ${(+p.amount.toFixed(4))}% a year`
+        : `Read as $${Math.round(p.amount).toLocaleString()} a year`;
+    el.textContent = scope === 'none'
+        ? `${reading}, but not applied - "Fee applies to" is None.`
+        : `${reading}.`;
+}
+
 
 function showTab(id) {
     // P69: replay is confined to Charts and Annual Details. Any other destination ends it - the
@@ -4704,6 +4747,14 @@ function buildShareURL() {
             params.set(short, el.value);
         }
     });
+    // P84. aumFeeMode stopped being a control when the mode became inferred from the text, so the
+    // loop above cannot see it either. Pin the RESOLVED mode whenever a fee is live: the inference
+    // threshold is a constant today, and a link that spells out what it meant keeps working even if
+    // that constant is ever revisited. Same reasoning as ptxm below.
+    {
+        const fee = parseAUMFeeAmount(document.getElementById('aumFeeAmount')?.value);
+        if (fee.amount > 0) params.set('afm', fee.mode);
+    }
     // P64e: these have no DOM field, so the loop above cannot see them. Re-emit them or a shared
     // link silently drops a figure the recipient never had a way to re-enter.
     if (PROP_TAX_STATE) {
@@ -4764,6 +4815,18 @@ function loadFromURL() {
     // is deliberately NOT implied - old links predate it and must keep their exact behavior.
     if (params.has('maxConversion') && !params.has('convertExcessToRoth')) {
         params.set('convertExcessToRoth', params.get('maxConversion'));
+    }
+    // P84. `aumFeeMode` has no element to load into. Rather than carry hidden state, fold it back
+    // into the amount's own text as a marker - "$20000" or "1.2%" - which is exactly what a user
+    // would have typed to mean the same thing. Everything downstream then reads one field, and a
+    // link that says 15 means 15% while one that says afm=flat means fifteen dollars.
+    if (params.has('aumFeeMode') && params.has('aumFeeAmount')) {
+        const m = params.get('aumFeeMode');
+        const a = (params.get('aumFeeAmount') || '').toString().trim();
+        if (a && (m === 'pct' || m === 'flat')) {
+            params.set('aumFeeAmount', m === 'flat' ? '$' + a : a + '%');
+        }
+        params.delete('aumFeeMode');
     }
     params.forEach((value, key) => {
         const el = document.getElementById(key);

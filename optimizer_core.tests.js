@@ -62,6 +62,8 @@ const core = IS_NODE ? require('./optimizer_core.js') : window.OptimizerCore;
 if (IS_NODE) require('./displayhelpers.js');
 
 const simulate = core.simulate;
+const AUM_FEE_PCT_MAX = core.AUM_FEE_PCT_MAX;
+const inferAUMFeeMode = core.inferAUMFeeMode;
 const optimizeSpend = core.optimizeSpend;
 const suggestSustainableSpend = core.suggestSustainableSpend;
 const suggestSpendMenu = core.suggestSpendMenu;
@@ -2176,6 +2178,29 @@ test('P84c: a mid-year fee does not move the SAME year\'s RMD, only later ones',
         'year-0 RMD must be identical with and without the fee', 1e-6);
     assert(fee.log[1]['RMD1-'] < off.log[1]['RMD1-'] - 1,
         'year-1 RMD should be lower, because the December 31 balance now reflects the fee');
+});
+
+test('P84d: percent vs dollars is inferred from the amount, and 20 belongs to FLAT', () => {
+    // One field carries both meanings. A real advisory fee is a fraction of a percent to about 2%;
+    // a real flat fee is thousands. The ranges do not overlap near the threshold.
+    assert(AUM_FEE_PCT_MAX === 20, 'the documented threshold is 20');
+    for (const [amt, want] of [[0.5, 'pct'], [1, 'pct'], [1.25, 'pct'], [19.99, 'pct'],
+                               [20, 'flat'], [20.01, 'flat'], [12000, 'flat'], [20000, 'flat']]) {
+        assert(inferAUMFeeMode(amt, null) === want,
+            `${amt} should infer ${want}, got ${inferAUMFeeMode(amt, null)}`);
+    }
+    // THE BOUNDARY BELONGS TO FLAT ON PURPOSE. Reading a bare 20 as $20/yr is harmless; reading it
+    // as 20% would quietly destroy a plan. The asymmetry of being wrong picks the side.
+    assert(inferAUMFeeMode(20, null) === 'flat', '20 must read as dollars, not as 20 percent');
+
+    // An explicit marker always wins over the magnitude, in both directions.
+    assert(inferAUMFeeMode(50, 'pct') === 'pct', 'an explicit percent survives a large number');
+    assert(inferAUMFeeMode(15, 'flat') === 'flat', 'an explicit dollar survives a small number');
+
+    // And the ENGINE must be safe on its own: a shared link carrying af=20000 with no afm must not
+    // be read as a 20,000% fee. This is the case that made inference an engine concern, not a UI one.
+    const r = simulate({ ..._AUM_BASE, aumFeeAmount: 20000, aumFeeScope: 'all' });
+    assertNear(r.log[0].AUMfee, 20000, 'a bare 20000 is twenty thousand dollars, not 20000 percent', 1);
 });
 
 test('P84d: a flat fee is CPI-indexed, and a percent fee is not', () => {

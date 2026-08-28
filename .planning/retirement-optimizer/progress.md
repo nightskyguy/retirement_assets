@@ -5942,3 +5942,42 @@ returns to 638,557 **exactly**.
 
 Changelog entry and the in-page `<li>` updated in place to say it starts at None. Version stamp
 stays 11.168d - same hour, and the scheme is hour-granular. Suites **354 / 61 / 22**.
+
+
+---
+
+**Same session 2026-08-28, sixth pass - the fee's %/$ dropdown replaced by inference, and it
+uncovered a defect the dropdown had been masking.**
+
+User asked for one field instead of two: `%` suffix or under 20 means percent, `$` prefix or over 20
+means a flat annual fee. Also reported that typing `20k` and changing the scope did nothing.
+
+**The `20k` report was a real bug and the diagnosis is worth keeping.** `aumFeeAmount` is
+`data-plain`, which exists so a numeric text field is not reformatted as `$2,031` - the `convEndYear`
+precedent. But `val()` returns `el.dataset.numVal` when set and the literal text otherwise, and
+`data-plain` means `numVal` is NEVER set. So `+val('aumFeeAmount')` on `"20k"` was `NaN`, fell
+through `|| 0`, and charged nothing. **The scope change DID recalculate - with a zero fee**, which is
+why it looked like nothing happened. Every other dollar field on the page runs through
+`parseShorthand`; this one had been excluded as a side effect of a flag chosen for formatting.
+
+**The inference threshold lives in the ENGINE, not the UI**, and that placement is the point: a
+shared link carrying `af=20000` with no `afm` must not be read as a 20,000% fee. `inferAUMFeeMode`
+is exported and used by both sides. **20 belongs to FLAT deliberately** - `$20/yr` is harmless to
+model, `20%` would quietly destroy a plan, so the asymmetry of being wrong picks the boundary side.
+
+**Removing the dropdown broke the URL round trip in both directions and neither was obvious.**
+`buildShareURL` iterates DOM elements and `loadFromURL` does `getElementById`, so with no
+`aumFeeMode` element the mode silently stopped being emitted AND silently stopped loading. Fixed
+without hidden state: the share URL pins the resolved mode, and an incoming `afm` is folded back into
+the amount's own text as `$15` or `15%`. The field text is the single source of truth, which is also
+why the fold is the right shape rather than a parallel variable.
+
+Browser-verified all ten parse cases (`1`, `1.2%`, `0.75`, `20`, `19.99`, `$15`, `20k`, `50%`,
+`2,500`, empty), the reported bug (`20k` + scope IRAs now charges **$597,070**), and the round trip
+(`?af=15&afm=flat` loads the field as `$15` and resolves to 15/flat, not 15%).
+
+Per the user's follow-up the sub-caption is now purely the reading - "Read as $20,000 a year." - and
+the charged-on-prior-year-end wording moved into the field tooltip, where most of it already was.
+
+New test pins the rule and the boundary (354 -> **355**). Shipped v11.168e; changelog entry edited in
+place per the one-entry-per-branch rule. Suites **355 / 61 / 22**.

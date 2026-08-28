@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.168d</title>
+    <title>Retirement Optimizer 11.168e</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,12 +59,12 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=111662"></script>
-	<script src="optimizer_core.js?v=11168d"></script>
+	<script src="optimizer_core.js?v=11168e"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=11168d"></script>
-	<script src="optimizer_tests.js?v=11168d"></script>
+	<script src="optimizer_ui.js?v=11168e"></script>
+	<script src="optimizer_tests.js?v=11168e"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -344,15 +344,11 @@
              % and $, so it must stay out of the x100 list and out of DOLLAR_INPUT_IDS, and the
              engine does the division. -->
         <div class="row" id="aumFeeAmount-wrap" style="display:none;">
-            <div><label style="font-size:0.9em;" title="Annual advisor or fund fee. Enter a percentage of the billed accounts, or a flat dollar amount that grows with your CPI. It is charged at the start of each year against the previous December 31 balances, the way advisors actually bill. Money taken from an IRA to pay it is NOT a taxable distribution. Cash is never billed and never pays. Leave at 0 for no fee.">Advisor Fee
-                <input type="text" id="aumFeeAmount" value="0" data-plain style="width:64px;font-size:14px;">
-                <select id="aumFeeMode" style="font-size:14px;">
-                    <option value="pct" selected>% / yr</option>
-                    <option value="flat">$ / yr</option>
-                </select></label>
-                <div style="font-size:0.78em;color:#666;margin-top:2px;">Charged on the prior year-end balance. Never a taxable distribution. Off unless "Fee applies to" names accounts.</div></div>
+            <div><label style="font-size:0.9em;" title="Annual advisor or fund fee. One field, read two ways: a small number is a percentage of the billed accounts, a large one is a flat dollar amount that grows with your CPI. Add a % or a $ to say which you meant. Shorthand works, so 20k is 20,000. It is charged at the start of each year against the previous December 31 balances, the way advisors actually bill. Money taken from an IRA to pay it is NOT a taxable distribution. Cash is never billed and never pays. Leave at 0 for no fee.">Advisor Fee
+                <input type="text" id="aumFeeAmount" value="0" data-plain oninput="updateAUMFeeHint()" onchange="updateAUMFeeHint()" style="width:80px;font-size:14px;"></label>
+                <div id="aumFeeRead" style="font-size:0.78em;color:#666;margin-top:2px;">No fee.</div></div>
             <div><label style="font-size:0.9em;" title="Which accounts the fee is charged against, and which pay it. Defaults to None, so no fee is charged until you pick accounts. Leave an amount typed and switch between None and a real choice to compare a plan with and without the fee. Cash is never included in either. Choose &quot;All, paid from IRA&quot; to bill every account but take the money from the larger IRA, which is a common arrangement and shrinks future required distributions.">Fee applies to
-                <select id="aumFeeScope" style="font-size:14px;">
+                <select id="aumFeeScope" onchange="updateAUMFeeHint()" style="font-size:14px;">
                     <option value="none" selected>None (no fee)</option>
                     <option value="all">All accounts</option>
                     <option value="brokerage">Brokerage only</option>
@@ -862,13 +858,13 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.168d</b>
+				<li data-flag="behavior"><b>11.168e</b>
 					<strong>An advisor fee you can model, and required distributions figured the way the tax rules define them.</strong>
 					<ol>
-					<li>A yearly advisor or fund fee, as a percentage or a flat CPI-indexed amount, with a choice of which accounts are billed and which pay. Starts at None, so nothing is charged until you pick accounts; switch back to None to compare a plan with and without it. Money taken from an IRA to pay it is not a taxable distribution. Under Advanced options.</li>
+					<li>A yearly advisor or fund fee. One field takes either a percentage or a flat CPI-indexed dollar amount and tells you which way it read what you typed. Choose which accounts are billed and which pay. Starts at None, so nothing is charged until you pick accounts; switch back to None to compare a plan with and without it. Money taken from an IRA to pay it is not a taxable distribution. Under Advanced options.</li>
 					<li>Required minimum distributions now come off your December 31 balance, so they are no longer inflated by part of the current year's growth and no longer shift with the month a withdrawal leaves.</li>
 					</ol>
-					<a href="optimizer_changelog.md#11.168d" target="_blank" rel="noopener">Details</a>
+					<a href="optimizer_changelog.md#11.168e" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="behavior"><b>11.1671</b>
 					<strong>Your Monte Carlo and Stress Test results may now differ from before, because the model behind them is more accurate.</strong>
@@ -1476,7 +1472,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=11168d';
+    const V = '?v=11168e';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

@@ -2356,11 +2356,29 @@ marked SUPERSEDED in place, the P28/P30 pattern.
 itself) shipped as v11.168d. Suites **353 / 61 / 22**, `slowInCore` 3, `TestTiers.EXPECTED` and
 `.githooks/README.md` reconciled.
 
-**What the fee ended up being.** Three inputs (`aumFeeAmount` raw-as-typed, `aumFeeMode`,
-`aumFeeScope`), `applyAUMFee(sim, yr)` between `resolveHousehold` and `computeIncome`, six billing
-scopes plus `none` over a frozen basis/source/spill table, brokerage debited pro-rata against basis
-so `capGainsPercentage` is unchanged, unpayable remainder dropped to `yr.aumFeeUnpaid`. Ten node
-tests including two `test.critical` non-taxability guards and the no-`_cfRun`-guard proof.
+**What the fee ended up being.** TWO controls, not three - an amount and a scope. `applyAUMFee(sim,
+yr)` between `resolveHousehold` and `computeIncome`, six billing scopes plus `none` over a frozen
+basis/source/spill table, brokerage debited pro-rata against basis so `capGainsPercentage` is
+unchanged, unpayable remainder dropped to `yr.aumFeeUnpaid`. Eleven node tests including two
+`test.critical` non-taxability guards and the no-`_cfRun`-guard proof.
+
+**The %/$ dropdown was REPLACED by inference, user request 2026-08-28.** One field: a `%` suffix or
+`$` prefix wins outright, otherwise `>= AUM_FEE_PCT_MAX` (20) is dollars and below it is percent.
+**The boundary belongs to FLAT deliberately** - a bare `20` read as $20/yr is harmless, read as 20%
+it destroys a plan, and the asymmetry of being wrong picks the side. `inferAUMFeeMode` lives in the
+ENGINE, not the UI, so a link carrying `af=20000` with no `afm` cannot be read as a 20,000% fee.
+A line under the field says which way it read what you typed.
+
+**And it fixed a real defect the dropdown was hiding.** `aumFeeAmount` is `data-plain`, so
+`el.dataset.numVal` is never set and `val()` returns the literal text - `+val('aumFeeAmount')` on
+`"20k"` was `NaN`, fell through `|| 0`, and charged NOTHING while looking like it had been accepted.
+The field now runs through `parseShorthand` like every other dollar input on the page.
+
+**`aumFeeMode` stopped being an element, which broke the URL round trip in both directions**, since
+`buildShareURL` iterates elements and `loadFromURL` does `getElementById`. Fixed without hidden
+state: the share URL pins the RESOLVED mode, and an incoming `afm` is folded back into the amount's
+own TEXT as `$15` or `15%` - exactly what a user would have typed to mean the same thing, so one
+field stays the single source of truth.
 
 **`none` is the DEFAULT scope, added on the user's request 2026-08-28 after the first fee build.**
 It is the off switch for a comparison: leave the amount typed and flip one dropdown, rather than

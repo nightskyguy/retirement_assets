@@ -90,6 +90,7 @@ first task. Every open item in the file now carries one.
 | ~~DONE~~ | ~~P30~~ | ~~Withdrawal policy — the `[40,60]` constants nobody chose~~ - **COMPLETE, `P30a`-`P30g`, v11.163F**; the menu shipped, both constants measured and left alone | - | - |
 | **O1** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
 | **O1** | P34 | Cost of finding a profitable conversion; worker + per-row memo | `P34a` | nothing |
+| **O1** | P84 | Annual advisor / AUM fee, **plus RMDs off the prior Dec 31 balance** (today they key off a mid-year balance whose growth depends on whether the plan converted) *(new 2026-08-28)* | `P84k` (the RMD half; runs before `P84a`) | nothing |
 | **DONE** | P52 | MC run scope: nerdknob "Run My Plan Only" *(default later flipped by P53f)* | shipped v11.150b | - |
 | **DONE** | P53 | Monte Carlo Stress Test suite (5 windows, bear-start, plan-only default) | shipped v11.1521-152f (#170) | - |
 | **DONE** | P54 | `?montecarlo` teaching demo + mode-aware paths floor | shipped v11.1553 (#173) | - |
@@ -2234,6 +2235,239 @@ marked SUPERSEDED in place, the P28/P30 pattern.
   `IRMAA_MARGIN_PATHS_RESULTS.md`.
 - **Related:** supersedes parts of `IRMAA_MARGIN_RESULTS.md` (P66b round 2); extends P70e, whose
   stress-bank figure reproduces here at 21.4% against its recorded 21.1%.
+
+---
+
+## P84: annual advisor / AUM fee, and RMDs off the prior December 31 balance  *(NEW 2026-08-28, user-raised, O1)*
+
+**Why:** the tool models every drag on a portfolio except the one most retirees actually pay. A 1%
+advisory fee on a $2M portfolio is ~$20,000 in year one, compounding for the whole horizon. That is
+larger than most of the levers this tool argues about and larger than the gap between several of the
+strategies it ranks, so a plan that ignores it is wrong by more than the margins it reports.
+
+**Ask, as raised:** an annual fee typed either as a percentage or a flat dollar amount, with a
+dropdown naming which accounts it applies to - Brokerage, Roths, IRAs, All, Roth and IRAs, All from
+IRA. The percentage comes out of the impacted accounts; a flat fee is CPI-indexed. Cumulative cost
+tracked. **Fee dollars taken from an IRA are NOT taxable distributions.** "All from IRA" charges
+against every account but pays out of the larger IRA.
+
+**Decided with the user 2026-08-27, do not re-litigate:**
+
+| decision | chosen | why |
+|---|---|---|
+| timing and basis | start of year, pre-withdrawal | the Jan-1 balance; reconciles against the Annual Details balance columns |
+| does "All" include Cash | **no**, All = IRA1+IRA2+Roth1+Roth2+Brokerage | Cash is the spending buffer P2's reserve protects; billing it fights the reserve refill every year |
+| brokerage fee realizes gain | **no**, cut value and basis pro-rata, discard the gain | keeps the fee out of every tax pass, so it cannot perturb an IRMAA/ACA/LTCG cliff or trigger the third pass |
+| flat mode and the dropdown | dropdown drives the withdrawal SOURCE | keeps the non-taxable-IRA benefit for flat fees, and one meaning for the dropdown in both modes |
+| flat-fee index clock | `sim.cpiRate` | user said "indexed by CPI" and the sidebar field is labeled CPI/COLA. Alternative on the record: the purpose test at `optimizer_core.js:1231-1238` puts prices the household PAYS on `sim.inflation`, as `CashReserve` does at `:1693`. One-token change if revisited |
+| counts toward `wdRate%` | **no** | `wdRate%` keeps meaning "portfolio draws that funded spending and taxes" and stays comparable to the 4% rule; PF14's definition holds. `totals.avgNetDepletion` already reflects the fee, being computed off `portfolioBalance` deltas |
+| nerd-gated | **no** | it is a fact about the plan, not a diagnostic - the rule written at `optimizer_ui.js:141-149`. Default 0 costs nobody a number, and gating it would strand a shared `?af=` link the recipient cannot see or clear |
+
+**Three inputs keys**, element id === engine key so `applyScenario`'s generic loop
+(`optimizer_ui.js:5028-5070`) round-trips them for free: `aumFeeAmount` (number, **raw as typed,
+never `/100`**, default `0` = OFF), `aumFeeMode` (`'pct'`|`'flat'`, default `'pct'`), `aumFeeScope`
+(one of `AUM_FEE_SCOPES`, default `'all'`).
+
+**Storing the amount raw is load-bearing, not a style choice.** A field whose meaning switches
+between `%` and `$` cannot live in `applyScenario`'s x100 list (`optimizer_ui.js:5043-5046`) or in
+`DOLLAR_INPUT_IDS` (`:4970-4974`), because which list applies would depend on a SECOND field. It is
+a `data-plain` text input, the `convEndYear` precedent (`retirement_optimizer.html:168`), and the
+engine does the `/100`.
+
+**Placement: a new `applyAUMFee(sim, yr)` called between `resolveHousehold` and `computeIncome`**
+in the year loop (`optimizer_core.js:3266-3286`). Three reasons, all load-bearing:
+1. The balance there is byte-identical to the end of `beginYear` (`:1292`) - `resolveHousehold`
+   moves only `BrokerageBasis`, for the IRC-1014 step-up (`:1361`). So this IS the Jan-1
+   post-pre-withdrawal-growth balance the fee is defined against.
+2. `resolveHousehold` can `return false` and break the loop (`:1306`, both spouses dead). Charging
+   inside `beginYear` would debit a year that never gets a log row.
+3. It is BEFORE `computeIncome`, so the fee lands on the IRA before RMDs are computed
+   (`:1554-1557`). **A 1% fee therefore shrinks the RMD by 1%.** Small, conservative in direction,
+   and a real consequence of the chosen timing - it gets a docblock sentence and a test that pins it.
+
+**The non-taxability mechanism, stated once:** `applyAUMFee` writes `balance` and `yr.aumFeeBy` and
+**never `yr.netWithdrawals`**. Every `calculateTaxes()` call site reads `yr.netWithdrawals.IRA` as
+both `earnedIncome` and `iraIncome` (`:1980, :2173, :2394, :2698, :2842, :2857`), so a debit that
+never enters that accumulator cannot reach any tax pass, any MAGI, or the TaxPlanner handoff. Same
+technique the QCD already uses at `:1576-1577`.
+
+**Scope tables**, frozen and exported next to `splitPreferLarger` (`:2746`) so the UI validates
+against the engine's own list rather than a second copy:
+
+- BASIS - what it is charged on. Cash is in no row. `brokerage`->[Brokerage]; `roths`->[Roth1,Roth2];
+  `iras`->[IRA1,IRA2]; `rothira`->[IRA1,IRA2,Roth1,Roth2]; `all` and `allfromira`->all five.
+- SOURCE - identical to BASIS for five of six. `allfromira` -> `splitPreferLarger(IRA1, IRA2)`.
+- SPILL once the source is dry: Brokerage, IRA1, IRA2, Roth1, Roth2. Roth last, matching
+  `fillSpendingGap`'s own order. **Cash never.**
+- In flat mode BASIS is simply unused: `want` comes from the mode, `paid` from the source. No
+  special-casing.
+
+Brokerage debit cuts value and `BrokerageBasis` by the same fraction, then `clampBrokerageBasis`
+(`:394`) re-establishes the P35f invariant. The ratio is unchanged, so `yr.capGainsPercentage`
+(`:1696`) prices identically. An unpayable remainder lands in `yr.aumFeeUnpaid`, dropped rather than
+carried and never turned into a shortfall - the floor-at-0 posture `applyWithdrawals` takes (`:645`).
+
+**NO `_cfRun` guard, deliberately.** The counterfactual runs (`:3302-3343`) spread the whole inputs
+object, so both arms pay the same fee and the Opportunity Cost comparison stays purely about the
+CONVERSION. Adding a guard later would make every OC number nonsense; the docblock forbids it and
+`P84f` exists to catch it.
+
+**Tracking:** `sim.cumulativeAUMFees` beside `cumulativeTaxes` (`:3171`, `sim` literal `:3254`);
+`totals.aumFees` + `totals.aumFeesCurrentDollars` in `growAndSettle` beside `totals.qcd` (`:2904`),
+same defensive `(totals.x || 0) +` idiom; four row keys in `buildSimYearLogRecord` (`:1036`)
+inserted **adjacently** after `'CashWD'` (`:1071`) - `AUMfee`, `SumAUMfees`, `-aumFeeBasis`,
+`-aumFeeFromIRA`. Adjacency is required, not cosmetic: `rebuildGroupRow` (`optimizer_ui.js:2739`)
+colSpans runs of consecutive same-group columns, so a visible key dropped mid-run shears the banner.
+Emit all four **unconditionally** with `?? 0` or the `_logSansTiming` identity tests
+(`optimizer_core.tests.js:1775`) break. Neither visible key contains `%`, `yr` or `year`, so the
+name-driven formatter (`optimizer_ui.js:2976-2978`) prints both as dollars and deflates both under
+Current-$.
+
+**UI:** sidebar section 2 (Assets), after the Cash Balance / Cash Reserve row
+(`retirement_optimizer.html:335-338`) - every dropdown option names a balance typed in that section.
+Amount + `$`/`%` mode on line one, accounts dropdown on line two, one `input-group`, one `<label>`,
+wrapper id `aumFeeAmount-wrap`. URL short keys `af`/`afm`/`afs`, checked against
+`OPT_LONG_TO_SHORT` (`:4594-4617`) and the hand-set `ptx`/`ptxm`/`ptxr` (`:4667-4671`); no change to
+`buildShareURL` or `loadFromURL` needed. One self-hiding stat tile, shown only when
+`totals.aumFees > 0`.
+
+### Second goal, added by the user 2026-08-28: RMDs must key off the PRIOR YEAR December 31 balance
+
+**The rule:** 26 CFR 1.401(a)(9)-5 sets the year's required distribution as the **prior December 31**
+account balance divided by the life-expectancy factor. Nothing that happens during the year - growth,
+a fee, a conversion, a withdrawal - can change the amount required for that year.
+
+**The engine does not do this.** `optimizer_core.js:1557-1558`:
+
+```js
+yr.rmd1 = yr.alive1 ? balance.IRA1 * yr.rmd1Pct || 0 : 0;
+```
+
+`balance.IRA1` at that moment has already had **this year's** pre-withdrawal growth applied, at
+`beginYear:1288` (`applyGrowth(balance, yr.growthRates, preMonths)`). So the RMD is struck off a
+mid-year balance.
+
+**That is two errors, and the second is the serious one.**
+1. A systematic overstatement of `preMonths/12 x growth`. Directionally: RMDs are too big, taxable
+   income is too high, IRMAA breaches slightly too frequent, terminal IRA slightly too small.
+2. **The RMD is coupled to the withdrawal-timing rule.** `preMonths` is **1 or 11**, chosen at
+   `:1284` from `yr._useEarly`, which is set at `:1275` from whether last year converted more than
+   $1,000. At 6% growth that is a ~5% swing in the RMD base. **Two otherwise identical plans get
+   different RMDs because one of them converted** - a dependency with no basis in the regulation.
+   This is the same coupling `P28j` is scoped against, surfacing in a second place, and it is why
+   this belongs in a phase rather than a one-line fix.
+
+**The correct anchor already exists and costs nothing to capture.** At the TOP of `beginYear`,
+before `:1288`, `balance` **is** the prior December 31 position: last year's `growAndSettle` applied
+`postMonths` and nothing has moved since. Year 0's prior-Dec-31 balance is the number the user typed.
+So: snapshot `sim.priorYearEndIRA1` / `priorYearEndIRA2` at the top of `beginYear`, and read those at
+`:1557-1558` instead of `balance.IRA1/IRA2`.
+
+**This SIMPLIFIES the fee work rather than complicating it.** Placement reason 3 above, and risk R11,
+both dissolve: once the RMD keys off the prior Dec 31 balance, a fee paid in year Y **cannot** shrink
+year Y's RMD, which is the legally correct answer. The fee keeps placement reasons 1 and 2. **Strike
+R11 and reason 3 when `P84k` lands.**
+
+**One edge case the fee newly makes reachable.** The RMD debits floor at zero (`:1582-1583`), but
+`yr.totalRMD` and `yr.taxableRMD` (`:1586-1587`) are computed from the requirement, not from what
+actually moved. If the fee - or a large QCD, which is the latent path today - drains the IRA below
+the required amount, the engine taxes money that never left the account. Cap both at the realized
+outflow.
+
+**Blast radius: this changes EVERY plan, not only plans that use the fee.**
+- The fee-OFF byte-identity test (`P84a`) is scoped to *fee-off vs field-absent under the new RMD
+  basis*. It is **not** an identity against `main`, and must not be written as one.
+- `optimizer_core.tests.js:259` (cyclic, beyond-RMD) and `:2658` (OC counterfactual RMD
+  counter-effect) are the likely re-baseline candidates. **Measure; do not guess which.**
+- The changelog entry must tell the reader a saved plan will not reproduce - stated as consequence,
+  not as history, per the repo's changelog rule.
+
+**Tasks:**
+- [ ] **P84a** *(S)* - scope tables, `_debitFee`/`_debitProRata`, `applyAUMFee`, the one-line
+      year-loop call, exports. No log, no totals, no UI. Ships behind a `0` default, so the OFF
+      byte-identity test is the whole safety net for this step.
+- [ ] **P84b** *(M)* - basis x source matrix, one test per scope: `brokerage`, `roths`, `iras`,
+      `rothira`, `all` (proves the Cash exclusion), `allfromira` (charges All, pays from the larger
+      IRA). Asymmetric balances throughout, so pro-rata cannot pass as 50/50.
+- [ ] **P84c** *(M)* - non-taxability invariants, two of them `test.critical`: a percent fee moves
+      no tax, no MAGI and no RMD in year 0; the IRA debit never enters `netWithdrawals`; a brokerage
+      fee realizes no capital gain and cuts basis pro-rata.
+- [ ] **P84d** *(S)* - flat-mode CPI indexing (`cpi: 0.03, inflation: 0.06`; assert `1.03^10` and
+      explicitly NOT `1.06^10`), depletion/spill order, `aumFeeUnpaid`, no negative balance, no NaN.
+- [ ] **P84e** *(S)* - tracking: cumulative scalar, the totals pair, `logYear` params, four row
+      keys, and the reconciliation test (`SumAUMfees` == sum of `AUMfee` == `totals.aumFees`).
+- [ ] **P84f** *(S)* - counterfactual proof. No engine change; the test exists to forbid a future
+      `_cfRun` guard.
+- [ ] **P84g** *(S)* - Annual Details wiring: `columnCategories` (`~:2495`), `columnGroupDefs`
+      (`:2556`), header `tooltips` (`:2809`). Both columns auto-hide at zero via
+      `analyzeColumnContent` (`:2653`).
+- [ ] **P84h** *(M)* - sidebar markup, `getInputs()`, `LABELS` (`:4453-4472`), URL keys. Needs a
+      real narrow-width look and a manual save -> reload -> share-link -> reload round trip.
+      **NOT** added: the dollar-input array (`retirement_optimizer.html:1347`), `DOLLAR_INPUT_IDS`,
+      the x100 list, the `_runOptimizerNow` strip list, `STRATEGY_SELECTION_FIELDS` - each for a
+      reason recorded below.
+- [ ] **P84i** *(S)* - stat tile markup and the `updateStats` writer, including Current-$.
+- [ ] **P84j** *(M)* - docs and counts: the `applyAUMFee` node in the `ARCHITECTURE.md:156`
+      pipeline; `TestTiers.EXPECTED` `optimizer_tests.js:2725` **all four numbers**; the suite table
+      `.githooks/README.md:16-20`; one `optimizer_changelog.md` entry plus the matching `<li>`; four
+      version-bump sites. Mechanical, and the step most often half-done.
+
+**ORDER:** `P84k` through `P84n` run **FIRST**, before `P84a`, despite the letters. They are lettered
+in the order they were added to the phase, per the file's convention; they execute first because the
+RMD basis change moves every number the fee tests would otherwise be baselined against, and because
+it retires placement reason 3 and risk R11 before the fee code is written to depend on them.
+
+- [ ] **P84k** *(S)* - characterize BEFORE changing anything. Dump `totalRMD`, `taxableRMD`,
+      `MAGI`, IRMAA breach count and terminal IRA across a spread of plans, both timing arms, and
+      record the size of the error and of the convert/no-convert RMD split. **This is the number the
+      changelog sentence is written from**, and a null result here would mean the fix is invisible
+      and the re-baseline risk is not worth taking. Gate for `P84l`.
+- [ ] **P84l** *(S)* - `sim.priorYearEndIRA1` / `priorYearEndIRA2` snapshotted at the top of
+      `beginYear` before the growth call (`:1288`), read at `:1557-1558`. Year 0 seeds from the typed
+      input, which is what the top-of-`beginYear` balance already holds - so no year-0 special case
+      should be needed. **Assert that rather than assuming it.**
+- [ ] **P84m** *(S)* - cap `yr.totalRMD` and `yr.taxableRMD` at the realized IRA outflow, so a
+      drained IRA cannot be taxed on a distribution that never happened. Reachable today via a large
+      QCD; the fee widens the path.
+- [ ] **P84n** *(M)* - tests and re-baseline: RMD equals prior-Dec-31 balance over the divisor to the
+      penny; **the RMD is identical across the two timing arms** (this is the coupling test, and it
+      is the one that fails on `main`); a mid-year fee does not move the same year's RMD; the drained
+      IRA case. Then re-run all three suites, re-baseline whatever moved, and reconcile **all four**
+      numbers in `TestTiers.EXPECTED` plus `.githooks/README.md`.
+
+**Risks, and the specific mechanism each one breaks through:**
+
+| # | what silently breaks | mechanism | mitigation |
+|---|---|---|---|
+| R1 | Break Even `convBEYear` moves | not a leak; the fee rides both counterfactual arms. But it shrinks both portfolios, so the RMD/IRMAA cascade shifts non-linearly. Correct, not a bug | `P84f`; one changelog sentence |
+| R2 | BETR is fee-blind | `computeBETR` (`:2932`) is closed-form over growth and marginal rates and reads no balance | deliberate; say so in the commit message |
+| R3 | a future `_cfRun` guard | would diverge the arms by the whole fee stream and make every OC number nonsense | docblock forbids it, `P84f` fails loudly |
+| R4 | Optimizer sweep | the fee must **NOT** join the `_runOptimizerNow` strip list (`optimizer_ui.js:1035-1043`). It is plan-wide and biases no comparison; stripping it makes every swept row a fee-free fiction while the CURRENT PLAN row pays, ranking strategies above the user's own plan on the fee alone | comment beside the three existing strips |
+| R5 | Monte Carlo hashing | the fee is constant across every variation, so it does **NOT** belong in `STRATEGY_SELECTION_FIELDS` (`optimizer_core.js:4097`). Adding it on one side only is exactly P74. MC gets it free through `simulate({...baseInputs, ...pathInputs})` | explicit non-change, recorded here |
+| R6 | TaxPlanner year-click handoff | if the fee ever entered `yr.netWithdrawals.IRA1/IRA2`, `-iraVolSpend*` inflates and the planner taxes a non-taxable debit | `P84c` |
+| R7 | Annual Details banner shears | `rebuildGroupRow` colSpans consecutive same-group columns | adjacent insertion + `columnGroupDefs` |
+| R8 | `_logSansTiming` identity tests | they `JSON.stringify` whole rows; a conditionally-emitted key breaks them | emit all four keys unconditionally with `?? 0` |
+| R9 | `applyScenario` drops the fee | the generic loop matches `getElementById(key)`; any id/key mismatch loads a plan without its fee | ids are exactly `aumFeeAmount`/`aumFeeMode`/`aumFeeScope` |
+| R10 | reserve breaches in plans that never breached | a fee draining Brokerage makes a breach likelier. Second-order only: the fee touches Cash in no basis, source or spill row | changelog sentence |
+| R11 | ~~RMDs shrink by the fee rate~~ **RETIRED by `P84l`** | was a consequence of charging before `computeIncome`. Once the RMD keys off the prior Dec 31 balance, a mid-year fee cannot move the same year's RMD at all | `P84n` pins it; delete this row and placement reason 3 when `P84l` lands |
+| R12 | the re-baseline hides a real regression | `P84l` moves numbers in almost every suite, so a genuinely broken assertion can be "fixed" by accepting the new value | `P84k` characterizes the expected direction and size FIRST, so each moved number is checked against a prediction rather than accepted because it moved |
+
+- **Status:** filed 2026-08-28, not started. Second goal (RMD basis) added by the user the same day.
+  **Estimate: 8 files, ~20 new tests (`optimizer_core` 340 -> ~360), 14 sub-tasks - 9 S, 5 M, no L.**
+  The fee half is additive and hides behind a `0` default; **the RMD half is a behavior change for
+  every existing plan** and carries the only re-baseline risk in the phase, which is why `P84k`
+  measures before `P84l` moves anything. Nearest shipped comparable for the fee: **P2 Cash Reserve**.
+  Nearest for the RMD correction: **P58**, where an assumption about money already moved was
+  corrected and saved plans stopped reproducing.
+- **Two goals, one branch, one changelog entry.** They ship together because `P84l` retires the fee's
+  third placement reason and risk R11: writing the fee first would bake in a rationale that the RMD
+  fix then deletes. If they are ever split, **the RMD half goes first** and the fee half rebases onto
+  it, never the reverse.
+- **Test fixture:** a local `AUM_BASE = {...BASE, growth: 0, inflation: 0, cpi: 0, ...}` with a
+  non-zero balance in every account, so each scope has something to bite and the arithmetic is
+  checkable by hand.
+- **Independent:** no phase dependencies. Touches `beginYear`'s neighbourhood only, so it does not
+  collide with `P35i`'s `fillSpendingGap` arm or with `P28j`'s `beginYear` timing rule.
 
 ---
 

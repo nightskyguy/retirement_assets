@@ -4436,8 +4436,8 @@ function updateAUMFeeHint() {
     const scope = document.getElementById('aumFeeScope')?.value || 'none';
     if (!(p.amount > 0)) { el.textContent = 'No fee.'; return; }
     const reading = p.mode === 'pct'
-        ? `Read as ${(+p.amount.toFixed(4))}% a year`
-        : `Read as $${Math.round(p.amount).toLocaleString()} a year`;
+        ? `${(+p.amount.toFixed(4))}% per year`
+        : `$${Math.round(p.amount).toLocaleString()} per year`;
     el.textContent = scope === 'none'
         ? `${reading}, but not applied - "Fee applies to" is None.`
         : `${reading}.`;

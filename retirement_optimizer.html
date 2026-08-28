@@ -347,15 +347,15 @@
             <div><label style="font-size:0.9em;" title="Annual advisor or fund fee. One field, read two ways: a small number is a percentage of the billed accounts, a large one is a flat dollar amount that grows with your CPI. Add a % or a $ to say which you meant. Shorthand works, so 20k is 20,000. It is charged at the start of each year against the previous December 31 balances, the way advisors actually bill. Money taken from an IRA to pay it is NOT a taxable distribution. Cash is never billed and never pays. Leave at 0 for no fee.">Advisor Fee
                 <input type="text" id="aumFeeAmount" value="0" data-plain oninput="updateAUMFeeHint()" onchange="updateAUMFeeHint()" style="width:80px;font-size:14px;"></label>
                 <div id="aumFeeRead" style="font-size:0.78em;color:#666;margin-top:2px;">No fee.</div></div>
-            <div><label style="font-size:0.9em;" title="Which accounts the fee is charged against, and which pay it. Defaults to None, so no fee is charged until you pick accounts. Leave an amount typed and switch between None and a real choice to compare a plan with and without the fee. Cash is never included in either. Choose &quot;All, paid from IRA&quot; to bill every account but take the money from the larger IRA, which is a common arrangement and shrinks future required distributions.">Fee applies to
+            <div><label style="font-size:0.9em;" title="Which accounts the fee is charged against, and which pay it. Defaults to None, so no fee is charged until you pick accounts. Leave an amount typed and switch between None and a real choice to compare a plan with and without the fee. Cash is never included in either. Choose &quot;All but Cash, paid from IRA&quot; to bill every other account but take the money from the larger IRA, which is a common arrangement and shrinks future required distributions.">Fee applies to
                 <select id="aumFeeScope" onchange="updateAUMFeeHint()" style="font-size:14px;">
                     <option value="none" selected>None (no fee)</option>
-                    <option value="all">All accounts</option>
+                    <option value="all">All but Cash</option>
                     <option value="brokerage">Brokerage only</option>
                     <option value="roths">Roths only</option>
                     <option value="iras">IRAs only</option>
                     <option value="rothira">Roths and IRAs</option>
-                    <option value="allfromira">All, paid from IRA</option>
+                    <option value="allfromira">All but Cash, paid from IRA</option>
                 </select></label></div>
         </div>
         </details>

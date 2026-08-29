@@ -6325,3 +6325,29 @@ would otherwise have made them time-dependent, including the golden capture repr
 existing test comment was also wrong and is corrected in place.
 
 Changelog entry names the Optimizer consequence plainly. v11.16a4.
+
+## 2026-08-29 (cont.) - P88f done; P88 and P89 both complete, v11.16a4
+
+Measured the user's original proposal properly now that P88b prices conversions correctly.
+
+**Answer: their instinct was right, their remedy was not.** 61 of 180 ceiling cells pick a non-zero
+conversion, so the search does not exclude them by itself; all 61 breach their own ceiling, several
+in every year they have one. But excluding them costs a median $53,990 and up to $1,546,930, with
+not one of the 61 gaining under $1,000 - there is nothing marginal to discard. Shipped `⤴` on the
+Strategy column instead, reading `-overageFromConv` so it never fires on a spending-forced breach.
+That distinction is exactly what P88c was built to make, and this is the first thing to use it.
+
+C5 was nearly scored on a bar it could not fail - "the heirs rate flips the answer at least once",
+which 3-of-60 would have passed. Rescored against the competing axis it FAILS: the spend rate is the
+lever (spread 25 against 3). That is the third time this session, after B2 and M1. Recorded in
+findings as a standing rule: a prediction that cannot lose is not a prediction.
+
+**Changelog consolidated.** I had written one entry per release - 11.16a3 and 11.16a4 - which is
+exactly what CLAUDE.md's one-entry-per-BRANCH rule forbids ("numbered the development rather than
+the change"). Merged back into a single entry covering P88 and P89, ordered by user impact, 249
+words against the ~150 target. The in-page list is at four entries, under its five ceiling.
+
+Version stayed 11.16a4 - same hour as P89. Suites 366/61/22. Browser verified the marker on a live
+sweep: 7 conversion rows, 2 marked, all five agnostic rows unmarked at zero breach.
+
+P88 and P89 both close. NOW table is back to its pre-session rows plus nothing.

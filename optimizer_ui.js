@@ -1481,9 +1481,25 @@ function _runOptimizerNow() {
                                         ...(convEndYear != null ? { convEndYear, convEndMode: 'extra' } : {}),
                                         computeOC: true });
             const lastEntry = beResult.log[beResult.log.length - 1];
+            // P88f. A conversion is stacked ON TOP of a draw already sized to fill the row's
+            // ceiling, so on a Fill Bracket / Min Limit / IRMAA Tier row it goes over. Measured
+            // across 180 ceiling cells: the search picks a non-zero conversion in 61 of them and
+            // ALL 61 breach. The rows are still worth offering - median gain $53,990 and up to
+            // $1,546,930, so dropping the family would throw real money away - but a row that
+            // quietly abandons the ceiling in its own name should say so.
+            //
+            // `-overageFromConv` is the conversion's share specifically (P88c), not spending that
+            // could not be funded inside the ceiling. Marking the second as if it were the first
+            // would put this glyph on rows where the user chose nothing.
+            const _convBreach = beResult.log.filter(r => (r['-overageFromConv'] ?? 0) > 1);
+            const _convBreachWorst = _convBreach.length
+                ? Math.max(..._convBreach.map(r => r['-overageFromConv'])) : 0;
             results.push({
                 _id: results.length,
-                _strategyLabel: baseRow._strategyLabel + ' ⇌' + (convEndYear != null ? ` ⏹${convEndYear}` : ''),
+                _strategyLabel: baseRow._strategyLabel + ' ⇌' + (convEndYear != null ? ` ⏹${convEndYear}` : '')
+                    + (_convBreach.length ? ' ⤴' : ''),
+                _convBreachYears: _convBreach.length,
+                _convBreachWorst: _convBreachWorst,
                 _paramLabel: baseRow._paramLabel,
                 _paramSortVal: baseRow._paramSortVal,
                 _family: baseRow._family ?? null,
@@ -1702,7 +1718,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
         },
         {
             key: 'strategy', label: 'Strategy',
-            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = unreachable target: the bracket/IRMAA/ACA ceiling cannot be hit. Sorting this column groups each family together and orders it by parameter. Click any row to load it, or ⚖ at the start of the row to measure every Δ column against it.',
+            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = unreachable target: the bracket/IRMAA/ACA ceiling cannot be hit. ⤴ = this row conversion goes ABOVE its own ceiling: the conversion is added on top of a draw already sized to fill the bracket or tier, so income lands over it. The row still scores well or it would not be here, but it is no longer respecting the limit in its name. Sorting this column groups each family together and orders it by parameter. Click any row to load it, or ⚖ at the start of the row to measure every Δ column against it.',
             getValue: r => r._strategyLabel,
             // Family, then parameter, then modifier - NOT the rendered label, which starts with markup
             // and emoji and scattered every clone away from the family it clones. rawSort compares

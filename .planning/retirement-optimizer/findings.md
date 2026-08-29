@@ -3120,3 +3120,28 @@ through that clamp, and the clamp was the missing piece.
 three existing suite call sites time-dependent, including a golden strategy-capture reproduction
 that would have broken in a later calendar year with no code change behind it. Any helper that
 defaults to "now" needs its test call sites pinned in the same commit.
+
+### P88f DONE - the ceiling rows are worth keeping, and worth marking (2026-08-29)
+
+Report: `research/CONVERSION_SEARCH_CEILINGS.md`. Harness: `.test_harnesses/convopt_ceiling_harness.js`,
+270 cells.
+
+The user proposed excluding ceiling families from the Optimizer's conversion search. **Right
+instinct, wrong remedy.**
+
+- **The search does not exclude them by itself.** 61 of 180 ceiling cells pick a non-zero
+  conversion; production drops only `$0` picks, so those 61 rows reach the table.
+- **All 61 breach their own ceiling.** Several in every year they have one - a `Fill Bracket 12%`
+  row is over its bracket 33 of 33 years.
+- **Excluding costs a median $53,990, up to $1,546,930, and NOT ONE of the 61 gains under $1,000.**
+  No marginal rows to discard cheaply, so answer (a) is the expensive one.
+- **Shipped answer: mark, do not drop.** `⤴` in the Strategy column, reading `-overageFromConv`
+  specifically so it never fires on a row that went over because spending could not be funded.
+- **The lever is the SPEND rate, not the heirs rate** (spread 25 vs 3). So a rule keyed on strategy
+  family is the wrong shape whichever way the exclusion question is answered.
+
+**Third time this session a prediction needed scoring against an ALTERNATIVE rather than against
+zero.** C5's first form asked whether the heirs rate flips the answer at least once; it flips 3 of
+60, which would have passed as HOLDS and meant nothing. Same failure as B2 in
+`BRACKET_CEILING_BASIS.md` and M1 in `EXTRA_CONVERSION_MAGI.md`. Worth treating as a standing rule:
+**a prediction that cannot lose is not a prediction.**

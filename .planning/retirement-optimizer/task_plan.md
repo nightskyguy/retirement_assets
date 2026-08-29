@@ -11,7 +11,6 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P88 | Extra Roth conversions now reach MAGI; `a`-`e` shipped v11.16a3 | `P88f` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
@@ -25,7 +24,8 @@ the ten captured paths; prev/next is one 46-stop ring; the Market Return chart n
 
 **P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 
-User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**, P88 opened at **O0**. Full index next.
+**P88 and P89 COMPLETE, shipped v11.16a4.** Extra Roth conversions reach MAGI so IRMAA charges them (lifetime IRMAA +30% to +132% at a $100k conversion); a warning at the input and a `⤴` in the Optimizer name the ceiling they break; the ACA age gate reads the year the plan actually starts. Suites **366**/61/22.
+User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. Full index next.
 
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
@@ -191,12 +191,28 @@ bracket row by itself - but that is a measurement, not a conviction.
       ceiling paces ORDINARY withdrawals while a conversion moves money inside the household. Once a
       run exists it names the measured years, the worst overage and the surcharge years. Browser
       verified: hidden on Proportional, shown on Fill Bracket, hidden again at a zero amount.
-- [ ] **P88f** - Re-open the Optimizer question. Should `selectConversionCandidates` skip ceiling
-      families? Measure it now that conversions are priced correctly; the answer may well be no.
-      Evidence it is worth asking: the GK re-baseline above shows the search moving one $25k step
-      once IRMAA is charged.
-- **Status:** `P88a`-`P88e` DONE 2026-08-29, shipped v11.16a3 with a changelog entry (this one IS
-  user-visible: IRMAA rises for plans that convert, and saved plans will not reproduce). `P88f` open.
+- [x] **P88f** - **DONE 2026-08-29.** `convopt_ceiling_harness.js` +
+      `research/CONVERSION_SEARCH_CEILINGS.md`, 270 cells. **Answer: the user's instinct is right and
+      their remedy is not - mark the rows, do not drop them.**
+      The search does NOT exclude them by itself: **61 of 180** ceiling cells pick a non-zero
+      conversion, and production drops only `$0` picks. **Every one of the 61 breaches its own
+      ceiling** - several in EVERY year they have one, including a `Fill Bracket 12%` row over its
+      bracket 33 of 33 years. But excluding them costs a **median $53,990, up to $1,546,930, with
+      not one of the 61 gaining less than $1,000** - there are no marginal rows to discard cheaply.
+      Shipped: **`⤴`** in the Strategy column on any conversion-optimized row whose conversion lands
+      above its ceiling, plus a legend entry. It reads `-overageFromConv` specifically, so it never
+      fires on a row that went over because SPENDING could not be funded inside the ceiling - the
+      distinction `P88c` was built to make. Browser verified on a live sweep: 7 `⇌` rows, 2 marked
+      (`Fill Bracket ✓ ⇌ ⤴`, `ACA Cliff ✓ ⇌ ⤴`), all five agnostic rows unmarked at zero breach.
+      **C5 BROKEN, and usefully:** the heirs rate is NOT the lever (spread 3); the SPEND rate is
+      (spread 25). It was nearly scored on "flips at least once", which 3-of-60 would have passed -
+      the third time this session a prediction needed scoring against an alternative rather than
+      against zero.
+      Deliberately NOT done: the rows are not excluded, not demoted in the ranking, and not withheld
+      from the Best table. They score what they score; the marker says what they gave up to score it.
+- **Status:** **COMPLETE.** `P88a`-`P88f` all DONE 2026-08-29, shipped v11.16a4. The branch carries
+  ONE consolidated changelog entry covering P88 and P89, per the one-entry-per-branch rule - the two
+  per-release entries written earlier were merged back into it.
   Measured headline: lifetime IRMAA +69% / +30% / +69% / +132% at a $100,000 conversion across Fill
   Bracket 22%, IRMAA Tier 1, Proportional and Ordered - and BEFORE the fix it FELL as the conversion
   grew ($1.41M to $0.63M), so the tool was presenting a large conversion as a way to REDUCE the
@@ -642,7 +658,7 @@ first task. Every open item in the file now carries one.
 | **O1** | P34 | Cost of finding a profitable conversion; worker + per-row memo | `P34a` | nothing |
 | **O1** | P84 | Annual advisor / AUM fee, **plus RMDs off the prior Dec 31 balance** (today they key off a mid-year balance whose growth depends on whether the plan converted) *(new 2026-08-28)* | `P84k` (the RMD half; runs before `P84a`) | nothing |
 | ~~DONE~~ | ~~P89~~ | ~~The ACA age gate read a year the plan does not start in~~ - **COMPLETE v11.16a4.** The advisory fired for every Limit choice, named a year and two ages the plan never used, and the same unclamped expression decided whether ACA rows reach the Optimizer. One shared `planFirstYear` now; measured at 22.2% disagreement, one-way | - | - |
-| **O0** | P88 | An Extra Roth Conversion never reaches `yr.tax.MAGI`, so the IRMAA lookback charges a figure that omits it - measured at a whole tier ($0 recorded where $7,166/yr was owed). Hits every strategy, not just the ceiling families, and biases the Optimizer's conversion search toward larger conversions *(new 2026-08-29, user-raised)* - **`a`-`e` DONE and SHIPPED v11.16a3**: MAGI now carries both conversion paths, the overage column sees them, 5 tests added (suites 363), and a warning names the conflict. Lifetime IRMAA +30% to +132% at a $100k conversion | `P88f` (the Optimizer question) | nothing |
+| ~~DONE~~ | ~~P88~~ | ~~An Extra Roth Conversion never reaches `yr.tax.MAGI`, so the IRMAA lookback charges a figure that omits it - measured at a whole tier ($0 recorded where $7,166/yr was owed). Hits every strategy, not just the ceiling families, and biases the Optimizer's conversion search toward larger conversions *(new 2026-08-29, user-raised)* - **COMPLETE, SHIPPED v11.16a4.** MAGI now carries both conversion paths, the overage column sees them, 8 tests added (suites 366), a warning names the conflict at the input and a `⤴` marks it in the Optimizer. Lifetime IRMAA +30% to +132% at a $100k conversion; the Optimizer offers 61 ceiling rows that all breach, worth a median $53,990 each, so they are marked rather than dropped | - | - |
 | **O2** | P87 | The "Limit" dropdown mixes two income bases: IRMAA tiers are MAGI thresholds (right), federal brackets are taxable-income thresholds spent as MAGI ceilings (wrong by one standard deduction) *(new 2026-08-29, user-raised)* - **`P87a` MEASURED 2026-08-29: the gap is exactly one deduction, and closing it LOSES money in 51 of 74 clean cells. Premise refuted; `P87f`, labelling the income basis, is what survives** | `P87f` | nothing |
 | **DONE** | P52 | MC run scope: nerdknob "Run My Plan Only" *(default later flipped by P53f)* | shipped v11.150b | - |
 | **DONE** | P53 | Monte Carlo Stress Test suite (5 windows, bear-start, plan-only default) | shipped v11.1521-152f (#170) | - |

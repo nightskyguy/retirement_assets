@@ -46,6 +46,7 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `convtiming_harness.js` | **node** | P85: does it matter WHICH YEARS a conversion program lands in, and is RMD suppression the reason? Front-load vs level vs back-load at equal lifetime gross. |
 | `rmdbasis_harness.js` | **node** | P84k/P84n: how wrong was the RMD basis, and did fixing it move what the characterization predicted? Run before and after `P84l`. |
 | `bracketbasis_harness.js` | **node** | P87a: the strategy Limit dropdown's federal entries are taxable-income thresholds spent as MAGI ceilings. How much room does that leave unused, and is the room worth anything? |
+| `convopt_ceiling_harness.js` | **node** | P88f: should the Optimizer's conversion search skip the families that target a ceiling? Measures what it picks for them, whether those picks break the ceiling, and what excluding them would cost. |
 | `extraconv_magi_harness.js` | **node** | P88a/P88b: an Extra Roth Conversion never reached MAGI, so the IRMAA lookback charged a figure that omitted it. How wrong was it, and did fixing it move what the characterization predicted? |
 
 ## betr_harness.js  (node)
@@ -457,3 +458,39 @@ Headline findings (2026-08-29):
    sizes. True for the ceiling families, false for the agnostic ones, whose surplus-routing drift
    reaches -14.6% of a $25,000 conversion. The claim is that the gross is ABSENT, so the test has
    to be one-sided and stated against the gross.
+
+## convopt_ceiling_harness.js  (node)
+
+```bash
+node .test_harnesses/convopt_ceiling_harness.js
+```
+
+**Full results live in [`CONVERSION_SEARCH_CEILINGS.md`](CONVERSION_SEARCH_CEILINGS.md).** This
+entry is the index; that file is the reference.
+
+P88f. A user proposed that the Optimizer stop offering conversion-optimized rows for strategies
+that target a ceiling, since the conversion is stacked on top of a draw already sized to fill it.
+The question was unanswerable until P88b, because the search was scoring those rows on numbers that
+omitted the conversion's own IRMAA.
+
+270 cells - 5 mixes x 3 heirs rates x 2 spend rates x 9 families - each running the production
+search (`optimizeConversionAmount` on `baselineScore`). Section 0 checks the ceiling/agnostic split
+against the engine's own `BracketTarget` rather than trusting the harness labels.
+
+Headline findings (2026-08-29):
+
+1. **The search does NOT exclude them by itself.** 61 of 180 ceiling cells pick a non-zero
+   conversion, so those rows reach the table. A $0 pick is dropped by production code, so this was
+   the first thing worth measuring: if it had been zero everywhere, the phase closed with no change.
+2. **Every one of them breaks its own ceiling - 61 of 61.** Several are over in EVERY year they
+   have a ceiling, including a row labelled `Fill Bracket 12%` breaching 33 of 33 years.
+3. **Excluding them is the expensive answer.** Median gain $53,990, largest $1,546,930, and not one
+   of the 61 gains less than $1,000. There are no marginal rows to discard cheaply.
+4. **The heirs rate is NOT the lever; the spend rate is** - spread 3 against 25. So a rule keyed on
+   strategy family is the wrong shape regardless of which way the exclusion question is answered.
+5. **Shipped answer: mark, do not drop.** A `⤴` in the Strategy column. It reads
+   `-overageFromConv` specifically, so it never fires on a row that went over because spending could
+   not be funded inside the ceiling.
+6. **A prediction nearly scored on a bar it could not fail.** C5's first form asked only whether the
+   heirs rate flips the answer at least once; it flips 3 of 60, which would have passed as a HOLDS.
+   Scored against the competing axis instead, it fails.

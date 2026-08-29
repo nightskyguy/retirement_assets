@@ -21,48 +21,25 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ## 11.16a4
 
-### The ACA age notice only appears for ACA strategies, and names the right year
+### Roth conversions now count toward IRMAA, and the tool says when they break your limit
 
-The notice explaining how the ACA income cap works appeared under the Limit dropdown for every
-choice, so picking a federal bracket or an IRMAA tier produced an unprompted paragraph about a cap
-the plan does not use. It now appears only when an ACA limit is selected. The separate notice
-explaining why the ACA choices are greyed out, once both of you are on Medicare, still appears
-whatever is selected, because otherwise there would be no way to find out why they cannot be picked.
+**Behavior change. Plans using Extra Annual Roth Conversion will show higher IRMAA surcharges, and
+saved plans and shared links will not reproduce their earlier numbers.** The conversion was always
+taxed correctly, but it never counted toward the income Medicare reads two years later to set your
+surcharge, so a plan could convert year after year and never be billed for it. This reaches every
+strategy, not only those targeting a bracket or tier. Nothing changes with no extra conversion set,
+or for a household too young for Medicare.
 
-The notice was also naming the wrong year and the wrong ages. It worked them out from your birth
-year plus the Retirement Start Age you typed, which is the year you reach that age even when that
-year has already passed. A plan starting this year for someone born in 1958 with a start age of 65
-was described as starting in 2023 with them at 65 and their spouse at 54, when the plan runs from
-2026 with them at 68 and 57. It now reads the year the plan actually begins.
-
-**Behavior change, and it reaches the Optimizer.** That same year decided whether ACA rows appear in
-the Optimizer table at all. If you are already past the Retirement Start Age you typed, ACA rows may
-now be correctly withheld where they used to be offered, because you are already on Medicare in the
-plan's first year. Nothing changes for a plan whose start age is still ahead of it.
-
-## 11.16a3
-
-### Extra Annual Roth Conversion now counts toward IRMAA, and says when it breaks your ceiling
-
-**Behavior change. Plans that use Extra Annual Roth Conversion will show higher IRMAA surcharges
-than before, and saved plans and shared links will not reproduce their earlier numbers.** The
-conversion was always taxed correctly; what it never did was count toward the income figure Medicare
-reads two years later to set your surcharge. So a plan could convert year after year and never be
-billed for it. It is billed now.
-
-The effect is largest where a conversion pushes income across a surcharge threshold, and it reaches
-every strategy, not only the ones that target a bracket or a tier. Nothing changes for a plan with
-no Extra Annual Roth Conversion and no cash-funded conversion tax, and nothing changes for a
-household too young for Medicare.
-
-A warning now appears under Extra Annual Roth Conversion when your strategy targets a ceiling -
-a federal bracket, an IRMAA tier, the Min Limit or the ACA cap. The conversion is added on top of
-that ceiling rather than fitted inside it, so it goes over; once a plan has run, the warning names
-how many years it goes over, by how much, and how many years carry a surcharge. It is a warning
-rather than a block, because converting past a ceiling on purpose is a reasonable plan: a ceiling
+Two places now tell you when a conversion goes past a limit you set: a notice under Extra Annual
+Roth Conversion, naming how many years it puts you over and by how much, and an upward arrow on any
+Optimizer row whose conversion lands above its own ceiling. Both warn rather than block - a ceiling
 paces ordinary withdrawals, while a conversion moves money from IRA to Roth rather than out of the
-household. The BracketOverage column in Annual Details now shows this too, where it used to show
-nothing.
+household.
+
+The ACA income-cap notice no longer appears for non-ACA choices, and no longer works its year out
+from your birth year plus the Retirement Start Age you typed, which could name a year already past.
+**That year also decides whether ACA rows appear in the Optimizer**, so if you are past the start
+age you typed, ACA rows may now be correctly withheld where they used to be offered.
 
 ## 11.1691
 

@@ -867,14 +867,9 @@
 
 				<ul id="changelog-list">
 				<li data-flag="behavior"><b>11.16a4</b>
-					<strong>The ACA age notice only appears for ACA strategies, and names the right year.</strong>
-					The notice about the ACA income cap appeared under the Limit dropdown for every choice, so picking a federal bracket or an IRMAA tier produced an unprompted paragraph about a cap the plan does not use. It now appears only when an ACA limit is selected. It was also naming the wrong year and ages: it used your birth year plus the Retirement Start Age you typed, which is the year you reach that age even when it has already passed, and it now reads the year the plan actually begins. <strong>Behavior change:</strong> that same year decides whether ACA rows appear in the Optimizer, so if you are already past the start age you typed, ACA rows may now be correctly withheld where they used to be offered.
+					<strong>Roth conversions now count toward IRMAA, and the tool says when they break your limit.</strong>
+					The conversion was always taxed correctly, but it never counted toward the income Medicare reads two years later to set your surcharge, so a plan could convert year after year and never be billed for it. <strong>Behavior change:</strong> plans using Extra Annual Roth Conversion will show higher IRMAA, and saved plans and shared links will not reproduce their earlier numbers. It reaches every strategy, not only those targeting a bracket or tier. Two places now tell you when a conversion goes past a limit you set: a notice under the field naming how many years it puts you over, and an upward arrow on any Optimizer row whose conversion lands above its own ceiling. Separately, the ACA income-cap notice no longer appears for non-ACA choices and no longer names a year already past - and that year also decides whether ACA rows appear in the Optimizer.
 					<a href="optimizer_changelog.md#11.16a4" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="behavior"><b>11.16a3</b>
-					<strong>Extra Annual Roth Conversion now counts toward IRMAA, and says when it breaks your ceiling.</strong>
-					The conversion was always taxed correctly, but it never counted toward the income figure Medicare reads two years later to set your surcharge, so a plan could convert year after year and never be billed for it. Plans using Extra Annual Roth Conversion will now show higher IRMAA, and saved plans and shared links will not reproduce their earlier numbers. It reaches every strategy, not only the ones targeting a bracket or tier; nothing changes with no extra conversion set. A warning now appears under the field when your strategy targets a ceiling, naming how many years the conversion puts you over it and by how much, and the BracketOverage column shows it too.
-					<a href="optimizer_changelog.md#11.16a3" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="display"><b>11.1691</b>
 					<strong>Current $ view now converts running totals correctly.</strong>

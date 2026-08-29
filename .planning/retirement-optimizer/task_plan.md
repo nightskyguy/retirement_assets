@@ -110,8 +110,9 @@ changelog entry saying saved plans will not reproduce.
       MISMATCH: `iRAbracketRoom` subtracts GROSS income from a POST-deduction threshold and
       `bracketOverage` measures MAGI against it, so a pre-deduction quantity is capped at a
       post-deduction number and nothing in between converts one to the other.
-      **But correcting it LOSES money in 51 of 74 clean cells, median -$47,092.** The premise that
-      the unused room is money left on the table is REFUTED. The sign is set by the BRACKET: 12%
+      **Correcting it costs money in 51 of 74 clean cells, median -$47,092** - but see the user
+      correction below, because that is a fact about the STRATEGY and NOT a verdict on the fix.
+      The sign is set by the BRACKET: 12%
       gains (median +$159,278, best +$1,201,973), 22% loses (-$173,437, worst -$2,523,647), 24%
       loses (-$14,583). The separator is OVER years and nothing else - a cell that gains was already
       breaching its ceiling every year, so the ceiling was not governing it and lifting it turns a
@@ -121,12 +122,46 @@ changelog entry saying saved plans will not reproduce.
       `yr.IRMAALimit` built from the bracket top containing the SPENDING GOAL ($211,399 where Fill
       Bracket 24% aims at $403,550), so the federal side of the min is never selected. That also
       makes the "24%" in `Min Limit 24%` close to decorative - a separate question, not P87's.
-      Priority verdict: **P87 stays O2 and its centre of gravity moves to `P87f`.**
-- [ ] **P87b** - DECIDE the federal fix. **`P87a` changed what this decides.** It is no longer "which
-      correction", it is "should the number change at all", and the measured answer leans no: the fix
-      is a loss in three quarters of the clean cells, and the two forms below differ in mechanism,
-      not in that. If anything is built it belongs behind a CHOICE - the 12% row wants the lift and
-      the 22% row does not - never as a silent correction. The two forms, unchanged:
+
+      **USER CORRECTION, same day, and it overturns the verdict this task first drew.** The first
+      reading was "the fix loses money, so the premise is refuted, so do not build `P87b`". That
+      judges a CORRECTNESS question with a WEALTH metric. When a user picks `22% Fed` or `IRMAA
+      Tier 2` the contract is FILL TO THAT LIMIT: fund the spending, convert or bank the rest. They
+      are not asking the tool to minimize tax - if they were they would not have named a ceiling.
+      Stopping one deduction short fails that contract whether or not stopping short leaves them
+      richer. The 51-of-74 result stays TRUE and stays REPORTABLE; what it measures is that filling
+      the 22% and 24% brackets is often a worse strategy than under-filling them, which is the
+      Optimizer ranking's job to surface, not a licence for the engine to under-deliver the strategy
+      that was selected. An accidental hedge is not a design.
+
+      **TARGETS AND CAPS ARE DIFFERENT CONTROLS and one `yr.limit` carries both.** `n% Fed` and
+      `IRMAA Tier n` are TARGETS - reaching them is success, stopping short is the defect. `n% FPL`
+      is a CAP - staying under is success and a breach is the risk. The engine already splits them
+      on BREACH behavior (soft cap with third-pass forced draws vs strict ACA with `acaBreach`); it
+      does not split them on FILL behavior, and the target case is the one being let down.
+
+      **AND NOTHING SIZES A CONVERSION AGAINST THE CEILING - measured, and larger than the deduction
+      gap.** Over the same 74 clean cells, total voluntary draw rose in only 18, and of the extra
+      draw only **32% became conversion**; the other 68% became IRA-sourced spending displacing
+      Brokerage and Cash draws (delivered spend is identical by the CLEAN filter, so it is not new
+      spending). Conversions were UNCHANGED in 29 of 74 cells. The code says why: the only two
+      claimants on the headroom are `iRAbracketRoom` (`:1964`), which sizes the IRA WITHDRAWAL with
+      spending funded first, and `extraConversionAmount`, which the user types and which is not
+      ceiling-derived. `convertExcessToRoth` (`:2636`) calls itself "a pure REALLOCATION" of
+      whatever after-tax surplus remains, capped by `netWithdrawals.IRA`; `applyConversionGrossUp`
+      (`:3016`) grosses up that existing surplus and never reads `yr.limit`; "Maximize Conversions"
+      is just those two flags together (`optimizer_ui.js:4705`), not "convert up to the limit".
+      **User model: limit minus needed spending = conversion headroom. Engine model: the limit sizes
+      a WITHDRAWAL and conversion is a downstream by-product of surplus routing.** They agree 32% of
+      the time by dollars.
+
+      Priority verdict: **P87 stays O2**, `P87b` is reclassified from optional optimization to
+      correctness fix, and a new `P87g` carries the conversion-sizing gap.
+- [ ] **P87b** - DECIDE the federal fix. **A CORRECTNESS fix, not an optimization** (see the user
+      correction in `P87a`): a named ceiling is a contract to fill, and the engine fills one
+      deduction short of it. The measured wealth cost is a CONSEQUENCE TO DISCLOSE, not a reason to
+      decline - the changelog entry must say plainly that bracket rows will withdraw and convert
+      more and that saved plans will not reproduce. The two forms, unchanged:
       **(i)** raise the federal ceiling to `bracket top + the year's deduction`, keeping the MAGI
       comparison. Must read the SAME deduction `calculateTaxes()` uses (std + age bumps + senior
       deduction with its phase-out), or the ceiling and the tax disagree - a second source of truth
@@ -143,15 +178,29 @@ changelog entry saying saved plans will not reproduce.
 - [ ] **P87e** - Tests: a fixed plan on `22% Fed` lands federal TAXABLE income on the bracket top,
       not MAGI; a plan on `IRMAA Tier 1` keeps `tax.MAGI` inside the tier (already covered, keep it
       green); an ACA plan with large SS is measured against the add-back definition.
-- [ ] **P87f** - **Now the best-supported item in the phase**, and the one `P87a` argues for. The
-      dropdown prints `22% Fed  ·  $211,400` and never says WHICH income that is; the honest answer is
-      "MAGI, though the number came from a taxable-income table". Label it, and say the same in the
-      README's strategy section. Nothing here promises recovered room - `P87a` measured that promise
-      wrong three times in four.
-- **Status:** `P87a` DONE 2026-08-29 and it refuted the phase's own premise; `P87b` reframed from
-  "which fix" to "any fix at all", `P87f` promoted, `minlimit` dropped from scope. `P87c`/`P87d` are
-  untouched by the measurement - it armed the deduction leg only, not the Social Security basis and
-  not the ACA add-back.
+- [ ] **P87f** - The dropdown prints `22% Fed  ·  $211,400` and never says WHICH income that is;
+      the honest answer today is "MAGI, though the number came from a taxable-income table". Label
+      it, and say the same in the README's strategy section. **Valuable but not the whole answer** -
+      naming the basis helps a reader understand the ceiling; it does not deliver the headroom they
+      asked for. If `P87b` ships, this label changes with it.
+- [ ] **P87g** - **NEW 2026-08-29, user-raised, and larger than the deduction gap.** Nothing in the
+      engine converts INTO the ceiling on purpose. A user who picks a limit expects the room between
+      their spending and that limit to become a Roth conversion (or to be banked); the engine sizes
+      a WITHDRAWAL against the limit and lets conversion fall out of surplus routing, which delivers
+      32% of the extra draw as conversion. Design decision, not a bug fix, and the shape is not
+      obvious: it interacts with the Cash Reserve (P2), the gap-fill order (P30), and
+      `fundConversionWithCash`, which today grosses up a surplus conversion WITHOUT checking
+      `yr.limit` and so can push MAGI past the ceiling the user named - worth confirming separately.
+      Measure before building, same as `P87a`: how much conversion would a "fill the headroom" rule
+      actually add, and what does it cost. **`P87b` should land first** - sizing conversions against
+      a ceiling that is itself one deduction short would bake the basis error into a second place.
+- **Status:** `P87a` DONE 2026-08-29; its first verdict was overturned by the user the same day; `P87b` reframed from
+  `P87b` reclassified as a correctness fix with a disclosable cost, `P87f` kept but demoted from
+  "the whole answer", `minlimit` dropped from scope, and `P87g` opened for the conversion-sizing
+  gap. `P87c`/`P87d` are untouched by the measurement - it armed the deduction leg only, not the
+  Social Security basis and not the ACA add-back. `P87d` gains weight from the target/cap split:
+  ACA is the one entry in the dropdown whose job is to stay UNDER, so its overage reading is the
+  number that matters for it.
 - **Depends on:** nothing. P66/P83 already settled the IRMAA indexing and margin.
 - **Left in the engine by `P87a`:** the research-only input `bracketCeilingAddDeduction`, default
   off and set by no UI (`optimizer_core.js:980`), and two hidden log fields, `-fedTaxableInc` and

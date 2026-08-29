@@ -48,8 +48,15 @@
  *   B2  The gain is largest where the spend rate is low -- where the ceiling binds and the IRA still
  *       has stock to give.
  *   B3  Lifetime nominal tax RISES while terminal after-tax net worth ALSO rises: more moved earlier
- *       at a lower rate. If terminal wealth falls, P87's premise is wrong and P87b should not be
- *       built as a "fix".
+ *       at a lower rate.
+ *
+ *       B3 IS SCORED, BUT IT IS NOT A VERDICT ON THE FIX, and the first version of this file said it
+ *       was. A named ceiling is a CONTRACT TO FILL: a user picking `22% Fed` or `IRMAA Tier 2` wants
+ *       the room between their spending and the limit converted or banked, and is not asking the
+ *       tool to minimize their tax. So B3 breaking means "filling this bracket is often a worse
+ *       STRATEGY than under-filling it" - the Optimizer ranking's business, and a changelog
+ *       disclosure if the fix ships - not "leave the ceiling one deduction short". Judging a
+ *       correctness defect by a wealth metric is how an accidental hedge gets mistaken for a design.
  *   B4  ZERO TEST. `IRMAA Tier n` and `n% FPL` rows are bit-identical across the arms -- their
  *       ceilings do not come from the federal bracket table.
  *
@@ -408,8 +415,8 @@ const verdict = (ok, txt) => console.log('  ' + (ok ? 'HOLDS ' : 'BROKEN') + '  
         'B3  clean cells: after-tax NW up in ' + nwUp + ', down in ' + nwDn + ', tax up in '
         + taxUp + ' of ' + clean.length + '. Median dTax ' + money(median(clean.map(r => r.dTax)))
         + ', median dNW ' + money(median(clean.map(r => r.dNW))) + '.');
-    if (nwDn > nwUp) console.log('        NW falls more often than it rises -- the "unused room is money'
-        + ' left behind" premise is REFUTED.');
+    if (nwDn > nwUp) console.log('        NW falls more often than it rises. That scores the STRATEGY,'
+        + ' not the fix -- see B3 in the file header.');
     for (const f of FAMILIES.filter(x => x.fed)) {
         const g = clean.filter(r => r.c.f.key === f.key);
         console.log('        ' + pad(f.label, 20) + ' up ' + rpad(g.filter(r => r.dNW > 1).length, 3)

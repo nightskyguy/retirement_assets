@@ -397,9 +397,10 @@ Headline findings (2026-08-29):
    bumps, $32,200 in 2026 to $70,876 by 2054. Neither operand is wrong: the bracket top is correct
    and the deduction reconciles to the cent, OBBBA senior deduction and its phase-out included. The
    defect is a units mismatch - a pre-deduction quantity capped at a post-deduction threshold.
-2. **Correcting it LOSES money in 51 of 74 clean cells**, median -$47,092. The premise that unused
-   bracket room is money left on the table is REFUTED: the shipped shortfall is accidentally
-   conservative.
+2. **Correcting it COSTS money in 51 of 74 clean cells**, median -$47,092 - a finding about the
+   STRATEGY, not a verdict on the fix. A named ceiling is a contract to fill, so the cost is a
+   changelog disclosure rather than a reason to under-deliver the strategy the user selected. The
+   report's section 7 records the earlier, wrong reading and why it was wrong.
 3. **The sign is set by the bracket, not the plan.** Fill Bracket 12% gains (median +$159,278);
    22% loses (-$173,437) and 24% loses (-$14,583).
 4. **The separator is OVER years and nothing else.** Cells that gain were already breaching the
@@ -410,5 +411,9 @@ Headline findings (2026-08-29):
    `yr.IRMAALimit`, built from the bracket top containing the SPENDING GOAL, which sits below the
    federal ceiling the user picked. So the zero test covers four families, not the two it was
    written for, and the "24%" in that row's label is close to decorative.
-6. **A prediction scored on the wrong quantity.** B1's first form asked a per-year claim of a
+6. **Nothing sizes a conversion against the ceiling, and that gap is bigger than the deduction
+   one.** Total voluntary draw rose in only 18 of 74 cells and just 32% of the extra draw became
+   conversion. `iRAbracketRoom` sizes a WITHDRAWAL; `convertExcessToRoth` reallocates leftover
+   surplus capped by the IRA draw; `applyConversionGrossUp` never reads `yr.limit`. Tracked as P87g.
+7. **A prediction scored on the wrong quantity.** B1's first form asked a per-year claim of a
    LIFETIME total and condemned a working arm in 70 of 120 cells. Same failure as `rmdbasis`'s R2.

@@ -3014,10 +3014,30 @@ The three sentences worth carrying without opening the report:
    the deduction reconciles to the cent, OBBBA senior deduction and phase-out included. The defect
    is a UNITS MISMATCH: `iRAbracketRoom` subtracts GROSS income from a POST-deduction threshold and
    `bracketOverage` measures MAGI against it. Do not go looking for a bad number; there isn't one.
-2. **Closing that gap LOSES money in 51 of 74 clean cells, median -$47,092.** The under-fill is
-   accidentally conservative. Any future note promising recovered bracket room would be wrong three
-   times in four. The sign is set by the bracket (12% gains, 22% and 24% lose) and the separator is
-   whether the plan was already breaching its ceiling to fund spending.
+2. **Closing that gap COSTS money in 51 of 74 clean cells, median -$47,092 - and that is a fact
+   about the STRATEGY, not a verdict on the fix.** A named ceiling is a contract to fill: the user
+   picking `22% Fed` or `IRMAA Tier 2` wants the room between their spending and the limit
+   converted or banked, and is not asking the tool to minimize their tax. The first version of this
+   entry read the wealth result as a reason not to fix the defect. That judges a correctness
+   question with a wealth metric. What the 51-of-74 actually says is that FILLING the 22% and 24%
+   brackets is often a worse strategy than under-filling them - the Optimizer ranking's job to
+   surface, and a changelog disclosure if the fix ships. An accidental hedge is not a design.
+   The sign is set by the bracket (12% gains, 22% and 24% lose) and the separator is whether the
+   plan was already breaching its ceiling to fund spending.
+
+   Corollary worth carrying: **targets and caps are different controls sharing one `yr.limit`.**
+   `n% Fed` and `IRMAA Tier n` are targets (reaching them is success); `n% FPL` is a cap (staying
+   under is success). The engine splits them on BREACH behavior already, not on FILL behavior.
+
+2b. **Nothing sizes a conversion against the ceiling, and this gap is larger than the deduction
+   one.** Over the same 74 cells, total voluntary draw rose in only 18, and just 32% of the extra
+   draw became conversion - the rest became IRA-sourced spending displacing Brokerage and Cash.
+   Conversions were unchanged in 29 of 74. Only `iRAbracketRoom` (sizes the WITHDRAWAL) and the
+   user-typed `extraConversionAmount` claim the headroom; `convertExcessToRoth` is a reallocation
+   of leftover surplus capped by the IRA draw, `applyConversionGrossUp` never reads `yr.limit`, and
+   "Maximize Conversions" is just those two flags. **User model: limit minus spending = conversion
+   headroom. Engine model: limit sizes a withdrawal, conversion falls out of surplus routing.**
+   Tracked as `P87g`.
 3. **`minlimit` is governed entirely by `yr.IRMAALimit`, which is built from the SPENDING GOAL, not
    from the federal rate the user picked.** 0 of 40 cells respond to a federal ceiling change. Any
    claim about what `Min Limit n%` targets should be measured before it is believed.

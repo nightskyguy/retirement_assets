@@ -131,7 +131,9 @@ not be quoted on its own.
 
 ## 3. Correcting the basis is not free money
 
-The headline, and it was not the expected one.
+The headline, and it was not the expected one. Read it as a statement about the STRATEGY, not as a
+verdict on the fix - section 7 explains why those are different questions and why an earlier version
+of this report got that wrong.
 
 | family | cells | clean | ceil yrs | moved | median dNW | best dNW | worst dNW | median dTax |
 |---|---|---|---|---|---|---|---|---|
@@ -220,20 +222,89 @@ larger than what is reported here - in both directions, since the sign is not un
 2. **Only the federal ceiling is lifted.** The state bracket top carries the same basis error and is
    left alone, so in a state whose table binds first the reading is low.
 
-## 7. What this says about P87b
+## 7. The wealth verdict answers a different question than the one P87 asks
 
-- **The basis error is confirmed and is exactly one deduction.** Section 1. Nothing about the
-  measurement disputes it.
-- **It should not be framed as money left on the table.** Correcting it loses in 51 of 74 clean
-  cells. Any release note or tooltip promising recovered room would be wrong three times in four.
-- **The strongest case for changing anything is the label, not the number.** The dropdown prints
-  `22% Fed  ·  $211,400` and never says which income that is - and the answer turns out to be
-  "MAGI, though the number came from a taxable-income table". `P87f` was already scoped for this and
-  is now the best-supported item in the phase.
-- **If a ceiling change is built anyway, it belongs behind a choice, not a fix.** The 12% row wants
-  it and the 22% row does not.
+**This section replaces an earlier conclusion that was wrong, and the error is worth naming because
+it is a whole class of error.** The first version of this report read section 3 as a verdict on the
+fix: net worth falls in 51 of 74 clean cells, therefore the premise is refuted, therefore do not
+build `P87b`. That reasoning judges a **correctness** question with a **wealth** metric, and the two
+are not the same question.
+
+When a user picks `22% Fed` or `IRMAA Tier 2`, the contract is **fill to that limit**. What they
+expect back is: fund the spending, and convert or bank everything between the spending and the
+ceiling. They are not asking the tool to minimize their tax - if they were, they would not have
+named a ceiling. So a ceiling that stops one deduction short has not done what it was asked,
+whether or not stopping short happens to leave them richer.
+
+The 51-of-74 result is still true and still worth disclosing. What it measures is that **filling the
+22% and 24% brackets is often a worse strategy than under-filling them** - a finding about the
+strategy, which the Optimizer's ranking is the right place to surface. It is not a licence for the
+engine to quietly under-deliver the strategy the user selected. An accidental hedge is not a design.
+
+### Targets and caps are not the same control
+
+The dropdown emits both and the engine runs them through one `yr.limit`:
+
+| entry | what the user means | what "correct" looks like |
+|---|---|---|
+| `n% Fed`, `IRMAA Tier n` | a **target**. Fill the headroom above spending | reaching the ceiling is success; stopping short is the defect |
+| `n% FPL` (ACA) | a **cap**. Keep spending under it | staying under is success; the risk is a breach, not a shortfall |
+
+The engine already separates the two on BREACH behavior - bracket and IRMAA are soft caps that let
+the third pass force a draw above the ceiling, ACA is strict and records `acaBreach` instead. It
+does not separate them on FILL behavior, and that is where the target case is being let down.
+
+### And nothing sizes a conversion against the ceiling at all
+
+Measured on the same 74 clean cells, this turns out to be the larger gap.
+
+| family | n | conversions up | unchanged | down | largest conversion gain |
+|---|---|---|---|---|---|
+| Fill Bracket 12% | 18 | 6 | 12 | 0 | $843,827 |
+| Fill Bracket 22% | 25 | 5 | 12 | 8 | $345,501 |
+| Fill Bracket 24% | 31 | 15 | 5 | 11 | $113,052 |
+
+Total voluntary draw rose in only **18 of 74** cells, and of the extra draw that did happen only
+**32% became conversion**; the other 68% became IRA-sourced spending. Since delivered spend is
+identical across arms by the CLEAN filter, that 68% is the IRA displacing Brokerage and Cash draws,
+not new spending.
+
+The code says why. Only two things consume the headroom, and neither is a conversion:
+
+- `iRAbracketRoom` (`optimizer_core.js:1964`) sizes the IRA **withdrawal**, and spending is funded
+  from it first.
+- `extraConversionAmount` is a figure the user types. It is not derived from the ceiling.
+
+`convertExcessToRoth` (`:2636`) describes itself as "a pure REALLOCATION" of whatever after-tax
+surplus happens to remain, capped by `netWithdrawals.IRA`. `applyConversionGrossUp` (`:3016`) grosses
+up that existing surplus and never reads `yr.limit`. "Maximize Conversions" in the UI is those two
+flags together (`optimizer_ui.js:4705`), not "convert up to the limit".
+
+So two models are in play and they coincide only by accident:
+
+| | |
+|---|---|
+| what a user picking a limit expects | limit minus needed spending = conversion headroom |
+| what the engine does | the limit sizes the IRA WITHDRAWAL; spending is funded first; the after-tax leftover becomes surplus; surplus is reallocated to Roth, capped by the IRA draw |
+
+They agree only when the extra draw actually leaves a surplus. Measured: 32% of the time, by dollars.
+
+### What follows for the phase
+
+- **The basis error is confirmed and is exactly one deduction.** Section 1, unchanged.
+- **`P87b` is a correctness fix, not an optimization.** The wealth cost is a consequence to disclose
+  in the changelog, not a reason to decline. If it is built, the changelog should say plainly that
+  bracket rows will convert and withdraw more, and that saved plans will not reproduce.
+- **`P87f` stays valuable but is no longer the whole answer.** Labelling which income the ceiling is
+  helps a reader; it does not deliver the headroom they asked for.
+- **The conversion-sizing gap deserves its own item**, and it is larger than the deduction. Nothing
+  today converts into the ceiling on purpose. A "convert the remaining headroom" behavior is a
+  design decision, not a bug fix, and it interacts with the Cash Reserve, the gap-fill order and
+  `fundConversionWithCash`.
 - **`minlimit` is out of scope for P87 entirely** (section 4), and carries a separate question of
   its own.
 - **P87c, P87d unchanged.** This measured the deduction leg only. The Social Security basis
   (`yr.fixedInc` is the full benefit where IRMAA and federal want the taxable portion) and the ACA
-  overage add-back were not armed here.
+  overage add-back were not armed here. P87d gains weight from the target/cap split above: the ACA
+  entry is the one control in the dropdown whose job is to stay UNDER, so its overage reading is
+  the number that matters for it.

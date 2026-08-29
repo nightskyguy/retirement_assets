@@ -6442,3 +6442,25 @@ lot of user-visible surface, and cutting further would start dropping things a r
 
 Verified in the browser: note reads as the user wrote it, tooltips read `SS: 26,073  ~3,674 tax` and
 `Brokerage: 2,779`. Suites 366/61/22.
+
+## 2026-08-29 (cont.) - in-page changelog split into bullets, and two notes dropped from it
+
+User review. The 11.16a4 entry read as one block of text, and the LATEST CHANGE banner copies the
+first `<li>`'s innerHTML verbatim, so it inherited the same wall. Now a nested `<ul>`, four bullets,
+which renders in both places (checked: `display: list-item`, markers `disc` in the banner and
+`circle` in the Change Log list, so they are real bullets and not just paragraph breaks).
+
+**Two notes dropped from the PAGE and kept in the .md**, on the user's rule, which is a better rule
+than "summarize everything":
+
+- The Cash Reserve "-1" wording fix. Anyone loading this build will never see the bad message, so
+  the note has no reader.
+- The Market Return chart naming the replayed year. Self-evident on sight.
+
+Recorded that rule in the VERSION SYNC comment block above the list, next to the existing
+five-entry ceiling, since the next person writing an entry is the one who needs it: **drop any note
+a reader of THIS build cannot act on - a fixed message they will never see, or a change that is
+obvious the moment they look at it. Both still belong in optimizer_changelog.md, which is the record
+rather than the notice.**
+
+The .md keeps all six items and stays at 301 words.

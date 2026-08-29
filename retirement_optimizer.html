@@ -851,6 +851,15 @@
 				     one without the other will silently desync the page title, Google Analytics, and
 				     the Version stat in the Summary Header.
 
+				     ONE BULLET PER NOTE, not a paragraph. A release that changes several things reads
+				     as a wall of text when they are run together, and the banner above inherits that
+				     wall verbatim. A nested <ul> renders in both places.
+
+				     AND THE PAGE LIST IS NOT THE .MD LIST. Drop any note a reader of THIS build
+				     cannot act on: a fixed message they will never see, or a change that is
+				     self-evident the moment they look at the thing. Both still belong in
+				     optimizer_changelog.md, which is the record rather than the notice.
+
 				     WHERE THE DETAIL LIVES: this list holds a SHORT summary of the five most recent
 				     releases only. The full write-up of every release, including everything older
 				     than these five, lives in optimizer_changelog.md at the repo root. When you add
@@ -868,7 +877,12 @@
 				<ul id="changelog-list">
 				<li data-flag="behavior"><b>11.16a4</b>
 					<strong>Roth conversions now count toward IRMAA, and the tool says when they break your limit.</strong>
-					The conversion was always taxed correctly, but it never counted toward the income Medicare reads two years later to set your surcharge, so a plan could convert year after year and never be billed for it. <strong>Behavior change:</strong> plans using Extra Annual Roth Conversion will show higher IRMAA, and saved plans and shared links will not reproduce their earlier numbers. It reaches every strategy, not only those targeting a bracket or tier. Two places now tell you when a conversion goes past a limit you set: a notice under the field naming how many years it puts you over, and an upward arrow on any Optimizer row whose conversion lands above its own ceiling. Separately, the ACA income-cap notice no longer appears for non-ACA choices and no longer names a year already past - and that year also decides whether ACA rows appear in the Optimizer. The Cash Reserve note offered "-1" as the way back to the original all-cash behavior; that value cannot be typed (it becomes 0, a different setting), so it now says to type Off. Two chart fixes: hovering over an income bar on Income &amp; Expenses now shows the actual income with the approximate tax attributed to it, instead of the scaled bar height; and the Market Return chart names the historical year a replayed path came from for everyone.
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li><strong>Behavior change - saved plans and shared links will not reproduce their earlier numbers.</strong> A Roth conversion was always taxed correctly, but it never counted toward the income Medicare reads two years later to set your surcharge, so a plan could convert year after year and never be billed for it. Plans using Extra Annual Roth Conversion will now show higher IRMAA. This reaches every strategy, not only those targeting a bracket or tier.</li>
+					<li>Two places now warn when a conversion goes past a limit you set: a note under Extra Annual Roth Conversion saying how many years it puts you over, and an upward arrow on any Optimizer row whose conversion lands above its own ceiling.</li>
+					<li><strong>Behavior change:</strong> the ACA income-cap notice no longer appears for non-ACA choices, and no longer names a year already past. That year also decides whether ACA rows appear in the Optimizer, so if you are past the Retirement Start Age you typed, ACA rows may now be correctly withheld.</li>
+					<li>Hovering over an income bar on Income &amp; Expenses now shows the actual income with the approximate tax attributed to it, instead of the scaled bar height.</li>
+					</ul>
 					<a href="optimizer_changelog.md#11.16a4" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="display"><b>11.1691</b>

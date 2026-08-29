@@ -737,12 +737,16 @@ function replayCarryOnStep(prev, next) {
     return next;
 }
 
-// P80. Which historical year the replayed path's year `i` was sampled from, or null. Three ways to
-// get nothing, all of them normal: no replay on screen, a synthetic path (GBM and AAM are drawn,
-// not sampled, so there is no year to name), or a reader without the nerdknob. The banks index
-// returns and inflation with ONE shared index, so this single year is honest for both.
+// P80. Which historical year the replayed path's year `i` was sampled from, or null. Two ways to
+// get nothing, both of them normal: no replay on screen, or a synthetic path (GBM and AAM are
+// drawn, not sampled, so there is no year to name). The banks index returns and inflation with ONE
+// shared index, so this single year is honest for both.
+//
+// P90: no longer gated on the nerdknob. Naming the year a bootstrap block came from is a FACT about
+// the path being shown, not a diagnostic - the same rule that ungated the advisor fee and the
+// forward IRMAA projection. A reader looking at a replayed 1974 return is better served knowing it
+// is 1974 than being shown the number alone.
 function replaySourceYear(i) {
-    if (typeof NERD_KNOBS === 'undefined' || !NERD_KNOBS) return null;
     const y = _replayState?.rows?.srcYears?.[i];
     return Number.isFinite(y) && y > 0 ? y : null;
 }
@@ -4399,8 +4403,22 @@ function updateCharts(log) {
     // scale = (1 - effectiveTaxRate) on post-refund income. Using r.netIncome is wrong in surplus
     // years because netIncome was computed with pre-refund cash withdrawals; the logged CashWD is
     // post-refund. Deriving scale from (visibleSum - totalTax) / visibleSum stays correct in both.
-    const mkInc = (label, color, rawFn) => ({
+    // P90. `_rawInc` is the UNSCALED series, already dollar-adjusted, so the tooltip can report the
+    // income that actually arrived rather than the scaled bar height. The bar heights are a
+    // presentation device - every source is shrunk by ONE year-wide rate so the stack lands exactly
+    // on the Net Income line - and a reader hovering over Social Security wants to know what Social
+    // Security paid, not what it looks like after that device.
+    //
+    // `taxed` says whether the source bears any tax at all, and it is why the difference is not
+    // labelled "tax" everywhere. The scale is uniform, so it shaves Cash withdrawals, Roth
+    // withdrawals and return of basis by the same fraction as an IRA draw - and none of those three
+    // is taxable. Printing "- $2,800 tax" beside a Roth withdrawal would invent a charge that does
+    // not exist. Those sources report their raw amount and stop there; the title line already flags
+    // them as untaxed.
+    const mkInc = (label, color, rawFn, taxed) => ({
         label, type: 'bar', backgroundColor: color, stack: 'income', order: 2,
+        _rawInc: log.map(r => rawFn(r) * adj(r)),
+        _taxed: !!taxed,
         data: log.map(r => {
             const vsum = visibleSum(r);
             const scale = vsum > 0 ? (vsum - r.totalTax) / vsum : 1;
@@ -4422,16 +4440,19 @@ function updateCharts(log) {
         data: {
             labels: log.map(r => r.year),
             datasets: [
-                // Income sources - all scaled by (1 - effectiveTaxRate) so they sum to (visibleSum - totalTax)
-                mkInc('SS',              '#3498dbB0', r => r.SSincome),
-                mkInc('Pension',         '#7f8c8dB0', r => r.pension),
-                mkInc('IRA RMD',         '#e67e22B0', r => r.RMDwd),
-                mkInc('Interest',        '#f1c40fB0', r => r.cashInterest),
-                mkInc('IRA WD',          '#d35400B0', r => r['-iraSpend'] ?? 0),
-                mkInc('Roth WD',         '#8e44adB0', r => r.RothWD),
-                mkInc('Gains+Div',       '#1abc9cB0', r => r.CapGains + r.cashDividends),
-                mkInc('Cash WD',         '#27ae60B0', r => r.CashWD ?? 0),
-                mkInc('Brokerage',       '#4F4FDC', r => basisReturn(r)),
+                // Income sources - all scaled by (1 - effectiveTaxRate) so they sum to (visibleSum -
+                // totalTax). The last argument is whether the source bears tax: Roth withdrawals,
+                // Cash withdrawals and return of basis do not, so the tooltip must not attribute
+                // any of the year's tax to them (P90).
+                mkInc('SS',              '#3498dbB0', r => r.SSincome,                    true),
+                mkInc('Pension',         '#7f8c8dB0', r => r.pension,                     true),
+                mkInc('IRA RMD',         '#e67e22B0', r => r.RMDwd,                       true),
+                mkInc('Interest',        '#f1c40fB0', r => r.cashInterest,                true),
+                mkInc('IRA WD',          '#d35400B0', r => r['-iraSpend'] ?? 0,           true),
+                mkInc('Roth WD',         '#8e44adB0', r => r.RothWD,                      false),
+                mkInc('Gains+Div',       '#1abc9cB0', r => r.CapGains + r.cashDividends,  true),
+                mkInc('Cash WD',         '#27ae60B0', r => r.CashWD ?? 0,                 false),
+                mkInc('Brokerage',       '#4F4FDC',   r => basisReturn(r),                false),
                 // Visual separator between spending and expense legend items
                 { label: '│', type: 'bar', data: log.map(() => 0), backgroundColor: 'transparent', borderWidth: 0, stack: 'income', order: 2 },
                 // Expenses stack on top of the Spendable Income line (unscaled absolute amounts)
@@ -4466,6 +4487,26 @@ function updateCharts(log) {
                     ...sharedTooltip.plugins.tooltip,
                     callbacks: {
                         ...sharedTooltip.plugins.tooltip.callbacks,
+                        // P90. The shared callback prints the plotted value, which on this chart is
+                        // the SCALED bar height - so hovering over a $45,000 pension read about
+                        // $38,700 and there was nothing on screen saying why. Income sources now
+                        // report the amount that actually arrived, with the tax attributed to them
+                        // beside it where they bear any. Expense bars are absolute already and fall
+                        // through to the shared callback untouched.
+                        label: ctx => {
+                            const d = ctx.dataset;
+                            const shown = Math.round(ctx.parsed.y);
+                            if (!d._rawInc) return d.label + ': ' + shown.toLocaleString();
+                            const rawv = Math.round(d._rawInc[ctx.dataIndex] ?? 0);
+                            const shaved = rawv - shown;
+                            // The attribution is the year's average rate applied proportionally, not
+                            // a per-source calculation - Social Security in particular is taxed on
+                            // at most 85% of itself. "~" says so rather than implying a figure the
+                            // engine computed for this source alone.
+                            return (d._taxed && shaved > 0)
+                                ? `${d.label}: ${rawv.toLocaleString()} - ~${shaved.toLocaleString()} tax`
+                                : `${d.label}: ${rawv.toLocaleString()}`;
+                        },
                         title: items => {
                             const r = log[items[0]?.dataIndex];
                             if (!r) return items[0]?.label ?? '';

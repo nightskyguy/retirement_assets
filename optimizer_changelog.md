@@ -41,6 +41,13 @@ from your birth year plus the Retirement Start Age you typed, which could name a
 **That year also decides whether ACA rows appear in the Optimizer**, so if you are past the start
 age you typed, ACA rows may now be correctly withheld where they used to be offered.
 
+Two chart fixes. On Income & Expenses, hovering over an income bar reported the scaled bar height
+rather than the money that arrived - a $15,000 pension read about $12,900, with nothing on screen
+saying why. It now shows what the source paid, and the tax attributed to it where it bears any;
+Roth withdrawals, cash withdrawals and return of basis show their amount alone, because no tax is
+charged on them. And on the Market Return chart, the historical year a replayed path was sampled
+from is now shown to everyone.
+
 ## 11.1691
 
 ### Current $ view now converts running totals correctly

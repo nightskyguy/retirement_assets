@@ -6351,3 +6351,34 @@ Version stayed 11.16a4 - same hour as P89. Suites 366/61/22. Browser verified th
 sweep: 7 conversion rows, 2 marked, all five agnostic rows unmarked at zero breach.
 
 P88 and P89 both close. NOW table is back to its pre-session rows plus nothing.
+
+## 2026-08-29 (cont.) - P90: two user-reported chart fixes, v11.16a4
+
+**A.** The Market Return chart's "(from 1974)" source-year suffix was nerdknob-only. Ungated, on the
+rule already written beside the advisor fee and the forward IRMAA projection: which historical year
+a bootstrap block came from is a FACT about the path on screen, not a diagnostic.
+
+**B.** The Income & Expenses tooltip reported the scaled bar height rather than the income. That
+chart shrinks every source by one year-wide rate so the stack meets the Net Income line; the tooltip
+printed the shrunk figure, so a $15,000 pension read $12,886 with no explanation on screen.
+
+Now `Pension: 15,000 - ~2,114 tax`. Two deliberate details:
+
+- **A `taxed` flag per source.** The scale is uniform, so it also shaves Roth withdrawals, Cash
+  withdrawals and return of basis - none of which is taxable. Those report their amount alone rather
+  than being given an invented tax charge. Checked the books on one year: attributed tax across the
+  taxed sources $26,733, untaxed Brokerage shaved $392, Fed+State that year $27,126. 26,733 + 392 =
+  27,125, so the uniform scale is fully accounted for and only the taxable part is named tax.
+- **A `~` on the figure.** Even where tax is borne, this is the year's average rate applied
+  proportionally, not a per-source calculation - Social Security is taxed on at most 85% of itself.
+
+The note under the chart pointed readers to Annual Details "for pre-tax amounts", which this change
+made half-stale, so it was rewritten rather than left aimed at the wrong place.
+
+**Changelog: folded into the existing branch entry, not added as a new one** - the mistake I made
+earlier this session and corrected. 341 words now, over the ~150 target and worth watching if the
+branch grows again.
+
+No tests: both are Chart.js callback wiring with no node-reachable seam. Suites unchanged at
+366/61/22, browser-verified instead - the callback returns `SS: 26,073 - ~3,674 tax` and
+`Brokerage: 2,779`, and `replaySourceYear` returns 1974 with NERD_KNOBS false.

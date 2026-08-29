@@ -24,12 +24,55 @@ the ten captured paths; prev/next is one 46-stop ring; the Market Return chart n
 
 **P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 
-**P88 and P89 COMPLETE, shipped v11.16a4.** Extra Roth conversions reach MAGI so IRMAA charges them (lifetime IRMAA +30% to +132% at a $100k conversion); a warning at the input and a `⤴` in the Optimizer name the ceiling they break; the ACA age gate reads the year the plan actually starts. Suites **366**/61/22.
+**P88, P89 and P90 COMPLETE, shipped v11.16a4.** Extra Roth conversions reach MAGI so IRMAA charges them (lifetime IRMAA +30% to +132% at a $100k conversion); a warning at the input and a `⤴` in the Optimizer name the ceiling they break; the ACA age gate reads the year the plan actually starts. Suites **366**/61/22.
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. Full index next.
 
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
+
+## P90: two chart fixes  *(2026-08-29, user-reported, DONE v11.16a4)*
+
+Both small, both user-reported, both shipped inside the branch's single changelog entry.
+
+**A. The Market Return chart's source year was behind the nerdknob.** `replaySourceYear`
+(`optimizer_ui.js`) returned `null` for anyone without it, so the "(from 1974)" suffix on a replayed
+path's tooltip only ever appeared for nerdknob readers. Ungated. The reasoning is the rule already
+written beside the advisor fee and the forward IRMAA projection: **which historical year a bootstrap
+block came from is a FACT about the path on screen, not a diagnostic.** A reader looking at a
+replayed 1974 return is better served knowing it is 1974.
+
+**B. The Income & Expenses tooltip reported the scaled bar height, not the income.** That chart
+shrinks every income source by ONE year-wide rate so the stack lands exactly on the Net Income line,
+which is a presentation device. The tooltip printed the shrunk number, so a $15,000 pension read
+$12,886 with nothing on screen explaining the gap.
+
+Now: the raw amount first, with the attributed tax beside it - `Pension: 15,000 - ~2,114 tax`.
+
+**The `~` and the `taxed` flag are the part worth keeping.** The scale is UNIFORM, so it shaves Roth
+withdrawals, Cash withdrawals and return of basis by the same fraction as an IRA draw, and none of
+those three is taxable. Printing "- $392 tax" beside a return of basis would invent a charge that
+does not exist, so those sources report their amount and stop; the title line already flags them as
+untaxed. And even where tax IS borne, the attribution is the year's average rate applied
+proportionally rather than a per-source calculation - Social Security is taxed on at most 85% of
+itself - which is what the `~` admits to.
+
+Measured on one year to confirm the books balance: attributed tax across the taxed sources came to
+$26,733, the untaxed Brokerage bar was shaved $392, and Fed + State tax that year was $27,126.
+26,733 + 392 = 27,125. The uniform scale is fully accounted for and only the taxable part is called
+tax.
+
+The note under the chart said "Incomes shown are After Taxes - See Annual Details for pre-tax
+amounts". Half of that was made stale by this change - the tooltip is now where the pre-tax amount
+lives - so it was rewritten rather than left pointing elsewhere.
+
+- **Status:** DONE, shipped v11.16a4. Both verified in the browser: the tooltip callback returns
+  `SS: 26,073 - ~3,674 tax` for a taxed source and `Brokerage: 2,779` for an untaxed one, and
+  `replaySourceYear` returns 1974 with `NERD_KNOBS` false.
+- **No tests added.** Both are Chart.js callback wiring with no node-reachable seam; the suites are
+  unchanged at 366/61/22 and the browser check is the evidence.
+
+---
 
 ## P89: the ACA age gate read a year the plan does not start in  *(2026-08-29, user-reported, DONE v11.16a4)*
 
@@ -657,6 +700,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
 | **O1** | P34 | Cost of finding a profitable conversion; worker + per-row memo | `P34a` | nothing |
 | **O1** | P84 | Annual advisor / AUM fee, **plus RMDs off the prior Dec 31 balance** (today they key off a mid-year balance whose growth depends on whether the plan converted) *(new 2026-08-28)* | `P84k` (the RMD half; runs before `P84a`) | nothing |
+| ~~DONE~~ | ~~P90~~ | ~~Two chart fixes~~ - **COMPLETE v11.16a4.** The Market Return chart's historical source year is no longer nerdknob-only, and the Income & Expenses tooltip reports what a source actually paid instead of its scaled bar height | - | - |
 | ~~DONE~~ | ~~P89~~ | ~~The ACA age gate read a year the plan does not start in~~ - **COMPLETE v11.16a4.** The advisory fired for every Limit choice, named a year and two ages the plan never used, and the same unclamped expression decided whether ACA rows reach the Optimizer. One shared `planFirstYear` now; measured at 22.2% disagreement, one-way | - | - |
 | ~~DONE~~ | ~~P88~~ | ~~An Extra Roth Conversion never reaches `yr.tax.MAGI`, so the IRMAA lookback charges a figure that omits it - measured at a whole tier ($0 recorded where $7,166/yr was owed). Hits every strategy, not just the ceiling families, and biases the Optimizer's conversion search toward larger conversions *(new 2026-08-29, user-raised)* - **COMPLETE, SHIPPED v11.16a4.** MAGI now carries both conversion paths, the overage column sees them, 8 tests added (suites 366), a warning names the conflict at the input and a `⤴` marks it in the Optimizer. Lifetime IRMAA +30% to +132% at a $100k conversion; the Optimizer offers 61 ceiling rows that all breach, worth a median $53,990 each, so they are marked rather than dropped | - | - |
 | **O2** | P87 | The "Limit" dropdown mixes two income bases: IRMAA tiers are MAGI thresholds (right), federal brackets are taxable-income thresholds spent as MAGI ceilings (wrong by one standard deduction) *(new 2026-08-29, user-raised)* - **`P87a` MEASURED 2026-08-29: the gap is exactly one deduction, and closing it LOSES money in 51 of 74 clean cells. Premise refuted; `P87f`, labelling the income basis, is what survives** | `P87f` | nothing |

@@ -6382,3 +6382,38 @@ branch grows again.
 No tests: both are Chart.js callback wiring with no node-reachable seam. Suites unchanged at
 366/61/22, browser-verified instead - the callback returns `SS: 26,073 - ~3,674 tax` and
 `Brokerage: 2,779`, and `replaySourceYear` returns 1974 with NERD_KNOBS false.
+
+## 2026-08-29 (cont.) - user reported "Stress Test 36 -> 40"; it is NOT this branch, and the real bug is worse
+
+Suspected a regression from this session. Measured instead of assuming, and the suspicion was wrong.
+
+**Staged `main` (11.1691) and HEAD (11.16a4) side by side and gave both the same shared URL. Both
+report `8 / 36` on first load. Both report `0 / 40` once the stress pass is re-run against the plan
+on screen.** `simulate()` is bit-identical for that plan across the two builds - same success, 36
+years funded, same tax, IRMAA, conversions, terminal wealth; the only log differences are the three
+fields P88/P88c added, previously `undefined`. `buildStressBank` is identical at every plan length
+and window mode.
+
+**The real defect: the first stress pass answers about a plan the user is not looking at.**
+`mcPlanYears(getInputs())` = 36 while `_mcResults.years` = 25, and 25 is the horizon of the saved
+*default* scenario that `loadScenarioByName('default')` applies before `loadFromURL()` replaces it.
+The sequence count is a pure function of (stressCount, years, window): 20-25 years -> 36 sequences,
+30+ -> 40. So the count the user saw move was the horizon moving.
+
+**It flips the verdict, which is why this is O0 rather than cosmetic.** Stale: "runs out of money in
+8 of the 36 worst historical periods, typically around 2046." Correct: "survives all 40." A false
+alarm on the one number the pass exists to produce. Opened as P91, explicitly marked NOT a regression
+so nobody bisects this branch for it. All three entry points read `getInputs()` fresh, so the run is
+started too early or not invalidated - not a stale variable.
+
+Also noted in P91d, and NOT the cause: the Monte Carlo controls are in neither the saved scenario nor
+the share URL, and mc_tab.js uses no localStorage, so paths/seed/stress count/window reset every load.
+That is the first thing anyone will blame when two runs of "the same plan" disagree.
+
+**P90b fixed and shipped:** the Cash Reserve warning offered "-1" as the way back to legacy all-cash
+behavior. `-1` is not typeable - the field carries `min: 0`, so it clamps to `0`, which is a
+DIFFERENT mode (no buffer, reinvest all surplus to Brokerage). A user following the advice landed in
+a third behavior silently. Now says "Off", which is what the field's own tooltip and placeholder
+already said. Folded into the branch's single changelog entry.
+
+Killed the two staged A/B servers afterwards.

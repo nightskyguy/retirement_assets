@@ -3145,3 +3145,34 @@ zero.** C5's first form asked whether the heirs rate flips the answer at least o
 60, which would have passed as HOLDS and meant nothing. Same failure as B2 in
 `BRACKET_CEILING_BASIS.md` and M1 in `EXTRA_CONVERSION_MAGI.md`. Worth treating as a standing rule:
 **a prediction that cannot lose is not a prediction.**
+
+## P91 - the Stress Test's first result is computed on a STALE horizon (2026-08-29)
+
+**Not a regression.** `main` (11.1691) and this branch (11.16a4), staged side by side and given the
+same shared URL, BOTH report `8 / 36` on first load and BOTH report `0 / 40` after the stress pass is
+re-run against the current plan. `simulate()` is bit-identical between the builds for that plan, and
+`buildStressBank` is identical at every plan length and window mode.
+
+**The sequence count is a pure function of (stressCount, plan years, window mode).** Combined mode at
+count 20: plan years 20-25 -> 36 sequences; 26 -> 37; 27-28 -> 39; 29 -> 41; 30+ -> 40. So the count
+moving 36 -> 40 means the PLAN HORIZON moved, nothing else.
+
+**And it moved because the first run used the wrong one.** `mcPlanYears(getInputs())` returns 36 for
+the plan on screen while `_mcResults.years` reads 25 - the horizon of the saved *default* scenario,
+applied by `loadScenarioByName('default')` before `loadFromURL()` replaces it.
+
+**The consequence is a flipped verdict, not a cosmetic number.** Same plan, same build, same session:
+stale horizon says "runs out of money in 8 of the 36 worst historical periods, typically around
+2046"; correct horizon says "survives all 40". A false alarm on the one number that pass exists to
+produce.
+
+Two things worth carrying:
+
+- **All three stress entry points read `getInputs()` fresh** (`runMonteCarlo`, the demo pass, and the
+  stress-only refresh at `mc_tab.js:815`), so the base is not stale where it is READ. The run is
+  being STARTED too early, or its result is not invalidated when the plan then changes. Do not go
+  looking for a stale variable.
+- **The Monte Carlo controls are in neither the saved scenario nor the share URL**, and `mc_tab.js`
+  uses no `localStorage` - so paths, seed, stress count and stress window reset every load and cannot
+  be shared. That is the first thing a reader will blame when two runs of "the same plan" disagree,
+  and it is NOT the cause here. Recorded so the next investigation does not start there.

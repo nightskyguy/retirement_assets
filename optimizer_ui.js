@@ -5065,7 +5065,13 @@ function maybeWarnCashReserveActive() {
     const n = DisplayHelpers.parseShorthand(raw);
     const v = (n == null || Number.isNaN(n)) ? +raw : n;
     if (!Number.isFinite(v) || v < 0) return;   // Off/blank/negative = off, no change to warn about
-    showMessage('Note: this scenario sets a Cash Reserve, which now reinvests surplus above it into your Brokerage. Results differ from releases before this feature. Set Cash Reserve blank (or -1) to restore the original all-cash behavior.', 'warning');
+    // P91. This used to say "blank (or -1)". `-1` is not typeable: the field is attached with
+    // min: 0, so it is clamped to 0 on blur - and 0 is a DIFFERENT mode (keep no buffer, reinvest
+    // ALL surplus to Brokerage), not the legacy all-cash behavior the sentence was offering. A user
+    // who followed the advice landed in a third mode without being told. Negative values are still
+    // accepted from old saved scenarios and shared links; "Off" is the only value a user can type,
+    // which is what the field's own tooltip and placeholder already say.
+    showMessage('Note: this scenario sets a Cash Reserve, which now reinvests surplus above it into your Brokerage. Results differ from releases before this feature. Type Off in Cash Reserve to restore the original all-cash behavior.', 'warning');
 }
 
 

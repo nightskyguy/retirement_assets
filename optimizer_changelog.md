@@ -41,6 +41,10 @@ from your birth year plus the Retirement Start Age you typed, which could name a
 **That year also decides whether ACA rows appear in the Optimizer**, so if you are past the start
 age you typed, ACA rows may now be correctly withheld where they used to be offered.
 
+The note shown when a plan carries a Cash Reserve offered "-1" as the way back to the original
+all-cash behavior. That value cannot be typed - it becomes 0, which is a different setting - so the
+note now says to type Off, which is what the field itself has always accepted.
+
 Two chart fixes. On Income & Expenses, hovering over an income bar reported the scaled bar height
 rather than the money that arrived - a $15,000 pension read about $12,900, with nothing on screen
 saying why. It now shows what the source paid, and the tax attributed to it where it bears any;

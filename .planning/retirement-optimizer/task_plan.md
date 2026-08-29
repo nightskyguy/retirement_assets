@@ -11,6 +11,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
+| **O0** | P91 | Stress Test's first result uses a stale plan horizon; verdict flips 8/36 -> 0/40. NOT this branch | `P91a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
@@ -24,12 +25,82 @@ the ten captured paths; prev/next is one 46-stop ring; the Market Return chart n
 
 **P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 
-**P88, P89 and P90 COMPLETE, shipped v11.16a4.** Extra Roth conversions reach MAGI so IRMAA charges them (lifetime IRMAA +30% to +132% at a $100k conversion); a warning at the input and a `⤴` in the Optimizer name the ceiling they break; the ACA age gate reads the year the plan actually starts. Suites **366**/61/22.
+**P88, P89, P90 COMPLETE v11.16a4** - conversions reach MAGI so IRMAA charges them (+30% to +132% at $100k); warnings name the ceilings they break; the ACA gate reads the plan's real first year; two chart fixes. Suites **366**/61/22. **P91 opened O0: the Stress Test's first result is computed on a STALE horizon and flips 8/36 to 0/40 - reproduced on `main`, NOT a regression from this branch.**
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. Full index next.
-
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
+
+## P91: the Stress Test's first result is computed on a stale plan horizon  *(NEW 2026-08-29, user-reported, O0, NOT a regression)*
+
+**How it surfaced.** The user reported the Stress Test "used to find 36 paths, now 40" after loading
+a saved plan, and suspected this branch.
+
+**IT IS NOT THIS BRANCH.** Measured directly: `main` (11.1691) and this branch (11.16a4) staged side
+by side and given the identical shared URL both report **`8 / 36`** on first load, and both report
+**`0 / 40`** once the stress pass is re-run against the current plan. The engine is bit-identical for
+that plan too - `simulate()` on both builds returns the same success, years funded (36), lifetime tax,
+IRMAA, conversions and terminal wealth; the only log differences are the three fields P88/P88c added,
+which were `undefined` before. `buildStressBank` is identical on both builds at every plan length and
+window mode.
+
+**The real defect is worse than the one reported, and it is on `main`.** The sequence count is a pure
+function of `(stressCount, plan years, window mode)`. Measured mapping in `combined` mode at count 20:
+
+| plan years | sequences |
+|---|---|
+| 20 - 25 | **36** |
+| 26 | 37 |
+| 27 - 28 | 39 |
+| 29 | 41 |
+| 30+ | **40** |
+
+On first load of that plan the run used **`years = 25`** while the plan on screen is **36 years**
+(`mcPlanYears(getInputs())` returns 36; `_mcResults.years` reads 25). 25 years is the horizon of the
+saved *default* scenario, which `loadScenarioByName('default')` applies before `loadFromURL()`
+replaces it - so the stress pass is answering about a plan the user is not looking at.
+
+**The consequence is a flipped verdict, not a cosmetic count.** Same plan, same build, same session:
+
+- stale horizon: **"runs out of money in 8 of the 36 worst historical periods, typically around 2046"**
+- correct horizon: **"survives all 40 of the worst historical periods on record"**
+
+A false alarm, and the number the whole pass exists to produce.
+
+- [ ] **P91a** - Find why the first stress pass captures the pre-URL horizon. All three entry points
+      (`runMonteCarlo`, the demo pass, the stress-only refresh at `mc_tab.js:815`) call `getInputs()`
+      fresh and `mcPlanYears(base)` at call time, so the base is not stale where it is READ - the run
+      is being STARTED too early, or its result is not invalidated when the plan then changes.
+      `setupAutoRecalc`'s debounce and `applyTabFromUrl` are the two suspects.
+- [ ] **P91b** - Fix, and the fix must be "the displayed stress result belongs to the displayed
+      plan", not "run it twice". A stale result that gets replaced is still a wrong verdict on screen
+      in between.
+- [ ] **P91c** - Test: `mcPlanYears` is pure and already node-reachable, so a horizon test is cheap.
+      The staleness itself needs the ordering, which is browser-only - pin what can be pinned.
+- [ ] **P91d** - While here: **the Monte Carlo controls are in neither the saved scenario nor the
+      share URL.** No `mc-*` key appears in `OPT_LONG_TO_SHORT` or the scenario field list, and
+      `mc_tab.js` uses no `localStorage`. So paths, seed, stress count and stress window reset to
+      their defaults on every load and cannot be shared. That is a separate gap and may be
+      deliberate; it is recorded here because it is the first thing a reader will suspect when two
+      runs of "the same plan" disagree, and it is NOT the cause of this one.
+- **Status:** diagnosed and reproduced on both builds, nothing fixed. **Not a regression** - do not
+  bisect this branch for it.
+
+---
+
+## P90b: the Cash Reserve warning named a value the field cannot hold  *(2026-08-29, user-reported, DONE)*
+
+The warning shown when a scenario carries a Cash Reserve said "Set Cash Reserve blank (or -1) to
+restore the original all-cash behavior". **`-1` is not typeable.** The field is attached with
+`min: 0`, so `-1` is clamped to `0` on blur - and `0` is a DIFFERENT mode: keep no buffer and
+reinvest ALL surplus into Brokerage. A user following that sentence landed in a third behavior
+without being told.
+
+Negative values are still accepted from old saved scenarios and shared links, which is why the
+parser keeps handling them. But `Off` is the only value a user can type, and it is already what the
+field's own tooltip and placeholder say. The message now says `Off`.
+
+---
 
 ## P90: two chart fixes  *(2026-08-29, user-reported, DONE v11.16a4)*
 

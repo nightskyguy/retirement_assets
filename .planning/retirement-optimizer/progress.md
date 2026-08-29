@@ -6060,3 +6060,95 @@ documentation describing a gate that no longer exists. Fixed in the same pass ra
 found by a reader.
 
 Version stays 11.168e (same hour; the scheme is hour-granular). Suites **355 / 61 / 22**.
+
+---
+
+**Session 2026-08-28 (second half) - P86 build, phases a-d, commits bd2c875 / fe11ca2 / 767074a,
+v11.1690.**
+
+**P86a folded into findings.md** ("P86a audit - every displayed dollar, classified"): three-agent
+sweep, every claim file:line verified. The audit found the scope the user predicted: Spendable was a
+THIRD broken running total, the MC survival table shows nominal taxes beside always-real spend, and
+each path's true inflation factor is computed inside simulate() then discarded at the mc_engine
+boundary.
+
+**P86b - the stored running totals are GONE, not fixed in place.** User decision: any kept stored
+sum would be Current-$; if on-demand costs <0.5%, drop them. Measured first: simulate() 114.0 ms
+median per 200 runs before, 113.8 after (the engine LOST three property writes per row);
+updateTable 24.7-28.7 ms with the running-sum pass being 3 additions/row. The counters
+(sim.cumulativeTaxes, sim.cumulativeAdvisorFees, totalsSpend pass-through) had zero readers outside
+the log builder - deleted whole. UI computes the displayed columns from ANNUAL_RUNNING_TOTALS, a
+NAMED map (the monotonicity-heuristic trap is written into the map's comment), spliced at the
+columns' historical positions so rebuildGroupRow's banner runs hold (group row 21 spans == 21
+visible columns, measured). Spendable renamed SumSpendable. Repro case killed: SumAdvisorFees
+monotone on ?af=0.8&afs=rothira in Current-$.
+
+**P86c - rmdCurrentDollars/qcdCurrentDollars twins** beside the tax/spend/fee trio, same
+start-of-year-factor idiom. Tile + QCD sub-label + Optimizer rmd column all pick by the toggle, and
+the column SORTS on what it displays. Browser: All RMDs $435,178 -> $322,064 beside All Taxes
+$477,083 -> $365,661.
+
+**P86d - the three stragglers.** Fee /yr average divides the displayed total. Conv Tax carries
+_convSavingsCurrent. Break Even (i) deflates at FORMAT time with two different deflators - terminal
+factor for the stop-year gains (stocks at the final date), the naming year's own factor for a named
+conversion amount - while the >1 decision thresholds stay nominal so the suggestion never flips
+with the view. Verified: gain $218,562 -> $107,518, year-0 conversion amount identical in both
+bases (factor 1, correct, not a bug).
+
+Suites 357/61/22, in-page 399 with ?runtests, badge green through all three commits. Remaining:
+P86e (MC engine dual basis), P86f (MC UI wiring).
+
+**Same session, P86e + P86f - the Monte Carlo half, commits 9c4b743 / 976452e. P86 COMPLETE.**
+
+**P86e.** mc_engine keeps a per-path-per-year factor bank (engine-side only): row.inflationFactor
+for logged years, extended past the log by the path's OWN inflationSequence (a persisted
+after-death balance keeps deflating), 1 for crashed paths. percentilesReal is percentiles OF
+deflated paths, never rescaled curves. medianTaxReal + medianSpendNominal fill the table's missing
+twins; the naming trap (medianTax nominal, medianSpend real) is documented at the push site.
+Exactness proven through the replay contract on a single-path run; float32 tolerance needed because
+computePercentiles rounds through Float32Array.
+
+**P86f.** Chart bands/traces/stress/table/headline all pick real fields when toggled, flat-CAGR
+only as stale-worker fallback; survival table sorts on what it displays; median tooltip reads
+ctx.parsed.y (was re-reading nominal percentiles under a deflated line).
+
+**The stale-cache lesson repeated itself in miniature during verification:** the worker busts with
+Date.now() (APP_VERSION is undefined), so the ENGINE was fresh and shipping twins while the PAGE
+ran cached mc_tab.js and ignored them - the exact mid-deploy skew the fallbacks exist for, observed
+live. mc_tab/mc_engine stamps bumped to 111690.
+
+**Measured, the reason the exact deflation matters:** on a 156-variation compare run, per-path real
+vs flat-CAGR differs +4.9% at the median, +9.0% on the best captured trace. Pinned row: Future $
+1,597,080 / 463,476 / 4,529,641 -> Current $ 716,644 / 352,454 / 3,110,501, headline follows,
+stress Final Balance 5,681,737 -> 2,815,865.
+
+Suites **358 / 61 / 22**, in-page 399, badge green. P86 complete; O0 queue is back to `P35i`.
+
+**Same session - user challenged the "engine got faster" claim: their MC compare run went 40s ->
+52s.** The claim was the simulate() microbench (P86b) wrongly generalized; the full runJob had not
+been A/B'd. Measured now, 5 alternating pairs, pre-P86 (5bb7d16 file set) vs current, 156 vars x
+500 paths x 35 yrs, seed 42: old mean 68.2s / min 52.7s, new mean 68.8s / min 48.9s - PARITY, with
+run-to-run noise up to 53% on identical builds. Arithmetic agrees: the P86e additions total well
+under 1% (extra percentile pass ~50ms, 2.7M divisions ~10ms, 4 small sorts, ~300KB message).
+User's 40->52 not explained by the code; suspects are variance, DevTools-open cache bypass (the
+worker busts with Date.now() because APP_VERSION is UNDEFINED - mc_controller.js:26, pre-existing
+bug worth fixing), or load. Offered: repeat runs, an in-page MC elapsed readout, APP_VERSION fix.
+Bench: scratchpad bench_mc.js against mcold/ mcnew/ staged trees.
+
+**MC perf follow-up, round 2 - user showed page-reported totalMs 43s (release) vs 62s (branch).**
+totalMs is engine-internal (mc_engine runJob t0 -> end, excludes worker boot/fetch/render), so the
+claim deserved an in-browser A/B. Staged git-archive builds of 5bb7d16 (/old) and HEAD (/new) under
+scratchpad/ab, served together, ran compare (bootstrap, 500 paths) alternating in one browser:
+old 58.7s -> new 115.3s -> old 111.1s. **The 2x slowdown followed RUN ORDER, not the build** - the
+release build doubled against itself. Thermal/browser ramp; consistent with the node A/B parity
+(means 68.2 vs 68.8) and with the <1% arithmetic. Verdict unchanged: builds at parity; single-pair
+wall-clock comparisons on this workload are meaningless. Asked user to restart browser and alternate
+with the NEW build first, compare per-build minima; if new still loses order-independent, next step
+is a real bisect by mixing engine/core between the staged trees.
+
+**User tabled the MC-time question mid-investigation (2026-08-28).** Evidence so far: node A/B
+parity (5 pairs), in-browser slowdown followed run order not build (old build doubled against
+itself). OPEN, deferred: if the branch still reads slower after a browser restart with order
+controlled, bisect via the staged scratchpad/ab trees (now unserved; rebuild with git archive).
+Lesson, user-stated: perf A/Bs on the MC should use 50-100 paths, not 500 - same answer, tenth the
+wall time. A/B server killed.

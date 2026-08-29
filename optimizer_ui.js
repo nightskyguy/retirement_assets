@@ -907,6 +907,15 @@ function updateCurrentDollarsView() {
         : (typeof _mcStress !== 'undefined' ? _mcStress : null);
     if (typeof _mcResults !== 'undefined' && _mcResults) {
         if (typeof renderMCChart === 'function') renderMCChart(_mcResults);
+        // P86: the survival table and the plan headline carry dollar figures too (final balance,
+        // taxes, spendable) and were never re-rendered here, so they sat on a fixed basis while
+        // the chart above them switched. Plan scope never renders the table (renderMCResults hides
+        // and empties it), so the same gate applies here.
+        if (typeof renderSurvivalTable === 'function' && _mcResults.variations
+            && (typeof _mcScope === 'undefined' || _mcScope !== 'plan')) {
+            renderSurvivalTable(_mcResults.variations, _mcResults.numPaths);
+        }
+        if (typeof renderPlanHeadline === 'function') renderPlanHeadline(_mcResults);
     }
     if (_stress && typeof renderStressChart === 'function') renderStressChart(_stress);
 }
@@ -1493,6 +1502,9 @@ function _runOptimizerNow() {
                 _optConvAmt: optConv,
                 _convEndYear: convEndYear,
                 _convSavings: (baseRow.totals.tax - beResult.totals.tax),
+                // P86: the Current-$ twin is a difference of sum-of-deflated-years totals, so the
+                // Conv Tax column can follow the toggle like the taxes it is made from.
+                _convSavingsCurrent: (baseRow.totals.taxCurrentDollars - beResult.totals.taxCurrentDollars),
                 _convBEYear: beResult.totals.convBEYear,
                 _convOCFinal: lastEntry?.convOC ?? null,
                 totals: beResult.totals,
@@ -1806,9 +1818,9 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
         },
         {
             key: 'rmd', label: 'All RMDs',
-            title: 'Total Required Minimum Distributions forced out of traditional IRAs over the plan. Lower means the strategy drew down or converted the IRA earlier, shrinking later forced withdrawals.',
-            getValue: r => Math.round(r.totals.rmd).toLocaleString(),
-            getSortValue: r => r.totals.rmd
+            title: 'Total Required Minimum Distributions forced out of traditional IRAs over the plan, in the dollars the Future $/Current $ switch selects. Lower means the strategy drew down or converted the IRA earlier, shrinking later forced withdrawals.',
+            getValue: r => Math.round(inC() ? (r.totals.rmdCurrentDollars ?? r.totals.rmd) : r.totals.rmd).toLocaleString(),
+            getSortValue: r => inC() ? (r.totals.rmdCurrentDollars ?? r.totals.rmd) : r.totals.rmd
         },
         {
             key: 'rmdtax', label: 'RMD Tax%',
@@ -1834,11 +1846,11 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             // other money column in this table is bare, and the heading already says what it is.
             getValue: r => {
                 if (r._convSavings == null) return '—';
-                const v = Math.round(r._convSavings);
+                const v = Math.round(inC() ? (r._convSavingsCurrent ?? r._convSavings) : r._convSavings);
                 const c = v > 0 ? '#1a7f37' : v < 0 ? '#cf222e' : '#57606a';
                 return `<span style="color:${c}">${v > 0 ? '+' : ''}${v.toLocaleString()}</span>`;
             },
-            getSortValue: r => r._convSavings ?? -Infinity
+            getSortValue: r => (inC() ? (r._convSavingsCurrent ?? r._convSavings) : r._convSavings) ?? -Infinity
         }
     ];
     // Display order comes from OPT_COLUMN_KEYS, not from the order these descriptors happen to be
@@ -2492,7 +2504,7 @@ const columnCategories = {
     'Roth': ['Balances', 'Roth Δ'],
     'Brokerage': ['Balances', 'Brokerage Δ'],
     'Basis': ['Balances', 'Brokerage Δ'],
-    'Spendable': ['Balances'],
+    'SumSpendable': ['Balances'],
 
     // Taxation
     'MAGI': ['Taxation'],
@@ -2591,7 +2603,7 @@ const columnGroupDefs = {
     'IRA1': 'Balances', 'IRA2': 'Balances', 'TotalIRA': 'Balances',
     'Roth1': 'Balances', 'Roth2': 'Balances',
     'Cash': 'Balances', 'Roth': 'Balances', 'Brokerage': 'Balances',
-    'Basis': 'Balances', 'totalWealth': 'Balances', 'Spendable': 'Balances',
+    'Basis': 'Balances', 'totalWealth': 'Balances', 'SumSpendable': 'Balances',
     'brokerageG': 'Balances', 'cashG': 'Balances', 'rothG': 'Balances', 'RMD%': 'Balances',
     'convOC': 'Opp. Cost', 'excessOC': 'Opp. Cost', 'convTax': 'Opp. Cost', 'excessTax': 'Opp. Cost',
     'BETR%': 'Opp. Cost', 'betrFlag': 'Opp. Cost', 'extraConv': 'Opp. Cost',
@@ -2604,6 +2616,50 @@ const columnGroupDefs = {
     'gkSpend': 'Income', 'gkAdj': 'Income',
     'infl%': 'Market', 'inflCum%': 'Market', 'return%': 'Market',
 };
+
+// P86: the running-total columns are COMPUTED HERE, not stored in the engine log. A stored nominal
+// sum-to-date divided by one row's inflation factor is the wrong Current-$ number (it can even
+// fall year over year); the right one is the running sum of each year's deflated flow. This is a
+// NAMED list on purpose - never infer accumulators by monotonicity: per-year flows like spendGoal
+// and netIncome legitimately DECLINE under Current-$ and must keep doing so.
+// `after` = the log key each computed column is spliced after; these are the columns' historical
+// positions, and rebuildGroupRow colSpans runs of consecutive same-group columns, so moving one
+// into the middle of another run shears the Annual Details banner (the P84 lesson).
+const ANNUAL_RUNNING_TOTALS = {
+    'SumTaxes':       { after: 'StateCap',         source: r => r.totalTax ?? 0 },
+    'SumAdvisorFees': { after: 'AdvisorFee',       source: r => r.AdvisorFee ?? 0 },
+    // Delivered spend = goal + shortfall (shortfall is <= 0 by construction), the same per-year
+    // quantity totals.spend accumulates in the engine, Guyton-Klinger included.
+    'SumSpendable':   { after: 'guaranteedIncome', source: r => (r.spendGoal ?? 0) + (r.shortfall ?? 0) },
+};
+
+// ONE key list for the Annual Details header row, body rows and content scan: the engine log's own
+// keys with the computed running-total columns spliced in. Three consumers, one list - the docblock
+// above isTableColumnKey explains what happened last time two of them disagreed.
+function annualDetailsKeys(log) {
+    const keys = Object.keys(log[0]);
+    for (const [key, def] of Object.entries(ANNUAL_RUNNING_TOTALS)) {
+        const at = keys.indexOf(def.after);
+        keys.splice(at >= 0 ? at + 1 : keys.length, 0, key);
+    }
+    return keys;
+}
+
+// One pass per render: each computed column's per-row value in the basis the toggle selects.
+// Future $ = running sum of the nominal per-year flow; Current $ = running sum of each year's
+// flow deflated by THAT year's factor (the totals.*CurrentDollars idiom).
+function computeRunningTotals(log, inCurrentDollars) {
+    const out = {};
+    for (const [key, def] of Object.entries(ANNUAL_RUNNING_TOTALS)) {
+        let sum = 0;
+        out[key] = log.map(row => {
+            const flow = def.source(row);
+            sum += inCurrentDollars ? flow / (row.inflationFactor || 1) : flow;
+            return sum;
+        });
+    }
+    return out;
+}
 
 // Get active categories based on checkbox state
 function getActiveCategories() {
@@ -2661,14 +2717,16 @@ function isTableColumnKey(key) {
 function analyzeColumnContent(log) {
     if (!log || log.length === 0) return {};
 
-    const keys = Object.keys(log[0]).filter(isTableColumnKey);
+    const keys = annualDetailsKeys(log).filter(isTableColumnKey);
     const columnStatus = {};
 
     keys.forEach(key => {
         let hasNonZeroValue = false;
 
         for (const row of log) {
-            const value = row[key];
+            // A computed running total has content iff any year's SOURCE flow is non-zero
+            // (keeps "no advisor fee -> SumAdvisorFees hidden" working).
+            const value = ANNUAL_RUNNING_TOTALS[key] ? ANNUAL_RUNNING_TOTALS[key].source(row) : row[key];
 
             // Check if value exists and is non-zero
             if (value != null && value !== '' && value !== '—') {
@@ -2816,7 +2874,11 @@ function updateTable(log) {
     table.border = '1';
     table.id = 'main-table';
 
-    const keys = Object.keys(log[0]);
+    const keys = annualDetailsKeys(log);
+    // P86: computed running-total columns, already in the basis the toggle selects - their cells
+    // must NOT go through the generic per-row deflation below.
+    const _inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
+    const _runningTotals = computeRunningTotals(log, _inCurrentDollars);
 
     // Create header - row 0 is the group banner, row 1 is the column names
     const thead = table.createTHead();
@@ -2861,9 +2923,10 @@ function updateTable(log) {
         'cashD+I': 'Dividends (from brokerage) and interest from Cash (deposits)',
         'MAGI': 'Modified Adjusted Gross Income - determines future IRMAA',
         'totalTax': 'Federal, State, IRMAA, NIIT, and CapGains taxes - in total.',
-        'SumTaxes': 'Running total of Federal, State, IRMAA, NIIT, and CapGains taxes.',
+        'SumTaxes': 'Running total of Federal, State, IRMAA, NIIT, and CapGains taxes. In Current $ mode each year is converted to today\'s purchasing power before it is added, so the total never falls.',
         'AdvisorFee': 'Advisor or fund fee charged this year, on the previous December 31 balances. Money taken from an IRA to pay it is not a taxable distribution.',
-        'SumAdvisorFees': 'Running total of advisor and fund fees paid.',
+        'SumAdvisorFees': 'Running total of advisor and fund fees paid. In Current $ mode each year is converted to today\'s purchasing power before it is added, so the total never falls.',
+        'SumSpendable': 'Running total of after-tax money actually delivered for spending (the spending goal minus any shortfall). In Current $ mode each year is converted to today\'s purchasing power before it is added.',
         'shortfall': 'How much income is missing, that is: spendGoal - (totalIncome - totalTax). Normally it means the plan ran out of money: every other account was spent and the IRA could not cover the rest. Two strategies report it by design instead. ACA Cliff will not cross its income cap while that cap is in force, because crossing it forfeits the premium subsidy. Ordered will not step outside the account sequence you chose, so it can leave a small residual while a later account still holds money.',
         'totalIncome': 'Funds from all sources, taxable and tax-free.',
         'NominalRate%': 'TotalTax/TotalGrossIncome for all taxes - Fed, State, IRMAA',
@@ -2962,7 +3025,8 @@ function updateTable(log) {
         keys.forEach(key => {
             if (isTableColumnKey(key)) {
                 const td = tr.insertCell();
-                const value = row[key];
+                const isRunningTotal = !!ANNUAL_RUNNING_TOTALS[key];
+                const value = isRunningTotal ? _runningTotals[key][i] : row[key];
 
                 if (tierEntry && !incomeShortfall && _IRMAACols.includes(key)) {
                     td.style.backgroundColor = tierEntry[0];
@@ -3011,8 +3075,11 @@ function updateTable(log) {
                         if (isYear) {
                             td.textContent = value;
                         } else {
-                            const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
-                            const displayValue = inCurrentDollars ? value / (row.inflationFactor || 1) : value;
+                            // Running totals are already in the selected basis (a running sum of
+                            // deflated years); dividing that sum by this row's factor would be
+                            // the exact mistake P86 removed.
+                            const displayValue = (_inCurrentDollars && !isRunningTotal)
+                                ? value / (row.inflationFactor || 1) : value;
                             td.textContent = Math.round(displayValue).toLocaleString();
                         }
                     }
@@ -3182,16 +3249,22 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
             // honest version needs a second simulation, the way Break Even does, and that belongs
             // in a phase of its own rather than in a tile sub-label.
             const yrs = totals.yearstested || 0;
+            // P86: the average divides the DISPLAYED total, so the sub-label and the tile above it
+            // are always on the same basis.
             if (sub) sub.innerText = yrs > 0
-                ? '$' + Math.round(fees / yrs).toLocaleString() + '/yr average' : '';
+                ? '$' + Math.round(dispFees / yrs).toLocaleString() + '/yr average' : '';
         }
     }
     const rmdEl = document.getElementById('stat-rmd');
     const rmdPctEl = document.getElementById('stat-rmd-pct');
-    if (rmdEl) rmdEl.innerText = '$' + Math.round(totals.rmd ?? 0).toLocaleString();
+    // P86: lifetime RMD and QCD are accumulated flows like All Taxes beside them, so they follow
+    // the toggle through the engine's sum-of-deflated-years twins.
+    const dispRmd = inCD ? (totals.rmdCurrentDollars ?? totals.rmd) : totals.rmd;
+    const dispQcd = inCD ? (totals.qcdCurrentDollars ?? totals.qcd) : totals.qcd;
+    if (rmdEl) rmdEl.innerText = '$' + Math.round(dispRmd ?? 0).toLocaleString();
     if (rmdPctEl) {
         const rmdPctStr = totals.tax > 0 ? `${((totals.rmdTax ?? 0) / totals.tax * 100).toFixed(0)}% of taxes` : '';
-        const qcdStr = (totals.qcd ?? 0) > 0 ? ` | QCD $${Math.round(totals.qcd).toLocaleString()}` : '';
+        const qcdStr = (dispQcd ?? 0) > 0 ? ` | QCD $${Math.round(dispQcd).toLocaleString()}` : '';
         rmdPctEl.innerText = rmdPctStr + qcdStr;
     }
     const yearsEl = document.getElementById('stat-years');
@@ -3222,13 +3295,22 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
             try {
                 const mode = lastSimInputs.convEndMode === 'extra' ? 'extra' : 'all';
                 const sugg = bestConversionStopYear(lastSimInputs, { mode });
+                // P86: the ⓘ dollars honor the toggle at FORMAT time only - the search and its
+                // thresholds stay nominal, so the suggestion itself never flips with the view.
+                // Stop-year gains are after-tax terminal-wealth differences (stocks at the final
+                // date), so they deflate by the terminal factor; a named conversion amount is a
+                // flow in its own year and deflates by that year's factor.
+                const _beDeflTerm = inCD
+                    ? 1 / (lastSimulationLog?.[lastSimulationLog.length - 1]?.inflationFactor || 1) : 1;
+                const _beDeflAtYear = (y) => inCD
+                    ? 1 / (lastSimulationLog?.find(r => r.year === y)?.inflationFactor || 1) : 1;
                 // Secondary color, only when Break Even is blank: which conversion erased the lead.
                 let boundaryNote = '';
                 if (totals.convBEYear == null) {
                     const diag = diagnoseConvBreakEvenFailure(lastSimInputs, lastSimulationLog);
-                    if (diag) boundaryNote = formatBreakEvenDiagnosis(diag);
+                    if (diag) boundaryNote = formatBreakEvenDiagnosis(diag, _beDeflAtYear);
                 }
-                const built = formatStopYearMessage(sugg, boundaryNote, mode);
+                const built = formatStopYearMessage(sugg, boundaryNote, mode, _beDeflTerm);
                 _beDiagnosisMsg = built.msg;
                 _beStopSuggestion = built.suggestion;
             } catch (e) {
@@ -3305,13 +3387,15 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
 // RMD divisors come from RMD_TABLE in taxengine.js (full table, ages 72–120).
 // Reads IRA balances, birth years, and growth rate from DOM inputs - no totals arg needed.
 // Formats a diagnoseConvBreakEvenFailure() result as a plain-English explanation.
-function formatBreakEvenDiagnosis(diag) {
-    const _fmt = (n) => '$' + Math.round(n).toLocaleString();
+// `deflAtYear` (P86) converts a named year's conversion amount to the displayed basis - a flow in
+// its own year deflates by that year's factor. Defaults to identity for Future $.
+function formatBreakEvenDiagnosis(diag, deflAtYear = () => 1) {
+    const _fmt = (n, y) => '$' + Math.round(n * deflAtYear(y)).toLocaleString();
     let msg;
     if (diag.outcome === 'neverSustains') {
-        msg = `The first conversion, in ${diag.breakingYear} (${_fmt(diag.breakingAmount)}), never earns back its own tax cost by the end of the plan.`;
+        msg = `The first conversion, in ${diag.breakingYear} (${_fmt(diag.breakingAmount, diag.breakingYear)}), never earns back its own tax cost by the end of the plan.`;
     } else {
-        msg = `Conversions through ${diag.lastSustainableYear} would have broken even in ${diag.lastSustainableBEYear}. The ${diag.breakingYear} conversion (${_fmt(diag.breakingAmount)}) is the one that erases the lead for good.`;
+        msg = `Conversions through ${diag.lastSustainableYear} would have broken even in ${diag.lastSustainableBEYear}. The ${diag.breakingYear} conversion (${_fmt(diag.breakingAmount, diag.breakingYear)}) is the one that erases the lead for good.`;
     }
     if (diag.futureIRATaxRateUnset) {
         msg += ' (Valued at each year\'s own tax bracket -- set a Marginal Heirs Tax Rate in Assumptions for a steadier comparison.)';
@@ -3326,9 +3410,12 @@ function formatBreakEvenDiagnosis(diag) {
 // blank. Returns { msg, suggestion } where suggestion is { year, mode } for the one-click apply,
 // or null when there is nothing actionable to click (converting through the end is already best,
 // or converting nothing is best -- the latter has no natural "stop after YEAR" the field expresses).
-function formatStopYearMessage(sugg, boundaryNote, mode) {
+// `deflTerm` (P86) converts the terminal-wealth gains to the displayed basis; the `> 1` decision
+// thresholds below deliberately stay on the NOMINAL values so the toggle never changes which
+// suggestion is made, only the dollars that describe it.
+function formatStopYearMessage(sugg, boundaryNote, mode, deflTerm = 1) {
     if (!sugg) return { msg: boundaryNote || '', suggestion: null };
-    const _m = (n) => '$' + Math.round(n).toLocaleString();
+    const _m = (n) => '$' + Math.round(n * deflTerm).toLocaleString();
     const scopeWord = mode === 'extra' ? 'the extra conversion' : 'conversions';
     let msg = '', suggestion = null;
     if (sugg.stopYearCalendar != null && sugg.gainVsFull > 1) {

@@ -17,6 +17,48 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1691"></a>
+
+## 11.1691
+
+### Current $ view now converts running totals correctly
+
+**Display fix. No plan produces different totals; what changes is how the running-total columns in
+Annual Details read when the Future $/Current $ switch is set to Current $.**
+
+The running-total columns (SumTaxes, SumAdvisorFees, and Spendable, renamed SumSpendable) could
+fall from one year to the next in Current $ view, which a lifetime total should never do. Each is
+now built the right way for that view: every year's amount is converted to today's purchasing power
+first, then added, so the total only grows. Future $ view and every per-year column are unchanged.
+Hover over any of the three column headers for what each total includes.
+
+The All RMDs figure and its QCD note, on the summary bar and in the Optimizer table, now follow the
+Future $/Current $ switch the same way. They always showed future dollars, even in Current $ view,
+sitting beside an All Taxes figure that converted; the two could not honestly be compared. The
+Optimizer's All RMDs column also sorts on the figure it displays.
+
+Three more readouts join them: the Advisor Fees tile's per-year average now averages the figure the
+tile shows, the Optimizer's Conv Tax column converts (and sorts on what it shows), and the dollar
+amounts in the Break Even explanation are stated in the dollars the switch selects. The Break Even
+suggestion itself, which year to stop converting or whether to convert at all, never changes with
+the switch; only the dollars that describe it do.
+
+The Monte Carlo tab is the largest change. The survival table's Final Balance, Total Taxes and
+Total Spendable columns, and the "Median ending balance" in the plan headline, each showed one
+fixed basis regardless of the switch; taxes were future dollars while Spendable beside them was
+today's dollars, so the two could not honestly be read together. All of them now follow the switch,
+and the table sorts on the figures it displays. The percentile bands, the drawn worst-to-best
+paths, and the Stress Test chart and table also follow the switch, and their Current $ figures are
+now exact: every simulated path is deflated by the inflation that path actually lived through,
+rather than every path sharing one average rate. High-inflation futures now look as poor in today's
+dollars as they are; with the old average-rate conversion the difference reached several percent.
+Hover over a line to read the value as drawn.
+
+The Monte Carlo path count now defaults to 400 per strategy (was 500), so a Compare run finishes
+sooner out of the box. The Paths box still goes up to 5,000 when you want a finer sample.
+
+---
+
 <a id="11.168e"></a>
 
 ## 11.168e

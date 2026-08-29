@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.168e</title>
+    <title>Retirement Optimizer 11.1691</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,12 +59,12 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=111662"></script>
-	<script src="optimizer_core.js?v=11168e"></script>
+	<script src="optimizer_core.js?v=111690"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=11168e"></script>
-	<script src="optimizer_tests.js?v=11168e"></script>
+	<script src="optimizer_ui.js?v=111690"></script>
+	<script src="optimizer_tests.js?v=111690"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -624,8 +624,8 @@
 				<strong style="font-size:0.9em;color:#555;">Advanced Parameters</strong>
 				<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;align-items:center;">
 					<label style="font-size:0.85em;color:#888;">(Mode selector above)</label>
-					<label style="font-size:0.85em;" title="Number of simulated market scenarios PER STRATEGY. The sweep runs this many paths against every withdrawal strategy it compares (about 144 of them on a typical plan), so 500 here is about 72,000 simulations. The running total is shown next to the Run button. More paths = more stable results, slower run.">Paths (per strategy)
-						<input type="number" id="mc-num-paths" value="500" min="100" max="5000" step="100" style="width:70px;margin-left:4px;" oninput="updateMCTimeEstimate()">
+					<label style="font-size:0.85em;" title="Number of simulated market scenarios PER STRATEGY. The sweep runs this many paths against every withdrawal strategy it compares (about 144 of them on a typical plan), so 400 here is about 58,000 simulations. The running total is shown next to the Run button. More paths = more stable results, slower run.">Paths (per strategy)
+						<input type="number" id="mc-num-paths" value="400" min="100" max="5000" step="100" style="width:70px;margin-left:4px;" oninput="updateMCTimeEstimate()">
 					</label>
 					<label style="font-size:0.85em;" title="Expected annual nominal return for Synthetic paths. Defaults to (and stays in sync with) the Assumptions Growth % - override here to test a different MC growth assumption. Not used in Historical mode.">Synthetic Return μ %
 						<input type="number" id="mc-mu" value="7" min="0" max="20" step="0.5" style="width:55px;margin-left:4px;" oninput="updateMCGrowthWarning()">
@@ -692,7 +692,7 @@
 			<div id="mc-error" style="display:none;padding:8px 12px;background:#f8d7da;border:1px solid #f5c6cb;border-radius:4px;color:#721c24;margin-bottom:10px;font-size:0.9em;"></div>
 
 			<!-- Shown when the sidebar has changed since the last full run. The stress pass below
-			     refreshes on its own (it is ~10 simulations); the 500-path sweep is far too
+			     refreshes on its own (it is ~10 simulations); the full path sweep is far too
 			     expensive to re-run on every edit, so it is flagged rather than recomputed. -->
 			<div id="mc-stale-banner" style="display:none;padding:8px 12px;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;color:#856404;margin-bottom:10px;font-size:0.9em;">
 				<strong>Out of date.</strong> The chart and survival table below were run before your latest changes. The Stress Test result is current.
@@ -862,6 +862,11 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="display"><b>11.1691</b>
+					<strong>Current $ view now converts running totals correctly.</strong>
+					In Annual Details, the running-total columns (SumTaxes, SumAdvisorFees, and Spendable, renamed SumSpendable) incorrectly discounted the whole column when viewing in Current $. These rows are now correct. The Monte Carlo tab did not change all displayed fields based on current/future, and it now does. In the Summary the <br>All RMDs<br> figure (and its QCD note), the Advisor Fees per-year average, the Optimizer's Conv Tax column, and the dollar amounts in the Break Even explanation follow the switch too; they always showed future dollars. The Break Even suggestion also follows current/future. While we determine where the decrease in performance occured, The Monte Carlo now runs 400 paths rather than 500.
+					<a href="optimizer_changelog.md#11.1691" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="behavior"><b>11.168e</b>
 					<strong>An advisor fee you can model, and required distributions figured the way the tax rules define them.</strong>
 					<ol>
@@ -1282,9 +1287,9 @@
 <script src="montecarlo/stats.js?v=11161f"></script>
 <!-- The Monte Carlo model itself. The worker importScripts() the same file; on file://, where a
      worker cannot load its scripts, mc_controller.js runs it here on the main thread. -->
-<script src="montecarlo/mc_engine.js?v=111671"></script>
+<script src="montecarlo/mc_engine.js?v=111690"></script>
 <script src="montecarlo/mc_controller.js?v=11161e"></script>
-<script src="montecarlo/mc_tab.js?v=111670"></script>
+<script src="montecarlo/mc_tab.js?v=111691"></script>
 
 <script type="text/javascript">
 function clampIntlInput(intlId, equityPct) {
@@ -1476,7 +1481,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=11168e';
+    const V = '?v=111690';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

@@ -2213,18 +2213,67 @@ test('P84d: a flat fee is CPI-indexed, and a percent fee is not', () => {
     assertNear(r.log[0]['-advisorFeeBasis'], 0, 'flat mode reports no basis', 1e-9);
 });
 
-test('P84e: the fee is tracked in the totals, the cumulative scalar and four log keys', () => {
+test('P84e: the fee is tracked in the totals and three log keys; the running total is P86-computed', () => {
     const r = simulate({ ..._ADVISOR_BASE, advisorFeeAmount: 1, advisorFeeMode: 'pct', advisorFeeScope: 'all' });
     assertNear(r.totals.advisorFees, _sumKey(r.log, 'AdvisorFee'), 'totals.advisorFees equals the per-year sum', 1);
     assert(r.totals.advisorFeesCurrentDollars > 0 && r.totals.advisorFeesCurrentDollars < r.totals.advisorFees,
         'the current-dollar total must be positive and smaller than the nominal one');
-    const last = r.log[r.log.length - 1];
-    assertNear(last.SumAdvisorFees, r.totals.advisorFees, 'the running total ends at the lifetime total', 1);
-    for (const k of ['AdvisorFee', 'SumAdvisorFees', '-advisorFeeBasis', '-advisorFeeFromIRA']) {
+    assertNear(r.totals.advisorFeesCurrentDollars,
+        r.log.reduce((a, e) => a + (e.AdvisorFee || 0) / (e.inflationFactor || 1), 0),
+        'the current-dollar total is the sum of each year deflated by its own factor', 1);
+    for (const k of ['AdvisorFee', '-advisorFeeBasis', '-advisorFeeFromIRA']) {
         assert(k in r.log[0], `log rows must carry ${k}`);
         assert(k in simulate({ ..._ADVISOR_BASE }).log[0],
             `log rows must carry ${k} even with no fee, or the identity tests break`);
     }
+    // P86: the stored running totals left the engine log; the UI computes them on demand. If one
+    // reappears here the wrong-basis Current-$ bug it caused comes back with it.
+    for (const k of ['SumAdvisorFees', 'SumTaxes', 'Spendable']) {
+        assert(!(k in r.log[0]), `${k} must NOT be a stored log key (P86 computes it in the UI)`);
+    }
+});
+
+test('P86: running-total identities - every lifetime total is the sum of its per-year column, in both bases', () => {
+    // Inflation is live in this base, so a wrong deflation basis is visible rather than plausible.
+    const r = simulate({ ..._ADVISOR_BASE, advisorFeeAmount: 0.8, advisorFeeMode: 'pct', advisorFeeScope: 'all' });
+    const sumCD = (log, f) => log.reduce((a, e) => a + f(e) / (e.inflationFactor || 1), 0);
+    // Nominal identities: the totals the tiles read equal the per-year columns the table shows.
+    assertNear(r.totals.tax, _sumKey(r.log, 'totalTax'), 'totals.tax = sum of totalTax', 1);
+    assertNear(r.totals.spend,
+        r.log.reduce((a, e) => a + (e.spendGoal || 0) + (e.shortfall || 0), 0),
+        'totals.spend = sum of delivered spend (spendGoal + shortfall)', 1);
+    // Current-$ identities: the CD twins are the sum of each year deflated by its OWN factor -
+    // never a nominal total deflated by one year's factor.
+    assertNear(r.totals.taxCurrentDollars, sumCD(r.log, e => e.totalTax || 0),
+        'taxCurrentDollars = sum of per-year deflated tax', 1);
+    assertNear(r.totals.spendCurrentDollars,
+        sumCD(r.log, e => (e.spendGoal || 0) + (e.shortfall || 0)),
+        'spendCurrentDollars = sum of per-year deflated delivered spend', 1);
+    // Each accumulator's per-year source is non-negative (delivered spend = min(goal, netIncome)),
+    // so ANY running sum of them - either basis - is non-decreasing. This is the engine-side half
+    // of the guarantee; the browser tier checks the rendered cells.
+    for (const e of r.log) {
+        assert((e.totalTax || 0) >= 0, 'per-year tax never negative');
+        assert((e.AdvisorFee || 0) >= 0, 'per-year fee never negative');
+        assert(((e.spendGoal || 0) + (e.shortfall || 0)) >= -1e-6,
+            'per-year delivered spend never negative');
+    }
+});
+
+test('P86c: lifetime RMD and QCD carry Current-$ twins built the tax/spend way', () => {
+    // Inflation is live, so a twin that merely copied the nominal total would fail loudly here.
+    const r = simulate({ ..._ADVISOR_BASE, qcdHHMax: 20000 });
+    const sumCD = (log, f) => log.reduce((a, e) => a + f(e) / (e.inflationFactor || 1), 0);
+    assert(r.totals.rmd > 0, 'fixture must produce RMDs');
+    assert(r.totals.qcd > 0, 'fixture must produce QCDs');
+    assert(r.totals.rmdCurrentDollars > 0 && r.totals.rmdCurrentDollars < r.totals.rmd,
+        'rmdCurrentDollars must be positive and smaller than the nominal total');
+    assert(r.totals.qcdCurrentDollars > 0 && r.totals.qcdCurrentDollars < r.totals.qcd,
+        'qcdCurrentDollars must be positive and smaller than the nominal total');
+    assertNear(r.totals.rmdCurrentDollars, sumCD(r.log, e => e.RMDwd || 0),
+        'rmdCurrentDollars = sum of per-year deflated RMDs', 1);
+    assertNear(r.totals.qcdCurrentDollars, sumCD(r.log, e => (e.QCD1 || 0) + (e.QCD2 || 0)),
+        'qcdCurrentDollars = sum of per-year deflated QCDs', 1);
 });
 
 test('P84f: BOTH counterfactual arms pay the fee, so Opportunity Cost stays about the conversion', () => {
@@ -5911,7 +5960,10 @@ test.critical('a no-tax state reports honest spend and honest failure', () => {
     for (const st of ['NV', 'TX', 'IL']) {
         const r = simulate({ ...base, STATEname: st });
         assert(r.totals.spend > 0, `${st}: total spend must be positive, got ${Math.round(r.totals.spend)}`);
-        assert(r.log[2].Spendable > 0, `${st}: year 2 spendable must be positive, got ${r.log[2].Spendable}`);
+        // P86: the stored Spendable running total left the log; delivered spend per year is
+        // spendGoal + shortfall (shortfall <= 0), the same quantity totals.spend accumulates.
+        const _delivered2 = r.log.slice(0, 3).reduce((a, e) => a + (e.spendGoal || 0) + (e.shortfall || 0), 0);
+        assert(_delivered2 > 0, `${st}: cumulative delivered spend through year 2 must be positive, got ${_delivered2}`);
         assert(r.totals.success === false,
             `${st}: a $400k goal on a $600k portfolio must fail, not report success`);
     }
@@ -6397,6 +6449,52 @@ test('P79: the capture variation ships one balance trace per captured path', asy
     // Stress already ships every path as stressPaths, so it must not pay for these twice.
     assert(msg.stress.variations[0].capturedTraces == null,
         'the stress pass shipped capturedTraces as well as stressPaths');
+});
+
+test('P86e: the MC message carries dual-basis twins, and real = each path deflated by ITS OWN inflation', async () => {
+    // Shape on a normal-size run: every twin present, same dimensions as its nominal sibling.
+    const cfg = _p71Cfg('gbm', { captureVariationIndex: 0 });
+    const msg = await _mcEngine.runJob(cfg);
+    assert(msg && !msg.error, `job failed: ${msg && msg.error}`);
+    const v = msg.variations[0];
+    for (const k of ['p5', 'p25', 'p50', 'p75', 'p95']) {
+        assert(Array.isArray(v.percentilesReal?.[k]) && v.percentilesReal[k].length === msg.years,
+            `percentilesReal.${k} missing or wrong length`);
+    }
+    assert(Number.isFinite(v.medianTaxReal) && v.medianTaxReal < v.medianTax,
+        'medianTaxReal must exist and sit below the nominal median under positive inflation');
+    assert(Number.isFinite(v.medianSpendNominal) && v.medianSpendNominal > v.medianSpend,
+        'medianSpendNominal must exist and sit above the real median under positive inflation');
+    assert(v.capturedTracesReal && v.capturedTracesReal.length === v.capturedTraces.length,
+        'capturedTracesReal must pair one-to-one with capturedTraces');
+    assert(Array.isArray(msg.stress.variations[0].stressPathsReal)
+        && msg.stress.variations[0].stressPathsReal.length === msg.stress.numPaths,
+        'the stress pass must ship stressPathsReal beside stressPaths');
+    // Exactness, proven through the replay contract on a single-path run: with one path, every
+    // aggregate IS that path, so the twins must equal the replayed simulate()'s own totals and the
+    // real curve must be the nominal curve divided year by year by the path's own inflationFactor.
+    const cfg1 = _p71Cfg('gbm', { captureVariationIndex: 0, numPaths: 1 });
+    const one = await _mcEngine.runJob(cfg1);
+    assert(one && !one.error, `single-path job failed: ${one && one.error}`);
+    const v1 = one.variations[0];
+    const baseInputs = cfg1.variations[0];
+    const pathIdx = v1.captured[0].pathIndex;
+    const inputs = _mcEngine.pathInputsFromBankRows(
+        one.capturedBankRows[pathIdx], baseInputs, one.simulationMode);
+    const res = core.simulate({ ...baseInputs, ...inputs });
+    assertNear(v1.medianTax, res.totals.tax, 'one path: medianTax is that path\'s nominal tax', 1);
+    assertNear(v1.medianTaxReal, res.totals.taxCurrentDollars,
+        'one path: medianTaxReal is that path\'s sum-of-deflated-years tax', 1);
+    assertNear(v1.medianSpend, res.totals.spendCurrentDollars,
+        'one path: medianSpend is that path\'s real spend', 1);
+    assertNear(v1.medianSpendNominal, res.totals.spend,
+        'one path: medianSpendNominal is that path\'s nominal spend', 1);
+    for (let y = 0; y < Math.min(one.years, res.log.length); y++) {
+        const want = v1.percentiles.p50[y] / (res.log[y].inflationFactor || 1);
+        // Relative tolerance: the percentile arrays round through float32 inside computePercentiles.
+        assert(Math.abs(v1.percentilesReal.p50[y] - want) <= Math.max(1, Math.abs(want)) * 1e-6,
+            `year ${y}: real p50 ${v1.percentilesReal.p50[y]} !== nominal/ownFactor ${want}`);
+    }
 });
 
 test('P80: every sampled year is labelled with the year that actually produced it', () => {

@@ -40,7 +40,7 @@ let _inputInflationChart = null;
 //      of candidate start years used to walk off the end of the ranked list inside buildStressBank.
 // One helper closes both: a non-finite read falls back to the default, and every read is clamped.
 const MC_PARAMS = {
-    'mc-num-paths':     { dflt: 500, min: 100, max: 5000 },
+    'mc-num-paths':     { dflt: 400, min: 100, max: 5000 },
     'mc-mu':            { dflt: 7,   min: 0,   max: 20, int: false },
     'mc-sigma':         { dflt: 12,  min: 1,   max: 40, int: false },
     'mc-seed':          { dflt: 42,  min: 0,   max: Number.MAX_SAFE_INTEGER },
@@ -458,7 +458,7 @@ function _buildMCHash() {
 }
 
 // The user-entered path count is PER STRATEGY: a Compare run puts it against every variation
-// buildVariations() produces (~144 on the default scenario), so "500 paths" is ~72,000 simulations.
+// buildVariations() produces (~144 on the default scenario), so "400 paths" is ~58,000 simulations.
 // That multiplier used to appear nowhere in the UI, which made the run look far smaller than it is.
 // With a single variation there is no multiplier to report, so the sentence drops it rather than
 // saying "x 1 strategies".
@@ -1206,7 +1206,7 @@ function renderMCMainMetrics(msg) {
 }
 
 // Stress-pass metrics — same Min/CAGR/Max grid, sourced from the ~10-20 worst historical decades
-// instead of the ~500-path bootstrap sample. `stress` is msg.stress (null in Synthetic mode).
+// instead of the full bootstrap sample. `stress` is msg.stress (null in Synthetic mode).
 function renderMCStressMetrics(stress) {
     // Always refresh the summary-bar tile from here, including the empty case, so a mode switch to
     // Synthetic blanks it rather than leaving a stale Historical number on every tab.
@@ -1363,7 +1363,9 @@ function renderPlanHeadline(msg) {
     const band     = survivalBand(v.survivalRate);
     const pct      = (v.survivalRate * 100).toFixed(1);
     const survived = Math.round(v.survivalRate * total);
-    const finalBal = v.percentiles.p50[v.percentiles.p50.length - 1] ?? 0;
+    // P86: the headline's median ending balance follows the Future $/Current $ switch like the
+    // table column that carries the same number.
+    const finalBal = _mcFinalBal(v);
     // Which simulation produced this number. The two modes are not comparable with each other, so a
     // survival rate quoted without naming its mode is a number you cannot check against anything.
     // assetRanges is present only for the bootstrap pass, the same test the table title uses.
@@ -1485,6 +1487,18 @@ let mcSortState = { colKey: 'survival', direction: 'desc' };
 
 // Column defs mirror the Optimizer table's click-to-sort pattern (optimizer_ui.js
 // getOptimizerColumns/sortOptimizerBy). Checkbox column is excluded — not sortable.
+// P86: the survival table's three dollar columns pick their basis by the Future $/Current $
+// toggle, sorting on the figure they display. Current-$ figures come from the engine's exact
+// per-path deflation; a stale cached worker ships no twins and each pick falls back to the field
+// it always showed (final/tax nominal, spend real).
+function _mcTableInCD() { return !!document.getElementById('show-current-dollars')?.checked; }
+function _mcFinalBal(v) {
+    const p = (_mcTableInCD() && v.percentilesReal) ? v.percentilesReal : v.percentiles;
+    return p.p50[p.p50.length - 1] ?? 0;
+}
+function _mcTaxVal(v)   { return _mcTableInCD() ? (v.medianTaxReal ?? v.medianTax) : v.medianTax; }
+function _mcSpendVal(v) { return _mcTableInCD() ? v.medianSpend : (v.medianSpendNominal ?? v.medianSpend); }
+
 function getMCColumns() {
     return [
         { key: 'strategy', label: 'Strategy', title: null,
@@ -1495,16 +1509,16 @@ function getMCColumns() {
             title: 'Median year across failed paths when the portfolio could no longer cover required spending',
             getSortValue: v => v.medianRuinYear ?? Infinity },
         { key: 'final', label: 'Final Balance',
-            title: 'Median portfolio balance in the final plan year across all surviving paths',
-            getSortValue: v => v.percentiles.p50[v.percentiles.p50.length - 1] ?? 0 },
+            title: 'Median portfolio balance in the final plan year across all surviving paths, in the dollars the Future $/Current $ switch selects. In Current $ each path is deflated by its own simulated inflation.',
+            getSortValue: v => _mcFinalBal(v) },
         { key: 'survival', label: 'Survival', title: null,
             getSortValue: v => v.survivalRate },
         { key: 'tax', label: 'Total Taxes',
-            title: 'Median lifetime taxes paid across all Monte Carlo paths',
-            getSortValue: v => v.medianTax ?? Infinity },
+            title: 'Median lifetime taxes paid across all Monte Carlo paths, in the dollars the Future $/Current $ switch selects.',
+            getSortValue: v => _mcTaxVal(v) ?? Infinity },
         { key: 'spend', label: 'Total Spendable',
-            title: "Median lifetime after-tax money actually spent across all Monte Carlo paths, in today's dollars (real). Strategies that cut spending — e.g. Guyton-Klinger — show a lower figure here.",
-            getSortValue: v => v.medianSpend ?? -Infinity },
+            title: 'Median lifetime after-tax money actually spent across all Monte Carlo paths, in the dollars the Future $/Current $ switch selects. Strategies that cut spending — e.g. Guyton-Klinger — show a lower figure here.',
+            getSortValue: v => _mcSpendVal(v) ?? -Infinity },
     ];
 }
 
@@ -1550,10 +1564,10 @@ function renderSurvivalTable(variations, numPaths) {
             const primary = mcSortState.direction === 'asc' ? cmp : -cmp;
             if (primary !== 0) return primary;
             if (mcSortState.colKey === 'survival') {
-                const aFinal = a.percentiles.p50[a.percentiles.p50.length - 1] ?? 0;
-                const bFinal = b.percentiles.p50[b.percentiles.p50.length - 1] ?? 0;
+                // P86: tiebreaks read the same basis the columns display.
+                const aFinal = _mcFinalBal(a), bFinal = _mcFinalBal(b);
                 if (bFinal !== aFinal) return bFinal - aFinal;
-                return (a.medianTax ?? Infinity) - (b.medianTax ?? Infinity);
+                return (_mcTaxVal(a) ?? Infinity) - (_mcTaxVal(b) ?? Infinity);
             }
             return primary;
         });
@@ -1575,8 +1589,10 @@ function renderSurvivalTable(variations, numPaths) {
         row.style.display = 'contents';
         row.dataset.varIdx = v._origIdx;
 
-        const taxTxt   = v.medianTax != null ? '$' + fmt(Math.round(v.medianTax)) : '—';
-        const spendTxt = v.medianSpend != null ? '$' + fmt(Math.round(v.medianSpend)) : '—';
+        const taxVal   = _mcTaxVal(v);
+        const spendVal = _mcSpendVal(v);
+        const taxTxt   = taxVal != null ? '$' + fmt(Math.round(taxVal)) : '—';
+        const spendTxt = spendVal != null ? '$' + fmt(Math.round(spendVal)) : '—';
         // The pinned row keeps its survival-band background so it still reads on the same scale as
         // everything else; the rule under it separates it from the ranked body.
         const cellCss = `padding:2px 8px;text-align:right;background:${color};cursor:pointer;`
@@ -1600,7 +1616,7 @@ function renderSurvivalTable(variations, numPaths) {
             (isPinned ? '📍 ' : '') + v.strategyFamily,
             escapeHtml(v.paramLabel),
             ruinTxt,
-            '$' + fmt(v.percentiles.p50[v.percentiles.p50.length - 1]),
+            '$' + fmt(_mcFinalBal(v)),
             `<strong>${pct}%</strong>`,
             taxTxt,
             spendTxt,
@@ -1870,10 +1886,16 @@ function renderMCChart(msg) {
 
     const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
     const inflRate = msg.inflationStats?.cagr ?? msg.inflationRate ?? 0;
+    // P86 fallback ONLY: a stale cached worker ships no *Real fields, and then Current-$ falls
+    // back to the old flat-CAGR rescale. With a current worker every curve and trace below comes
+    // from the engine's exact per-path deflation (each path divided by its OWN inflation).
     const deflate = (arr) => {
         if (!inCurrentDollars || !arr) return arr;
         return arr.map((v, y) => v / Math.pow(1 + inflRate, y + 1));
     };
+    const band = (v, key) => inCurrentDollars
+        ? (v.percentilesReal?.[key] ?? deflate(v.percentiles[key]))
+        : v.percentiles[key];
 
     _legendIsolatedKey = null;   // reset on each fresh render
     const datasets = [];
@@ -1905,23 +1927,23 @@ function renderMCChart(msg) {
         // giving only the median a lower order would sink the OTHER strategies' medians beneath the
         // pinned block's translucent band fills. Blocks move as units instead.
         const ord  = isPinned ? 0 : 1;
-        datasets.push({ label: `${v.label} p5`,  data: deflate(v.percentiles.p5),
+        datasets.push({ label: `${v.label} p5`,  data: band(v, 'p5'),
             borderColor: 'transparent', backgroundColor: 'transparent',
             pointRadius: 0, fill: false, tension: 0.3, order: ord });
-        datasets.push({ label: `${v.label} p95`, data: deflate(v.percentiles.p95),
+        datasets.push({ label: `${v.label} p95`, data: band(v, 'p95'),
             borderColor: 'transparent', backgroundColor: c.band95,
             pointRadius: 0, fill: base, tension: 0.3, order: ord });
-        datasets.push({ label: `${v.label} p25`, data: deflate(v.percentiles.p25),
+        datasets.push({ label: `${v.label} p25`, data: band(v, 'p25'),
             borderColor: 'transparent', backgroundColor: 'transparent',
             pointRadius: 0, fill: false, tension: 0.3, order: ord });
-        datasets.push({ label: `${v.label} p75`, data: deflate(v.percentiles.p75),
+        datasets.push({ label: `${v.label} p75`, data: band(v, 'p75'),
             borderColor: 'transparent', backgroundColor: c.band75,
             pointRadius: 0, fill: base + 2, tension: 0.3, order: ord });
         datasets.push({
             // 📍 and the heavier stroke mark the sidebar's own plan. Chart.js draws lower `order`
             // last, i.e. on top, so the pinned median is never buried under a competing strategy.
             label: (isPinned ? '📍 ' : '') + v.label + ` (${(v.survivalRate * 100).toFixed(0)}%)`,
-            data:  deflate(v.percentiles.p50),
+            data:  band(v, 'p50'),
             borderColor: c.solid, backgroundColor: 'transparent',
             borderWidth: isPinned ? 4 : 2.5, pointRadius: 0, fill: false, tension: 0.3,
             // P82a. intersect:true means a series is only described when the pointer is actually
@@ -1940,6 +1962,8 @@ function renderMCChart(msg) {
         const pinnedAt = _mcDrawOrder.indexOf(_mcPinIdx);
         const pv = pinnedAt >= 0 ? msg.variations[_mcPinIdx] : null;
         const traces = pv?.capturedTraces;
+        // P86: each drawn path on its OWN current-$ basis; flat-CAGR only for a stale worker.
+        const tracesReal = pv?.capturedTracesReal;
         if (traces?.length) {
             _mcTraceGroup = pinnedAt;
             (pv.captured ?? []).forEach((r, i) => {
@@ -1950,7 +1974,9 @@ function renderMCChart(msg) {
                     : `Rank ${Math.round(r.rankPct)}%`;
                 datasets.push({
                     label: name,
-                    data: deflate(Array.from(traces[i])),
+                    data: inCurrentDollars
+                        ? (tracesReal?.[i] ? Array.from(tracesReal[i]) : deflate(Array.from(traces[i])))
+                        : Array.from(traces[i]),
                     // Red for the worst block, gray for the percentile samples: the reader is
                     // looking for the shape of a bad path, not for one more strategy color.
                     borderColor: r.rank < CAPTURE_WORST_N_LOCAL
@@ -1996,10 +2022,11 @@ function renderMCChart(msg) {
                 // A drawn path names itself and its outcome; it has no percentile to read.
                 if (ctx.dataset?._traceLabel)
                     return `  ${ctx.dataset._traceLabel}  $${fmt(ctx.parsed?.y)}`;
+                // P86: the DRAWN value, like the trace branch above. Re-reading the nominal
+                // percentiles here printed future dollars under a Current-$ line.
                 const v = _mcResults?.variations[_mcDrawOrder[Math.floor(ctx.datasetIndex / 5)]];
-                const val = v?.percentiles?.p50?.[ctx.dataIndex];
                 const name = v ? v.label : ctx.dataset.label;
-                return `  ${name}  $${fmt(val)}`;
+                return `  ${name}  $${fmt(ctx.parsed?.y)}`;
             },
         },
     };
@@ -2088,9 +2115,12 @@ function renderStressChart(stress) {
     const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
     const inflRate = stress.inflationStats?.cagr ?? 0;
     // One deflator for both the lines and the table's Final Balance column, so the two cannot show
-    // the same quantity on different bases.
-    const deflateOne = (v, y) => inCurrentDollars ? v / Math.pow(1 + inflRate, y + 1) : v;
-    const deflate = (arr) => (!inCurrentDollars || !arr) ? arr : arr.map(deflateOne);
+    // the same quantity on different bases. P86: with a current worker, Current-$ uses
+    // stressPathsReal - each scenario deflated by its OWN inflation sequence - and these flat-CAGR
+    // helpers become identity; they still carry a stale cached worker.
+    const useReal = inCurrentDollars && !!stress?.variations?.[0]?.stressPathsReal;
+    const deflateOne = (v, y) => (inCurrentDollars && !useReal) ? v / Math.pow(1 + inflRate, y + 1) : v;
+    const deflate = (arr) => (!inCurrentDollars || useReal || !arr) ? arr : arr.map(deflateOne);
 
     _legendIsolatedKeyStress = null;   // reset on each fresh render
     const datasets = [];
@@ -2100,7 +2130,7 @@ function renderStressChart(stress) {
     // scenario. Legend entries are deliberately terse ("1966 ✗2041"): ten copies of the old
     // "1966 (eq: … inf: … real: …)" label crowded out the chart itself. Every statistic that used
     // to live in the label now has a column in the table under the chart.
-    const rows  = buildStressRows(stress, deflateOne);
+    const rows  = buildStressRows(stress, deflateOne, useReal);
     const dense = rows.length > STRESS_DENSE_THRESHOLD;
     rows.forEach((r, pos) => {
         const ds = STRESS_DENSE_STYLE[r.band] ?? STRESS_DENSE_STYLE['survive'];
@@ -2192,15 +2222,18 @@ function renderStressChart(stress) {
 // Default order is worst-outcome-first: everything that ran out of money, earliest failure first,
 // then the survivors by how much they ended with. Ranking by starting-decade severity (the old
 // order) buried a plan-killing scenario below one the plan shrugged off.
-function buildStressRows(stress, deflateOne = (v) => v) {
+function buildStressRows(stress, deflateOne = (v) => v, useReal = false) {
     const v = stress?.variations?.[0];
     if (!v?.stressPaths?.length) return [];
     const startYears = stress.startYears ?? [];
     const ruinYears  = v.ruinYearsPerPath ?? [];
     const planYears  = stress.years ?? _mcResults?.years ?? v.stressPaths[0].length;
     const worst      = stress.worstRealCAGRs ?? {};
+    // P86: the real traces are zero exactly where the nominal ones are, so the ruin fallback and
+    // the band logic below read the same either way.
+    const pathsSrc = (useReal && v.stressPathsReal) ? v.stressPathsReal : v.stressPaths;
 
-    const rows = v.stressPaths.map((path, rank) => {
+    const rows = pathsSrc.map((path, rank) => {
         const startYear = startYears[rank] ?? null;
         // Older cached workers did not send per-scenario ruin years. Fall back to reading the trace:
         // a ruined path is pinned at $0 from the year it failed.

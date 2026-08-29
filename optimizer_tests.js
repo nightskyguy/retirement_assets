@@ -2421,6 +2421,81 @@ assertEqual(
 			`every Annual Details row has one cell per header (${nCols} headers)`);
 	})();
 
+	// ===== P86: running-total columns accumulate in the toggle's basis; per-year columns do not =====
+	// The stored SumTaxes/SumAdvisorFees/Spendable log columns were nominal sums-to-date, and the
+	// generic Current-$ cell formatter divided them by that row's factor - which can make a
+	// lifetime total FALL year over year (SumAdvisorFees 80,672 -> 79,371 was the report). The
+	// running totals are now computed on demand from a NAMED list, so under Current-$ each is a
+	// running sum of deflated years and can never decrease. The guard has two halves on purpose:
+	// the accumulators must be monotone, AND an ordinary per-year column must still deflate
+	// per-row - a "fix" that rebased every declining column would pass the first half and fail the
+	// second (spendGoal genuinely loses real value; that decline is correct).
+	// ⚠ UNSAFE - MUTATES: #main-table (re-rendered twice) and #show-current-dollars (restored).
+	(function runningTotalsAccumulateInSelectedBasis() {
+		if (!unsafeTest('runningTotalsAccumulateInSelectedBasis')) return;
+		if (typeof getInputs !== 'function' || typeof updateTable !== 'function') return;
+		const cdBox = document.getElementById('show-current-dollars');
+		if (!cdBox) return;
+		const wasChecked = cdBox.checked;
+		try {
+			const log = simulate(getInputs()).log;
+			if (!log || log.length < 3) return;
+			cdBox.checked = true;
+			updateTable(log);
+			const table = document.getElementById('main-table');
+			const headRows = table.querySelectorAll('thead tr');
+			const headers = [...headRows[headRows.length - 1].querySelectorAll('th')].map(th => th.textContent);
+			assertEqual(headers.includes('Spendable'), false,
+				'the stored Spendable column is gone (renamed SumSpendable, computed on demand)');
+			const cellNum = (row, col) => parseFloat(row.cells[col].textContent.replace(/,/g, ''));
+			const bodyRows = [...table.querySelectorAll('tbody tr')];
+			for (const name of ['SumTaxes', 'SumAdvisorFees', 'SumSpendable']) {
+				const col = headers.indexOf(name);
+				assertEqual(col >= 0, true, `${name} column renders`);
+				let prev = -Infinity, monotone = true;
+				for (const r of bodyRows) {
+					const v = cellNum(r, col);
+					if (!isNaN(v)) { if (v < prev - 0.5) { monotone = false; break; } prev = v; }
+				}
+				assertEqual(monotone, true, `${name} never decreases under Current-$`);
+			}
+			// The anti-heuristic half: a per-year flow still deflates by ITS OWN row's factor.
+			const sgCol = headers.indexOf('spendGoal');
+			const lastIdx = log.length - 1;
+			if (sgCol >= 0 && (log[lastIdx].inflationFactor || 1) > 1) {
+				const shown = cellNum(bodyRows[lastIdx], sgCol);
+				const want = Math.round((log[lastIdx].spendGoal || 0) / (log[lastIdx].inflationFactor || 1));
+				assertEqual(Math.abs(shown - want) <= 1, true,
+					`spendGoal cell is the per-row deflated flow (got ${shown}, want ~${want})`);
+			}
+		} finally {
+			cdBox.checked = wasChecked;
+			try { updateTable(simulate(getInputs()).log); } catch (e) { /* page re-renders on next run */ }
+		}
+	})();
+
+	// ===== P86c: the All RMDs optimizer column sorts on the basis the toggle selects =====
+	// Lifetime RMDs are an accumulated flow like All Taxes beside them; sorting nominal while
+	// displaying Current-$ (or vice versa) would order the table by a number the reader cannot see.
+	// ⚠ UNSAFE - MUTATES: #show-current-dollars (restored).
+	(function rmdColumnFollowsToggle() {
+		if (!unsafeTest('rmdColumnFollowsToggle')) return;
+		if (typeof getOptimizerColumns !== 'function') return;
+		const cdBox = document.getElementById('show-current-dollars');
+		if (!cdBox) return;
+		const was = cdBox.checked;
+		try {
+			const stub = { totals: { rmd: 1000, rmdCurrentDollars: 700 } };
+			const col = () => getOptimizerColumns(true).find(c => c.key === 'rmd');
+			cdBox.checked = false;
+			assertEqual(col().getSortValue(stub), 1000, 'Future $: All RMDs sorts on the nominal lifetime total');
+			cdBox.checked = true;
+			assertEqual(col().getSortValue(stub), 700, 'Current $: All RMDs sorts on the sum of deflated years');
+		} finally {
+			cdBox.checked = was;
+		}
+	})();
+
 	// ===== An unclosed inline tag in the changelog eats the rest of the page =====
 	// v11.15a2 shipped an <li> whose <strong> was never closed. Nothing threw and nothing looked
 	// wrong in the source, but the HTML parser's recovery re-parented the two entries BELOW it
@@ -2722,7 +2797,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 355, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 358, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

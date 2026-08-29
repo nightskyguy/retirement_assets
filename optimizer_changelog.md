@@ -26,31 +26,23 @@ For what the tool does and how to use it, see [README.md](README.md).
 **Behavior change. Plans using Extra Annual Roth Conversion will show higher IRMAA surcharges, and
 saved plans and shared links will not reproduce their earlier numbers.** The conversion was always
 taxed correctly, but it never counted toward the income Medicare reads two years later to set your
-surcharge, so a plan could convert year after year and never be billed for it. This reaches every
-strategy, not only those targeting a bracket or tier. Nothing changes with no extra conversion set,
-or for a household too young for Medicare.
+surcharge - so a plan could convert year after year and never be billed for it. This reaches every
+strategy, not only those targeting a bracket or tier. Nothing changes with no extra conversion set.
 
-Two places now tell you when a conversion goes past a limit you set: a notice under Extra Annual
-Roth Conversion, naming how many years it puts you over and by how much, and an upward arrow on any
-Optimizer row whose conversion lands above its own ceiling. Both warn rather than block - a ceiling
-paces ordinary withdrawals, while a conversion moves money from IRA to Roth rather than out of the
-household.
+Two places now warn when a conversion goes past a limit you set: a note under Extra Annual Roth
+Conversion, naming how many years it puts you over, and an upward arrow on any Optimizer row whose
+conversion lands above its own ceiling. Neither blocks - a ceiling paces ordinary withdrawals, while
+a conversion moves money from IRA to Roth rather than out of the household.
 
-The ACA income-cap notice no longer appears for non-ACA choices, and no longer works its year out
-from your birth year plus the Retirement Start Age you typed, which could name a year already past.
-**That year also decides whether ACA rows appear in the Optimizer**, so if you are past the start
-age you typed, ACA rows may now be correctly withheld where they used to be offered.
+**Also a behavior change:** the ACA income-cap notice no longer appears for non-ACA choices, and no
+longer works its year out from your birth year plus the Retirement Start Age you typed, which could
+name a year already past. That year also decides whether ACA rows appear in the Optimizer, so if you
+are past the start age you typed, ACA rows may now be correctly withheld.
 
-The note shown when a plan carries a Cash Reserve offered "-1" as the way back to the original
-all-cash behavior. That value cannot be typed - it becomes 0, which is a different setting - so the
-note now says to type Off, which is what the field itself has always accepted.
-
-Two chart fixes. On Income & Expenses, hovering over an income bar reported the scaled bar height
-rather than the money that arrived - a $15,000 pension read about $12,900, with nothing on screen
-saying why. It now shows what the source paid, and the tax attributed to it where it bears any;
-Roth withdrawals, cash withdrawals and return of basis show their amount alone, because no tax is
-charged on them. And on the Market Return chart, the historical year a replayed path was sampled
-from is now shown to everyone.
+Smaller: the Cash Reserve note offered "-1" to restore the original all-cash behavior, a value the
+field will not take - it now says to type Off. Hovering over an income bar on Income & Expenses shows
+the actual income with the approximate tax attributed to it, rather than the scaled bar height. And
+the Market Return chart names the historical year a replayed path came from for everyone.
 
 ## 11.1691
 

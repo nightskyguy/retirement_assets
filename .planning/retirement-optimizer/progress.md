@@ -6417,3 +6417,28 @@ a third behavior silently. Now says "Off", which is what the field's own tooltip
 already said. Folded into the branch's single changelog entry.
 
 Killed the two staged A/B servers afterwards.
+
+## 2026-08-29 (cont.) - P90 wording corrected after user review
+
+The user read my P90 note and pushed back on two things, both fair.
+
+**It overstated the precision.** My note said "Hover over a bar for what that source actually paid,
+and the tax attributed to it", which reads as though the tax figure is that source's real bill. It
+is not - it is the year's average rate shared out proportionally. Their example: $35,000 of Social
+Security does not owe $12,000. Replaced with their wording, which is also shorter: "Income BARS have
+been scaled down by the total taxes. Hover over a bar to see the actual income less the approximate
+attributed tax."
+
+**`- ~3,674 tax` is hard to parse** - two operators in a row. Now `26,073  ~3,674 tax`: the space and
+the word "tax" already say it is a deduction, so the minus sign was only noise. The `~` stays, and it
+is now the only thing carrying the approximation, so the code comment says so explicitly rather than
+leaving it to the note.
+
+**Changelog trimmed while in there.** It had grown to 416 words against the ~150 target as this
+branch accumulated - the same drift CLAUDE.md warns about, one step removed. Rewritten to 301,
+ordered by what a reader needs first: the IRMAA behavior change, the two conversion warnings, the ACA
+gate (also a behavior change), then the small stuff. Still over target; this branch simply carries a
+lot of user-visible surface, and cutting further would start dropping things a reader must act on.
+
+Verified in the browser: note reads as the user wrote it, tooltips read `SS: 26,073  ~3,674 tax` and
+`Brokerage: 2,779`. Suites 366/61/22.

@@ -4500,11 +4500,15 @@ function updateCharts(log) {
                             const rawv = Math.round(d._rawInc[ctx.dataIndex] ?? 0);
                             const shaved = rawv - shown;
                             // The attribution is the year's average rate applied proportionally, not
-                            // a per-source calculation - Social Security in particular is taxed on
-                            // at most 85% of itself. "~" says so rather than implying a figure the
-                            // engine computed for this source alone.
+                            // a per-source calculation - $35,000 of Social Security does not really
+                            // owe $12,000, and Social Security is taxed on at most 85% of itself in
+                            // any case. The "~" carries that, and it is the only thing that does.
+                            //
+                            // No minus sign before the "~": "- ~3,674" is two operators in a row and
+                            // reads as noise. The space and the word "tax" already say it is a
+                            // deduction from the figure beside it.
                             return (d._taxed && shaved > 0)
-                                ? `${d.label}: ${rawv.toLocaleString()} - ~${shaved.toLocaleString()} tax`
+                                ? `${d.label}: ${rawv.toLocaleString()}  ~${shaved.toLocaleString()} tax`
                                 : `${d.label}: ${rawv.toLocaleString()}`;
                         },
                         title: items => {

@@ -906,7 +906,7 @@ function nominalRateAtLimit(entity, status, limit, inflation, rateCreep = 1) {
 // The invariant that catches this whole class, and the test that pins it: the average rate at a
 // fixed ceiling is INVARIANT ACROSS YEARS. A ceiling names the same real position in the table
 // every year, so its average rate cannot drift. It drifts only when two clocks disagree.
-function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, alive1, alive2, IRMAALimit, fedRateCreep = 1, stateRateCreep = 1, medicareRate = 1) {
+function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, alive1, alive2, IRMAALimit, fedRateCreep = 1, stateRateCreep = 1, medicareRate = 1, dedAddBack = 0) {
     let limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit;
 
     if ((inputs.stratIRMAATier ?? -1) >= 0) {
@@ -964,6 +964,20 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         marginalStateTaxRate = stLimit.rate * stateRateCreep;
         stateLimit = stLimit.limit;
         nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, cpiRate, stateRateCreep);
+
+        // P87a RESEARCH ARM, default off, set by no UI. A federal bracket top is a TAXABLE-income
+        // threshold; every caller of this function spends the result as a MAGI ceiling. Armed, this
+        // raises the federal number by the year's deduction so the two are on one basis, and the
+        // difference between the arms is what the shipped ceiling leaves unfilled.
+        //
+        // Placed HERE, and the position is the measurement: after the rate lookups, which want the
+        // statutory bracket and not the ceiling; after the state lookup, which is keyed on the
+        // unmodified federal limit so the state bracket selected cannot shift; before the state min,
+        // so a state ceiling still binds on its own terms. The state limit is deliberately NOT
+        // lifted even though it carries the same basis error - this arm measures the federal gap
+        // alone, and in a state whose table binds first that makes the reading an UNDERSTATEMENT.
+        // The `minlimit` IRMAA min below stays after it: that one is a genuine MAGI cap.
+        if (inputs.bracketCeilingAddDeduction) limit += dedAddBack;
 
         limit = Math.min(stateLimit, limit);
 
@@ -1108,6 +1122,14 @@ function buildSimYearLogRecord(p) {
         '-capGainsTax': p.tax.capitalGainsTax,
         '-capGainsRate': p.tax.capitalGainsRate,
         '-cpiFactor': p.cpiRate,
+        // P87a. The two federal quantities the bracket-ceiling basis question needs, and the
+        // only ones of tax's that nothing else re-emitted. A federal bracket top bounds TAXABLE
+        // income; the ceiling built from it is spent against MAGI, and fedDeduction is exactly
+        // the gap between the two. It is the FULL deduction calculateTaxes() charged - standard
+        // or itemized, plus the age-65 bumps and the senior deduction after its phase-out - not
+        // the bare `std` field, so the name is narrower than the number.
+        '-fedTaxableInc': p.tax.federalTaxableIncome,
+        '-fedDeduction': p.tax.federalStdDeduction,
         // Tax-rate creep multipliers actually applied this year (1 = today's statutory rates).
         '-fedRateCreep': p.fedRateCreep,
         '-stateRateCreep': p.stateRateCreep,
@@ -1443,6 +1465,27 @@ function resolveHousehold(sim, yr) {
     const _irmaaMargin = irmaaMarginDollars(inputs, IRMAABracket.limit + 1, yr.status, _irmaaEffCpi,
                                             sim.medicareRate, onMedicareAtCharge(yr.age1, yr.age2, yr.alive1, yr.alive2));
     yr.IRMAALimit = Math.min(yr.goalLimit, IRMAABracket.limit - _irmaaMargin);
+    // P87a RESEARCH ARM. The deduction computeBracketCeiling adds back when armed; 0 otherwise, and
+    // nothing reads it otherwise. It cannot be THIS year's deduction: the senior deduction phases out
+    // against federalAGI (taxengine.js:1470), which is the very quantity the ceiling is about to
+    // determine. So this takes LAST year's charged deduction and re-indexes it from the CPI factor of
+    // the year that produced it to this one, and falls back for year 0 - and only year 0 - to the
+    // statutory standard deduction plus age bumps, with no senior deduction and no itemizing.
+    //
+    // That approximation is the point rather than a shortcut around it: it is a MEASUREMENT arm, and
+    // the circularity it steps around is exactly what P87b(i) has to solve properly if the fix ships.
+    yr._ceilDedAddBack = 0;
+    if (inputs.bracketCeilingAddDeduction) {
+        const _prior = sim.log[sim.log.length - 1];
+        if (_prior && _prior['-fedDeduction'] > 0) {
+            const _priorCpi = _prior['-cpiFactor'] || sim.cpiRate;
+            yr._ceilDedAddBack = _prior['-fedDeduction'] * (sim.cpiRate / _priorCpi);
+        } else {
+            const _fed = TAXData.FEDERAL[yr.status];
+            const _nSen = (yr.alive1 && yr.age1 >= _fed.age ? 1 : 0) + (yr.alive2 && yr.age2 >= _fed.age ? 1 : 0);
+            yr._ceilDedAddBack = (_fed.std + _fed.stdbump * _nSen) * sim.cpiRate;
+        }
+    }
     yr.totalIncome = 0;
     yr.netIncome = 0;
     yr.capitalGains = 0;
@@ -1876,7 +1919,7 @@ function planPrimaryWithdrawals(sim, yr) {
                 // year, so compute it fresh here rather than reading a stale/undefined `limit`.
                 // yr.isACAStrategy, not inputs.strategy: a lapsed ACA year has no ceiling to
                 // respect, and computeBracketCeiling would still hand back the FPL cap if asked.
-                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate).limit;
+                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack).limit;
                 _room = Math.min(_room, Math.max(0, _ceil - ordFloor));
             }
             return Math.max(yr.additionalSpendNeeded, _room * (1 - yr.capGainsPercentage * sim.capitalGainsRate));
@@ -1888,7 +1931,7 @@ function planPrimaryWithdrawals(sim, yr) {
                 // Same ceiling call and field assignments as the family's own branch below, so a
                 // coexist harvest year looks to downstream passes like the family branch ran.
                 ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit } =
-                    computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate));
+                    computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack));
                 yr.bracketTarget = yr.limit;
                 let _iraRoom = Math.max(0, yr.limit - _baseOrdinaryInc);
                 const _magiShaped = (inputs.stratIRMAATier ?? -1) >= 0
@@ -1955,7 +1998,7 @@ function planPrimaryWithdrawals(sim, yr) {
     // to the baseline `else` below - Proportional 0%, which is the intended successor.
     } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || yr.isACAStrategy) {
         ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit } =
-            computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate));
+            computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack));
 
         yr.bracketTarget = yr.limit;
 

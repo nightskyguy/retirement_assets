@@ -2999,3 +2999,22 @@ simulate() 40yr couple, fee armed, growth+inflation on: 5 batches x 200 runs aft
 106.7 / 110.7 / **114.0 median** / 121.6 / 135.2 ms; per-run 0.570 ms; totals.totalTime 0.511 ms.
 Bench script: scratchpad `bench_simulate.js` (batch noise ~10x the 0.5% gate, so compare BEST-of-5
 too: baseline best 106.7 ms).
+
+## P87a - the bracket ceiling's income basis (2026-08-29)
+
+Full report: `research/BRACKET_CEILING_BASIS.md`. Harness:
+`.test_harnesses/bracketbasis_harness.js`.
+
+The three sentences worth carrying without opening the report:
+
+1. **The federal Limit entries are taxable-income thresholds spent as MAGI ceilings, and the gap is
+   exactly one deduction.** Fill Bracket 22%: ceiling $211,400, MAGI $211,400, federal taxable
+   income $179,200, deduction $32,200. Confirmed to the dollar, every year, widening to $39,998 by
+   2058.
+2. **Closing that gap LOSES money in 51 of 74 clean cells, median -$47,092.** The under-fill is
+   accidentally conservative. Any future note promising recovered bracket room would be wrong three
+   times in four. The sign is set by the bracket (12% gains, 22% and 24% lose) and the separator is
+   whether the plan was already breaching its ceiling to fund spending.
+3. **`minlimit` is governed entirely by `yr.IRMAALimit`, which is built from the SPENDING GOAL, not
+   from the federal rate the user picked.** 0 of 40 cells respond to a federal ceiling change. Any
+   claim about what `Min Limit n%` targets should be measured before it is believed.

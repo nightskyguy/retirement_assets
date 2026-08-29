@@ -14,7 +14,6 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
-| **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 | **O1** | P28j | Withdrawal timing keys off conversion; the $1,000 nobody chose | `P28ja` |
 
@@ -26,6 +25,7 @@ the ten captured paths; prev/next is one 46-stop ring; the Market Return chart n
 **P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Full index next.
+User 2026-08-29: P19 demoted to **O2**.
 
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
@@ -99,11 +99,28 @@ byte-identical, and P85's lesson applies - a "this cannot affect that" claim doe
 withdrawal feedback loop. Budget for a re-run of the sweeps that quote bracket rows, and for a
 changelog entry saying saved plans will not reproduce.
 
-- [ ] **P87a** - MEASURE. Default MFJ plan on `22% Fed`: log `bracketTarget`, `tax.MAGI`, federal
-      taxable income and the resulting unused room, per year. Report the lifetime conversion dollars
-      left on the table. **That number sets the priority** - promote out of O2 if it is large, and
-      note that a NOW-table row means keeping the LINE-30 marker on line 30.
-- [ ] **P87b** - DECIDE the federal fix, two forms, both defensible:
+- [x] **P87a** - **DONE 2026-08-29, and it inverted the phase.** `bracketbasis_harness.js`,
+      `research/BRACKET_CEILING_BASIS.md`, 240 cells x 2 arms.
+      **The defect is confirmed exactly:** a Fill Bracket 22% plan aims at $211,400, lands MAGI on
+      $211,400 and federal TAXABLE income on $179,200, against a $32,200 deduction. To the dollar,
+      every year, widening to $39,998 by 2058 as the age bumps and senior deduction grow.
+      **But correcting it LOSES money in 51 of 74 clean cells, median -$47,092.** The premise that
+      the unused room is money left on the table is REFUTED. The sign is set by the BRACKET: 12%
+      gains (median +$159,278, best +$1,201,973), 22% loses (-$173,437, worst -$2,523,647), 24%
+      loses (-$14,583). The separator is OVER years and nothing else - a cell that gains was already
+      breaching its ceiling every year, so the ceiling was not governing it and lifting it turns a
+      forced draw into an ordinary one (lifetime tax -$53,590); a cell that loses had ZERO OVER
+      years, and lifting a ceiling that genuinely governed just draws more, earlier, for $314 of tax.
+      **`minlimit` is out of the phase entirely:** 0 of 40 cells move, because its ceiling is
+      `yr.IRMAALimit` built from the bracket top containing the SPENDING GOAL ($211,399 where Fill
+      Bracket 24% aims at $403,550), so the federal side of the min is never selected. That also
+      makes the "24%" in `Min Limit 24%` close to decorative - a separate question, not P87's.
+      Priority verdict: **P87 stays O2 and its centre of gravity moves to `P87f`.**
+- [ ] **P87b** - DECIDE the federal fix. **`P87a` changed what this decides.** It is no longer "which
+      correction", it is "should the number change at all", and the measured answer leans no: the fix
+      is a loss in three quarters of the clean cells, and the two forms below differ in mechanism,
+      not in that. If anything is built it belongs behind a CHOICE - the 12% row wants the lift and
+      the 22% row does not - never as a silent correction. The two forms, unchanged:
       **(i)** raise the federal ceiling to `bracket top + the year's deduction`, keeping the MAGI
       comparison. Must read the SAME deduction `calculateTaxes()` uses (std + age bumps + senior
       deduction with its phase-out), or the ceiling and the tax disagree - a second source of truth
@@ -120,10 +137,19 @@ changelog entry saying saved plans will not reproduce.
 - [ ] **P87e** - Tests: a fixed plan on `22% Fed` lands federal TAXABLE income on the bracket top,
       not MAGI; a plan on `IRMAA Tier 1` keeps `tax.MAGI` inside the tier (already covered, keep it
       green); an ACA plan with large SS is measured against the add-back definition.
-- [ ] **P87f** - User-facing: the dropdown prints `22% Fed  ·  $211,400` and never says WHICH income
-      that is. Label it, and say the same thing in the README's strategy section.
-- **Status:** open, nothing built. `P87a` first.
+- [ ] **P87f** - **Now the best-supported item in the phase**, and the one `P87a` argues for. The
+      dropdown prints `22% Fed  ·  $211,400` and never says WHICH income that is; the honest answer is
+      "MAGI, though the number came from a taxable-income table". Label it, and say the same in the
+      README's strategy section. Nothing here promises recovered room - `P87a` measured that promise
+      wrong three times in four.
+- **Status:** `P87a` DONE 2026-08-29 and it refuted the phase's own premise; `P87b` reframed from
+  "which fix" to "any fix at all", `P87f` promoted, `minlimit` dropped from scope. `P87c`/`P87d` are
+  untouched by the measurement - it armed the deduction leg only, not the Social Security basis and
+  not the ACA add-back.
 - **Depends on:** nothing. P66/P83 already settled the IRMAA indexing and margin.
+- **Left in the engine by `P87a`:** the research-only input `bracketCeilingAddDeduction`, default
+  off and set by no UI (`optimizer_core.js:980`), and two hidden log fields, `-fedTaxableInc` and
+  `-fedDeduction`. All three are inert unless the harness arms them.
 
 ---
 
@@ -376,10 +402,10 @@ first task. Every open item in the file now carries one.
 | **O1** | P36 | Phased efficiency study — **round 1 DONE 2026-08-10** | `P36b` round 2 | `P35i` |
 | **O1** | P51 | Perfect-foresight oracle — **a-c,e-g DONE 2026-08-10**, gap table delivered | `P51d` cross-check | nothing |
 | ~~DONE~~ | ~~P30~~ | ~~Withdrawal policy — the `[40,60]` constants nobody chose~~ - **COMPLETE, `P30a`-`P30g`, v11.163F**; the menu shipped, both constants measured and left alone | - | - |
-| **O1** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
+| **O2** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
 | **O1** | P34 | Cost of finding a profitable conversion; worker + per-row memo | `P34a` | nothing |
 | **O1** | P84 | Annual advisor / AUM fee, **plus RMDs off the prior Dec 31 balance** (today they key off a mid-year balance whose growth depends on whether the plan converted) *(new 2026-08-28)* | `P84k` (the RMD half; runs before `P84a`) | nothing |
-| **O2** | P87 | The "Limit" dropdown mixes two income bases: IRMAA tiers are MAGI thresholds (right), federal brackets are taxable-income thresholds spent as MAGI ceilings (wrong by one standard deduction) *(new 2026-08-29, user-raised)* | `P87a` (measure first) | nothing |
+| **O2** | P87 | The "Limit" dropdown mixes two income bases: IRMAA tiers are MAGI thresholds (right), federal brackets are taxable-income thresholds spent as MAGI ceilings (wrong by one standard deduction) *(new 2026-08-29, user-raised)* - **`P87a` MEASURED 2026-08-29: the gap is exactly one deduction, and closing it LOSES money in 51 of 74 clean cells. Premise refuted; `P87f`, labelling the income basis, is what survives** | `P87f` | nothing |
 | **DONE** | P52 | MC run scope: nerdknob "Run My Plan Only" *(default later flipped by P53f)* | shipped v11.150b | - |
 | **DONE** | P53 | Monte Carlo Stress Test suite (5 windows, bear-start, plan-only default) | shipped v11.1521-152f (#170) | - |
 | **DONE** | P54 | `?montecarlo` teaching demo + mode-aware paths floor | shipped v11.1553 (#173) | - |

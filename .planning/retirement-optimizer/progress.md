@@ -6153,3 +6153,65 @@ itself). OPEN, deferred: if the branch still reads slower after a browser restar
 controlled, bisect via the staged scratchpad/ab trees (now unserved; rebuild with git archive).
 Lesson, user-stated: perf A/Bs on the MC should use 50-100 paths, not 500 - same answer, tenth the
 wall time. A/B server killed.
+
+## 2026-08-29 - P19 demoted to O2; P87a measured, and it refuted P87's premise
+
+**P19 -> O2 (user, this session).** Row removed from the NOW table (that table is O0/O1 only), index
+row at what was line 379 relabelled, and a `User 2026-08-29:` note added beside the 2026-08-07 one.
+The note is load-bearing rather than decorative: deleting a NOW row would have pulled the LINE-30
+marker up to 29 and silently dropped a row out of the planning hook's `head -30` window. One line
+out, one line in.
+
+**P87a DONE.** New harness `.test_harnesses/bracketbasis_harness.js`, report
+`research/BRACKET_CEILING_BASIS.md`, rows added to `research/README.md` and `research/HARNESSES.md`
+in the same commit. 240 cells x 2 arms, 485 sims, ~2s.
+
+Engine changes, all inert unless armed:
+- `-fedTaxableInc` and `-fedDeduction` on the log record (leading `-` keeps them out of Annual
+  Details; browser-verified at 87 columns with neither present).
+- `bracketCeilingAddDeduction`, research-only, default off, no UI. Raises the federal-mode ceiling
+  by the year's deduction. Placed after the state bracket LOOKUP but before the state min and before
+  the `minlimit` IRMAA min, and the position is the measurement - see the comment at
+  `optimizer_core.js:980`.
+- `computeBracketCeiling` gained a 13th parameter, `dedAddBack`, passed from `yr._ceilDedAddBack` at
+  all three call sites.
+
+**The finding, in one line: the defect is real and exactly one deduction, and correcting it loses
+money.** A Fill Bracket 22% plan aims at $211,400, lands MAGI on $211,400 and federal TAXABLE income
+on $179,200, against a $32,200 deduction - to the dollar, every year. But over 74 clean cells,
+terminal after-tax net worth RISES in 19 and FALLS in 51, median -$47,092.
+
+The sign is set by the bracket, not the plan: 12% gains (+$159,278 median, +$1,201,973 best), 22%
+loses (-$173,437, -$2,523,647 worst), 24% loses (-$14,583). The separator is OVER years and nothing
+else - cells that gain were already breaching the ceiling every year, so the ceiling was not
+governing them and lifting it turns a forced draw into an ordinary one (lifetime tax -$53,590);
+cells that lose had ZERO OVER years, and lifting a ceiling that did govern just draws more, earlier,
+for $314 of tax. Control-arm lifetime tax is the same in both groups to within $1,200 of $894,000,
+so it is not a tax-level story.
+
+**Second finding, unlooked-for: `Min Limit 24%` never sees the federal number.** 0 of 40 cells move.
+Its ceiling is `yr.IRMAALimit`, built from `goalLimit` - the bracket top containing the SPENDING
+GOAL, $211,399 where Fill Bracket 24% aims at $403,550 - so the min never selects the federal side.
+The "24%" in that row's label is close to decorative. Not P87's problem; recorded so it is not lost.
+
+**Two predictions were scored on the wrong quantity and both are documented rather than deleted.**
+B1 asked a per-year claim of a LIFETIME total and condemned a working arm in 70 of 120 cells
+(drawing more early leaves less to draw later; a lifetime sum is not monotone in the ceiling). Same
+failure as `rmdbasis_harness.js` R2. B4's second clause predicted `minlimit` would move.
+
+**Phase consequences:** P87 stays O2. `P87b` reframed from "which correction" to "should the number
+change at all", and if anything is built it belongs behind a choice, not as a silent fix. `P87f`
+(label which income the ceiling is) promoted to the phase's best-supported item. `P87c`/`P87d`
+untouched - this armed the deduction leg only.
+
+**Verification.** Suites 358 / 61 / 22, unchanged; no tests added, so `TestTiers.EXPECTED` and
+`.githooks/README.md` needed no reconciliation. In-browser: Annual Details renders 87 columns with
+neither new key present, self-check badge green with tier 2 run via `?runtests`.
+
+**No changelog entry for this branch.** Nothing in `git diff main...HEAD` is visible to a user: the
+flag is off, the log fields are hidden, and the only `retirement_optimizer.html` change is the
+`optimizer_core.js?v=` cache-buster. The `<title>` stamp was bumped to 11.16a1 and then reverted for
+the same reason - that number names a changelog entry, and there is no entry to name.
+
+GOTCHA for the next session: `.planning/retirement-optimizer/task_plan.md` is CRLF, and an edit
+written with bare `\n` leaves one mixed line behind. Normalize on the way out.

@@ -45,6 +45,7 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `gapfill_objectives_harness.js` | **node** | P30h: should the `[40,60]` gap-fill blend be deleted and unified on the Cash-first cascade? Scores every OPTIMIZER_OBJECTIVES key plus a liquidity measure. |
 | `convtiming_harness.js` | **node** | P85: does it matter WHICH YEARS a conversion program lands in, and is RMD suppression the reason? Front-load vs level vs back-load at equal lifetime gross. |
 | `rmdbasis_harness.js` | **node** | P84k/P84n: how wrong was the RMD basis, and did fixing it move what the characterization predicted? Run before and after `P84l`. |
+| `bracketbasis_harness.js` | **node** | P87a: the strategy Limit dropdown's federal entries are taxable-income thresholds spent as MAGI ceilings. How much room does that leave unused, and is the room worth anything? |
 
 ## betr_harness.js  (node)
 
@@ -369,3 +370,42 @@ Its own `R2` prediction - that the RMD BASIS, the RMD divided by the prior year-
 independent of withdrawal timing - was written wrong twice - once as a lifetime total, which condemns a correct
 fix, and once as a two-spouse blended ratio. Both are documented in the file header, because the
 wrong versions are more instructive than the right one.
+
+## bracketbasis_harness.js  (node)
+
+```bash
+node .test_harnesses/bracketbasis_harness.js
+```
+
+**Full results, tables and reasoning live in [`BRACKET_CEILING_BASIS.md`](BRACKET_CEILING_BASIS.md).**
+This entry is the index; that file is the reference.
+
+P87a. `computeBracketCeiling` returns three kinds of ceiling as one number and every caller spends
+it as a MAGI ceiling. The IRMAA tiers really are MAGI thresholds; the federal bracket tops are
+TAXABLE-income thresholds, so "fill the 22% bracket" stops one whole deduction short of filling it.
+
+Runs the standing 5-mix ladder x 2 IRA-Goal settings x 2 states x 6 families x 2 spend rates = 240
+cells on two arms, ~2 seconds. Half the harness is a census off the control arm's log alone (how
+many years actually sat ON the ceiling); the other half is the A/B behind the research-only
+`bracketCeilingAddDeduction`, default off and set by no UI.
+
+Headline findings (2026-08-29):
+
+1. **The defect is exactly one deduction, confirmed to the dollar.** A Fill Bracket 22% plan aims at
+   $211,400, lands MAGI on $211,400 and federal taxable income on $179,200, against a $32,200
+   deduction. It widens with the age-65 bumps and the senior deduction, to $39,998 by 2058.
+2. **Correcting it LOSES money in 51 of 74 clean cells**, median -$47,092. The premise that unused
+   bracket room is money left on the table is REFUTED: the shipped shortfall is accidentally
+   conservative.
+3. **The sign is set by the bracket, not the plan.** Fill Bracket 12% gains (median +$159,278);
+   22% loses (-$173,437) and 24% loses (-$14,583).
+4. **The separator is OVER years and nothing else.** Cells that gain were already breaching the
+   ceiling every year, so the ceiling was not governing them and lifting it re-times a forced draw
+   into an ordinary one (lifetime tax -$53,590). Cells that lose had zero OVER years, and lifting a
+   ceiling that genuinely governed just draws more, earlier, for $314 of tax.
+5. **`Min Limit 24%` never sees the federal number at all** - 0 of 40 cells move. Its ceiling is
+   `yr.IRMAALimit`, built from the bracket top containing the SPENDING GOAL, which sits below the
+   federal ceiling the user picked. So the zero test covers four families, not the two it was
+   written for, and the "24%" in that row's label is close to decorative.
+6. **A prediction scored on the wrong quantity.** B1's first form asked a per-year claim of a
+   LIFETIME total and condemned a working arm in 70 of 120 cells. Same failure as `rmdbasis`'s R2.

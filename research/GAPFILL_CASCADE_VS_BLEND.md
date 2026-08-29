@@ -1,4 +1,4 @@
-# P30h - should the `[40, 60]` gap-fill blend be deleted and unified on the Cash-first cascade?
+# Should the `[40, 60]` gap-fill blend be deleted and unified on the Cash-first cascade?  *(phase P30h)*
 
 Reference record for `gapfill_objectives_harness.js`. Reproducible with:
 

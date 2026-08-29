@@ -1,7 +1,21 @@
-# P84k / P84l / P84m / P84o — the RMD basis was a mid-year balance
+# The RMD basis was a mid-year balance  *(phase P84k / P84l / P84m / P84o)*
 
 Harness: [`rmdbasis_harness.js`](https://github.com/nightskyguy/retirement_assets/blob/main/.test_harnesses/rmdbasis_harness.js). Run `node .test_harnesses/rmdbasis_harness.js`.
 Suites after the change: **344 / 61 / 22** (`slowInCore` 3).
+
+---
+
+## 0. Reading guide - the codes used below
+
+| code | what it is |
+|---|---|
+| **`P84k` / `P84l` / `P84m` / `P84o`** | sub-items of phase P84 in `task_plan.md`: characterize first, fix the basis, cap the taxable RMD, pin the year-0 limitation |
+| **`R1` - `R4`** | the four predictions registered before the fix ran; stated with their verdicts in **section 4** |
+| **`R11`** | a RISK from the P84 plan: "RMDs shrink by the fee rate", which was a reason to sequence the fee work carefully. Retired by `P84l` |
+| **`R12`** | a RISK from the P84 plan: the re-baseline hides a real regression. `P84l` moves numbers in almost every suite, so a genuinely broken assertion can be "fixed" by accepting whatever it now prints. The mitigation is to characterize the expected direction and size FIRST, which is what section 2 is |
+
+`R1`-`R4` and `R11`/`R12` are different series that happen to share a letter: `R1`-`R4` are
+predictions about this measurement, `R11`/`R12` are risks about doing the work.
 
 ---
 
@@ -21,7 +35,7 @@ The engine struck it off `balance.IRA1` at `optimizer_core.js:1557`, which by th
 
 ---
 
-## 2. P84k — characterization, run before anything changed (risk R12)
+## 2. P84k — characterization, run before anything changed (mitigating risk `R12`)
 
 30 plans (5 mixes × 3 families × 2 spend rates), `iraBaseGoal` at the shipped $750,000.
 
@@ -60,6 +74,8 @@ and therefore owns the fix; a test pins the limitation so it cannot drift silent
 
 ## 4. Predictions, scored
 
+Registered before the fix ran.
+
 | id | verdict | evidence |
 |---|---|---|
 | **R1** lifetime RMDs fall wherever any RMD is taken | **HELD** | e.g. defaults/propwd/4% $4,598,607 → $4,372,422 |
@@ -88,7 +104,7 @@ claimed — the same family as P83's P1, P30f's vacuous predicate, and the four 
 
 ## 5. Re-baselines, each checked against a prediction rather than accepted
 
-Three pinned assertions moved. Under R12 the rule is that a moved number must match the
+Three pinned assertions moved. Under `R12` the rule is that a moved number must match the
 characterization's predicted **direction**, or it is a regression wearing a re-pin's clothes.
 
 | assertion | before | after | direction |
@@ -127,7 +143,7 @@ Four, all in `optimizer_core.tests.js` (340 → 344):
 P85's first run measured the RMD channel on this broken basis **and** at `iraBaseGoal: 0`. Both were
 wrong, and together they flipped a headline: the claim "front-loading gives strictly lower lifetime
 RMDs in 186 of 186 cells" became **375 of 499, with 124 counterexamples**. See
-[`CONVTIMING_RESULTS.md`](CONVTIMING_RESULTS.md) section 4.
+[`CONVERSION_TIMING.md`](CONVERSION_TIMING.md) section 4.
 
 Still open: `P84a`–`P84j`, the AUM fee itself. `P84l` retires risk **R11** and placement reason 3 in
 that plan — once the RMD keys off the prior December 31 balance, a mid-year fee cannot move the same

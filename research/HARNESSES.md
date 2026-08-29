@@ -4,12 +4,11 @@ Index of the investigative / audit scripts for the retirement optimizer engine, 
 they produce. These are **not** part of the regular unit-test suite (`optimizer_core.tests.js`); they
 are kept so a finding can be re-derived on demand.
 
-This file was `README.md` until 2026-08-24. It is a catalog, not an introduction, and the name now
-says so - which also stops it colliding with the repo's real README in search results and in
-conversation.
+This file is a catalog, not an introduction.
 
 **Two directories, and the split is deliberate.** The **scripts** live in `.test_harnesses/` and the
-**reports** live here in `research/`, one `<NAME>_RESULTS.md` per study. Until 2026-08-28 both sat in
+**reports** live here in `research/`, one `<SUBJECT>.md` per study, indexed by
+[`README.md`](README.md). Until 2026-08-28 both sat in
 `.test_harnesses/`, which was hard to scan and also hid the half worth reading: Jekyll skips
 dot-directories, so nothing under `.test_harnesses/` is reachable on the deployed site, and every
 report was invisible with it. `research/` is published, so each report is readable at
@@ -86,7 +85,7 @@ EV2.reportPolicies();        // best amount vs best stop-year vs joint
 node .test_harnesses/gapfill_harness.js
 ```
 
-**Full results, tables and reasoning live in [`GAPFILL_RESULTS.md`](GAPFILL_RESULTS.md).** This entry
+**Full results, tables and reasoning live in [`GAPFILL_SPLIT.md`](GAPFILL_SPLIT.md).** This entry
 is the index; that file is the reference.
 
 Sweeps `gapFillWeights` (P30a) over 0/20/40/60/80/100 as Brokerage's share of the default gap-fill
@@ -135,7 +134,7 @@ Headline findings:
 node .test_harnesses/unifiedconv_harness.js
 ```
 
-**Full results, tables and reasoning live in [`P28_RESULTS.md`](P28_RESULTS.md).** This entry is the
+**Full results, tables and reasoning live in [`CONVERSION_ROUTING.md`](CONVERSION_ROUTING.md).** This entry is the
 index; that file is the reference.
 
 **Settled 2026-08-24 (P28f).** `unifiedConvRouting` was deleted from the engine after it measured
@@ -147,7 +146,7 @@ the Optimizer's 🅡 rows. The grid is now 6 arms, 540 simulations.
 `fillCashThenRoth` range of +$470,977 to -$633,605, negative in 26 of 60 cells, against the
 +$3,559,596 / 1-of-60 below. The mechanism inverted too: the largest Brokerage draws in the grid now
 produce the largest LOSSES, where they used to produce the largest gains. The zero-predicate still
-holds. Full re-baseline in `P28_RESULTS.md` section 15 - quote that, not the 2026-07-30 tables.
+holds. Full re-baseline in `CONVERSION_ROUTING.md` section 15 - quote that, not the 2026-07-30 tables.
 
 Tests a proposed nerdknob (P28): model every **voluntary** (non-RMD) IRA withdrawal as a Roth
 conversion, then spend out of Roth. Runs a 5-mix account ladder (shipped defaults -> balanced thirds
@@ -193,7 +192,7 @@ Headline findings:
 node .test_harnesses/phased_harness.js
 ```
 
-**Full results, tables and reasoning live in [`PHASED_RESULTS.md`](PHASED_RESULTS.md).**
+**Full results, tables and reasoning live in [`STRATEGY_FAMILY_RANKING.md`](STRATEGY_FAMILY_RANKING.md).**
 
 P36 round 1. Runs the Optimizer table's OWN enumeration (`buildStrategyFamilies`, nerdknob
 configuration, 192 arms) over a crossed 45-cell grid (P28's 5-mix ladder x wealth x0.5/1/3 x spend
@@ -220,7 +219,7 @@ node .test_harnesses/oracle_harness.js          # P51a conversions-only
 node .test_harnesses/oracle_harness.js --full   # + P51c-g (needs the oracleWithdrawalPlan hook)
 ```
 
-**Full results live in [`ORACLE_RESULTS.md`](ORACLE_RESULTS.md).** P51: perfect-foresight
+**Full results live in [`PERFECT_FORESIGHT_ORACLE.md`](PERFECT_FORESIGHT_ORACLE.md).** P51: perfect-foresight
 trajectory oracle — per-year `extraConversionAmount[]` + per-year `oracleWithdrawalPlan`
 splits, coordinate descent, spend pinned, backstops instrumented. An upper-bound DIAGNOSTIC
 for one deterministic path, never a policy. Headlines (2026-08-10): flat scalar conversions
@@ -234,7 +233,7 @@ oracle in one cell because surplus ROUTING is outside the menu — cyclic's real
 node .test_harnesses/endgame_harness.js
 ```
 
-**Full results live in [`ENDGAME_RESULTS.md`](ENDGAME_RESULTS.md).** P35n: scenarios start IN
+**Full results live in [`ENDGAME_DRAW_ORDER.md`](ENDGAME_DRAW_ORDER.md).** P35n: scenarios start IN
 the endgame (couple 75/73, RMDs active, IRA at target) and bake off tail policies via the P51b
 `oracleWithdrawalPlan` `{seq}`/`{prop}` entry forms. 144 cells, ~32k sims, ~13s.
 
@@ -252,7 +251,7 @@ proportional at every wealth level tested.
 node .test_harnesses/brokerage_harness.js
 ```
 
-**Q2/Q3/Q4 results live in [`P32_RESULTS.md`](P32_RESULTS.md).** P32's harness: q1 (how often is
+**Q2/Q3/Q4 results live in [`BROKERAGE_DRAW.md`](BROKERAGE_DRAW.md).** P32's harness: q1 (how often is
 Brokerage drawn -- premise refuted, re-run post-fix with three of four families UP), the
 accounting audit that found the dividend double-credit (`e9a3c8b`), q2 (third-pass spiral --
 **answered 2026-08-21: there is no spiral**, 0 capped years in 3,960 armed runs and `bounded`
@@ -278,7 +277,7 @@ identical to `unbounded` everywhere), and as of 2026-08-10 q3/q4 over the Stage-
 node .test_harnesses/cpi_index_harness.js
 ```
 
-**Full results, tables and predictions live in [`CPI_INDEX_RESULTS.md`](CPI_INDEX_RESULTS.md).**
+**Full results, tables and predictions live in [`BRACKET_INDEXATION.md`](BRACKET_INDEXATION.md).**
 
 P70a. `sim.inflation` follows the path; `sim.cpiRate` - which indexes federal and state brackets,
 the LTCG brackets, IRMAA thresholds, the ACA FPL multiple, the IRA goal and Social Security COLA -
@@ -304,7 +303,7 @@ and the ACA effect shows up as a moved ceiling with zero breaches in either arm.
 node .test_harnesses/convtiming_harness.js
 ```
 
-**Full results, tables and reasoning live in [`CONVTIMING_RESULTS.md`](CONVTIMING_RESULTS.md).**
+**Full results, tables and reasoning live in [`CONVERSION_TIMING.md`](CONVERSION_TIMING.md).**
 This entry is the index; that file is the reference.
 
 Answers a user question nothing else here could: converting *earlier* is supposed to beat converting
@@ -338,7 +337,8 @@ finding did not survive either change; the numbers below are the second run.**
    (paired on 72: $449,889 -> $21,724). N3, which holds terminal pre-tax IRA equal, now has signal
    (18 of 60 usable) and FRONT still leads - so the advantage survives with the RMD stock held flat.
 4. **At an 8% spend rate the sign flips**, and in 750 of 1,440 comparisons an aggressive front-loaded
-   schedule is not even deliverable - the IRA does not hold it. Both are real constraints on P5.
+   schedule is not even deliverable - the IRA does not hold it. Both are real constraints on the
+   phase P5 per-year conversion schedule.
 5. **The conversion tax rate is not the lever**: off an identical gross, the net landing in Roth is
    a coin flip (median -$464).
 
@@ -351,7 +351,7 @@ Requires the research-only `_cfSuppressConversionsBeforeYear` flag added to
 node .test_harnesses/rmdbasis_harness.js
 ```
 
-**Full results in [`RMDBASIS_RESULTS.md`](RMDBASIS_RESULTS.md).**
+**Full results in [`RMD_BASIS.md`](RMD_BASIS.md).**
 
 The characterization behind `P84l`, written to be run BEFORE the fix and again after. 26 CFR
 1.401(a)(9)-5 sets the year's required distribution from the prior December 31 balance; the engine
@@ -365,6 +365,7 @@ It exists separately from the fix because of risk R12: `P84l` moves numbers in a
 a genuinely broken assertion could be "fixed" by accepting whatever new value appeared. Recording the
 predicted direction and size first makes each re-baseline a check rather than a shrug.
 
-Its own R2 prediction was written wrong twice - once as a lifetime total, which condemns a correct
+Its own `R2` prediction - that the RMD BASIS, the RMD divided by the prior year-end balance, is
+independent of withdrawal timing - was written wrong twice - once as a lifetime total, which condemns a correct
 fix, and once as a two-spouse blended ratio. Both are documented in the file header, because the
 wrong versions are more instructive than the right one.

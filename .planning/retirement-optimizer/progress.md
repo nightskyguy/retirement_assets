@@ -1301,7 +1301,7 @@ User feedback on the baseline-accounting UI:
 ## Session: 2026-08-04 (worktree readme-review-updates-c9df11, branch worktrees/next-on-list-55379e) — doc file-reference gaps, the golden-file question, and P35 PR 3b rebuilt from scratch
 
 - User asked for three things: the file-reference sections were never updated for files recent PRs added; it was unclear whether the `sweep_golden.*` files are harnesses that belong in `.test_harnesses/` or interim profiling artifacts; and PR 3b was to be **started over**, abandoning [PR #148](https://github.com/nightskyguy/retirement_assets/pull/148) rather than continuing a branch whose edits had produced conflicts. Built fresh on `main` = `9014c81`. **#148 should be closed, not merged — the same change now exists here.**
-- ANSWERED THE GOLDEN QUESTION WITH A RULE, not a one-off placement: **would the node suite fail without this file?** `optimizer_core.test.js:67` `require`s `sweep_golden.js` at the top level, so it is a fixture — 18 named tests assert against it, and deleting it does not lose 18 tests, it stops the suite from loading at all. `.test_harnesses/` is for scripts that answer a research question once (BETR, stop-year, unified-conversion): not run by any `.test.js`, several browser-only, output is prose in `findings.md` / `P28_RESULTS.md`. Neither `gen` nor `import` is interim or profiling — `gen` rewrites `sweep_golden.js` in place by `__dirname`, so all three stay together at root. Rule written into `ARCHITECTURE.md` §6 and cross-linked from `.test_harnesses/README.md`, which is where someone about to drop a new file will actually look.
+- ANSWERED THE GOLDEN QUESTION WITH A RULE, not a one-off placement: **would the node suite fail without this file?** `optimizer_core.test.js:67` `require`s `sweep_golden.js` at the top level, so it is a fixture — 18 named tests assert against it, and deleting it does not lose 18 tests, it stops the suite from loading at all. `.test_harnesses/` is for scripts that answer a research question once (BETR, stop-year, unified-conversion): not run by any `.test.js`, several browser-only, output is prose in `findings.md` / `CONVERSION_ROUTING.md`. Neither `gen` nor `import` is interim or profiling — `gen` rewrites `sweep_golden.js` in place by `__dirname`, so all three stay together at root. Rule written into `ARCHITECTURE.md` §6 and cross-linked from `research/README.md`, which is where someone about to drop a new file will actually look.
 - FOUND A SECOND, OLDER DEFECT WHILE IN THE FILE REFERENCE: `ARCHITECTURE.md`'s dependency graph still had an `optimizer_history.js` node with a "fetch on expand" edge. That file was deleted back in the changelog consolidation; a previous pass corrected two prose references and missed the diagram. Node, edge, and its `classDef` entry all removed. `FILE_DIRECTORY.md:11` still listed it too, and its `retirement_optimizer.html` row was missing `optimizer_tests.js` and `doclinks.js`, both of which the page does load.
 - Nine rows added to `ARCHITECTURE.md` §6 (the three `sweep_golden.*`, `taxPaymentPlanner.js` + its test, `RetirementTaxPlanner.html`, `optimizer_styles_responsive.css`, `optimizer_changelog.md`, `.test_harnesses/`); `sweep_golden.js` and `doclinks.test.js` added to the graph's node subgraph. Six added to `FILE_DIRECTORY.md`, plus a new **Docs** section for `README.md` / `ARCHITECTURE.md` / `optimizer_changelog.md` — none of the three was listed anywhere in the repo's own file index.
 - P35 PR 3b: Medicare eligibility was a literal `65` in ten places across `optimizer_core.js`, `optimizer_ui.js`, and `Retirement_Projection.html`. PR 3c has to ask the same question an eleventh time, which is the reason this goes first. Now `TAXData.IRMAA.ELIGIBILITY_AGE`.
@@ -2128,8 +2128,8 @@ Stage 1 scans (done this session), Stage 2 `cycleHarvestMode`/`cycleCoexist` res
 A/Bs, Stage 3 = NEW PHASE P51 perfect-foresight oracle (allocated, O1).
 
 Stage 1 shipped: NEW `.test_harnesses/phased_harness.js` (P36 round 1 — 45-cell grid x the sweep's
-own 192-arm enumeration, UI scoring recipe, three tables → PHASED_RESULTS.md) and
-`brokerage_harness.js` +q3/q4 (P32e → P32_RESULTS.md). Q1 re-run post-dividend-fix folded in.
+own 192-arm enumeration, UI scoring recipe, three tables → STRATEGY_FAMILY_RANKING.md) and
+`brokerage_harness.js` +q3/q4 (P32e → BROKERAGE_DRAW.md). Q1 re-run post-dividend-fix folded in.
 Headlines (full detail findings.md 2026-08-10): cyclic wins 26/45 cells but HALF is the
 surplus-routing confound (CashReserve:0 control still wins 23/45 at half magnitude — future cyclic
 A/Bs must equalize routing); cycleLTCGTarget 0.20 is an ANTI-lever (wins 53/2,576, worst −$380k,
@@ -2152,7 +2152,7 @@ it). No engine edits yet — Stage 2 opens with the default-off inputs + bit-ide
 sizing refactored into a `_sizeHarvest(ordFloor)` closure (byte-identical math when off), MAGI
 ceilings via a documented two-pass fixed point, coexist IRA draw un-zeroes surplus conversions
 automatically. Tests: absent≡off deep-equal x2 scenarios, leak guard, IRMAA-tier invariant,
-spendonly<=maxbracket. A/Bs q5/q6 in brokerage_harness -> P32_RESULTS.md. ALL THREE S2 predictions
+spendonly<=maxbracket. A/Bs q5/q6 in brokerage_harness -> BROKERAGE_DRAW.md. ALL THREE S2 predictions
 WRONG: maxbracket wins only 4% of 2,514 pairs (the top-off is a pre-§1014 design); coexist is
 median-NEGATIVE (-0.73%) because the skip was protective for aggressive ceilings (FB35 -$2.1M)
 while measured arms gain (IRA Draw 5-8% up to +$808k). thirdPassBrokerage/forcedIRAAllowBrokerage
@@ -2195,7 +2195,7 @@ pension. All still uncommitted.
 User approved the endgame study with three choices (IRA axis both, death axis 2 profiles,
 conversions off+sensitivity). Built: `{prop}`/`{seq}` entry forms added to the P51b
 oracleWithdrawalPlan hook (+2 tests, suite 244/244), NEW endgame_harness.js (144 cells starting
-AT the IRA-target state, 32k sims/13s), ENDGAME_RESULTS.md. RESULT: **Cash -> Roth -> Brokerage
+AT the IRA-target state, 32k sims/13s), ENDGAME_DRAW_ORDER.md. RESULT: **Cash -> Roth -> Brokerage
 wins 88/108; the P35 PR-5 balance-proportional BALANCED spec is the worst arm (median -$223k,
 wins 1 cell)**. Mechanism = P28 + §1014 composed (Roth displacing the BROKERAGE draw, brokerage
 ridden to step-up). E-P3 decisively WRONG (predicted Roth-early loses; it won 100/108). Boundary
@@ -3269,10 +3269,10 @@ by eye. So `brokFirst` buys nothing the third-pass arm does not already deliver 
 losses for it: on this metric it is **dominated**, not merely riskier. That is a stronger statement
 than "the two arms disagree" and it goes straight into P32h.
 
-Written: a full Q2 section in `.test_harnesses/P32_RESULTS.md` (with the title line, run header,
+Written: a full Q2 section in `research/BROKERAGE_DRAW.md` (with the title line, run header,
 predictions table, Coverage and Scope Limits sections all updated - Q2 crosses basis/state/dividend,
 so the file's old "single state, 50% basis" limits had to be scoped to Q1 rather than left standing);
-`.test_harnesses/README.md` now records that q2 printed SKIPPED from v11.1582 to 2026-08-21 and says
+`research/README.md` now records that q2 printed SKIPPED from v11.1582 to 2026-08-21 and says
 to check a probe's counter names against the engine before believing a question is blocked.
 
 Still harness + docs only. No shipped file touched, no version bump, no changelog. `P32g` (record the
@@ -3287,7 +3287,7 @@ before writing any advice showed I had read `totals.shortfall` backwards. It acc
 and a delta of `+$68,786` is that much previously unpaid spending **now paid**, not new shortfall.
 The engine confirms it three ways: lifetime spend rises by exactly $68,786, unfunded dollars go
 $68,792 -> $6, and `failedInYear` goes from ten years to one. So the "unresolved trade-off" I wrote
-into P32_RESULTS.md and findings.md that morning was not unresolved and not a trade-off in the
+into BROKERAGE_DRAW.md and findings.md that morning was not unresolved and not a trade-off in the
 direction stated. Corrected in both files with the mechanism named, and the harness now prints
 unfunded dollars as positive magnitudes `off -> armed` so the direction is on the page. Also added a
 per-arm unfunded-dollars table, because the pooled version of that number was misleading in exactly
@@ -4147,7 +4147,7 @@ stale in three places, all from P23:
 - The Account Composition paragraph named "Synthetic (Log-Normal / GBM)" as the mode that ignores
   the per-account mix. Still true, but it now names both synthetic modes.
 
-**`.test_harnesses/README.md` -> `HARNESSES.md`.** It is a catalog of eleven investigative scripts,
+**`research/README.md` -> `HARNESSES.md`.** It is a catalog of eleven investigative scripts,
 not an introduction, and the name collided with the repo's real README in search and in conversation.
 Renamed with `git mv`, a line at the top records the old name, and every live inbound reference moved
 with it: `ARCHITECTURE.md`, `FILE_DIRECTORY.md`, and five references in `task_plan.md`. Two of those
@@ -4373,7 +4373,7 @@ then P30a-g.
 disagree. The default branch's `[40,60]` is wrong - `w=0` wins 65 of 82 clean cells, 40 wins none.
 The bracket branch's Cash-first is right - swapping it loses 21 of 23. And under Ordered the story
 collapses: "Cash before Brokerage" is exactly 30/60, a coin flip, because a four-account sequence
-also places the IRA and Roth and that swamps the pair. Full tables in `GAPFILL_RESULTS.md`.
+also places the IRA and Roth and that swamps the pair. Full tables in `GAPFILL_SPLIT.md`.
 
 **P30g shipped the menu, not the constants.** Two of the three Ordered codes on offer (RIBC, BIRC)
 win nothing in 60 cells, and the most-often-best sequence, CBRI, was not offered at all. The list is
@@ -4384,7 +4384,7 @@ win is measured on `baselineScoreOf` only, and "always drain Cash first" has a l
 harness cannot see. That reasoning is written into P30g so it is not re-derived.
 
 **Corrections worth keeping.** P28's 2026-07-30 evidence no longer reproduces on the current engine
-and its mechanism has inverted; the ladder was re-baselined (`P28_RESULTS.md` section 15) before P30
+and its mechanism has inverted; the ladder was re-baselined (`CONVERSION_ROUTING.md` section 15) before P30
 reused it. `resolveOrderedSeq` was silently resolving all 21 unshipped permutations to CBIR - they
 named one sequence and ran another - which is why P30d had to generalize it before it could measure
 anything. And one prediction was scored VACUOUS rather than quietly dropped: no cell in the grid
@@ -4706,7 +4706,7 @@ Worst single scenario -36.7%. The sign tracks realized-minus-assumed CPI monoton
 buckets (+1.4% when the path came in cold, -11.9% when it ran >3pt hot; 107 of 110 cheaper in that
 tail). Mechanism visible in the drift: a 1966 start reaches cpiFactor 4.70 on the path against 1.78
 fixed - every threshold sitting at 38% of where the path's own price level put it. So P70 is an
-engine fix, not a NOTE. Full tables in `.test_harnesses/CPI_INDEX_RESULTS.md`.
+engine fix, not a NOTE. Full tables in `research/BRACKET_INDEXATION.md`.
 
 **Three things the write-up carries into P70b.** (1) The lower the CPI a user types, the worse the
 distortion - every family's delta shrinks monotonically 2.0% -> 3.0%, so typing a conservative rate
@@ -5353,7 +5353,7 @@ with the current value as the default, verify bit-identical when unset, and only
 **The re-baseline warning carries to round 3.** P28's own tables stopped reproducing after P32; the
 13-of-25 and the -$1,095,454 in `P28i` were measured on the same pre-P32 engine and must be re-run
 before they are quoted. `P28ja` is that task, and it writes a NEW numbered section of
-`P28_RESULTS.md` rather than editing the 2026-07-30 tables, which is what P30 did.
+`CONVERSION_ROUTING.md` rather than editing the 2026-07-30 tables, which is what P30 did.
 
 Files touched: `task_plan.md` only - P28j phase inserted, P28's Status line repointed, one row added
 to the NOW table with the header re-flowed so the LINE-30 BOUNDARY marker stays on line 30.
@@ -5390,7 +5390,7 @@ Files touched: `task_plan.md` only.
 
 **Same session, third pass - `P28ja` RUN. The re-baseline reframed the phase it was written for.**
 
-450 sims, 75 cells, v11.1671 engine. Written up as `P28_RESULTS.md` **section 16**, with section 9
+450 sims, 75 cells, v11.1671 engine. Written up as `CONVERSION_ROUTING.md` **section 16**, with section 9
 left intact under a SUPERSEDED pointer - the pattern P30 set, and the third time in this repo a
 research table has failed to reproduce after an engine change.
 
@@ -5428,14 +5428,14 @@ textbook answer where the answer is known is the reason to trust the rest.
 Early-on-conversion rule never pays and nobody can turn it off". Priority should be re-decided rather
 than inherited - flagged in the Status line rather than changed unilaterally.
 
-Files touched: `.test_harnesses/P28_RESULTS.md` (section 16 + the section 9 pointer, normalized back
+Files touched: `research/CONVERSION_ROUTING.md` (section 16 + the section 9 pointer, normalized back
 to CRLF), `task_plan.md`. No engine code, no version bump, no changelog - nothing a user can see.
 
 **Same session, fourth pass - P83, the IRMAA margin re-run the user asked for.** New harness, ~31s,
 research complete the same day. No engine change, no version bump, no changelog.
 
 **The premise was right and both existing documents were wrong about it.**
-`IRMAA_MARGIN_RESULTS.md` section 5 is titled "The limit no sweep can lift" and proves its case by
+`IRMAA_MARGIN_FIXED_CPI.md` section 5 is titled "The limit no sweep can lift" and proves its case by
 quoting `sim.cpiRate *= (1 + inputs.cpi)`. **That line has not existed since P70.** It is now
 `cpi_t = yr.yearInflation + (inputs.cpi - inputs.inflation)`, so the threshold follows each path,
 while `irmaaFwdFactor()` deliberately stays on the scalar `inputs.cpi` because a plan forecasting the
@@ -5503,8 +5503,8 @@ still below the $9,200 p10 error. Same shape as P30's `[40,60]`. Needs a continu
 knob, which is an engine change. And `P83e`: `halfstep` is now the deletion candidate the old document
 had nominated halfcpi and cpiminus1 for.
 
-Files: `.test_harnesses/irmaa_margin_paths_harness.js` (new), `IRMAA_MARGIN_PATHS_RESULTS.md` (new),
-`HARNESSES.md` (registered), `IRMAA_MARGIN_RESULTS.md` (sections 5 and 7 marked SUPERSEDED in place),
+Files: `.test_harnesses/irmaa_margin_paths_harness.js` (new), `IRMAA_MARGIN_MONTE_CARLO.md` (new),
+`HARNESSES.md` (registered), `IRMAA_MARGIN_FIXED_CPI.md` (sections 5 and 7 marked SUPERSEDED in place),
 `task_plan.md` (P83 filed). Suites unchanged at 340 / 61 / 22 - no tests added, so no
 `TestTiers.EXPECTED` reconciliation.
 
@@ -5519,7 +5519,7 @@ premise rather than silently applying the requested substitution to the wrong le
 have inverted every table it touched.
 
 **Renamed in BOTH the document and the harness, deliberately.** The ask named only
-`P28_RESULTS.md`, but the harness PRINTS those column headers, so fixing the document alone would
+`CONVERSION_ROUTING.md`, but the harness PRINTS those column headers, so fixing the document alone would
 have left a results file whose labels disagree with the output that reproduces it - the same
 confusion, one layer down, and harder to spot. Arm keys are map lookups and are never printed, so
 `RF`->`RtC`, `RC`->`CtR`, `RFC`->`RtC+C`, `RCC`->`CtR+C` is invisible in the output; only the literal
@@ -5535,7 +5535,7 @@ keys survive in one sentence explaining the rename, which is why a grep for them
 
 Checked the rest of `.test_harnesses/` for the old keys: nothing else used them.
 
-Files: `.test_harnesses/P28_RESULTS.md`, `.test_harnesses/unifiedconv_harness.js`. Suites 340 / 61 / 22.
+Files: `research/CONVERSION_ROUTING.md`, `.test_harnesses/unifiedconv_harness.js`. Suites 340 / 61 / 22.
 
 **Same session, sixth pass - P83f. User asked HOW the threshold forecast is made under variable
 inflation, and what margin is right if that forecast is as good as it reasonably can be.**
@@ -5584,7 +5584,7 @@ pooled over a stationary process the two windows agree to within noise (GBM forw
 -5.02% / undershoot 46.5%, backward +0.74% / -4.96% / 46.0%). Section 1's numbers stand; only the
 wording was wrong, and the correction says so rather than quietly restating them.
 
-Files: `irmaa_margin_paths_harness.js` (section 3b added), `IRMAA_MARGIN_PATHS_RESULTS.md` (section 8,
+Files: `irmaa_margin_paths_harness.js` (section 3b added), `IRMAA_MARGIN_MONTE_CARLO.md` (section 8,
 section 1 window correction, section 7 cross-reference), `task_plan.md` (P83f). Suites 340 / 61 / 22.
 
 **Same session, seventh pass - P30h. User asked whether the `[40,60]` blend is a candidate for
@@ -5634,7 +5634,7 @@ bugs live, not the measurement, because a wrong scorer still prints a confident 
 on w=0, the case for deleting the blend is much stronger than P30g assumed". They do not agree. P30g
 declined for reasons it could not check; those reasons were right, for a reason it did not state.
 
-Files: `.test_harnesses/gapfill_objectives_harness.js` (new), `GAPFILL_OBJECTIVES_RESULTS.md` (new),
+Files: `.test_harnesses/gapfill_objectives_harness.js` (new), `GAPFILL_CASCADE_VS_BLEND.md` (new),
 `HARNESSES.md` (registered), `task_plan.md` (P30h, P30 status now P30a-P30h). No engine change, no
 version bump, no changelog. Suites 340 / 61 / 22.
 
@@ -5656,7 +5656,7 @@ whatever it looked like.
 **Then the real answer: nobody had tested it.** `betr_harness.js` asks convert-vs-not.
 `stopyear_harness.js` / `bestConversionStopYear()` ask when to STOP - and a later stop converts MORE
 in total, so the cutoff sweep confounds timing with amount and structurally cannot answer "same
-program, different years". `RMD` appeared 1-2 times across all twelve `*_RESULTS.md` files. P5 (the
+program, different years". `RMD` appeared 1-2 times across all twelve `research/*.md` reports. P5 (the
 greedy per-year schedule) would produce the shape but is unimplemented.
 
 **Built `convtiming_harness.js`.** FRONT / LEVEL / BACK conversion schedules at equal lifetime
@@ -5709,7 +5709,7 @@ at 6 of 30 because 48 of 60 arms are flat-at-zero - the IRA ends empty either wa
 to be equalized is already equal. **The decomposition N3 was built for was carried by the
 zero-growth arm instead, which is weaker, and that is stated in the results rather than glossed.**
 
-Files: `.test_harnesses/convtiming_harness.js` (new), `CONVTIMING_RESULTS.md` (new), `HARNESSES.md`
+Files: `.test_harnesses/convtiming_harness.js` (new), `CONVERSION_TIMING.md` (new), `HARNESSES.md`
 (registered), `optimizer_core.js` (one research flag), `task_plan.md` (P85 + P85a/b/c follow-ups;
 the LINE-30 boundary was held by replacing one line with one line). No version bump, no changelog -
 nothing user-visible. Suites 340 / 61 / 22.
@@ -5787,8 +5787,8 @@ in a CRLF file.
 
 Files: `optimizer_core.js` (P84l snapshot + P84m realized-outflow cap), `optimizer_core.tests.js`
 (4 new tests, 4 re-pins), `optimizer_tests.js`, `.githooks/README.md`, `retirement_optimizer.html`,
-`optimizer_changelog.md`, `.test_harnesses/rmdbasis_harness.js` + `RMDBASIS_RESULTS.md` (new),
-`convtiming_harness.js` + `CONVTIMING_RESULTS.md` (re-run), `HARNESSES.md`, `task_plan.md`.
+`optimizer_changelog.md`, `.test_harnesses/rmdbasis_harness.js` + `RMD_BASIS.md` (new),
+`convtiming_harness.js` + `CONVERSION_TIMING.md` (re-run), `HARNESSES.md`, `task_plan.md`.
 Suites **344 / 61 / 22**.
 
 
@@ -5823,6 +5823,7 @@ linking these through GitHub blob URLs.
 still carries a dot on purpose (nobody should run a harness from a browser). Those links are absolute
 GitHub blob URLs now. Verified through `docHref` with a rendered-origin stub:
 `research/P32_RESULTS.md -> research/P32_RESULTS.html`, dot-paths untouched, absolute URLs untouched.
+(Both sides of that example were renamed on 2026-08-29; the check itself is unaffected.)
 
 **Also improved on the way:** the changelog's three research links were absolute blob URLs; they are
 now plain relative links, so `doclinks.js` turns them into rendered site pages while they still

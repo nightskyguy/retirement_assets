@@ -77,3 +77,38 @@ work deserves - what was corrected mid-branch, why an approach changed, what was
 the audit trail. The changelog is for the person deciding whether this release touches their plan.
 
 Target for a whole entry: **about 150 words.** A 954-word entry was rejected once already.
+## A research report in `research/` is written for a reader who has none of the context
+
+Three rules, all three added on 2026-08-29 after a read-through found every one of them broken
+somewhere. They apply to every file in `research/`, and to any new one a harness produces.
+
+### Name the file for its SUBJECT, never for the phase
+
+`P32_RESULTS.md` and `P28_RESULTS.md` told a reader nothing. They are now `BROKERAGE_DRAW.md` and
+`CONVERSION_ROUTING.md`.
+
+**Treat the phase ID as information the reader does not have.** It may appear inside the file - as a
+parenthetical on the title, and freely in the body where it points at `task_plan.md` - but nothing a
+reader needs in order to find or choose the file may depend on knowing it. The `_RESULTS` suffix is
+dropped as well: every file in that directory is one, so repeating it in fifteen filenames carries
+no information.
+
+### Define every code before its first use
+
+Prediction ids (`C2`, `S1-P4`, `E-P3`, `R12`), normalization ids (`N1`, `N2`, `N3`), arm and mix
+names, grid knobs (`k`, `S`, `b20`). A report that scores **"C2 is BROKEN"** in section 4 and first
+states what C2 claimed in section 8 is not readable on its own, and that is exactly what
+`CONVTIMING_RESULTS.md` did. `N1` appeared twice and was never defined at all.
+
+The fix that works is a **reading guide near the top** - one block of small tables defining the
+codes, the arms and the grid - with the verdict tables later pointing back at it. Rearranging the
+results is not required and usually makes them worse.
+
+Watch for id series that collide: a bare `P5` has meant both a prediction and a phase in the same
+sentence. Say which, or rename one.
+
+### Add the report to `research/README.md` in the same commit
+
+`research/README.md` is the index: one row per report, a link and one or two sentences on what it
+covers and what it found. A new harness that writes a report and does not add its row has produced a
+file nobody will open. An index nobody updates is worse than no index.

@@ -277,7 +277,7 @@ function computeAnnualQCDs(inputs, balance, simYear, qcdLimit, provisionalMAGI, 
         // against, and every other setting lost on the same trade. The asymmetry is structural - a
         // surcharge is a few thousand a year while the MAGI needed to clear a threshold is tens of
         // thousands - so no setting could ever pay for itself here.
-        //   See research/IRMAA_DEFAULT_RESULTS.md.
+        //   See research/IRMAA_MARGIN_DEFAULT.md.
         const effCpi = cpiRate * irmaaFwdFactor({ ...inputs, irmaaMarginMode: 'none' });
         const tierTarget = getIRMAATierTargetMAGI(provisionalMAGI, status, effCpi, 2);
         // 0 means the household is already clear of every surcharge, so there is nothing to escape
@@ -2100,7 +2100,7 @@ function fillSpendingGap(sim, yr) {
     // the near-free win the 2026-07-30 run recorded. P32 letting the third pass draw Brokerage is the
     // likely cause: displacing a Brokerage draw IS this mechanism, so changing when Brokerage is
     // drawn changes both the size and the sign. That is why it ships as a swept dimension rather
-    // than a default, and why the harness numbers in P28_RESULTS.md carry a re-run warning.
+    // than a default, and why the harness numbers in CONVERSION_ROUTING.md carry a re-run warning.
     // Validated against the known values rather than tested for truthiness: with `|| null` a typo
     // like 'fillCashThenRother' fell through to the Roth-first branch and silently modelled the
     // OTHER mode. Anything unrecognized now means "leave today's behavior alone".
@@ -2294,7 +2294,7 @@ function resolveResidualAndForcedIRA(sim, yr) {
             // promised and could not pay, against $1,711 of new unfunded spending from allowing it.
             // Every scenario it rescued was an IRMAA Ceiling (`minlimit`) plan, the case this was
             // pinned on - Brokerage the only money left, and the engine refusing to touch it.
-            // See `research/P32_RESULTS.md`, section Q2.
+            // See `research/BROKERAGE_DRAW.md`, section Q2.
             // P28 flag: only 'fillRothThenCash' changes the third pass. The pass is already Cash then
             // Roth, which IS the 'fillCashThenRoth' order, so that mode leaves it untouched.
             // Neither carries cap gains, so this only picks which tax-free account drains first.
@@ -2617,7 +2617,7 @@ function routeSurplusAndConvert(sim, yr) {
     // Roth gains X - T - S either way -- so it could only ever re-label, and 630 simulations
     // confirmed it: 0 money fields moved in 90 cells. A view that wants the two legs told
     // separately does not need an engine flag, because `-iraSpend` and `-iraConvGrossTot` are
-    // already in every log row. Reasoning and measurements: research/P28_RESULTS.md.
+    // already in every log row. Reasoning and measurements: research/CONVERSION_ROUTING.md.
 
     // If there is still a surplus, replace any excess Cash withdrawal.
     yr.surplus.Cash = Math.min(yr.surplus.Total, yr.netWithdrawals.Cash);
@@ -3275,7 +3275,7 @@ function endYear(sim, yr) {
     // excess at 3 points whatever the path does. Making BOTH terms path-following instead was
     // tried and rejected: it turns a 12% inflation year into ~24% premium growth, which implies
     // 12 points of excess medical cost in that year, and it swung measured IRMAA dollars from
-    // -6.5% to +29% (research/CPI_INDEX_RESULTS.md).
+    // -6.5% to +29% (research/BRACKET_INDEXATION.md).
     //
     // Written as cpi_t + inputs.inflation because that is the INTENT - index plus a fixed excess.
     // It reduces algebraically to i_t + inputs.cpi, which is the same thing and reads as less.
@@ -4705,7 +4705,7 @@ function lowestBreakEvenHeirsRate(baseInputs, candidates = [], opts = {}) {
 // always a sequence the sweeps score, and vice versa.
 //
 // Four accounts permute 24 ways. These six are the ones that ever came out ahead in the P30d
-// sweep (research/GAPFILL_RESULTS.md sections 10 and 15), ordered by how often each was
+// sweep (research/GAPFILL_SPLIT.md sections 10 and 15), ordered by how often each was
 // the best of all 24 and, on a tie, by how much was at stake when it won. CBRI and CIBR win most
 // and were not offered at all before v11.163F. RIBC and BIRC won nothing anywhere in that grid
 // and are kept because they are the Roth-first and brokerage-first stress tests they were added

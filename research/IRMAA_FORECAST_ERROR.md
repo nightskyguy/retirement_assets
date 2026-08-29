@@ -3,7 +3,7 @@
 `node .test_harnesses/irmaa_cpi_risk_harness.js`. 12 plans x 6 modes = 72 simulations, each
 re-billed in 68 realized CPI worlds = **4,896 plan-world pairs**. Plan assumes CPI 2.5%.
 
-This is the measurement [IRMAA_MARGIN_RESULTS.md](IRMAA_MARGIN_RESULTS.md) could not make. It
+This is the measurement [IRMAA_MARGIN_FIXED_CPI.md](IRMAA_MARGIN_FIXED_CPI.md) could not make. It
 **reverses that round's recommendation**, and the reversal is the point of the file.
 
 ---
@@ -13,7 +13,7 @@ This is the measurement [IRMAA_MARGIN_RESULTS.md](IRMAA_MARGIN_RESULTS.md) could
 Every dollar figure is an ANNUAL surcharge (TAXData holds IRMAA monthly; everything is x12,
 matching `calcIRMAA`), escalated by the engine's `medicareRate` and summed in the NOMINAL dollars of
 the year charged. Nothing is discounted to today. Discounting does not change any ordering here -
-see the basis table in [IRMAA_DEFAULT_RESULTS.md](IRMAA_DEFAULT_RESULTS.md).
+see the basis table in [IRMAA_MARGIN_DEFAULT.md](IRMAA_MARGIN_DEFAULT.md).
 
 ## 1. Why Monte Carlo and the Stress Test cannot do this
 
@@ -91,7 +91,7 @@ windows that undershoot: 29 of 60 produce any breach at all.
 
 ## 5. This reverses the constant-CPI recommendation
 
-[IRMAA_MARGIN_RESULTS.md](IRMAA_MARGIN_RESULTS.md) section 7 said to drop `halfcpi` and `cpiminus1`
+[IRMAA_MARGIN_FIXED_CPI.md](IRMAA_MARGIN_FIXED_CPI.md) section 7 said to drop `halfcpi` and `cpiminus1`
 as "the most expensive modes that buy the same nothing". That was correct **for a world with no CPI
 uncertainty**, which is the only world that harness could build. With uncertainty admitted:
 

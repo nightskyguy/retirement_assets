@@ -24,7 +24,7 @@
  * moved number is checked against a prediction rather than accepted because it moved.
  *
  * Run it on `main` and after the fix; section 4 states what must be true afterwards, and the same
- * script scores it. Results in `research/RMDBASIS_RESULTS.md`.
+ * script scores it. Results in `research/RMD_BASIS.md`.
  *
  * PREDICTIONS, stated before the fix:
  *   R1  Lifetime RMDs FALL for every plan that takes any RMD at all. Direction is certain (the

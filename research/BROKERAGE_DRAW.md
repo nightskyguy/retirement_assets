@@ -1,4 +1,4 @@
-# P32 results — Q1 re-run, **Q2 (the spiral)**, Q3 (does cyclic win), Q4 (cycleLTCGTarget)
+# Why Brokerage is barely drawn, and whether the exclusion keeping it out is still right  *(phase P32)*
 
 **Run:** Q1/Q3-Q6 on 2026-08-10, engine at `5e1075e` (post dividend fix `e9a3c8b`, post basis
 step-up v11.1499). **Q2 on 2026-08-21**, engine at `0b4d5b5` (v11.15cf, post SALT/IRMAA).
@@ -13,6 +13,98 @@ never existed - the shipped counters are `thirdPassBrokerIters` / `thirdPassBrok
 `SKIPPED` and the question looked answered. Anything written before 2026-08-21 that cites a Q2
 number came from a separate scratch script, not from this file.
 
+## Reading guide - every label used below, defined once
+
+Sections after this one use these codes without re-introducing them.
+
+### Where this file sits
+
+The user asked three questions on 2026-08-10: **(A)** how hard whole-horizon asset-utilization
+optimization is on this engine, **(B)** whether Cyclic leaves money on the table in its harvest
+years, **(C)** whether Proportional's optimality can be proven. The answer was planned as a
+three-stage program:
+
+| stage | what it did | where it landed |
+|---|---|---|
+| **Stage 1** | scans - Q1 re-run, Q3, Q4 | this file, plus `STRATEGY_FAMILY_RANKING.md` |
+| **Stage 2** | the `cycleHarvestMode` / `cycleCoexist` A/Bs - Q5, Q6 | this file |
+| **Stage 3** | perfect-foresight oracle, became phase P51 | [`PERFECT_FORESIGHT_ORACLE.md`](PERFECT_FORESIGHT_ORACLE.md) |
+
+So "question B" below is the user's B, and "Stage 2's q6" means **Q6 in this file**, which is
+where B gets its causal answer rather than a descriptive one.
+
+### The six questions
+
+| id | question | asked because |
+|---|---|---|
+| **Q1** | how often is Brokerage drawn at all, by strategy family? | re-run after the dividend double-credit fix |
+| **Q2** | does letting the third pass draw Brokerage cause a cap-gains spiral? | the exclusion at `optimizer_core.js:2044` cites no run |
+| **Q3** | does cyclic harvesting ever beat its non-cyclic twin? | |
+| **Q4** | is `cycleLTCGTarget` 0.20 better than the shipped 0.15? | |
+| **Q5** | does `cycleHarvestMode: maxbracket` - top the harvest off to fill the 0% LTCG bracket - pay? | |
+| **Q6** | does `cycleCoexist: bracketfill` - let a harvest year also run the family's IRA sizing - reclaim the money question B is about? | |
+
+### The four prediction families, and a name collision to watch
+
+Every prediction was registered in the harness before the numbers were looked at. They come in four
+batches with different prefixes, and **all verdicts are in the "Predictions scored" section near the
+end**:
+
+| ids | registered for | stated where |
+|---|---|---|
+| **P1 - P4** | Q1, the draw-frequency question | harness header |
+| **P5, P6** | Q2, the spiral question | harness header |
+| **S1-P2 - S1-P4** | Stage 1: Q3, Q4, and the Q1 re-run | harness, `q3/q4` section |
+| **S2-P1 - S2-P3** | Stage 2: Q5 and Q6 | harness, `q5/q6` section |
+| **B-P1 - B-P3** | the basis-axis extension | harness, basis section |
+
+> **`P5` and `P6` here are PREDICTIONS, not phases.** `task_plan.md` also has a phase P5 (per-year
+> conversion schedule) and a phase P6 (simulation sanity tests), and they are unrelated. Everywhere
+> in this file a bare `P1`-`P6` is a prediction; a phase is written `P32d`, `P36`, `P51` and so on.
+
+The statements, so a verdict below can be read without jumping:
+
+| id | prediction |
+|---|---|
+| **P1** | baseline / propwd / gk / fixed draw Brokerage most often and earliest - their gap fill is proportional, not sequential |
+| **P2** | bracket / minlimit / fixedpct draw it less and later - Cash comes first in their chain |
+| **P3** | ordered BIRC ~100% from year 0, CBIR high, RIBC lowest and latest |
+| **P4** | rows that never draw Brokerage are rare outside RIBC and Brokerage-poor plans |
+| **P5** | the spiral does not diverge: SS inclusion caps at 85% and LTCG at 20%, so the feedback is convergent |
+| **P6** | allowing Brokerage in the third pass eliminates the pinned `minlimit` stranding |
+| **S1-P2** | cyclic beats its non-cyclic twin in <15% of cells, wins concentrated in the brokerage-heavy mixes |
+| **S1-P3** | `cycleLTCGTarget` 0.20 moves the result <1%, except in 8%-spend cells |
+| **S1-P4** | every family's draw frequency rises vs the pre-fix engine; never-draw rows stay at 0 |
+| **S2-P1** | `bracketfill` does no harm in >=80% of pairs, median gain <2% |
+| **S2-P2** | coexist gains scale with harvest frequency - largest in thirds / brokheavy |
+| **S2-P3** | `maxbracket` beats `spendonly` in >=70% of pairs |
+| **B-P1** | the 0.20-target losses GROW at 20% basis and shrink toward inert at 80% |
+| **B-P2** | coexist's median is more negative at 20% basis; the IRA Draw 5-8% gains persist at both extremes |
+| **B-P3** | `spendonly`'s win share grows at 20% basis and falls toward parity at 80% |
+
+### Grids, mixes and arm labels
+
+Two different grids feed this file; the **Coverage** section near the end carries both in full.
+
+- **The Q1 / Q2 ladder** - five scenarios named `capbase`, `brokPoor`, `brokThird`, `brokHalf`,
+  `brokRich`, walking Brokerage-poor to Brokerage-rich with total investable held at $2.25M so that
+  "how often is Brokerage drawn" is not confounded with how much of it there is.
+- **The Stage-1 45-cell grid** - mixes named `defaults`, `round1`, `thirds`, `brokheavy`, crossed
+  with wealth x0.5/1/3 and spend 4/6/8%. Full mix table in `STRATEGY_FAMILY_RANKING.md`.
+
+**Strategy families** name which gap-fill branch an arm lands in: `baseline` (proportional
+Brokerage+Cash), `bracket` (Cash then Brokerage then Roth - covers `bracket22`, `minlimit`,
+`fixedpct2`), `ordered` (the user's own sequence), `cyclic` (the harvest branch).
+
+**`CBIR` / `RIBC` / `BIRC`** are the ordered strategy's draw sequences, one letter per account:
+**C**ash, **B**rokerage, **I**RA, **R**oth. `BIRC` draws Brokerage first; `RIBC` reaches it third,
+behind Roth and the whole IRA.
+
+**Basis fraction** (`b20` / `b50` / `b80` in cell names) is cost basis as a share of the Brokerage
+balance. Low basis = highly appreciated, so each harvested dollar realizes more gain.
+
+---
+
 ## Q1 re-run on the corrected engine (P32d precondition)
 
 Share of years drawing Brokerage, by gap-fill family, vs the 2026-08-06 numbers measured on the
@@ -26,7 +118,7 @@ double-crediting engine:
 | ordered | 44.7% | 45.8% | UP |
 
 Never-draw rows: still **0 of 55**. Ordered sub-order: CBIR 51.7% > BIRC 46.7% > RIBC 39.2%
-(same ordering conclusion as pre-fix; P3's BIRC-first prediction stays WRONG).
+(same ordering conclusion as pre-fix; prediction P3's BIRC-first ordering stays WRONG).
 
 **S1-P4 scored WRONG on a technicality:** three of four families rose as predicted, but cyclic
 fell 0.8pt. The premise refutation stands unchanged — Brokerage is drawn constantly.
@@ -63,7 +155,7 @@ Grid: 3 basis fractions x 3 states x 2 dividend rates x the 5-scenario ladder x 
 **Zero capped years in 3,960 armed runs**, and `bounded` is identical to `unbounded` on every
 counter. That identity is the load-bearing evidence, not the zero: `bounded` stops at 6 passes and
 `unbounded` at 200, so if any single year had ever wanted a 7th the two rows would differ. They do
-not, anywhere on the grid. **P5 RIGHT.**
+not, anywhere on the grid. **Prediction P5 RIGHT.**
 
 Three readings that are easy to get wrong:
 
@@ -119,7 +211,7 @@ the forced-IRA column before the grid was run rather than after.
 All 9 winning cells are IRMAA Ceiling rows: `capbase/minlimit` 19→23 funded (CA), 14→23 (NY), 19→24
 (TX), at all three basis fractions. That is the pinned defect in the harness header — `minlimit`
 stranding $71,382 across nine consecutive years with Brokerage untouched and every other account at
-zero. **P6 RIGHT** for the arm it actually named.
+zero. **Prediction P6 RIGHT** for the arm it actually named.
 
 The 2 losers are both `brokPoor/minlimit` NY, 24→23 funded, shortfall better by $6, final net worth
 −$9,108.
@@ -197,7 +289,7 @@ a smooth deterministic path GK never triggers a guardrail and degenerates to the
 so those rows are twins. ACA rows are not excluded here (untenability hits both sides of the pair
 equally), but ACA family wins inherit the one-sided-pricing caveat.
 
-**Harvest-year money-on-the-table (descriptive; the causal number is Stage 2's q6):** pooled over
+**Harvest-year money-on-the-table (descriptive; the causal number is Q6 below):** pooled over
 successful cyclic rows, 28,390 harvest years drew only $4.1M of IRA (and $8.7k of conversions —
 the surplus-conversion cap at `:1984-1988` zeroes them). Forgone IRA draw per harvest year,
 using each arm's own IRA-year mean: **~$111,700**. Median per-row forgone equals **57.1%** of the
@@ -260,7 +352,11 @@ reclaiming it blindly with the family's own sizing is net-negative on median. Th
 arm-aware gating, which is exactly the kind of heuristic this repo requires an axis-property +
 pinned test for.
 
-## Predictions scored (registered in the harness header before the numbers)
+## Predictions scored
+
+All four batches, every one registered in the harness before the numbers were looked at. The
+statements are in the reading guide at the top; P1, P2 and P4 were scored in the pre-fix 2026-08-06
+run and are not re-scored here.
 
 | id | prediction | verdict |
 |---|---|---|
@@ -272,8 +368,11 @@ pinned test for.
 | S2-P3 | maxbracket beats spendonly in >=70% of pairs | **WRONG — inverted**: maxbracket wins 4% |
 | P5 | the spiral does not diverge; SS inclusion caps at 85% and LTCG at 20%, so the feedback is convergent | **RIGHT** — 0 capped years in 3,960 armed runs; bounded ≡ unbounded on every counter |
 | P6 | allowing Brokerage in the third pass eliminates the pinned `minlimit` stranding | **RIGHT** — 9 of 11 movers better, every one of them a `minlimit` row |
+| B-P1 | 0.20-target losses grow at 20% basis, shrink at 80% | **RIGHT** — worst loss −$540k at b20, −$380k at default basis, −$232k at b80 |
+| B-P2 | coexist median more negative at 20% basis; IRA Draw gains persist at both extremes | **RIGHT** — median −$39k at b20 vs −$4.8k at b80; IRA Draw gains at every basis |
+| B-P3 | spendonly win share grows at 20% basis, falls toward parity at 80% | **RIGHT** in direction — 58% / 58% / 56%, but the share barely moves |
 
-P6 named the **third-pass** arm. Scoring it against the pooled funded-year total would have let
+Prediction P6 named the **third-pass** arm. Scoring it against the pooled funded-year total would have let
 `brokFirst` — an arm P6 never mentions — decide the verdict and print "MIXED". It is scored per arm
 instead, and `brokFirst`'s own record (9 better / 88 worse) is reported beside it as a separate
 decision.
@@ -301,7 +400,7 @@ declining 1%/yr (7.1% of assets), SS $48k+$24k @67, CA, growth 5%, dividendRate 
 the dividend defect could not contaminate Q1), x 11 strategy arms = 55 rows.
 
 **Q3/Q4/Q5/Q6 — the Stage-1 crossed grid** (45 cells x 192 arms): 5 mixes x wealth x0.5/1/3 x
-spend 4/6/8% of assets. Full mix table in `PHASED_RESULTS.md` (Coverage section). Ranges:
+spend 4/6/8% of assets. Full mix table in `STRATEGY_FAMILY_RANKING.md` (Coverage section). Ranges:
 total assets **$810k – $14.58M**; IRA share 22–86%; Brokerage share 6–62%; Roth 4–32%; annual
 spend **$32,400 – $1,166,400**; basis fraction 43–56%. Held fixed: couple 64/62 die 92/94
 (deaths 2054/2058 — only 4 survivor years, 33-yr horizon; note this DIFFERS from the Q1
@@ -309,7 +408,8 @@ ladder's ~15), SS $45k+$24k, CA, 6%/2.5% path, dividendRate 2%.
 
 **Basis-axis extension (2026-08-10, closes the 43-56% gap for the 45-cell A/Bs).** The Stage-1
 grid was rebuilt at basis = 20% (highly appreciated) and 80% (mostly contributions) and Q3-Q6
-re-run. Predictions B-P1..B-P3 pre-registered; **all three RIGHT** — every conclusion holds at
+re-run. Predictions B-P1 to B-P3 (stated in the reading guide) pre-registered; **all three
+RIGHT** — every conclusion holds at
 both extremes, with magnitudes scaling exactly as the §1014 mechanism predicts:
 
 | question | basis 20% | mix default (43-56%) | basis 80% |

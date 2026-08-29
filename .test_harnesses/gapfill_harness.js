@@ -24,7 +24,7 @@
  * all, which is the exact resource the weight splits).
  *
  * A THIRD-PASS ARM, TO SETTLE AN OPEN HYPOTHESIS. P28's ladder was re-baselined on 2026-08-24
- * (`research/P28_RESULTS.md` section 15) and its mechanism had inverted: the largest Brokerage draws now
+ * (`research/CONVERSION_ROUTING.md` section 15) and its mechanism had inverted: the largest Brokerage draws now
  * produce the largest LOSSES where they used to produce the largest gains. The standing hypothesis
  * is P32 (v11.15e3), which let the third pass draw Brokerage by default, so Roth or Cash spent
  * early is no longer there when the third pass reaches for it. Every cell therefore runs twice,

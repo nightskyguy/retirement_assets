@@ -1,4 +1,4 @@
-# P85 — when conversions happen. Is earlier better, and is RMD suppression why?
+# When conversions happen: is earlier better, and is RMD suppression why?  *(phase P85)*
 
 Harness: [`convtiming_harness.js`](https://github.com/nightskyguy/retirement_assets/blob/main/.test_harnesses/convtiming_harness.js). Run `node .test_harnesses/convtiming_harness.js`.
 11,274 simulations, ~9 seconds. Suites at the time of the run: **344 / 61 / 22**.
@@ -28,6 +28,66 @@ at equal lifetime **gross**, over 5 mixes × 3 spend rates × 2 states × 2 Cash
 2 families × **2 IRA Goals** = 240 cells, at 2 program sizes and 3 block widths. Every arm pinned to
 `forceWithdrawTiming: 'late'`, because P28ja measured the withdrawal-timing leg as larger than the
 conversion leg in 29 of 54 cells.
+
+### Vocabulary - every label used below, defined once
+
+Everything the results sections refer to by a short code is listed here. Sections 2 through 10 use
+these without re-introducing them.
+
+**The three schedule shapes.** One cell runs all three, converting the same lifetime gross:
+
+| shape | when it converts |
+|---|---|
+| **FRONT** | all of it in the first `k` years |
+| **LEVEL** | spread evenly across every year |
+| **BACK** | all of it in the last `k` years |
+
+**The two sweep knobs.** `k` is the **block width** - how many years the FRONT and BACK blocks span,
+swept at 3, 5 and 10. `S` is the **program size** - the lifetime gross to convert, set as a share of
+the starting IRA balance and swept at 15% and 30%. A slice written `k=5, S=30%` names one setting of
+each.
+
+**The two strategy families.** Each cell runs one of them, and the two behave differently enough
+that most results below are reported per family:
+
+| key | strategy |
+|---|---|
+| **`propwd`** | Proportional 10% - proportional withdrawals plus a 10% IRA boost |
+| **`bracket`** | Fill Bracket 24% - draw the IRA up to the top of the 24% federal bracket |
+
+**The three normalizations, N1 to N3.** Equal nominal gross is not a neutral way to compare
+schedules: a dollar converted in year 0 removes a larger share of the future IRA than the same dollar
+in year 10. So the question is asked three ways, and disagreement between them is itself a result.
+
+| id | what is held equal across the three arms | what it is for |
+|---|---|---|
+| **N1** | lifetime **gross** converted | the headline. Every number in sections 2 to 6 is N1 unless it says otherwise |
+| **N2** | lifetime **tax**, in current dollars | "for the same tax bill, when?" |
+| **N3** | **terminal pre-tax IRA** | isolates the RMD stock by construction - hold the stock equal and see whether FRONT still wins |
+
+N2 and N3 reach their target by bisecting a scale factor on each arm's gross until it matches the
+LEVEL arm's value, which is why they cost roughly 50x an N1 cell and are run on one slice rather than
+the whole grid.
+
+**How a comparison is classified.** Delivery is verified, not assumed, and a cell is only scored if
+all three of its arms survive every filter:
+
+| word | meaning |
+|---|---|
+| **undelivered** | an arm's actual converted gross missed the request, because `applyExtraConversion` caps each year at the available IRA balance. Excluded rather than silently compared at a smaller `S` |
+| **insolvent** | an arm ran out of money |
+| **dirty** | the three arms did not deliver equal spend. Moving the schedule moves delivered spend, so comparing wealth across unequal spend is meaningless (the P29 / P28jd rule) |
+| **clean** | delivered, solvent, equal spend. Only these are scored, on after-tax net worth |
+
+**The four predictions, C1 to C4.** Stated in the harness before the sweep ran, scored in
+**section 8**, which carries the verdicts and the evidence:
+
+| id | prediction |
+|---|---|
+| **C1** | FRONT beats BACK on after-tax net worth in a majority of clean cells |
+| **C2** | FRONT has strictly lower lifetime RMDs in EVERY clean cell - the user's stated mechanism, so a single counterexample localizes where the intuition breaks rather than merely denting it |
+| **C3** | FRONT's advantage shrinks toward $0 as growth goes to zero. If it does not, something other than compounding is paying |
+| **C4** | N1 and N2 agree on direction |
 
 ---
 
@@ -69,8 +129,9 @@ Measured, same plan, only the goal differing:
 
 **At goal 0 the bracket family drains the IRA to nothing and takes no RMDs at all.** A harness asking
 what conversions do to RMDs, run at goal 0, was asking it of plans that have none. It is also the
-whole explanation for the first run's N3 failure: "flat at zero, the IRA is exhausted with or without
-the conversion" in 48 of 60 arms is a statement about goal 0, not about conversions.
+whole explanation for why N3 (equal terminal pre-tax IRA) produced nothing usable in the first run:
+"flat at zero, the IRA is exhausted with or without the conversion" in 48 of 60 arms is a statement
+about goal 0, not about conversions.
 
 The clean-cell population for the bracket family goes from **6** comparisons at goal 0 to **133** at
 goal 750k.
@@ -97,7 +158,9 @@ section 4, and it is currently undocumented.
 
 ---
 
-## 4. C2 is BROKEN: 124 cells where front-loading gives HIGHER lifetime RMDs
+## 4. C2 is BROKEN - 124 cells where front-loading gives HIGHER lifetime RMDs
+
+C2 predicted FRONT would have strictly lower lifetime RMDs in **every** clean cell. It does not.
 
 The counterexamples are perfectly localized:
 
@@ -129,7 +192,7 @@ wrong for the strategy most likely to be paired with a floor.**
 
 ---
 
-## 5. The mechanism: compounding pays, and now N3 says so directly
+## 5. The mechanism: compounding pays, and now N3 (equal terminal IRA) says so directly
 
 | channel | FRONT − BACK, 499 clean comparisons |
 |---|---|
@@ -170,19 +233,24 @@ premium.
 
 ## 7. What could not be measured
 
-Of 1,440 N1 comparisons: **750 undelivered** (the IRA does not hold the request — itself a real
-constraint on front-loading), 102 insolvent, 89 with unequal delivered spend, leaving **499 clean**.
+Of 1,440 N1 (equal lifetime gross) comparisons: **750 undelivered** (the IRA does not hold the
+request - itself a real constraint on front-loading), 102 insolvent, 89 with unequal delivered spend,
+leaving **499 clean**.
 
-**N2 (equal lifetime tax) remains unusable at 2 of 60.** Lifetime tax is not monotone in the
-conversion amount and usually *falls* as conversions rise ($796,324 → $572,130 → $427,589 at requests
-of $0 / $420k / $1.68M): an arm that converts nothing carries a bigger IRA into RMD age and pays more
-tax overall. 33 targets fell outside the bracket, 24 were flat, 11 failed to converge.
+**N2 (equal lifetime tax) remains unusable at 2 of 60**, against a 5-cell floor. Lifetime tax is not
+monotone in the conversion amount and usually *falls* as conversions rise ($796,324 → $572,130 →
+$427,589 at requests of $0 / $420k / $1.68M): an arm that converts nothing carries a bigger IRA into
+RMD age and pays more tax overall. 33 targets fell outside the bracket, 24 were flat, 11 failed to
+converge.
 
-**C4 is UNTESTED**, not broken — N2 yields 2 usable cells against a 5-cell floor.
+**C4 (N1 and N2 agree on direction) is UNTESTED**, not broken: with 2 usable N2 cells there is no
+N2 direction to compare against N1.
 
 ---
 
-## 8. Predictions
+## 8. Predictions, scored
+
+Stated before the run (section 1 lists them); verdicts here.
 
 | id | verdict | evidence |
 |---|---|---|
@@ -204,7 +272,7 @@ Five in the first run (section 7 of the superseded version, preserved in `progre
 
 6. **The RMD-basis harness's own R2 was written wrong twice** — first as a lifetime-total comparison,
    which condemns a correct fix, then as a blended two-spouse ratio. Details in
-   [`RMDBASIS_RESULTS.md`](RMDBASIS_RESULTS.md) section 4.
+   [`RMD_BASIS.md`](RMD_BASIS.md) section 4.
 
 The standing lesson is unchanged and now has six instances: **the scorer, not the measurement, is
 where these bugs live**, because a wrong scorer prints a confident verdict either way.

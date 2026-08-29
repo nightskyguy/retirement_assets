@@ -11,7 +11,6 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P91 | Stress Test's first result uses a stale plan horizon; verdict flips 8/36 -> 0/40. NOT this branch | `P91a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
@@ -25,8 +24,9 @@ the ten captured paths; prev/next is one 46-stop ring; the Market Return chart n
 
 **P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 
-**P88, P89, P90 COMPLETE v11.16a4** - conversions reach MAGI so IRMAA charges them (+30% to +132% at $100k); warnings name the ceilings they break; the ACA gate reads the plan's real first year; two chart fixes. Suites **366**/61/22. **P91 opened O0: the Stress Test's first result is computed on a STALE horizon and flips 8/36 to 0/40 - reproduced on `main`, NOT a regression from this branch.**
+**P88, P89, P90 COMPLETE v11.16a4** - conversions reach MAGI so IRMAA charges them (+30% to +132% at $100k); warnings name the ceilings they break; the ACA gate reads the plan's real first year; two chart fixes. Suites **366**/61/22. **P91 DONE v11.16a5: the Stress Test's first result was computed on a STALE horizon (8/36 where the truth is 0/40) because a refresh displaced by an in-flight one was DROPPED, never retried; now coalesced. The full sweep was silently stale the same way and now raises its Out-of-date banner. Was on `main` too - never a regression from this branch.**
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. Full index next.
+
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
@@ -67,24 +67,57 @@ replaces it - so the stress pass is answering about a plan the user is not looki
 
 A false alarm, and the number the whole pass exists to produce.
 
-- [ ] **P91a** - Find why the first stress pass captures the pre-URL horizon. All three entry points
+- [x] **P91a** - **DONE.** Not a stale variable, as predicted - a **dropped request**.
+      `refreshMCStressOnly` opened with `if (_mcStressRefreshing) return;` and
+      `if (_mcWorkerBusy()) return;`. Both are correct guards (two in-flight passes would race to
+      render) and both DISCARDED the request rather than remembering it. The page primes the pass
+      once on load; a share URL or saved scenario lands while that prime is running; the refresh it
+      asks for hits a guard and is forgotten; nothing else ever asks. `mcInputsChanged` cannot
+      recover it either - it reads `_lastMCHash` but never writes it, so there is no retry path.
+      **Two earlier fixes in this same file came from this same guard** (`runMonteCarlo` and
+      `cancelMC`, both commented in place) and both cleared the stuck FLAG rather than rescuing the
+      lost REQUEST. That is why this was a third visit.
+- [x] **P91b** - **DONE.** Coalesce instead of drop. `_mcStressPending` remembers a displaced
+      request and `_drainStressPending()` runs it when the in-flight pass finishes - on error too,
+      since an errored pass is still a reason to go back for what it displaced. The flag is cleared
+      BEFORE re-entering so a persistently failing refresh runs once more and stops rather than
+      spinning. `runMonteCarlo` clears it at entry (its own stress pass satisfies anything pending
+      at that moment) and drains at completion (a request that arrived DURING the run is not
+      satisfied); `cancelMC` clears it, deliberately - the user cancelled, so do not start another
+      pass on their behalf.
+- [x] **P91e** - **FOUND WHILE FIXING, same class, worse in one way.** The FULL sweep was silently
+      stale too. `markMCStale(false)` ran unconditionally at completion, asserting the result
+      matches the plan on screen. The staleness check lives in `mcInputsChanged`, which skips it
+      while `_mcResults` is still null - exactly the case during load - so a sweep started against
+      the pre-URL plan finished, CLEARED the banner, and left a 25-year answer under a 36-year plan
+      with nothing saying so. Now re-checked at completion, where `_mcResults` finally exists,
+      against the same hash `mcInputsChanged` uses. The banner's own text was already right: "The
+      chart and survival table below were run before your latest changes. The Stress Test result is
+      current."
+- [ ] ~~**P91a-old** - Find why the first stress pass captures the pre-URL horizon.~~ All three entry points
       (`runMonteCarlo`, the demo pass, the stress-only refresh at `mc_tab.js:815`) call `getInputs()`
       fresh and `mcPlanYears(base)` at call time, so the base is not stale where it is READ - the run
       is being STARTED too early, or its result is not invalidated when the plan then changes.
       `setupAutoRecalc`'s debounce and `applyTabFromUrl` are the two suspects.
-- [ ] **P91b** - Fix, and the fix must be "the displayed stress result belongs to the displayed
-      plan", not "run it twice". A stale result that gets replaced is still a wrong verdict on screen
-      in between.
-- [ ] **P91c** - Test: `mcPlanYears` is pure and already node-reachable, so a horizon test is cheap.
-      The staleness itself needs the ordering, which is browser-only - pin what can be pinned.
+- [x] **P91c** - **No node test, and the repo already says why.** `optimizer_core.tests.js:5446`
+      records that this code "lives in montecarlo/mc_tab.js, which needs a DOM and is covered in the
+      browser tier". `mcPlanYears`, `refreshMCStressOnly` and `_drainStressPending` are all inside
+      that file and none is exported. Browser verification is the evidence, same as P90. Suites
+      unchanged at 366/61/22.
 - [ ] **P91d** - While here: **the Monte Carlo controls are in neither the saved scenario nor the
       share URL.** No `mc-*` key appears in `OPT_LONG_TO_SHORT` or the scenario field list, and
       `mc_tab.js` uses no `localStorage`. So paths, seed, stress count and stress window reset to
       their defaults on every load and cannot be shared. That is a separate gap and may be
       deliberate; it is recorded here because it is the first thing a reader will suspect when two
       runs of "the same plan" disagree, and it is NOT the cause of this one.
-- **Status:** diagnosed and reproduced on both builds, nothing fixed. **Not a regression** - do not
-  bisect this branch for it.
+- **Status:** **DONE, shipped v11.16a5.** Verified on the user's own URL, fresh load, cache busted:
+  headline now `0 / 40` with the stress horizon (36) matching the plan (36), where before the fix the
+  same load gave `8 / 36` on a 25-year horizon. The full sweep genuinely did run early and is still
+  on 25 years - that is by design for the expensive pass - but it now RAISES the "Out of date" banner
+  instead of clearing it, which is the contract the banner text always claimed.
+- **Still true and still not the cause:** the Monte Carlo controls are in neither the saved scenario
+  nor the share URL and `mc_tab.js` uses no `localStorage`, so paths, seed, stress count and window
+  reset every load (`P91d`, open).
 
 ---
 
@@ -771,6 +804,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
 | **O1** | P34 | Cost of finding a profitable conversion; worker + per-row memo | `P34a` | nothing |
 | **O1** | P84 | Annual advisor / AUM fee, **plus RMDs off the prior Dec 31 balance** (today they key off a mid-year balance whose growth depends on whether the plan converted) *(new 2026-08-28)* | `P84k` (the RMD half; runs before `P84a`) | nothing |
+| ~~DONE~~ | ~~P91~~ | ~~Stress Test's first result used a stale plan horizon~~ - **COMPLETE v11.16a5.** A displaced stress refresh was dropped and never retried, so the headline settled on the pre-load plan: `8 / 36` where the truth is `0 / 40`. Coalesced; the full sweep's silent staleness fixed with it | - | - |
 | ~~DONE~~ | ~~P90~~ | ~~Two chart fixes~~ - **COMPLETE v11.16a4.** The Market Return chart's historical source year is no longer nerdknob-only, and the Income & Expenses tooltip reports what a source actually paid instead of its scaled bar height | - | - |
 | ~~DONE~~ | ~~P89~~ | ~~The ACA age gate read a year the plan does not start in~~ - **COMPLETE v11.16a4.** The advisory fired for every Limit choice, named a year and two ages the plan never used, and the same unclamped expression decided whether ACA rows reach the Optimizer. One shared `planFirstYear` now; measured at 22.2% disagreement, one-way | - | - |
 | ~~DONE~~ | ~~P88~~ | ~~An Extra Roth Conversion never reaches `yr.tax.MAGI`, so the IRMAA lookback charges a figure that omits it - measured at a whole tier ($0 recorded where $7,166/yr was owed). Hits every strategy, not just the ceiling families, and biases the Optimizer's conversion search toward larger conversions *(new 2026-08-29, user-raised)* - **COMPLETE, SHIPPED v11.16a4.** MAGI now carries both conversion paths, the overage column sees them, 8 tests added (suites 366), a warning names the conflict at the input and a `⤴` marks it in the Optimizer. Lifetime IRMAA +30% to +132% at a $100k conversion; the Optimizer offers 61 ceiling rows that all breach, worth a median $53,990 each, so they are marked rather than dropped | - | - |

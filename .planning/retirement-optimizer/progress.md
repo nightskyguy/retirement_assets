@@ -6464,3 +6464,38 @@ obvious the moment they look at it. Both still belong in optimizer_changelog.md,
 rather than the notice.**
 
 The .md keeps all six items and stays at 301 words.
+
+## 2026-08-29 (cont.) - P91 DONE, v11.16a5
+
+**It was a dropped request, not a stale variable** - which is what the write-up predicted, so the
+prediction earned its place. `refreshMCStressOnly`'s two guards (`_mcStressRefreshing`,
+`_mcWorkerBusy`) are both correct and both threw the request away. Prime-on-load is still running
+when the share URL or saved scenario lands, the refresh it asks for is discarded, and nothing ever
+asks again - `mcInputsChanged` reads `_lastMCHash` but never writes it, so there is no retry path.
+
+**The same guard has now caused three bugs and the first two fixes treated the wrong half.**
+`runMonteCarlo` and `cancelMC` both carry comments about clearing the flag so later refreshes are not
+frozen out; both fixed the stuck FLAG, neither noticed that a request dropped while the flag was
+legitimately set is gone for good. Recorded in findings as the transferable shape: a guard that drops
+work needs somewhere to put the work, not just a reliable way to clear itself.
+
+Fix is coalescing: `_mcStressPending` + `_drainStressPending()`, drained on every completion including
+errors, flag cleared before re-entry so a failing refresh runs once more instead of spinning.
+
+**Found while fixing, same class:** the full sweep was silently stale too - `markMCStale(false)` ran
+unconditionally at completion, and the staleness check it depends on skips itself while `_mcResults`
+is null, which is exactly the load case. So a sweep on the pre-URL plan finished, CLEARED the banner,
+and sat there looking current. Now re-checked at completion. The banner text was already right; it
+had just never been shown in the situation it describes.
+
+Verified on the user's own URL, fresh load with the cache busted: `0 / 40`, stress horizon 36 = plan
+36. Before: `8 / 36` on a 25-year horizon. The sweep is still on 25 years - correct, it did run early
+- but now raises the Out-of-date banner.
+
+No node test: `optimizer_core.tests.js:5446` already records that this code needs a DOM and is
+covered in the browser tier. Suites unchanged 366/61/22.
+
+**Changelog is 416 words against the ~150 target.** I have trimmed it twice and it keeps growing
+because the branch keeps earning entries - six user-visible items now, three of them behavior
+changes. Noting it rather than shaving further: cutting more would drop things a reader has to act
+on, and the stress fix in particular tells them to re-check a number they may have believed.

@@ -561,6 +561,10 @@ function runMonteCarlo(scope) {
     // deliver its callback. Without this the flag stays true forever and every later stress refresh
     // returns at its own guard, silently freezing the Stress Test on the previous plan.
     _mcStressRefreshing = false;
+    // P91: this run computes the stress pass itself off the base it is about to read, so a request
+    // pending at this moment is already satisfied. Anything that arrives after this line is not,
+    // and is drained in the completion callback.
+    _mcStressPending = false;
 
     const base = getInputs();
 
@@ -618,6 +622,11 @@ function runMonteCarlo(scope) {
         (pct) => updateMCProgress(pct),
         (msg) => {
             setMCRunning(false);
+            // P91. A full run computes its own stress pass, so a request that arrived BEFORE this
+            // run started is satisfied by it. One that arrived DURING it is not - the plan moved
+            // after this run read its inputs - and refreshMCStressOnly's own hash-free check will
+            // simply re-run the ~10 sims, which is cheap enough not to be worth distinguishing.
+            _drainStressPending();
             // This run just told the timing model what this machine actually costs, so both button
             // labels are restated from it -- including dropping the "about" once anything real has
             // been measured.
@@ -629,7 +638,14 @@ function runMonteCarlo(scope) {
             }
             _mcResults = msg;
             _mcSelected.clear();
-            markMCStale(false);
+            // P91. `markMCStale(false)` used to be unconditional, which asserts the result matches
+            // the plan on screen - and it does not when the plan moved WHILE the run was in flight.
+            // The staleness check lives in mcInputsChanged(), which skips it when `_mcResults` is
+            // still null; on page load that is exactly the case, so a sweep started against the
+            // pre-URL plan finished, cleared the banner and left a 25-year answer sitting under a
+            // 36-year plan with nothing saying so. Re-checked here, where `_mcResults` finally
+            // exists, against the same hash mcInputsChanged uses.
+            markMCStale(_buildSweepHash() !== _lastSweepHash);
             renderMCResults(msg);
         }
     );
@@ -641,6 +657,9 @@ function cancelMC() {
     // file:// path a stress-only refresh can be the thing in flight. Leaving the flag set freezes
     // every later refresh at its own guard.
     _mcStressRefreshing = false;
+    // P91: the user cancelled, so do not quietly start another pass on their behalf. A later edit
+    // re-requests one; forgetting it here is a choice rather than the oversight this phase fixed.
+    _mcStressPending = false;
     setMCRunning(false);
 }
 
@@ -771,6 +790,31 @@ function renderDemoTable(rows) {
 // --- Reacting to sidebar edits --------------------------------------------
 
 let _mcStressRefreshing = false;
+// P91. A stress refresh requested while one is in flight used to be DROPPED, and nothing ever
+// went back for it. That is how the Stress Test came to answer about a plan nobody was looking at:
+// the page primes the pass once on load, the share URL or a saved scenario lands while that prime
+// is still running, the refresh it asks for hits the guard below and is forgotten, and the headline
+// settles on the PREVIOUS plan's horizon. Measured on a shared link: the first result was computed
+// over 25 years while the plan on screen ran 36, and the verdict read "runs out of money in 8 of
+// the 36 worst historical periods" where the right answer is "survives all 40".
+//
+// The guard itself is correct - two in-flight stress passes would race to render. What was missing
+// is that a dropped request has to be REMEMBERED. This flag is that memory, and every path that
+// clears `_mcStressRefreshing` drains it.
+//
+// Two earlier fixes in this file (runMonteCarlo and cancelMC, both commented below) also came from
+// this guard, and both fixed the flag rather than the lost request. That is why this is a third
+// visit: clearing a stuck flag lets the NEXT request through, but nothing was ever going to make
+// one when the plan had already finished loading.
+let _mcStressPending = false;
+
+// Run the refresh that was dropped while another was in flight, if there was one. Clears the flag
+// FIRST so a refresh that fails cannot re-arm itself and spin.
+function _drainStressPending() {
+    if (!_mcStressPending) return;
+    _mcStressPending = false;
+    refreshMCStressOnly();
+}
 // Latest stress-pass payload, independent of whether a full Monte Carlo run has ever happened.
 // The stress pass is ~10 simulations, so it runs from page load and on every input change; that
 // makes it the one Monte Carlo number that is always current, which is why it earns a summary-bar
@@ -808,9 +852,11 @@ function markMCStale(stale) {
 // Re-runs ONLY the stress pass against the edited plan and swaps it into the cached results.
 // Deliberately does not call setMCRunning(): at ~10 simulations the progress bar would flash.
 function refreshMCStressOnly() {
-    if (_mcStressRefreshing) return;
+    // P91: dropped, but NOT forgotten. Both of these mean "the plan may have moved since the pass
+    // now running was started", which is exactly the case that used to leave a stale verdict.
+    if (_mcStressRefreshing) { _mcStressPending = true; return; }
     const simulationMode = document.getElementById('mc-sim-mode')?.value ?? 'gbm';
-    if (_mcWorkerBusy()) return;                  // never interrupt a full run in flight
+    if (_mcWorkerBusy()) { _mcStressPending = true; return; }   // never interrupt a full run in flight
 
     const base = getInputs();
     // The stress chart's x-axis needs these, and a nerdknob user can reach a stress result without
@@ -838,7 +884,10 @@ function refreshMCStressOnly() {
         null,
         (msg) => {
             _mcStressRefreshing = false;
-            if (msg.error || !msg.stress) return;
+            // P91. Drained on EVERY completion, error included: an errored pass is still a reason
+            // to go back for the request it displaced. _drainStressPending clears its own flag
+            // before re-entering, so a persistently failing refresh runs once more and stops.
+            if (msg.error || !msg.stress) { _drainStressPending(); return; }
             // renderStressChart labels its x-axis from the plan length. It used to read that off
             // _mcResults, which is null until a full sweep has run -- so a nerdknob user got the
             // headline count with an empty chart underneath it.

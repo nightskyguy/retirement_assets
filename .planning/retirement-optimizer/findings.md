@@ -3176,3 +3176,36 @@ Two things worth carrying:
   uses no `localStorage` - so paths, seed, stress count and stress window reset every load and cannot
   be shared. That is the first thing a reader will blame when two runs of "the same plan" disagree,
   and it is NOT the cause here. Recorded so the next investigation does not start there.
+
+### P91 DONE, v11.16a5 - it was a DROPPED REQUEST, not a stale variable
+
+The prediction in the write-up held: all three entry points read `getInputs()` fresh, so nothing was
+stale where it was read. **The request itself was thrown away.**
+
+`refreshMCStressOnly` opened with `if (_mcStressRefreshing) return;` and `if (_mcWorkerBusy()) return;`.
+Both guards are correct - two in-flight passes would race to render - and both DISCARDED the request
+instead of remembering it. The page primes the pass once on load; a share URL or saved scenario lands
+while that prime is running; the refresh it asks for hits a guard and is forgotten; nothing asks
+again. `mcInputsChanged` cannot recover it: it READS `_lastMCHash` and never writes it, so there is
+no retry path anywhere.
+
+**The shape worth carrying: this guard has now caused three bugs, and the first two fixes treated the
+wrong half.** `runMonteCarlo` and `cancelMC` both carry comments about clearing `_mcStressRefreshing`
+so later refreshes are not frozen out. Both fixed the stuck FLAG. Neither noticed that a request
+dropped while the flag was legitimately set is gone for good. **A guard that drops work needs a place
+to put the work, not just a reliable way to clear itself.**
+
+Fix: `_mcStressPending` + `_drainStressPending()`, drained on every completion including errors,
+flag cleared before re-entry so a failing refresh runs once more rather than spinning.
+
+**Found while fixing, same class:** the FULL sweep was silently stale too. `markMCStale(false)` ran
+unconditionally at completion, asserting the result matches the plan on screen. The staleness check
+lives in `mcInputsChanged`, which skips it while `_mcResults` is null - exactly the case during load -
+so a sweep started against the pre-URL plan finished, CLEARED the banner, and left a 25-year answer
+under a 36-year plan with nothing saying so. Now re-checked at completion. The banner's own text was
+already correct and had simply never been shown in the case it described.
+
+Verified on the reported URL, fresh load, cache busted: `0 / 40` with stress horizon 36 matching the
+plan's 36, where the same load previously gave `8 / 36` on a 25-year horizon. No node test is
+possible and the repo already says so at `optimizer_core.tests.js:5446` - mc_tab.js needs a DOM and
+is covered in the browser tier.

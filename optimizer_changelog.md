@@ -19,18 +19,26 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 <a id="11.1691"></a>
 
-## 11.16a4
+## 11.16a5
 
-### Roth conversions now count toward IRMAA, and the tool says when they break your limit
+### The Stress Test could report on the wrong plan, and Roth conversions now count toward IRMAA
+
+**The Stress Test's first result could be computed against the plan you had before the one you
+loaded.** Opening a saved plan or a shared link starts the pass once on load; if the plan finished
+loading while that pass was still running, the refresh it asked for was dropped and never retried, so
+the headline settled on the earlier plan's horizon. Measured on one shared link: it read "runs out of
+money in 8 of the 36 worst historical periods" where the plan on screen survives all 40. **If you
+have read a Stress Test result on a freshly loaded plan, re-check it.** The chart and survival table
+below it now also raise the "Out of date" banner in that situation instead of appearing current.
 
 **Behavior change. Plans using Extra Annual Roth Conversion will show higher IRMAA surcharges, and
 saved plans and shared links will not reproduce their earlier numbers.** The conversion was always
-taxed correctly, but it never counted toward the income Medicare reads two years later to set your
-surcharge - so a plan could convert year after year and never be billed for it. This reaches every
+taxed correctly, but never counted toward the income Medicare reads two years later to set your
+surcharge, so a plan could convert year after year and never be billed for it. This reaches every
 strategy, not only those targeting a bracket or tier. Nothing changes with no extra conversion set.
 
 Two places now warn when a conversion goes past a limit you set: a note under Extra Annual Roth
-Conversion, naming how many years it puts you over, and an upward arrow on any Optimizer row whose
+Conversion naming how many years it puts you over, and an upward arrow on any Optimizer row whose
 conversion lands above its own ceiling. Neither blocks - a ceiling paces ordinary withdrawals, while
 a conversion moves money from IRA to Roth rather than out of the household.
 
@@ -39,10 +47,10 @@ longer works its year out from your birth year plus the Retirement Start Age you
 name a year already past. That year also decides whether ACA rows appear in the Optimizer, so if you
 are past the start age you typed, ACA rows may now be correctly withheld.
 
-Smaller: the Cash Reserve note offered "-1" to restore the original all-cash behavior, a value the
-field will not take - it now says to type Off. Hovering over an income bar on Income & Expenses shows
-the actual income with the approximate tax attributed to it, rather than the scaled bar height. And
-the Market Return chart names the historical year a replayed path came from for everyone.
+Smaller: the Cash Reserve note offered "-1", a value the field will not take - it now says Off.
+Hovering over an income bar on Income & Expenses shows the actual income with the approximate tax
+attributed to it, not the scaled bar height. The Market Return chart names the historical year a
+replayed path came from for everyone.
 
 ## 11.1691
 

@@ -106,13 +106,20 @@ through a knob labelled "safety margin".
 
 ## 3. Two predictions were wrong, and both matter
 
-**P3 wrong — margins save surcharge even when inflation meets or beats the assumption.** At realized
+Five predictions, `P1` to `P5`, were registered in the harness header before the run. `P1` and `P2`
+came out as expected and are not discussed further; the three below are the ones with something to
+say. Each is stated where it is scored. (These are PREDICTION ids, not the phases of the same name
+in `task_plan.md`.)
+
+**`P3` predicted that a margin only saves surcharge when realized inflation UNDERSHOOTS the
+assumption. WRONG - margins save surcharge even when inflation meets or beats it.** At realized
 3% and 4%, above the 2.5% assumption, `halfcpi` still saves $14,465 and $17,288. That is not
 protection: `irmaa_cpi_risk_harness.js` shows zero boundary breaches at those rates. It is the same
 conversion-sizing effect leaking into the surcharge column — a lower ceiling means lower MAGI means a
 lower tier in some years regardless of any cliff being crossed.
 
-**P4 wrong — the small settings are not dominated, just weak.** All three save surcharge on the
+**`P4` predicted the small dollar settings would be dominated outright. WRONG - they are not
+dominated, just weak.** All three save surcharge on the
 historical record, but four to five times less than the rate-shaped ones:
 
 | mode | mean dSurcharge | best window | worst | windows where it saved |
@@ -125,7 +132,8 @@ historical record, but four to five times less than the rate-shaped ones:
 
 `halfcpi` saves surcharge in 59 of the 60 windows, more than any other setting.
 
-**P5 held** — `halfcpi` and `cpiminus1` are within 25% of each other. Keeping both is redundant.
+**`P5` predicted `halfcpi` and `cpiminus1` would land close enough to make one of them redundant.
+HELD** - they are within 25% of each other.
 
 ## 4. Recommendation
 
@@ -152,7 +160,7 @@ decays to irrelevance as thresholds inflate) and save four to five times less th
 ## 5. What the margin uniquely provides, once the artifact is removed
 
 Only one thing: guarding the tier **boundary** against CPI forecast error. From
-[IRMAA_CPI_RISK_RESULTS.md](IRMAA_CPI_RISK_RESULTS.md), assume 2.5% and realize 1%, and `halfcpi`
+[IRMAA_FORECAST_ERROR.md](IRMAA_FORECAST_ERROR.md), assume 2.5% and realize 1%, and `halfcpi`
 prevents 21 breaching years of 92 while `flat1000` prevents 0. At or above the assumed rate it
 prevents nothing, because nothing is breached.
 

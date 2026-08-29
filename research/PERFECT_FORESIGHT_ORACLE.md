@@ -1,4 +1,4 @@
-# P51 results — perfect-foresight oracle (conversions + withdrawal split)
+# Perfect-foresight oracle: how much a plan leaves on the table  *(phase P51)*
 
 **Run:** 2026-08-10, engine at `5e1075e` + the P51b hook (uncommitted), suite 242/242.
 **Harness:** `node .test_harnesses/oracle_harness.js` (P51a) / `--full` (P51c-g).
@@ -6,6 +6,37 @@
 **Objective:** wealth-only real after-tax NW at the cell's shared heirs rate, **spend pinned**
 (candidates with shortfall > $1 or delivered spend ≠ base ± $1 are discarded). Backstops
 instrumented, never bypassed.
+
+## Reading guide - every label used below, defined once
+
+**Where this file sits.** The user asked three questions on 2026-08-10: **(A)** how hard
+whole-horizon asset-utilization optimization is on this engine, **(B)** whether Cyclic leaves money
+on the table in its harvest years, **(C)** whether Proportional's optimality can be proven. Those
+were answered by a three-stage program: **Stage 1** and **Stage 2** are the scans and A/Bs in
+[`BROKERAGE_DRAW.md`](BROKERAGE_DRAW.md) and [`STRATEGY_FAMILY_RANKING.md`](STRATEGY_FAMILY_RANKING.md); **Stage 3** is this
+oracle, allocated as phase P51. So "question A" and "question C" below are the user's, and
+"Stage 1's q3" points into `BROKERAGE_DRAW.md`.
+
+**The predictions, `S3-P1` to `S3-P4` and `B-P4`.** All registered in the harness before the numbers
+were looked at; verdicts are in **Predictions scored**, below. `S3-` is the Stage-3 batch, `B-P4`
+the basis-axis extension:
+
+| id | prediction |
+|---|---|
+| **S3-P1** | the conversions-only oracle beats the best FLAT scalar conversion by <3% in most cells, and the win concentrates in the pre-SS / pre-RMD window - timing, not total volume |
+| **S3-P2** | the median gap to the oracle of each cell's best family row is <4% |
+| **S3-P3** | oracle trajectories show harvest-like alternation - Brokerage-dominant years alternating with IRA-dominant ones - in the thirds / brokheavy mixes |
+| **S3-P4** | accepted oracle solutions show ~zero backstop activity (forced IRA in <5% of years) |
+| **B-P4** | the best-family gap GROWS at 20% basis, and Proportional's gap stays >1% at both basis extremes |
+
+**Grid labels.** The five mixes are `defaults`, `defaults3x`, `round1`, `thirds`, `brokheavy`; the
+Coverage section below gives each one's balances. `b20` / `b80` name the basis arm - cost basis as a
+share of the Brokerage balance, so low basis means highly appreciated. `CBIR` is an ordered-strategy
+draw sequence, one letter per account (**C**ash, **B**rokerage, **I**RA, **R**oth). `GK` is
+Guyton-Klinger guardrails, and a "GK-base cell" is one where GK is the only family that survives at
+the base row's delivered spend.
+
+---
 
 ## What the oracle IS and IS NOT (read first)
 
@@ -20,7 +51,7 @@ design. Two honest consequences:
 1. Coordinate descent over a 10-archetype menu is local and coarse — treat every oracle number
    as a LOWER bound on the true ceiling (P51d's cross-check remains open).
 2. The negative gaps are themselves the attribution: **cyclic's residual edge lives in surplus
-   routing, not in draw order** — consistent with Stage 1's q3 confound finding.
+   routing, not in draw order** — consistent with the Q3 surplus-routing confound in [`BROKERAGE_DRAW.md`](BROKERAGE_DRAW.md).
 
 ## P51a — conversions-only (champion base, 15/15 cells)
 
@@ -28,7 +59,7 @@ design. Two honest consequences:
 |---|---|
 | Oracle gain over the champion row | **0 – 2.87%** (max +$241,415, round1 @4%) |
 | Best flat scalar (core's own `optimizeConversionAmount`) | **$0 in 15 of 15 cells** |
-| S3-P1 (oracle beats flat by <3% in most cells) | **RIGHT**, 15/15 |
+| `S3-P1` (oracle beats flat by <3% in most cells) | **RIGHT**, 15/15 |
 
 The flat sweep finds nothing on champion arms while per-year timing finds up to $241k —
 **per-year conversion shapes are genuinely inexpressible to the flat sweep**, the same
@@ -73,14 +104,14 @@ instrument; it is only its POLICY use that is out of bounds.
 
 ## P51f — trajectory post-mortem (observation only, ships nothing)
 
-- **No harvest-like alternation** (S3-P3 WRONG: 1/6 thirds/brokheavy cells with ≥3 IRA↔Brok
+- **No harvest-like alternation** (prediction `S3-P3` WRONG: 1/6 thirds/brokheavy cells with ≥3 IRA↔Brok
   flips). The oracle does not rediscover cyclic's rhythm through the withdrawal menu.
 - The recurring shape instead: **family-default or IRA-led years through mid-plan, then a
   solid Roth-spending tail** in the final ~5-10 years, with Brokerage held to the §1014
   step-up. Rational in-model: Roth compounds tax-free longest, terminal brokerage gains are
   erased anyway. This is a perfect-foresight artifact to NOTICE, not a rule to ship.
 - Backstops stayed silent everywhere: forced-IRA years = 0 in 15/15 accepted solutions
-  (S3-P4 RIGHT).
+  (prediction `S3-P4` RIGHT).
 
 ## P51g — heirs-rate sensitivity (full re-optimization at 0.15 / 0.35)
 
@@ -91,6 +122,8 @@ instrument; it is only its POLICY use that is out of bounds.
   Roth-tail split, nearly rate-insensitive.
 
 ## Predictions scored
+
+Statements are in the reading guide at the top. `B-P4` is scored in the basis-axis section below.
 
 | id | prediction | verdict |
 |---|---|---|
@@ -134,7 +167,8 @@ at 6-8% strain excludes most fixed-spend families in GK-base cells (counted per 
 ## Basis-axis extension (2026-08-10, closes the 43-56% basis gap)
 
 The grid was rebuilt at basis 20% and 80% — **45 cells total** (5 mixes x 3 spend x 3 basis
-arms), 511k sims / 562s. Prediction **B-P4 (pre-registered) RIGHT**:
+arms), 511k sims / 562s. Prediction **`B-P4` RIGHT** - the best-family gap grows at 20% basis and
+Proportional stays above 1% at both extremes:
 
 - Median best-family gap: **4.47%** at basis 20% > 4.35% at default > **1.83%** at basis 80% —
   more embedded gain = more tax terrain = more oracle alpha, exactly the §1014-driven direction.
@@ -143,9 +177,10 @@ arms), 511k sims / 562s. Prediction **B-P4 (pre-registered) RIGHT**:
 - Conversions-only gains GROW off the default basis: max 2.87% (default) → **9.00%** at b20 and
   **6.45%** at b80 (e.g. defaults3x @4% b80: +$408k, Ordered CBIR champion). Per-year
   conversion timing matters MORE when the brokerage is not mid-basis, in both directions.
-- Backstops stayed silent in **45/45** cells (S3-P4 extended).
+- Backstops stayed silent in **45/45** cells (`S3-P4` extended).
 
-Published S3-P1..P4 scores above remain keyed to the default-basis arm for comparability.
+The published `S3-P1` to `S3-P4` scores above remain keyed to the default-basis arm for
+comparability.
 
 ## Scope limits
 

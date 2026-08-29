@@ -1,4 +1,4 @@
-# P36 round 1 — family-ranking study over the shipped sweep enumeration
+# Ranking the strategy families over the shipped sweep enumeration  *(phase P36, round 1)*
 
 **Run:** 2026-08-10, engine at `5e1075e` (post dividend fix `e9a3c8b`, post basis step-up v11.1499).
 **Harness:** `node .test_harnesses/phased_harness.js` — 45 cells x 192 arms = 8,640 sims, ~9s.
@@ -32,7 +32,7 @@ ACA-untenable (any breach year) are vote-ineligible, mirroring the Best-table ru
    cyc famKeys: GK 68, IRA Draw 34, Ordered 16, Reduce 9, Fill Bracket 8, Proportional 5,
    IRMAA 1 = **141 of 360**. Low-strain (4%) leaders are IRA Draw|cyc (17) and Ordered|cyc (12).
    The paired form (cyclic vs its own non-cyclic twin, same family/param) is `q3()` in
-   `brokerage_harness.js` — see `P32_RESULTS.md`.
+   `brokerage_harness.js` — see `BROKERAGE_DRAW.md`.
 
 4. **ACA Cliff never wins and ranks last everywhere — DO NOT CONCLUDE.** The tool prices the cost
    of staying under the cap and not the subsidy benefit (documented one-sided pricing,
@@ -172,12 +172,12 @@ every mix again.
 - SS $45k @70 + $24k @67; no pension; CA residency only
 - One deterministic path: growth 6%, inflation/CPI 2.5%, cashYield 3%, dividendRate 2%
 - ~~Brokerage basis fraction narrow: 43–56%~~ **CLOSED 2026-08-10**: the grid was rebuilt at
-  basis 20% and 80% (135 cells total) and the ranking conclusions re-checked. **B-P5
-  (pre-registered) RIGHT — rankings are basis-stable**: same leader (Guyton-Klinger|cash, with
+  basis 20% and 80% (135 cells total) and the ranking conclusions re-checked. **Prediction `B-P5`,
+  registered before the run, said the rankings would be basis-stable. RIGHT**: same leader (Guyton-Klinger|cash, with
   the same survivorship caveat), ACA Cliff still zero-vote everywhere, and Proportional|lin
   still reaches top-3 on networth/balanced in **0 cells at 20% AND 0 cells at 80%** (mean rank
   16.0 / 15.4). At 80% basis two more famKeys drop to zero votes (Fill Bracket|lin,
-  IRMAA Ceil|cash). Basis moves the LEVELS (see P32_RESULTS.md basis table), not the ORDER.
+  IRMAA Ceil|cash). Basis moves the LEVELS (see BROKERAGE_DRAW.md basis table), not the ORDER.
 - Spend flat (spendChange 0), CashReserve off, `convertExcessToRoth` on (the sweep's own default)
 
 ## Scope limits
@@ -191,6 +191,6 @@ withdrawal rates. Mean ranks compare families WITHIN cells; nothing here compare
 ## What this feeds
 
 - **P36e** (default ordering / arm count): the vote tables above, with the GK caveat applied.
-- **P32e Q3**: cyclic wins at the vote level; the paired twin comparison is in `P32_RESULTS.md`.
+- **P32e Q3**: cyclic wins at the vote level; the paired twin comparison is in `BROKERAGE_DRAW.md`.
 - **Round 2** (after P35i): add Phased arms, death-timing axis, `deathBasisStepUp` cross,
   `survivorSpendPct` factor per the P36 section's full design.

@@ -1,4 +1,4 @@
-# P28 results — unified conversion routing, Roth-first gap filling, and the conversion switch
+# Conversion routing: unified routing, Roth-first gap filling, and the conversion switch  *(phase P28)*
 
 Reference record for `unifiedconv_harness.js`. Everything below is reproducible with:
 
@@ -455,6 +455,20 @@ Grid: the section-5 grid, 5 mixes x 3 spend rates x 5 families (Guyton-Klinger s
 drifts), **75 cells, 450 simulations**. A 90-cell variant including GK is reported beside it, because
 GK turns out to behave like the rest here and excluding it changes only the counts, not the answer.
 
+### 16.0 The `P28j` questions this section scores
+
+`Q1` to `Q5` below are the falsifiable questions written into phase `P28j` in `task_plan.md`, not
+questions of this document. Three of them are touched here:
+
+| id | question |
+|---|---|
+| **Q1** | of the cost the shipped rule imposes, how much is the withdrawal TIMING and how much is the conversion itself? |
+| **Q2** | is `early` - the side the shipped rule picks after a conversion year - actually the better one? |
+| **Q5** | is the timing leg purely a compounding effect? Predicted: a zero-return arm collapses it to ~$0 |
+
+`Q3` (is the $1,000 conversion threshold load-bearing) and `Q4` (how many years one flip touches)
+are not addressed by this re-baseline.
+
 ### 16.1 What moved
 
 Δscore, ON minus OFF. "free" uses the engine's own timing rule; "pinned" holds
@@ -492,7 +506,7 @@ withdrawal to Early, and Early is a cost every time it is measurable. In 29 of 5
 so for more than half the grid, the number section 9 attributed to `convertExcessToRoth` was mostly
 reporting *when the money left*, not *whether converting paid*.
 
-### 16.3 Q2 answered early: late beats early, and not narrowly
+### 16.3 `Q2` answered early: late beats early, and not narrowly
 
 Pinning `'early'` against `'late'` across all live cells:
 
@@ -505,7 +519,7 @@ Pinning `'early'` against `'late'` across all live cells:
 The shipped rule sends conversion years to Early. On this grid that is the wrong side of the trade
 about nine times in ten.
 
-### 16.4 Q5 scored: **BROKEN**, and the residual is the interesting part
+### 16.4 `Q5` scored: **BROKEN**, and the residual is the interesting part
 
 The prediction written into `P28j` was that the timing leg is a compounding effect, so a zero-growth
 arm should collapse it to about $0. It does not. Same grid at three growth rates:

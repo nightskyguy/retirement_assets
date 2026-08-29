@@ -15,7 +15,7 @@
  * NOTHING IN THIS REPO ANSWERED IT. betr_harness.js asks convert-vs-not. stopyear_harness.js and
  * bestConversionStopYear() ask when to STOP -- and a later stop converts MORE in total, so a cutoff
  * sweep confounds timing with amount and cannot answer this. unifiedconv_harness.js and
- * oracle_harness.js ask different questions. RMD appears 1-2 times in twelve `research/*_RESULTS.md` files.
+ * oracle_harness.js ask different questions. RMD appears 1-2 times in twelve `research/*.md` reports.
  *
  * THIS IS NOT P28j. P28j is the intra-year withdrawal MONTH (preMonths 1 vs 11,
  * optimizer_core.js:1275-1285), whose Early(Conv) / Late(Spend) column names invite exactly this

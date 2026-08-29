@@ -1,4 +1,4 @@
-# P83 - which IRMAA safety margin is best against Monte Carlo inflation paths
+# Which IRMAA safety margin is best against Monte Carlo inflation paths  *(phase P83)*
 
 Reference record for `irmaa_margin_paths_harness.js`. Reproducible with:
 
@@ -14,9 +14,39 @@ assumptions, 30-year plans aimed at IRMAA Tier 1, seed 42, 150 paths per synthet
 > and the fixed-indexation control says roughly half of that is genuine forecast absorption rather
 > than ceiling tuning. The default does not change. What changes is why it is defensible.
 
+## Reading guide - the five modes and the five predictions
+
+**The five margin modes**, all of them `irmaaMarginMode` settings, are what this run sweeps. A margin
+is safety room held back below the tier ceiling, so that a year whose realized CPI comes in under the
+plan's assumption does not breach the tier anyway. Two shape it as a rate, two as dollars:
+
+| mode | shape | what it holds back |
+|---|---|---|
+| **`halfcpi`** | rate | projects the threshold forward by **half** the two-year CPI increase (3% CPI: +3.045% instead of +6.09%) |
+| **`cpiminus1`** | rate | the full increase **less one point** (3% CPI: +5.09%) |
+| **`halfstep`** | dollars | half of what crossing this exact tier boundary costs, so the setback scales with the cliff |
+| **`flat2000`** | dollars | a flat $2,000 |
+| **`none`** | - | no margin. The control every column below is measured against |
+
+**The five predictions, `P1` to `P5`**, were registered in the harness before the numbers were looked
+at, and are scored in **section 6**:
+
+| id | prediction |
+|---|---|
+| **P1** | bootstrap generates the largest two-year forecast error, so the largest margin benefit |
+| **P2** | the rate-shaped modes beat the dollar-shaped ones |
+| **P3** | surcharge dollars stay noise, under ±0.5% between modes |
+| **P4** | the fixed-indexation control shows a materially smaller benefit than the path arm |
+| **P5** | `halfcpi` leads on wealth in every mode |
+
+> `P1` to `P5` here are PREDICTIONS. `task_plan.md` also numbers its phases `P1`, `P2`, and so on,
+> and they are unrelated; a phase referenced in this file is written `P70`, `P83f` and the like.
+
+---
+
 ## 0. Why this run is possible, when the earlier one said it was not
 
-`IRMAA_MARGIN_RESULTS.md` section 5 is titled "The limit no sweep can lift" and rests on this line:
+`IRMAA_MARGIN_FIXED_CPI.md` section 5 is titled "The limit no sweep can lift" and rests on this line:
 
 ```js
 sim.cpiRate *= (1 + inputs.cpi);        // constant, every run, every path
@@ -158,8 +188,8 @@ they recover only a third to a half as much.
 **`halfstep` is the exception that rules out "bigger setback always wins".** It has the second largest
 year-0 setback and the *smallest* benefit - a third of what `flat2000` buys for $435 less. Size alone
 does not order this list. No mechanism is offered here; it is recorded as unexplained rather than
-given a plausible story, and it is the reason P2 is stated as shape-vs-size rather than as a size
-ranking.
+given a plausible story, and it is the reason prediction `P2` is stated as shape-vs-size rather
+than as a size ranking.
 
 ## 5. The open question this run raises and cannot answer
 
@@ -173,6 +203,8 @@ knob to sweep and adding one is an engine change. It is the same shape as P30's 
 constant that wins is the biggest one available, which is not the same as the right one.
 
 ## 6. Scored predictions
+
+Registered before the run; the statements are also in the reading guide at the top.
 
 | | prediction | outcome |
 |---|---|---|
@@ -210,7 +242,7 @@ paths. P70e's −0.09% on the stress bank reproduces here at −0.12%.
 1. **Keep `halfcpi` as `IRMAA_MARGIN_DEFAULT`.** It now wins on breaches, on surcharge dollars and on
    wealth, in all three Monte Carlo modes plus stress. Previously it was defensible only on the
    conversion-sizing side effect; it is now defensible on the thing it is named for.
-2. **`IRMAA_MARGIN_RESULTS.md` sections 5 and 7 are superseded** and are marked so. Section 5 quotes
+2. **`IRMAA_MARGIN_FIXED_CPI.md` sections 5 and 7 are superseded** and are marked so. Section 5 quotes
    a line of engine code that no longer exists, and its conclusion - "a safety margin has nothing to
    be safe against" - is now false. Section 7's recommendation 3, that `halfcpi` and `cpiminus1`
    should be deleted if the knob ever leaves the nerdknob, is **reversed**: they are the two best
@@ -298,7 +330,7 @@ next year's only inside a block.
 
 **What the oracle row is for.** Perfect foresight leaves zero error, so the margin would be pure cost
 and the correct setting would be `none` - which is exactly the old constant-CPI regime that
-`IRMAA_MARGIN_RESULTS.md` measured. The distance between the `oracle` row and every other row is the
+`IRMAA_MARGIN_FIXED_CPI.md` measured. The distance between the `oracle` row and every other row is the
 entire value a safety margin can have. It is large, and no forecast rule tested closes any of it.
 
 ### So what is the recommended setting, given a reasonable forecast?

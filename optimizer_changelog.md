@@ -925,10 +925,10 @@ What was added, and why:
 - **Four engine research inputs**, used only by the offline study harnesses.
 - **Five research studies were run and recorded** (results live beside the harnesses). The
   highlights below will shape future releases:
-  [Brokerage Research](research/P32_RESULTS.md), 
-  [Proportional Draw Research](research/PHASED_RESULTS.md)
+  [Brokerage Research](research/BROKERAGE_DRAW.md), 
+  [Proportional Draw Research](research/STRATEGY_FAMILY_RANKING.md)
   (it's not as optimal as thought), and 
-  ["EndGame" Research](research/ENDGAME_RESULTS.md) -
+  ["EndGame" Research](research/ENDGAME_DRAW_ORDER.md) -
   what is the best strategy once the IRA is under control. 
 
 ---

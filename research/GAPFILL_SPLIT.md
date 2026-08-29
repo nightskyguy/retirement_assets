@@ -1,4 +1,4 @@
-# P30 results — the `[40, 60]` gap-fill split
+# The `[40, 60]` gap-fill split: the constant nobody chose  *(phase P30)*
 
 Reference record for `gapfill_harness.js`. Reproducible with:
 
@@ -44,7 +44,7 @@ policy rather than three (verified in P30a before this sweep was allowed to read
 6 weights x 5 mixes x 3 spend rates x 2 states x 2 Cash-Reserve settings x 3 live families x 2
 third-pass arms, plus 3 guard families = 2,430 simulations. `COMMON` and the five mixes are copied
 verbatim from `unifiedconv_harness.js`, so the scenario ladder is P28's, re-baselined
-(`P28_RESULTS.md` §15) before reuse.
+(`CONVERSION_ROUTING.md` §15) before reuse.
 
 **Scoring.** `baselineScoreOf` against the `w=40` arm of the same cell. One deliberate departure
 from `unifiedconv_harness.js`, which scored each arm at its OWN `res.totals.futureIRARate`: that

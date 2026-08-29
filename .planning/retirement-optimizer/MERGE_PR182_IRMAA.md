@@ -85,7 +85,7 @@ default, so the feedback loop above never opens in them.
 
 ## Open IRMAA items, unaffected by the merge
 
-Recorded in [research/IRMAA_CPI_RISK_RESULTS.md](../../research/IRMAA_CPI_RISK_RESULTS.md).
+Recorded in [research/IRMAA_FORECAST_ERROR.md](../../research/IRMAA_FORECAST_ERROR.md).
 
 1. **Project the filing STATUS forward, not just CPI.** Every clean breach found across three rounds
    is income sized while married and billed after a death against single-filer thresholds roughly

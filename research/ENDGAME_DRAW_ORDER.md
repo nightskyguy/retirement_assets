@@ -1,9 +1,39 @@
-# P35n results — the endgame tail bake-off (what Phased should draw post-IRA-target)
+# Endgame draw order: what to spend once the IRA has hit its target  *(phase P35n)*
 
 **Run:** 2026-08-10, engine at `5e1075e` + uncommitted P51b hook (with the P35n `{prop}`/`{seq}`
 entry forms), suite 244/244. **Harness:** `node .test_harnesses/endgame_harness.js` — 108 cells,
 27k sims, 11s. Scenarios START in the endgame state: couple 75/73, SS in payment, RMDs active,
 IRA already at its target.
+
+## Reading guide - every label used below, defined once
+
+**The candidate arms.** Each names the order the tail spends its accounts once the IRA has reached
+its target. The letters are accounts: **C**ash, **B**rokerage, **R**oth.
+
+| arm | what it draws |
+|---|---|
+| **`seq-CRB`** | Cash, then Roth, then Brokerage, with the IRA as a last-resort backstop |
+| **`seq-CBR`** | Cash, then Brokerage, then Roth |
+| **`flip-k`** | `seq-CBR` until year `k`, then Roth-first for the rest. `k/h` reports `k` as a fraction of the horizon `h`, so 0.4 means the flip lands 40% of the way in |
+| **`spec-prop`** | the P35 PR-5 spec: a BALANCED fill spread over Brokerage, Cash and Roth in proportion to their balances. The baseline every Δ below is measured against |
+| **`ref`** | today's shipped engine default, shown as the incumbent only |
+| **light oracle** | a per-year menu search, included as a ceiling rather than as a shippable arm |
+
+`b20` / `b50` / `b80` name the basis arm - cost basis as a share of the Brokerage balance, so `b20`
+is a highly appreciated account.
+
+**The five predictions, `E-P1` to `E-P5`**, were registered in the harness before the numbers were
+looked at, and are scored in **Predictions scored** below:
+
+| id | prediction |
+|---|---|
+| **E-P1** | `seq-CBR` beats `spec-prop` in >=70% of comparable cells |
+| **E-P2** | the flip adds real value at basis 20%, with the best `k` in the last third of the horizon, and ~nothing at basis 80% |
+| **E-P3** | static Roth-early (`seq-CRB`) loses to `seq-CBR` in most cells |
+| **E-P4** | the residual-IRA axis changes levels, not the ordering verdict - same winner in >=80% of paired cells |
+| **E-P5** | turning conversions on leaves the winner unchanged in >=80% of checked cells |
+
+---
 
 ## Headline
 
@@ -23,7 +53,7 @@ P51 oracle shape suggested; reconciliation below.
 
 `seq-CRB`'s dominance holds on EVERY axis slice: both death profiles (joint 48/54, widow 40/54),
 both IRA levels, all three mixes, all three basis fractions, all three spend rates. The
-conversions-ON sensitivity pass changed the winner in **0 of 36** cells (E-P5 RIGHT).
+conversions-ON sensitivity pass changed the winner in **0 of 36** cells (prediction `E-P5` RIGHT).
 
 ## Why Roth-early wins — and why this does NOT contradict P28
 
@@ -44,7 +74,7 @@ conversions-ON sensitivity pass changed the winner in **0 of 36** cells (E-P5 RI
 
 - **flip-k is just a worse CRB.** Best flips land at k/h 0.4–0.6 — the SCAN FLOOR (0.4 was the
   earliest fraction tried), i.e. the optimizer wants the Roth-first regime as early as allowed.
-  E-P2's "late flip" framing was wrong for the right reason.
+  Prediction `E-P2`'s "late flip" framing was wrong for the right reason.
 - **The light oracle adds only ~$26-29k median over the best static arm** — a fixed CRB
   sequence captures nearly all expressible tail value; per-year cleverness buys little here.
 - **The IRA axis moves levels, not the verdict** (winner identical in 41/54 paired cells; the
@@ -53,7 +83,10 @@ conversions-ON sensitivity pass changed the winner in **0 of 36** cells (E-P5 RI
 - **ref (today's default tail) is not floor-safe**: it draws the IRA proportionally below
   target. Shown as the incumbent only.
 
-## Predictions scored (E-P1..E-P5, registered in the harness header)
+## Predictions scored
+
+Registered in the harness header before the run; the statements are also in the reading guide
+at the top.
 
 | id | prediction | verdict |
 |---|---|---|

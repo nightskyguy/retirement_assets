@@ -17,7 +17,7 @@
  *
  * while irmaaFwdFactor() deliberately stayed on the scalar inputs.cpi, because a plan forecasting
  * the index two years out is not clairvoyant. So REALIZED and ASSUMED CPI now diverge, which is
- * exactly the "engine change, not a harness one" that research/IRMAA_MARGIN_RESULTS.md section 7 asked for.
+ * exactly the "engine change, not a harness one" that research/IRMAA_MARGIN_FIXED_CPI.md section 7 asked for.
  * The margin finally has something to be safe against.
  *
  * WHAT P70e ALREADY DID, AND WHAT IT DID NOT

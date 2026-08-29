@@ -4,7 +4,7 @@
 > engine can build, and in that world the margin provably prevents nothing. Once the realized CPI is
 > allowed to differ from the assumed one, the margin does prevent breaches and the two rate-haircut
 > modes this file recommends deleting turn out to be the only correctly shaped ones. See
-> [IRMAA_CPI_RISK_RESULTS.md](IRMAA_CPI_RISK_RESULTS.md). The cost measurements below remain valid.
+> [IRMAA_FORECAST_ERROR.md](IRMAA_FORECAST_ERROR.md). The cost measurements below remain valid.
 
 `node .test_harnesses/irmaa_margin_harness.js`. Round 2: 3 arms x 7 portfolio shapes x 3 CPI rates
 = 84 cells x 7 modes = **588 simulations**, Cycle Brokerage **off** in every one. Wealth is
@@ -118,7 +118,7 @@ follow-up this work has earned twice over.
 
 ## 5. The limit no sweep can lift
 
-> **SUPERSEDED 2026-08-27 - the limit was lifted. See `IRMAA_MARGIN_PATHS_RESULTS.md` (P83).**
+> **SUPERSEDED 2026-08-27 - the limit was lifted. See `IRMAA_MARGIN_MONTE_CARLO.md` (P83).**
 > The line of engine code quoted below no longer exists. P70 replaced it with
 > `cpi_t = yr.yearInflation + (inputs.cpi - inputs.inflation)`, so the IRMAA threshold now follows
 > each path while `irmaaFwdFactor()` stays on the scalar `inputs.cpi`. Realized and assumed CPI
@@ -159,7 +159,7 @@ Recorded because two of the three were defects in the measurement, not findings 
 
 ## 7. What to do
 
-> **Items 2 and 3 are SUPERSEDED 2026-08-27 by `IRMAA_MARGIN_PATHS_RESULTS.md` (P83).** Item 2's
+> **Items 2 and 3 are SUPERSEDED 2026-08-27 by `IRMAA_MARGIN_MONTE_CARLO.md` (P83).** Item 2's
 > "no wider sweep will change that" was correct for the engine of the day and is not correct now.
 > Item 3 is REVERSED: `halfcpi` and `cpiminus1` are the two BEST modes once the threshold is
 > uncertain, and `halfstep` is the deletion candidate instead. Item 4's second follow-up - give CPI

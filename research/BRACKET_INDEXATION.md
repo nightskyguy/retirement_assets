@@ -1,4 +1,4 @@
-# P70a: bracket indexation under variable inflation
+# Bracket indexation under variable inflation  *(phase P70a)*
 
 Harness: [`cpi_index_harness.js`](https://github.com/nightskyguy/retirement_assets/blob/main/.test_harnesses/cpi_index_harness.js). Run `node .test_harnesses/cpi_index_harness.js`.
 Measured 2026-08-26. 30 plans x 26 stress scenarios x 2 arms = 1,560 simulations, about 1 second.
@@ -111,7 +111,8 @@ that reported only breaches would have concluded indexation does not reach the A
 
 ## Predictions, scored
 
-Recorded in the harness header before any number was looked at.
+Recorded in the harness header before any number was looked at. `P1` to `P5` here are PREDICTION
+ids, not the phases of the same name in `task_plan.md`.
 
 | | prediction | outcome |
 |---|---|---|

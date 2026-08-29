@@ -2,7 +2,7 @@
 
 ## P35n endgame: the Phased tail should be a SEQUENCE, Cash -> Roth -> Brokerage - the PR-5 proportional spec is refuted (2026-08-10)
 
-The endgame bake-off (`.test_harnesses/ENDGAME_RESULTS.md`, 144 cells starting AT the
+The endgame bake-off (`research/ENDGAME_DRAW_ORDER.md`, 144 cells starting AT the
 IRA-target state, couple 75/73, RMDs live) answers the user's tail question, and the answer
 inverted the pre-registered expectation (E-P3 decisively WRONG - the wrong prediction is the
 output):
@@ -62,7 +62,7 @@ axes: household shape/survivor years, state (CA), return path, pension.
 
 ## Stage 3 oracle: conversion timing is the real lever, proportional is refuted twice, and cyclic's edge is ROUTING (2026-08-10)
 
-P51 ran end-to-end (`.test_harnesses/ORACLE_RESULTS.md`; harness `oracle_harness.js`, engine
+P51 ran end-to-end (`research/PERFECT_FORESIGHT_ORACLE.md`; harness `oracle_harness.js`, engine
 hook `oracleWithdrawalPlan` default-off, suite 242/242, 165k sims / 196s). Five conclusions:
 
 **1. The flat conversion sweep leaves per-year money on the table, and only per-year timing can
@@ -101,7 +101,7 @@ instrument; only its POLICY use is out of bounds.
 
 Two research inputs shipped in the `:1432` harvest branch (`cycleHarvestMode`, `cycleCoexist`),
 default off, absent≡off byte-identical + leak-guard + MAGI-tier tests, suite 238/238. A/Bs in
-`.test_harnesses/P32_RESULTS.md` (q5/q6). All three S2 predictions WRONG:
+`research/BROKERAGE_DRAW.md` (q5/q6). All three S2 predictions WRONG:
 
 **1. "Max the bracket anyway" LOSES post-§1014.** `cycleHarvestMode: 'spendonly'` beats the
 shipped maxbracket top-off in the overwhelming majority of 2,514 cyclic pairs (maxbracket wins
@@ -124,7 +124,7 @@ give harvest years conversions back.
 
 ## Stage 1 brokerage scans: the cyclic advantage is half confound, and the nerdknob points the wrong way (2026-08-10)
 
-Full tables: `.test_harnesses/PHASED_RESULTS.md` (P36 round 1) and `.test_harnesses/P32_RESULTS.md`
+Full tables: `research/STRATEGY_FAMILY_RANKING.md` (P36 round 1) and `research/BROKERAGE_DRAW.md`
 (Q1 re-run, Q3, Q4). Both run the Optimizer's own 192-arm enumeration over a 45-cell grid (P28
 mix ladder x wealth x0.5/1/3 x spend 4/6/8%), UI scoring recipe, shared per-cell heirs rate.
 Eight results, several inverting the obvious reading:
@@ -1995,7 +1995,7 @@ into.
 Consequences worth acting on: this is a default-facing switch that can cost more than a million
 dollars in plausible account mixes, and part of that cost is a withdrawal-timing side effect the user
 cannot see or control. Worth deciding separately whether the early/late rule should key off
-conversion at all. Full tables in `.test_harnesses/P28_RESULTS.md` §7.
+conversion at all. Full tables in `research/CONVERSION_ROUTING.md` §7.
 
 ## Spend rate was a hidden confound, and controlling it overturned three P28 conclusions (2026-07-30, round 3)
 

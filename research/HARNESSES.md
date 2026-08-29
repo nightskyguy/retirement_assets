@@ -393,7 +393,10 @@ Headline findings (2026-08-29):
 
 1. **The defect is exactly one deduction, confirmed to the dollar.** A Fill Bracket 22% plan aims at
    $211,400, lands MAGI on $211,400 and federal taxable income on $179,200, against a $32,200
-   deduction. It widens with the age-65 bumps and the senior deduction, to $39,998 by 2058.
+   deduction. The gap is the whole federal deduction, so it grows with indexation and the age-65
+   bumps, $32,200 in 2026 to $70,876 by 2054. Neither operand is wrong: the bracket top is correct
+   and the deduction reconciles to the cent, OBBBA senior deduction and its phase-out included. The
+   defect is a units mismatch - a pre-deduction quantity capped at a post-deduction threshold.
 2. **Correcting it LOSES money in 51 of 74 clean cells**, median -$47,092. The premise that unused
    bracket room is money left on the table is REFUTED: the shipped shortfall is accidentally
    conservative.

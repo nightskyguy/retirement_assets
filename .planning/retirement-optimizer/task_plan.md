@@ -103,7 +103,13 @@ changelog entry saying saved plans will not reproduce.
       `research/BRACKET_CEILING_BASIS.md`, 240 cells x 2 arms.
       **The defect is confirmed exactly:** a Fill Bracket 22% plan aims at $211,400, lands MAGI on
       $211,400 and federal TAXABLE income on $179,200, against a $32,200 deduction. To the dollar,
-      every year, widening to $39,998 by 2058 as the age bumps and senior deduction grow.
+      every year, growing with indexation and the age-65 bumps to $70,876 by 2054. **Neither operand
+      is wrong** - the bracket top is the right edge of the right bracket, and the deduction
+      reconciles to the cent including the OBBBA senior deduction and its phase-out (2027 = $33,005
+      std + $1,691 age bump + $1,999 senior, sunsetting to $0 in 2029). The defect is a UNITS
+      MISMATCH: `iRAbracketRoom` subtracts GROSS income from a POST-deduction threshold and
+      `bracketOverage` measures MAGI against it, so a pre-deduction quantity is capped at a
+      post-deduction number and nothing in between converts one to the other.
       **But correcting it LOSES money in 51 of 74 clean cells, median -$47,092.** The premise that
       the unused room is money left on the table is REFUTED. The sign is set by the BRACKET: 12%
       gains (median +$159,278, best +$1,201,973), 22% loses (-$173,437, worst -$2,523,647), 24%

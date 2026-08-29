@@ -79,11 +79,35 @@ Year 0 of a Fill Bracket 22% plan, straight off the log:
 | the year's deduction | $32,200 |
 
 $211,400 - $179,200 = $32,200, to the dollar. The plan asked to fill the 22% bracket and filled it
-to $179,200 of a $211,400 bracket. The gap widens with the age-65 bumps and the senior deduction: by
-2058 the same plan's deduction is $39,998.
+to $179,200 of a $211,400 bracket - inside the 22% band, but one deduction short of its top.
+
+The gap is the whole federal deduction, so it grows with indexation, the age-65 bumps and the OBBBA
+senior deduction: **$32,200 in 2026 to $70,876 by 2054** on this plan, still MFJ. It then falls to
+$37,142 in 2055, and that fall is a **filing-status change** - spouse 1 dies and the plan becomes
+Single, halving the bracket table and the deduction together - not a narrowing of the defect.
+
+**Year 0 is exactly clean for a reason worth naming.** Social Security has not started yet, so
+`yr.fixedInc` is zero and the sizing aggregate and MAGI agree on every term. Once benefits begin,
+the aggregate uses the FULL benefit while MAGI uses the taxable portion, at most 85% - a second gap,
+pointing the other way, and the subject of `P87c` rather than of this measurement.
 
 This happens every year a bracket strategy runs, always in the same direction, and no cliff is
 crossed, which is why it never announced itself.
+
+### Which of the three things it could have been
+
+The number on each side of the comparison is correct. The comparison is not.
+
+| candidate | verdict |
+|---|---|
+| the wrong ceiling is picked | **No.** `findLimitByRate('FEDERAL','MFJ',0.22)` returns `211400` off a 2026 table reading `24800 / 100800 / 211400 / 403550 / 512450 / 768700`. Right bracket, right edge, correctly indexed by `cpiRate` |
+| the deduction is wrong, e.g. OBBBA missed | **No.** 2027's $36,695 is std $32,200 x 1.025 = $33,005, plus one age-65 bump $1,691, plus a senior deduction of $6,000 - ($216,685 - $150,000) x 0.06 = $1,999. The OBBBA senior deduction is applied with its phase-out and correctly drops to $0 in 2029 at the `sunsetYear: 2028` boundary |
+| something else | **Yes: a units mismatch at the comparison.** `iRAbracketRoom` subtracts GROSS income components from a POST-deduction threshold, and `bracketOverage` measures MAGI against that same threshold. A pre-deduction quantity is capped at a post-deduction number, and nothing between the lookup and the comparison converts one to the other |
+
+The function's own header states the intent - "MAGI ceiling for bracket/minlimit/aca strategies"
+(`optimizer_core.js:854`) - and the intent is coherent. The label and the number come out of the
+same lookup, but only the number reaches the engine, and it is then used on a basis the label does
+not describe. That is why `P87f` and not `P87b` is what survived this report.
 
 ## 2. Where the ceiling actually binds
 

@@ -3009,8 +3009,11 @@ The three sentences worth carrying without opening the report:
 
 1. **The federal Limit entries are taxable-income thresholds spent as MAGI ceilings, and the gap is
    exactly one deduction.** Fill Bracket 22%: ceiling $211,400, MAGI $211,400, federal taxable
-   income $179,200, deduction $32,200. Confirmed to the dollar, every year, widening to $39,998 by
-   2058.
+   income $179,200, deduction $32,200. Confirmed to the dollar, every year, growing to $70,876 by
+   2054. **NEITHER OPERAND IS WRONG** - the bracket top is the right edge of the right bracket, and
+   the deduction reconciles to the cent, OBBBA senior deduction and phase-out included. The defect
+   is a UNITS MISMATCH: `iRAbracketRoom` subtracts GROSS income from a POST-deduction threshold and
+   `bracketOverage` measures MAGI against it. Do not go looking for a bad number; there isn't one.
 2. **Closing that gap LOSES money in 51 of 74 clean cells, median -$47,092.** The under-fill is
    accidentally conservative. Any future note promising recovered bracket room would be wrong three
    times in four. The sign is set by the bracket (12% gains, 22% and 24% lose) and the separator is

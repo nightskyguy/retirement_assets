@@ -6215,3 +6215,36 @@ the same reason - that number names a changelog entry, and there is no entry to 
 
 GOTCHA for the next session: `.planning/retirement-optimizer/task_plan.md` is CRLF, and an edit
 written with bare `\n` leaves one mixed line behind. Normalize on the way out.
+
+## 2026-08-29 (cont.) - P88 opened at O0: extra conversions are invisible to MAGI
+
+Came out of a user observation, not a plan item. The user pointed out that `extraConversionAmount`
+and Fill Bracket are antagonistic - an extra conversion stacked on a draw already sized to fill the
+ceiling must break it - and proposed a UI warning plus excluding bracket families from the
+Optimizer's conversion search. Both correct. Chasing why the tool has never SHOWN that conflict
+found a larger defect underneath it.
+
+**`applyExtraConversion` updates the year's tax and not the year's MAGI.** Logged MAGI is identical
+at $0, $25k, $50k and $100k of extra conversion - flat $211,400 against a $211,400 ceiling. The
+income tax is charged correctly (both functions recompute it and copy `federalTax`/`stateTax` back);
+`MAGI`, `AGI` and `federalTaxableIncome` are simply not copied out of the same result.
+
+That figure is what the IRMAA lookback charges two years later. On the probe plan the engine records
+`-none-` / $0 where $311,400 of true MAGI earns Tier 2 at $7,166 a year. Every strategy using the
+conversion path is affected, so this is not a ceiling-family problem, and it biases the Optimizer's
+`⇌` conversion search toward larger conversions across the board.
+
+Two blindnesses stack and either alone would hide it: the stale MAGI, and `bracketOverage` being
+computed in the withdrawal phases (`:2276`, `:2518`) long before `applyExtraConversion` runs
+(`:3534`).
+
+Sequenced deliberately: characterize with a harness FIRST (P88a, the rmdbasis R12 lesson - this
+moves IRMAA in nearly every converting plan, so predictions get registered before the fix), then the
+fix, then the overage recompute, then tests, and only THEN the UI warning the user asked for. A
+warning shipped ahead of the fix would describe a conflict the tool's own numbers deny. The
+Optimizer exclusion is deferred to P88f and may prove unnecessary once conversions are priced right.
+
+P88 blocks P87g. NOW-table bookkeeping: the new O0 row cost a line, so the two `User <date>:`
+decision notes were merged into one to keep the LINE-30 marker on line 30.
+
+Nothing built this session beyond the write-up; no engine change, suites unchanged at 358 / 61 / 22.

@@ -3041,3 +3041,29 @@ The three sentences worth carrying without opening the report:
 3. **`minlimit` is governed entirely by `yr.IRMAALimit`, which is built from the SPENDING GOAL, not
    from the federal rate the user picked.** 0 of 40 cells respond to a federal ceiling change. Any
    claim about what `Min Limit n%` targets should be measured before it is believed.
+
+## P88 - an Extra Roth Conversion never reaches MAGI (2026-08-29, user-raised)
+
+Full write-up in `task_plan.md` under P88. The three things worth carrying without opening it:
+
+1. **`applyExtraConversion` charges the income tax and never updates `yr.tax.MAGI`.** It copies
+   `federalTax` and `stateTax` out of its own `calculateTaxes` result (`optimizer_core.js:2832`) and
+   copies nothing else. `applyConversionGrossUp` has the same shape (`:3062`). Measured on one
+   Fill Bracket 22% plan: logged MAGI is **$211,400 at every one of $0 / $25k / $50k / $100k of
+   `extraConversionAmount`**. It does not move at all.
+2. **The stale figure is what IRMAA charges.** `growAndSettle` pushes `yr.tax.MAGI` into
+   `balance.magiHistory` (`:3139`) and `beginYear` charges off `magiHistory[len-2]` (`:1435`). On
+   that plan the engine records `-none-` / $0 where the true $311,400 MAGI earns **Tier 2, $7,166 a
+   year**. This is NOT confined to ceiling strategies - Proportional and Ordered use the same
+   conversion path and under-report IRMAA identically.
+3. **`bracketOverage` is blind twice over.** It is computed at `:2276` and `:2518`, inside the
+   withdrawal phases, while `applyExtraConversion` runs at `:3534`. So even a corrected MAGI leaves
+   the overage measuring the strategy's own draw only.
+
+Consequence for the Optimizer: `selectConversionCandidates` (`:4122`) deliberately keeps bracket
+families and splits `bracket` into `bracket-irmaa` / `bracket-rate` so each gets a champion. Those
+`⇌` rows are scored on numbers that omit the IRMAA cost of the conversion being optimized, biasing
+`optimizeConversionAmount` toward larger conversions everywhere.
+
+**Do not build P87g before P88.** Sizing conversions against a ceiling is meaningless while the
+conversions are invisible to the ceiling's own income measure.

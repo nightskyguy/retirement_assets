@@ -6123,3 +6123,32 @@ vs flat-CAGR differs +4.9% at the median, +9.0% on the best captured trace. Pinn
 stress Final Balance 5,681,737 -> 2,815,865.
 
 Suites **358 / 61 / 22**, in-page 399, badge green. P86 complete; O0 queue is back to `P35i`.
+
+**Same session - user challenged the "engine got faster" claim: their MC compare run went 40s ->
+52s.** The claim was the simulate() microbench (P86b) wrongly generalized; the full runJob had not
+been A/B'd. Measured now, 5 alternating pairs, pre-P86 (5bb7d16 file set) vs current, 156 vars x
+500 paths x 35 yrs, seed 42: old mean 68.2s / min 52.7s, new mean 68.8s / min 48.9s - PARITY, with
+run-to-run noise up to 53% on identical builds. Arithmetic agrees: the P86e additions total well
+under 1% (extra percentile pass ~50ms, 2.7M divisions ~10ms, 4 small sorts, ~300KB message).
+User's 40->52 not explained by the code; suspects are variance, DevTools-open cache bypass (the
+worker busts with Date.now() because APP_VERSION is UNDEFINED - mc_controller.js:26, pre-existing
+bug worth fixing), or load. Offered: repeat runs, an in-page MC elapsed readout, APP_VERSION fix.
+Bench: scratchpad bench_mc.js against mcold/ mcnew/ staged trees.
+
+**MC perf follow-up, round 2 - user showed page-reported totalMs 43s (release) vs 62s (branch).**
+totalMs is engine-internal (mc_engine runJob t0 -> end, excludes worker boot/fetch/render), so the
+claim deserved an in-browser A/B. Staged git-archive builds of 5bb7d16 (/old) and HEAD (/new) under
+scratchpad/ab, served together, ran compare (bootstrap, 500 paths) alternating in one browser:
+old 58.7s -> new 115.3s -> old 111.1s. **The 2x slowdown followed RUN ORDER, not the build** - the
+release build doubled against itself. Thermal/browser ramp; consistent with the node A/B parity
+(means 68.2 vs 68.8) and with the <1% arithmetic. Verdict unchanged: builds at parity; single-pair
+wall-clock comparisons on this workload are meaningless. Asked user to restart browser and alternate
+with the NEW build first, compare per-build minima; if new still loses order-independent, next step
+is a real bisect by mixing engine/core between the staged trees.
+
+**User tabled the MC-time question mid-investigation (2026-08-28).** Evidence so far: node A/B
+parity (5 pairs), in-browser slowdown followed run order not build (old build doubled against
+itself). OPEN, deferred: if the branch still reads slower after a browser restart with order
+controlled, bisect via the staged scratchpad/ab trees (now unserved; rebuild with git archive).
+Lesson, user-stated: perf A/Bs on the MC should use 50-100 paths, not 500 - same answer, tenth the
+wall time. A/B server killed.

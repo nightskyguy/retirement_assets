@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1690"></a>
+<a id="11.1691"></a>
 
-## 11.1690
+## 11.1691
 
 ### Current $ view now converts running totals correctly
 
@@ -53,6 +53,9 @@ now exact: every simulated path is deflated by the inflation that path actually 
 rather than every path sharing one average rate. High-inflation futures now look as poor in today's
 dollars as they are; with the old average-rate conversion the difference reached several percent.
 Hover over a line to read the value as drawn.
+
+The Monte Carlo path count now defaults to 400 per strategy (was 500), so a Compare run finishes
+sooner out of the box. The Paths box still goes up to 5,000 when you want a finer sample.
 
 ---
 

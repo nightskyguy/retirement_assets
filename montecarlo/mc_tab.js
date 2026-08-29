@@ -40,7 +40,7 @@ let _inputInflationChart = null;
 //      of candidate start years used to walk off the end of the ranked list inside buildStressBank.
 // One helper closes both: a non-finite read falls back to the default, and every read is clamped.
 const MC_PARAMS = {
-    'mc-num-paths':     { dflt: 500, min: 100, max: 5000 },
+    'mc-num-paths':     { dflt: 400, min: 100, max: 5000 },
     'mc-mu':            { dflt: 7,   min: 0,   max: 20, int: false },
     'mc-sigma':         { dflt: 12,  min: 1,   max: 40, int: false },
     'mc-seed':          { dflt: 42,  min: 0,   max: Number.MAX_SAFE_INTEGER },
@@ -458,7 +458,7 @@ function _buildMCHash() {
 }
 
 // The user-entered path count is PER STRATEGY: a Compare run puts it against every variation
-// buildVariations() produces (~144 on the default scenario), so "500 paths" is ~72,000 simulations.
+// buildVariations() produces (~144 on the default scenario), so "400 paths" is ~58,000 simulations.
 // That multiplier used to appear nowhere in the UI, which made the run look far smaller than it is.
 // With a single variation there is no multiplier to report, so the sentence drops it rather than
 // saying "x 1 strategies".
@@ -1206,7 +1206,7 @@ function renderMCMainMetrics(msg) {
 }
 
 // Stress-pass metrics — same Min/CAGR/Max grid, sourced from the ~10-20 worst historical decades
-// instead of the ~500-path bootstrap sample. `stress` is msg.stress (null in Synthetic mode).
+// instead of the full bootstrap sample. `stress` is msg.stress (null in Synthetic mode).
 function renderMCStressMetrics(stress) {
     // Always refresh the summary-bar tile from here, including the empty case, so a mode switch to
     // Synthetic blanks it rather than leaving a stale Historical number on every tab.

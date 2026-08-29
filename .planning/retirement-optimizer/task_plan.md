@@ -31,6 +31,102 @@ User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Fu
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
 
+## P87: the "Limit" dropdown mixes two income bases - IRMAA is MAGI, the federal brackets are not  *(NEW 2026-08-29, user-raised, measure before building)*
+
+**The question, as asked:** the tax-bracket limits in the strategy "Limit" dropdown are income
+thresholds, but the IRMAA limits should be MAGI thresholds - are they?
+
+**Answer: the IRMAA half is right. The federal half is the one on the wrong basis.** Both come out
+of the same dropdown (`generateStratRateOptions`, `optimizer_ui.js:5995`), both land in the same
+variable, and both are then spent by the same line of engine code - which treats every one of them
+as a MAGI ceiling.
+
+### The three ceiling kinds, and what each one actually is
+
+| dropdown entry | table it reads | that table's true basis | what the engine compares to it | verdict |
+|---|---|---|---|---|
+| `IRMAA Tier n` | `TAXData.IRMAA.*.brackets` | **MAGI** = AGI + tax-exempt interest | MAGI-shaped aggregate | **right** |
+| `n% Fed` | `TAXData.FEDERAL.*.brackets` | **taxable income**, i.e. AFTER the standard deduction (`std: 32200` is a separate field on the same object) | MAGI-shaped aggregate | **wrong by one deduction** |
+| `n% FPL` (ACA) | FPL multiple | **ACA MAGI** = AGI + tax-exempt interest + ALL Social Security, taxable or not | MAGI-shaped aggregate | ceiling right, the overage check is wrong (below) |
+
+### Where each claim comes from
+
+- The IRMAA branch (`optimizer_core.js:912-937`) reads the IRMAA table, forward-indexes it by the
+  two-year lookback (`irmaaFwdFactor`, `:214`), subtracts the `irmaaMarginMode` margin and then 1,
+  so the ceiling lands strictly inside the tier. The charge itself uses
+  `yr.tax.MAGI = federalAGI + taxExemptInterest` (`taxengine.js:1516`), which is SSA's definition.
+  Nothing to fix here; P66 and P83 already did this work.
+- The federal branch (`:957-967`) takes `findLimitByRate(...).limit` - the raw bracket top,
+  `211400` for the 22% MFJ ceiling. That is an after-deduction number. Nothing adds the deduction
+  back anywhere on the path.
+- Both then reach the same sizing line, `optimizer_core.js:1964`:
+  `iRAbracketRoom = yr.limit - yr.taxableInc - yr.fixedInc - yr.taxableInterest - yr.taxableDividends`
+  Gross components, no deduction subtracted. And `bracketOverage = max(0, yr.tax.MAGI - bracketTarget)`
+  (`:2233`, `:2475`) judges the result against MAGI **for every mode**, federal included.
+- The function's own header already states the intent: "MAGI ceiling for bracket/minlimit/aca
+  strategies" (`:854`). The intent is coherent; the federal numbers poured into it are not MAGI
+  numbers.
+
+### What it costs
+
+"Fill the 22% bracket" stops when **MAGI** reaches the 22% top, so taxable income stops one standard
+deduction short of it - about $32,200 MFJ in 2026, more with the two $1,650 age-65 bumps and the
+$6,000-per-filer senior deduction (`optimizer_core.js:1359`). That is conversion and withdrawal room
+the strategy was asked for and never used, every year, silently. Direction is always the same: the
+plan under-fills. No cliff is ever crossed, which is why this has never announced itself.
+
+### Second, smaller basis gap, and it points opposite ways in the two modes
+
+`yr.fixedInc = yr.s1 + yr.s2` (`:1586`) is the FULL Social Security benefit. Which is correct depends
+on the ceiling:
+
+- **IRMAA and federal** want the TAXABLE portion, at most 85%. Using the full benefit overstates
+  income by up to 15% of SS, so sizing undershoots the tier it is aimed at - conservative, and in
+  the same direction as the deduction gap above.
+- **ACA** wants the full benefit; the statute adds non-taxable SS back. Here the current code is
+  right by accident of sharing the line.
+- The mirror image shows up on the measurement side: `yr.tax.MAGI` has no non-taxable-SS add-back,
+  so ACA's `bracketOverage` understates how far over the FPL cap a year actually went.
+
+Interest and dividends in the same aggregate are beginning-of-year estimates, flagged in-code as
+"APPROXIMATE worst case" (`:1589`). Same direction again.
+
+### Why this is `measure first` and not a one-line fix
+
+Every candidate fix MOVES the ceiling, so every bracket / minlimit / ACA row changes: withdrawals,
+conversions, lifetime tax, the Optimizer ranking, the Break Even verdict. Nothing here will be
+byte-identical, and P85's lesson applies - a "this cannot affect that" claim does not survive the
+withdrawal feedback loop. Budget for a re-run of the sweeps that quote bracket rows, and for a
+changelog entry saying saved plans will not reproduce.
+
+- [ ] **P87a** - MEASURE. Default MFJ plan on `22% Fed`: log `bracketTarget`, `tax.MAGI`, federal
+      taxable income and the resulting unused room, per year. Report the lifetime conversion dollars
+      left on the table. **That number sets the priority** - promote out of O2 if it is large, and
+      note that a NOW-table row means keeping the LINE-30 marker on line 30.
+- [ ] **P87b** - DECIDE the federal fix, two forms, both defensible:
+      **(i)** raise the federal ceiling to `bracket top + the year's deduction`, keeping the MAGI
+      comparison. Must read the SAME deduction `calculateTaxes()` uses (std + age bumps + senior
+      deduction with its phase-out), or the ceiling and the tax disagree - a second source of truth
+      for the deduction is the failure mode to avoid.
+      **(ii)** compare federal-mode ceilings against taxable income instead of MAGI. Narrower blast
+      radius in the sizing line, but it forks `bracketOverage` by mode.
+- [ ] **P87c** - The SS term in the sizing aggregate: taxable portion for IRMAA/federal, full benefit
+      for ACA. Note the circularity - the taxable SS fraction depends on the withdrawal being sized -
+      so this needs an iteration or a converged estimate; today's full-benefit shortcut is the
+      conservative escape from it, and dropping it without replacing it would overshoot.
+- [ ] **P87d** - ACA overage: either add the non-taxable-SS add-back to a separate `acaMAGI`, or
+      state in the tooltip that the ACA overage reads low. Do not change `tax.MAGI` itself - IRMAA
+      and NIIT read it and their definition is the current one.
+- [ ] **P87e** - Tests: a fixed plan on `22% Fed` lands federal TAXABLE income on the bracket top,
+      not MAGI; a plan on `IRMAA Tier 1` keeps `tax.MAGI` inside the tier (already covered, keep it
+      green); an ACA plan with large SS is measured against the add-back definition.
+- [ ] **P87f** - User-facing: the dropdown prints `22% Fed  ·  $211,400` and never says WHICH income
+      that is. Label it, and say the same thing in the README's strategy section.
+- **Status:** open, nothing built. `P87a` first.
+- **Depends on:** nothing. P66/P83 already settled the IRMAA indexing and margin.
+
+---
+
 ## P86: the Current-$ basis - a lifetime total is the SUM OF DEFLATED YEARS, not a deflated total  *(DONE 2026-08-28, user-raised; b-f shipped v11.1690, commits bd2c875..976452e)*
 
 **The rule, stated once because everything here follows from it:**
@@ -135,7 +231,7 @@ makes every figure honor the existing definition.
 their consequences shrink. **Nothing in this repo had tested either half.** `betr_harness.js` asks
 convert-vs-not; `stopyear_harness.js` / `bestConversionStopYear()` ask when to STOP, and a later
 stop converts MORE in total, so a cutoff sweep confounds timing with amount and cannot answer it.
-`RMD` appeared 1-2 times across all twelve existing `*_RESULTS.md` files.
+`RMD` appeared 1-2 times across all twelve existing `research/*.md` reports.
 
 **The question arrived attached to P28j and is NOT P28j.** P28j is the intra-year withdrawal MONTH
 (`preMonths` 1 vs 11, `optimizer_core.js:1275-1285`); its `Early(Conv)` / `Late(Spend)` column names
@@ -202,7 +298,7 @@ suites unchanged at 340 / 61 / 22.
   direction.
 
 **FOUR scorer defects, all caught before publication** - the fourth session running where the scorer,
-not the measurement, is where the bugs were. Full accounting in `CONVTIMING_RESULTS.md` section 7.
+not the measurement, is where the bugs were. Full accounting in `CONVERSION_TIMING.md` section 7.
 The two worth carrying forward:
 1. **The timing-pin assertion was VACUOUS.** It read `r.useEarly`, which does not exist on a log row
    (the row carries `timing` as a rendered string, `optimizer_core.js:1168`). It was `false`
@@ -211,7 +307,7 @@ The two worth carrying forward:
 2. **C3 compared two different samples** - median of 29 cells against median of 4. Pairing it moved
    the headline from "17.6% survives" to "4.0% survives", a factor of four, on identical data.
 
-**Files:** `.test_harnesses/convtiming_harness.js` (new), `CONVTIMING_RESULTS.md` (new),
+**Files:** `.test_harnesses/convtiming_harness.js` (new), `CONVERSION_TIMING.md` (new),
 `HARNESSES.md` (registered), `optimizer_core.js` (one research flag). No version bump, no changelog -
 nothing here is user-visible.
 
@@ -283,6 +379,7 @@ first task. Every open item in the file now carries one.
 | **O1** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
 | **O1** | P34 | Cost of finding a profitable conversion; worker + per-row memo | `P34a` | nothing |
 | **O1** | P84 | Annual advisor / AUM fee, **plus RMDs off the prior Dec 31 balance** (today they key off a mid-year balance whose growth depends on whether the plan converted) *(new 2026-08-28)* | `P84k` (the RMD half; runs before `P84a`) | nothing |
+| **O2** | P87 | The "Limit" dropdown mixes two income bases: IRMAA tiers are MAGI thresholds (right), federal brackets are taxable-income thresholds spent as MAGI ceilings (wrong by one standard deduction) *(new 2026-08-29, user-raised)* | `P87a` (measure first) | nothing |
 | **DONE** | P52 | MC run scope: nerdknob "Run My Plan Only" *(default later flipped by P53f)* | shipped v11.150b | - |
 | **DONE** | P53 | Monte Carlo Stress Test suite (5 windows, bear-start, plan-only default) | shipped v11.1521-152f (#170) | - |
 | **DONE** | P54 | `?montecarlo` teaching demo + mode-aware paths floor | shipped v11.1553 (#173) | - |
@@ -314,7 +411,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P55 | MCP server — let an AI run the engine over a customer's scenario *(new 2026-08-16, set priority)* | `P55a` | nothing (engine is DOM-free) |
 | **O2** | P28 | "Every voluntary IRA withdrawal is a conversion" - **`P28f`/`g`/`h` SETTLED and SHIPPED v11.162B**: routing flag deleted as measured-inert, `rothGapFill` shipped as a control plus the 🅡 sweep rows. `P28j` is the remainder | `P28j` (needs its own phase) | nothing |
 | **O3** | P40 | Test-file layout — the `tests/` subfolder move | decision, then the move | nothing |
-| **O3** | P5 | Greedy DP conversion schedule | `P5a` | nothing |
+| **O3** | P5 | Per-year conversion schedule - greedy forward search, one year at a time | `P5a` | nothing |
 | **O3** | P6 | Simulation sanity-check tests | `P6a` | nothing |
 | **O3** | P8 | Annual-table view presets | `P8a` | design after P22 |
 | **O3** | P9 | ACA refinement remainder | `P9a` | nothing |
@@ -487,8 +584,37 @@ MAINTENANCE NOTE: a stale "uncommitted" in this trail reads as a live claim abou
 
 ---
 
-## P5: Greedy DP Conversion Schedule (was Phase 23b)
-**Why:** Phase 23 implemented `optimizeConversionAmount()` as a scalar sweep. Per-year optimal conversion schedule (greedy DP) is deferred.
+## P5: Per-Year Conversion Schedule - Greedy Forward Search (was Phase 23b, "greedy DP")
+**Why:** Phase 23 implemented `optimizeConversionAmount()` as a scalar sweep: ONE conversion amount,
+reused every year. A plan wants a different amount each year - larger in the low-income years before
+Social Security and RMDs start, tapering toward $0 once the brackets fill on their own. This phase
+searches for that per-year schedule.
+
+### What "greedy DP" means here, and why the name is half wrong
+
+The phrase was carried over from the Phase 23 notes. Only the first word is accurate. Keep the
+distinction in mind before anyone sets out to "finish the DP".
+
+**Greedy** - the search fixes year t's conversion before it looks at year t+1, and never revisits
+it. Each year is chosen by whatever scores best given the state it inherits, with no lookahead. That
+is what makes the run affordable: `years x sweep steps` engine evaluations, roughly 30 x 200,
+instead of the `steps ^ years` a true joint optimum would cost.
+
+**DP (dynamic programming)** - is what this is NOT. Real DP would need a state variable (IRA
+balance, brokerage basis, filing status, year), a value function over that state, and backward
+induction from the terminal year, so that year t's choice is scored against the best achievable
+future rather than against the next single step. Nothing here does that: no memo table, no backward
+pass, no state discretization.
+
+**Consequence, and it is the thing to test for:** a greedy schedule can be beaten. Filling to the
+top of the 22% bracket this year can be locally optimal and still leave too much in the IRA for the
+survivor's single-filer years, which a lookahead would have priced in. So `P5f` is not a formality -
+the schedule must be scored against the scalar optimizer, and a LOWER score is a real result about
+the method, not a bug in the harness.
+
+If greedy proves materially short, the next step is a limited lookahead - score year t by simulating
+k years forward, k = 2 or 3 - not full DP. Backward induction over a continuous IRA balance needs
+state discretization and is a much bigger piece of work than this phase is scoped for.
 
 **UNBLOCKED — verified 2026-07-30, and it does not depend on P28.** The per-year lever already
 exists: `_extraConvAmountFor` (`optimizer_core.js:1677`) reads `inputs.extraConversionAmount[y]`
@@ -496,8 +622,8 @@ whenever the input is an array, so a per-year schedule is expressible against to
 representation change. An earlier claim in the P28 discussion that the "unified conversion" reframe
 was the precondition for a 1-D per-year search was wrong; the 1-D search is already available.
 
-**Core algorithm:**
-For each year t from retirement to max(RMD ages):
+**Core algorithm (greedy forward pass):**
+For each year t from retirement to max(RMD ages), in order:
 1. Sweep `extraConversionAmount` from $0 to totalIRA in $10k steps
 2. Lock in optimal C_t; advance year t+1 with updated state
 3. Result: `convSchedule[y]` array
@@ -506,12 +632,12 @@ For each year t from retirement to max(RMD ages):
 
 **MC Stage 2 (stretch):** Top-K strategies with their locked schedules → 500 MC paths each → add MC Survival column to optimizer.
 
-- [ ] **P5a** — Implement `buildConversionSchedule(baseInputs, overrides)` — greedy DP year-by-year
+- [ ] **P5a** — Implement `buildConversionSchedule(baseInputs, overrides)` — greedy forward pass, one year at a time, no lookahead
 - [ ] **P5b** — `buildVariations()`: when `includeConvOpt` set, use schedule (not scalar) for optimized rows
 - [ ] **P5c** — Optimizer table: "Conv $/yr" column (avg), "Conv Savings $" column
 - [ ] **P5d** — Annual Details: `convSched` column (Opp. Cost category)
-- [ ] **P5e** — Test: greedy DP schedule tapers toward $0 near RMD onset (sanity check)
-- [ ] **P5f** — Test: schedule rows beat scalar optimizer on same inputs (if not identical)
+- [ ] **P5e** — Test: the schedule tapers toward $0 near RMD onset (sanity check)
+- [ ] **P5f** — Test: schedule rows vs scalar optimizer on the same inputs — record the measured gap in either direction; greedy is not guaranteed to win
 - **Status:** pending
 - **Depends on:** Phase 23 ✓ (scaffold in place)
 
@@ -1372,7 +1498,7 @@ in the measuring phase.
 - [x] **P70a DONE 2026-08-26** - measured. `cpiFollowsPath` (opt-in input, default OFF, in
       `advanceYear`) plus `.test_harnesses/cpi_index_harness.js`: the Stress Test's own scenario set
       (`buildStressBank` + `buildPathInputs`, not a new one), 30 plans x 26 scenarios x 2 arms.
-      Full tables in [`CPI_INDEX_RESULTS.md`](../../`research/CPI_INDEX_RESULTS.md`).
+      Full tables in [`BRACKET_INDEXATION.md`](../../research/BRACKET_INDEXATION.md).
 
       **The gate opened: this is an engine fix, not a NOTE.** Lifetime tax is **8.32% lower** under
       path-following across 780 pairs; **38 scenarios go from ruined to surviving and 0 go the other
@@ -2193,7 +2319,7 @@ timing. See `findings.md`, "A log field the next iteration reads is engine state
 - [x] **P28i** — **ROUND 3 (2026-07-30):** answered "does `convertExcessToRoth` ever lose on its own?" — **yes,
       13 of 25 cells, worst -$1,095,454**, for the same Cash-buffer reason plus a hidden
       withdrawal-timing flip. Added `forceWithdrawTiming` (research input, default off) to separate
-      the two. Full write-up now lives at `research/P28_RESULTS.md`.
+      the two. Full write-up now lives at `research/CONVERSION_ROUTING.md`.
 - [ ] **P28j** — **SPUN OFF, needs its own phase:** `convertExcessToRoth` is a DEFAULT-FACING switch that can
       cost >$1M in plausible account mixes, and part of that is the early/late withdrawal-timing rule
       keying off `rothConv` — invisible and uncontrollable from the UI. Decide whether timing should
@@ -2229,7 +2355,7 @@ timing. See `findings.md`, "A log field the next iteration reads is engine state
   likely cause - displacing a Brokerage draw is the entire mechanism, so changing when Brokerage is
   drawn changes size and sign. What survives: `fillCashThenRoth` is still the better of the two
   positions (54 of 60), and the zero-predicate still holds. What does not: "worth $3.56M and almost
-  never loses". Warning box added to `P28_RESULTS.md` and `HARNESSES.md`; the shipped copy quotes the
+  never loses". Warning box added to `CONVERSION_ROUTING.md` and `HARNESSES.md`; the shipped copy quotes the
   re-run. **The lesson is general: a research document is only true against the engine that produced
   it, and this repo changes that engine often.**
 - **Status:** research complete (4 rounds); `P28f`/`g`/`h` shipped 2026-08-24. **`P28j` now HAS its
@@ -2248,7 +2374,7 @@ flips the FOLLOWING year's withdrawal to Early, the flip **never once pays** in 
 **late beats early 35 of 39**. The phase is now about the timing rule, not the checkbox.
 
 *Original framing, kept because it is why the phase exists: round 3 measured `convertExcessToRoth`
-losing in 13 of 25 cells at -$1,095,454 (the phase's own round-3 grid; `P28_RESULTS.md` section 9
+losing in 13 of 25 cells at -$1,095,454 (the phase's own round-3 grid; `CONVERSION_ROUTING.md` section 9
 carries the round-4 75-cell version at 28 of 75 / -$1,411,488). Both are pre-P32 numbers.*
 
 **The rule, verbatim** (`optimizer_core.js:1274-1275`):
@@ -2303,7 +2429,7 @@ That is now the third time in this repo a research table stopped reproducing aft
 - The gap-fill ordering. P30 is complete and both `[40,60]`-family constants were deliberately left alone.
 
 **Tasks:**
-- [x] **P28ja** - **DONE 2026-08-27, and it reframed the phase.** `P28_RESULTS.md` section 16, new
+- [x] **P28ja** - **DONE 2026-08-27, and it reframed the phase.** `CONVERSION_ROUTING.md` section 16, new
       section, section 9 left intact with a SUPERSEDED pointer. 75 cells / 450 sims on the v11.1671
       engine. **The >$1M framing this phase opened with is gone: the conversion's own worst case is
       -$8,658.** 15 of 17 losing cells stop losing the moment `forceWithdrawTiming: 'late'` is held
@@ -2345,7 +2471,7 @@ That is now the third time in this repo a research table stopped reproducing aft
 analysis against those paths and find which safety margin produces the best results.
 
 **The premise checked out, and the existing documents were wrong about it.**
-`IRMAA_MARGIN_RESULTS.md` section 5, "The limit no sweep can lift", says the analysis is impossible
+`IRMAA_MARGIN_FIXED_CPI.md` section 5, "The limit no sweep can lift", says the analysis is impossible
 and quotes `sim.cpiRate *= (1 + inputs.cpi)` as proof. That line no longer exists - P70 replaced it
 with `cpi_t = yr.yearInflation + (inputs.cpi - inputs.inflation)`, so the IRMAA threshold follows each
 path while `irmaaFwdFactor()` deliberately stays on the scalar `inputs.cpi`. Realized and assumed CPI
@@ -2374,7 +2500,7 @@ $2,435, cpiminus1 $2,180, flat2000 $2,000. Only halfcpi is sized to the error. `
 exception that kills a pure size ranking - second largest setback, smallest benefit, a third of what
 `flat2000` buys for $435 less. **Unexplained, and recorded as unexplained.**
 
-**Full write-up:** `research/IRMAA_MARGIN_PATHS_RESULTS.md`. Old document's sections 5 and 7
+**Full write-up:** `research/IRMAA_MARGIN_MONTE_CARLO.md`. Old document's sections 5 and 7
 marked SUPERSEDED in place, the P28/P30 pattern.
 
 - [x] **P83a** - `.test_harnesses/irmaa_margin_paths_harness.js`. Banks from
@@ -2441,8 +2567,8 @@ marked SUPERSEDED in place, the P28/P30 pattern.
   a user can see. **`IRMAA_MARGIN_DEFAULT = 'halfcpi'` re-confirmed, on better evidence than before**,
   and re-confirmed a second way by `P83f`: no better forecast exists to shrink the need for it.
   **Harness:** `.test_harnesses/irmaa_margin_paths_harness.js` (node, ~31s), results in
-  `IRMAA_MARGIN_PATHS_RESULTS.md`.
-- **Related:** supersedes parts of `IRMAA_MARGIN_RESULTS.md` (P66b round 2); extends P70e, whose
+  `IRMAA_MARGIN_MONTE_CARLO.md`.
+- **Related:** supersedes parts of `IRMAA_MARGIN_FIXED_CPI.md` (P66b round 2); extends P70e, whose
   stress-bank figure reproduces here at 21.4% against its recorded 21.1%.
 
 ---
@@ -2524,7 +2650,7 @@ show a 21-against-82 mismatch that did not exist.
 reported anywhere. It needs a counterfactual run. Candidate for its own phase.
 
 **STATUS 2026-08-28: `P84k`, `P84l`, `P84m`, `P84n` and `P84o` are DONE and shipped as v11.168c.**
-The RMD now keys off the prior December 31 balance. `rmdbasis_harness.js` + `RMDBASIS_RESULTS.md`
+The RMD now keys off the prior December 31 balance. `rmdbasis_harness.js` + `RMD_BASIS.md`
 carry the characterization and the scoring; four new node tests (340 -> **344**), `TestTiers.EXPECTED`
 and `.githooks/README.md` reconciled; three GK pins and one P38 pin re-baselined, **each checked
 against the characterization's predicted direction rather than accepted because it moved** (R12).
@@ -2990,7 +3116,7 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
   `cashYield` taxed as ordinary income, Brokerage realizes LTCG and steps up basis. P28's mechanism
   settles Roth-vs-X and says nothing about Cash-vs-Brokerage.
 - **Q3 (prediction to state up front and score).** P28's "no Brokerage draw, no lever"
-  (`.test_harnesses/HARNESSES.md`) predicts the weight is inert wherever Brokerage is never touched.
+  (`research/HARNESSES.md`) predicts the weight is inert wherever Brokerage is never touched.
   If the prediction holds, Q1's answer is conditional, not global.
 - **Q4.** Does any of the 21 unimplemented orderings beat all three shipped ones?
 - **Q5.** How many rows would change if gap-fill order became independent of spend strategy?
@@ -3007,7 +3133,7 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
 **Already ruled out — do not re-derive:**
 - Roth's position in the gap fill. `fillCashThenRoth` is the better of the two positions and
   **shipped 2026-08-24** as the *Roth before Brokerage* switch plus the 🅡 sweep rows.
-- **RE-BASELINED 2026-08-24, `P28_RESULTS.md` section 15.** The ladder was re-run on today's engine
+- **RE-BASELINED 2026-08-24, `CONVERSION_ROUTING.md` section 15.** The ladder was re-run on today's engine
   before P30 was allowed to reuse it. Quote section 15, never the 2026-07-30 tables.
   - **Still true:** the **zero-predicate** - a control arm that never drew Brokerage returns exactly
     $0. Both such cells in the grid still do. And the ranking: `fillCashThenRoth` beats
@@ -3042,9 +3168,9 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
       Brokerage at all, `[100,0]` still spills into Cash through the shortfall cascade, and the split
       moves monotonically across 0/20/40/60/80/100. That is what makes a 0-to-100 sweep a sweep of
       one policy rather than of two. Suite 308 -> 310.
-- [x] **P30 re-baseline** — DONE 2026-08-24, `P28_RESULTS.md` section 15. See the block above.
+- [x] **P30 re-baseline** — DONE 2026-08-24, `CONVERSION_ROUTING.md` section 15. See the block above.
 - [x] **P30b** — **DONE 2026-08-24.** `.test_harnesses/gapfill_harness.js`, 2,430 sims in ~2s, full
-      write-up in `GAPFILL_RESULTS.md`. **Q1 is answered: the constant IS load-bearing and 40 is not
+      write-up in `GAPFILL_SPLIT.md`. **Q1 is answered: the constant IS load-bearing and 40 is not
       the number.** 227 of 360 cells move by more than $1,000 (widest $616,919), and among the 82
       cells that are clean wealth comparisons - delivered spend unchanged, every weight funding the
       plan - **w=40 is best in ZERO of them** and w=0 in 65. Blast radius is three families only
@@ -3094,7 +3220,7 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
         `OPTIMIZER_GRIDS.ordered`, so a sequence a user can pick is always a sequence the sweeps
         score. Six entries in the order they earned: **CBRI, CBIR, CIBR, BCIR, RIBC, BIRC** - by
         outright wins, ties broken by summed margin over the best shipped ordering
-        (`GAPFILL_RESULTS.md` section 15: CIBR $1,851,441 over BCIR's $1,666,683 at 8 wins each).
+        (`GAPFILL_SPLIT.md` section 15: CIBR $1,851,441 over BCIR's $1,666,683 at 8 wins each).
         CBIR stays the pre-selected option and the resolver fallback. Cost: MC 144 -> 156 rows,
         Optimizer 117 -> 126.
       - **NOT shipped, and this is the decision, not an omission:** the default branch's `[40,60]`.
@@ -3111,7 +3237,7 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
 - [x] **P30h** - **DONE 2026-08-27, user question: is the blend a candidate for deletion, replaced by
       the shortfall cascade? ANSWER: NO, and the current default is not defensible either.**
       `.test_harnesses/gapfill_objectives_harness.js`, 540 sims, results in
-      `GAPFILL_OBJECTIVES_RESULTS.md`. Closes the two gaps `P30g` named.
+      `GAPFILL_CASCADE_VS_BLEND.md`. Closes the two gaps `P30g` named.
       **Reframing that made it worth running:** `w=0` is not "Cash only" - `calculateWithdrawals`
       cascades the shortfall, so `[0,100]` drains Cash then draws Brokerage, which IS the bracket
       branch's sequence. Verified in the log, not argued. So the question was "should the blend
@@ -3141,7 +3267,7 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
   shipped is the Ordered menu; both `[40,60]`-family constants were measured and deliberately left
   alone, with the reasons recorded in `P30g` above so they are not re-derived. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
   new file, NOT an extension of `unifiedconv_harness.js`, which is already a four-round document with
-  `P28_RESULTS.md` as its reference)
+  `CONVERSION_ROUTING.md` as its reference)
 - **Depends on:** no code dependency. Its *ship* decision was downstream of P28's, which is now
   settled and shipped (v11.162B), so P30's research runs against a fixed baseline. The 🅡 rows are
   part of that baseline: a weight sweep must state which Roth position it holds fixed.
@@ -3279,7 +3405,7 @@ level.
 
 **Why:** three observations converge on one place. (1) The user reports Brokerage draws not occurring
 as expected. (2) The repo has already measured that this is load-bearing: every cell whose control arm
-never touched Brokerage returns exactly $0 (`.test_harnesses/HARNESSES.md`, findings.md:1057-1062).
+never touched Brokerage returns exactly $0 (`research/HARNESSES.md`, findings.md:1057-1062).
 (3) **Gain harvesting already exists and most users never see it** — the cyclic modifier maxes out the
 LTCG bracket *on purpose* even when spend does not need the money (`optimizer_core.js:1301-1303`, a
 deliberate basis step-up), and its target-bracket knob `cycleLTCGTarget` (default 0.15 = target the 0%
@@ -3378,8 +3504,8 @@ selected" is whether cyclic ever wins. Splitting them would make each half read 
         ever produces a capped year, the re-check is still the right move and the reasoning is in
         findings.md.
   - [x] **P32d-5 - written up. DONE 2026-08-21.** New Q2 section in
-        `research/P32_RESULTS.md` (title, run header, predictions table, Coverage and Scope
-        Limits all updated); `.test_harnesses/HARNESSES.md` now records that q2 printed SKIPPED for
+        `research/BROKERAGE_DRAW.md` (title, run header, predictions table, Coverage and Scope
+        Limits all updated); `research/HARNESSES.md` now records that q2 printed SKIPPED for
         months and why. **P5 RIGHT**, **P6 RIGHT** - P6 named the third-pass arm, so it is scored
         per arm instead of on the pooled total, which had let `brokFirst` print "MIXED" for an arm
         P6 never mentioned. Arm labels renamed at the user's request: `fib` -> `brokFirst`,
@@ -3388,12 +3514,12 @@ selected" is whether cyclic ever wins. Splitting them would make each half read 
     **set-identical** to `bounded`'s 9, so the third-pass arm strictly dominates it on funded years.
   - **Do NOT re-run Q1.** `P32e` already re-measured it post-dividend-fix ("three families UP,
     cyclic -0.8pt, never-draw still 0/55").
-- [x] **P32e** — Q3/Q4 DONE 2026-08-10 (`research/P32_RESULTS.md`). Q3: cyclic wins 26/45
+- [x] **P32e** — Q3/Q4 DONE 2026-08-10 (`research/BROKERAGE_DRAW.md`). Q3: cyclic wins 26/45
   cells as shipped but HALF is the surplus-routing confound — a `CashReserve: 0` control still wins
   23/45 at half the magnitude ($891k max). Q4 INVERTED: `cycleLTCGTarget 0.20` moves 898/2,576
   pairs and wins 53 — the nerdknob gate is protecting users, not hiding a lever; 0.15 confirmed.
   Q1 re-run post-fix: three families UP, cyclic −0.8pt, never-draw still 0/55.
-- [x] **P32f** — Q5 DONE 2026-08-10 (q5, `P32_RESULTS.md`). **INVERTED**: maxbracket wins only
+- [x] **P32f** — Q5 DONE 2026-08-10 (q5, `BROKERAGE_DRAW.md`). **INVERTED**: maxbracket wins only
   108/2,514 pairs (4%); spendonly gains to +$396k. Post-§1014 (v11.1499) a held-to-death harvest
   has no terminal payoff, only MAGI costs — the top-off is a pre-step-up design.
 - [x] **P32g** - **DONE 2026-08-21.** New item in README "Limitations and Restrictions", after the
@@ -3488,7 +3614,7 @@ selected" is whether cyclic ever wins. Splitting them would make each half read 
   - [x] **P32h-3** - decisions (1)-(4) recorded above. No code, deliberately: three of them are
         "keep what ships" and the fourth is explicitly deferred to its own item.
 
-- [x] **P32i** — Q6 DONE 2026-08-10 (q6, `P32_RESULTS.md`). Median NEGATIVE (−0.73%): the harvest
+- [x] **P32i** — Q6 DONE 2026-08-10 (q6, `BROKERAGE_DRAW.md`). Median NEGATIVE (−0.73%): the harvest
   skip was accidentally protective for aggressive ceilings (Fill Bracket 35% −$2.1M) while measured
   arms genuinely gain (IRA Draw 5-8% up to +$808k). The money-on-the-table is real but reclaiming
   it blindly loses; shipping would need arm-aware gating (axis-property + pinned-test bar applies).
@@ -3508,7 +3634,7 @@ selected" is whether cyclic ever wins. Splitting them would make each half read 
   tail shipped at **v11.15e3, PR #185**. Merged: PR #155 (third-pass state tax), PR #156 (brokerage
   research + the dividend over-credit fix), PR #185 (the third-pass re-scope). The only thing carried
   forward is `P32j` above, which `P32h` deferred on purpose rather than left undone.
-  **Harness:** `.test_harnesses/brokerage_harness.js` (node), results in `research/P32_RESULTS.md`
+  **Harness:** `.test_harnesses/brokerage_harness.js` (node), results in `research/BROKERAGE_DRAW.md`
 - **Depends on:** shares the gap-fill path with P30. Sequencing preference, not a hard dependency: run
   P30 first so the `[40,60]` question is settled before the third-pass arms move the same numbers.
 
@@ -3859,7 +3985,7 @@ unlike oracle foresight). An "endgame grid" (scenarios STARTING at IRA=goal, RMD
 Brok/Roth/Cash mix x basis 20/50/80 x spend) can measure this TODAY without `P35i`, using the
 existing ordered arms + the oracle for the ceiling. → new sub-item `P35n`.
 
-- [x] **P35n** — DONE 2026-08-10 (`research/ENDGAME_RESULTS.md`, endgame_harness.js,
+- [x] **P35n** — DONE 2026-08-10 (`research/ENDGAME_DRAW_ORDER.md`, endgame_harness.js,
       144 cells). **The PR-5 BALANCED fill spec is refuted: balance-proportional is the WORST
       arm (median −$223k, wins 1/108). Winner: the SEQUENCE Cash → Roth → Brokerage with IRA as
       last-resort backstop (88/108 cells; conversions-insensitive 36/36).** Mechanism: §1014
@@ -4250,7 +4376,7 @@ as a default.
 - [x] **P36c** — The three reporting tables produced; `conveffect` exclusion stated with its reason.
   GK caveat mandatory when reading them: survivorship (eligible arms 160→37 across spend rates) +
   spend drift (+38%/−12%) inflate every GK number.
-- [x] **P36d** — `research/PHASED_RESULTS.md` + a row in `.test_harnesses/HARNESSES.md`
+- [x] **P36d** — `research/STRATEGY_FAMILY_RANKING.md` + a row in `research/HARNESSES.md`
 - [ ] **P36e** — Decide P35's shipped arm count and `survivorSpendPct` default from the output
   (needs round 2)
 - **Status:** round 1 DONE (2026-08-10); round 2 waits on `P35i`. Runs as P35's PR 7.
@@ -4345,7 +4471,7 @@ The `*.tests.js` suffix is safe precisely because `_tests.js` does not match it.
   `:26`/`:56` and `import.js:95` keep working because `sweep_golden.js` moves alongside.
 - The GENERATED/IMPORTED marker strings (`gen.js:53` vs `sweep_golden.js:118`, `import.js:74` vs
   `:792`) are a **rename** hazard only — a move preserves filenames.
-- `ARCHITECTURE.md:305-318` and `.test_harnesses/HARNESSES.md` ("What does not belong here") both state a "where a test file
+- `ARCHITECTURE.md:305-318` and `research/HARNESSES.md` ("What does not belong here") both state a "where a test file
   belongs" rule that the move would repeal. Budget those ~18 lines as design work, not `sed`.
 - Manual browser pass is irreducible: three pages, over both `http://localhost:8767` and `file://`,
   and specifically re-test Escape-closes-modal (`standalone/IncomeTaxPlanner.html:1194`) and the
@@ -4802,7 +4928,7 @@ schedule column is ever productized.
       oracle in defaults @6% (menu cannot express surplus routing), so the descent+menu result
       is a lower bound on the true ceiling — the cross-check should bound how far below it sits.
       Also open: GK-base cells at 6-8% spend need a survivable fixed-spend base for family gaps.
-- [x] **P51e** — DONE 2026-08-10 → `research/ORACLE_RESULTS.md`. **"propwd
+- [x] **P51e** — DONE 2026-08-10 → `research/PERFECT_FORESIGHT_ORACLE.md`. **"propwd
       default-optimal" REFUTED on the absolute half too**: gap-to-oracle 2.3-11.6% where
       measurable (pre-declared bar was <1%), IRA Draw ahead in every cell. Attribution:
       conversion timing >> withdrawal split (defaults3x @4%: +$1.08M conv vs +$36k split); flat

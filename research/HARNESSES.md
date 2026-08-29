@@ -46,6 +46,7 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `convtiming_harness.js` | **node** | P85: does it matter WHICH YEARS a conversion program lands in, and is RMD suppression the reason? Front-load vs level vs back-load at equal lifetime gross. |
 | `rmdbasis_harness.js` | **node** | P84k/P84n: how wrong was the RMD basis, and did fixing it move what the characterization predicted? Run before and after `P84l`. |
 | `bracketbasis_harness.js` | **node** | P87a: the strategy Limit dropdown's federal entries are taxable-income thresholds spent as MAGI ceilings. How much room does that leave unused, and is the room worth anything? |
+| `extraconv_magi_harness.js` | **node** | P88a/P88b: an Extra Roth Conversion never reached MAGI, so the IRMAA lookback charged a figure that omitted it. How wrong was it, and did fixing it move what the characterization predicted? |
 
 ## betr_harness.js  (node)
 
@@ -417,3 +418,42 @@ Headline findings (2026-08-29):
    surplus capped by the IRA draw; `applyConversionGrossUp` never reads `yr.limit`. Tracked as P87g.
 7. **A prediction scored on the wrong quantity.** B1's first form asked a per-year claim of a
    LIFETIME total and condemned a working arm in 70 of 120 cells. Same failure as `rmdbasis`'s R2.
+
+## extraconv_magi_harness.js  (node)
+
+```bash
+node .test_harnesses/extraconv_magi_harness.js
+```
+
+**Full results, both columns and the scored predictions live in [`EXTRA_CONVERSION_MAGI.md`](EXTRA_CONVERSION_MAGI.md).** This entry is the index; that file is
+the reference.
+
+P88. Both additional-conversion paths - the typed Extra Annual Roth Conversion and the
+cash-funded gross-up - run after the year's main tax pass and used to write back only
+`federalTax` and `stateTax`. Every income-basis field kept its pre-conversion value, so the
+year's MAGI omitted the conversion. That figure is pushed into the plan's MAGI history and is
+what the IRMAA lookback charges two years later.
+
+Run it on the pre-fix engine and again after; section 1 is self-diagnosing and says which build
+it is looking at, and the pre-fix numbers are recorded IN the file so it scores the fix itself
+rather than needing two pasted tables compared by hand.
+
+Headline findings (2026-08-29):
+
+1. **A whole tier, invisible.** One plan converting $100,000 a year recorded MAGI $211,400 and
+   `-none-` / $0 of surcharge where $311,400 earns Tier 2 at $7,166 a year.
+2. **Never a ceiling-strategy problem.** Lifetime IRMAA rose +69% (Fill Bracket 22%), +30%
+   (IRMAA Tier 1), +69% (Proportional) and +132% (Ordered) at a $100,000 conversion. The two
+   bracket-agnostic families were under-billed by as much or more than the two ceiling ones.
+3. **The BEFORE column says something worse than "too low".** Lifetime IRMAA used to FALL as the
+   conversion grew, $1.41M to $0.63M, because the shrinking IRA lowered later RMDs while the
+   conversion's own cost was never charged. The tool presented a large conversion as a way to
+   REDUCE the Medicare surcharge.
+4. **The fix reaches the two conversion paths and nothing else.** Lifetime IRMAA at a $0
+   conversion is identical on both builds to the dollar for all four families, year-0 income tax
+   is unchanged at every conversion size, and a 20-cell fingerprint over plans using neither path
+   matches exactly.
+5. **A prediction written too strongly.** M1 first claimed MAGI was IDENTICAL across conversion
+   sizes. True for the ceiling families, false for the agnostic ones, whose surplus-routing drift
+   reaches -14.6% of a $25,000 conversion. The claim is that the gross is ABSENT, so the test has
+   to be one-sided and stated against the gross.

@@ -19,6 +19,30 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 <a id="11.1691"></a>
 
+## 11.16a3
+
+### Extra Annual Roth Conversion now counts toward IRMAA, and says when it breaks your ceiling
+
+**Behavior change. Plans that use Extra Annual Roth Conversion will show higher IRMAA surcharges
+than before, and saved plans and shared links will not reproduce their earlier numbers.** The
+conversion was always taxed correctly; what it never did was count toward the income figure Medicare
+reads two years later to set your surcharge. So a plan could convert year after year and never be
+billed for it. It is billed now.
+
+The effect is largest where a conversion pushes income across a surcharge threshold, and it reaches
+every strategy, not only the ones that target a bracket or a tier. Nothing changes for a plan with
+no Extra Annual Roth Conversion and no cash-funded conversion tax, and nothing changes for a
+household too young for Medicare.
+
+A warning now appears under Extra Annual Roth Conversion when your strategy targets a ceiling -
+a federal bracket, an IRMAA tier, the Min Limit or the ACA cap. The conversion is added on top of
+that ceiling rather than fitted inside it, so it goes over; once a plan has run, the warning names
+how many years it goes over, by how much, and how many years carry a surcharge. It is a warning
+rather than a block, because converting past a ceiling on purpose is a reasonable plan: a ceiling
+paces ordinary withdrawals, while a conversion moves money from IRA to Roth rather than out of the
+household. The BracketOverage column in Annual Details now shows this too, where it used to show
+nothing.
+
 ## 11.1691
 
 ### Current $ view now converts running totals correctly

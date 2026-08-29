@@ -1146,6 +1146,11 @@ function buildSimYearLogRecord(p) {
         'StateCap': p.tax.stLimit,
         'BracketTarget': p.bracketTarget,
         'BracketOverage': p.bracketOverage,
+        // P88c. The share of BracketOverage caused by a voluntary conversion rather than by
+        // spending that could not be funded inside the ceiling. Hidden ('-' prefix) because the
+        // visible column is the total; this exists so the Optimizer's feasibility heuristic and any
+        // future warning can tell a forced breach from a chosen one.
+        '-overageFromConv': p.overageFromConv ?? 0,
         'ForcedIRA': p.forcedIRA,
         // acaBreach has been passed into this builder since the strict-ACA strategy shipped and was
         // never emitted, so the year a cap actually bound was only ever visible as a total. Leading
@@ -1492,7 +1497,10 @@ function resolveHousehold(sim, yr) {
     yr.limit = undefined;   // MAGI ceiling for bracket/minlimit/aca strategies (see computeBracketCeiling)
     yr.stateLimit = undefined;
     yr.bracketTarget = 0;  // ceiling being targeted by bracket/minlimit/aca strategies
-    yr.bracketOverage = 0; // how far MAGI exceeded bracketTarget (0 when no bracket strategy)
+    yr.bracketOverage = 0; // how far MAGI exceeded bracketTarget (0 when no bracket strategy).
+                           // Set in the withdrawal phases, then re-decided by recomputeBracketOverage
+                           // once the conversion paths have run (P88c).
+    yr._overageFromConv = 0; // the part of the above a voluntary conversion is responsible for
     yr.forcedIRA = 0;      // soft-cap break: IRA drawn ABOVE the ceiling to fund mandatory spending
     yr.acaBreach = false;  // strict ACA cap could not fund spending → plan untenable this year
 
@@ -2773,6 +2781,58 @@ function cfRefundIRA(sim, yr, netTarget) {
 // Phase 23: extra conversion - additional IRA→Roth independent of spending strategy.
 // extraConversionAmount[y] (or scalar $) = gross IRA to additionally withdraw and convert.
 // Taxes come from IRA gross (same convention as convertExcessToRoth surplus). Net Roth = gross - tax.
+// P88b. THE INCOME BASIS OF A YEAR, and the list is explicit on purpose.
+//
+// Both additional-conversion paths - applyConversionGrossUp and applyExtraConversion - pull IRA
+// dollars AFTER the year's main tax pass has already run, and both used to write only `federalTax`
+// and `stateTax` back onto `yr.tax`. Every income-BASIS field kept its pre-conversion value, so
+// `yr.tax.MAGI` omitted the conversion entirely. That is not a display defect: `growAndSettle`
+// pushes `yr.tax.MAGI` into `balance.magiHistory`, and `beginYear` charges IRMAA against
+// `magiHistory[len-2]` two years later. A household could convert $100,000 every year and never be
+// billed a cent of IRMAA on it. Measured before the fix at a whole tier: $0 recorded where $7,166 a
+// year was owed. `bracketOverage` read the same stale figure, which is half of why a conversion
+// could blow through a Fill Bracket ceiling invisibly (the other half is P88c - it is computed
+// before either path runs).
+//
+// WHY A NAMED LIST RATHER THAN Object.assign(yr.tax, calc). The recomputed calc is made with
+// `IRMAAAnnualCost: 0`, because this year's IRMAA is already known from the lookback and is added
+// separately. So that result's `IRMAAAnnualCost`, `IRMAARate`, `nominalRate` and `totalTax` are all
+// wrong for this year and copying them would reintroduce a different bug. Only the income basis
+// moves; rates and totals stay with their existing owners. Anything added to calculateTaxes()'s
+// return that describes INCOME rather than tax belongs in this list.
+const TAX_BASIS_FIELDS = Object.freeze([
+    'MAGI', 'AGI', 'federalTaxableIncome', 'stateAGI', 'stateTaxableIncome',
+    'taxableSS', 'provisionalIncome', 'taxableOrdinaryIncome', 'taxablePreferentialIncome',
+    'ordinaryIncomeInAGI', 'preferentialIncomeInAGI',
+    'federalStdDeduction', 'stateStdDeduction', 'seniorDeduction', 'useItemized',
+]);
+function adoptTaxBasis(yr, calc) {
+    if (!yr.tax || !calc) return;
+    for (const k of TAX_BASIS_FIELDS) if (calc[k] !== undefined) yr.tax[k] = calc[k];
+}
+
+// P88c. `bracketOverage` is computed twice inside the WITHDRAWAL phases (applyPrimaryAndTaxPass1
+// and resolveResidualAndForcedIRA), and both are long before either additional-conversion path
+// runs. So even with P88b's corrected MAGI the column could not see a conversion: it was decided
+// before the conversion existed. This runs after both paths and re-decides it.
+//
+// TWO CAUSES, KEPT APART, because they mean opposite things to a reader. Spending that could not be
+// funded inside the ceiling is the plan failing to respect its own limit; a user-typed Extra Annual
+// Roth Conversion going over is the user choosing to. `_overageFromConv` carries the second so the
+// first stays readable, and so `isBracketInfeasible` can keep meaning "this ceiling cannot fund this
+// plan" rather than "you asked to convert past it" - a heuristic that fires on every bracket row the
+// moment a conversion is typed would empty the Optimizer's table for exactly the users P88 is for.
+//
+// `acaBreach` is deliberately NOT re-decided here. It is set at resolveResidualAndForcedIRA off the
+// spending-driven figure and means "the strict cap could not fund spending", which a voluntary
+// conversion does not change.
+function recomputeBracketOverage(yr) {
+    if (!(yr.bracketTarget > 0)) { yr._overageFromConv = 0; return; }
+    const fromSpending = yr.bracketOverage ?? 0;
+    yr.bracketOverage = Math.max(0, (yr.tax?.MAGI ?? 0) - yr.bracketTarget);
+    yr._overageFromConv = Math.max(0, yr.bracketOverage - fromSpending);
+}
+
 function applyExtraConversion(sim, yr) {
     const { inputs, balance, birthyear1, birthyear2 } = sim;
     const y = yr.y;
@@ -2832,6 +2892,10 @@ function applyExtraConversion(sim, yr) {
             // FedTax + StateTax + IRMAA reconcile to totalTax. capGainsTax is unchanged (ordinary income).
             yr.tax.federalTax = _exTaxCalc.federalTax;
             yr.tax.stateTax   = _exTaxCalc.stateTax;
+            // P88b. _exTaxCalc is the full with-conversion income picture - it already carries any
+            // gross-up income via _priorIRAInc - so its income basis is the year's correct one. The
+            // defect was that only the two tax numbers above were ever taken from it.
+            adoptTaxBasis(yr, _exTaxCalc);
             yr._extraIRAIncome = (yr._extraIRAIncome ?? 0) + _gross;   // keep the basis consistent for any later consumer
         }
     }
@@ -3068,6 +3132,28 @@ function applyConversionGrossUp(sim, yr) {
     // understates itself. applyExtraConversion reads this for exactly that reason.
     yr._extraIRAIncome = (yr._extraIRAIncome ?? 0) + increase;
 
+    // P88b. The gross-up's own income basis. Unlike applyExtraConversion this function never had a
+    // WITH-gross-up tax calc to copy from - `shadowCalc` above is the counterfactual WITHOUT the
+    // conversion - so one is made here. It cannot be done by adding `increase` to MAGI by hand:
+    // extra IRA income raises provisional income, which can raise the TAXABLE share of Social
+    // Security, so AGI rises by more than the draw whenever that share is below its 85% cap.
+    //
+    // Argument shape is the main tax pass's (`yr.tax = calculateTaxes(...)`), with the gross-up's
+    // IRA dollars added to both legs, and `IRMAAAnnualCost: 0` for the reason in adoptTaxBasis.
+    // When applyExtraConversion runs afterwards it recomputes over the same income plus its own
+    // gross and adopts that instead, so the two never disagree - this call is what makes the basis
+    // right for a plan that grosses up and has no extra conversion.
+    adoptTaxBasis(yr, calculateTaxes({
+        filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
+        totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: 0,
+        earnedIncome: baseEI + (yr.netWithdrawals.IRA ?? 0) + increase, inflation: sim.cpiRate,
+        pensionIncome: yr.pension, iraIncome: yr.taxableRMD + (yr.netWithdrawals.IRA ?? 0) + increase,
+        qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
+        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep,
+        stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh,
+        propTax: yr.propTax, taxYear: yr.taxYear
+    }));
+
     yr.grossUpIRA = increase;   // bookkeeping for grossOut
     yr.grossUpTax = taxCost;
 }
@@ -3241,7 +3327,7 @@ function logYear(sim, yr) {
         surplus: yr.surplus, totalRMD: yr.totalRMD, qcd1: yr.qcd1, qcd2: yr.qcd2, taxableDividends: yr.taxableDividends, taxableInterest: yr.taxableInterest,
         netWithdrawals: yr.netWithdrawals, rmd1: yr.rmd1, rmd2: yr.rmd2, totalConverted: yr.totalConverted, tax: yr.tax, IRMAA: yr.IRMAA, IRMAATier: yr.IRMAATier, medicareBase: yr.medicareBase, cpiRate: sim.cpiRate,
         iraVolSpend1: yr.iraVolSpend1, iraVolSpend2: yr.iraVolSpend2, iraConvGross1: yr.iraConvGross1, iraConvGross2: yr.iraConvGross2,
-        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, bracketOverage: yr.bracketOverage, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
+        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
         balance: balance, nominalTaxRate: sim.nominalTaxRate, totalWealth: yr.totalWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
         gains: yr.gains, rmd1Pct: yr.rmd1Pct, subCycleLabel: yr.subCycleLabel, convNetValue: null, excessNetValue: null,
         incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,
@@ -3532,6 +3618,7 @@ function simulate(inputs) {
         routeSurplusAndConvert(sim, yr);
         applyConversionGrossUp(sim, yr);
         applyExtraConversion(sim, yr);
+        recomputeBracketOverage(yr);   // P88c: after BOTH conversion paths, never before
         attributeIncrementalTaxes(sim, yr);
         growAndSettle(sim, yr);
         evaluateYearOutcome(sim, yr);

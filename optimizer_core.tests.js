@@ -3414,7 +3414,15 @@ test('optimizeConversionAmount: GK sweep rejects a higher-scoring but spend-unst
     // its own guard band on future spend.
     const gated = optimizeConversionAmount(gkBase, { strategy: 'gk' }, 'finalNW');
     assert(gated.optConv < 425000, `gated sweep must not pick the unstable $425k candidate, got ${gated.optConv}`);
-    assertNear(gated.optConv, 150000, 'gated sweep should land on the largest still-stable candidate', 1);
+    // P88b RE-BASELINE, 150000 -> 100000, and the reason is checked rather than accepted. Before
+    // P88b an extra conversion never reached MAGI, so the IRMAA lookback never charged it and the
+    // sweep's finalNW curve was missing a real cost that grows with the conversion. This fixture is
+    // 65 at the start and on Medicare throughout: lifetime IRMAA was $0 at every candidate and is
+    // now $29k-$39k across them, which moves the argmax down one $25k step. $150,000 now scores
+    // $1,056,138 against $100,000's $1,066,185. The two assertions above are the test's actual
+    // subject and both still hold unchanged - $425,000 still out-scores everything on raw finalNW
+    // and the stability gate still refuses it.
+    assertNear(gated.optConv, 100000, 'gated sweep should land on the largest still-stable candidate', 1);
 });
 
 test('optimizeConversionAmount: non-GK strategies are unaffected by the stability gate', () => {
@@ -3529,6 +3537,110 @@ test('cash-funding: flag off leaves every balance untouched (regression guard)',
     assertNear(bare.finalNW, explicitOff.finalNW, 'an absent flag must behave exactly like an explicit false', 0.01);
     assert(bare.log.every(r => r['-grossUpIRA'] === 0 && r['-extraConvCashTax'] === 0),
         'no cash-funding may occur with the flag off');
+});
+
+// ── P88: an additional conversion must reach the year's INCOME BASIS, not only its tax ────────
+// Both additional-conversion paths run after the year's main tax pass and used to write back only
+// `federalTax` and `stateTax`. Every income-basis field kept its pre-conversion value, so
+// `yr.tax.MAGI` omitted the conversion -- and that is the figure pushed into `balance.magiHistory`
+// and charged for IRMAA two years later. A household could convert $100,000 a year and never be
+// billed for it. Characterized in `.test_harnesses/extraconv_magi_harness.js`.
+// MAGI_BASE is on Medicare from year 0 so the lookback has something to charge, and its ordinary
+// MAGI must sit BELOW the first single-filer IRMAA threshold ($108,999) with a $100,000 conversion
+// carrying it over one. A 3% draw on $1.2M is about $36,000, so $0 pays no surcharge and $100,000
+// lands near $136,000 -- inside Tier 1's 109,000-137,000 band.
+//
+// THE FIRST VERSION OF THIS FIXTURE DREW $250,000 A YEAR and the IRMAA test could not fail: the
+// single-filer bands run 109k / 137k / 174k / 205k / 500k, so $250,000 and $350,000 are the SAME
+// tier and adding a conversion moved nothing. A fixture for a threshold test has to straddle a
+// threshold; if the bands are ever re-indexed, check that this one still does.
+const MAGI_BASE = {
+    ...BASE,
+    birthyear1: 1955, die1: 92,
+    IRA1: 1200000, Brokerage: 0, BrokerageBasis: 0, Cash: 400000, Roth: 0,
+    strategy: 'fixedpct', iraWithdrawPct: 0.03,
+    spendGoal: 40000, nYears: 10,
+};
+
+test('P88: an Extra Roth Conversion raises the year MAGI by its gross', () => {
+    const off = simulate({ ...MAGI_BASE, extraConversionAmount: 0 });
+    const on  = simulate({ ...MAGI_BASE, extraConversionAmount: 100000 });
+    const a = off.log[0], b = on.log[0];
+    assert(b.extraConv === 100000, `test setup: the full gross must convert, got ${b.extraConv}`);
+    // The strategy's own draw is identical on both arms here, so the whole MAGI difference is the
+    // conversion. Anything less than the gross means the basis was not adopted.
+    assertNear(b.MAGI - a.MAGI, 100000, 'MAGI must rise by the conversion gross', 1);
+});
+
+test('P88: the raised MAGI is what IRMAA is charged on, two years later', () => {
+    const off = simulate({ ...MAGI_BASE, extraConversionAmount: 0 });
+    const on  = simulate({ ...MAGI_BASE, extraConversionAmount: 100000 });
+    const sum = (r, k) => r.log.reduce((t, x) => t + (x[k] || 0), 0);
+    // Direction is the whole claim: a larger MAGI cannot buy a cheaper tier. The SIZE moves with
+    // the feedback loop (a bigger IRMAA bill draws more, which moves later balances), so it is not
+    // pinned -- see the harness for the measured magnitudes.
+    assert(off.log.some(r => (r.Medicare || 0) > 0),
+        'test setup: the household must be on Medicare for the surcharge to exist');
+    assert(sum(off, 'IRMAA') === 0,
+        `test setup: the unconverted plan must sit below the first threshold, got ${sum(off, 'IRMAA')}`);
+    assert(sum(on, 'IRMAA') > 0,
+        'converting $100k/yr must cost IRMAA once the conversion reaches MAGI');
+    // And it must be the LOOKBACK that moves, not year 0: IRMAA is charged on income from two
+    // years earlier, so the first year cannot respond to this year's conversion.
+    assert((on.log[0].IRMAA || 0) === (off.log[0].IRMAA || 0),
+        'year 0 IRMAA is charged on pre-plan income and must not move');
+});
+
+test('P88: the cash-funded gross-up also reaches MAGI', () => {
+    // applyConversionGrossUp had the same defect and no with-gross-up tax calc to copy from, so it
+    // makes its own. This is the path with NO extraConversionAmount, which the other fix cannot cover.
+    const base = { ...MAGI_BASE, convertExcessToRoth: true, strategy: 'fixedpct',
+                   iraWithdrawPct: 0.15, extraConversionAmount: 0 };
+    const off = simulate({ ...base, fundConversionWithCash: false });
+    const on  = simulate({ ...base, fundConversionWithCash: true });
+    const gu = on.log[0]['-grossUpIRA'] || 0;
+    assert(gu > 1, `test setup: the gross-up must fire, got ${gu}`);
+    // The gross-up adds IRA income, which can also push more Social Security into the taxable
+    // share, so MAGI rises by AT LEAST the draw rather than exactly it.
+    assert(on.log[0].MAGI - off.log[0].MAGI >= gu - 1,
+        'the gross-up draw must appear in MAGI');
+});
+
+test('P88: bracketOverage sees a conversion, and names it separately from a forced draw', () => {
+    const base = { ...MAGI_BASE, strategy: 'bracket', stratRate: 0.22,
+                   stratIRMAATier: -1, stratACAMultiple: 0 };
+    const off = simulate({ ...base, extraConversionAmount: 0 });
+    const on  = simulate({ ...base, extraConversionAmount: 100000 });
+    const a = off.log[0], b = on.log[0];
+    assert((a.BracketOverage || 0) < 1,
+        `test setup: the unconverted year must sit inside its ceiling, got ${a.BracketOverage}`);
+    assert((b.BracketOverage || 0) > 1,
+        'a conversion stacked on a filled bracket must show as overage, not vanish');
+    // The two causes stay distinguishable: this overage is chosen, not forced by spending.
+    assertNear(b['-overageFromConv'], b.BracketOverage,
+        'a conversion-caused overage must be attributed to the conversion', 1);
+});
+
+test('P88: no conversion and no cash-funding means nothing moved (regression guard)', () => {
+    // The zero test. Neither corrected path runs, so the fix must be invisible. This is the
+    // assertion that catches a "fix" that reached further than the two conversion paths.
+    const plain = { ...MAGI_BASE, extraConversionAmount: 0, fundConversionWithCash: false,
+                    convertExcessToRoth: false };
+    const r = simulate(plain);
+    assert(r.log.every(x => (x.extraConv || 0) === 0 && (x['-grossUpIRA'] || 0) === 0),
+        'test setup: neither additional-conversion path may run in this fixture');
+    assert(r.log.every(x => (x['-overageFromConv'] || 0) === 0),
+        'with no conversion there is no conversion-caused overage');
+    // MAGI must still be the main tax pass's own figure: AGI plus tax-exempt interest, which is 0
+    // here, so MAGI = taxable income + deduction. Only where taxable income is ABOVE zero: once the
+    // portfolio is spent out, AGI falls below the deduction, `federalTaxableIncome` floors at 0 and
+    // the identity legitimately stops holding. Skipping those years is not weakening the test -
+    // asserting through the floor is asserting arithmetic that was never claimed.
+    const live = r.log.filter(x => (x['-fedTaxableInc'] || 0) > 0);
+    assert(live.length > 3, `test setup: need funded years to reconcile, got ${live.length}`);
+    assert(live.every(x => Math.abs((x.MAGI || 0) - (x['-fedTaxableInc'] || 0)
+                                    - (x['-fedDeduction'] || 0)) < 1),
+        'MAGI must reconcile to taxable income plus the deduction when nothing was added');
 });
 
 // ── Accurate per-account IRA-withdrawal accounting + prefer-larger conversion sourcing ─────────
@@ -4916,7 +5028,11 @@ test('breakEvenHeirsRate: returns null when no rate up to the ceiling pays', () 
 test.slow('breakEvenHeirsRate: the rate/amount pair it reports is self-consistent', () => {
     const r = breakEvenHeirsRate(CONV_BASE, FIXEDPCT_OV, {});
     assert(r !== null, 'this fixture does have a threshold');
-    assertNear(r.rate, 0.57, 'break-even heirs rate for the fixedpct fixture', 0.011);
+    // P88b RE-BASELINE, 0.57 -> 0.65. Converting now carries the IRMAA it always owed, so it takes
+    // a HIGHER heirs rate to justify - the direction a correction must move this. Checked on the
+    // fixture rather than accepted: age 74 in year 0 and on Medicare throughout, lifetime IRMAA
+    // $6,001 with no extra conversion and $35,704 at $100,000 of it.
+    assertNear(r.rate, 0.65, 'break-even heirs rate for the fixedpct fixture', 0.011);
     assert(r.optConv === 75000, `expected a $75,000 conversion at the threshold, got ${r.optConv}`);
     // The rounding nudge exists so a reported rate never comes back with a $0 conversion.
     assert(r.optConv > 0, 'a reported rate must always carry a real conversion amount');
@@ -4947,7 +5063,8 @@ test.slow('lowestBreakEvenHeirsRate: finds a threshold the best-scoring candidat
         { overrides: FIXEDPCT_OV, terminalIRA: 500000, label: 'fixedpct' }
     ], {});
     assert(best !== null, 'the pool search must find the candidate that does have a threshold');
-    assertNear(best.rate, 0.57, 'pool-wide lowest break-even heirs rate', 0.011);
+    // P88b RE-BASELINE, 0.57 -> 0.65: same fixture, same cause as the test above.
+    assertNear(best.rate, 0.65, 'pool-wide lowest break-even heirs rate', 0.011);
     assert(best.label === 'fixedpct', `expected the fixedpct candidate to win, got ${best.label}`);
 });
 

@@ -3067,3 +3067,33 @@ families and splits `bracket` into `bracket-irmaa` / `bracket-rate` so each gets
 
 **Do not build P87g before P88.** Sizing conversions against a ceiling is meaningless while the
 conversions are invisible to the ceiling's own income measure.
+
+### P88a-e DONE, shipped v11.16a3 (2026-08-29)
+
+Report: `research/EXTRA_CONVERSION_MAGI.md`. Harness:
+`.test_harnesses/extraconv_magi_harness.js` (pre-fix numbers recorded inside it, so it scores the
+fix itself). M1-M6 all HOLD.
+
+- **Lifetime IRMAA at a $100,000 conversion rose +69% (Fill Bracket 22%), +30% (IRMAA Tier 1), +69%
+  (Proportional), +132% (Ordered).** Bracket-agnostic families were under-billed as much or more
+  than the ceiling families, so this was never a ceiling problem.
+- **The BEFORE column is worse than "too low": IRMAA FELL as the conversion grew**, $1.41M to
+  $0.63M. The shrinking IRA lowered later RMDs while the conversion's own cost was never charged, so
+  the tool presented a large Roth conversion as a way to REDUCE the Medicare surcharge.
+- **The fix is confined.** IRMAA at a $0 conversion is identical to the dollar on both builds for
+  all four families; year-0 income tax is unchanged at every size; a 20-cell fingerprint over plans
+  using neither conversion path matches exactly.
+- **The Optimizer was biased toward larger conversions.** Its GK sweep fixture moved $150,000 ->
+  $100,000 once IRMAA was priced. `breakEvenHeirsRate` moved 0.57 -> 0.65 on its fixture: converting
+  needs a higher heirs rate now that it carries the surcharge.
+
+Two implementation notes worth keeping:
+
+1. `applyConversionGrossUp` could NOT be fixed by adding its draw to MAGI by hand. Extra IRA income
+   raises provisional income, which can push more Social Security into the taxable share, so AGI
+   rises by MORE than the draw whenever that share is under its 85% cap. It needs a real recompute.
+2. The copied field list is explicit, not an `Object.assign`. The recomputed calc carries
+   `IRMAAAnnualCost: 0`, so its `IRMAARate`, `nominalRate` and `totalTax` are wrong for the year.
+
+`P88f` (should the Optimizer skip ceiling families in its conversion search?) is the only item left,
+and the GK re-baseline is the evidence it is worth asking. **P88 unblocks `P87g`.**

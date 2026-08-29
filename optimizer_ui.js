@@ -873,6 +873,7 @@ function runSimulation() {
     updateStats(res.totals, res.finalNW, lastFinalNWCurrentDollars);
     updateCharts(res.log);
     updateIRAGoalHint();
+    updateExtraConvWarning();  // P88e: after the log exists, so it can say how many years broke
     refreshSuggestedSpend();   // re-solve the engine-calibrated suggested spend for the ⓘ icon
     // Show computed marginal rate in the auto label when futureIRATaxRate is blank
     const _autoRateEl = document.getElementById('future-ira-tax-auto');
@@ -1134,7 +1135,12 @@ function _runOptimizerNow() {
         perfRuns.family[_fk] = (perfRuns.family[_fk] ?? 0) + (simulationCount - _runsBefore);
         const lastEntry = res.log[res.log.length - 1];
         const totalYears = res.log.length;
-        const ovYears = res.log.filter(e => (e['BracketOverage'] ?? 0) > 0).length;
+        // P88c: count only the SPENDING-driven part. BracketOverage now also carries overage a
+        // voluntary Extra Annual Roth Conversion caused, and "infeasible" must keep meaning "this
+        // ceiling cannot fund this plan" - otherwise typing a conversion would flag every bracket
+        // row infeasible and empty the table.
+        const ovYears = res.log.filter(e =>
+            ((e['BracketOverage'] ?? 0) - (e['-overageFromConv'] ?? 0)) > 0).length;
         const bracketOveragePct = totalYears > 0 ? ovYears / totalYears : 0;
         const isBracketInfeasible = overrides.strategy === 'bracket' && bracketOveragePct > 0.5;
         // ACA is strict: any year its FPL cap can't fund spending makes the plan untenable (the
@@ -2910,7 +2916,7 @@ function updateTable(log) {
         'FedCap': 'Upper boundary of the current federal tax bracket.',
         'StateCap': 'Upper boundary of the current state tax bracket.',
         'BracketTarget': 'MAGI ceiling targeted by the bracket/IRMAA strategy this year (0 for other strategies).',
-        'BracketOverage': 'Amount MAGI exceeded the bracket target. Non-zero means spending needs pushed above the ceiling.',
+        'BracketOverage': 'Amount MAGI exceeded the bracket target. Two things put it above: spending needs that could not be funded inside the ceiling, and an Extra Annual Roth Conversion, which is added on top of the ceiling rather than fitted inside it.',
         'ForcedIRA': 'Extra IRA withdrawn to fund mandatory spending after Cash, Brokerage and Roth were exhausted. For the Fill Bracket and IRMAA Tier strategies this draw goes above their ceiling, which is what makes those ceilings soft. ACA Cliff never does this while its cap is in force: an IRA withdrawal is taxable income and crossing the cap forfeits the premium subsidy, so it leaves a shortfall instead. Once that cap ends at Medicare it is funded like any other strategy.',
         'spendGoal': 'This amount increases by inflation less Spend Delta%.',
         'Roth': 'Combined Roth balance at year end.',
@@ -4737,6 +4743,58 @@ const OPT_FAMILY_OF_STRATEGY = {
     aca: 'ACA Cliff', ordered: 'Ordered', gk: 'Guyton-Klinger',
 };
 
+// P88e. An Extra Annual Roth Conversion and a ceiling strategy pull against each other, and until
+// P88b the tool could not say so: the conversion never reached MAGI, so the overage column showed
+// nothing and IRMAA charged nothing. Both are now real, which is what makes this warning worth
+// showing rather than alarming.
+//
+// WARN, DO NOT BLOCK. Converting past a ceiling on purpose is a legitimate plan - the ceiling paces
+// ORDINARY withdrawals, and a conversion moves money inside the household rather than out of it.
+// What the user must not do is believe the ceiling still holds.
+//
+// The strategies this applies to are the ones that carry a ceiling: Fill Bracket (federal rate or
+// IRMAA tier), Min Limit, and the ACA cap. Proportional, Ordered, IRA Draw % and Reduce are
+// bracket-agnostic and have no ceiling to breach, so they say nothing.
+function extraConvCeilingKind() {
+    const m = val('strategy');
+    if (m === 'minlimit') return 'the Min Limit ceiling';
+    if (m === 'aca') return 'the ACA FPL cap';
+    if (m !== 'bracket') return null;
+    if ((+val('stratIRMAATier') ?? -1) >= 0) return 'the IRMAA tier ceiling';
+    if ((+val('stratACAMultiple') ?? 0) > 0) return 'the ACA FPL cap';
+    return 'the federal bracket ceiling';
+}
+
+function updateExtraConvWarning() {
+    const box = document.getElementById('extraConv-warn');
+    if (!box) return;
+    const amt  = +(document.getElementById('extraConversionAmount')?.dataset.numVal
+                   ?? val('extraConversionAmount')) || 0;
+    const kind = extraConvCeilingKind();
+    if (amt <= 0 || !kind) { box.style.display = 'none'; box.innerHTML = ''; return; }
+
+    // Measured, when there is a run to measure. `-overageFromConv` is the part of BracketOverage
+    // this conversion caused, so the count is years the ceiling was actually broken BY THE
+    // CONVERSION rather than by spending the ceiling could not fund.
+    let measured = '';
+    if (Array.isArray(lastSimulationLog) && lastSimulationLog.length) {
+        const yrs = lastSimulationLog.filter(r => (r['-overageFromConv'] ?? 0) > 1);
+        if (yrs.length) {
+            const worst = Math.max(...yrs.map(r => r['-overageFromConv']));
+            const irmaaYrs = lastSimulationLog.filter(r => (r.IRMAA ?? 0) > 0).length;
+            measured = ` In this plan it puts you over in <b>${yrs.length}</b> year${yrs.length === 1 ? '' : 's'}`
+                     + `, by up to <b>${DisplayHelpers.formatDollar(worst)}</b>`
+                     + (irmaaYrs ? `, and ${irmaaYrs} year${irmaaYrs === 1 ? '' : 's'} carry an IRMAA surcharge.` : '.');
+        }
+    }
+    box.innerHTML = `<b>This conversion is added on top of ${kind}, not fitted inside it.</b> `
+        + `Your strategy fills income up to the ceiling, then this amount goes over it.${measured} `
+        + `That can be exactly what you want - a ceiling paces ordinary withdrawals, while a `
+        + `conversion moves money from IRA to Roth rather than out of the household - but the `
+        + `ceiling will not hold while it is set. See BracketOverage and IRMAA in Annual Details.`;
+    box.style.display = '';
+}
+
 function toggleStrategyUI() {
     let m = val('strategy');
     document.getElementById('ui-fixed').classList.toggle('hidden', m !== 'fixed');
@@ -4755,6 +4813,7 @@ function toggleStrategyUI() {
         document.getElementById('rothGapFill').disabled = (m === 'ordered');
     }
     // document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
+    updateExtraConvWarning();   // P88e: the ceiling it warns about is the one just switched to
 }
 
 

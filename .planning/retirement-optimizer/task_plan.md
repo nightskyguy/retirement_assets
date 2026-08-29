@@ -11,7 +11,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P88 | Extra Roth conversions are invisible to MAGI, so IRMAA never charges them | `P88a` |
+| **O0** | P88 | Extra Roth conversions now reach MAGI; `a`-`e` shipped v11.16a3 | `P88f` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
@@ -95,43 +95,62 @@ IRMAA charge lands, and the Optimizer starts pricing those rows honestly. The ex
 proposed may then be unnecessary - a correctly priced search should reject a large conversion on a
 bracket row by itself - but that is a measurement, not a conviction.
 
-- [ ] **P88a** - CHARACTERIZE BEFORE THE FIX, and it earns a harness rather than a note, for
-      `rmdbasis_harness.js`'s reason (risk R12): this moves IRMAA in almost every plan that converts,
-      so a genuinely broken assertion could be "fixed" by accepting whatever new value appeared.
-      Record predicted direction and size FIRST. Lands as two files per the `research/` rule -
-      `.test_harnesses/extraconv_magi_harness.js` and a report - plus its `research/README.md` and
-      `HARNESSES.md` rows in the same commit. Predictions to register: IRMAA dollars RISE for every
-      plan with a non-zero extra conversion and a Medicare-age household, never fall; plans with no
-      extra conversion and no gross-up are BIT-IDENTICAL (the zero test); a household too young for
-      Medicare shows moved MAGI and unmoved IRMAA.
-- [ ] **P88b** - THE FIX. `applyExtraConversion` and `applyConversionGrossUp` must update the year's
-      MAGI, not only its tax. Both already hold a full `calculateTaxes` result for the with-conversion
-      income (`_exTaxCalc`, `shadowCalc`), so the corrected MAGI is in hand - the failure is that only
-      `federalTax`/`stateTax` are copied out of it. Prefer copying the whole basis (`MAGI`, `AGI`,
-      `federalTaxableIncome`, `taxableSS`) from that same result over recomputing, so one call stays
-      the single source of truth. `_extraIRAIncome` already tracks the added gross and is read only
-      inside `applyExtraConversion` (`:2793`); decide whether it survives the fix or is subsumed.
-- [ ] **P88c** - Order-of-operations: `bracketOverage` is computed before the conversions exist, so
-      even a correct MAGI leaves it blind. Either recompute the overage after
-      `applyExtraConversion`, or state in the tooltip that it measures the strategy's own draw only.
-      Recomputing is the honest option and is what makes `P87`'s target/cap reporting mean anything.
-- [ ] **P88d** - Tests: a plan with `extraConversionAmount` shows MAGI higher by the gross; the same
-      plan two years later shows the IRMAA tier the raised MAGI earns; a plan with no extra
-      conversion is bit-identical. Adding tests means reconciling `TestTiers.EXPECTED` AND
-      `.githooks/README.md`, per the repo rule.
-- [ ] **P88e** - THEN the UI warning the user asked for: an Extra Annual Roth Conversion on a
-      Fill Bracket / IRMAA Tier / ACA row will breach the ceiling that row exists to respect. Warn
-      rather than block - a user may want it - and say what it will cost now that the cost is real.
-- [ ] **P88f** - THEN re-open the Optimizer question. Should `selectConversionCandidates` skip
-      ceiling families? Measure it once conversions are priced correctly; the answer may be no.
-- **Status:** open, nothing built. `P88a` first. The measurement above is recorded but is NOT the
-  characterization - it is one plan, one year, and `P88a` needs the grid and the predictions.
-- **Depends on:** nothing. **Blocks:** `P87g` (sizing conversions against a ceiling is meaningless
-  while conversions are invisible to the ceiling's own income measure), and the changelog wording
-  for anything in P87.
-- **Changelog note when this ships:** IRMAA surcharges will RISE for plans using Extra Annual Roth
-  Conversion, and saved plans will not reproduce. That is a correction, not a regression, and the
-  entry should say so plainly.
+- [x] **P88a** - **DONE 2026-08-29.** `.test_harnesses/extraconv_magi_harness.js` +
+      `research/EXTRA_CONVERSION_MAGI.md`, rows in `research/README.md` and `HARNESSES.md`. 172 sims.
+      Predictions M1-M6 registered before the fix and all six HOLD after it. The pre-fix numbers are
+      recorded IN the harness, so it scores the fix itself rather than needing two pasted tables.
+- [x] **P88b** - **DONE, v11.16a3.** New `adoptTaxBasis(yr, calc)` + `TAX_BASIS_FIELDS`
+      (`optimizer_core.js`, above `applyExtraConversion`). `applyExtraConversion` adopts the basis
+      from the `_exTaxCalc` it already had; `applyConversionGrossUp` had no with-gross-up calc to
+      copy, so it makes one - adding `increase` to MAGI by hand would have been wrong, because extra
+      IRA income can push more Social Security into the taxable share and lift AGI by MORE than the
+      draw. The field list is EXPLICIT rather than an `Object.assign`: the recomputed calc carries
+      `IRMAAAnnualCost: 0`, so its `IRMAARate`, `nominalRate` and `totalTax` are wrong for the year
+      and copying them would trade one bug for another.
+- [x] **P88c** - **DONE.** `recomputeBracketOverage(yr)` runs in the year loop after BOTH conversion
+      paths. **Two causes kept apart:** the visible `BracketOverage` is the total, and the new hidden
+      `-overageFromConv` carries the part a voluntary conversion caused. The Optimizer's
+      `isBracketInfeasible` heuristic subtracts it, so "this ceiling cannot fund this plan" keeps its
+      meaning - without that, typing a conversion would flag every bracket row infeasible and empty
+      the table for exactly the users P88 is for. `acaBreach` is deliberately NOT re-decided: it is
+      set off the spending-driven figure and means "the strict cap could not fund spending".
+- [x] **P88d** - **DONE.** 5 tests added, suites **363**/61/22, `TestTiers.EXPECTED` and
+      `.githooks/README.md` both reconciled; badge green in-browser at 845 total.
+      **Three existing tests re-baselined, each checked rather than accepted (risk R12):** the GK
+      conversion sweep 150000 -> 100000 (its finalNW argmax moved because IRMAA is now charged -
+      $0 at every candidate before, $29k-$39k now; the test's own two assertions, that $425k
+      out-scores everything and is still refused by the stability gate, are untouched), and
+      `breakEvenHeirsRate` 0.57 -> 0.65 twice (converting carries the surcharge it always owed, so it
+      takes a higher heirs rate to justify; the fixture is 74 and on Medicare, lifetime IRMAA $6,001
+      with no conversion and $35,704 at $100,000).
+      **Two of the NEW tests were wrong first and both faults are recorded in the file.** The IRMAA
+      test's fixture drew $250,000 a year, and the single-filer bands run 109k/137k/174k/205k/500k -
+      so $250,000 and $350,000 are the SAME tier and the test could not fail. A threshold test needs
+      a fixture that straddles a threshold. The regression guard asserted
+      `MAGI == taxableIncome + deduction` over every year, which stops holding once the portfolio is
+      spent out and taxable income floors at zero.
+- [x] **P88e** - **DONE.** Visible warning under Extra Annual Roth Conversion, shown only when the
+      strategy targets a ceiling (Fill Bracket, IRMAA Tier, Min Limit, ACA) and the amount is
+      non-zero. Visible text rather than a tooltip, per the repo rule - a phone cannot hover. It
+      WARNS, it does not block: converting past a ceiling on purpose is a reasonable plan, since a
+      ceiling paces ORDINARY withdrawals while a conversion moves money inside the household. Once a
+      run exists it names the measured years, the worst overage and the surcharge years. Browser
+      verified: hidden on Proportional, shown on Fill Bracket, hidden again at a zero amount.
+- [ ] **P88f** - Re-open the Optimizer question. Should `selectConversionCandidates` skip ceiling
+      families? Measure it now that conversions are priced correctly; the answer may well be no.
+      Evidence it is worth asking: the GK re-baseline above shows the search moving one $25k step
+      once IRMAA is charged.
+- **Status:** `P88a`-`P88e` DONE 2026-08-29, shipped v11.16a3 with a changelog entry (this one IS
+  user-visible: IRMAA rises for plans that convert, and saved plans will not reproduce). `P88f` open.
+  Measured headline: lifetime IRMAA +69% / +30% / +69% / +132% at a $100,000 conversion across Fill
+  Bracket 22%, IRMAA Tier 1, Proportional and Ordered - and BEFORE the fix it FELL as the conversion
+  grew ($1.41M to $0.63M), so the tool was presenting a large conversion as a way to REDUCE the
+  Medicare surcharge.
+- **Depends on:** nothing. **UNBLOCKS `P87g`** as of the fix - conversions now reach the ceiling's
+  own income measure, so sizing them against it is finally a meaningful thing to build.
+- **Changelog:** written, v11.16a3, and it says plainly that IRMAA rises and saved plans will not
+  reproduce. The in-page list was over its documented five-entry ceiling, so the two oldest were
+  dropped when this was added; their detail is preserved in `optimizer_changelog.md`.
 
 ---
 
@@ -567,7 +586,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
 | **O1** | P34 | Cost of finding a profitable conversion; worker + per-row memo | `P34a` | nothing |
 | **O1** | P84 | Annual advisor / AUM fee, **plus RMDs off the prior Dec 31 balance** (today they key off a mid-year balance whose growth depends on whether the plan converted) *(new 2026-08-28)* | `P84k` (the RMD half; runs before `P84a`) | nothing |
-| **O0** | P88 | An Extra Roth Conversion never reaches `yr.tax.MAGI`, so the IRMAA lookback charges a figure that omits it - measured at a whole tier ($0 recorded where $7,166/yr was owed). Hits every strategy, not just the ceiling families, and biases the Optimizer's conversion search toward larger conversions *(new 2026-08-29, user-raised)* | `P88a` (characterize first) | nothing |
+| **O0** | P88 | An Extra Roth Conversion never reaches `yr.tax.MAGI`, so the IRMAA lookback charges a figure that omits it - measured at a whole tier ($0 recorded where $7,166/yr was owed). Hits every strategy, not just the ceiling families, and biases the Optimizer's conversion search toward larger conversions *(new 2026-08-29, user-raised)* - **`a`-`e` DONE and SHIPPED v11.16a3**: MAGI now carries both conversion paths, the overage column sees them, 5 tests added (suites 363), and a warning names the conflict. Lifetime IRMAA +30% to +132% at a $100k conversion | `P88f` (the Optimizer question) | nothing |
 | **O2** | P87 | The "Limit" dropdown mixes two income bases: IRMAA tiers are MAGI thresholds (right), federal brackets are taxable-income thresholds spent as MAGI ceilings (wrong by one standard deduction) *(new 2026-08-29, user-raised)* - **`P87a` MEASURED 2026-08-29: the gap is exactly one deduction, and closing it LOSES money in 51 of 74 clean cells. Premise refuted; `P87f`, labelling the income basis, is what survives** | `P87f` | nothing |
 | **DONE** | P52 | MC run scope: nerdknob "Run My Plan Only" *(default later flipped by P53f)* | shipped v11.150b | - |
 | **DONE** | P53 | Monte Carlo Stress Test suite (5 windows, bear-start, plan-only default) | shipped v11.1521-152f (#170) | - |

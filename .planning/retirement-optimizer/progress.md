@@ -6248,3 +6248,43 @@ P88 blocks P87g. NOW-table bookkeeping: the new O0 row cost a line, so the two `
 decision notes were merged into one to keep the LINE-30 marker on line 30.
 
 Nothing built this session beyond the write-up; no engine change, suites unchanged at 358 / 61 / 22.
+
+## 2026-08-29 (cont.) - P88a-e built and shipped, v11.16a3
+
+User asked for a through e. All five done; `P88f` deliberately left open.
+
+**P88a.** `extraconv_magi_harness.js` + `research/EXTRA_CONVERSION_MAGI.md`, 172 sims, rows in both
+indexes. Ran on the stale engine FIRST and the pre-fix numbers are embedded in the harness, so it
+scores the fix rather than needing two pasted tables compared by hand. M1-M6 all HOLD.
+
+**P88b.** `adoptTaxBasis(yr, calc)` + an explicit `TAX_BASIS_FIELDS` list.
+`applyExtraConversion` adopts from the `_exTaxCalc` it already had. `applyConversionGrossUp` had no
+with-gross-up calc, so it makes one - and it had to, because adding `increase` to MAGI by hand is
+wrong whenever taxable Social Security is under its 85% cap: the draw raises provisional income and
+AGI moves by more than the draw. The list is explicit rather than an `Object.assign` because the
+recomputed calc carries `IRMAAAnnualCost: 0` and its rate/total fields are wrong for the year.
+
+**P88c.** `recomputeBracketOverage` after both paths, with the two causes kept apart -
+`-overageFromConv` is the voluntary share, and `isBracketInfeasible` subtracts it so the heuristic
+keeps meaning "this ceiling cannot fund this plan". Without that, typing a conversion would flag
+every bracket row infeasible and empty the Optimizer table for exactly the users this phase is for.
+`acaBreach` deliberately left on the spending-driven figure.
+
+**P88d.** 5 new tests, suites **363**/61/22, `TestTiers.EXPECTED` and `.githooks/README.md`
+reconciled, badge green in-browser at 845 total. Three existing tests re-baselined and every one
+CHECKED rather than accepted, which is the whole reason P88a ran first (risk R12). Two of my own new
+tests were wrong on the first pass and both faults are recorded in the test file: the IRMAA fixture
+drew $250,000/yr, and single-filer bands run 109k/137k/174k/205k/500k, so $250k and $350k are the
+SAME tier and the test could not fail; and the regression guard asserted an identity that stops
+holding once the portfolio is spent out and taxable income floors at zero.
+
+**P88e.** Visible warning under Extra Annual Roth Conversion, gated on a ceiling strategy plus a
+non-zero amount. Warns, never blocks. Carries measured numbers once a run exists. Browser verified
+in all three states.
+
+**Changelog written** - this branch IS user-visible now, unlike its earlier commits. The in-page
+list was already over its documented five-entry ceiling, so the two oldest went when this was added.
+
+Version 11.16a3, five bump sites including the tier-2 loader's own `const V` (the suites changed).
+
+**P88 unblocks P87g.** Next: `P88f`, and the GK re-baseline is the evidence it is worth asking.

@@ -6288,3 +6288,40 @@ list was already over its documented five-entry ceiling, so the two oldest went 
 Version 11.16a3, five bump sites including the tier-2 loader's own `const V` (the suites changed).
 
 **P88 unblocks P87g.** Next: `P88f`, and the GK re-baseline is the evidence it is worth asking.
+
+## 2026-08-29 (cont.) - P89: the ACA age gate read a year the plan does not start in
+
+User selected `Below IRMAA` and got a paragraph about the ACA FPL cap. Three stacked defects, and
+the user chose to fix all three.
+
+**A.** `updateACAWarning` never read `sel.value` - it gated on "does the dropdown contain ACA
+options" plus ages, so the FPL advisory fired for every Limit choice.
+
+**B.** Its year and both ages were wrong: `by1 + startAge` = 2023 on the reported plan, which
+actually runs from 2026. It announced "you will be 65 and your spouse 54" for a plan whose first
+year has them at 68 and 57. The block's own comment says naming the start year is "the whole point
+of this block rather than a flourish", added because exactly this confusion was reported before.
+
+**C.** The same expression lives in `bothOnMedicareAtStart`, which decides whether ACA rows appear
+in the Optimizer at all.
+
+**Root cause: two definitions of the plan's first year, one clamped and one not.** I initially
+guessed `startAge` was vestigial because the engine never reads it; that was wrong, and checking
+`getInputs()` corrected it - `startAge` drives the start year through `startInYear`'s clamp.
+
+Measured before changing anything: 22.2% of a 6,396-combination grid disagrees, 1,423 flips one way
+and 0 the other. The direction is provable and is now pinned by a test rather than left to be
+re-measured.
+
+Fixed with one shared `planFirstYear(by1, startAge, currentYear)`, pure and year-pinnable. The
+advisory is gated on an ACA selection; the "options are greyed out" message deliberately is not,
+since a user who cannot select them could otherwise never learn why.
+
+3 tests, suites **366**/61/22, both count sites reconciled, badge green at 848 in-browser. Verified
+on the user's exact URL: hidden on Below IRMAA, and the ACA advisory now reads 2026 / 68 / 57.
+
+**Three existing test call sites had to be pinned to an explicit year** - the new default parameter
+would otherwise have made them time-dependent, including the golden capture reproduction. One
+existing test comment was also wrong and is corrected in place.
+
+Changelog entry names the Optimizer consequence plainly. v11.16a4.

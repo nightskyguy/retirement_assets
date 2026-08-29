@@ -31,6 +31,61 @@ User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 20
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
 
+## P89: the ACA age gate read a year the plan does not start in  *(2026-08-29, user-reported, DONE v11.16a4)*
+
+**How it surfaced.** The user selected `Below IRMAA` and got a paragraph about the ACA FPL cap.
+
+**Three defects, stacked, and the third is the root of the other two.**
+
+- **A. The advisory was never gated on the selection.** `updateACAWarning` (`optimizer_ui.js:5978`)
+  checked only whether the dropdown CONTAINS ACA options, plus the ages. It never read `sel.value`,
+  so the FPL advisory fired for every choice - federal bracket, IRMAA tier, anything.
+- **B. Its year and both ages were wrong.** It computed `startYear = by1 + startAge`. On the reported
+  plan that is 1958 + 65 = 2023, and the message said "you will be 65 and your spouse 54". The plan
+  actually runs from **2026** with them at **68 and 57**. The block carries a comment saying that
+  naming the start year is "the whole point of this block rather than a flourish", added because
+  ages-today beside a claim about another year "reads as a stale control, and it was reported as
+  one". It then did the same thing one layer down.
+- **C. The same expression gated real behavior.** `bothOnMedicareAtStart` carried its own
+  `by1 + startAge`, and it decides `acaNeverApplies` (`optimizer_ui.js:1158`) and `acaDisabled`
+  (`:1221`) - whether ACA rows appear in the Optimizer at all.
+
+**The root cause is that the plan's first year had TWO definitions.** `getInputs()` built
+`startInYear` as `max(by1 + startAge, currentYear)` - clamped, because a simulation cannot start in
+the past - and that is what the engine runs on. The ACA gate re-derived the same year without the
+clamp. `startAge` is not vestigial, which was the first wrong guess: it drives the start year
+THROUGH that clamp, and the clamp was the missing piece.
+
+**Measured before the fix**, over a 6,396-combination grid of birth years, start ages and spouse
+ages: the clamped and unclamped answers disagree in **22.2%** of them, **1,423 flips to "both on
+Medicare" and 0 the other way.** The direction is provable rather than incidental - the clamp only
+moves the year forward, so ages at start only rise - and a test now pins it, so a later change that
+produces a backwards flip fails rather than ships.
+
+- [x] **P89a** - `planFirstYear(by1, startAge, currentYear)` in `optimizer_core.js`, exported. One
+      definition. `getInputs().startInYear` and `bothOnMedicareAtStart` both call it; the second
+      also stopped asking `startAge >= medAge`, which was the same unclamped assumption in a second
+      place - the question is whether they have reached Medicare age BY THE YEAR THE PLAN BEGINS,
+      not whether the age they typed reaches it. `currentYear` is a parameter, not a `new Date()`
+      call, so the function stays pure and a test can pin a year.
+- [x] **P89b** - The advisory is gated on `sel.value.startsWith('aca')`. The `bothMedicare` branch
+      is deliberately NOT gated the same way: it explains why the ACA options are greyed out, and a
+      user who cannot select them could otherwise never find out why.
+- [x] **P89c** - The warning's year and BOTH ages now come from the clamped start year.
+- [x] **P89d** - 3 tests; suites **366**/61/22, `TestTiers.EXPECTED` and `.githooks/README.md`
+      reconciled. **Three existing call sites in the suite were pinned to an explicit year**, because
+      the new default parameter would otherwise have made them time-dependent - including the golden
+      strategy-capture reproduction, which would have broken in some later calendar year with no code
+      change behind it. One existing comment was also WRONG and is corrected: `both(1960, 60, ...)`
+      was labelled "neither 65 at start", but the plan starts in 2026 when person 1 is 66 and IS on
+      Medicare. The row still returns false, on the spouse rather than on the filer, which is how the
+      mislabel survived.
+- **Status:** DONE, shipped v11.16a4 with a changelog entry naming the Optimizer consequence.
+- **Follow-up, not opened as work:** `startAge` is labelled "Retirement Start Age" but behaves as
+  "your age now, unless it is still ahead of you". Worth a label pass one day; it is not a defect.
+
+---
+
 ## P88: an Extra Roth Conversion never reaches MAGI, so IRMAA never charges it  *(NEW 2026-08-29, user-raised, O0)*
 
 **How it surfaced.** The user observed that `extraConversionAmount` and Fill Bracket are
@@ -586,6 +641,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
 | **O1** | P34 | Cost of finding a profitable conversion; worker + per-row memo | `P34a` | nothing |
 | **O1** | P84 | Annual advisor / AUM fee, **plus RMDs off the prior Dec 31 balance** (today they key off a mid-year balance whose growth depends on whether the plan converted) *(new 2026-08-28)* | `P84k` (the RMD half; runs before `P84a`) | nothing |
+| ~~DONE~~ | ~~P89~~ | ~~The ACA age gate read a year the plan does not start in~~ - **COMPLETE v11.16a4.** The advisory fired for every Limit choice, named a year and two ages the plan never used, and the same unclamped expression decided whether ACA rows reach the Optimizer. One shared `planFirstYear` now; measured at 22.2% disagreement, one-way | - | - |
 | **O0** | P88 | An Extra Roth Conversion never reaches `yr.tax.MAGI`, so the IRMAA lookback charges a figure that omits it - measured at a whole tier ($0 recorded where $7,166/yr was owed). Hits every strategy, not just the ceiling families, and biases the Optimizer's conversion search toward larger conversions *(new 2026-08-29, user-raised)* - **`a`-`e` DONE and SHIPPED v11.16a3**: MAGI now carries both conversion paths, the overage column sees them, 5 tests added (suites 363), and a warning names the conflict. Lifetime IRMAA +30% to +132% at a $100k conversion | `P88f` (the Optimizer question) | nothing |
 | **O2** | P87 | The "Limit" dropdown mixes two income bases: IRMAA tiers are MAGI thresholds (right), federal brackets are taxable-income thresholds spent as MAGI ceilings (wrong by one standard deduction) *(new 2026-08-29, user-raised)* - **`P87a` MEASURED 2026-08-29: the gap is exactly one deduction, and closing it LOSES money in 51 of 74 clean cells. Premise refuted; `P87f`, labelling the income basis, is what survives** | `P87f` | nothing |
 | **DONE** | P52 | MC run scope: nerdknob "Run My Plan Only" *(default later flipped by P53f)* | shipped v11.150b | - |

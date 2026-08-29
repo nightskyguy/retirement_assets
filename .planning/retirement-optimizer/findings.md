@@ -3097,3 +3097,26 @@ Two implementation notes worth keeping:
 
 `P88f` (should the Optimizer skip ceiling families in its conversion search?) is the only item left,
 and the GK re-baseline is the evidence it is worth asking. **P88 unblocks `P87g`.**
+
+## P89 - the plan's first year had two definitions (2026-08-29, DONE v11.16a4)
+
+Carry this one because it is a shape, not a one-off: **`startInYear` was computed in two places and
+only one of them clamped.** `getInputs()` built it as `max(by1 + startAge, currentYear)` - the
+engine's basis - while `bothOnMedicareAtStart` and the ACA warning re-derived `by1 + startAge`
+without the clamp. `startAge` is NOT vestigial (my first guess was wrong): it drives the start year
+through that clamp, and the clamp was the missing piece.
+
+- Measured over 6,396 combinations: the two answers disagree **22.2%** of the time, **1,423 flips
+  one way, 0 the other.** Provable direction - the clamp only moves the year forward, so ages at
+  start only rise, so "both on Medicare" only becomes more true. Pinned by a test.
+- The unclamped year reached real behavior, not just text: it gates `acaNeverApplies` and
+  `acaDisabled`, i.e. whether ACA rows appear in the Optimizer.
+- The engine itself was always right - `acaCapLapsed` uses each year's real ages. Only the UI gate
+  was on the wrong basis.
+- `planFirstYear(by1, startAge, currentYear)` is now the single definition, exported, pure, with
+  `currentYear` a parameter so tests can pin it.
+
+**Test-rot note worth reusing:** adding a `currentYear = new Date().getFullYear()` default made
+three existing suite call sites time-dependent, including a golden strategy-capture reproduction
+that would have broken in a later calendar year with no code change behind it. Any helper that
+defaults to "now" needs its test call sites pinned in the same commit.

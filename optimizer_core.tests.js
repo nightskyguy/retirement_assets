@@ -109,6 +109,7 @@ const bestTimeLimitedConversion = core.bestTimeLimitedConversion;
 const buildVariations = core.buildVariations;
 const buildStrategyFamilies = core.buildStrategyFamilies;
 const bothOnMedicareAtStart = core.bothOnMedicareAtStart;
+const planFirstYear = core.planFirstYear;
 const MC_GRIDS = core.MC_GRIDS;
 const OPTIMIZER_GRIDS = core.OPTIMIZER_GRIDS;
 const sameStrategySelection = core.sameStrategySelection;
@@ -4181,18 +4182,21 @@ test('ELIGIBILITY_AGE: the constant exists and ships at 65', () => {
 test('ELIGIBILITY_AGE: the at-start Medicare helper follows the constant', () => {
     // Covered two helpers until eitherOnMedicareAtStart was deleted, dead after P35 PR 3c.
     // Today a 66-year-old is already on Medicare when the plan opens.
-    assert(bothOnMedicareAtStart(1960, 66, false, 0) === true,  'single at 66 vs 65 → on Medicare');
-    // startYear = 1960 + 66 = 2026; spouse born 1958 is 68, so both are past 65 today.
-    assert(bothOnMedicareAtStart(1960, 66, true, 1958) === true, 'couple 66/68 vs 65 → both on Medicare');
+    // P89: every call pins the year. The helper clamps the plan's first year to the current one,
+    // so an unpinned call asserts something different in every calendar year.
+    const Y = 2026;
+    assert(bothOnMedicareAtStart(1960, 66, false, 0, Y) === true,  'single at 66 vs 65 → on Medicare');
+    // startYear = max(1960 + 66, 2026) = 2026; spouse born 1958 is 68, so both are past 65.
+    assert(bothOnMedicareAtStart(1960, 66, true, 1958, Y) === true, 'couple 66/68 vs 65 → both on Medicare');
     withEligibilityAge(67, () => {
-        assert(bothOnMedicareAtStart(1960, 66, false, 0) === false, 'single at 66 vs 67 → not yet');
+        assert(bothOnMedicareAtStart(1960, 66, false, 0, Y) === false, 'single at 66 vs 67 → not yet');
         // Same couple, one on each side of the moved constant: the 68-year-old qualifies and the
         // 66-year-old does not. This is the assertion that catches an AND silently becoming an OR
         // — it used to be carried by contrast with the deleted twin, so it is made directly now.
-        assert(bothOnMedicareAtStart(1960, 66, true, 1958) === false,
+        assert(bothOnMedicareAtStart(1960, 66, true, 1958, Y) === false,
             'AND: the younger spouse does not qualify at 67, so the couple does not either');
-        // startYear = 1960 + 68 = 2028; spouse born 1956 is 72 — both past 67.
-        assert(bothOnMedicareAtStart(1960, 68, true, 1956) === true, 'AND: both past the new age');
+        // startYear = max(1960 + 68, 2026) = 2028; spouse born 1956 is 72 — both past 67.
+        assert(bothOnMedicareAtStart(1960, 68, true, 1956, Y) === true, 'AND: both past the new age');
     });
     assert(TAXData.IRMAA.ELIGIBILITY_AGE === 65,
         'the constant must be restored on the way out, or every later test runs on a moved gate');
@@ -5666,8 +5670,12 @@ for (const [name, g] of Object.entries(OPT_GOLDEN)) {
             // removes it. The four captures still reproduce because the one recorded with the
             // nerdknob OFF (`default`) has both people on Medicare at start, so its ACA rows were
             // suppressed by age rather than by the flag. Checked before the gate was dropped.
+            // P89: the year is PINNED. bothOnMedicareAtStart now clamps the plan's first year to
+            // the current one, so leaving it to default would make this golden reproduction
+            // time-dependent: a fixture whose gate answer flips in some later calendar year would
+            // break this test with no code change behind it.
             acaFamily: !bothOnMedicareAtStart(g.base.birthyear1, g.base.startAge,
-                !!g.base.hasSpouse, g.base.hasSpouse ? (g.base.birthyear2 || 0) : 0),
+                !!g.base.hasSpouse, g.base.hasSpouse ? (g.base.birthyear2 || 0) : 0, 2026),
             bracketResetsIRMAATier: true,
             markCashFunding: nerd,
             cashClones: nerd && g.base.Cash > 0,
@@ -5731,13 +5739,71 @@ test('bothOnMedicareAtStart: AND semantics, single filer, and the missing-input 
     // Moved out of optimizer_ui.js in P35 PR 2 and never covered there. It had an OR twin,
     // eitherOnMedicareAtStart, deleted once P35 PR 3c left it without a caller. The one-of-two row
     // below is the case the twin used to contrast against, so it is asserted on its own terms.
-    const both = bothOnMedicareAtStart;
-    assert(both(1960, 65, true, 1952) === true,  'both 65+ at start');
-    assert(both(1960, 60, true, 1962) === false, 'neither 65 at start');
-    assert(both(1960, 65, true, 1975) === false,
+    // P89: every call pins the year, and one comment here was WRONG before that. `both(1960, 60,
+    // ...)` was labelled "neither 65 at start" - but the plan cannot start in 1960+60=2020, it
+    // starts in 2026, when person 1 is 66 and IS on Medicare. The row still returns false, on the
+    // spouse rather than on the filer, which is why the mislabel survived.
+    const both = bothOnMedicareAtStart, Y = 2026;
+    assert(both(1960, 65, true, 1952, Y) === true,  'both 65+ at start');
+    assert(both(1960, 60, true, 1962, Y) === false,
+        'person 1 is 66 at the clamped start and the spouse is 64: AND is false on the spouse');
+    assert(both(1960, 65, true, 1975, Y) === false,
         'one 65+, one not: AND is false, and this is the row an OR would get wrong');
-    assert(both(1960, 65, false, 0) === true,    'a single filer needs only themselves');
-    assert(both(0, 65, true, 1952) === false,    'missing inputs are not an assertion of anything');
+    assert(both(1960, 65, false, 0, Y) === true,    'a single filer needs only themselves');
+    assert(both(0, 65, true, 1952, Y) === false,    'missing inputs are not an assertion of anything');
+});
+
+// ── P89: the plan's first year has one definition, and the ACA age gate uses it ────────────────
+// `startAge` is the user's real-world age, so the year they ARE that age is birthyear + startAge -
+// clamped forward, because a simulation cannot start in the past. getInputs() always clamped when
+// building `startInYear`; the ACA gate carried an unclamped copy, so for anyone already past their
+// typed Retirement Start Age it answered about a year the plan does not start in.
+test('P89: planFirstYear clamps a start year that has already passed', () => {
+    assert(planFirstYear(1958, 65, 2026) === 2026,
+        'born 1958 and typing 65 reaches that age in 2023, but the plan starts now');
+    assert(planFirstYear(1970, 65, 2026) === 2035, 'a future start year is left alone');
+    assert(planFirstYear(1958, 0, 2026) === 2026,  'no start age means start now');
+});
+
+test('P89: the ACA age gate reads the clamped year, not the typed age', () => {
+    // The reported case: born 1958, Retirement Start Age 65, spouse born 1969. The plan starts in
+    // 2026 with the filer at 68 and the spouse at 57 - not 2023 with them at 65 and 54.
+    assert(planFirstYear(1958, 65, 2026) - 1958 === 68, 'the filer is 68 when the plan opens');
+    assert(planFirstYear(1958, 65, 2026) - 1969 === 57, 'the spouse is 57 when the plan opens');
+    // A filer whose typed age is below 65 but who is past 65 by the time the plan starts. The old
+    // unclamped test asked `startAge >= 65` and got this wrong.
+    assert(bothOnMedicareAtStart(1958, 60, false, 0, 2026) === true,
+        'typed 60, but 68 when the plan opens: on Medicare');
+    assert(bothOnMedicareAtStart(1958, 60, false, 0, 2018) === false,
+        'same inputs in a year the clamp does not bite: 60 at start, not yet on Medicare');
+});
+
+test('P89: clamping can only make the gate MORE true, never less', () => {
+    // The direction is provable rather than incidental - the clamp only moves the start year
+    // forward, so ages at start can only rise, so "both on Medicare" can only become more true.
+    // Measured at 1,423 flips one way and 0 the other over a 6,396-combination grid; this pins the
+    // property so a later change that produces a backwards flip fails here rather than shipping.
+    const medAge = TAXData.IRMAA.ELIGIBILITY_AGE, Y = 2026;
+    const unclamped = (by1, sa, hs, by2) => {
+        if (!by1 || !sa) return false;
+        const sy = by1 + sa;
+        const p1 = sa >= medAge, p2 = hs && by2 > 0 && (sy - by2) >= medAge;
+        return hs ? (p1 && p2) : p1;
+    };
+    let flipsToTrue = 0, flipsToFalse = 0;
+    for (let by1 = 1945; by1 <= 1985; by1++) {
+        for (let sa = 50; sa <= 75; sa++) {
+            for (const by2 of [0, by1 - 8, by1 + 4, by1 + 11]) {
+                const hs = by2 > 0;
+                const now = bothOnMedicareAtStart(by1, sa, hs, hs ? by2 : 0, Y);
+                const was = unclamped(by1, sa, hs, hs ? by2 : 0);
+                if (now && !was) flipsToTrue++;
+                if (was && !now) flipsToFalse++;
+            }
+        }
+    }
+    assert(flipsToFalse === 0, `clamping must never un-set the gate, got ${flipsToFalse} backwards flips`);
+    assert(flipsToTrue > 0, 'test setup: the grid must contain cases the clamp actually changes');
 });
 
 test('OPT_GOLDEN: the Optimizer sweeps the two families MC does not, on its own IRA Draw grid', () => {

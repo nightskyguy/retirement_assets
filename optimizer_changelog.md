@@ -19,6 +19,27 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 <a id="11.1691"></a>
 
+## 11.16a4
+
+### The ACA age notice only appears for ACA strategies, and names the right year
+
+The notice explaining how the ACA income cap works appeared under the Limit dropdown for every
+choice, so picking a federal bracket or an IRMAA tier produced an unprompted paragraph about a cap
+the plan does not use. It now appears only when an ACA limit is selected. The separate notice
+explaining why the ACA choices are greyed out, once both of you are on Medicare, still appears
+whatever is selected, because otherwise there would be no way to find out why they cannot be picked.
+
+The notice was also naming the wrong year and the wrong ages. It worked them out from your birth
+year plus the Retirement Start Age you typed, which is the year you reach that age even when that
+year has already passed. A plan starting this year for someone born in 1958 with a start age of 65
+was described as starting in 2023 with them at 65 and their spouse at 54, when the plan runs from
+2026 with them at 68 and 57. It now reads the year the plan actually begins.
+
+**Behavior change, and it reaches the Optimizer.** That same year decided whether ACA rows appear in
+the Optimizer table at all. If you are already past the Retirement Start Age you typed, ACA rows may
+now be correctly withheld where they used to be offered, because you are already on Medicare in the
+plan's first year. Nothing changes for a plan whose start age is still ahead of it.
+
 ## 11.16a3
 
 ### Extra Annual Roth Conversion now counts toward IRMAA, and says when it breaks your ceiling

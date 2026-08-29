@@ -586,14 +586,9 @@ function getInputs() {
         propWithdraw: +val('propWithdraw') / 100.0,
         iraWithdrawPct: +val('iraWithdrawPct') / 100.0,
         startAge: +val('startAge') || (new Date().getFullYear() - +val('birthyear1')),
-        startInYear: (() => {
-            const sa = +val('startAge');
-            const by1 = +val('birthyear1');
-            // startAge is the user's real-world age: the year they ARE that age = birthyear + startAge.
-            // Clamp to the current calendar year - can't start a simulation in the past.
-            const computed = sa > 0 ? by1 + sa : new Date().getFullYear();
-            return Math.max(computed, new Date().getFullYear());
-        })(),
+        // P89: one definition of the plan's first year, shared with the ACA age gate. This block
+        // used to carry its own copy of the clamp and the gate carried an unclamped copy.
+        startInYear: planFirstYear(+val('birthyear1'), +val('startAge')),
         dividendReinvest: !!valChecked('dividendReinvest'),
         cyclicEnabled: !!valChecked('cyclicEnabled'),
         cyclicOrder:   val('cyclicOrder') ?? 'ira-first',
@@ -5992,9 +5987,11 @@ function updateACAWarning() {
 
     if (!by1 || !startAge) { warnEl.style.display = 'none'; return; }
 
-    const startYear    = by1 + startAge;
+    // P89: the PLAN'S first year, clamped, from the one shared definition - not `by1 + startAge`,
+    // which is the year they reach that age even when it is in the past.
+    const startYear    = planFirstYear(by1, startAge);
     const medAge       = TAXData.IRMAA.ELIGIBILITY_AGE;
-    const p1Medicare   = startAge >= medAge;
+    const p1Medicare   = (startYear - by1) >= medAge;
     const p2Medicare   = hasSpouse && by2 > 0 && (startYear - by2) >= medAge;
     const bothMedicare = bothOnMedicareAtStart(by1, startAge, hasSpouse, by2);
     const oneMedicare  = hasSpouse && (p1Medicare !== p2Medicare);
@@ -6017,7 +6014,10 @@ function updateACAWarning() {
     // retirement start. A user who sets a 1966 birth year sees "Age 59" next to it and is then told
     // they are on Medicare - two true statements about two different years, one of which the page
     // never showed. It reads as a stale control, and it was reported as one.
-    const p1AgeAtStart = startAge;
+    // P89: BOTH ages come from the start year. p1's used to be `startAge` itself, which is the age
+    // the user typed rather than the age they will be when the plan begins - so a plan starting
+    // today for someone already past that age announced an age they had passed years ago.
+    const p1AgeAtStart = startYear - by1;
     const p2AgeAtStart = startYear - by2;
     const you  = `you will be ${p1AgeAtStart}`;
     const them = `your spouse ${p2AgeAtStart}`;
@@ -6027,7 +6027,13 @@ function updateACAWarning() {
             ? `⚠ At retirement start in ${startYear}, ${you} and ${them} - both on Medicare (age ${medAge}+), so there is no premium subsidy for an income cap to protect. ACA options are unavailable. Lower Retirement Start Age to model pre-Medicare years.`
             : `⚠ At retirement start in ${startYear} ${you}, already on Medicare (age ${medAge}+), so there is no premium subsidy for an income cap to protect. ACA options are unavailable. Lower Retirement Start Age to model pre-Medicare years.`;
         warnEl.style.display = 'block';
-    } else if (oneMedicare) {
+    } else if (oneMedicare && sel.value.startsWith('aca')) {
+        // P89: gated on the SELECTION. This advisory describes how the FPL cap behaves for a plan
+        // that is using one; it was previously shown for every selection, so choosing a federal
+        // bracket or an IRMAA tier produced an unprompted paragraph about a cap the plan does not
+        // have. The bothMedicare branch above is NOT gated the same way on purpose: it explains why
+        // the ACA options are greyed out, and a user who cannot select them could otherwise never
+        // find out why.
         // Was "ACA income limits apply only to the other person", which was wrong in both
         // directions: the FPL cap is tested against HOUSEHOLD MAGI, so the Medicare spouse's
         // RMDs and Social Security count against it, and the cap does not lift for anyone until

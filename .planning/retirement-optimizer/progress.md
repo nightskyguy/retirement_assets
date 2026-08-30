@@ -6579,3 +6579,53 @@ round-trip. `?str=bracket&sr=aca400` lands on stratRate `10`, not `aca400`, so `
 reads 0 and the plan silently loads as Fill Bracket 10% instead of an ACA cap. `buildShareURL` emits
 exactly that pair, so every shared ACA plan is affected. Confirmed pre-existing: `git diff main`
 touches no stratRate code. Recorded in task_plan as its own item.
+
+## 2026-08-29 (cont.) - P92a DONE: the bracket ceiling adds the deduction, v11.16aa
+
+Suites **367 / 61 / 22**, browser badge green at 853. The ceiling raise is unconditional; the P87a
+research flag `bracketCeilingAddDeduction` is gone from the engine.
+
+**The plan's instruction could not be followed literally, and measuring said what to do instead.**
+It asked for "the SAME deduction calculateTaxes() charges". That deduction does not exist when the
+ceiling is placed - the senior deduction phases out against the AGI the ceiling is about to
+determine - so the real question was how wrong each OBTAINABLE deduction is. New harness
+`.test_harnesses/ceilded_harness.js`, 3,960 plan-years:
+
+| candidate | median | p90 | worst |
+|---|---:|---:|---:|
+| last year's charged, re-indexed (the P87a arm) | $0 | $763 | **$35,505** |
+| statutory std + age bumps, re-derived | $0 | $4,300 | $6,000 |
+| **ask calculateTaxes() about a provisional year, twice - SHIPPED** | **$0** | **$0** | $6,000 |
+
+The prior-year candidate is exact in the median and wrong by the WHOLE $35,505 in the 120 years the
+filing status changes, because it carries an MFJ number into a Single year. That killed it.
+
+**The second pass is not polish.** Asking at the bracket top evaluates the senior deduction about one
+deduction too low, so it comes back too large and the ceiling OVERSHOOTS: measured $1,338 of taxable
+income spilling into the next bracket. Asking again at the ceiling the first pass implies turns that
+into an $80 undershoot. Verified in the browser on the default plan: bracket top $211,400, ceiling
+$252,790, taxable income $207,641 - against $22,308 short before.
+
+**Cost measured, not assumed:** 0.813 ms/sim against main's 0.820 on a 40-year Fill Bracket plan,
+alternating runs. Two extra tax calls a year are lost in the noise.
+
+**Four tests failed and none was a pinned constant.** Every one was a fixture whose assumption the
+ceiling change invalidated, and each was repaired to keep testing its own subject:
+- `soft cap (federal bracket)`: a 22% ceiling on the true top no longer breaches at all, so there
+  was no forced draw left to test. New `CAP_SOFT` at 12%, where the limit still binds.
+- Two `P35g` step-up tests: the ceiling drains that fixture's IRA to zero, which drops the survivor
+  into the **0% long-term capital-gains band** - and a step-up on gains taxed at 0% is worth exactly
+  nothing, so both assertions about its value went vacuously false. `STEPUP_BASE` gains an IRA Goal.
+  Worth keeping in mind: that is a real consequence a user can hit, not only a fixture artifact.
+- `OC: counterfactual pays the RMD counter-effect`: comparing the counterfactual's lifetime tax
+  against the actual run's is confounded now that the actual arm converts ~$1M. Replaced with the
+  causal form its own title claims - same plan, bigger IRA, bigger RMDs, more tax - which holds on
+  main too.
+
+**Disclosed cost, measured against main on the P87a grid:** 71 clean cells, net worth up in 18 and
+down in 49, median **-$47,549**, best +$1,517,175, worst -$2,589,357. By bracket: 12% +$157,572,
+22% -$200,350, 24% -$12,741. Median conversion change $0 - nothing sizes a conversion against the
+ceiling, which is P87a section 7's finding surviving intact and still unaddressed.
+
+`-ceilDedAddBack` is now logged beside `-fedDeduction` so the residual is auditable from a finished
+run. `research/BRACKET_CEILING_BASIS.md` gains section 8 and its index row names it.

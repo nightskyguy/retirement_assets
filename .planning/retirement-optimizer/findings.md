@@ -3318,3 +3318,48 @@ both of which now load Proportional Withdraw +% at 20 and a real plan (finalNW $
 `?str=bracket&sr=aca400` - which is exactly what `buildShareURL` emits for an ACA plan - lands the
 ceiling dropdown on `10`, so `stratACAMultiple` reads 0 and the plan loads as Fill Bracket 10%.
 Confirmed pre-existing: the P94 diff against `main` touches no `stratRate` code. Opened as P95.
+
+## 2026-08-29 - P92a: which deduction can a ceiling actually use, and what filling costs
+
+**The circularity is not solvable, so the question changes.** A federal bracket top is a
+taxable-income threshold and the ceiling built from it is spent as a MAGI ceiling; the gap is the
+year's deduction. But the OBBBA senior deduction phases out against federal AGI, which is exactly
+what the ceiling is about to determine, so the year's own deduction cannot be known when the ceiling
+is placed. The useful question is not "use the right one" but "how wrong is each obtainable one".
+
+Measured over 3,960 plan-years on the P87a grid (`.test_harnesses/ceilded_harness.js`), scored
+against `-fedDeduction`, the deduction `calculateTaxes()` actually charged:
+
+| candidate | median | p90 | worst | fails where |
+|---|---:|---:|---:|---|
+| last year's charged, re-indexed | $0 | $763 | **$35,505** | every filing-status change: an MFJ number carried into a Single year |
+| statutory std + age bumps, re-derived | $0 | $4,300 | $6,000 | a second source of truth, and no more accurate for it |
+| **ask `calculateTaxes()` twice, at a provisional year** | **$0** | **$0** | $6,000 | only years the plan never reaches its ceiling |
+
+**The second pass is load-bearing and the reason is general.** Asking at the bracket top evaluates
+the phase-out about one deduction too low, so the deduction comes back too LARGE and the ceiling
+overshoots - $1,338 of taxable income into the next bracket on one plan. Asking again at the ceiling
+the first pass implies gives an $80 undershoot. The phase-out rate is 6%, so each pass cuts the
+error by that factor and a third is not worth its call. **Any fixed point evaluated at the input
+rather than the output has this bias**; it is not specific to deductions.
+
+**Two extra `calculateTaxes()` calls a year cost nothing measurable**: 0.813 ms/sim against 0.820 on
+the release before, alternating runs on a 40-year Fill Bracket plan. The engine already makes four to
+six a year.
+
+**The shipped cost, measured against `main` on the P87a grid** - 71 clean cells, same delivered
+spending both sides: net worth up in 18, down in 49, median **-$47,549**, best +$1,517,175, worst
+-$2,589,357. By bracket: 12% **+$157,572**, 22% **-$200,350**, 24% -$12,741. This reproduces P87a's
+arm (-$47,092) closely enough to say the arm was measuring the right thing.
+
+**Median conversion change: $0.** P87a section 7's largest finding survives untouched - nothing sizes
+a conversion against the ceiling, so the extra headroom becomes IRA-funded spending displacing
+Brokerage and Cash draws, not conversion. That gap is still open and is larger than the one just
+closed.
+
+**A consequence worth carrying forward, found through a test fixture.** A Fill Bracket ceiling on the
+true bracket top drains `STEPUP_BASE`'s IRA to zero by the terminal year, which drops the survivor's
+income into the **0% long-term capital-gains band**. An IRC 1014 step-up on gains that would be taxed
+at 0% is worth exactly nothing, so `finalNW` and the pre-step-up liquidation value become equal. Two
+step-up tests went vacuously false on that alone. A user filling a 22% bracket can reach the same
+state, and nothing on screen says the step-up stopped being worth anything.

@@ -21,6 +21,24 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ## 11.16aa
 
+### Fill Fed Bracket now fills the bracket
+
+**Behavior change. Every plan using a Fill Fed Bracket limit will withdraw and convert more, and
+saved plans and shared links will not reproduce their earlier numbers.** Picking "22%" stopped short
+of the top of the 22% bracket by the whole of that year's deduction - about $32,000 in 2026 for a
+married couple, and more each year as the deduction grows. A tax bracket is a limit on income after
+the deduction; the plan was measuring against income before it. The two are now on one footing, so a
+chosen bracket is filled to its top.
+
+**This is not free money, and which way it goes depends on the bracket you picked.** Measured across
+71 plans that fund the same spending either way: terminal net worth rises in 18 and falls in 49. A
+12% limit typically gains about $158,000; a 22% limit typically loses about $200,000, and a 24% limit
+is close to flat. Filling a cheap bracket further is usually worth doing; filling an expensive one
+usually is not, because money leaves the IRA earlier than it needed to and stops compounding there.
+If your plan uses a 22% or 24% limit and you chose it expecting the old behavior, this is worth
+re-reading before you rely on the new numbers. Limits that are not federal brackets - IRMAA tiers and
+the ACA cap - are unchanged, because those are already measured on the right income.
+
 ### A saved plan naming a strategy this version does not have now loads as the default
 
 A saved plan or a shared link can name a withdrawal strategy that is no longer in the Strategy menu.

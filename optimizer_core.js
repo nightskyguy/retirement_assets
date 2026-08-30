@@ -965,18 +965,20 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         stateLimit = stLimit.limit;
         nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, cpiRate, stateRateCreep);
 
-        // P87a RESEARCH ARM, default off, set by no UI. A federal bracket top is a TAXABLE-income
-        // threshold; every caller of this function spends the result as a MAGI ceiling. Armed, this
-        // raises the federal number by the year's deduction so the two are on one basis, and the
-        // difference between the arms is what the shipped ceiling leaves unfilled.
+        // P92a. A federal bracket top is a TAXABLE-income threshold; every caller of this function
+        // spends the result as a MAGI ceiling. Raising it by the year's deduction puts the two on
+        // one basis, so "fill the 22% bracket" fills the 22% bracket instead of stopping one
+        // deduction short of it. Measured at $32,200 short in 2026 and $70,876 by 2054 on one plan
+        // (research/BRACKET_CEILING_BASIS.md section 1). `dedAddBack` is computed once a year in
+        // resolveSpendTarget; it is 0 for every ceiling that is not a federal bracket top.
         //
-        // Placed HERE, and the position is the measurement: after the rate lookups, which want the
-        // statutory bracket and not the ceiling; after the state lookup, which is keyed on the
-        // unmodified federal limit so the state bracket selected cannot shift; before the state min,
-        // so a state ceiling still binds on its own terms. The state limit is deliberately NOT
-        // lifted even though it carries the same basis error - this arm measures the federal gap
-        // alone, and in a state whose table binds first that makes the reading an UNDERSTATEMENT.
-        if (inputs.bracketCeilingAddDeduction) limit += dedAddBack;
+        // Placed HERE, and the position matters: after the rate lookups, which want the statutory
+        // bracket and not the ceiling; after the state lookup, which is keyed on the unmodified
+        // federal limit so the state bracket selected cannot shift; before the state min, so a
+        // state ceiling still binds on its own terms. The state limit is deliberately NOT lifted -
+        // it carries the same basis error, and correcting it is a separate decision with its own
+        // 51 tables to be right about.
+        limit += dedAddBack;
 
         limit = Math.min(stateLimit, limit);
     }
@@ -1122,6 +1124,11 @@ function buildSimYearLogRecord(p) {
         // the bare `std` field, so the name is narrower than the number.
         '-fedTaxableInc': p.tax.federalTaxableIncome,
         '-fedDeduction': p.tax.federalStdDeduction,
+        // P92a. The deduction the CEILING used, beside the one that was CHARGED. They differ by
+        // whatever the two-pass estimate could not see coming, and keeping both is what makes that
+        // residual auditable from a finished run instead of an argument. 0 for every ceiling that
+        // is not a federal bracket top.
+        '-ceilDedAddBack': p._ceilDedAddBack,
         // Tax-rate creep multipliers actually applied this year (1 = today's statutory rates).
         '-fedRateCreep': p.fedRateCreep,
         '-stateRateCreep': p.stateRateCreep,
@@ -1447,27 +1454,7 @@ function resolveHousehold(sim, yr) {
     yr.goalFedBracketLimit = findUpperLimitByAmount('FEDERAL', yr.status, sim.spendGoal, sim.cpiRate)
     yr.goalStateBracketLimit = findUpperLimitByAmount(STATEname, yr.status, sim.spendGoal, sim.cpiRate)
     yr.goalLimit = Math.min(yr.goalFedBracketLimit.limit, yr.goalStateBracketLimit.limit)
-    // P87a RESEARCH ARM. The deduction computeBracketCeiling adds back when armed; 0 otherwise, and
-    // nothing reads it otherwise. It cannot be THIS year's deduction: the senior deduction phases out
-    // against federalAGI (taxengine.js:1470), which is the very quantity the ceiling is about to
-    // determine. So this takes LAST year's charged deduction and re-indexes it from the CPI factor of
-    // the year that produced it to this one, and falls back for year 0 - and only year 0 - to the
-    // statutory standard deduction plus age bumps, with no senior deduction and no itemizing.
-    //
-    // That approximation is the point rather than a shortcut around it: it is a MEASUREMENT arm, and
-    // the circularity it steps around is exactly what P87b(i) has to solve properly if the fix ships.
-    yr._ceilDedAddBack = 0;
-    if (inputs.bracketCeilingAddDeduction) {
-        const _prior = sim.log[sim.log.length - 1];
-        if (_prior && _prior['-fedDeduction'] > 0) {
-            const _priorCpi = _prior['-cpiFactor'] || sim.cpiRate;
-            yr._ceilDedAddBack = _prior['-fedDeduction'] * (sim.cpiRate / _priorCpi);
-        } else {
-            const _fed = TAXData.FEDERAL[yr.status];
-            const _nSen = (yr.alive1 && yr.age1 >= _fed.age ? 1 : 0) + (yr.alive2 && yr.age2 >= _fed.age ? 1 : 0);
-            yr._ceilDedAddBack = (_fed.std + _fed.stdbump * _nSen) * sim.cpiRate;
-        }
-    }
+    yr._ceilDedAddBack = 0;   // P92a, set in resolveSpendTarget once the year's income is known
     yr.totalIncome = 0;
     yr.netIncome = 0;
     yr.capitalGains = 0;
@@ -1692,6 +1679,60 @@ function resolveSpendTarget(sim, yr) {
     yr.isACAStrategy = inputs.strategy === 'aca' && !yr.acaLapsed;
     yr.isBracketStrategy = inputs.strategy === 'bracket' || inputs.strategy === 'fixedpct' || yr.isACAStrategy;
     yr.isOrderedStrategy = inputs.strategy === 'ordered';
+
+    // P92a. The deduction computeBracketCeiling adds back, so that "fill the 22% bracket" reaches the
+    // top of the 22% bracket. A federal bracket top bounds TAXABLE income; the ceiling is spent
+    // against MAGI; the deduction is exactly the gap.
+    //
+    // WHICH DEDUCTION, and why it is asked for rather than worked out. calculateTaxes() is the only
+    // thing that decides this - standard or itemized, the age-65 bumps, the OBBBA senior deduction
+    // after its phase-out - so it is asked, and a second derivation that could drift from it is not
+    // written. What it is asked ABOUT is a provisional year: this year's real fixed income plus an
+    // IRA draw large enough to reach the bracket top, which is the income the ceiling is about to
+    // produce.
+    //
+    // THE CIRCULARITY IS REAL AND THIS IS THE STEP AROUND IT. The senior deduction phases out
+    // against federal AGI, which is what the ceiling determines, so the year's own deduction cannot
+    // be known exactly before the ceiling is placed. What the estimate misses is logged beside what
+    // was charged (`-ceilDedAddBack` against `-fedDeduction`), so the residual is auditable from a
+    // finished run rather than argued. Measured over 3,960 plan-years
+    // (`.test_harnesses/ceilded_harness.js`): median $0, p90 $0, worst $6,000 - one senior
+    // deduction, in years where the plan never reaches the ceiling so the realized AGI is nowhere
+    // near the provisional one - against a median deduction of $47,744.
+    //
+    // The rejected alternative was last year's charged deduction re-indexed. It matches this in the
+    // median and is wrong by the whole $35,505 in a year the filing status changes, because it
+    // carries an MFJ number into a Single year; this is exact in those years.
+    //
+    // GATED to the case that uses it. The federal branch of computeBracketCeiling is reached only
+    // from a `bracket` strategy with no IRMAA tier and no ACA multiple; every other ceiling gets 0
+    // here and pays nothing for this.
+    if (inputs.strategy === 'bracket' && (inputs.stratIRMAATier ?? -1) < 0
+                                      && (inputs.stratACAMultiple ?? 0) <= 0) {
+        const _top = findLimitByRate('FEDERAL', yr.status, inputs.stratRate, sim.cpiRate).limit;
+        const _fixed = yr.pension + yr.taxableRMD + yr.taxableInterest + yr.taxableDividends + yr.fixedInc;
+        const _dedAt = income => {
+            const _provIRA = Math.max(0, income - _fixed);
+            return calculateTaxes({
+                filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
+                totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: 0,
+                earnedIncome: yr.pension + yr.taxableRMD + yr.taxableInterest + _provIRA, inflation: sim.cpiRate,
+                pensionIncome: yr.pension, iraIncome: yr.taxableRMD + _provIRA,
+                qualifiedDiv: yr.taxableDividends, capGains: 0, hsaContrib: 0,
+                taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep,
+                stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh,
+                propTax: yr.propTax, taxYear: yr.taxYear
+            }).federalStdDeduction;
+        };
+        // TWO PASSES, and the second one is not a refinement for its own sake. The first asks at the
+        // BRACKET TOP, which is about one deduction below where the plan will actually land, so the
+        // senior deduction is under-phased-out and comes back too large - and a ceiling raised by
+        // too much deduction overshoots the bracket top rather than reaching it. Measured on one
+        // plan: $1,338 of taxable income spilled into the next bracket. The second pass asks at the
+        // ceiling the first pass implies, which is where the income really lands. A third pass is
+        // not worth its call: the phase-out rate is 6%, so each pass cuts the error by that factor.
+        yr._ceilDedAddBack = _dedAt(_top + _dedAt(_top));
+    }
 
     // Phase 22: Guyton-Klinger dynamic spend adjustment (runs before targetSpend resolution)
     if (inputs.strategy === 'gk') {
@@ -3312,6 +3353,7 @@ function logYear(sim, yr) {
         surplusToBrokerage: yr.surplusToBrokerage, cashBreach: yr.cashBreach,
         grossUpIRA: yr.grossUpIRA, grossUpTax: yr.grossUpTax, extraConvCashTax: yr.extraConvCashTax,
         fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep,
+        _ceilDedAddBack: yr._ceilDedAddBack,
         ssStart1: yr['-ssStart1'], ssStart2: yr['-ssStart2'], ssStartSurvivor: yr['-ssStartSurvivor'],
         grossOutflows: yr._grossOutflows, netOutflows: yr._netOutflows,
         yearInflows: yr._yearInflows, wdRate: yr._wdRate,

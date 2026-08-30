@@ -973,6 +973,12 @@ const STEPUP_BASE = {
     cashYield: 0.02, dividendRate: 0.02,
     dividendReinvest: false,                         // DRIP would raise basis every year and mask
     futureIRATaxRate: 0.28,                          // the two step-ups this section is testing
+    // P92a. The Goal is what keeps this fixture ABOUT the step-up. A Fill Bracket ceiling on the
+    // true bracket top drains this IRA to zero by the terminal year, which drops the survivor's
+    // income into the 0% long-term capital-gains band - and a step-up on gains that would be taxed
+    // at 0% is worth exactly nothing, so every assertion about its value became vacuously false.
+    // The Goal leaves an IRA behind, income with it, and a non-zero rate for the step-up to save.
+    iraBaseGoal: 400000,
 };
 
 test('P35g: every TAXData jurisdiction declares a BasisStepUp of 0.50 or 1.00', () => {
@@ -1716,8 +1722,14 @@ const CAP_BASE = {
 const _sumAbsShortfall = log => log.reduce((s, e) => s + Math.abs(e.shortfall || 0), 0);
 const _sumForcedIRA   = log => log.reduce((s, e) => s + (e.ForcedIRA || 0), 0);
 
+// P92a. CAP_BASE's own 22% ceiling no longer breaches: once the ceiling reaches the true top of
+// the 22% bracket it is above everything this plan needs, so there is no forced draw left to test.
+// The 12% ceiling is the same fixture with a limit that still genuinely binds, which is what the
+// three soft-cap assertions are about.
+const CAP_SOFT = { ...CAP_BASE, stratRate: 0.12 };
+
 test('soft cap (federal bracket): forced IRA funds spending — no lingering shortfall', () => {
-    const r = simulate({ ...CAP_BASE });
+    const r = simulate({ ...CAP_SOFT });
     assert(_sumForcedIRA(r.log) > 100000, `expected substantial forced IRA, got ${Math.round(_sumForcedIRA(r.log))}`);
     assert(_sumAbsShortfall(r.log) < 100, `expected ~0 total shortfall, got ${Math.round(_sumAbsShortfall(r.log))}`);
     assert(r.totals.success, 'plan should succeed once IRA funds the spend');
@@ -1726,10 +1738,59 @@ test('soft cap (federal bracket): forced IRA funds spending — no lingering sho
 });
 
 test('soft cap: forced IRA never exceeds available IRA (no over-draw past depletion)', () => {
-    const r = simulate({ ...CAP_BASE });
+    const r = simulate({ ...CAP_SOFT });
     // Final IRA balance must stay non-negative — the loop is bounded by curBalances.IRA.
     const last = r.log[r.log.length - 1];
     assert((last.TotalIRA ?? 0) >= -1, `IRA went negative: ${last.TotalIRA}`);
+});
+
+// ── P92a: a chosen limit is the limit ───────────────────────────────────────────────────────────
+// A federal bracket top bounds TAXABLE income. Every caller of computeBracketCeiling spends the
+// number it returns as a MAGI ceiling, and nothing converted one to the other, so "fill the 22%
+// bracket" stopped one whole deduction below the top of the 22% bracket - $22,308 short in year 0
+// of the fixture below, growing with indexation and the age-65 bumps. The ceiling is now raised by
+// the year's deduction, so the two are on one basis.
+const CEIL_FILL = { ...BASE, strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1,
+                    stratACAMultiple: 0, IRA1: 2000000, convertExcessToRoth: true, nYears: 5 };
+
+test('P92a: a Fill Bracket ceiling reaches the top of the bracket, not one deduction short', () => {
+    const e = simulate({ ...CEIL_FILL }).log[0];
+    const top = findLimitByRate('FEDERAL', e.status, 0.22, e['-cpiFactor']).limit;
+    // The whole claim, in one line: the plan's federal TAXABLE income lands on the bracket top.
+    // Before, this sat a full deduction below it and the year still counted as "filled".
+    assertNear(e['-fedTaxableInc'], top, 'taxable income must reach the top of the chosen bracket', 500);
+    // And the ceiling it aimed at is that top plus the deduction, which is the conversion between
+    // the two bases and the only thing that changed.
+    assertNear(e.BracketTarget - top, e['-ceilDedAddBack'],
+        'the ceiling is the bracket top plus the deduction it added back', 1);
+    assert(e['-ceilDedAddBack'] > 0, 'a federal-bracket year must have an add-back at all');
+});
+
+test('P92a: the deduction the ceiling used is the one the tax pass charged', () => {
+    // The circularity, pinned rather than argued. The senior deduction phases out against federal
+    // AGI, which is what the ceiling determines, so the year's own deduction is not knowable when
+    // the ceiling is placed; the engine asks calculateTaxes() about a provisional year instead and
+    // iterates twice. This bounds what that estimate can miss - one senior deduction per filer,
+    // which is what a year the plan never reaches the ceiling can cost.
+    const log = simulate({ ...CEIL_FILL, nYears: 20 }).log;
+    const cap = TAXData.OBBBA.SENIOR_DED.perSenior * 2;
+    const bad = log.filter(e => Math.abs((e['-ceilDedAddBack'] || 0) - e['-fedDeduction']) > cap);
+    assert(bad.length === 0,
+        `the ceiling's deduction drifted past one senior deduction in ${bad.length} years: `
+        + bad.slice(0, 3).map(e => `${e.year} used ${Math.round(e['-ceilDedAddBack'])} vs charged ${Math.round(e['-fedDeduction'])}`).join(' | '));
+});
+
+test('P92a: an IRMAA tier and an ACA cap get no add-back at all', () => {
+    // The zero test. Those two ceilings are already MAGI quantities - an IRMAA threshold and an FPL
+    // multiple - so there is nothing to convert and adding a deduction to either would break a
+    // ceiling that was right. P87a measured them unmoved in 80 of 80 cells; this keeps them so.
+    for (const [name, over] of [['IRMAA tier 1', { stratRate: 0, stratIRMAATier: 1 }],
+                                ['ACA 400% FPL', { strategy: 'aca', stratRate: 0, stratIRMAATier: -1,
+                                                   stratACAMultiple: 400, birthyear1: 1975, die1: 95 }]]) {
+        const log = simulate({ ...CEIL_FILL, ...over }).log;
+        assert(log.every(e => (e['-ceilDedAddBack'] || 0) === 0),
+            `${name} must get no deduction add-back, got ${Math.round(log.find(e => e['-ceilDedAddBack'])?.['-ceilDedAddBack'] ?? 0)}`);
+    }
 });
 
 test('soft cap (fixedpct): capped % with spend over cap still funds spending from IRA', () => {
@@ -3024,8 +3085,19 @@ test('OC: counterfactual pays the RMD counter-effect (bigger IRA → bigger RMDs
     assert(cf.log.reduce((s, r) => s + (r.rothConv ?? 0), 0) < 1, 'counterfactual must not convert');
     assert(cf.totals.rmd > actual.totals.rmd + 1000,
         `counterfactual RMDs (${Math.round(cf.totals.rmd)}) must exceed actual (${Math.round(actual.totals.rmd)})`);
-    assert(cf.totals.tax > actual.totals.tax,
-        `counterfactual lifetime tax (${Math.round(cf.totals.tax)}) must exceed actual (${Math.round(actual.totals.tax)}) — RMD taxes priced`);
+    // P92a. This used to compare the counterfactual's lifetime tax against the actual run's, and
+    // that comparison is confounded: the actual run CONVERTS, and a ceiling on the true bracket top
+    // converts nearly $1M here, so the actual arm's own conversion tax now exceeds the RMD tax the
+    // counterfactual pays. The claim in this test's title is causal and is tested causally instead -
+    // hold everything else fixed and give the counterfactual a bigger IRA. Bigger IRA, bigger RMDs,
+    // more tax, with no conversion anywhere in either arm to confuse it.
+    const cfWith = ira => simulate({ ...inputs, IRA1: ira, _cfRun: true, _cfSuppressConversions: true,
+                                     extraConversionAmount: 0, computeOC: false });
+    const cfSmall = cfWith(1000000), cfBig = cfWith(2000000);
+    assert(cfBig.totals.rmd > cfSmall.totals.rmd,
+        `a bigger IRA must produce bigger RMDs: ${Math.round(cfSmall.totals.rmd)} -> ${Math.round(cfBig.totals.rmd)}`);
+    assert(cfBig.totals.tax > cfSmall.totals.tax,
+        `and the counterfactual must PAY for them: ${Math.round(cfSmall.totals.tax)} -> ${Math.round(cfBig.totals.tax)}`);
     // Identity: last convOC equals the finalNW difference - but the two sides are now on DIFFERENT
     // valuation bases and the identity has to name which one it uses. Break Even is deliberately
     // still computed on the liquidation basis (P35g decision 4), while finalNW carries the IRC

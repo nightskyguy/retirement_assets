@@ -11,7 +11,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P92 | A chosen limit is the limit: no silent min, warn when infeasible *(user-decided)* | `P92a` |
+| **O0** | P92 | A chosen limit is the limit; **P92a DONE v11.16aa**, infeasibility warning next | `P92c` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
@@ -229,14 +229,26 @@ obvious: `yr.IRMAALimit = min(goalLimit, IRMAA tier ceiling - margin)` where `go
 bracket top containing the SPENDING GOAL. Measured: it made `Min Limit 24%` target $211,399 where
 `Fill Bracket 24%` targets $403,550, so the percentage the user picked was close to decorative.
 
-- [ ] **P92a** - Raise the federal-mode ceiling by the year's deduction (`P87b` form (i)). The
-      research flag `bracketCeilingAddDeduction` from `P87a` already does exactly this and is
-      measured; promoting it to unconditional is the change. **It must read the SAME deduction
-      `calculateTaxes()` charges** - a second source of truth for the deduction is the failure mode
-      to avoid, and `P88b`'s `adoptTaxBasis` already establishes where that lives.
-      **Disclose the cost:** measured at a median **-$47,092** across 74 clean cells, up to
-      -$2,523,647 on 22% rows and +$1,201,973 on 12% rows. That is a real change to every bracket
-      plan and the changelog must say saved plans will not reproduce.
+- [x] **P92a** - DONE v11.16aa. The federal-mode ceiling is raised by the year's deduction,
+      unconditionally; the `bracketCeilingAddDeduction` flag is gone from the engine.
+      **The instruction "read the SAME deduction `calculateTaxes()` charges" could not be followed
+      literally and measuring said what to do instead.** That deduction does not exist when the
+      ceiling is placed - the senior deduction phases out against the AGI the ceiling determines - so
+      the question was how wrong each obtainable one is. Over 3,960 plan-years
+      (`.test_harnesses/ceilded_harness.js`): last year's charged deduction re-indexed is exact in
+      the median and wrong by the whole **$35,505** in a filing-status-change year; asking
+      `calculateTaxes()` about a provisional year, TWICE, is median $0 / p90 $0 / worst $6,000 and
+      exact in those years. Shipped. The second pass is load-bearing: one pass overshoots the bracket
+      top by $1,338 of taxable income. `-ceilDedAddBack` is logged beside `-fedDeduction` so the
+      residual is auditable. Cost measured at 0.813 ms/sim against main's 0.820 - noise.
+      **Disclosed:** 71 clean cells, net worth up in 18 and down in 49, median **-$47,549**, best
+      +$1,517,175, worst -$2,589,357; 12% +$157,572, 22% -$200,350, 24% -$12,741; median conversion
+      change $0. Changelog says saved plans will not reproduce. `research/BRACKET_CEILING_BASIS.md`
+      section 8 carries the whole measurement.
+      **Four tests failed and not one was a pinned constant** - every one a fixture whose assumption
+      the change invalidated. Notable: a Fill Bracket ceiling on the true bracket top drains
+      `STEPUP_BASE`'s IRA to zero, which drops the survivor into the **0% LTCG band**, and a step-up
+      on gains taxed at 0% is worth nothing. That is a real consequence, not only a fixture artifact.
 - [ ] **P92b** - Drop the `goalLimit` and IRMAA `min` from `minlimit`, then decide whether the
       strategy survives at all. If it is identical to Fill Bracket, remove it and migrate saved
       plans and share URLs rather than leaving a twin in the dropdown.
@@ -271,7 +283,8 @@ paths read `balance.Cash` only (`optimizer_core.js:2869`, `:3113`). So "iff ther
 brokerage to pay the tax" is not implemented for Brokerage at all, and the "iff" is a blend rather
 than a condition. If either should change, that is a decision, not a defect.
 
-- **Status:** decisions recorded, nothing built. `P92a` first.
+- **Status:** `P92a` DONE v11.16aa. `P92b` is answered by P94 - there is no `minlimit` left to
+  delete. **`P92c`, the infeasibility warning, is next.**
 
 ---
 

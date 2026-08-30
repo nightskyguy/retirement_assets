@@ -308,3 +308,50 @@ They agree only when the extra draw actually leaves a surplus. Measured: 32% of 
   overage add-back were not armed here. P87d gains weight from the target/cap split above: the ACA
   entry is the one control in the dropdown whose job is to stay UNDER, so its overage reading is
   the number that matters for it.
+
+---
+
+## 8. It shipped (P92a), and WHICH deduction turned out to be the hard part
+
+The fix landed in v11.16aa. Section 3's cost held on the shipped implementation, measured the same
+way against the release before it: 71 clean cells, terminal after-tax net worth up in 18 and down in
+49, median **-$47,549** (this report's arm said -$47,092), best +$1,517,175, worst -$2,589,357, and
+the same split by bracket - 12% gains a median $157,572, 22% loses $200,350, 24% is near flat at
+-$12,741. Median conversion change: **$0**, which is section 7's last finding surviving intact.
+
+The open question this report left was section 6's first approximation: the arm used LAST year's
+charged deduction, re-indexed, because the senior deduction phases out against the AGI the ceiling is
+about to determine. That circularity does not go away, so the shipped question was not "use the right
+deduction" but "how wrong is each obtainable one".
+
+Harness:
+[`.test_harnesses/ceilded_harness.js`](https://github.com/nightskyguy/retirement_assets/blob/main/.test_harnesses/ceilded_harness.js).
+3,960 plan-years on this report's grid, every candidate scored against `-fedDeduction`, the deduction
+`calculateTaxes()` actually charged that year.
+
+| candidate | what it is | median err | p90 | worst |
+|---|---|---:|---:|---:|
+| **PRIOR** | last year's charged deduction, re-indexed - this report's arm | $0 | $763 | **$35,505** |
+| **STAT** | statutory standard deduction plus age bumps, re-derived | $0 | $4,300 | $6,000 |
+| **DIRECT** | ask `calculateTaxes()` about a provisional year, twice - **shipped** | **$0** | **$0** | $6,000 |
+
+Against a median charged deduction of $47,744.
+
+- **PRIOR is exact in the median and catastrophic in one kind of year.** In the 120 plan-years where
+  the filing status changes it is wrong by $35,505 - the whole difference between the MFJ deduction
+  it carried forward and the Single one now charged. DIRECT is exact in those years, because it asks
+  about THIS year's status.
+- **STAT re-derives the deduction, which is the failure mode to avoid** - a second source of truth
+  that can drift from the tax engine - and it is no more accurate for it.
+- **DIRECT is asked TWICE, and the second pass is not polish.** The first asks at the bracket top,
+  which is about one deduction below where the plan will land, so the senior deduction is
+  under-phased-out and comes back too large. On one plan that overshot the bracket top by $1,338 of
+  taxable income. Asking again at the ceiling the first pass implies turns that into an $80
+  undershoot. The phase-out rate is 6%, so a third pass is not worth its call.
+- **The residual is $6,000 - one senior deduction - and only in years the plan never reaches its
+  ceiling**, where the realized AGI is nowhere near the provisional one. It is logged rather than
+  argued: `-ceilDedAddBack` (what the ceiling used) sits beside `-fedDeduction` (what was charged) in
+  every row, so the gap is recoverable from any finished run.
+
+The measured cost of the whole two-pass estimate is zero: 0.813 ms/sim against 0.820 on the release
+before it, on a 40-year Fill Bracket plan, alternating runs.

@@ -906,7 +906,7 @@ function nominalRateAtLimit(entity, status, limit, inflation, rateCreep = 1) {
 // The invariant that catches this whole class, and the test that pins it: the average rate at a
 // fixed ceiling is INVARIANT ACROSS YEARS. A ceiling names the same real position in the table
 // every year, so its average rate cannot drift. It drifts only when two clocks disagree.
-function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, alive1, alive2, IRMAALimit, fedRateCreep = 1, stateRateCreep = 1, medicareRate = 1) {
+function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, alive1, alive2, IRMAALimit, fedRateCreep = 1, stateRateCreep = 1, medicareRate = 1, dedAddBack = 0) {
     let limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit;
 
     if ((inputs.stratIRMAATier ?? -1) >= 0) {
@@ -964,6 +964,20 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         marginalStateTaxRate = stLimit.rate * stateRateCreep;
         stateLimit = stLimit.limit;
         nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, cpiRate, stateRateCreep);
+
+        // P87a RESEARCH ARM, default off, set by no UI. A federal bracket top is a TAXABLE-income
+        // threshold; every caller of this function spends the result as a MAGI ceiling. Armed, this
+        // raises the federal number by the year's deduction so the two are on one basis, and the
+        // difference between the arms is what the shipped ceiling leaves unfilled.
+        //
+        // Placed HERE, and the position is the measurement: after the rate lookups, which want the
+        // statutory bracket and not the ceiling; after the state lookup, which is keyed on the
+        // unmodified federal limit so the state bracket selected cannot shift; before the state min,
+        // so a state ceiling still binds on its own terms. The state limit is deliberately NOT
+        // lifted even though it carries the same basis error - this arm measures the federal gap
+        // alone, and in a state whose table binds first that makes the reading an UNDERSTATEMENT.
+        // The `minlimit` IRMAA min below stays after it: that one is a genuine MAGI cap.
+        if (inputs.bracketCeilingAddDeduction) limit += dedAddBack;
 
         limit = Math.min(stateLimit, limit);
 
@@ -1108,6 +1122,14 @@ function buildSimYearLogRecord(p) {
         '-capGainsTax': p.tax.capitalGainsTax,
         '-capGainsRate': p.tax.capitalGainsRate,
         '-cpiFactor': p.cpiRate,
+        // P87a. The two federal quantities the bracket-ceiling basis question needs, and the
+        // only ones of tax's that nothing else re-emitted. A federal bracket top bounds TAXABLE
+        // income; the ceiling built from it is spent against MAGI, and fedDeduction is exactly
+        // the gap between the two. It is the FULL deduction calculateTaxes() charged - standard
+        // or itemized, plus the age-65 bumps and the senior deduction after its phase-out - not
+        // the bare `std` field, so the name is narrower than the number.
+        '-fedTaxableInc': p.tax.federalTaxableIncome,
+        '-fedDeduction': p.tax.federalStdDeduction,
         // Tax-rate creep multipliers actually applied this year (1 = today's statutory rates).
         '-fedRateCreep': p.fedRateCreep,
         '-stateRateCreep': p.stateRateCreep,
@@ -1124,6 +1146,11 @@ function buildSimYearLogRecord(p) {
         'StateCap': p.tax.stLimit,
         'BracketTarget': p.bracketTarget,
         'BracketOverage': p.bracketOverage,
+        // P88c. The share of BracketOverage caused by a voluntary conversion rather than by
+        // spending that could not be funded inside the ceiling. Hidden ('-' prefix) because the
+        // visible column is the total; this exists so the Optimizer's feasibility heuristic and any
+        // future warning can tell a forced breach from a chosen one.
+        '-overageFromConv': p.overageFromConv ?? 0,
         'ForcedIRA': p.forcedIRA,
         // acaBreach has been passed into this builder since the strict-ACA strategy shipped and was
         // never emitted, so the year a cap actually bound was only ever visible as a total. Leading
@@ -1443,13 +1470,37 @@ function resolveHousehold(sim, yr) {
     const _irmaaMargin = irmaaMarginDollars(inputs, IRMAABracket.limit + 1, yr.status, _irmaaEffCpi,
                                             sim.medicareRate, onMedicareAtCharge(yr.age1, yr.age2, yr.alive1, yr.alive2));
     yr.IRMAALimit = Math.min(yr.goalLimit, IRMAABracket.limit - _irmaaMargin);
+    // P87a RESEARCH ARM. The deduction computeBracketCeiling adds back when armed; 0 otherwise, and
+    // nothing reads it otherwise. It cannot be THIS year's deduction: the senior deduction phases out
+    // against federalAGI (taxengine.js:1470), which is the very quantity the ceiling is about to
+    // determine. So this takes LAST year's charged deduction and re-indexes it from the CPI factor of
+    // the year that produced it to this one, and falls back for year 0 - and only year 0 - to the
+    // statutory standard deduction plus age bumps, with no senior deduction and no itemizing.
+    //
+    // That approximation is the point rather than a shortcut around it: it is a MEASUREMENT arm, and
+    // the circularity it steps around is exactly what P87b(i) has to solve properly if the fix ships.
+    yr._ceilDedAddBack = 0;
+    if (inputs.bracketCeilingAddDeduction) {
+        const _prior = sim.log[sim.log.length - 1];
+        if (_prior && _prior['-fedDeduction'] > 0) {
+            const _priorCpi = _prior['-cpiFactor'] || sim.cpiRate;
+            yr._ceilDedAddBack = _prior['-fedDeduction'] * (sim.cpiRate / _priorCpi);
+        } else {
+            const _fed = TAXData.FEDERAL[yr.status];
+            const _nSen = (yr.alive1 && yr.age1 >= _fed.age ? 1 : 0) + (yr.alive2 && yr.age2 >= _fed.age ? 1 : 0);
+            yr._ceilDedAddBack = (_fed.std + _fed.stdbump * _nSen) * sim.cpiRate;
+        }
+    }
     yr.totalIncome = 0;
     yr.netIncome = 0;
     yr.capitalGains = 0;
     yr.limit = undefined;   // MAGI ceiling for bracket/minlimit/aca strategies (see computeBracketCeiling)
     yr.stateLimit = undefined;
     yr.bracketTarget = 0;  // ceiling being targeted by bracket/minlimit/aca strategies
-    yr.bracketOverage = 0; // how far MAGI exceeded bracketTarget (0 when no bracket strategy)
+    yr.bracketOverage = 0; // how far MAGI exceeded bracketTarget (0 when no bracket strategy).
+                           // Set in the withdrawal phases, then re-decided by recomputeBracketOverage
+                           // once the conversion paths have run (P88c).
+    yr._overageFromConv = 0; // the part of the above a voluntary conversion is responsible for
     yr.forcedIRA = 0;      // soft-cap break: IRA drawn ABOVE the ceiling to fund mandatory spending
     yr.acaBreach = false;  // strict ACA cap could not fund spending → plan untenable this year
 
@@ -1876,7 +1927,7 @@ function planPrimaryWithdrawals(sim, yr) {
                 // year, so compute it fresh here rather than reading a stale/undefined `limit`.
                 // yr.isACAStrategy, not inputs.strategy: a lapsed ACA year has no ceiling to
                 // respect, and computeBracketCeiling would still hand back the FPL cap if asked.
-                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate).limit;
+                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack).limit;
                 _room = Math.min(_room, Math.max(0, _ceil - ordFloor));
             }
             return Math.max(yr.additionalSpendNeeded, _room * (1 - yr.capGainsPercentage * sim.capitalGainsRate));
@@ -1888,7 +1939,7 @@ function planPrimaryWithdrawals(sim, yr) {
                 // Same ceiling call and field assignments as the family's own branch below, so a
                 // coexist harvest year looks to downstream passes like the family branch ran.
                 ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit } =
-                    computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate));
+                    computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack));
                 yr.bracketTarget = yr.limit;
                 let _iraRoom = Math.max(0, yr.limit - _baseOrdinaryInc);
                 const _magiShaped = (inputs.stratIRMAATier ?? -1) >= 0
@@ -1955,7 +2006,7 @@ function planPrimaryWithdrawals(sim, yr) {
     // to the baseline `else` below - Proportional 0%, which is the intended successor.
     } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || yr.isACAStrategy) {
         ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit } =
-            computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate));
+            computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack));
 
         yr.bracketTarget = yr.limit;
 
@@ -2730,6 +2781,58 @@ function cfRefundIRA(sim, yr, netTarget) {
 // Phase 23: extra conversion - additional IRA→Roth independent of spending strategy.
 // extraConversionAmount[y] (or scalar $) = gross IRA to additionally withdraw and convert.
 // Taxes come from IRA gross (same convention as convertExcessToRoth surplus). Net Roth = gross - tax.
+// P88b. THE INCOME BASIS OF A YEAR, and the list is explicit on purpose.
+//
+// Both additional-conversion paths - applyConversionGrossUp and applyExtraConversion - pull IRA
+// dollars AFTER the year's main tax pass has already run, and both used to write only `federalTax`
+// and `stateTax` back onto `yr.tax`. Every income-BASIS field kept its pre-conversion value, so
+// `yr.tax.MAGI` omitted the conversion entirely. That is not a display defect: `growAndSettle`
+// pushes `yr.tax.MAGI` into `balance.magiHistory`, and `beginYear` charges IRMAA against
+// `magiHistory[len-2]` two years later. A household could convert $100,000 every year and never be
+// billed a cent of IRMAA on it. Measured before the fix at a whole tier: $0 recorded where $7,166 a
+// year was owed. `bracketOverage` read the same stale figure, which is half of why a conversion
+// could blow through a Fill Bracket ceiling invisibly (the other half is P88c - it is computed
+// before either path runs).
+//
+// WHY A NAMED LIST RATHER THAN Object.assign(yr.tax, calc). The recomputed calc is made with
+// `IRMAAAnnualCost: 0`, because this year's IRMAA is already known from the lookback and is added
+// separately. So that result's `IRMAAAnnualCost`, `IRMAARate`, `nominalRate` and `totalTax` are all
+// wrong for this year and copying them would reintroduce a different bug. Only the income basis
+// moves; rates and totals stay with their existing owners. Anything added to calculateTaxes()'s
+// return that describes INCOME rather than tax belongs in this list.
+const TAX_BASIS_FIELDS = Object.freeze([
+    'MAGI', 'AGI', 'federalTaxableIncome', 'stateAGI', 'stateTaxableIncome',
+    'taxableSS', 'provisionalIncome', 'taxableOrdinaryIncome', 'taxablePreferentialIncome',
+    'ordinaryIncomeInAGI', 'preferentialIncomeInAGI',
+    'federalStdDeduction', 'stateStdDeduction', 'seniorDeduction', 'useItemized',
+]);
+function adoptTaxBasis(yr, calc) {
+    if (!yr.tax || !calc) return;
+    for (const k of TAX_BASIS_FIELDS) if (calc[k] !== undefined) yr.tax[k] = calc[k];
+}
+
+// P88c. `bracketOverage` is computed twice inside the WITHDRAWAL phases (applyPrimaryAndTaxPass1
+// and resolveResidualAndForcedIRA), and both are long before either additional-conversion path
+// runs. So even with P88b's corrected MAGI the column could not see a conversion: it was decided
+// before the conversion existed. This runs after both paths and re-decides it.
+//
+// TWO CAUSES, KEPT APART, because they mean opposite things to a reader. Spending that could not be
+// funded inside the ceiling is the plan failing to respect its own limit; a user-typed Extra Annual
+// Roth Conversion going over is the user choosing to. `_overageFromConv` carries the second so the
+// first stays readable, and so `isBracketInfeasible` can keep meaning "this ceiling cannot fund this
+// plan" rather than "you asked to convert past it" - a heuristic that fires on every bracket row the
+// moment a conversion is typed would empty the Optimizer's table for exactly the users P88 is for.
+//
+// `acaBreach` is deliberately NOT re-decided here. It is set at resolveResidualAndForcedIRA off the
+// spending-driven figure and means "the strict cap could not fund spending", which a voluntary
+// conversion does not change.
+function recomputeBracketOverage(yr) {
+    if (!(yr.bracketTarget > 0)) { yr._overageFromConv = 0; return; }
+    const fromSpending = yr.bracketOverage ?? 0;
+    yr.bracketOverage = Math.max(0, (yr.tax?.MAGI ?? 0) - yr.bracketTarget);
+    yr._overageFromConv = Math.max(0, yr.bracketOverage - fromSpending);
+}
+
 function applyExtraConversion(sim, yr) {
     const { inputs, balance, birthyear1, birthyear2 } = sim;
     const y = yr.y;
@@ -2789,6 +2892,10 @@ function applyExtraConversion(sim, yr) {
             // FedTax + StateTax + IRMAA reconcile to totalTax. capGainsTax is unchanged (ordinary income).
             yr.tax.federalTax = _exTaxCalc.federalTax;
             yr.tax.stateTax   = _exTaxCalc.stateTax;
+            // P88b. _exTaxCalc is the full with-conversion income picture - it already carries any
+            // gross-up income via _priorIRAInc - so its income basis is the year's correct one. The
+            // defect was that only the two tax numbers above were ever taken from it.
+            adoptTaxBasis(yr, _exTaxCalc);
             yr._extraIRAIncome = (yr._extraIRAIncome ?? 0) + _gross;   // keep the basis consistent for any later consumer
         }
     }
@@ -3025,6 +3132,28 @@ function applyConversionGrossUp(sim, yr) {
     // understates itself. applyExtraConversion reads this for exactly that reason.
     yr._extraIRAIncome = (yr._extraIRAIncome ?? 0) + increase;
 
+    // P88b. The gross-up's own income basis. Unlike applyExtraConversion this function never had a
+    // WITH-gross-up tax calc to copy from - `shadowCalc` above is the counterfactual WITHOUT the
+    // conversion - so one is made here. It cannot be done by adding `increase` to MAGI by hand:
+    // extra IRA income raises provisional income, which can raise the TAXABLE share of Social
+    // Security, so AGI rises by more than the draw whenever that share is below its 85% cap.
+    //
+    // Argument shape is the main tax pass's (`yr.tax = calculateTaxes(...)`), with the gross-up's
+    // IRA dollars added to both legs, and `IRMAAAnnualCost: 0` for the reason in adoptTaxBasis.
+    // When applyExtraConversion runs afterwards it recomputes over the same income plus its own
+    // gross and adopts that instead, so the two never disagree - this call is what makes the basis
+    // right for a plan that grosses up and has no extra conversion.
+    adoptTaxBasis(yr, calculateTaxes({
+        filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
+        totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: 0,
+        earnedIncome: baseEI + (yr.netWithdrawals.IRA ?? 0) + increase, inflation: sim.cpiRate,
+        pensionIncome: yr.pension, iraIncome: yr.taxableRMD + (yr.netWithdrawals.IRA ?? 0) + increase,
+        qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
+        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep,
+        stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh,
+        propTax: yr.propTax, taxYear: yr.taxYear
+    }));
+
     yr.grossUpIRA = increase;   // bookkeeping for grossOut
     yr.grossUpTax = taxCost;
 }
@@ -3198,7 +3327,7 @@ function logYear(sim, yr) {
         surplus: yr.surplus, totalRMD: yr.totalRMD, qcd1: yr.qcd1, qcd2: yr.qcd2, taxableDividends: yr.taxableDividends, taxableInterest: yr.taxableInterest,
         netWithdrawals: yr.netWithdrawals, rmd1: yr.rmd1, rmd2: yr.rmd2, totalConverted: yr.totalConverted, tax: yr.tax, IRMAA: yr.IRMAA, IRMAATier: yr.IRMAATier, medicareBase: yr.medicareBase, cpiRate: sim.cpiRate,
         iraVolSpend1: yr.iraVolSpend1, iraVolSpend2: yr.iraVolSpend2, iraConvGross1: yr.iraConvGross1, iraConvGross2: yr.iraConvGross2,
-        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, bracketOverage: yr.bracketOverage, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
+        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
         balance: balance, nominalTaxRate: sim.nominalTaxRate, totalWealth: yr.totalWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
         gains: yr.gains, rmd1Pct: yr.rmd1Pct, subCycleLabel: yr.subCycleLabel, convNetValue: null, excessNetValue: null,
         incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,
@@ -3489,6 +3618,7 @@ function simulate(inputs) {
         routeSurplusAndConvert(sim, yr);
         applyConversionGrossUp(sim, yr);
         applyExtraConversion(sim, yr);
+        recomputeBracketOverage(yr);   // P88c: after BOTH conversion paths, never before
         attributeIncrementalTaxes(sim, yr);
         growAndSettle(sim, yr);
         evaluateYearOutcome(sim, yr);
@@ -4457,11 +4587,37 @@ function rankRowsByObjective(rows, objKey, rate = 0) {
 // too broad: a 66/62 couple has real ACA years, and those breach years are now MEASURED through
 // totals.acaBreachYears rather than assumed away on day one. Do not reintroduce it - the
 // measurement is strictly better evidence than the predicate was.
-function bothOnMedicareAtStart(by1, startAge, hasSpouse, by2) {
+// P89. THE PLAN'S FIRST YEAR, and there is now exactly one definition of it.
+//
+// `startAge` is the user's real-world age, so the year they ARE that age is birthyear + startAge -
+// but a simulation cannot start in the past, so that is CLAMPED to the current year. getInputs()
+// has always clamped it when building `startInYear`, which is what the engine runs on. The ACA
+// age gate re-derived the same year WITHOUT the clamp, so for anyone already past their typed
+// Retirement Start Age the gate was answering about a year the plan does not start in - and the
+// warning text built from it named a year in the past and two ages nobody was.
+//
+// Measured over a 6,396-combination grid of birth years, start ages and spouse ages: the two
+// answers disagree in 22.2% of them, and the disagreement is strictly ONE-WAY - 1,423 cases where
+// the clamped answer says both are on Medicare and the unclamped one did not, and ZERO the other
+// way. That direction is not a coincidence to be re-measured later: the clamp can only move the
+// year forward, so the ages at start can only rise, so "both on Medicare" can only become more
+// true. Any future change here that produces a flip in the other direction is a bug in the change.
+//
+// `currentYear` is a parameter rather than a `new Date()` call so this stays pure and a test can
+// pin a year. Callers in the app omit it.
+function planFirstYear(by1, startAge, currentYear = new Date().getFullYear()) {
+    const computed = startAge > 0 ? by1 + startAge : currentYear;
+    return Math.max(computed, currentYear);
+}
+
+function bothOnMedicareAtStart(by1, startAge, hasSpouse, by2, currentYear = new Date().getFullYear()) {
     if (!by1 || !startAge) return false;
-    const startYear  = by1 + startAge;
+    const startYear  = planFirstYear(by1, startAge, currentYear);
     const medAge     = TAXData.IRMAA.ELIGIBILITY_AGE;
-    const p1Medicare = startAge >= medAge;
+    // Both ages come from the START YEAR, not from startAge. `startAge >= medAge` was the same
+    // unclamped assumption in a second place: it asks whether the age they TYPED reaches Medicare,
+    // where the question is whether they have reached it by the year the plan begins.
+    const p1Medicare = (startYear - by1) >= medAge;
     const p2Medicare = hasSpouse && by2 > 0 && (startYear - by2) >= medAge;
     return hasSpouse ? (p1Medicare && p2Medicare) : p1Medicare;
 }
@@ -5063,7 +5219,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -5071,7 +5227,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

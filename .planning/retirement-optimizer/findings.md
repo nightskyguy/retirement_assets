@@ -2999,3 +2999,283 @@ simulate() 40yr couple, fee armed, growth+inflation on: 5 batches x 200 runs aft
 106.7 / 110.7 / **114.0 median** / 121.6 / 135.2 ms; per-run 0.570 ms; totals.totalTime 0.511 ms.
 Bench script: scratchpad `bench_simulate.js` (batch noise ~10x the 0.5% gate, so compare BEST-of-5
 too: baseline best 106.7 ms).
+
+## P87a - the bracket ceiling's income basis (2026-08-29)
+
+Full report: `research/BRACKET_CEILING_BASIS.md`. Harness:
+`.test_harnesses/bracketbasis_harness.js`.
+
+The three sentences worth carrying without opening the report:
+
+1. **The federal Limit entries are taxable-income thresholds spent as MAGI ceilings, and the gap is
+   exactly one deduction.** Fill Bracket 22%: ceiling $211,400, MAGI $211,400, federal taxable
+   income $179,200, deduction $32,200. Confirmed to the dollar, every year, growing to $70,876 by
+   2054. **NEITHER OPERAND IS WRONG** - the bracket top is the right edge of the right bracket, and
+   the deduction reconciles to the cent, OBBBA senior deduction and phase-out included. The defect
+   is a UNITS MISMATCH: `iRAbracketRoom` subtracts GROSS income from a POST-deduction threshold and
+   `bracketOverage` measures MAGI against it. Do not go looking for a bad number; there isn't one.
+2. **Closing that gap COSTS money in 51 of 74 clean cells, median -$47,092 - and that is a fact
+   about the STRATEGY, not a verdict on the fix.** A named ceiling is a contract to fill: the user
+   picking `22% Fed` or `IRMAA Tier 2` wants the room between their spending and the limit
+   converted or banked, and is not asking the tool to minimize their tax. The first version of this
+   entry read the wealth result as a reason not to fix the defect. That judges a correctness
+   question with a wealth metric. What the 51-of-74 actually says is that FILLING the 22% and 24%
+   brackets is often a worse strategy than under-filling them - the Optimizer ranking's job to
+   surface, and a changelog disclosure if the fix ships. An accidental hedge is not a design.
+   The sign is set by the bracket (12% gains, 22% and 24% lose) and the separator is whether the
+   plan was already breaching its ceiling to fund spending.
+
+   Corollary worth carrying: **targets and caps are different controls sharing one `yr.limit`.**
+   `n% Fed` and `IRMAA Tier n` are targets (reaching them is success); `n% FPL` is a cap (staying
+   under is success). The engine splits them on BREACH behavior already, not on FILL behavior.
+
+2b. **Nothing sizes a conversion against the ceiling, and this gap is larger than the deduction
+   one.** Over the same 74 cells, total voluntary draw rose in only 18, and just 32% of the extra
+   draw became conversion - the rest became IRA-sourced spending displacing Brokerage and Cash.
+   Conversions were unchanged in 29 of 74. Only `iRAbracketRoom` (sizes the WITHDRAWAL) and the
+   user-typed `extraConversionAmount` claim the headroom; `convertExcessToRoth` is a reallocation
+   of leftover surplus capped by the IRA draw, `applyConversionGrossUp` never reads `yr.limit`, and
+   "Maximize Conversions" is just those two flags. **User model: limit minus spending = conversion
+   headroom. Engine model: limit sizes a withdrawal, conversion falls out of surplus routing.**
+   Tracked as `P87g`.
+3. **`minlimit` is governed entirely by `yr.IRMAALimit`, which is built from the SPENDING GOAL, not
+   from the federal rate the user picked.** 0 of 40 cells respond to a federal ceiling change. Any
+   claim about what `Min Limit n%` targets should be measured before it is believed.
+
+## P88 - an Extra Roth Conversion never reaches MAGI (2026-08-29, user-raised)
+
+Full write-up in `task_plan.md` under P88. The three things worth carrying without opening it:
+
+1. **`applyExtraConversion` charges the income tax and never updates `yr.tax.MAGI`.** It copies
+   `federalTax` and `stateTax` out of its own `calculateTaxes` result (`optimizer_core.js:2832`) and
+   copies nothing else. `applyConversionGrossUp` has the same shape (`:3062`). Measured on one
+   Fill Bracket 22% plan: logged MAGI is **$211,400 at every one of $0 / $25k / $50k / $100k of
+   `extraConversionAmount`**. It does not move at all.
+2. **The stale figure is what IRMAA charges.** `growAndSettle` pushes `yr.tax.MAGI` into
+   `balance.magiHistory` (`:3139`) and `beginYear` charges off `magiHistory[len-2]` (`:1435`). On
+   that plan the engine records `-none-` / $0 where the true $311,400 MAGI earns **Tier 2, $7,166 a
+   year**. This is NOT confined to ceiling strategies - Proportional and Ordered use the same
+   conversion path and under-report IRMAA identically.
+3. **`bracketOverage` is blind twice over.** It is computed at `:2276` and `:2518`, inside the
+   withdrawal phases, while `applyExtraConversion` runs at `:3534`. So even a corrected MAGI leaves
+   the overage measuring the strategy's own draw only.
+
+Consequence for the Optimizer: `selectConversionCandidates` (`:4122`) deliberately keeps bracket
+families and splits `bracket` into `bracket-irmaa` / `bracket-rate` so each gets a champion. Those
+`⇌` rows are scored on numbers that omit the IRMAA cost of the conversion being optimized, biasing
+`optimizeConversionAmount` toward larger conversions everywhere.
+
+**Do not build P87g before P88.** Sizing conversions against a ceiling is meaningless while the
+conversions are invisible to the ceiling's own income measure.
+
+### P88a-e DONE, shipped v11.16a3 (2026-08-29)
+
+Report: `research/EXTRA_CONVERSION_MAGI.md`. Harness:
+`.test_harnesses/extraconv_magi_harness.js` (pre-fix numbers recorded inside it, so it scores the
+fix itself). M1-M6 all HOLD.
+
+- **Lifetime IRMAA at a $100,000 conversion rose +69% (Fill Bracket 22%), +30% (IRMAA Tier 1), +69%
+  (Proportional), +132% (Ordered).** Bracket-agnostic families were under-billed as much or more
+  than the ceiling families, so this was never a ceiling problem.
+- **The BEFORE column is worse than "too low": IRMAA FELL as the conversion grew**, $1.41M to
+  $0.63M. The shrinking IRA lowered later RMDs while the conversion's own cost was never charged, so
+  the tool presented a large Roth conversion as a way to REDUCE the Medicare surcharge.
+- **The fix is confined.** IRMAA at a $0 conversion is identical to the dollar on both builds for
+  all four families; year-0 income tax is unchanged at every size; a 20-cell fingerprint over plans
+  using neither conversion path matches exactly.
+- **The Optimizer was biased toward larger conversions.** Its GK sweep fixture moved $150,000 ->
+  $100,000 once IRMAA was priced. `breakEvenHeirsRate` moved 0.57 -> 0.65 on its fixture: converting
+  needs a higher heirs rate now that it carries the surcharge.
+
+Two implementation notes worth keeping:
+
+1. `applyConversionGrossUp` could NOT be fixed by adding its draw to MAGI by hand. Extra IRA income
+   raises provisional income, which can push more Social Security into the taxable share, so AGI
+   rises by MORE than the draw whenever that share is under its 85% cap. It needs a real recompute.
+2. The copied field list is explicit, not an `Object.assign`. The recomputed calc carries
+   `IRMAAAnnualCost: 0`, so its `IRMAARate`, `nominalRate` and `totalTax` are wrong for the year.
+
+`P88f` (should the Optimizer skip ceiling families in its conversion search?) is the only item left,
+and the GK re-baseline is the evidence it is worth asking. **P88 unblocks `P87g`.**
+
+## P89 - the plan's first year had two definitions (2026-08-29, DONE v11.16a4)
+
+Carry this one because it is a shape, not a one-off: **`startInYear` was computed in two places and
+only one of them clamped.** `getInputs()` built it as `max(by1 + startAge, currentYear)` - the
+engine's basis - while `bothOnMedicareAtStart` and the ACA warning re-derived `by1 + startAge`
+without the clamp. `startAge` is NOT vestigial (my first guess was wrong): it drives the start year
+through that clamp, and the clamp was the missing piece.
+
+- Measured over 6,396 combinations: the two answers disagree **22.2%** of the time, **1,423 flips
+  one way, 0 the other.** Provable direction - the clamp only moves the year forward, so ages at
+  start only rise, so "both on Medicare" only becomes more true. Pinned by a test.
+- The unclamped year reached real behavior, not just text: it gates `acaNeverApplies` and
+  `acaDisabled`, i.e. whether ACA rows appear in the Optimizer.
+- The engine itself was always right - `acaCapLapsed` uses each year's real ages. Only the UI gate
+  was on the wrong basis.
+- `planFirstYear(by1, startAge, currentYear)` is now the single definition, exported, pure, with
+  `currentYear` a parameter so tests can pin it.
+
+**Test-rot note worth reusing:** adding a `currentYear = new Date().getFullYear()` default made
+three existing suite call sites time-dependent, including a golden strategy-capture reproduction
+that would have broken in a later calendar year with no code change behind it. Any helper that
+defaults to "now" needs its test call sites pinned in the same commit.
+
+### P88f DONE - the ceiling rows are worth keeping, and worth marking (2026-08-29)
+
+Report: `research/CONVERSION_SEARCH_CEILINGS.md`. Harness: `.test_harnesses/convopt_ceiling_harness.js`,
+270 cells.
+
+The user proposed excluding ceiling families from the Optimizer's conversion search. **Right
+instinct, wrong remedy.**
+
+- **The search does not exclude them by itself.** 61 of 180 ceiling cells pick a non-zero
+  conversion; production drops only `$0` picks, so those 61 rows reach the table.
+- **All 61 breach their own ceiling.** Several in every year they have one - a `Fill Bracket 12%`
+  row is over its bracket 33 of 33 years.
+- **Excluding costs a median $53,990, up to $1,546,930, and NOT ONE of the 61 gains under $1,000.**
+  No marginal rows to discard cheaply, so answer (a) is the expensive one.
+- **Shipped answer: mark, do not drop.** `⤴` in the Strategy column, reading `-overageFromConv`
+  specifically so it never fires on a row that went over because spending could not be funded.
+- **The lever is the SPEND rate, not the heirs rate** (spread 25 vs 3). So a rule keyed on strategy
+  family is the wrong shape whichever way the exclusion question is answered.
+
+**Third time this session a prediction needed scoring against an ALTERNATIVE rather than against
+zero.** C5's first form asked whether the heirs rate flips the answer at least once; it flips 3 of
+60, which would have passed as HOLDS and meant nothing. Same failure as B2 in
+`BRACKET_CEILING_BASIS.md` and M1 in `EXTRA_CONVERSION_MAGI.md`. Worth treating as a standing rule:
+**a prediction that cannot lose is not a prediction.**
+
+## P91 - the Stress Test's first result is computed on a STALE horizon (2026-08-29)
+
+**Not a regression.** `main` (11.1691) and this branch (11.16a4), staged side by side and given the
+same shared URL, BOTH report `8 / 36` on first load and BOTH report `0 / 40` after the stress pass is
+re-run against the current plan. `simulate()` is bit-identical between the builds for that plan, and
+`buildStressBank` is identical at every plan length and window mode.
+
+**The sequence count is a pure function of (stressCount, plan years, window mode).** Combined mode at
+count 20: plan years 20-25 -> 36 sequences; 26 -> 37; 27-28 -> 39; 29 -> 41; 30+ -> 40. So the count
+moving 36 -> 40 means the PLAN HORIZON moved, nothing else.
+
+**And it moved because the first run used the wrong one.** `mcPlanYears(getInputs())` returns 36 for
+the plan on screen while `_mcResults.years` reads 25 - the horizon of the saved *default* scenario,
+applied by `loadScenarioByName('default')` before `loadFromURL()` replaces it.
+
+**The consequence is a flipped verdict, not a cosmetic number.** Same plan, same build, same session:
+stale horizon says "runs out of money in 8 of the 36 worst historical periods, typically around
+2046"; correct horizon says "survives all 40". A false alarm on the one number that pass exists to
+produce.
+
+Two things worth carrying:
+
+- **All three stress entry points read `getInputs()` fresh** (`runMonteCarlo`, the demo pass, and the
+  stress-only refresh at `mc_tab.js:815`), so the base is not stale where it is READ. The run is
+  being STARTED too early, or its result is not invalidated when the plan then changes. Do not go
+  looking for a stale variable.
+- **The Monte Carlo controls are in neither the saved scenario nor the share URL**, and `mc_tab.js`
+  uses no `localStorage` - so paths, seed, stress count and stress window reset every load and cannot
+  be shared. That is the first thing a reader will blame when two runs of "the same plan" disagree,
+  and it is NOT the cause here. Recorded so the next investigation does not start there.
+
+### P91 DONE, v11.16a5 - it was a DROPPED REQUEST, not a stale variable
+
+The prediction in the write-up held: all three entry points read `getInputs()` fresh, so nothing was
+stale where it was read. **The request itself was thrown away.**
+
+`refreshMCStressOnly` opened with `if (_mcStressRefreshing) return;` and `if (_mcWorkerBusy()) return;`.
+Both guards are correct - two in-flight passes would race to render - and both DISCARDED the request
+instead of remembering it. The page primes the pass once on load; a share URL or saved scenario lands
+while that prime is running; the refresh it asks for hits a guard and is forgotten; nothing asks
+again. `mcInputsChanged` cannot recover it: it READS `_lastMCHash` and never writes it, so there is
+no retry path anywhere.
+
+**The shape worth carrying: this guard has now caused three bugs, and the first two fixes treated the
+wrong half.** `runMonteCarlo` and `cancelMC` both carry comments about clearing `_mcStressRefreshing`
+so later refreshes are not frozen out. Both fixed the stuck FLAG. Neither noticed that a request
+dropped while the flag was legitimately set is gone for good. **A guard that drops work needs a place
+to put the work, not just a reliable way to clear itself.**
+
+Fix: `_mcStressPending` + `_drainStressPending()`, drained on every completion including errors,
+flag cleared before re-entry so a failing refresh runs once more rather than spinning.
+
+**Found while fixing, same class:** the FULL sweep was silently stale too. `markMCStale(false)` ran
+unconditionally at completion, asserting the result matches the plan on screen. The staleness check
+lives in `mcInputsChanged`, which skips it while `_mcResults` is null - exactly the case during load -
+so a sweep started against the pre-URL plan finished, CLEARED the banner, and left a 25-year answer
+under a 36-year plan with nothing saying so. Now re-checked at completion. The banner's own text was
+already correct and had simply never been shown in the case it described.
+
+Verified on the reported URL, fresh load, cache busted: `0 / 40` with stress horizon 36 matching the
+plan's 36, where the same load previously gave `8 / 36` on a 25-year horizon. No node test is
+possible and the repo already says so at `optimizer_core.tests.js:5446` - mc_tab.js needs a DOM and
+is covered in the browser tier.
+
+## P92 decisions, and two corrections worth keeping (2026-08-29)
+
+**Correction to my own summary.** I told the user that fixing the ceiling BASIS (P87b) and the
+conversion SIZING (P87g) would also fix `Min Limit n%` being decorative. **It would not.** Those are
+independent terms. `minlimit`'s ceiling is
+`min(federal top, state top, min(goalLimit, IRMAA tier - margin))`, and the term that dominates is
+`goalLimit` - the bracket top containing the SPENDING GOAL. Raising the federal side by a deduction
+takes $403,550 to about $440,000; the min still selects $211,399 and nothing moves. Always check
+which term of a `min` is binding before claiming a fix reaches it.
+
+**`TAXData.SOCIALSECURITY` already carries the 85% figure** as the top bracket rate
+(`SGL`/`MFJ` brackets ending `{l: 34000, r: 0.85}` / `{l: 44000, r: 0.85}`). So the P87c "SS should be
+reduced to its taxable share, and the constant must come from tax data" requirement needs no new
+field - read the last bracket's rate.
+
+**Extra Conversion semantics, settled from the code so it is not re-argued.** The amount is the GROSS
+withdrawn from the IRA, capped only by the IRA balance; tax is netted out of it, so less lands in
+Roth than the number entered. `fundConversionWithCash` pays that tax from Cash instead but **does not
+gate on the cash existing** - it blends, funding what Cash allows and netting the remainder. **Both
+funding paths read `balance.Cash` only; Brokerage is never used to pay conversion tax**
+(`optimizer_core.js:2869`, `:3113`).
+
+**Verified: `startAge` behaves as intended.** Past it, no-op (plan starts now); ahead of it, the plan
+starts in that later year. `planFirstYear(1958,65,2026)=2026`, `planFirstYear(1958,72,2026)=2030`,
+engine first rows 2026/2030 at ages 68/72. **But the portfolio does NOT grow between today and a
+future start year** - typed $1M gives a year-0 IRA of $1,050,154 starting 2026 and $1,046,082
+starting 2030, where four years at 6% would be ~$1.26M. Balances are treated as AT RETIREMENT, not
+today. Defensible for a drawdown model; a decision rather than a defect, and unrecorded until now.
+
+## P94 - `minlimit` is unreachable, and the evidence (2026-08-29)
+
+Measured before proposing removal, because "nobody uses it" is the kind of claim that is usually
+wrong:
+
+| surface | result |
+|---|---|
+| strategy dropdown | 6 options; `minlimit` is not one |
+| Optimizer sweep | **0 of 111** families emit it |
+| Monte Carlo sweep | **0 of 156** variations emit it |
+| `?str=minlimit` URL | **already broken** - select goes blank (`selectedIndex: -1`), `getInputs().strategy` is `""`, plan computes **$0** |
+| `sweep_golden.js` | 0 references |
+| README / ARCHITECTURE | 0 references |
+
+**The URL result is the one that settles it.** A share link or saved scenario naming `minlimit` does
+not silently fall back today - it produces no plan at all. So there are no working plans to migrate,
+and removal costs nothing.
+
+**It has drifted out of step with the strategy it shadows.** `_stratImpliesConversion`
+(`optimizer_core.js:1339`) lists `'bracket'` and omits `'minlimit'`, so an otherwise identical plan
+picks a different year-0 withdrawal month. On the IRMAA-tier path `minlimit` and `bracket` differ in
+exactly ONE log column, `timing`, with every money field identical - that is unmaintained code, and
+it is the concrete instance.
+
+**Two corrections to my own earlier statements, both from not checking which term of a `min` binds:**
+
+1. I told the user that fixing the ceiling basis (P87b) and the conversion sizing (P87g) would fix
+   `Min Limit` being decorative. It would not - `goalLimit` is an independent term and dominates.
+2. I then said "a user choosing 24% vs 12% here may be changing nothing." **No user can choose it at
+   all.** The finding was real but the framing implied a reachable control.
+
+**The cascade, verified rather than assumed.** `yr.IRMAALimit` has exactly one consumer, so it dies
+with the clamp along with `_irmaaEffCpi`, `IRMAABracket`, `_irmaaMargin`, the `IRMAALimit` parameter
+(three call sites) and a 15-line comment block. **But `yr.goalLimit` SURVIVES** - it caps
+`targetSpend` for non-bracket strategies at `:1749`, and `goalFedBracketLimit.rate` /
+`goalStateBracketLimit.rate` set the marginal rates at `:1778`-`:1779`. I nearly wrote that the whole
+chain was orphaned; checking is what stopped it.
+
+**Noted, out of scope:** `targetSpend` capping non-bracket strategies at `goalLimit` means
+Proportional's spending is silently limited by a tax bracket top.

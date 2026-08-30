@@ -109,6 +109,7 @@ const bestTimeLimitedConversion = core.bestTimeLimitedConversion;
 const buildVariations = core.buildVariations;
 const buildStrategyFamilies = core.buildStrategyFamilies;
 const bothOnMedicareAtStart = core.bothOnMedicareAtStart;
+const planFirstYear = core.planFirstYear;
 const MC_GRIDS = core.MC_GRIDS;
 const OPTIMIZER_GRIDS = core.OPTIMIZER_GRIDS;
 const sameStrategySelection = core.sameStrategySelection;
@@ -3414,7 +3415,15 @@ test('optimizeConversionAmount: GK sweep rejects a higher-scoring but spend-unst
     // its own guard band on future spend.
     const gated = optimizeConversionAmount(gkBase, { strategy: 'gk' }, 'finalNW');
     assert(gated.optConv < 425000, `gated sweep must not pick the unstable $425k candidate, got ${gated.optConv}`);
-    assertNear(gated.optConv, 150000, 'gated sweep should land on the largest still-stable candidate', 1);
+    // P88b RE-BASELINE, 150000 -> 100000, and the reason is checked rather than accepted. Before
+    // P88b an extra conversion never reached MAGI, so the IRMAA lookback never charged it and the
+    // sweep's finalNW curve was missing a real cost that grows with the conversion. This fixture is
+    // 65 at the start and on Medicare throughout: lifetime IRMAA was $0 at every candidate and is
+    // now $29k-$39k across them, which moves the argmax down one $25k step. $150,000 now scores
+    // $1,056,138 against $100,000's $1,066,185. The two assertions above are the test's actual
+    // subject and both still hold unchanged - $425,000 still out-scores everything on raw finalNW
+    // and the stability gate still refuses it.
+    assertNear(gated.optConv, 100000, 'gated sweep should land on the largest still-stable candidate', 1);
 });
 
 test('optimizeConversionAmount: non-GK strategies are unaffected by the stability gate', () => {
@@ -3529,6 +3538,110 @@ test('cash-funding: flag off leaves every balance untouched (regression guard)',
     assertNear(bare.finalNW, explicitOff.finalNW, 'an absent flag must behave exactly like an explicit false', 0.01);
     assert(bare.log.every(r => r['-grossUpIRA'] === 0 && r['-extraConvCashTax'] === 0),
         'no cash-funding may occur with the flag off');
+});
+
+// ── P88: an additional conversion must reach the year's INCOME BASIS, not only its tax ────────
+// Both additional-conversion paths run after the year's main tax pass and used to write back only
+// `federalTax` and `stateTax`. Every income-basis field kept its pre-conversion value, so
+// `yr.tax.MAGI` omitted the conversion -- and that is the figure pushed into `balance.magiHistory`
+// and charged for IRMAA two years later. A household could convert $100,000 a year and never be
+// billed for it. Characterized in `.test_harnesses/extraconv_magi_harness.js`.
+// MAGI_BASE is on Medicare from year 0 so the lookback has something to charge, and its ordinary
+// MAGI must sit BELOW the first single-filer IRMAA threshold ($108,999) with a $100,000 conversion
+// carrying it over one. A 3% draw on $1.2M is about $36,000, so $0 pays no surcharge and $100,000
+// lands near $136,000 -- inside Tier 1's 109,000-137,000 band.
+//
+// THE FIRST VERSION OF THIS FIXTURE DREW $250,000 A YEAR and the IRMAA test could not fail: the
+// single-filer bands run 109k / 137k / 174k / 205k / 500k, so $250,000 and $350,000 are the SAME
+// tier and adding a conversion moved nothing. A fixture for a threshold test has to straddle a
+// threshold; if the bands are ever re-indexed, check that this one still does.
+const MAGI_BASE = {
+    ...BASE,
+    birthyear1: 1955, die1: 92,
+    IRA1: 1200000, Brokerage: 0, BrokerageBasis: 0, Cash: 400000, Roth: 0,
+    strategy: 'fixedpct', iraWithdrawPct: 0.03,
+    spendGoal: 40000, nYears: 10,
+};
+
+test('P88: an Extra Roth Conversion raises the year MAGI by its gross', () => {
+    const off = simulate({ ...MAGI_BASE, extraConversionAmount: 0 });
+    const on  = simulate({ ...MAGI_BASE, extraConversionAmount: 100000 });
+    const a = off.log[0], b = on.log[0];
+    assert(b.extraConv === 100000, `test setup: the full gross must convert, got ${b.extraConv}`);
+    // The strategy's own draw is identical on both arms here, so the whole MAGI difference is the
+    // conversion. Anything less than the gross means the basis was not adopted.
+    assertNear(b.MAGI - a.MAGI, 100000, 'MAGI must rise by the conversion gross', 1);
+});
+
+test('P88: the raised MAGI is what IRMAA is charged on, two years later', () => {
+    const off = simulate({ ...MAGI_BASE, extraConversionAmount: 0 });
+    const on  = simulate({ ...MAGI_BASE, extraConversionAmount: 100000 });
+    const sum = (r, k) => r.log.reduce((t, x) => t + (x[k] || 0), 0);
+    // Direction is the whole claim: a larger MAGI cannot buy a cheaper tier. The SIZE moves with
+    // the feedback loop (a bigger IRMAA bill draws more, which moves later balances), so it is not
+    // pinned -- see the harness for the measured magnitudes.
+    assert(off.log.some(r => (r.Medicare || 0) > 0),
+        'test setup: the household must be on Medicare for the surcharge to exist');
+    assert(sum(off, 'IRMAA') === 0,
+        `test setup: the unconverted plan must sit below the first threshold, got ${sum(off, 'IRMAA')}`);
+    assert(sum(on, 'IRMAA') > 0,
+        'converting $100k/yr must cost IRMAA once the conversion reaches MAGI');
+    // And it must be the LOOKBACK that moves, not year 0: IRMAA is charged on income from two
+    // years earlier, so the first year cannot respond to this year's conversion.
+    assert((on.log[0].IRMAA || 0) === (off.log[0].IRMAA || 0),
+        'year 0 IRMAA is charged on pre-plan income and must not move');
+});
+
+test('P88: the cash-funded gross-up also reaches MAGI', () => {
+    // applyConversionGrossUp had the same defect and no with-gross-up tax calc to copy from, so it
+    // makes its own. This is the path with NO extraConversionAmount, which the other fix cannot cover.
+    const base = { ...MAGI_BASE, convertExcessToRoth: true, strategy: 'fixedpct',
+                   iraWithdrawPct: 0.15, extraConversionAmount: 0 };
+    const off = simulate({ ...base, fundConversionWithCash: false });
+    const on  = simulate({ ...base, fundConversionWithCash: true });
+    const gu = on.log[0]['-grossUpIRA'] || 0;
+    assert(gu > 1, `test setup: the gross-up must fire, got ${gu}`);
+    // The gross-up adds IRA income, which can also push more Social Security into the taxable
+    // share, so MAGI rises by AT LEAST the draw rather than exactly it.
+    assert(on.log[0].MAGI - off.log[0].MAGI >= gu - 1,
+        'the gross-up draw must appear in MAGI');
+});
+
+test('P88: bracketOverage sees a conversion, and names it separately from a forced draw', () => {
+    const base = { ...MAGI_BASE, strategy: 'bracket', stratRate: 0.22,
+                   stratIRMAATier: -1, stratACAMultiple: 0 };
+    const off = simulate({ ...base, extraConversionAmount: 0 });
+    const on  = simulate({ ...base, extraConversionAmount: 100000 });
+    const a = off.log[0], b = on.log[0];
+    assert((a.BracketOverage || 0) < 1,
+        `test setup: the unconverted year must sit inside its ceiling, got ${a.BracketOverage}`);
+    assert((b.BracketOverage || 0) > 1,
+        'a conversion stacked on a filled bracket must show as overage, not vanish');
+    // The two causes stay distinguishable: this overage is chosen, not forced by spending.
+    assertNear(b['-overageFromConv'], b.BracketOverage,
+        'a conversion-caused overage must be attributed to the conversion', 1);
+});
+
+test('P88: no conversion and no cash-funding means nothing moved (regression guard)', () => {
+    // The zero test. Neither corrected path runs, so the fix must be invisible. This is the
+    // assertion that catches a "fix" that reached further than the two conversion paths.
+    const plain = { ...MAGI_BASE, extraConversionAmount: 0, fundConversionWithCash: false,
+                    convertExcessToRoth: false };
+    const r = simulate(plain);
+    assert(r.log.every(x => (x.extraConv || 0) === 0 && (x['-grossUpIRA'] || 0) === 0),
+        'test setup: neither additional-conversion path may run in this fixture');
+    assert(r.log.every(x => (x['-overageFromConv'] || 0) === 0),
+        'with no conversion there is no conversion-caused overage');
+    // MAGI must still be the main tax pass's own figure: AGI plus tax-exempt interest, which is 0
+    // here, so MAGI = taxable income + deduction. Only where taxable income is ABOVE zero: once the
+    // portfolio is spent out, AGI falls below the deduction, `federalTaxableIncome` floors at 0 and
+    // the identity legitimately stops holding. Skipping those years is not weakening the test -
+    // asserting through the floor is asserting arithmetic that was never claimed.
+    const live = r.log.filter(x => (x['-fedTaxableInc'] || 0) > 0);
+    assert(live.length > 3, `test setup: need funded years to reconcile, got ${live.length}`);
+    assert(live.every(x => Math.abs((x.MAGI || 0) - (x['-fedTaxableInc'] || 0)
+                                    - (x['-fedDeduction'] || 0)) < 1),
+        'MAGI must reconcile to taxable income plus the deduction when nothing was added');
 });
 
 // ── Accurate per-account IRA-withdrawal accounting + prefer-larger conversion sourcing ─────────
@@ -4069,18 +4182,21 @@ test('ELIGIBILITY_AGE: the constant exists and ships at 65', () => {
 test('ELIGIBILITY_AGE: the at-start Medicare helper follows the constant', () => {
     // Covered two helpers until eitherOnMedicareAtStart was deleted, dead after P35 PR 3c.
     // Today a 66-year-old is already on Medicare when the plan opens.
-    assert(bothOnMedicareAtStart(1960, 66, false, 0) === true,  'single at 66 vs 65 → on Medicare');
-    // startYear = 1960 + 66 = 2026; spouse born 1958 is 68, so both are past 65 today.
-    assert(bothOnMedicareAtStart(1960, 66, true, 1958) === true, 'couple 66/68 vs 65 → both on Medicare');
+    // P89: every call pins the year. The helper clamps the plan's first year to the current one,
+    // so an unpinned call asserts something different in every calendar year.
+    const Y = 2026;
+    assert(bothOnMedicareAtStart(1960, 66, false, 0, Y) === true,  'single at 66 vs 65 → on Medicare');
+    // startYear = max(1960 + 66, 2026) = 2026; spouse born 1958 is 68, so both are past 65.
+    assert(bothOnMedicareAtStart(1960, 66, true, 1958, Y) === true, 'couple 66/68 vs 65 → both on Medicare');
     withEligibilityAge(67, () => {
-        assert(bothOnMedicareAtStart(1960, 66, false, 0) === false, 'single at 66 vs 67 → not yet');
+        assert(bothOnMedicareAtStart(1960, 66, false, 0, Y) === false, 'single at 66 vs 67 → not yet');
         // Same couple, one on each side of the moved constant: the 68-year-old qualifies and the
         // 66-year-old does not. This is the assertion that catches an AND silently becoming an OR
         // — it used to be carried by contrast with the deleted twin, so it is made directly now.
-        assert(bothOnMedicareAtStart(1960, 66, true, 1958) === false,
+        assert(bothOnMedicareAtStart(1960, 66, true, 1958, Y) === false,
             'AND: the younger spouse does not qualify at 67, so the couple does not either');
-        // startYear = 1960 + 68 = 2028; spouse born 1956 is 72 — both past 67.
-        assert(bothOnMedicareAtStart(1960, 68, true, 1956) === true, 'AND: both past the new age');
+        // startYear = max(1960 + 68, 2026) = 2028; spouse born 1956 is 72 — both past 67.
+        assert(bothOnMedicareAtStart(1960, 68, true, 1956, Y) === true, 'AND: both past the new age');
     });
     assert(TAXData.IRMAA.ELIGIBILITY_AGE === 65,
         'the constant must be restored on the way out, or every later test runs on a moved gate');
@@ -4916,7 +5032,11 @@ test('breakEvenHeirsRate: returns null when no rate up to the ceiling pays', () 
 test.slow('breakEvenHeirsRate: the rate/amount pair it reports is self-consistent', () => {
     const r = breakEvenHeirsRate(CONV_BASE, FIXEDPCT_OV, {});
     assert(r !== null, 'this fixture does have a threshold');
-    assertNear(r.rate, 0.57, 'break-even heirs rate for the fixedpct fixture', 0.011);
+    // P88b RE-BASELINE, 0.57 -> 0.65. Converting now carries the IRMAA it always owed, so it takes
+    // a HIGHER heirs rate to justify - the direction a correction must move this. Checked on the
+    // fixture rather than accepted: age 74 in year 0 and on Medicare throughout, lifetime IRMAA
+    // $6,001 with no extra conversion and $35,704 at $100,000 of it.
+    assertNear(r.rate, 0.65, 'break-even heirs rate for the fixedpct fixture', 0.011);
     assert(r.optConv === 75000, `expected a $75,000 conversion at the threshold, got ${r.optConv}`);
     // The rounding nudge exists so a reported rate never comes back with a $0 conversion.
     assert(r.optConv > 0, 'a reported rate must always carry a real conversion amount');
@@ -4947,7 +5067,8 @@ test.slow('lowestBreakEvenHeirsRate: finds a threshold the best-scoring candidat
         { overrides: FIXEDPCT_OV, terminalIRA: 500000, label: 'fixedpct' }
     ], {});
     assert(best !== null, 'the pool search must find the candidate that does have a threshold');
-    assertNear(best.rate, 0.57, 'pool-wide lowest break-even heirs rate', 0.011);
+    // P88b RE-BASELINE, 0.57 -> 0.65: same fixture, same cause as the test above.
+    assertNear(best.rate, 0.65, 'pool-wide lowest break-even heirs rate', 0.011);
     assert(best.label === 'fixedpct', `expected the fixedpct candidate to win, got ${best.label}`);
 });
 
@@ -5549,8 +5670,12 @@ for (const [name, g] of Object.entries(OPT_GOLDEN)) {
             // removes it. The four captures still reproduce because the one recorded with the
             // nerdknob OFF (`default`) has both people on Medicare at start, so its ACA rows were
             // suppressed by age rather than by the flag. Checked before the gate was dropped.
+            // P89: the year is PINNED. bothOnMedicareAtStart now clamps the plan's first year to
+            // the current one, so leaving it to default would make this golden reproduction
+            // time-dependent: a fixture whose gate answer flips in some later calendar year would
+            // break this test with no code change behind it.
             acaFamily: !bothOnMedicareAtStart(g.base.birthyear1, g.base.startAge,
-                !!g.base.hasSpouse, g.base.hasSpouse ? (g.base.birthyear2 || 0) : 0),
+                !!g.base.hasSpouse, g.base.hasSpouse ? (g.base.birthyear2 || 0) : 0, 2026),
             bracketResetsIRMAATier: true,
             markCashFunding: nerd,
             cashClones: nerd && g.base.Cash > 0,
@@ -5614,13 +5739,71 @@ test('bothOnMedicareAtStart: AND semantics, single filer, and the missing-input 
     // Moved out of optimizer_ui.js in P35 PR 2 and never covered there. It had an OR twin,
     // eitherOnMedicareAtStart, deleted once P35 PR 3c left it without a caller. The one-of-two row
     // below is the case the twin used to contrast against, so it is asserted on its own terms.
-    const both = bothOnMedicareAtStart;
-    assert(both(1960, 65, true, 1952) === true,  'both 65+ at start');
-    assert(both(1960, 60, true, 1962) === false, 'neither 65 at start');
-    assert(both(1960, 65, true, 1975) === false,
+    // P89: every call pins the year, and one comment here was WRONG before that. `both(1960, 60,
+    // ...)` was labelled "neither 65 at start" - but the plan cannot start in 1960+60=2020, it
+    // starts in 2026, when person 1 is 66 and IS on Medicare. The row still returns false, on the
+    // spouse rather than on the filer, which is why the mislabel survived.
+    const both = bothOnMedicareAtStart, Y = 2026;
+    assert(both(1960, 65, true, 1952, Y) === true,  'both 65+ at start');
+    assert(both(1960, 60, true, 1962, Y) === false,
+        'person 1 is 66 at the clamped start and the spouse is 64: AND is false on the spouse');
+    assert(both(1960, 65, true, 1975, Y) === false,
         'one 65+, one not: AND is false, and this is the row an OR would get wrong');
-    assert(both(1960, 65, false, 0) === true,    'a single filer needs only themselves');
-    assert(both(0, 65, true, 1952) === false,    'missing inputs are not an assertion of anything');
+    assert(both(1960, 65, false, 0, Y) === true,    'a single filer needs only themselves');
+    assert(both(0, 65, true, 1952, Y) === false,    'missing inputs are not an assertion of anything');
+});
+
+// ── P89: the plan's first year has one definition, and the ACA age gate uses it ────────────────
+// `startAge` is the user's real-world age, so the year they ARE that age is birthyear + startAge -
+// clamped forward, because a simulation cannot start in the past. getInputs() always clamped when
+// building `startInYear`; the ACA gate carried an unclamped copy, so for anyone already past their
+// typed Retirement Start Age it answered about a year the plan does not start in.
+test('P89: planFirstYear clamps a start year that has already passed', () => {
+    assert(planFirstYear(1958, 65, 2026) === 2026,
+        'born 1958 and typing 65 reaches that age in 2023, but the plan starts now');
+    assert(planFirstYear(1970, 65, 2026) === 2035, 'a future start year is left alone');
+    assert(planFirstYear(1958, 0, 2026) === 2026,  'no start age means start now');
+});
+
+test('P89: the ACA age gate reads the clamped year, not the typed age', () => {
+    // The reported case: born 1958, Retirement Start Age 65, spouse born 1969. The plan starts in
+    // 2026 with the filer at 68 and the spouse at 57 - not 2023 with them at 65 and 54.
+    assert(planFirstYear(1958, 65, 2026) - 1958 === 68, 'the filer is 68 when the plan opens');
+    assert(planFirstYear(1958, 65, 2026) - 1969 === 57, 'the spouse is 57 when the plan opens');
+    // A filer whose typed age is below 65 but who is past 65 by the time the plan starts. The old
+    // unclamped test asked `startAge >= 65` and got this wrong.
+    assert(bothOnMedicareAtStart(1958, 60, false, 0, 2026) === true,
+        'typed 60, but 68 when the plan opens: on Medicare');
+    assert(bothOnMedicareAtStart(1958, 60, false, 0, 2018) === false,
+        'same inputs in a year the clamp does not bite: 60 at start, not yet on Medicare');
+});
+
+test('P89: clamping can only make the gate MORE true, never less', () => {
+    // The direction is provable rather than incidental - the clamp only moves the start year
+    // forward, so ages at start can only rise, so "both on Medicare" can only become more true.
+    // Measured at 1,423 flips one way and 0 the other over a 6,396-combination grid; this pins the
+    // property so a later change that produces a backwards flip fails here rather than shipping.
+    const medAge = TAXData.IRMAA.ELIGIBILITY_AGE, Y = 2026;
+    const unclamped = (by1, sa, hs, by2) => {
+        if (!by1 || !sa) return false;
+        const sy = by1 + sa;
+        const p1 = sa >= medAge, p2 = hs && by2 > 0 && (sy - by2) >= medAge;
+        return hs ? (p1 && p2) : p1;
+    };
+    let flipsToTrue = 0, flipsToFalse = 0;
+    for (let by1 = 1945; by1 <= 1985; by1++) {
+        for (let sa = 50; sa <= 75; sa++) {
+            for (const by2 of [0, by1 - 8, by1 + 4, by1 + 11]) {
+                const hs = by2 > 0;
+                const now = bothOnMedicareAtStart(by1, sa, hs, hs ? by2 : 0, Y);
+                const was = unclamped(by1, sa, hs, hs ? by2 : 0);
+                if (now && !was) flipsToTrue++;
+                if (was && !now) flipsToFalse++;
+            }
+        }
+    }
+    assert(flipsToFalse === 0, `clamping must never un-set the gate, got ${flipsToFalse} backwards flips`);
+    assert(flipsToTrue > 0, 'test setup: the grid must contain cases the clamp actually changes');
 });
 
 test('OPT_GOLDEN: the Optimizer sweeps the two families MC does not, on its own IRA Draw grid', () => {

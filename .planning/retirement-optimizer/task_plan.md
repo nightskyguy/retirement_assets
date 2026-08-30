@@ -11,10 +11,11 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
+| **O0** | P94 | Remove the `minlimit` strategy entirely; unknown strategy -> default *(own step)* | `P94a` |
+| **O0** | P92 | A chosen limit is the limit: no silent min, warn when infeasible *(user-decided)* | `P92a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
-| **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 | **O1** | P28j | Withdrawal timing keys off conversion; the $1,000 nobody chose | `P28ja` |
 
@@ -24,12 +25,560 @@ the ten captured paths; prev/next is one 46-stop ring; the Market Return chart n
 **P84 COMPLETE, SHIPPED v11.168d** - advisor/AUM fee + RMDs off the prior Dec 31 balance; suites **353**/61/22. **P85 RE-RUN**: earlier still wins 353 of 499, but the RMD claim BROKE (124 counterexamples, all bracket at a live IRA Goal). O0 stays `P35i`; `P72` still pending.
 
 **P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
-
-User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Full index next.
-
+**P88, P89, P90 COMPLETE v11.16a4** - conversions reach MAGI so IRMAA charges them (+30% to +132% at $100k); warnings name the ceilings they break; the ACA gate reads the plan's real first year; two chart fixes. Suites **366**/61/22. **P91 DONE v11.16a5: the Stress Test's first result was computed on a STALE horizon (8/36 where the truth is 0/40) because a refresh displaced by an in-flight one was DROPPED, never retried; now coalesced. The full sweep was silently stale the same way and now raises its Out-of-date banner. Was on `main` too - never a regression from this branch.**
+User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. Full index next.
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
+
+## P94: remove the `minlimit` strategy entirely  *(NEW 2026-08-29, user-decided, O0, NOT YET BUILT)*
+
+**Goal: simplify the logic and the architecture.** Per the user's standing rule, accuracy and
+comprehensibility outweigh byte-identity - this removal is expected to change nothing for any
+reachable plan, but that is a consequence, not the point.
+
+**To be done as its OWN step**, on the user's instruction, because extirpating it may break
+something: not folded into P92 or any other phase.
+
+### Why it goes
+
+`minlimit` ("Lesser of") predates the tool's IRMAA modelling. It meant *the lesser of the chosen
+federal bracket and a nearby IRMAA threshold*, and partly guarded against a runaway taxation spiral.
+**Both reasons are gone:** IRMAA tiers are modelled directly (the `IRMAA Ceil` family sweeps tiers
+0-4 through `strategy: 'bracket'`), and the spiral was measured and REFUTED in P32 - 0 capped years
+in 3,960 armed runs.
+
+It is unreachable, measurably:
+
+| surface | result |
+|---|---|
+| strategy dropdown | 6 options; `minlimit` is not one |
+| Optimizer sweep | **0 of 111** families emit it |
+| Monte Carlo sweep | **0 of 156** variations emit it |
+| `?str=minlimit` URL | **already broken** - select goes blank (`selectedIndex: -1`), `getInputs().strategy` is `""`, plan computes **$0** |
+| `sweep_golden.js` | 0 references |
+| README / ARCHITECTURE | 0 references |
+
+It has also drifted out of step with the strategy it shadows: `_stratImpliesConversion`
+(`optimizer_core.js:1339`) lists `'bracket'` and omits `'minlimit'`, so an otherwise identical plan
+picks a different year-0 withdrawal month. Nobody noticed because nobody can run it.
+
+- [ ] **P94a** - Delete the arm. The ceiling clamp in `computeBracketCeiling` (`:984`) is the only
+      place the strategy DOES anything; then drop `|| inputs.strategy === 'minlimit'` from
+      `yr.isBracketStrategy` (`:1716`), the withdrawal dispatch (`:2007`) and the cyclic-coexist
+      conditions (`:1923`, `:1938`, `:1946`), plus the comments at `:854`, `:1458`, `:1497`, `:1499`,
+      `:1881`, `:1888`, `:1891`, `:2346`, `:3541` and one in `taxengine.js`. UI: three sites -
+      the ACA/bracket guard (`optimizer_ui.js:494`), `extraConvCeilingKind`'s "the Min Limit ceiling"
+      branch (`:4836`, added by P88e and dead on arrival) and the `ui-bracket` toggle (`:4877`).
+- [ ] **P94b** - **THE CASCADE, and the actual simplification.** `yr.IRMAALimit` has EXACTLY ONE
+      consumer - the clamp being deleted. So it takes with it the `IRMAALimit` parameter of
+      `computeBracketCeiling` (**all three call sites shorten**: `:1930`, `:1942`, `:2009`),
+      `yr.IRMAALimit` (`:1472`), `_irmaaEffCpi`, `IRMAABracket`, `_irmaaMargin` (`:1468`-`:1471`), and
+      the 15-line comment block at `:1458`-`:1467` explaining why the field is provably inert.
+      `computeBracketCeiling` drops from three branches to two.
+      **DO NOT remove `yr.goalLimit` / `goalFedBracketLimit` / `goalStateBracketLimit`.** They look
+      orphaned and are not: `goalLimit` caps `targetSpend` for non-bracket strategies at `:1749`, and
+      the two `.rate` fields set the marginal rates at `:1778`-`:1779`. Checked before writing this.
+      `irmaaMarginDollars` / `irmaaFwdFactor` also stay - the IRMAA-tier branch still uses them.
+- [ ] **P94c** - **Unknown strategy -> silent fallback to the default**, which is `propwd` with
+      `propWithdraw` 20 (first `<option>`, no `selected`; the input carries `value="20"`).
+      **Reuse the existing precedent rather than inventing one:** `applyScenario` already maps
+      `'aca'` back to `'bracket'` because the dropdown has no option for it. Add a GENERIC guard
+      immediately after that - the user asked for "`minlimit` OR ANY non-named strategy", and a name
+      list would need maintaining. If the select matches no option (`selectedIndex === -1`), reset to
+      the first option and restore its parameter default from `OPT_DEFAULTS`
+      (`optimizer_ui.js:4941`). **Silent, per the instruction.** Must run AFTER the `aca` mapping so
+      that deliberate case is not swallowed. Same guard on the URL path via one shared helper.
+      **This is a user-visible IMPROVEMENT:** a legacy scenario naming `minlimit` currently loads as a
+      blank strategy and a $0 plan; it will load as a working default plan.
+- [ ] **P94d** - Tests. Most references are incidental: fixtures passing `stratIRMAATier: 1` take the
+      IRMAA branch, so the clamp never executes - the suite already says so at
+      `optimizer_core.tests.js:4331`, and it was confirmed empirically (on that path `minlimit` and
+      `bracket` differ in exactly ONE column, `timing`, with every money field identical).
+      **Re-point to `strategy: 'bracket'`**, expecting no money change: `:388`, `:424`, `:1952`,
+      `:2671`, `:2687`, `:2734`, `:2736`. **Delete** `minlimit: the IRMAA ceiling is a real limit
+      below the first tier` (`:6124`, the only test that genuinely exercises the clamp) and
+      `yr.IRMAALimit is inert` (`:4327`, whose subject ceases to exist). **Add one** for the unknown
+      strategy falling back to the default. Reconcile counts in all three places.
+- [ ] **P94e** - Changelog: ONE bullet, for the FALLBACK only - "a saved plan naming a strategy this
+      version does not have now loads as the default instead of coming up blank". The `minlimit`
+      removal itself is invisible and, by the in-page rule added this session, has no reader.
+
+### Verification
+
+`sweep_golden.js` is untouched, so the strategy-enumeration goldens must still reproduce - **that is
+the guard proving neither sweep ever emitted `minlimit`.** Then:
+`grep -rn "minlimit" --include=*.js --include=*.html .` returns nothing outside `.planning/` and
+`research/`. In the browser: `?str=minlimit` and `?str=totalNonsense` both land on Proportional
+Withdraw +% at 20 with a real plan (today: blank, $0); a normal `?str=bracket` plan is unchanged; and
+`?str=aca` still maps to `bracket`, proving the guard did not swallow the deliberate case.
+
+- **Status:** planned in full, nothing built. Approved plan kept at
+  `~/.claude/plans/abundant-noodling-barto.md`.
+- **Answers `P92b`**, which asked whether `Min Limit` survives once its `min` is removed. It does not
+  need to: there is no user-facing strategy to delete, only dead code, so P92's "strategy deletion
+  with migration" worry was mis-scoped.
+
+### Found while exploring, OUT OF SCOPE
+
+`targetSpend` caps non-bracket strategies at `goalLimit` (`optimizer_core.js:1749`), so
+**Proportional's spending is silently limited by a tax bracket top.** Live and load-bearing.
+Recorded rather than folded in.
+
+---
+
+## P93: name the year the assets belong to  *(2026-08-29, user-decided, DONE v11.16a9)*
+
+**Raised as a modelling gap, resolved as a labelling one, and the user's framing is the right one.**
+I reported that the portfolio does not grow between today and a future retirement year - typed $1M
+gives a year-0 IRA of $1,050,154 starting 2026 and $1,046,082 starting 2030, where four years at 6%
+would be about $1.26M. The user's answer: the section is titled **"Assets at Retirement Age"**, so
+the balances were never meant to be today's. **This tool has no accumulation phase, and the reader is
+responsible for forecasting the assets to that year.** The defect is that the year was nowhere on
+screen.
+
+- [x] **P93a** - The heading now names it: `2. Assets at Retirement Age (2035)`. Computed from
+      `planFirstYear` (P89), the SAME definition the engine's `startInYear` uses, so the label cannot
+      drift from the year actually simulated.
+- [x] **P93b** - Wired to both inputs that move it. `updateProfileAgeDisplay()` already fired on
+      birth year and month; `startAge` had its own inline `oninput` that only refreshed the ACA
+      warning, so it needed adding there too. Verified across four cases: born 1958 with start age
+      72 -> (2030), 75 -> (2033), 60 (already passed) -> (2026, clamped), and born 1975 with 60 ->
+      (2035). Every one matches `planFirstYear`.
+- [x] **P93c** - The documentation entry said "Enter balances in today's dollars", which is the exact
+      misreading this phase exists to stop. It now says the balances are the ones expected in the
+      year the plan starts, that there is no accumulation phase, and that forecasting to that year is
+      the reader's job.
+- **Status:** DONE, shipped v11.16a9 in the branch's single changelog entry. No calculation changed.
+- **Not done, and not a defect:** the tool still models no accumulation. That is the design, now
+  stated rather than implied.
+
+---
+
+## P92: a chosen limit is the limit - no silent min, and say so when it cannot be met  *(NEW 2026-08-29, user-decided, O0)*
+
+**Supersedes the open half of P87.** `P87a` measured the federal ceiling's basis and `P88` fixed the
+conversion/MAGI defect; this phase is the user's decision about what a ceiling MEANS, which settles
+`P87b` and reframes `P87f`.
+
+### The decisions, as given
+
+1. **The target is whatever limit the user chose. Full stop.** No `min` against anything else.
+2. **Fed brackets target the TOP of the bracket as listed**, in TAXABLE-income terms. Stopping one
+   deduction short is not correct and is to be corrected. This is `P87b`, now decided rather than
+   open: form **(i)**, raise the ceiling by the year's deduction.
+3. **IRMAA targets MAGI**, forward-projected two years. Already correct (P66/P83); nothing to do.
+4. **Deductions computed as accurately as reasonable**, with the understanding that OBBBA and other
+   special deductions expire and some phase out. The engine already models the senior deduction and
+   its phase-out and sunsets it at 2028 - `P88b`'s `TAX_BASIS_FIELDS` work confirmed all of that
+   reconciles to the cent, so the accuracy requirement is already met. What was missing is only that
+   the CEILING never used it.
+5. **When the chosen limit is INFEASIBLE** - the spend goal cannot be met inside it - **warn the user
+   that the selected limit is infeasible, and fall back to satisfying the Spend Goal only.** Today
+   the third pass forces the draw silently and only `BracketOverage` records it; there is no warning,
+   and `_isBracketInfeasible` is a >50%-of-years heuristic in the Optimizer, not a per-plan message.
+6. **When there is NO explicit limit:** use the chosen spend + conversion and ignore any limit.
+7. **Extra Conversions remain incompatible with a Fill strategy** - already shipped as the P88e input
+   warning and the P88f `⤴` marker. Warn, do not block. No further work.
+
+### What this changes, and why it is not a small edit
+
+`Min Limit n%` becomes the federal bracket top and nothing else, which makes it **arithmetically
+identical to `Fill Bracket n%`**. That is a strategy deletion, not a tweak: the dropdown should lose
+one of the two rather than ship twins, and `buildStrategyFamilies`, the MC and Optimizer grids, the
+golden captures and `sameStrategySelection` all enumerate it.
+
+**The `goalLimit` term is the thing being removed**, and it is worth naming because it is not
+obvious: `yr.IRMAALimit = min(goalLimit, IRMAA tier ceiling - margin)` where `goalLimit` is the
+bracket top containing the SPENDING GOAL. Measured: it made `Min Limit 24%` target $211,399 where
+`Fill Bracket 24%` targets $403,550, so the percentage the user picked was close to decorative.
+
+- [ ] **P92a** - Raise the federal-mode ceiling by the year's deduction (`P87b` form (i)). The
+      research flag `bracketCeilingAddDeduction` from `P87a` already does exactly this and is
+      measured; promoting it to unconditional is the change. **It must read the SAME deduction
+      `calculateTaxes()` charges** - a second source of truth for the deduction is the failure mode
+      to avoid, and `P88b`'s `adoptTaxBasis` already establishes where that lives.
+      **Disclose the cost:** measured at a median **-$47,092** across 74 clean cells, up to
+      -$2,523,647 on 22% rows and +$1,201,973 on 12% rows. That is a real change to every bracket
+      plan and the changelog must say saved plans will not reproduce.
+- [ ] **P92b** - Drop the `goalLimit` and IRMAA `min` from `minlimit`, then decide whether the
+      strategy survives at all. If it is identical to Fill Bracket, remove it and migrate saved
+      plans and share URLs rather than leaving a twin in the dropdown.
+- [ ] **P92c** - The infeasibility warning. Per-plan, visible text (not tooltip-only), naming the
+      limit and that the plan fell back to Spend Goal only. The engine already knows: `forcedIRA`
+      and `bracketOverage` are both recorded per year, and `-overageFromConv` (P88c) separates a
+      chosen breach from a forced one - this warning is the FORCED half.
+- [ ] **P92d** - Tests, and the three-site count reconciliation.
+- [ ] **P92e** - `P87f` folds in here: once the ceiling is on the right basis the dropdown should
+      still say WHICH income it means, because IRMAA rows are MAGI and federal rows are taxable
+      income and they will still be different quantities.
+
+### Needs modeling before it can be built - NOT part of P92
+
+**A dynamic limit.** The user's idea: when spend + conversion makes the chosen limit infeasible,
+instead of only falling back, choose a limit that pushes the plan down to the next LOWER IRMAA tier
+(with a warning), or up to the lower of the next tiers. That is a search over ceilings with a cost
+function, not a rule, and it needs measuring the way `P87a` and `P88a` were. Opened as a successor,
+unnumbered until scoped.
+
+### Answered from the code, so it is not re-litigated
+
+**"What does Extra Conversion actually mean?"** Today it is the user's second reading: the amount is
+the **GROSS withdrawn from the IRA**, capped only by the IRA balance, and the tax is netted out of it
+- so LESS lands in Roth than the number entered ($20,000 lands about $13,700 at a 31% marginal rate).
+The field's tooltip already says this.
+
+`fundConversionWithCash` ("Use Cash") moves it toward the first reading by paying that tax from Cash
+instead, but it **does not gate on whether the cash exists** - it blends, funding what Cash allows and
+netting the uncovered remainder. And **Brokerage is never used to pay conversion tax**; both funding
+paths read `balance.Cash` only (`optimizer_core.js:2869`, `:3113`). So "iff there is cash OR
+brokerage to pay the tax" is not implemented for Brokerage at all, and the "iff" is a blend rather
+than a condition. If either should change, that is a decision, not a defect.
+
+- **Status:** decisions recorded, nothing built. `P92a` first.
+
+---
+
+## P91: the Stress Test's first result is computed on a stale plan horizon  *(NEW 2026-08-29, user-reported, O0, NOT a regression)*
+
+**How it surfaced.** The user reported the Stress Test "used to find 36 paths, now 40" after loading
+a saved plan, and suspected this branch.
+
+**IT IS NOT THIS BRANCH.** Measured directly: `main` (11.1691) and this branch (11.16a4) staged side
+by side and given the identical shared URL both report **`8 / 36`** on first load, and both report
+**`0 / 40`** once the stress pass is re-run against the current plan. The engine is bit-identical for
+that plan too - `simulate()` on both builds returns the same success, years funded (36), lifetime tax,
+IRMAA, conversions and terminal wealth; the only log differences are the three fields P88/P88c added,
+which were `undefined` before. `buildStressBank` is identical on both builds at every plan length and
+window mode.
+
+**The real defect is worse than the one reported, and it is on `main`.** The sequence count is a pure
+function of `(stressCount, plan years, window mode)`. Measured mapping in `combined` mode at count 20:
+
+| plan years | sequences |
+|---|---|
+| 20 - 25 | **36** |
+| 26 | 37 |
+| 27 - 28 | 39 |
+| 29 | 41 |
+| 30+ | **40** |
+
+On first load of that plan the run used **`years = 25`** while the plan on screen is **36 years**
+(`mcPlanYears(getInputs())` returns 36; `_mcResults.years` reads 25). 25 years is the horizon of the
+saved *default* scenario, which `loadScenarioByName('default')` applies before `loadFromURL()`
+replaces it - so the stress pass is answering about a plan the user is not looking at.
+
+**The consequence is a flipped verdict, not a cosmetic count.** Same plan, same build, same session:
+
+- stale horizon: **"runs out of money in 8 of the 36 worst historical periods, typically around 2046"**
+- correct horizon: **"survives all 40 of the worst historical periods on record"**
+
+A false alarm, and the number the whole pass exists to produce.
+
+- [x] **P91a** - **DONE.** Not a stale variable, as predicted - a **dropped request**.
+      `refreshMCStressOnly` opened with `if (_mcStressRefreshing) return;` and
+      `if (_mcWorkerBusy()) return;`. Both are correct guards (two in-flight passes would race to
+      render) and both DISCARDED the request rather than remembering it. The page primes the pass
+      once on load; a share URL or saved scenario lands while that prime is running; the refresh it
+      asks for hits a guard and is forgotten; nothing else ever asks. `mcInputsChanged` cannot
+      recover it either - it reads `_lastMCHash` but never writes it, so there is no retry path.
+      **Two earlier fixes in this same file came from this same guard** (`runMonteCarlo` and
+      `cancelMC`, both commented in place) and both cleared the stuck FLAG rather than rescuing the
+      lost REQUEST. That is why this was a third visit.
+- [x] **P91b** - **DONE.** Coalesce instead of drop. `_mcStressPending` remembers a displaced
+      request and `_drainStressPending()` runs it when the in-flight pass finishes - on error too,
+      since an errored pass is still a reason to go back for what it displaced. The flag is cleared
+      BEFORE re-entering so a persistently failing refresh runs once more and stops rather than
+      spinning. `runMonteCarlo` clears it at entry (its own stress pass satisfies anything pending
+      at that moment) and drains at completion (a request that arrived DURING the run is not
+      satisfied); `cancelMC` clears it, deliberately - the user cancelled, so do not start another
+      pass on their behalf.
+- [x] **P91e** - **FOUND WHILE FIXING, same class, worse in one way.** The FULL sweep was silently
+      stale too. `markMCStale(false)` ran unconditionally at completion, asserting the result
+      matches the plan on screen. The staleness check lives in `mcInputsChanged`, which skips it
+      while `_mcResults` is still null - exactly the case during load - so a sweep started against
+      the pre-URL plan finished, CLEARED the banner, and left a 25-year answer under a 36-year plan
+      with nothing saying so. Now re-checked at completion, where `_mcResults` finally exists,
+      against the same hash `mcInputsChanged` uses. The banner's own text was already right: "The
+      chart and survival table below were run before your latest changes. The Stress Test result is
+      current."
+- [ ] ~~**P91a-old** - Find why the first stress pass captures the pre-URL horizon.~~ All three entry points
+      (`runMonteCarlo`, the demo pass, the stress-only refresh at `mc_tab.js:815`) call `getInputs()`
+      fresh and `mcPlanYears(base)` at call time, so the base is not stale where it is READ - the run
+      is being STARTED too early, or its result is not invalidated when the plan then changes.
+      `setupAutoRecalc`'s debounce and `applyTabFromUrl` are the two suspects.
+- [x] **P91c** - **No node test, and the repo already says why.** `optimizer_core.tests.js:5446`
+      records that this code "lives in montecarlo/mc_tab.js, which needs a DOM and is covered in the
+      browser tier". `mcPlanYears`, `refreshMCStressOnly` and `_drainStressPending` are all inside
+      that file and none is exported. Browser verification is the evidence, same as P90. Suites
+      unchanged at 366/61/22.
+- [ ] **P91d** - While here: **the Monte Carlo controls are in neither the saved scenario nor the
+      share URL.** No `mc-*` key appears in `OPT_LONG_TO_SHORT` or the scenario field list, and
+      `mc_tab.js` uses no `localStorage`. So paths, seed, stress count and stress window reset to
+      their defaults on every load and cannot be shared. That is a separate gap and may be
+      deliberate; it is recorded here because it is the first thing a reader will suspect when two
+      runs of "the same plan" disagree, and it is NOT the cause of this one.
+- **Status:** **DONE, shipped v11.16a5.** Verified on the user's own URL, fresh load, cache busted:
+  headline now `0 / 40` with the stress horizon (36) matching the plan (36), where before the fix the
+  same load gave `8 / 36` on a 25-year horizon. The full sweep genuinely did run early and is still
+  on 25 years - that is by design for the expensive pass - but it now RAISES the "Out of date" banner
+  instead of clearing it, which is the contract the banner text always claimed.
+- **Still true and still not the cause:** the Monte Carlo controls are in neither the saved scenario
+  nor the share URL and `mc_tab.js` uses no `localStorage`, so paths, seed, stress count and window
+  reset every load (`P91d`, open).
+
+---
+
+## P90b: the Cash Reserve warning named a value the field cannot hold  *(2026-08-29, user-reported, DONE)*
+
+The warning shown when a scenario carries a Cash Reserve said "Set Cash Reserve blank (or -1) to
+restore the original all-cash behavior". **`-1` is not typeable.** The field is attached with
+`min: 0`, so `-1` is clamped to `0` on blur - and `0` is a DIFFERENT mode: keep no buffer and
+reinvest ALL surplus into Brokerage. A user following that sentence landed in a third behavior
+without being told.
+
+Negative values are still accepted from old saved scenarios and shared links, which is why the
+parser keeps handling them. But `Off` is the only value a user can type, and it is already what the
+field's own tooltip and placeholder say. The message now says `Off`.
+
+---
+
+## P90: two chart fixes  *(2026-08-29, user-reported, DONE v11.16a4)*
+
+Both small, both user-reported, both shipped inside the branch's single changelog entry.
+
+**A. The Market Return chart's source year was behind the nerdknob.** `replaySourceYear`
+(`optimizer_ui.js`) returned `null` for anyone without it, so the "(from 1974)" suffix on a replayed
+path's tooltip only ever appeared for nerdknob readers. Ungated. The reasoning is the rule already
+written beside the advisor fee and the forward IRMAA projection: **which historical year a bootstrap
+block came from is a FACT about the path on screen, not a diagnostic.** A reader looking at a
+replayed 1974 return is better served knowing it is 1974.
+
+**B. The Income & Expenses tooltip reported the scaled bar height, not the income.** That chart
+shrinks every income source by ONE year-wide rate so the stack lands exactly on the Net Income line,
+which is a presentation device. The tooltip printed the shrunk number, so a $15,000 pension read
+$12,886 with nothing on screen explaining the gap.
+
+Now: the raw amount first, with the attributed tax beside it - `Pension: 15,000 - ~2,114 tax`.
+
+**The `~` and the `taxed` flag are the part worth keeping.** The scale is UNIFORM, so it shaves Roth
+withdrawals, Cash withdrawals and return of basis by the same fraction as an IRA draw, and none of
+those three is taxable. Printing "- $392 tax" beside a return of basis would invent a charge that
+does not exist, so those sources report their amount and stop; the title line already flags them as
+untaxed. And even where tax IS borne, the attribution is the year's average rate applied
+proportionally rather than a per-source calculation - Social Security is taxed on at most 85% of
+itself - which is what the `~` admits to.
+
+Measured on one year to confirm the books balance: attributed tax across the taxed sources came to
+$26,733, the untaxed Brokerage bar was shaved $392, and Fed + State tax that year was $27,126.
+26,733 + 392 = 27,125. The uniform scale is fully accounted for and only the taxable part is called
+tax.
+
+The note under the chart said "Incomes shown are After Taxes - See Annual Details for pre-tax
+amounts". Half of that was made stale by this change - the tooltip is now where the pre-tax amount
+lives - so it was rewritten rather than left pointing elsewhere.
+
+- **Status:** DONE, shipped v11.16a4. Both verified in the browser: the tooltip callback returns
+  `SS: 26,073 - ~3,674 tax` for a taxed source and `Brokerage: 2,779` for an untaxed one, and
+  `replaySourceYear` returns 1974 with `NERD_KNOBS` false.
+- **No tests added.** Both are Chart.js callback wiring with no node-reachable seam; the suites are
+  unchanged at 366/61/22 and the browser check is the evidence.
+
+---
+
+## P89: the ACA age gate read a year the plan does not start in  *(2026-08-29, user-reported, DONE v11.16a4)*
+
+**How it surfaced.** The user selected `Below IRMAA` and got a paragraph about the ACA FPL cap.
+
+**Three defects, stacked, and the third is the root of the other two.**
+
+- **A. The advisory was never gated on the selection.** `updateACAWarning` (`optimizer_ui.js:5978`)
+  checked only whether the dropdown CONTAINS ACA options, plus the ages. It never read `sel.value`,
+  so the FPL advisory fired for every choice - federal bracket, IRMAA tier, anything.
+- **B. Its year and both ages were wrong.** It computed `startYear = by1 + startAge`. On the reported
+  plan that is 1958 + 65 = 2023, and the message said "you will be 65 and your spouse 54". The plan
+  actually runs from **2026** with them at **68 and 57**. The block carries a comment saying that
+  naming the start year is "the whole point of this block rather than a flourish", added because
+  ages-today beside a claim about another year "reads as a stale control, and it was reported as
+  one". It then did the same thing one layer down.
+- **C. The same expression gated real behavior.** `bothOnMedicareAtStart` carried its own
+  `by1 + startAge`, and it decides `acaNeverApplies` (`optimizer_ui.js:1158`) and `acaDisabled`
+  (`:1221`) - whether ACA rows appear in the Optimizer at all.
+
+**The root cause is that the plan's first year had TWO definitions.** `getInputs()` built
+`startInYear` as `max(by1 + startAge, currentYear)` - clamped, because a simulation cannot start in
+the past - and that is what the engine runs on. The ACA gate re-derived the same year without the
+clamp. `startAge` is not vestigial, which was the first wrong guess: it drives the start year
+THROUGH that clamp, and the clamp was the missing piece.
+
+**Measured before the fix**, over a 6,396-combination grid of birth years, start ages and spouse
+ages: the clamped and unclamped answers disagree in **22.2%** of them, **1,423 flips to "both on
+Medicare" and 0 the other way.** The direction is provable rather than incidental - the clamp only
+moves the year forward, so ages at start only rise - and a test now pins it, so a later change that
+produces a backwards flip fails rather than ships.
+
+- [x] **P89a** - `planFirstYear(by1, startAge, currentYear)` in `optimizer_core.js`, exported. One
+      definition. `getInputs().startInYear` and `bothOnMedicareAtStart` both call it; the second
+      also stopped asking `startAge >= medAge`, which was the same unclamped assumption in a second
+      place - the question is whether they have reached Medicare age BY THE YEAR THE PLAN BEGINS,
+      not whether the age they typed reaches it. `currentYear` is a parameter, not a `new Date()`
+      call, so the function stays pure and a test can pin a year.
+- [x] **P89b** - The advisory is gated on `sel.value.startsWith('aca')`. The `bothMedicare` branch
+      is deliberately NOT gated the same way: it explains why the ACA options are greyed out, and a
+      user who cannot select them could otherwise never find out why.
+- [x] **P89c** - The warning's year and BOTH ages now come from the clamped start year.
+- [x] **P89d** - 3 tests; suites **366**/61/22, `TestTiers.EXPECTED` and `.githooks/README.md`
+      reconciled. **Three existing call sites in the suite were pinned to an explicit year**, because
+      the new default parameter would otherwise have made them time-dependent - including the golden
+      strategy-capture reproduction, which would have broken in some later calendar year with no code
+      change behind it. One existing comment was also WRONG and is corrected: `both(1960, 60, ...)`
+      was labelled "neither 65 at start", but the plan starts in 2026 when person 1 is 66 and IS on
+      Medicare. The row still returns false, on the spouse rather than on the filer, which is how the
+      mislabel survived.
+- **Status:** DONE, shipped v11.16a4 with a changelog entry naming the Optimizer consequence.
+- **Follow-up, not opened as work:** `startAge` is labelled "Retirement Start Age" but behaves as
+  "your age now, unless it is still ahead of you". Worth a label pass one day; it is not a defect.
+
+---
+
+## P88: an Extra Roth Conversion never reaches MAGI, so IRMAA never charges it  *(NEW 2026-08-29, user-raised, O0)*
+
+**How it surfaced.** The user observed that `extraConversionAmount` and Fill Bracket are
+antagonistic - an extra conversion stacked on a draw already sized to fill the ceiling must break
+the ceiling - and proposed a UI warning plus excluding bracket families from the Optimizer's
+conversion search. Both observations are correct. Chasing them found the reason the tool has never
+shown the conflict, and the reason is a bigger defect than the conflict.
+
+**`applyExtraConversion` charges the income tax and never updates MAGI.** It recomputes the year's
+federal and state tax from its own `calculateTaxes` call and writes them back
+(`optimizer_core.js:2832-2833`), so income tax is right. It does not write `yr.tax.MAGI`,
+`yr.tax.AGI` or `yr.tax.federalTaxableIncome`. `applyConversionGrossUp` has the same shape
+(`:3062-3063`).
+
+### The measurement
+
+One plan, Fill Bracket 22%, MFJ 64/62, CA, $2.5M IRA, 4 conversion sizes. Straight off the log:
+
+| extraConversionAmount | ceiling | logged MAGI | logged BracketOverage |
+|---|---|---|---|
+| $0 | $211,400 | $211,400 | $0 |
+| $25,000 | $211,400 | $211,400 | $0 |
+| $50,000 | $211,400 | $211,400 | $0 |
+| $100,000 | $211,400 | $211,400 | $0 |
+
+**MAGI does not move at all across a $100,000 conversion.** Reproduce with any bracket plan: run
+`simulate()` twice, once with `extraConversionAmount: 0` and once with `100000`, and compare
+`log[0].MAGI`.
+
+Two independent blindnesses stack, and either alone would hide it:
+
+1. `bracketOverage` is computed at `:2276` and `:2518`, both inside the withdrawal phases, while
+   `applyExtraConversion` runs at `:3534`. The overage is decided before the conversion exists.
+2. The MAGI it would have read is stale anyway, per the above.
+
+### What it costs, and it is not confined to bracket strategies
+
+`growAndSettle` pushes `yr.tax.MAGI` into `balance.magiHistory` (`:3139`), and `beginYear` charges
+IRMAA off `magiHistory[len-2]` (`:1435-1441`). **The stale figure is what gets charged, two years
+later.** For the year-0 plan above with a $100,000 extra conversion:
+
+| | MAGI | tier | annual surcharge |
+|---|---|---|---|
+| what the engine records | $211,400 | `-none-` | **$0** |
+| what actually happened | $311,400 | **Tier 2** | **$7,166** |
+
+Every strategy uses this conversion path. Proportional and Ordered are bracket-agnostic, as the user
+notes, but they under-report IRMAA identically. Also wrong by the conversion gross: the MAGI column
+in Annual Details, and the RetirementTaxPlanner handoff.
+
+**And it biases the Optimizer.** The `⇌` rows call `optimizeConversionAmount`, and
+`selectConversionCandidates` (`:4122`) deliberately keeps bracket families - it splits `bracket` into
+`bracket-irmaa` and `bracket-rate` so each gets a champion. Those rows are scored on numbers that
+omit the IRMAA cost of the very conversion being optimized, so the search is biased toward LARGER
+conversions everywhere, not only on bracket rows.
+
+### Why the fix comes before the UI warning
+
+Until MAGI is right, a warning would be telling users about a conflict the tool's own numbers deny.
+Once MAGI includes the conversion, the antagonism becomes visible on its own: the overage fires, the
+IRMAA charge lands, and the Optimizer starts pricing those rows honestly. The exclusion the user
+proposed may then be unnecessary - a correctly priced search should reject a large conversion on a
+bracket row by itself - but that is a measurement, not a conviction.
+
+- [x] **P88a** - **DONE 2026-08-29.** `.test_harnesses/extraconv_magi_harness.js` +
+      `research/EXTRA_CONVERSION_MAGI.md`, rows in `research/README.md` and `HARNESSES.md`. 172 sims.
+      Predictions M1-M6 registered before the fix and all six HOLD after it. The pre-fix numbers are
+      recorded IN the harness, so it scores the fix itself rather than needing two pasted tables.
+- [x] **P88b** - **DONE, v11.16a3.** New `adoptTaxBasis(yr, calc)` + `TAX_BASIS_FIELDS`
+      (`optimizer_core.js`, above `applyExtraConversion`). `applyExtraConversion` adopts the basis
+      from the `_exTaxCalc` it already had; `applyConversionGrossUp` had no with-gross-up calc to
+      copy, so it makes one - adding `increase` to MAGI by hand would have been wrong, because extra
+      IRA income can push more Social Security into the taxable share and lift AGI by MORE than the
+      draw. The field list is EXPLICIT rather than an `Object.assign`: the recomputed calc carries
+      `IRMAAAnnualCost: 0`, so its `IRMAARate`, `nominalRate` and `totalTax` are wrong for the year
+      and copying them would trade one bug for another.
+- [x] **P88c** - **DONE.** `recomputeBracketOverage(yr)` runs in the year loop after BOTH conversion
+      paths. **Two causes kept apart:** the visible `BracketOverage` is the total, and the new hidden
+      `-overageFromConv` carries the part a voluntary conversion caused. The Optimizer's
+      `isBracketInfeasible` heuristic subtracts it, so "this ceiling cannot fund this plan" keeps its
+      meaning - without that, typing a conversion would flag every bracket row infeasible and empty
+      the table for exactly the users P88 is for. `acaBreach` is deliberately NOT re-decided: it is
+      set off the spending-driven figure and means "the strict cap could not fund spending".
+- [x] **P88d** - **DONE.** 5 tests added, suites **363**/61/22, `TestTiers.EXPECTED` and
+      `.githooks/README.md` both reconciled; badge green in-browser at 845 total.
+      **Three existing tests re-baselined, each checked rather than accepted (risk R12):** the GK
+      conversion sweep 150000 -> 100000 (its finalNW argmax moved because IRMAA is now charged -
+      $0 at every candidate before, $29k-$39k now; the test's own two assertions, that $425k
+      out-scores everything and is still refused by the stability gate, are untouched), and
+      `breakEvenHeirsRate` 0.57 -> 0.65 twice (converting carries the surcharge it always owed, so it
+      takes a higher heirs rate to justify; the fixture is 74 and on Medicare, lifetime IRMAA $6,001
+      with no conversion and $35,704 at $100,000).
+      **Two of the NEW tests were wrong first and both faults are recorded in the file.** The IRMAA
+      test's fixture drew $250,000 a year, and the single-filer bands run 109k/137k/174k/205k/500k -
+      so $250,000 and $350,000 are the SAME tier and the test could not fail. A threshold test needs
+      a fixture that straddles a threshold. The regression guard asserted
+      `MAGI == taxableIncome + deduction` over every year, which stops holding once the portfolio is
+      spent out and taxable income floors at zero.
+- [x] **P88e** - **DONE.** Visible warning under Extra Annual Roth Conversion, shown only when the
+      strategy targets a ceiling (Fill Bracket, IRMAA Tier, Min Limit, ACA) and the amount is
+      non-zero. Visible text rather than a tooltip, per the repo rule - a phone cannot hover. It
+      WARNS, it does not block: converting past a ceiling on purpose is a reasonable plan, since a
+      ceiling paces ORDINARY withdrawals while a conversion moves money inside the household. Once a
+      run exists it names the measured years, the worst overage and the surcharge years. Browser
+      verified: hidden on Proportional, shown on Fill Bracket, hidden again at a zero amount.
+- [x] **P88f** - **DONE 2026-08-29.** `convopt_ceiling_harness.js` +
+      `research/CONVERSION_SEARCH_CEILINGS.md`, 270 cells. **Answer: the user's instinct is right and
+      their remedy is not - mark the rows, do not drop them.**
+      The search does NOT exclude them by itself: **61 of 180** ceiling cells pick a non-zero
+      conversion, and production drops only `$0` picks. **Every one of the 61 breaches its own
+      ceiling** - several in EVERY year they have one, including a `Fill Bracket 12%` row over its
+      bracket 33 of 33 years. But excluding them costs a **median $53,990, up to $1,546,930, with
+      not one of the 61 gaining less than $1,000** - there are no marginal rows to discard cheaply.
+      Shipped: **`⤴`** in the Strategy column on any conversion-optimized row whose conversion lands
+      above its ceiling, plus a legend entry. It reads `-overageFromConv` specifically, so it never
+      fires on a row that went over because SPENDING could not be funded inside the ceiling - the
+      distinction `P88c` was built to make. Browser verified on a live sweep: 7 `⇌` rows, 2 marked
+      (`Fill Bracket ✓ ⇌ ⤴`, `ACA Cliff ✓ ⇌ ⤴`), all five agnostic rows unmarked at zero breach.
+      **C5 BROKEN, and usefully:** the heirs rate is NOT the lever (spread 3); the SPEND rate is
+      (spread 25). It was nearly scored on "flips at least once", which 3-of-60 would have passed -
+      the third time this session a prediction needed scoring against an alternative rather than
+      against zero.
+      Deliberately NOT done: the rows are not excluded, not demoted in the ranking, and not withheld
+      from the Best table. They score what they score; the marker says what they gave up to score it.
+- **Status:** **COMPLETE.** `P88a`-`P88f` all DONE 2026-08-29, shipped v11.16a4. The branch carries
+  ONE consolidated changelog entry covering P88 and P89, per the one-entry-per-branch rule - the two
+  per-release entries written earlier were merged back into it.
+  Measured headline: lifetime IRMAA +69% / +30% / +69% / +132% at a $100,000 conversion across Fill
+  Bracket 22%, IRMAA Tier 1, Proportional and Ordered - and BEFORE the fix it FELL as the conversion
+  grew ($1.41M to $0.63M), so the tool was presenting a large conversion as a way to REDUCE the
+  Medicare surcharge.
+- **Depends on:** nothing. **UNBLOCKS `P87g`** as of the fix - conversions now reach the ceiling's
+  own income measure, so sizing them against it is finally a meaningful thing to build.
+- **Changelog:** written, v11.16a3, and it says plainly that IRMAA rises and saved plans will not
+  reproduce. The in-page list was over its documented five-entry ceiling, so the two oldest were
+  dropped when this was added; their detail is preserved in `optimizer_changelog.md`.
+
+---
 
 ## P87: the "Limit" dropdown mixes two income bases - IRMAA is MAGI, the federal brackets are not  *(NEW 2026-08-29, user-raised, measure before building)*
 
@@ -99,11 +648,69 @@ byte-identical, and P85's lesson applies - a "this cannot affect that" claim doe
 withdrawal feedback loop. Budget for a re-run of the sweeps that quote bracket rows, and for a
 changelog entry saying saved plans will not reproduce.
 
-- [ ] **P87a** - MEASURE. Default MFJ plan on `22% Fed`: log `bracketTarget`, `tax.MAGI`, federal
-      taxable income and the resulting unused room, per year. Report the lifetime conversion dollars
-      left on the table. **That number sets the priority** - promote out of O2 if it is large, and
-      note that a NOW-table row means keeping the LINE-30 marker on line 30.
-- [ ] **P87b** - DECIDE the federal fix, two forms, both defensible:
+- [x] **P87a** - **DONE 2026-08-29, and it inverted the phase.** `bracketbasis_harness.js`,
+      `research/BRACKET_CEILING_BASIS.md`, 240 cells x 2 arms.
+      **The defect is confirmed exactly:** a Fill Bracket 22% plan aims at $211,400, lands MAGI on
+      $211,400 and federal TAXABLE income on $179,200, against a $32,200 deduction. To the dollar,
+      every year, growing with indexation and the age-65 bumps to $70,876 by 2054. **Neither operand
+      is wrong** - the bracket top is the right edge of the right bracket, and the deduction
+      reconciles to the cent including the OBBBA senior deduction and its phase-out (2027 = $33,005
+      std + $1,691 age bump + $1,999 senior, sunsetting to $0 in 2029). The defect is a UNITS
+      MISMATCH: `iRAbracketRoom` subtracts GROSS income from a POST-deduction threshold and
+      `bracketOverage` measures MAGI against it, so a pre-deduction quantity is capped at a
+      post-deduction number and nothing in between converts one to the other.
+      **Correcting it costs money in 51 of 74 clean cells, median -$47,092** - but see the user
+      correction below, because that is a fact about the STRATEGY and NOT a verdict on the fix.
+      The sign is set by the BRACKET: 12%
+      gains (median +$159,278, best +$1,201,973), 22% loses (-$173,437, worst -$2,523,647), 24%
+      loses (-$14,583). The separator is OVER years and nothing else - a cell that gains was already
+      breaching its ceiling every year, so the ceiling was not governing it and lifting it turns a
+      forced draw into an ordinary one (lifetime tax -$53,590); a cell that loses had ZERO OVER
+      years, and lifting a ceiling that genuinely governed just draws more, earlier, for $314 of tax.
+      **`minlimit` is out of the phase entirely:** 0 of 40 cells move, because its ceiling is
+      `yr.IRMAALimit` built from the bracket top containing the SPENDING GOAL ($211,399 where Fill
+      Bracket 24% aims at $403,550), so the federal side of the min is never selected. That also
+      makes the "24%" in `Min Limit 24%` close to decorative - a separate question, not P87's.
+
+      **USER CORRECTION, same day, and it overturns the verdict this task first drew.** The first
+      reading was "the fix loses money, so the premise is refuted, so do not build `P87b`". That
+      judges a CORRECTNESS question with a WEALTH metric. When a user picks `22% Fed` or `IRMAA
+      Tier 2` the contract is FILL TO THAT LIMIT: fund the spending, convert or bank the rest. They
+      are not asking the tool to minimize tax - if they were they would not have named a ceiling.
+      Stopping one deduction short fails that contract whether or not stopping short leaves them
+      richer. The 51-of-74 result stays TRUE and stays REPORTABLE; what it measures is that filling
+      the 22% and 24% brackets is often a worse strategy than under-filling them, which is the
+      Optimizer ranking's job to surface, not a licence for the engine to under-deliver the strategy
+      that was selected. An accidental hedge is not a design.
+
+      **TARGETS AND CAPS ARE DIFFERENT CONTROLS and one `yr.limit` carries both.** `n% Fed` and
+      `IRMAA Tier n` are TARGETS - reaching them is success, stopping short is the defect. `n% FPL`
+      is a CAP - staying under is success and a breach is the risk. The engine already splits them
+      on BREACH behavior (soft cap with third-pass forced draws vs strict ACA with `acaBreach`); it
+      does not split them on FILL behavior, and the target case is the one being let down.
+
+      **AND NOTHING SIZES A CONVERSION AGAINST THE CEILING - measured, and larger than the deduction
+      gap.** Over the same 74 clean cells, total voluntary draw rose in only 18, and of the extra
+      draw only **32% became conversion**; the other 68% became IRA-sourced spending displacing
+      Brokerage and Cash draws (delivered spend is identical by the CLEAN filter, so it is not new
+      spending). Conversions were UNCHANGED in 29 of 74 cells. The code says why: the only two
+      claimants on the headroom are `iRAbracketRoom` (`:1964`), which sizes the IRA WITHDRAWAL with
+      spending funded first, and `extraConversionAmount`, which the user types and which is not
+      ceiling-derived. `convertExcessToRoth` (`:2636`) calls itself "a pure REALLOCATION" of
+      whatever after-tax surplus remains, capped by `netWithdrawals.IRA`; `applyConversionGrossUp`
+      (`:3016`) grosses up that existing surplus and never reads `yr.limit`; "Maximize Conversions"
+      is just those two flags together (`optimizer_ui.js:4705`), not "convert up to the limit".
+      **User model: limit minus needed spending = conversion headroom. Engine model: the limit sizes
+      a WITHDRAWAL and conversion is a downstream by-product of surplus routing.** They agree 32% of
+      the time by dollars.
+
+      Priority verdict: **P87 stays O2**, `P87b` is reclassified from optional optimization to
+      correctness fix, and a new `P87g` carries the conversion-sizing gap.
+- [ ] **P87b** - DECIDE the federal fix. **A CORRECTNESS fix, not an optimization** (see the user
+      correction in `P87a`): a named ceiling is a contract to fill, and the engine fills one
+      deduction short of it. The measured wealth cost is a CONSEQUENCE TO DISCLOSE, not a reason to
+      decline - the changelog entry must say plainly that bracket rows will withdraw and convert
+      more and that saved plans will not reproduce. The two forms, unchanged:
       **(i)** raise the federal ceiling to `bracket top + the year's deduction`, keeping the MAGI
       comparison. Must read the SAME deduction `calculateTaxes()` uses (std + age bumps + senior
       deduction with its phase-out), or the ceiling and the tax disagree - a second source of truth
@@ -120,10 +727,36 @@ changelog entry saying saved plans will not reproduce.
 - [ ] **P87e** - Tests: a fixed plan on `22% Fed` lands federal TAXABLE income on the bracket top,
       not MAGI; a plan on `IRMAA Tier 1` keeps `tax.MAGI` inside the tier (already covered, keep it
       green); an ACA plan with large SS is measured against the add-back definition.
-- [ ] **P87f** - User-facing: the dropdown prints `22% Fed  ·  $211,400` and never says WHICH income
-      that is. Label it, and say the same thing in the README's strategy section.
-- **Status:** open, nothing built. `P87a` first.
+- [ ] **P87f** - The dropdown prints `22% Fed  ·  $211,400` and never says WHICH income that is;
+      the honest answer today is "MAGI, though the number came from a taxable-income table". Label
+      it, and say the same in the README's strategy section. **Valuable but not the whole answer** -
+      naming the basis helps a reader understand the ceiling; it does not deliver the headroom they
+      asked for. If `P87b` ships, this label changes with it.
+- [ ] **P87g** - **NEW 2026-08-29, user-raised, and larger than the deduction gap.** Nothing in the
+      engine converts INTO the ceiling on purpose. A user who picks a limit expects the room between
+      their spending and that limit to become a Roth conversion (or to be banked); the engine sizes
+      a WITHDRAWAL against the limit and lets conversion fall out of surplus routing, which delivers
+      32% of the extra draw as conversion. Design decision, not a bug fix, and the shape is not
+      obvious: it interacts with the Cash Reserve (P2), the gap-fill order (P30), and
+      `fundConversionWithCash`. That last one was flagged here as "grosses up a conversion without
+      checking `yr.limit`, worth confirming separately" - it was confirmed, and it is worse: see
+      **`P88`**, where neither additional-conversion path reaches `yr.tax.MAGI` at all, so nothing
+      downstream can see the breach.
+      Measure before building, same as `P87a`: how much conversion would a "fill the headroom" rule
+      actually add, and what does it cost. **BLOCKED ON `P88`** - sizing conversions against a
+      ceiling is meaningless while conversions are invisible to that ceiling's own income measure -
+      and `P87b` should land before it too, or the basis error gets baked into a second place.
+- **Status:** `P87a` DONE 2026-08-29; its first verdict was overturned by the user the same day; `P87b` reframed from
+  `P87b` reclassified as a correctness fix with a disclosable cost, `P87f` kept but demoted from
+  "the whole answer", `minlimit` dropped from scope, and `P87g` opened for the conversion-sizing
+  gap. `P87c`/`P87d` are untouched by the measurement - it armed the deduction leg only, not the
+  Social Security basis and not the ACA add-back. `P87d` gains weight from the target/cap split:
+  ACA is the one entry in the dropdown whose job is to stay UNDER, so its overage reading is the
+  number that matters for it.
 - **Depends on:** nothing. P66/P83 already settled the IRMAA indexing and margin.
+- **Left in the engine by `P87a`:** the research-only input `bracketCeilingAddDeduction`, default
+  off and set by no UI (`optimizer_core.js:980`), and two hidden log fields, `-fedTaxableInc` and
+  `-fedDeduction`. All three are inert unless the harness arms them.
 
 ---
 
@@ -376,10 +1009,15 @@ first task. Every open item in the file now carries one.
 | **O1** | P36 | Phased efficiency study — **round 1 DONE 2026-08-10** | `P36b` round 2 | `P35i` |
 | **O1** | P51 | Perfect-foresight oracle — **a-c,e-g DONE 2026-08-10**, gap table delivered | `P51d` cross-check | nothing |
 | ~~DONE~~ | ~~P30~~ | ~~Withdrawal policy — the `[40,60]` constants nobody chose~~ - **COMPLETE, `P30a`-`P30g`, v11.163F**; the menu shipped, both constants measured and left alone | - | - |
-| **O1** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
+| **O2** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
 | **O1** | P34 | Cost of finding a profitable conversion; worker + per-row memo | `P34a` | nothing |
 | **O1** | P84 | Annual advisor / AUM fee, **plus RMDs off the prior Dec 31 balance** (today they key off a mid-year balance whose growth depends on whether the plan converted) *(new 2026-08-28)* | `P84k` (the RMD half; runs before `P84a`) | nothing |
-| **O2** | P87 | The "Limit" dropdown mixes two income bases: IRMAA tiers are MAGI thresholds (right), federal brackets are taxable-income thresholds spent as MAGI ceilings (wrong by one standard deduction) *(new 2026-08-29, user-raised)* | `P87a` (measure first) | nothing |
+| ~~DONE~~ | ~~P93~~ | ~~Name the year the assets belong to~~ - **COMPLETE v11.16a9.** "Assets at Retirement Age" now names its year, from the same `planFirstYear` the engine uses. The tool has no accumulation phase and now says so instead of implying it | - | - |
+| ~~DONE~~ | ~~P91~~ | ~~Stress Test's first result used a stale plan horizon~~ - **COMPLETE v11.16a5.** A displaced stress refresh was dropped and never retried, so the headline settled on the pre-load plan: `8 / 36` where the truth is `0 / 40`. Coalesced; the full sweep's silent staleness fixed with it | - | - |
+| ~~DONE~~ | ~~P90~~ | ~~Two chart fixes~~ - **COMPLETE v11.16a4.** The Market Return chart's historical source year is no longer nerdknob-only, and the Income & Expenses tooltip reports what a source actually paid instead of its scaled bar height | - | - |
+| ~~DONE~~ | ~~P89~~ | ~~The ACA age gate read a year the plan does not start in~~ - **COMPLETE v11.16a4.** The advisory fired for every Limit choice, named a year and two ages the plan never used, and the same unclamped expression decided whether ACA rows reach the Optimizer. One shared `planFirstYear` now; measured at 22.2% disagreement, one-way | - | - |
+| ~~DONE~~ | ~~P88~~ | ~~An Extra Roth Conversion never reaches `yr.tax.MAGI`, so the IRMAA lookback charges a figure that omits it - measured at a whole tier ($0 recorded where $7,166/yr was owed). Hits every strategy, not just the ceiling families, and biases the Optimizer's conversion search toward larger conversions *(new 2026-08-29, user-raised)* - **COMPLETE, SHIPPED v11.16a4.** MAGI now carries both conversion paths, the overage column sees them, 8 tests added (suites 366), a warning names the conflict at the input and a `⤴` marks it in the Optimizer. Lifetime IRMAA +30% to +132% at a $100k conversion; the Optimizer offers 61 ceiling rows that all breach, worth a median $53,990 each, so they are marked rather than dropped | - | - |
+| **O2** | P87 | The "Limit" dropdown mixes two income bases: IRMAA tiers are MAGI thresholds (right), federal brackets are taxable-income thresholds spent as MAGI ceilings (wrong by one standard deduction) *(new 2026-08-29, user-raised)* - **`P87a` MEASURED 2026-08-29: the gap is exactly one deduction, and closing it LOSES money in 51 of 74 clean cells. Premise refuted; `P87f`, labelling the income basis, is what survives** | `P87f` | nothing |
 | **DONE** | P52 | MC run scope: nerdknob "Run My Plan Only" *(default later flipped by P53f)* | shipped v11.150b | - |
 | **DONE** | P53 | Monte Carlo Stress Test suite (5 windows, bear-start, plan-only default) | shipped v11.1521-152f (#170) | - |
 | **DONE** | P54 | `?montecarlo` teaching demo + mode-aware paths floor | shipped v11.1553 (#173) | - |

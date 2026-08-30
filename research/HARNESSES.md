@@ -45,6 +45,9 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `gapfill_objectives_harness.js` | **node** | P30h: should the `[40,60]` gap-fill blend be deleted and unified on the Cash-first cascade? Scores every OPTIMIZER_OBJECTIVES key plus a liquidity measure. |
 | `convtiming_harness.js` | **node** | P85: does it matter WHICH YEARS a conversion program lands in, and is RMD suppression the reason? Front-load vs level vs back-load at equal lifetime gross. |
 | `rmdbasis_harness.js` | **node** | P84k/P84n: how wrong was the RMD basis, and did fixing it move what the characterization predicted? Run before and after `P84l`. |
+| `bracketbasis_harness.js` | **node** | P87a: the strategy Limit dropdown's federal entries are taxable-income thresholds spent as MAGI ceilings. How much room does that leave unused, and is the room worth anything? |
+| `convopt_ceiling_harness.js` | **node** | P88f: should the Optimizer's conversion search skip the families that target a ceiling? Measures what it picks for them, whether those picks break the ceiling, and what excluding them would cost. |
+| `extraconv_magi_harness.js` | **node** | P88a/P88b: an Extra Roth Conversion never reached MAGI, so the IRMAA lookback charged a figure that omitted it. How wrong was it, and did fixing it move what the characterization predicted? |
 
 ## betr_harness.js  (node)
 
@@ -369,3 +372,125 @@ Its own `R2` prediction - that the RMD BASIS, the RMD divided by the prior year-
 independent of withdrawal timing - was written wrong twice - once as a lifetime total, which condemns a correct
 fix, and once as a two-spouse blended ratio. Both are documented in the file header, because the
 wrong versions are more instructive than the right one.
+
+## bracketbasis_harness.js  (node)
+
+```bash
+node .test_harnesses/bracketbasis_harness.js
+```
+
+**Full results, tables and reasoning live in [`BRACKET_CEILING_BASIS.md`](BRACKET_CEILING_BASIS.md).**
+This entry is the index; that file is the reference.
+
+P87a. `computeBracketCeiling` returns three kinds of ceiling as one number and every caller spends
+it as a MAGI ceiling. The IRMAA tiers really are MAGI thresholds; the federal bracket tops are
+TAXABLE-income thresholds, so "fill the 22% bracket" stops one whole deduction short of filling it.
+
+Runs the standing 5-mix ladder x 2 IRA-Goal settings x 2 states x 6 families x 2 spend rates = 240
+cells on two arms, ~2 seconds. Half the harness is a census off the control arm's log alone (how
+many years actually sat ON the ceiling); the other half is the A/B behind the research-only
+`bracketCeilingAddDeduction`, default off and set by no UI.
+
+Headline findings (2026-08-29):
+
+1. **The defect is exactly one deduction, confirmed to the dollar.** A Fill Bracket 22% plan aims at
+   $211,400, lands MAGI on $211,400 and federal taxable income on $179,200, against a $32,200
+   deduction. The gap is the whole federal deduction, so it grows with indexation and the age-65
+   bumps, $32,200 in 2026 to $70,876 by 2054. Neither operand is wrong: the bracket top is correct
+   and the deduction reconciles to the cent, OBBBA senior deduction and its phase-out included. The
+   defect is a units mismatch - a pre-deduction quantity capped at a post-deduction threshold.
+2. **Correcting it COSTS money in 51 of 74 clean cells**, median -$47,092 - a finding about the
+   STRATEGY, not a verdict on the fix. A named ceiling is a contract to fill, so the cost is a
+   changelog disclosure rather than a reason to under-deliver the strategy the user selected. The
+   report's section 7 records the earlier, wrong reading and why it was wrong.
+3. **The sign is set by the bracket, not the plan.** Fill Bracket 12% gains (median +$159,278);
+   22% loses (-$173,437) and 24% loses (-$14,583).
+4. **The separator is OVER years and nothing else.** Cells that gain were already breaching the
+   ceiling every year, so the ceiling was not governing them and lifting it re-times a forced draw
+   into an ordinary one (lifetime tax -$53,590). Cells that lose had zero OVER years, and lifting a
+   ceiling that genuinely governed just draws more, earlier, for $314 of tax.
+5. **`Min Limit 24%` never sees the federal number at all** - 0 of 40 cells move. Its ceiling is
+   `yr.IRMAALimit`, built from the bracket top containing the SPENDING GOAL, which sits below the
+   federal ceiling the user picked. So the zero test covers four families, not the two it was
+   written for, and the "24%" in that row's label is close to decorative.
+6. **Nothing sizes a conversion against the ceiling, and that gap is bigger than the deduction
+   one.** Total voluntary draw rose in only 18 of 74 cells and just 32% of the extra draw became
+   conversion. `iRAbracketRoom` sizes a WITHDRAWAL; `convertExcessToRoth` reallocates leftover
+   surplus capped by the IRA draw; `applyConversionGrossUp` never reads `yr.limit`. Tracked as P87g.
+7. **A prediction scored on the wrong quantity.** B1's first form asked a per-year claim of a
+   LIFETIME total and condemned a working arm in 70 of 120 cells. Same failure as `rmdbasis`'s R2.
+
+## extraconv_magi_harness.js  (node)
+
+```bash
+node .test_harnesses/extraconv_magi_harness.js
+```
+
+**Full results, both columns and the scored predictions live in [`EXTRA_CONVERSION_MAGI.md`](EXTRA_CONVERSION_MAGI.md).** This entry is the index; that file is
+the reference.
+
+P88. Both additional-conversion paths - the typed Extra Annual Roth Conversion and the
+cash-funded gross-up - run after the year's main tax pass and used to write back only
+`federalTax` and `stateTax`. Every income-basis field kept its pre-conversion value, so the
+year's MAGI omitted the conversion. That figure is pushed into the plan's MAGI history and is
+what the IRMAA lookback charges two years later.
+
+Run it on the pre-fix engine and again after; section 1 is self-diagnosing and says which build
+it is looking at, and the pre-fix numbers are recorded IN the file so it scores the fix itself
+rather than needing two pasted tables compared by hand.
+
+Headline findings (2026-08-29):
+
+1. **A whole tier, invisible.** One plan converting $100,000 a year recorded MAGI $211,400 and
+   `-none-` / $0 of surcharge where $311,400 earns Tier 2 at $7,166 a year.
+2. **Never a ceiling-strategy problem.** Lifetime IRMAA rose +69% (Fill Bracket 22%), +30%
+   (IRMAA Tier 1), +69% (Proportional) and +132% (Ordered) at a $100,000 conversion. The two
+   bracket-agnostic families were under-billed by as much or more than the two ceiling ones.
+3. **The BEFORE column says something worse than "too low".** Lifetime IRMAA used to FALL as the
+   conversion grew, $1.41M to $0.63M, because the shrinking IRA lowered later RMDs while the
+   conversion's own cost was never charged. The tool presented a large conversion as a way to
+   REDUCE the Medicare surcharge.
+4. **The fix reaches the two conversion paths and nothing else.** Lifetime IRMAA at a $0
+   conversion is identical on both builds to the dollar for all four families, year-0 income tax
+   is unchanged at every conversion size, and a 20-cell fingerprint over plans using neither path
+   matches exactly.
+5. **A prediction written too strongly.** M1 first claimed MAGI was IDENTICAL across conversion
+   sizes. True for the ceiling families, false for the agnostic ones, whose surplus-routing drift
+   reaches -14.6% of a $25,000 conversion. The claim is that the gross is ABSENT, so the test has
+   to be one-sided and stated against the gross.
+
+## convopt_ceiling_harness.js  (node)
+
+```bash
+node .test_harnesses/convopt_ceiling_harness.js
+```
+
+**Full results live in [`CONVERSION_SEARCH_CEILINGS.md`](CONVERSION_SEARCH_CEILINGS.md).** This
+entry is the index; that file is the reference.
+
+P88f. A user proposed that the Optimizer stop offering conversion-optimized rows for strategies
+that target a ceiling, since the conversion is stacked on top of a draw already sized to fill it.
+The question was unanswerable until P88b, because the search was scoring those rows on numbers that
+omitted the conversion's own IRMAA.
+
+270 cells - 5 mixes x 3 heirs rates x 2 spend rates x 9 families - each running the production
+search (`optimizeConversionAmount` on `baselineScore`). Section 0 checks the ceiling/agnostic split
+against the engine's own `BracketTarget` rather than trusting the harness labels.
+
+Headline findings (2026-08-29):
+
+1. **The search does NOT exclude them by itself.** 61 of 180 ceiling cells pick a non-zero
+   conversion, so those rows reach the table. A $0 pick is dropped by production code, so this was
+   the first thing worth measuring: if it had been zero everywhere, the phase closed with no change.
+2. **Every one of them breaks its own ceiling - 61 of 61.** Several are over in EVERY year they
+   have a ceiling, including a row labelled `Fill Bracket 12%` breaching 33 of 33 years.
+3. **Excluding them is the expensive answer.** Median gain $53,990, largest $1,546,930, and not one
+   of the 61 gains less than $1,000. There are no marginal rows to discard cheaply.
+4. **The heirs rate is NOT the lever; the spend rate is** - spread 3 against 25. So a rule keyed on
+   strategy family is the wrong shape regardless of which way the exclusion question is answered.
+5. **Shipped answer: mark, do not drop.** A `⤴` in the Strategy column. It reads
+   `-overageFromConv` specifically, so it never fires on a row that went over because spending could
+   not be funded inside the ceiling.
+6. **A prediction nearly scored on a bar it could not fail.** C5's first form asked only whether the
+   heirs rate flips the answer at least once; it flips 3 of 60, which would have passed as a HOLDS.
+   Scored against the competing axis instead, it fails.

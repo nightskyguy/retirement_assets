@@ -586,14 +586,9 @@ function getInputs() {
         propWithdraw: +val('propWithdraw') / 100.0,
         iraWithdrawPct: +val('iraWithdrawPct') / 100.0,
         startAge: +val('startAge') || (new Date().getFullYear() - +val('birthyear1')),
-        startInYear: (() => {
-            const sa = +val('startAge');
-            const by1 = +val('birthyear1');
-            // startAge is the user's real-world age: the year they ARE that age = birthyear + startAge.
-            // Clamp to the current calendar year - can't start a simulation in the past.
-            const computed = sa > 0 ? by1 + sa : new Date().getFullYear();
-            return Math.max(computed, new Date().getFullYear());
-        })(),
+        // P89: one definition of the plan's first year, shared with the ACA age gate. This block
+        // used to carry its own copy of the clamp and the gate carried an unclamped copy.
+        startInYear: planFirstYear(+val('birthyear1'), +val('startAge')),
         dividendReinvest: !!valChecked('dividendReinvest'),
         cyclicEnabled: !!valChecked('cyclicEnabled'),
         cyclicOrder:   val('cyclicOrder') ?? 'ira-first',
@@ -623,7 +618,27 @@ function getInputs() {
  *
  *
  */
+// P93. The heading over the balance fields says "Assets at Retirement Age", and the year it means
+// is not on screen anywhere. That matters more here than a label usually does, because THE TOOL HAS
+// NO ACCUMULATION PHASE: it never grows the typed balances between today and a later retirement
+// year. A reader who types today's balances and a Retirement Start Age still ahead of them is
+// modelling a smaller portfolio than they will actually have, and nothing says so - measured at
+// $1,050,154 starting 2026 against $1,046,082 starting 2030 for the same typed $1M, where four
+// years at 6% would be about $1.26M.
+//
+// Naming the year turns that from a hidden assumption into an instruction: these are the balances
+// AS OF this year, and forecasting them to it is the reader's job. Reads the same `planFirstYear`
+// the engine's `startInYear` uses (P89), so the label cannot drift from the year actually simulated.
+function updateAssetsYearLabel() {
+    const el = document.getElementById('assets-year-label');
+    if (!el) return;
+    const by1 = +val('birthyear1') || 0;
+    if (!by1) { el.textContent = ''; return; }
+    el.textContent = ' (' + planFirstYear(by1, +val('startAge') || 0) + ')';
+}
+
 function updateProfileAgeDisplay() {
+    updateAssetsYearLabel();   // P93: birth year moves the start year, so it moves this label
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
@@ -742,12 +757,16 @@ function replayCarryOnStep(prev, next) {
     return next;
 }
 
-// P80. Which historical year the replayed path's year `i` was sampled from, or null. Three ways to
-// get nothing, all of them normal: no replay on screen, a synthetic path (GBM and AAM are drawn,
-// not sampled, so there is no year to name), or a reader without the nerdknob. The banks index
-// returns and inflation with ONE shared index, so this single year is honest for both.
+// P80. Which historical year the replayed path's year `i` was sampled from, or null. Two ways to
+// get nothing, both of them normal: no replay on screen, or a synthetic path (GBM and AAM are
+// drawn, not sampled, so there is no year to name). The banks index returns and inflation with ONE
+// shared index, so this single year is honest for both.
+//
+// P90: no longer gated on the nerdknob. Naming the year a bootstrap block came from is a FACT about
+// the path being shown, not a diagnostic - the same rule that ungated the advisor fee and the
+// forward IRMAA projection. A reader looking at a replayed 1974 return is better served knowing it
+// is 1974 than being shown the number alone.
 function replaySourceYear(i) {
-    if (typeof NERD_KNOBS === 'undefined' || !NERD_KNOBS) return null;
     const y = _replayState?.rows?.srcYears?.[i];
     return Number.isFinite(y) && y > 0 ? y : null;
 }
@@ -873,6 +892,7 @@ function runSimulation() {
     updateStats(res.totals, res.finalNW, lastFinalNWCurrentDollars);
     updateCharts(res.log);
     updateIRAGoalHint();
+    updateExtraConvWarning();  // P88e: after the log exists, so it can say how many years broke
     refreshSuggestedSpend();   // re-solve the engine-calibrated suggested spend for the ⓘ icon
     // Show computed marginal rate in the auto label when futureIRATaxRate is blank
     const _autoRateEl = document.getElementById('future-ira-tax-auto');
@@ -1134,7 +1154,12 @@ function _runOptimizerNow() {
         perfRuns.family[_fk] = (perfRuns.family[_fk] ?? 0) + (simulationCount - _runsBefore);
         const lastEntry = res.log[res.log.length - 1];
         const totalYears = res.log.length;
-        const ovYears = res.log.filter(e => (e['BracketOverage'] ?? 0) > 0).length;
+        // P88c: count only the SPENDING-driven part. BracketOverage now also carries overage a
+        // voluntary Extra Annual Roth Conversion caused, and "infeasible" must keep meaning "this
+        // ceiling cannot fund this plan" - otherwise typing a conversion would flag every bracket
+        // row infeasible and empty the table.
+        const ovYears = res.log.filter(e =>
+            ((e['BracketOverage'] ?? 0) - (e['-overageFromConv'] ?? 0)) > 0).length;
         const bracketOveragePct = totalYears > 0 ? ovYears / totalYears : 0;
         const isBracketInfeasible = overrides.strategy === 'bracket' && bracketOveragePct > 0.5;
         // ACA is strict: any year its FPL cap can't fund spending makes the plan untenable (the
@@ -1480,9 +1505,25 @@ function _runOptimizerNow() {
                                         ...(convEndYear != null ? { convEndYear, convEndMode: 'extra' } : {}),
                                         computeOC: true });
             const lastEntry = beResult.log[beResult.log.length - 1];
+            // P88f. A conversion is stacked ON TOP of a draw already sized to fill the row's
+            // ceiling, so on a Fill Bracket / Min Limit / IRMAA Tier row it goes over. Measured
+            // across 180 ceiling cells: the search picks a non-zero conversion in 61 of them and
+            // ALL 61 breach. The rows are still worth offering - median gain $53,990 and up to
+            // $1,546,930, so dropping the family would throw real money away - but a row that
+            // quietly abandons the ceiling in its own name should say so.
+            //
+            // `-overageFromConv` is the conversion's share specifically (P88c), not spending that
+            // could not be funded inside the ceiling. Marking the second as if it were the first
+            // would put this glyph on rows where the user chose nothing.
+            const _convBreach = beResult.log.filter(r => (r['-overageFromConv'] ?? 0) > 1);
+            const _convBreachWorst = _convBreach.length
+                ? Math.max(..._convBreach.map(r => r['-overageFromConv'])) : 0;
             results.push({
                 _id: results.length,
-                _strategyLabel: baseRow._strategyLabel + ' ⇌' + (convEndYear != null ? ` ⏹${convEndYear}` : ''),
+                _strategyLabel: baseRow._strategyLabel + ' ⇌' + (convEndYear != null ? ` ⏹${convEndYear}` : '')
+                    + (_convBreach.length ? ' ⤴' : ''),
+                _convBreachYears: _convBreach.length,
+                _convBreachWorst: _convBreachWorst,
                 _paramLabel: baseRow._paramLabel,
                 _paramSortVal: baseRow._paramSortVal,
                 _family: baseRow._family ?? null,
@@ -1701,7 +1742,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
         },
         {
             key: 'strategy', label: 'Strategy',
-            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = unreachable target: the bracket/IRMAA/ACA ceiling cannot be hit. Sorting this column groups each family together and orders it by parameter. Click any row to load it, or ⚖ at the start of the row to measure every Δ column against it.',
+            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = unreachable target: the bracket/IRMAA/ACA ceiling cannot be hit. ⤴ = this row conversion goes ABOVE its own ceiling: the conversion is added on top of a draw already sized to fill the bracket or tier, so income lands over it. The row still scores well or it would not be here, but it is no longer respecting the limit in its name. Sorting this column groups each family together and orders it by parameter. Click any row to load it, or ⚖ at the start of the row to measure every Δ column against it.',
             getValue: r => r._strategyLabel,
             // Family, then parameter, then modifier - NOT the rendered label, which starts with markup
             // and emoji and scattered every clone away from the family it clones. rawSort compares
@@ -2910,7 +2951,7 @@ function updateTable(log) {
         'FedCap': 'Upper boundary of the current federal tax bracket.',
         'StateCap': 'Upper boundary of the current state tax bracket.',
         'BracketTarget': 'MAGI ceiling targeted by the bracket/IRMAA strategy this year (0 for other strategies).',
-        'BracketOverage': 'Amount MAGI exceeded the bracket target. Non-zero means spending needs pushed above the ceiling.',
+        'BracketOverage': 'Amount MAGI exceeded the bracket target. Two things put it above: spending needs that could not be funded inside the ceiling, and an Extra Annual Roth Conversion, which is added on top of the ceiling rather than fitted inside it.',
         'ForcedIRA': 'Extra IRA withdrawn to fund mandatory spending after Cash, Brokerage and Roth were exhausted. For the Fill Bracket and IRMAA Tier strategies this draw goes above their ceiling, which is what makes those ceilings soft. ACA Cliff never does this while its cap is in force: an IRA withdrawal is taxable income and crossing the cap forfeits the premium subsidy, so it leaves a shortfall instead. Once that cap ends at Medicare it is funded like any other strategy.',
         'spendGoal': 'This amount increases by inflation less Spend Delta%.',
         'Roth': 'Combined Roth balance at year end.',
@@ -4382,8 +4423,22 @@ function updateCharts(log) {
     // scale = (1 - effectiveTaxRate) on post-refund income. Using r.netIncome is wrong in surplus
     // years because netIncome was computed with pre-refund cash withdrawals; the logged CashWD is
     // post-refund. Deriving scale from (visibleSum - totalTax) / visibleSum stays correct in both.
-    const mkInc = (label, color, rawFn) => ({
+    // P90. `_rawInc` is the UNSCALED series, already dollar-adjusted, so the tooltip can report the
+    // income that actually arrived rather than the scaled bar height. The bar heights are a
+    // presentation device - every source is shrunk by ONE year-wide rate so the stack lands exactly
+    // on the Net Income line - and a reader hovering over Social Security wants to know what Social
+    // Security paid, not what it looks like after that device.
+    //
+    // `taxed` says whether the source bears any tax at all, and it is why the difference is not
+    // labelled "tax" everywhere. The scale is uniform, so it shaves Cash withdrawals, Roth
+    // withdrawals and return of basis by the same fraction as an IRA draw - and none of those three
+    // is taxable. Printing "- $2,800 tax" beside a Roth withdrawal would invent a charge that does
+    // not exist. Those sources report their raw amount and stop there; the title line already flags
+    // them as untaxed.
+    const mkInc = (label, color, rawFn, taxed) => ({
         label, type: 'bar', backgroundColor: color, stack: 'income', order: 2,
+        _rawInc: log.map(r => rawFn(r) * adj(r)),
+        _taxed: !!taxed,
         data: log.map(r => {
             const vsum = visibleSum(r);
             const scale = vsum > 0 ? (vsum - r.totalTax) / vsum : 1;
@@ -4405,16 +4460,19 @@ function updateCharts(log) {
         data: {
             labels: log.map(r => r.year),
             datasets: [
-                // Income sources - all scaled by (1 - effectiveTaxRate) so they sum to (visibleSum - totalTax)
-                mkInc('SS',              '#3498dbB0', r => r.SSincome),
-                mkInc('Pension',         '#7f8c8dB0', r => r.pension),
-                mkInc('IRA RMD',         '#e67e22B0', r => r.RMDwd),
-                mkInc('Interest',        '#f1c40fB0', r => r.cashInterest),
-                mkInc('IRA WD',          '#d35400B0', r => r['-iraSpend'] ?? 0),
-                mkInc('Roth WD',         '#8e44adB0', r => r.RothWD),
-                mkInc('Gains+Div',       '#1abc9cB0', r => r.CapGains + r.cashDividends),
-                mkInc('Cash WD',         '#27ae60B0', r => r.CashWD ?? 0),
-                mkInc('Brokerage',       '#4F4FDC', r => basisReturn(r)),
+                // Income sources - all scaled by (1 - effectiveTaxRate) so they sum to (visibleSum -
+                // totalTax). The last argument is whether the source bears tax: Roth withdrawals,
+                // Cash withdrawals and return of basis do not, so the tooltip must not attribute
+                // any of the year's tax to them (P90).
+                mkInc('SS',              '#3498dbB0', r => r.SSincome,                    true),
+                mkInc('Pension',         '#7f8c8dB0', r => r.pension,                     true),
+                mkInc('IRA RMD',         '#e67e22B0', r => r.RMDwd,                       true),
+                mkInc('Interest',        '#f1c40fB0', r => r.cashInterest,                true),
+                mkInc('IRA WD',          '#d35400B0', r => r['-iraSpend'] ?? 0,           true),
+                mkInc('Roth WD',         '#8e44adB0', r => r.RothWD,                      false),
+                mkInc('Gains+Div',       '#1abc9cB0', r => r.CapGains + r.cashDividends,  true),
+                mkInc('Cash WD',         '#27ae60B0', r => r.CashWD ?? 0,                 false),
+                mkInc('Brokerage',       '#4F4FDC',   r => basisReturn(r),                false),
                 // Visual separator between spending and expense legend items
                 { label: '│', type: 'bar', data: log.map(() => 0), backgroundColor: 'transparent', borderWidth: 0, stack: 'income', order: 2 },
                 // Expenses stack on top of the Spendable Income line (unscaled absolute amounts)
@@ -4449,6 +4507,30 @@ function updateCharts(log) {
                     ...sharedTooltip.plugins.tooltip,
                     callbacks: {
                         ...sharedTooltip.plugins.tooltip.callbacks,
+                        // P90. The shared callback prints the plotted value, which on this chart is
+                        // the SCALED bar height - so hovering over a $45,000 pension read about
+                        // $38,700 and there was nothing on screen saying why. Income sources now
+                        // report the amount that actually arrived, with the tax attributed to them
+                        // beside it where they bear any. Expense bars are absolute already and fall
+                        // through to the shared callback untouched.
+                        label: ctx => {
+                            const d = ctx.dataset;
+                            const shown = Math.round(ctx.parsed.y);
+                            if (!d._rawInc) return d.label + ': ' + shown.toLocaleString();
+                            const rawv = Math.round(d._rawInc[ctx.dataIndex] ?? 0);
+                            const shaved = rawv - shown;
+                            // The attribution is the year's average rate applied proportionally, not
+                            // a per-source calculation - $35,000 of Social Security does not really
+                            // owe $12,000, and Social Security is taxed on at most 85% of itself in
+                            // any case. The "~" carries that, and it is the only thing that does.
+                            //
+                            // No minus sign before the "~": "- ~3,674" is two operators in a row and
+                            // reads as noise. The space and the word "tax" already say it is a
+                            // deduction from the figure beside it.
+                            return (d._taxed && shaved > 0)
+                                ? `${d.label}: ${rawv.toLocaleString()}  ~${shaved.toLocaleString()} tax`
+                                : `${d.label}: ${rawv.toLocaleString()}`;
+                        },
                         title: items => {
                             const r = log[items[0]?.dataIndex];
                             if (!r) return items[0]?.label ?? '';
@@ -4737,6 +4819,58 @@ const OPT_FAMILY_OF_STRATEGY = {
     aca: 'ACA Cliff', ordered: 'Ordered', gk: 'Guyton-Klinger',
 };
 
+// P88e. An Extra Annual Roth Conversion and a ceiling strategy pull against each other, and until
+// P88b the tool could not say so: the conversion never reached MAGI, so the overage column showed
+// nothing and IRMAA charged nothing. Both are now real, which is what makes this warning worth
+// showing rather than alarming.
+//
+// WARN, DO NOT BLOCK. Converting past a ceiling on purpose is a legitimate plan - the ceiling paces
+// ORDINARY withdrawals, and a conversion moves money inside the household rather than out of it.
+// What the user must not do is believe the ceiling still holds.
+//
+// The strategies this applies to are the ones that carry a ceiling: Fill Bracket (federal rate or
+// IRMAA tier), Min Limit, and the ACA cap. Proportional, Ordered, IRA Draw % and Reduce are
+// bracket-agnostic and have no ceiling to breach, so they say nothing.
+function extraConvCeilingKind() {
+    const m = val('strategy');
+    if (m === 'minlimit') return 'the Min Limit ceiling';
+    if (m === 'aca') return 'the ACA FPL cap';
+    if (m !== 'bracket') return null;
+    if ((+val('stratIRMAATier') ?? -1) >= 0) return 'the IRMAA tier ceiling';
+    if ((+val('stratACAMultiple') ?? 0) > 0) return 'the ACA FPL cap';
+    return 'the federal bracket ceiling';
+}
+
+function updateExtraConvWarning() {
+    const box = document.getElementById('extraConv-warn');
+    if (!box) return;
+    const amt  = +(document.getElementById('extraConversionAmount')?.dataset.numVal
+                   ?? val('extraConversionAmount')) || 0;
+    const kind = extraConvCeilingKind();
+    if (amt <= 0 || !kind) { box.style.display = 'none'; box.innerHTML = ''; return; }
+
+    // Measured, when there is a run to measure. `-overageFromConv` is the part of BracketOverage
+    // this conversion caused, so the count is years the ceiling was actually broken BY THE
+    // CONVERSION rather than by spending the ceiling could not fund.
+    let measured = '';
+    if (Array.isArray(lastSimulationLog) && lastSimulationLog.length) {
+        const yrs = lastSimulationLog.filter(r => (r['-overageFromConv'] ?? 0) > 1);
+        if (yrs.length) {
+            const worst = Math.max(...yrs.map(r => r['-overageFromConv']));
+            const irmaaYrs = lastSimulationLog.filter(r => (r.IRMAA ?? 0) > 0).length;
+            measured = ` In this plan it puts you over in <b>${yrs.length}</b> year${yrs.length === 1 ? '' : 's'}`
+                     + `, by up to <b>${DisplayHelpers.formatDollar(worst)}</b>`
+                     + (irmaaYrs ? `, and ${irmaaYrs} year${irmaaYrs === 1 ? '' : 's'} carry an IRMAA surcharge.` : '.');
+        }
+    }
+    box.innerHTML = `<b>This conversion is added on top of ${kind}, not fitted inside it.</b> `
+        + `Your strategy fills income up to the ceiling, then this amount goes over it.${measured} `
+        + `That can be exactly what you want - a ceiling paces ordinary withdrawals, while a `
+        + `conversion moves money from IRA to Roth rather than out of the household - but the `
+        + `ceiling will not hold while it is set. See BracketOverage and IRMAA in Annual Details.`;
+    box.style.display = '';
+}
+
 function toggleStrategyUI() {
     let m = val('strategy');
     document.getElementById('ui-fixed').classList.toggle('hidden', m !== 'fixed');
@@ -4755,6 +4889,7 @@ function toggleStrategyUI() {
         document.getElementById('rothGapFill').disabled = (m === 'ordered');
     }
     // document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
+    updateExtraConvWarning();   // P88e: the ceiling it warns about is the one just switched to
 }
 
 
@@ -4954,7 +5089,13 @@ function maybeWarnCashReserveActive() {
     const n = DisplayHelpers.parseShorthand(raw);
     const v = (n == null || Number.isNaN(n)) ? +raw : n;
     if (!Number.isFinite(v) || v < 0) return;   // Off/blank/negative = off, no change to warn about
-    showMessage('Note: this scenario sets a Cash Reserve, which now reinvests surplus above it into your Brokerage. Results differ from releases before this feature. Set Cash Reserve blank (or -1) to restore the original all-cash behavior.', 'warning');
+    // P91. This used to say "blank (or -1)". `-1` is not typeable: the field is attached with
+    // min: 0, so it is clamped to 0 on blur - and 0 is a DIFFERENT mode (keep no buffer, reinvest
+    // ALL surplus to Brokerage), not the legacy all-cash behavior the sentence was offering. A user
+    // who followed the advice landed in a third mode without being told. Negative values are still
+    // accepted from old saved scenarios and shared links; "Off" is the only value a user can type,
+    // which is what the field's own tooltip and placeholder already say.
+    showMessage('Note: this scenario sets a Cash Reserve, which now reinvests surplus above it into your Brokerage. Results differ from releases before this feature. Type Off in Cash Reserve to restore the original all-cash behavior.', 'warning');
 }
 
 
@@ -5933,9 +6074,11 @@ function updateACAWarning() {
 
     if (!by1 || !startAge) { warnEl.style.display = 'none'; return; }
 
-    const startYear    = by1 + startAge;
+    // P89: the PLAN'S first year, clamped, from the one shared definition - not `by1 + startAge`,
+    // which is the year they reach that age even when it is in the past.
+    const startYear    = planFirstYear(by1, startAge);
     const medAge       = TAXData.IRMAA.ELIGIBILITY_AGE;
-    const p1Medicare   = startAge >= medAge;
+    const p1Medicare   = (startYear - by1) >= medAge;
     const p2Medicare   = hasSpouse && by2 > 0 && (startYear - by2) >= medAge;
     const bothMedicare = bothOnMedicareAtStart(by1, startAge, hasSpouse, by2);
     const oneMedicare  = hasSpouse && (p1Medicare !== p2Medicare);
@@ -5958,7 +6101,10 @@ function updateACAWarning() {
     // retirement start. A user who sets a 1966 birth year sees "Age 59" next to it and is then told
     // they are on Medicare - two true statements about two different years, one of which the page
     // never showed. It reads as a stale control, and it was reported as one.
-    const p1AgeAtStart = startAge;
+    // P89: BOTH ages come from the start year. p1's used to be `startAge` itself, which is the age
+    // the user typed rather than the age they will be when the plan begins - so a plan starting
+    // today for someone already past that age announced an age they had passed years ago.
+    const p1AgeAtStart = startYear - by1;
     const p2AgeAtStart = startYear - by2;
     const you  = `you will be ${p1AgeAtStart}`;
     const them = `your spouse ${p2AgeAtStart}`;
@@ -5968,7 +6114,13 @@ function updateACAWarning() {
             ? `⚠ At retirement start in ${startYear}, ${you} and ${them} - both on Medicare (age ${medAge}+), so there is no premium subsidy for an income cap to protect. ACA options are unavailable. Lower Retirement Start Age to model pre-Medicare years.`
             : `⚠ At retirement start in ${startYear} ${you}, already on Medicare (age ${medAge}+), so there is no premium subsidy for an income cap to protect. ACA options are unavailable. Lower Retirement Start Age to model pre-Medicare years.`;
         warnEl.style.display = 'block';
-    } else if (oneMedicare) {
+    } else if (oneMedicare && sel.value.startsWith('aca')) {
+        // P89: gated on the SELECTION. This advisory describes how the FPL cap behaves for a plan
+        // that is using one; it was previously shown for every selection, so choosing a federal
+        // bracket or an IRMAA tier produced an unprompted paragraph about a cap the plan does not
+        // have. The bothMedicare branch above is NOT gated the same way on purpose: it explains why
+        // the ACA options are greyed out, and a user who cannot select them could otherwise never
+        // find out why.
         // Was "ACA income limits apply only to the other person", which was wrong in both
         // directions: the FPL cap is tested against HOUSEHOLD MAGI, so the Medicare spouse's
         // RMDs and Social Security count against it, and the cap does not lift for anyone until

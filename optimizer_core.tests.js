@@ -1233,6 +1233,53 @@ test('GK optimize-spend: floor is GK-specific — propwd reaches a higher spend 
         `propwd ${Math.round(pw.optimizedSpend)} should exceed floor-capped GK ${Math.round(gk.optimizedSpend)}`);
 });
 
+// ── Compact money for display (formatDollarShort) ─────────────────────────────
+// P92e. The Limit dropdown now prints each entry's own figure AND its position on the other income
+// ladder, so the dollars had to get shorter. Three significant figures, k/M/B.
+//
+// It sits next to compactNum() below and is its opposite: that one is LOSSLESS and for share URLs,
+// this one is LOSSY and for reading. The pair of suites is here so nobody reaches for the wrong one.
+const formatDollarShort = globalThis.window.DisplayHelpers.formatDollarShort;
+
+test('formatDollarShort: three significant figures, and the suffix follows the magnitude', () => {
+    const cases = [
+        [0, '$0'], [999, '$999'],                       // under a thousand stays whole dollars
+        [1000, '$1k'], [1400, '$1.4k'], [24800, '$24.8k'],
+        [100800, '$101k'], [211400, '$211k'], [273999, '$274k'], [403550, '$404k'],
+        [1000000, '$1M'], [1200000, '$1.2M'], [1234567890, '$1.23B'],
+        [-211400, '-$211k'],
+    ];
+    for (const [n, want] of cases) {
+        assert(formatDollarShort(n) === want,
+            `formatDollarShort(${n}) = "${formatDollarShort(n)}", expected "${want}"`);
+    }
+});
+
+test('formatDollarShort: rounding up carries into the next unit instead of reading 1000k', () => {
+    // The boundary this exists for: 999,500 rounds to 1000k, which is not a thing anyone writes.
+    assert(formatDollarShort(999500) === '$1M', `got ${formatDollarShort(999500)}`);
+    assert(formatDollarShort(99950) === '$100k', `got ${formatDollarShort(99950)}`);
+    assert(formatDollarShort(999999999) === '$1B', `got ${formatDollarShort(999999999)}`);
+    // And it never runs away past the largest unit there is.
+    assert(/^\$[\d.]+B$/.test(formatDollarShort(9.9e14)), `got ${formatDollarShort(9.9e14)}`);
+});
+
+test('formatDollarShort is NOT compactNum: it never emits scientific notation', () => {
+    // compactNum('100000') is "1e5" - correct for a URL, unreadable in a menu. Whatever this
+    // returns has to be something a person reads as money.
+    for (const n of [100000, 1e6, 1e9, 12345, 250000]) {
+        const out = formatDollarShort(n);
+        assert(!/e/i.test(out), `formatDollarShort(${n}) = "${out}" contains an exponent`);
+        assert(out.startsWith('$'), `formatDollarShort(${n}) = "${out}" is not money`);
+    }
+});
+
+test('formatDollarShort: a non-number is empty, not "$NaN"', () => {
+    for (const bad of [NaN, Infinity, undefined, null, 'abc']) {
+        assert(formatDollarShort(bad) === '', `formatDollarShort(${String(bad)}) = "${formatDollarShort(bad)}"`);
+    }
+});
+
 // ── Share-URL value compression (compactNum) ────────────────────────────────────
 // compactNum shrinks dollar values; DisplayHelpers.parseShorthand decodes them on load.
 // The round-trip MUST be lossless, and the compact form never longer than the raw form.

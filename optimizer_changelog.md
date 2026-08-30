@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.16ab"></a>
+<a id="11.16af"></a>
 
-## 11.16ab
+## 11.16af
 
 ### Fill Fed Bracket now fills the bracket
 
@@ -38,6 +38,23 @@ usually is not, because money leaves the IRA earlier than it needed to and stops
 If your plan uses a 22% or 24% limit and you chose it expecting the old behavior, this is worth
 re-reading before you rely on the new numbers. Limits that are not federal brackets - IRMAA tiers and
 the ACA cap - are unchanged, because those are already measured on the right income.
+
+### The Limit menu says where each limit sits on the other ladder
+
+The menu mixes two kinds of ceiling and used to print both as a bare dollar amount, which invited a
+comparison that does not hold: a federal bracket is a limit on income **after** your deduction, while
+an IRMAA tier is a limit on income **before** it. Each entry now names where it falls on the other
+one, so `22% Fed - $211k (IRMAA Tier 1)` and `IRMAA Tier 1 - $274k (24% Fed)`. Amounts are shortened
+to make room.
+
+Underneath, a sentence describes the limit you picked, including the thing the list cannot show: an
+IRMAA tier **spans** a bracket boundary, so filling Tier 1 starts in the 22% bracket and finishes in
+the 24% one. **Show me** opens a picture of both ladders on one income axis, with your limit and your
+plan's own first-year income marked on it.
+
+**The amounts in that menu were each about 2.8% too high** and are now correct: they were being aged
+one extra year past tax tables that were already current. The top of the 22% bracket reads $211,400
+again, which is what the plan was using all along - only the menu was wrong.
 
 ### The plan now tells you when your limit could not be kept
 

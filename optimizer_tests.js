@@ -2307,7 +2307,9 @@ assertEqual(
 			// Exactly two reference-only entries: the top federal bracket and the top IRMAA tier.
 			const off = opts.filter(o => o.disabled);
 			assertEqual(off.length, 2, 'two unbounded bands are listed but not selectable');
-			assertEqual(off.every(o => /\+$/.test(o.textContent.trim())), true,
+			// P92e. The `+` used to end the label and now sits against the amount, because every
+			// entry gained the other ladder's band after it: "$769k+ (IRMAA Tier 5)".
+			assertEqual(off.every(o => /\d[kMB]?\+/.test(o.textContent)), true,
 				'a reference-only entry names the income where it begins, with a trailing +');
 			assertEqual(off.some(o => o.value === '37') && off.some(o => o.value.startsWith('IRMAA')), true,
 				'the two are the top federal bracket and the top IRMAA tier');
@@ -2320,8 +2322,10 @@ assertEqual(
 			for (const o of off) {
 				const prev = opts[opts.indexOf(o) - 1];
 				assertEqual(!!prev && !prev.disabled, true, 'a reference entry follows a selectable ceiling');
-				const dollars = t => +(String(t).match(/\$([\d,]+)/) || [0, '0'])[1].replace(/,/g, '');
-				assertEqual(dollars(o.textContent), dollars(prev.textContent) + 1,
+				// P92e. Off `data-limit`, not off the label. The label is now compact - "$769k" -
+				// so a one-dollar relationship is not visible in it at all, and reading a display
+				// string for a number was what made this brittle in the first place.
+				assertEqual(Number(o.dataset.limit), Number(prev.dataset.limit) + 1,
 					'a reference entry begins one dollar above the ceiling below it');
 			}
 
@@ -2422,6 +2426,130 @@ assertEqual(
 			for (const [el, v] of snap) el.value = v;
 			spouse.checked = wasSpouse;
 			toggleSpouseUI?.(); refreshStratRateOptions?.(); updateACAWarning();
+		}
+	})();
+
+	// ===== Every limit says where it sits on the OTHER ladder =====
+	// The menu mixes three families whose numbers are three different measures of income: a federal
+	// entry is a TAXABLE-income threshold, an IRMAA entry is MAGI, an ACA entry is ACA MAGI. Read as
+	// one column of dollars they invite a comparison that is not valid - and the case that matters is
+	// that IRMAA Tier 1 BEGINS inside the 22% bracket and ENDS inside the 24% one, so "fill Tier 1"
+	// is a 24% decision. Each label now carries the other ladder's band, and this checks the
+	// annotation against the entry's own numeric limit rather than against a hardcoded string, so it
+	// keeps holding when the tables are indexed forward.
+	// ⚠ UNSAFE - MUTATES: #strategy and #stratRate. Both snapshotted and restored.
+	(function everyLimitNamesItsOtherLadder() {
+		if (!unsafeTest('everyLimitNamesItsOtherLadder')) return;   // writes #strategy and #stratRate
+		const strat = document.getElementById('strategy'), rate = document.getElementById('stratRate');
+		if (!strat || !rate || typeof crossLadderNote !== 'function') return;
+		const wasStrat = strat.value, wasRate = rate.value;
+		try {
+			strat.value = 'bracket';
+			const status = getDropdownStatus();
+			const cpi = (+document.getElementById('cpi')?.value || 2.8) / 100;
+			const cpiAdj = Math.pow(1 + cpi, Math.max(0, new Date().getFullYear() - TAX_DATA_BASE_YEAR));
+			let checked = 0;
+			for (const o of rate.options) {
+				const limit = Number(o.dataset.limit);
+				assertEqual(isFinite(limit) && limit > 0, true, `every option carries a numeric data-limit (${o.value})`);
+				const kind = /^\d+$/.test(o.value) ? 'fed' : 'magi';
+				const want = crossLadderNote(kind, limit, status, cpiAdj);
+				if (!want) continue;
+				assertEqual(o.textContent.includes(`(${want})`), true,
+					`"${o.textContent.trim()}" must name its position on the other ladder as (${want})`);
+				checked++;
+			}
+			assertEqual(checked > 4, true, 'the menu offered enough entries for this to mean anything');
+			// The straddle itself, in the direction each family reads it. A federal top plus the
+			// deduction is MAGI; an IRMAA threshold minus it is taxable income. If these two ever agree
+			// with each other the conversion has been dropped somewhere.
+			const ded = dropdownDeduction(status);
+			assertEqual(ded > 0, true, 'there is a deduction to convert between the two bases with');
+			assertEqual(irmaaBandNameAt(1e9, status, cpiAdj).startsWith('IRMAA Tier'), true,
+				'an enormous income lands in a named tier, not "below IRMAA"');
+			assertEqual(irmaaBandNameAt(0, status, cpiAdj), 'below IRMAA',
+				'and no income at all is below every tier');
+		} finally {
+			strat.value = wasStrat;
+			if ([...rate.options].some(o => o.value === wasRate)) rate.value = wasRate;
+			toggleStrategyUI?.();
+		}
+	})();
+
+	// ===== The sentence, and the picture behind "Show me" =====
+	// The picture is a PICTURE. The whole feature has exactly one interaction, the toggle that opens
+	// it, and the test is what keeps it that way: an onclick or a title inside the panel would make
+	// it a control nobody designed.
+	// ⚠ UNSAFE - MUTATES: #strategy, #stratRate, and opens/closes the ladder panel.
+	(function limitLadderIsAPictureNotAControl() {
+		if (!unsafeTest('limitLadderIsAPictureNotAControl')) return;   // writes #strategy and #stratRate
+		const strat = document.getElementById('strategy'), rate = document.getElementById('stratRate');
+		const note = document.getElementById('limit-basis'), panel = document.getElementById('limit-ladder');
+		if (!strat || !rate || !note || !panel || typeof toggleLimitLadder !== 'function') return;
+		const wasStrat = strat.value, wasRate = rate.value, wasOpen = panel.style.display !== 'none';
+		try {
+			strat.value = 'bracket';
+			toggleStrategyUI?.();
+			if (![...rate.options].some(o => o.value === 'IRMAA1')) return;
+			rate.value = 'IRMAA1';
+			if (panel.style.display !== 'none') toggleLimitLadder();   // start closed
+			updateLimitBasisNote();
+			// An IRMAA tier spans a range, and naming both ends is the thing a one-line label cannot do.
+			assertEqual(/runs .* to /.test(note.textContent), true,
+				`the note names the tier's own span: "${note.textContent.trim()}"`);
+			assertEqual(/Show me/.test(note.textContent), true, 'and offers the picture');
+			assertEqual(panel.style.display, 'none', 'which is closed until it is asked for');
+			toggleLimitLadder();
+			assertEqual(panel.style.display !== 'none', true, '"Show me" opens it');
+			assertEqual(panel.innerHTML.includes('<svg'), true, 'and it draws the two ladders');
+			const svg = panel.querySelector('svg');
+			assertEqual(/onclick|<a[\s>]|title=/i.test(svg ? svg.outerHTML : ''), false,
+				'the DRAWING is a picture: nothing in it is clickable, hoverable or titled');
+			// It opens away from the link that opened it, so it has to carry its own way out.
+			assertEqual(!!document.getElementById('limit-ladder-close'), true,
+				'and it carries a close control, because the link that opened it is elsewhere');
+			document.body.click();
+			assertEqual(panel.style.display, 'none', 'clicking outside dismisses it');
+			toggleLimitLadder();
+			toggleLimitLadder();
+			assertEqual(panel.style.display, 'none', 'and the link itself toggles it shut');
+			// A strategy with no ceiling has no basis to describe, so both go away.
+			strat.value = 'propwd';
+			toggleStrategyUI?.();
+			updateLimitBasisNote();
+			assertEqual(note.innerHTML, '', 'a strategy with no ceiling raises no basis note');
+		} finally {
+			if (panel.style.display !== 'none' && !wasOpen) { panel.style.display = 'none'; panel.innerHTML = ''; }
+			strat.value = wasStrat;
+			if ([...rate.options].some(o => o.value === wasRate)) rate.value = wasRate;
+			toggleStrategyUI?.();
+			updateBracketFeedback?.();
+			updateLimitBasisNote?.();
+		}
+	})();
+
+	// ===== The menu's dollars are the engine's dollars =====
+	// TAX_DATA_BASE_YEAR was hardcoded to 2025 while the tables it indexes say 2026, so every limit
+	// in the menu was compounded one extra year of CPI over figures that were already current: the
+	// menu offered $217,319 where the engine built the same plan's ceiling on $211,400. Reading the
+	// year off the data is what stops that recurring; this is what proves the two now agree.
+	(function dropdownLimitsMatchTheEngine() {
+		if (typeof TAXData === 'undefined' || typeof findLimitByRate !== 'function') return;
+		assertEqual(TAX_DATA_BASE_YEAR, TAXData.FEDERAL.YEAR,
+			'the displayed limits are indexed from the year the federal table declares');
+		// One factor serves both families, so the two tables have to share a year.
+		assertEqual(TAXData.IRMAA.YEAR, TAXData.FEDERAL.YEAR,
+			'the federal and IRMAA tables are the same vintage');
+		const sel = document.getElementById('stratRate');
+		if (!sel) return;
+		const status = getDropdownStatus();
+		for (const o of sel.options) {
+			if (!/^\d+$/.test(o.value)) continue;
+			const rate = +o.value / 100;
+			const engine = findLimitByRate('FEDERAL', status, rate, 1).limit;
+			if (!isFinite(engine)) continue;
+			assertEqual(Number(o.dataset.limit), Math.round(engine),
+				`the menu's ${o.value}% limit is the one the engine uses for a plan starting this year`);
 		}
 	})();
 
@@ -2949,7 +3077,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 367, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 371, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

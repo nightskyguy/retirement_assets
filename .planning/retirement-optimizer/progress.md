@@ -6698,3 +6698,56 @@ had not rolled, so the stamp is still 11.16ab and the browser needed an explicit
 gated on the selection, so that a user who cannot pick an ACA row could still learn why. The
 already-past-65 case now loses that explanation. If greyed-with-no-reason reads badly, the answer is
 a short statement of fact with no advice in it, not the old sentence back.
+
+## 2026-08-29 (cont.) - P92e DONE: the Limit menu reads on both ladders, v11.16af
+
+Node **371 / 61 / 22**, browser badge green at **924** (470 in-page + 454 node), zero unsafe skips,
+bundle freshness checked before believing it.
+
+**The base-year defect the user spotted was real and is fixed first.** `TAX_DATA_BASE_YEAR` was
+hardcoded `2025` while `TAXData.FEDERAL.YEAR` and `TAXData.IRMAA.YEAR` both say `2026`, so the menu
+compounded one extra year of CPI over tables that were already current: `$217,319` where the engine
+built the same plan's ceiling on `$211,400`. It now reads the year off the data. Verified against
+`findLimitByRate('FEDERAL', status, rate, 1)` for every federal entry, in a test.
+
+**The ACA rows were off by the same year plus one more.** They compounded
+`currentYear - FPL_BASE_YEAR + 1`, which is two years where the federal rows took one. Measured
+against the engine's own ACA formula before changing anything: a 2026 plan targets $84,049 where the
+menu offered $86,403. They now mirror the engine exactly, `cpiAdj * (1 + cpi)`.
+
+**Deduction source, as planned:** `-fedDeduction` off the plan's first year, divided by that year's
+`-cpiFactor`. That divisor is load-bearing and the plan was right to flag it: `sim.cpiRate` does NOT
+open at 1, it compounds from the table year to the plan's FIRST year, so a plan starting 2035 logs a
+deduction inflated 28%. Measured (`cpiFactorY0` 1.282 on a 2035 plan, 1 on a 2026 one).
+
+**Sorting on the comparable axis was tried and REVERTED, and the reason is worth keeping.** The raw
+sort puts `24% Fed - $404k` above `IRMAA Tier 3 - $410k` while its real ceiling ($435,750 MAGI) is
+below Tier 3 - the inversion I flagged when scoping. Fixing it re-sorts `10% Fed - $24.8k` to sit
+between the $63k and $84k ACA rows, because its MAGI equivalent is $57k, and a visible column
+reading 42k, 52.5k, 63k, 24.8k, 84k looks broken on sight, on every load. Traded a subtle wrong
+ordering for an obvious-looking one; took the subtle one and let the annotation and the ladder carry
+the truth. Recorded in a code comment so it is not re-attempted.
+
+**The ladder is a picture, per instruction, and had three defects found by looking at it:**
+- The IRMAA table's first row is a `-none-` sentinel one dollar below Tier 1, not a tier. Drawing it
+  as one produced a $1 sliver and shifted every tier label by one - the row read `none T2 T4`.
+- Inside a 245px sidebar that clips its overflow the SVG was either illegible or scrolled sideways.
+  Now `position:fixed`, placed under the dropdown and clamped to the viewport, same as
+  `#touch-tooltip`. Clamping only the bottom put it off the TOP of the window when the page was
+  scrolled; both ends now.
+- **User-reported mid-build: no obvious way to dismiss it.** It opens away from the link that opened
+  it, so "click Show me again" is not discoverable. It now has a titled header with `close ✕`,
+  dismisses on a click outside (the share panel's pattern) and on Escape, and the link itself reads
+  `Hide ▾` while open. Four routes, all verified.
+
+**Two old tests broke and both were parsing the label text** - the exact practice this phase removed
+from `updateBracketFeedback()`. The reference-entry checks read `$769,001` out of the label to prove
+the "+1 dollar" relation; at 3 significant figures that is `$769k` on both sides. Re-pointed at
+`data-limit`. The trailing-`+` check now looks for the `+` against the amount, since the label
+continues past it.
+
+**Formatter:** `DisplayHelpers.formatDollarShort`, 3 significant figures with k/M/B. Deliberately NOT
+`compactNum`, which is a lossless share-URL compressor that renders 100000 as `1e5`. Four node tests
+including the carry cases (999,500 -> $1M, 999,999,999 -> $1B) and that it never emits an exponent.
+First version blew the stack on a billion by recursing to carry; the unit search also ran backwards
+and called a billion "k". Both caught by probing the output rather than reasoning about it.

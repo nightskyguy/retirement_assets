@@ -3363,3 +3363,43 @@ income into the **0% long-term capital-gains band**. An IRC 1014 step-up on gain
 at 0% is worth exactly nothing, so `finalNW` and the pre-step-up liquidation value become equal. Two
 step-up tests went vacuously false on that alone. A user filling a 22% bracket can reach the same
 state, and nothing on screen says the step-up stopped being worth anything.
+
+## 2026-08-29 - P92e: two income ladders, one axis, and what the display was quietly adding
+
+**The display was aging the tax tables by a year that had already happened.** `TAX_DATA_BASE_YEAR`
+was hardcoded `2025` in `optimizer_ui.js` while `TAXData.FEDERAL.YEAR` and `TAXData.IRMAA.YEAR` both
+declare `2026`, so the Limit dropdown compounded one extra year of CPI over figures already current:
+`$217,319` displayed where the engine built the same plan's ceiling on `$211,400`, which is
+211,400 x 1.028 to the dollar. The ACA rows were worse by one more year again, compounding
+`currentYear - FPL_BASE_YEAR + 1`. **A constant that restates something the data already says will
+drift the moment the data moves**; both now derive from the table's own declared year.
+
+**`sim.cpiRate` does NOT open at 1.** It compounds from the table year to the plan's FIRST year, so a
+plan starting 2035 logs `-cpiFactor` 1.282 in year 0 and a deduction inflated by the same. Anything
+reading a year-0 log field as "table-year dollars" has to divide by that factor. Measured, not
+assumed, and it is the difference between a correct cross-ladder conversion and one that is 28% out
+for anyone retiring in the future.
+
+**The two ladders can share an axis only after the deduction is added to the federal side.** On MFJ
+2026 figures: the 22% bracket ends at $243,600 of total income, IRMAA Tier 1 runs $218,000 to
+$274,000, and the 24% bracket ends at $435,750. So **Tier 1 opens inside 22% and closes inside 24%** -
+filling it is a 24% decision - and `24% Fed` sits above Tier 3 and above Tier 4's start.
+
+**Sorting the menu on that comparable axis fixes one inversion and creates a worse-looking one.**
+`24% Fed - $404k` correctly moves after `IRMAA Tier 3 - $410k`, and `10% Fed - $24.8k` moves between
+the $63k and $84k ACA rows, because its MAGI equivalent is $57k. A visible column reading
+42k, 52.5k, 63k, 24.8k, 84k reads as a bug on sight, on every load, where the inversion is subtle and
+can be stated in words. **A list of numbers on different bases has no ordering that is both correct
+and legible**; the choice is which of the two failures to take, and the annotation plus the picture
+are what make the legible one honest.
+
+**Two tests broke, both because they read a display string for a number.** The reference-entry checks
+recovered `$769,001` out of an option label to prove a one-dollar relationship, which is invisible at
+three significant figures. `updateBracketFeedback()` did the same thing for the ceiling it feeds off.
+Numbers now travel on a `data-limit` attribute. **A label is a thing to read, not an API.**
+
+**Two formatter bugs that only showed up by running it**, both in code that reads as obviously
+correct: carrying a rounded value up into the next unit by recursion never terminates above the
+largest unit (stack overflow at a billion), and searching a descending unit table from the end
+returns the SMALLEST unit that fits, so a billion formatted as "k". Neither was visible in the
+source; both were the first thing a printed table of outputs showed.

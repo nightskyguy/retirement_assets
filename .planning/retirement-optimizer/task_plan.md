@@ -11,7 +11,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P92 | A chosen limit is the limit; **a, c DONE**; tests and the basis label left | `P92e` |
+| ~~O0~~ | P92 | A chosen limit is the limit - **a, c, e ALL DONE** v11.16af; b answered by P94 | - |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
@@ -290,9 +290,22 @@ bracket top containing the SPENDING GOAL. Measured: it made `Min Limit 24%` targ
       comparison was false, and the P88e warning named "the federal bracket ceiling" for every plan
       in the family including IRMAA and ACA ones. Now asks `getInputs()`.
 - [ ] **P92d** - Tests, and the three-site count reconciliation.
-- [ ] **P92e** - `P87f` folds in here: once the ceiling is on the right basis the dropdown should
-      still say WHICH income it means, because IRMAA rows are MAGI and federal rows are taxable
-      income and they will still be different quantities.
+- [x] **P92e** - DONE v11.16af, and larger than "label it" once the user reframed it. Each entry now
+      names its position on the OTHER ladder (`22% Fed - $211k (IRMAA Tier 1)`,
+      `IRMAA Tier 1 - $274k (24% Fed)`), a sentence under the menu adds what a label cannot carry -
+      **an IRMAA tier SPANS a bracket boundary** - and `Show me` opens a static picture of both
+      ladders on one income axis. New `DisplayHelpers.formatDollarShort` (3 significant figures,
+      k/M/B) makes room; it is NOT `compactNum`, which is lossless and for URLs.
+      **A display defect the user found while reviewing this:** `TAX_DATA_BASE_YEAR` was hardcoded
+      2025 against tables that declare 2026, so every limit in the menu was aged one extra year -
+      `$217,319` where the engine used `$211,400`. Now read off `TAXData.FEDERAL.YEAR`; the ACA rows
+      were off by that year plus one more and now mirror the engine's own formula. Pinned by a test
+      against `findLimitByRate`.
+      **Sorting on the comparable axis was tried and REVERTED** - it fixes `24% Fed` vs `IRMAA Tier 3`
+      and moves `10% Fed - $24.8k` between the $63k and $84k ACA rows, which reads as broken. The
+      annotation and the ladder carry the ranking instead. Do not re-attempt without solving that.
+      `updateBracketFeedback()` stopped parsing the option's display text for its number; a
+      `data-limit` attribute carries it, and two old tests that did the same thing were re-pointed.
 
 ### Needs modeling before it can be built - NOT part of P92
 
@@ -316,9 +329,12 @@ paths read `balance.Cash` only (`optimizer_core.js:2869`, `:3113`). So "iff ther
 brokerage to pay the tax" is not implemented for Brokerage at all, and the "iff" is a blend rather
 than a condition. If either should change, that is a decision, not a defect.
 
-- **Status:** `P92a` DONE v11.16aa, `P92c` DONE v11.16ab. `P92b` is answered by P94 - there is no
-  `minlimit` left to delete. **`P92e` is what remains**, plus `P92d`'s count reconciliation, which
-  each step has been doing as it lands.
+- **Status:** COMPLETE. `P92a` v11.16aa, `P92c` v11.16ab, `P92e` v11.16af; `P92b` answered by P94
+  (no `minlimit` left to delete) and `P92d`'s count reconciliation was done by each step as it
+  landed. **What P92 did NOT settle, and is still open: `P87g`** - nothing sizes a conversion against
+  the ceiling, so the headroom a filled bracket opens becomes IRA-funded spending rather than
+  conversion. Measured at a median conversion change of $0 in P92a. That gap is larger than the one
+  P92a closed.
 
 ---
 

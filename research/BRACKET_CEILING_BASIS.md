@@ -285,10 +285,8 @@ Section 8's "median conversion change $0" carries the same correction: it is not
 missing mechanism. AT years are the minority (section 2), so in the median cell the ceiling was not
 binding and raising it could not change anything.
 
-**What survives as a real open question** is not conversion sizing at all. It is that a plan can stop
-REACHING its ceiling in later years even with conversions on - measured on the plan above, MAGI falls
-$2,546 short in 2031 and $9,366 short by 2035, against a ceiling that is not moving away from it.
-That is the same class as the basis error P92a fixed, in a different place, and it is unmeasured.
+**What survives as a real open question** is not conversion sizing at all. It is that a plan stops
+REACHING its ceiling once Social Security starts - and that has now been measured. See section 9.
 
 The original measurement, unchanged:
 
@@ -396,3 +394,49 @@ Against a median charged deduction of $47,744.
 
 The measured cost of the whole two-pass estimate is zero: 0.813 ms/sim against 0.820 on the release
 before it, on a 40-year Fill Bracket plan, alternating runs.
+
+---
+
+## 9. A second basis error, same shape, still shipped: 15% of Social Security
+
+Measured 2026-08-30, chasing the under-fill named in the correction to section 7.
+
+**A plan stops exactly 15% of its Social Security benefit short of the ceiling it was told to fill.**
+Not approximately - `short / SSincome` is `0.150000` in every affected year, minimum equal to
+maximum, on every ceiling family.
+
+Harness: `.test_harnesses/underfill_harness.js`. Fixture is a 2026 MFJ couple, $2.8M across two
+IRAs, Fill Bracket 22%, Convert Excess to Roth on, TX so no state ceiling can bind first.
+
+| ceiling | under-filled years | short / SS | headroom never used |
+|---|---:|---|---:|
+| Fill Bracket 22% | 17 | 0.15000 exactly | **$168,500** |
+| Fill Bracket 24% | 2 | 0.15000 exactly | $8,634 |
+| IRMAA Tier 1 | 11 | 0.15000 exactly | $97,380 |
+| IRMAA Tier 2 | 5 | 0.15000 exactly | $36,054 |
+
+Years are restricted to those where Social Security is paid AND the IRA still has money, because a
+drained IRA cannot reach any ceiling and that is not a defect.
+
+**The mechanism, and it is P87c.** The sizing aggregate subtracts the FULL benefit
+(`yr.fixedInc = yr.s1 + yr.s2`) from the ceiling, while only the taxable share of the benefit - at
+most 85% - ever reaches MAGI. The draw is therefore sized as though the untaxed 15% consumed ceiling
+that it never occupies, and the plan leaves exactly that much unused. Same shape as the deduction
+error P92a fixed: a quantity on one income basis compared against a threshold on another.
+
+### Three arms that identify it
+
+| arm | under-filled years | reading |
+|---|---:|---|
+| baseline | 28 of 33 | short begins in 2031, the first year any benefit is paid |
+| **no Social Security at all** | 16 of 33 | **the small persistent short disappears entirely**; the 16 remaining are a drained IRA |
+| Social Security claimed at 62 | 33 of 33 | the short begins sooner, with the benefit |
+
+Two regimes have to be told apart in the raw output, and conflating them is what made this look
+mysterious at first. Once the IRA empties (2048 on this fixture) the short jumps to $170k-$390k
+because there is nothing left to draw - not a defect. The defect is the small persistent short of
+$2,546 rising to $12,597 while the IRA still holds millions.
+
+**It reaches IRMAA tiers as well as federal brackets**, which places it in the sizing rather than in
+either ceiling. P92a's deduction fix cannot have addressed it: that one raised the federal ceiling,
+and this leaves an equal 15% unused underneath every ceiling.

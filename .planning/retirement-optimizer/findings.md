@@ -3403,3 +3403,42 @@ correct: carrying a rounded value up into the next unit by recursion never termi
 largest unit (stack overflow at a billion), and searching a descending unit table from the end
 returns the SMALLEST unit that fits, so a billion formatted as "k". Neither was visible in the
 source; both were the first thing a printed table of outputs showed.
+
+## 2026-08-30 - P87c CONFIRMED: a plan leaves exactly 15% of its Social Security unused
+
+**The user rejected a claim of mine and was right, and chasing why turned up a live defect.** I had
+repeated P87a's "nothing sizes a conversion against the ceiling" as though it described the
+mechanism. It does not: on a Fill Bracket 22% plan with Convert Excess to Roth, MAGI lands on
+`BracketTarget` to the dollar and the conversion is its residual after spending ($243,600 ceiling,
+$238,179 drawn, $145,721 to spending, **$92,458 converted**). The conversion is governed by the limit,
+exactly as the user said. Corrected in the report, the index and the task plan.
+
+**What the challenge exposed.** Looking at that same run properly, the plan reaches its ceiling every
+year until 2031 and never again. `short / SSincome` = **0.150000**, minimum equal to maximum, in
+every affected year and on every ceiling family:
+
+| ceiling | under-filled years | headroom never used |
+|---|---:|---:|
+| Fill Bracket 22% | 17 | **$168,500** |
+| IRMAA Tier 1 | 11 | $97,380 |
+| IRMAA Tier 2 | 5 | $36,054 |
+
+The sizing aggregate subtracts the FULL benefit (`yr.fixedInc`) from the ceiling while at most 85% of
+the benefit reaches MAGI, so the untaxed 15% is treated as consuming ceiling it never occupies. **The
+same shape as the deduction error P92a fixed** - a quantity on one income basis measured against a
+threshold on another - and NOT fixed by it, because this one sits under every ceiling rather than in
+the federal ceiling's own value.
+
+**Three arms identify it beyond argument:** remove Social Security and the persistent short vanishes
+entirely; claim at 62 and it starts sooner; keep it and it starts in the first year any benefit is
+paid.
+
+**Two regimes had to be separated first, and conflating them is what made it look mysterious.** Once
+the IRA empties the short jumps to $170k-$390k because there is nothing left to draw. That is not a
+defect. The defect is the small persistent short - $2,546 rising to $12,597 - while the IRA still
+holds millions. A raw table of shortfalls shows both and looks like noise.
+
+**A wrong statement of mine, corrected:** I said 2031 was before that plan's Social Security started.
+It is not - person 2 claims at 67 in 2031. I had checked only person 1, whose benefit starts in 2032.
+The 2031 short is the first SS year, not a counter-example, and treating it as one nearly sent this
+after the wrong mechanism.

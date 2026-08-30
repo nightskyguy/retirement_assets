@@ -368,10 +368,18 @@ than a condition. If either should change, that is a decision, not a defect.
   conversion IS governed by the limit, exactly as a user expects. P92a's "median conversion change
   $0" is not counter-evidence either: AT years are the minority, so the ceiling was not binding in
   the median cell. `research/BRACKET_CEILING_BASIS.md` section 7 carries the correction.
-- **What survives, and is the real open item: the plan stops REACHING its ceiling in later years.**
-  Same fixture: MAGI falls $2,546 short in 2031 and $9,366 short by 2035. Same class as the basis
-  error P92a fixed, different place. Unmeasured - the taxable-Social-Security feedback (`P87c`) is
-  the first suspect but does not explain 2031, which is before that plan's SS starts.
+- **MEASURED 2026-08-30, and it is `P87c`: the plan stops exactly 15% of its Social Security benefit
+  short of the ceiling.** `short / SSincome` is `0.150000` in every affected year, min equal to max,
+  on Fill Bracket 22% and 24% and on IRMAA Tiers 1 and 2 alike. The sizing aggregate subtracts the
+  FULL benefit (`yr.fixedInc`) from the ceiling while only the taxable share, at most 85%, reaches
+  MAGI - so the untaxed 15% is treated as consuming ceiling it never occupies. On one $2.8M fixture
+  that is **$168,500 of headroom never used** across 17 years at Fill Bracket 22%, $97,380 at IRMAA
+  Tier 1. Identified by three arms: remove SS and the short vanishes; claim at 62 and it starts
+  sooner. Same shape as the deduction error P92a fixed, and NOT fixed by it - it sits under every
+  ceiling, federal and IRMAA. `research/BRACKET_CEILING_BASIS.md` section 9, harness
+  `.test_harnesses/underfill_harness.js`. **My earlier claim that 2031 is before that plan's SS
+  starts was wrong** - person 2 claims at 67 in 2031; I had only checked person 1.
+  **This is the next O0 candidate.**
 
 ---
 

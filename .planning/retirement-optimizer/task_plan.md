@@ -11,6 +11,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
+| **O0** | P92 | A chosen limit is the limit: no silent min, warn when infeasible *(user-decided)* | `P92a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
@@ -26,10 +27,93 @@ the ten captured paths; prev/next is one 46-stop ring; the Market Return chart n
 
 **P88, P89, P90 COMPLETE v11.16a4** - conversions reach MAGI so IRMAA charges them (+30% to +132% at $100k); warnings name the ceilings they break; the ACA gate reads the plan's real first year; two chart fixes. Suites **366**/61/22. **P91 DONE v11.16a5: the Stress Test's first result was computed on a STALE horizon (8/36 where the truth is 0/40) because a refresh displaced by an in-flight one was DROPPED, never retried; now coalesced. The full sweep was silently stale the same way and now raises its Out-of-date banner. Was on `main` too - never a regression from this branch.**
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. Full index next.
-
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
+
+## P92: a chosen limit is the limit - no silent min, and say so when it cannot be met  *(NEW 2026-08-29, user-decided, O0)*
+
+**Supersedes the open half of P87.** `P87a` measured the federal ceiling's basis and `P88` fixed the
+conversion/MAGI defect; this phase is the user's decision about what a ceiling MEANS, which settles
+`P87b` and reframes `P87f`.
+
+### The decisions, as given
+
+1. **The target is whatever limit the user chose. Full stop.** No `min` against anything else.
+2. **Fed brackets target the TOP of the bracket as listed**, in TAXABLE-income terms. Stopping one
+   deduction short is not correct and is to be corrected. This is `P87b`, now decided rather than
+   open: form **(i)**, raise the ceiling by the year's deduction.
+3. **IRMAA targets MAGI**, forward-projected two years. Already correct (P66/P83); nothing to do.
+4. **Deductions computed as accurately as reasonable**, with the understanding that OBBBA and other
+   special deductions expire and some phase out. The engine already models the senior deduction and
+   its phase-out and sunsets it at 2028 - `P88b`'s `TAX_BASIS_FIELDS` work confirmed all of that
+   reconciles to the cent, so the accuracy requirement is already met. What was missing is only that
+   the CEILING never used it.
+5. **When the chosen limit is INFEASIBLE** - the spend goal cannot be met inside it - **warn the user
+   that the selected limit is infeasible, and fall back to satisfying the Spend Goal only.** Today
+   the third pass forces the draw silently and only `BracketOverage` records it; there is no warning,
+   and `_isBracketInfeasible` is a >50%-of-years heuristic in the Optimizer, not a per-plan message.
+6. **When there is NO explicit limit:** use the chosen spend + conversion and ignore any limit.
+7. **Extra Conversions remain incompatible with a Fill strategy** - already shipped as the P88e input
+   warning and the P88f `⤴` marker. Warn, do not block. No further work.
+
+### What this changes, and why it is not a small edit
+
+`Min Limit n%` becomes the federal bracket top and nothing else, which makes it **arithmetically
+identical to `Fill Bracket n%`**. That is a strategy deletion, not a tweak: the dropdown should lose
+one of the two rather than ship twins, and `buildStrategyFamilies`, the MC and Optimizer grids, the
+golden captures and `sameStrategySelection` all enumerate it.
+
+**The `goalLimit` term is the thing being removed**, and it is worth naming because it is not
+obvious: `yr.IRMAALimit = min(goalLimit, IRMAA tier ceiling - margin)` where `goalLimit` is the
+bracket top containing the SPENDING GOAL. Measured: it made `Min Limit 24%` target $211,399 where
+`Fill Bracket 24%` targets $403,550, so the percentage the user picked was close to decorative.
+
+- [ ] **P92a** - Raise the federal-mode ceiling by the year's deduction (`P87b` form (i)). The
+      research flag `bracketCeilingAddDeduction` from `P87a` already does exactly this and is
+      measured; promoting it to unconditional is the change. **It must read the SAME deduction
+      `calculateTaxes()` charges** - a second source of truth for the deduction is the failure mode
+      to avoid, and `P88b`'s `adoptTaxBasis` already establishes where that lives.
+      **Disclose the cost:** measured at a median **-$47,092** across 74 clean cells, up to
+      -$2,523,647 on 22% rows and +$1,201,973 on 12% rows. That is a real change to every bracket
+      plan and the changelog must say saved plans will not reproduce.
+- [ ] **P92b** - Drop the `goalLimit` and IRMAA `min` from `minlimit`, then decide whether the
+      strategy survives at all. If it is identical to Fill Bracket, remove it and migrate saved
+      plans and share URLs rather than leaving a twin in the dropdown.
+- [ ] **P92c** - The infeasibility warning. Per-plan, visible text (not tooltip-only), naming the
+      limit and that the plan fell back to Spend Goal only. The engine already knows: `forcedIRA`
+      and `bracketOverage` are both recorded per year, and `-overageFromConv` (P88c) separates a
+      chosen breach from a forced one - this warning is the FORCED half.
+- [ ] **P92d** - Tests, and the three-site count reconciliation.
+- [ ] **P92e** - `P87f` folds in here: once the ceiling is on the right basis the dropdown should
+      still say WHICH income it means, because IRMAA rows are MAGI and federal rows are taxable
+      income and they will still be different quantities.
+
+### Needs modeling before it can be built - NOT part of P92
+
+**A dynamic limit.** The user's idea: when spend + conversion makes the chosen limit infeasible,
+instead of only falling back, choose a limit that pushes the plan down to the next LOWER IRMAA tier
+(with a warning), or up to the lower of the next tiers. That is a search over ceilings with a cost
+function, not a rule, and it needs measuring the way `P87a` and `P88a` were. Opened as a successor,
+unnumbered until scoped.
+
+### Answered from the code, so it is not re-litigated
+
+**"What does Extra Conversion actually mean?"** Today it is the user's second reading: the amount is
+the **GROSS withdrawn from the IRA**, capped only by the IRA balance, and the tax is netted out of it
+- so LESS lands in Roth than the number entered ($20,000 lands about $13,700 at a 31% marginal rate).
+The field's tooltip already says this.
+
+`fundConversionWithCash` ("Use Cash") moves it toward the first reading by paying that tax from Cash
+instead, but it **does not gate on whether the cash exists** - it blends, funding what Cash allows and
+netting the uncovered remainder. And **Brokerage is never used to pay conversion tax**; both funding
+paths read `balance.Cash` only (`optimizer_core.js:2869`, `:3113`). So "iff there is cash OR
+brokerage to pay the tax" is not implemented for Brokerage at all, and the "iff" is a blend rather
+than a condition. If either should change, that is a decision, not a defect.
+
+- **Status:** decisions recorded, nothing built. `P92a` first.
+
+---
 
 ## P91: the Stress Test's first result is computed on a stale plan horizon  *(NEW 2026-08-29, user-reported, O0, NOT a regression)*
 

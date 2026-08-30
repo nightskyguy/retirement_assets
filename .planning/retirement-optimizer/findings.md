@@ -3209,3 +3209,32 @@ Verified on the reported URL, fresh load, cache busted: `0 / 40` with stress hor
 plan's 36, where the same load previously gave `8 / 36` on a 25-year horizon. No node test is
 possible and the repo already says so at `optimizer_core.tests.js:5446` - mc_tab.js needs a DOM and
 is covered in the browser tier.
+
+## P92 decisions, and two corrections worth keeping (2026-08-29)
+
+**Correction to my own summary.** I told the user that fixing the ceiling BASIS (P87b) and the
+conversion SIZING (P87g) would also fix `Min Limit n%` being decorative. **It would not.** Those are
+independent terms. `minlimit`'s ceiling is
+`min(federal top, state top, min(goalLimit, IRMAA tier - margin))`, and the term that dominates is
+`goalLimit` - the bracket top containing the SPENDING GOAL. Raising the federal side by a deduction
+takes $403,550 to about $440,000; the min still selects $211,399 and nothing moves. Always check
+which term of a `min` is binding before claiming a fix reaches it.
+
+**`TAXData.SOCIALSECURITY` already carries the 85% figure** as the top bracket rate
+(`SGL`/`MFJ` brackets ending `{l: 34000, r: 0.85}` / `{l: 44000, r: 0.85}`). So the P87c "SS should be
+reduced to its taxable share, and the constant must come from tax data" requirement needs no new
+field - read the last bracket's rate.
+
+**Extra Conversion semantics, settled from the code so it is not re-argued.** The amount is the GROSS
+withdrawn from the IRA, capped only by the IRA balance; tax is netted out of it, so less lands in
+Roth than the number entered. `fundConversionWithCash` pays that tax from Cash instead but **does not
+gate on the cash existing** - it blends, funding what Cash allows and netting the remainder. **Both
+funding paths read `balance.Cash` only; Brokerage is never used to pay conversion tax**
+(`optimizer_core.js:2869`, `:3113`).
+
+**Verified: `startAge` behaves as intended.** Past it, no-op (plan starts now); ahead of it, the plan
+starts in that later year. `planFirstYear(1958,65,2026)=2026`, `planFirstYear(1958,72,2026)=2030`,
+engine first rows 2026/2030 at ages 68/72. **But the portfolio does NOT grow between today and a
+future start year** - typed $1M gives a year-0 IRA of $1,050,154 starting 2026 and $1,046,082
+starting 2030, where four years at 6% would be ~$1.26M. Balances are treated as AT RETIREMENT, not
+today. Defensible for a drawdown model; a decision rather than a defect, and unrecorded until now.

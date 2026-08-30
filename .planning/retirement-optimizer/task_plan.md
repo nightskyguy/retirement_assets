@@ -360,10 +360,18 @@ than a condition. If either should change, that is a decision, not a defect.
 
 - **Status:** COMPLETE. `P92a` v11.16aa, `P92c` v11.16ab, `P92e` v11.16af; `P92b` answered by P94
   (no `minlimit` left to delete) and `P92d`'s count reconciliation was done by each step as it
-  landed. **What P92 did NOT settle, and is still open: `P87g`** - nothing sizes a conversion against
-  the ceiling, so the headroom a filled bracket opens becomes IRA-funded spending rather than
-  conversion. Measured at a median conversion change of $0 in P92a. That gap is larger than the one
-  P92a closed.
+  landed.
+- **`P87g` AS WRITTEN IS WRONG, corrected 2026-08-30 after the user challenged it.** It claimed
+  nothing sizes a conversion against the ceiling. Measured: on a Fill Bracket 22% plan with Convert
+  Excess to Roth, MAGI lands on `BracketTarget` to the dollar and the conversion is its residual
+  after spending ($243,600 ceiling, $238,179 drawn, $145,721 to spending, **$92,458 converted**). The
+  conversion IS governed by the limit, exactly as a user expects. P92a's "median conversion change
+  $0" is not counter-evidence either: AT years are the minority, so the ceiling was not binding in
+  the median cell. `research/BRACKET_CEILING_BASIS.md` section 7 carries the correction.
+- **What survives, and is the real open item: the plan stops REACHING its ceiling in later years.**
+  Same fixture: MAGI falls $2,546 short in 2031 and $9,366 short by 2035. Same class as the basis
+  error P92a fixed, different place. Unmeasured - the taxable-Social-Security feedback (`P87c`) is
+  the first suspect but does not explain 2031, which is before that plan's SS starts.
 
 ---
 

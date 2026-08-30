@@ -254,9 +254,43 @@ The engine already separates the two on BREACH behavior - bracket and IRMAA are 
 the third pass force a draw above the ceiling, ACA is strict and records `acaBreach` instead. It
 does not separate them on FILL behavior, and that is where the target case is being let down.
 
-### And nothing sizes a conversion against the ceiling at all
+### The extra headroom mostly did not become conversion
 
-Measured on the same 74 clean cells, this turns out to be the larger gap.
+**CORRECTED 2026-08-30. This section was headed "And nothing sizes a conversion against the ceiling
+at all", and that heading is wrong.** It was read back as a claim about the MECHANISM - that a
+bracket strategy's conversion is not governed by the limit - and repeated that way in the task plan
+and in this report's own index row. The user challenged it, and measuring says the user is right.
+
+On a Fill Bracket 22% plan with Convert Excess to Roth on, in a year the ceiling binds:
+
+| | |
+|---|---|
+| ceiling (`BracketTarget`) | $243,600 |
+| MAGI it landed on | **$243,600**, to the dollar |
+| IRA drawn | $238,179 |
+| of which funded spending | $145,721 |
+| of which **converted** | **$92,458** |
+
+The draw reaches the ceiling and the conversion is what is left of it after spending. **That is
+exactly the model in the table below headed "what a user picking a limit expects."** The two models
+do not diverge in the ordinary case; the table overstates the difference.
+
+What the measurement in this section actually supports is narrower, and it is a statement about the
+MARGIN rather than the mechanism: when the ceiling MOVED by one deduction, only 32% of the extra
+draw came out as extra conversion. Nor is that obviously a defect - the other 68% funded spending
+that would otherwise have come from Brokerage and Cash, so the household still converts whatever
+the ceiling leaves after spending, at a ceiling that is now higher.
+
+Section 8's "median conversion change $0" carries the same correction: it is not evidence of a
+missing mechanism. AT years are the minority (section 2), so in the median cell the ceiling was not
+binding and raising it could not change anything.
+
+**What survives as a real open question** is not conversion sizing at all. It is that a plan can stop
+REACHING its ceiling in later years even with conversions on - measured on the plan above, MAGI falls
+$2,546 short in 2031 and $9,366 short by 2035, against a ceiling that is not moving away from it.
+That is the same class as the basis error P92a fixed, in a different place, and it is unmeasured.
+
+The original measurement, unchanged:
 
 | family | n | conversions up | unchanged | down | largest conversion gain |
 |---|---|---|---|---|---|
@@ -280,14 +314,18 @@ surplus happens to remain, capped by `netWithdrawals.IRA`. `applyConversionGross
 up that existing surplus and never reads `yr.limit`. "Maximize Conversions" in the UI is those two
 flags together (`optimizer_ui.js:4705`), not "convert up to the limit".
 
-So two models are in play and they coincide only by accident:
+So two descriptions are in play:
 
 | | |
 |---|---|
 | what a user picking a limit expects | limit minus needed spending = conversion headroom |
 | what the engine does | the limit sizes the IRA WITHDRAWAL; spending is funded first; the after-tax leftover becomes surplus; surplus is reallocated to Roth, capped by the IRA draw |
 
-They agree only when the extra draw actually leaves a surplus. Measured: 32% of the time, by dollars.
+**They describe the same outcome in the ordinary case**, which is what the correction at the top of
+this section measured: the draw reaches the ceiling, spending takes what it needs, the rest converts.
+The original text here said they "coincide only by accident" and read the 32% figure as how often
+they agree. That is not what 32% measures - it is the share of the EXTRA draw, at a ceiling that
+moved, which came out as conversion rather than as spending displacing Brokerage and Cash.
 
 ### What follows for the phase
 
@@ -297,7 +335,10 @@ They agree only when the extra draw actually leaves a surplus. Measured: 32% of 
   bracket rows will convert and withdraw more, and that saved plans will not reproduce.
 - **`P87f` stays valuable but is no longer the whole answer.** Labelling which income the ceiling is
   helps a reader; it does not deliver the headroom they asked for.
-- **The conversion-sizing gap deserves its own item**, and it is larger than the deduction. Nothing
+- **CORRECTED: there is no conversion-sizing gap of the kind this bullet claimed.** See the
+  correction at the head of the previous section. What deserves an item is the under-fill measured
+  there: a plan that stops reaching its ceiling in later years. The rest of this bullet is left as
+  written, because the design questions it raises are real even though its premise was not. Nothing
   today converts into the ceiling on purpose. A "convert the remaining headroom" behavior is a
   design decision, not a bug fix, and it interacts with the Cash Reserve, the gap-fill order and
   `fundConversionWithCash`.

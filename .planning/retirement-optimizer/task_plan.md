@@ -11,7 +11,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P92 | A chosen limit is the limit; **P92a DONE v11.16aa**, infeasibility warning next | `P92c` |
+| **O0** | P92 | A chosen limit is the limit; **a, c DONE**; tests and the basis label left | `P92e` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
@@ -252,10 +252,18 @@ bracket top containing the SPENDING GOAL. Measured: it made `Min Limit 24%` targ
 - [ ] **P92b** - Drop the `goalLimit` and IRMAA `min` from `minlimit`, then decide whether the
       strategy survives at all. If it is identical to Fill Bracket, remove it and migrate saved
       plans and share URLs rather than leaving a twin in the dropdown.
-- [ ] **P92c** - The infeasibility warning. Per-plan, visible text (not tooltip-only), naming the
-      limit and that the plan fell back to Spend Goal only. The engine already knows: `forcedIRA`
-      and `bracketOverage` are both recorded per year, and `-overageFromConv` (P88c) separates a
-      chosen breach from a forced one - this warning is the FORCED half.
+- [x] **P92c** - DONE v11.16ab. `#limit-warn` under the Limit dropdown, filled from the last run by
+      `updateLimitFeasibilityWarning()`, counting only the FORCED half (`BracketOverage` less
+      `-overageFromConv`), with ACA counted off `-acaBreach` and worded as a cap rather than a target.
+      **No threshold, and that is the decision.** Measured on the P87a grid, both ends are common -
+      IRMAA Tier 1 breaches in 1 to 50% of years in 24 of 40 cells while Fill Bracket 12% breaches in
+      all 40, 36 of them past half - so the COUNT is the message and only the opening sentence
+      hardens past half. Seven in-page assertions; browser badge 860.
+      **Found and fixed on the way, shipped broken since v11.16a4:** `extraConvCeilingKind()` read
+      `val('stratIRMAATier')` and `val('stratACAMultiple')`, neither of which is a form field - both
+      are derived in `getInputs()` from the Limit dropdown - so both were `undefined`, every NaN
+      comparison was false, and the P88e warning named "the federal bracket ceiling" for every plan
+      in the family including IRMAA and ACA ones. Now asks `getInputs()`.
 - [ ] **P92d** - Tests, and the three-site count reconciliation.
 - [ ] **P92e** - `P87f` folds in here: once the ceiling is on the right basis the dropdown should
       still say WHICH income it means, because IRMAA rows are MAGI and federal rows are taxable
@@ -283,8 +291,9 @@ paths read `balance.Cash` only (`optimizer_core.js:2869`, `:3113`). So "iff ther
 brokerage to pay the tax" is not implemented for Brokerage at all, and the "iff" is a blend rather
 than a condition. If either should change, that is a decision, not a defect.
 
-- **Status:** `P92a` DONE v11.16aa. `P92b` is answered by P94 - there is no `minlimit` left to
-  delete. **`P92c`, the infeasibility warning, is next.**
+- **Status:** `P92a` DONE v11.16aa, `P92c` DONE v11.16ab. `P92b` is answered by P94 - there is no
+  `minlimit` left to delete. **`P92e` is what remains**, plus `P92d`'s count reconciliation, which
+  each step has been doing as it lands.
 
 ---
 

@@ -2379,6 +2379,72 @@ assertEqual(
 		}
 	})();
 
+	// ===== The ceiling a warning names is the ceiling you picked =====
+	// extraConvCeilingKind() read val('stratIRMAATier') and val('stratACAMultiple'). NEITHER IS A FORM
+	// FIELD: both are derived in getInputs() from the single Limit dropdown, whose value carries them
+	// as "IRMAA2" or "aca400". Both lookups returned undefined, every comparison against NaN is false,
+	// and the function fell through to "the federal bracket ceiling" for every plan in the family -
+	// naming the wrong ceiling in the one sentence whose whole job is to name the right one. A test
+	// per ceiling kind, because one passing kind is exactly what hid this.
+	// ⚠ UNSAFE - MUTATES: #stratRate and #strategy, both snapshotted and restored below.
+	(function ceilingKindNamesTheChosenLimit() {
+		if (!unsafeTest('ceilingKindNamesTheChosenLimit')) return;   // writes #strategy and #stratRate
+		const strat = document.getElementById('strategy'), rate = document.getElementById('stratRate');
+		if (!strat || !rate || typeof extraConvCeilingKind !== 'function') return;
+		const wasStrat = strat.value, wasRate = rate.value;
+		try {
+			strat.value = 'bracket';
+			const has = v => [...rate.options].some(o => o.value === v);
+			for (const [v, want] of [['22', 'the federal bracket ceiling'],
+			                         ['IRMAA2', 'the IRMAA tier ceiling'],
+			                         ['aca400', 'the ACA FPL cap']]) {
+				if (!has(v)) continue;   // the menu rebuilds with filing status; skip what it is not offering
+				rate.value = v;
+				assertEqual(extraConvCeilingKind(), want, `a "${v}" limit is named ${want}`);
+			}
+			// A strategy with no ceiling at all has nothing to name, and both warnings key off that.
+			strat.value = 'propwd';
+			assertEqual(extraConvCeilingKind(), null, 'a strategy with no ceiling names nothing');
+		} finally {
+			strat.value = wasStrat;
+			if ([...rate.options].some(o => o.value === wasRate)) rate.value = wasRate;
+			toggleStrategyUI?.();
+		}
+	})();
+
+	// ===== A limit that could not be kept says so =====
+	// The engine already fell back to funding the Spend Goal - the third pass forces a draw past a
+	// bracket or IRMAA ceiling rather than leave spending unpaid - and said nothing about it. Only
+	// the BracketOverage column recorded it, so the headline numbers described a plan running under a
+	// limit it had broken. The box is checked in both directions on the SAME plan: a 12% ceiling
+	// cannot fund it and must warn, and a strategy with no ceiling must stay silent.
+	// ⚠ UNSAFE - MUTATES: #strategy, #stratRate, and re-runs the plan. Restored, and re-run again.
+	(function infeasibleLimitWarns() {
+		if (!unsafeTest('infeasibleLimitWarns')) return;   // writes #strategy and re-runs the plan
+		const box = document.getElementById('limit-warn');
+		const strat = document.getElementById('strategy'), rate = document.getElementById('stratRate');
+		if (!box || !strat || !rate || typeof updateLimitFeasibilityWarning !== 'function') return;
+		const wasStrat = strat.value, wasRate = rate.value;
+		try {
+			if ([...rate.options].some(o => o.value === '12')) {
+				strat.value = 'bracket'; rate.value = '12';
+				runSimulation();
+				assertEqual(box.style.display !== 'none', true,
+					'a 12% ceiling cannot fund the default plan, and the plan has to say so');
+				assertEqual(/\d+ of \d+ years?/.test(box.textContent), true,
+					'and it names how many years it could not keep the limit');
+			}
+			strat.value = 'propwd';
+			runSimulation();
+			assertEqual(box.style.display, 'none', 'a strategy with no ceiling raises no limit warning');
+		} finally {
+			strat.value = wasStrat;
+			if ([...rate.options].some(o => o.value === wasRate)) rate.value = wasRate;
+			toggleStrategyUI?.();
+			runSimulation();
+		}
+	})();
+
 	// ===== A strategy this version does not have loads as the default, not as a blank $0 plan =====
 	// A <select> handed a value matching no option lands on selectedIndex -1 and reports "", so
 	// getInputs().strategy is empty, no withdrawal branch matches, and the page renders a $0 plan

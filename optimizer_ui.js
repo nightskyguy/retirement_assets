@@ -893,6 +893,7 @@ function runSimulation() {
     updateCharts(res.log);
     updateIRAGoalHint();
     updateExtraConvWarning();  // P88e: after the log exists, so it can say how many years broke
+    updateLimitFeasibilityWarning();   // P92c: same reason - it reports on the run just finished
     refreshSuggestedSpend();   // re-solve the engine-calibrated suggested spend for the ⓘ icon
     // Show computed marginal rate in the auto label when futureIRATaxRate is blank
     const _autoRateEl = document.getElementById('future-ira-tax-auto');
@@ -4831,12 +4832,19 @@ const OPT_FAMILY_OF_STRATEGY = {
 // The strategies this applies to are the ones that carry a ceiling: Fill Bracket (federal rate or
 // IRMAA tier) and the ACA cap. Proportional, Ordered, IRA Draw % and Reduce are
 // bracket-agnostic and have no ceiling to breach, so they say nothing.
+// P92c. This read `val('stratIRMAATier')` and `val('stratACAMultiple')`, and NEITHER IS A FORM
+// FIELD: both are derived in getInputs() from the one Limit dropdown, whose value carries them as
+// "IRMAA2" or "aca400". So both lookups returned undefined, `+undefined` is NaN, and every
+// comparison against it is false - the function fell through to "the federal bracket ceiling" for
+// every plan in the family, IRMAA tiers and ACA caps included. It named the wrong ceiling from the
+// day it shipped, in the one sentence whose whole job is to name the right one. Asking getInputs(),
+// which is where those two values actually exist, is the fix; `strategy` is derived there too, and
+// is the only place 'aca' is ever the answer (the dropdown itself only ever says 'bracket').
 function extraConvCeilingKind() {
-    const m = val('strategy');
-    if (m === 'aca') return 'the ACA FPL cap';
-    if (m !== 'bracket') return null;
-    if ((+val('stratIRMAATier') ?? -1) >= 0) return 'the IRMAA tier ceiling';
-    if ((+val('stratACAMultiple') ?? 0) > 0) return 'the ACA FPL cap';
+    const i = getInputs();
+    if (i.strategy === 'aca') return 'the ACA FPL cap';
+    if (i.strategy !== 'bracket') return null;
+    if ((i.stratIRMAATier ?? -1) >= 0) return 'the IRMAA tier ceiling';
     return 'the federal bracket ceiling';
 }
 
@@ -4867,6 +4875,59 @@ function updateExtraConvWarning() {
         + `That can be exactly what you want - a ceiling paces ordinary withdrawals, while a `
         + `conversion moves money from IRA to Roth rather than out of the household - but the `
         + `ceiling will not hold while it is set. See BracketOverage and IRMAA in Annual Details.`;
+    box.style.display = '';
+}
+
+// P92c. A limit the user picked is a contract, and this is the plan saying when it could not keep
+// it. The engine already falls back to funding the Spend Goal - the third pass forces an IRA draw
+// past a bracket or IRMAA ceiling rather than leaving spending unpaid - but it did that silently,
+// and only the BracketOverage column recorded it. A reader looking at the headline numbers had no
+// way to know the limit on screen was not the limit the plan ran under.
+//
+// NO THRESHOLD. The Optimizer's `_isBracketInfeasible` calls a row infeasible past 50% of years,
+// which is a reasonable way to rank a table and a bad way to talk to one reader: on the P87a grid a
+// single breached year is common (24 of 40 IRMAA Tier 1 cells breach in 1 to 50% of years) while a
+// wholly unfundable limit is also common (all 40 Fill Bracket 12% cells breach, 36 of them past
+// half). Both are worth saying and they are not the same statement, so the COUNT is the message and
+// only the opening sentence changes with it.
+//
+// The forced half only. `-overageFromConv` (P88c) carries overage an Extra Annual Roth Conversion
+// caused, which is the user choosing to go over rather than the plan being unable to stay under;
+// that half is what updateExtraConvWarning() covers.
+function updateLimitFeasibilityWarning() {
+    const box = document.getElementById('limit-warn');
+    if (!box) return;
+    const kind = extraConvCeilingKind();   // null for every strategy with no ceiling at all
+    const log  = Array.isArray(lastSimulationLog) ? lastSimulationLog : null;
+    if (!kind || !log || !log.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+
+    // ACA is a CAP, not a target: breaching it forfeits the premium subsidy rather than paying a
+    // higher bracket rate, so it is counted off its own flag and worded as a different event.
+    const isACA = kind === 'the ACA FPL cap';
+    const forced = r => (r.BracketOverage ?? 0) - (r['-overageFromConv'] ?? 0);
+    const yrs = isACA ? log.filter(r => r['-acaBreach']) : log.filter(r => forced(r) > 1);
+    if (!yrs.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+
+    const n = yrs.length, m = log.length;
+    const worst = Math.max(...yrs.map(forced));
+    const most = n / m > 0.5;
+    const yearWord = m === 1 ? 'year' : 'years';   // "1 of 25 years" - the plural is the TOTAL's
+    if (isACA) {
+        box.innerHTML = `<b>Your spending does not fit under ${kind} in ${n} of ${m} ${yearWord}.</b> `
+            + `The plan pays for the spending anyway, so income goes over the cap in ${n === 1 ? 'that year' : 'those years'} `
+            + `and the premium subsidy is lost in ${n === 1 ? 'it' : 'them'}. Lower the Spend Goal, or raise the `
+            + `multiple, to keep the cap. See acaBreach and BracketOverage in Annual Details.`;
+    } else {
+        box.innerHTML = (most
+                ? `<b>${kind.charAt(0).toUpperCase() + kind.slice(1)} you chose cannot fund this plan:</b> `
+                  + `your Spend Goal does not fit inside it in ${n} of ${m} ${yearWord}. `
+                : `<b>Your Spend Goal does not fit inside ${kind} in ${n} of ${m} ${yearWord}.</b> `)
+            + `The plan withdraws past it to pay for spending, by up to `
+            + `<b>${DisplayHelpers.formatDollar(worst)}</b>, so ${n === 1 ? 'that year satisfies' : 'those years satisfy'} `
+            + `your Spend Goal rather than the limit. Lower the Spend Goal or pick a higher limit to keep it. `
+            + `A conversion you chose to make going over is counted separately, not here. `
+            + `See BracketOverage in Annual Details.`;
+    }
     box.style.display = '';
 }
 
@@ -4926,6 +4987,7 @@ function toggleStrategyUI() {
     }
     // document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
     updateExtraConvWarning();   // P88e: the ceiling it warns about is the one just switched to
+    updateLimitFeasibilityWarning();   // P92c: and so is the limit this one reports on
 }
 
 

@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.16aa"></a>
+<a id="11.16ab"></a>
 
-## 11.16aa
+## 11.16ab
 
 ### Fill Fed Bracket now fills the bracket
 
@@ -38,6 +38,20 @@ usually is not, because money leaves the IRA earlier than it needed to and stops
 If your plan uses a 22% or 24% limit and you chose it expecting the old behavior, this is worth
 re-reading before you rely on the new numbers. Limits that are not federal brackets - IRMAA tiers and
 the ACA cap - are unchanged, because those are already measured on the right income.
+
+### The plan now tells you when your limit could not be kept
+
+Picking a limit did not stop the plan from going past it. When your Spend Goal could not be funded
+underneath the limit, the plan paid for the spending anyway and drew above the ceiling, and nothing
+on screen said so - only the BracketOverage column in Annual Details recorded it, so the headline
+numbers described a plan running under a limit it had broken. A note now appears under the limit you
+picked, naming how many years of the plan could not stay inside it and by how much at worst. It
+counts only years the spending forced it; a conversion you chose to make going over is reported
+separately, in the note under Extra Annual Roth Conversion.
+
+That note under Extra Annual Roth Conversion also named the wrong ceiling. It said "the federal
+bracket ceiling" whatever you had picked, including on plans set to an IRMAA tier or an ACA cap. It
+now names the one you chose.
 
 ### A saved plan naming a strategy this version does not have now loads as the default
 

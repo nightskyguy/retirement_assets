@@ -6629,3 +6629,46 @@ ceiling, which is P87a section 7's finding surviving intact and still unaddresse
 
 `-ceilDedAddBack` is now logged beside `-fedDeduction` so the residual is auditable from a finished
 run. `research/BRACKET_CEILING_BASIS.md` gains section 8 and its index row names it.
+
+## 2026-08-29 (cont.) - P92c DONE: a limit that could not be kept now says so, v11.16ab
+
+Suites **367 / 61 / 22** in node (unchanged - the warning is UI), browser badge green at **860**
+(410 in-page + 450 node). Seven new in-page assertions.
+
+**NO THRESHOLD, and that is the decision.** The Optimizer's `_isBracketInfeasible` calls a row
+infeasible past 50% of years. That is fine for ranking a table and wrong for talking to one reader,
+because both ends of the distribution are common. Measured on the P87a grid, cells with at least one
+forced-overage year:
+
+| family | cells | 0 forced yrs | 1..50% | >50% |
+|---|---:|---:|---:|---:|
+| Fill 12% | 40 | 0 | 4 | 36 |
+| Fill 22% | 40 | 6 | 14 | 20 |
+| Fill 24% | 40 | 37 | 3 | 0 |
+| IRMAA 1 | 40 | 12 | 24 | 4 |
+| IRMAA 3 | 40 | 37 | 3 | 0 |
+
+A single breached year is common and a wholly unfundable limit is common; they are different
+statements and neither is noise. So the COUNT is the message - "in 3 of 25 years" - and only the
+opening sentence hardens past half. ACA gets its own wording off `-acaBreach`, because it is a CAP
+and breaching it forfeits the subsidy rather than paying a higher rate.
+
+**Found and fixed, shipped broken since v11.16a4:** `extraConvCeilingKind()` read
+`val('stratIRMAATier')` and `val('stratACAMultiple')`, and **neither is a form field** - both are
+derived in `getInputs()` from the single Limit dropdown, whose value carries them as `IRMAA2` or
+`aca400`. Both reads were `undefined`, `+undefined` is `NaN`, every comparison against it is false,
+and the function fell through to "the federal bracket ceiling" for every plan in the family. The P88e
+warning has been naming the wrong ceiling from the day it shipped, in the one sentence whose whole
+job is to name the right one. Confirmed on `main`. Now asks `getInputs()`. My own warning inherited
+the bug and is what surfaced it.
+
+**Verified in the browser, all four kinds:** Fill 12% -> "cannot fund this plan: ... 22 of 25 years
+... up to $191,296"; IRMAA tier 0 -> "the IRMAA tier ceiling ... 1 of 25 years ... up to $130"; ACA
+400% -> "income goes over the cap in 2 of 36 years and the premium subsidy is lost"; Proportional ->
+silent.
+
+**Testing gotcha, cost a full false-green run.** I bumped `?v=` to `1116ab` and THEN edited
+`optimizer_tests.js`, so the browser served the cached bundle and reported 403 passing with my new
+tests never executed - a green badge that meant nothing. `runTests.toString().includes(...)` is what
+caught it; `fetch(url, {cache:'reload'})` on the exact `?v=` URL fixed it. **Bump the version AFTER
+editing, not before, or verify the bundle actually contains the new code.**

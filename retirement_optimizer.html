@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.16aa</title>
+    <title>Retirement Optimizer 11.16ab</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -63,8 +63,8 @@
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=1116aa"></script>
-	<script src="optimizer_tests.js?v=1116aa"></script>
+	<script src="optimizer_ui.js?v=1116ab"></script>
+	<script src="optimizer_tests.js?v=1116ab"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -105,6 +105,11 @@
 				</select></label>
 				<div id="bracket-feedback" style="font-size:0.85em;color:#555;margin-top:4px;"></div>
 				<div id="aca-age-warn" style="display:none;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:3px 7px;font-size:0.82em;margin-top:4px;"></div>
+				<!-- P92c. A chosen limit is a contract, so the plan has to say when it could not keep
+				     it. Visible text rather than a tooltip: a phone cannot hover, and this changes
+				     what the numbers above it mean. Filled from the last run by
+				     updateLimitFeasibilityWarning(). -->
+				<div id="limit-warn" style="display:none;margin-top:4px;padding:6px 8px;border-left:3px solid #d97706;background:#fffbeb;color:#78350f;font-size:0.85em;line-height:1.35;"></div>
 			</div>
 
 			<div id="ui-propwd" class="input-group hidden">
@@ -875,13 +880,14 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.16aa</b>
+				<li data-flag="behavior"><b>11.16ab</b>
 					<strong>Fill Fed Bracket now fills the bracket.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li><strong>Behavior change - saved plans and shared links will not reproduce their earlier numbers.</strong> Picking "22%" stopped short of the top of the 22% bracket by that year's whole deduction, about $32,000 in 2026 for a married couple and more each year after. A chosen bracket is now filled to its top, so these plans withdraw and convert more. <strong>Which way that lands depends on the bracket:</strong> across 71 plans funding the same spending either way, terminal net worth rose in 18 and fell in 49 - a 12% limit typically gains about $158,000, a 22% limit typically loses about $200,000. If your plan uses a 22% or 24% limit, re-read it before relying on the new numbers. IRMAA tiers and the ACA cap are unchanged.</li>
+					<li><strong>The plan now tells you when your limit could not be kept.</strong> If your Spend Goal cannot be funded underneath the limit you picked, the plan pays for the spending and draws above the ceiling anyway - and said nothing about it. A note under the limit now names how many years could not stay inside it and by how much at worst. The note under Extra Annual Roth Conversion also said "the federal bracket ceiling" whatever you had picked; it now names the ceiling you chose.</li>
 					<li>A saved plan or shared link naming a withdrawal strategy that is no longer in the Strategy menu used to come up with nothing selected and compute as all zeros. It now loads as Proportional Withdraw +% at its default setting, so you get a working plan you can change rather than a blank one.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.16aa" target="_blank" rel="noopener">Details</a>
+					<a href="optimizer_changelog.md#11.16ab" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="behavior"><b>11.16a9</b>
 					<strong>The Stress Test could report on the wrong plan, and Roth conversions now count toward IRMAA.</strong>

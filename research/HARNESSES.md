@@ -76,13 +76,13 @@ evidence of currency.
 
 | harness | verdict | evidence |
 |---|---|---|
-| `bracketbasis_harness.js` | **BROKEN** (`F4`,`F5`) | prints `flag armed: BROKEN`; `bracketCeilingAddDeduction` is gone, so both arms are identical and B1/B2/B3/B5 all score on $0 |
-| `convopt_ceiling_harness.js` | **BROKEN** (`F5`) | prints `1 families are labelled wrongly - every result below is suspect`; `Min Limit 24%` is 30 of 270 cells. Headline inverted: 61-of-61 breaching is now **44/59 breach, 15 do not** |
-| `phased_harness.js` | **BROKEN** (arm enumeration) | runs **148 arms**, not the 192 the report is computed over; "118 of 192 arms never win" cannot be restated. Leaders are stable (`B-P5` RIGHT) |
-| `ordered_fill_harness.js` | **BROKEN** (coverage) | names 3 sequence codes; the engine has shipped 6 since `dd309bf`, and the missing `CBRI` is the one P30d found best |
+| `bracketbasis_harness.js` | **FIXED 2026-08-30** | was BROKEN (`F4`): printed `flag armed: BROKEN` and scored four predictions on a column of zeros. Re-pointed onto `-ceilDedAddBack` as a one-arm audit of the shipped ceiling; `A1`-`A5` all HOLD |
+| `convopt_ceiling_harness.js` | **FIXED 2026-08-30** | was BROKEN (`F5`): printed `every result below is suspect` and kept going. Dead family dropped, setup check now stops the run. `C2` restored to **44 of 44** - see the re-run note in the report |
+| `phased_harness.js` | **DRIFTED** (not broken) | reads `buildStrategyFamilies()` and self-adapts - it printed **148 arms** at runtime. The harness is sound; the REPORT is stale at 192, so "118 of 192 arms never win" needs re-deriving. Leaders stable (`B-P5` RIGHT) |
+| `ordered_fill_harness.js` | **COVERAGE FIXED 2026-08-30** (not broken) | its restart proof is explicitly sequence-independent, so the finding always stood; but it hard-coded 3 of the 6 codes shipped since `dd309bf`. Now reads `core.ORDERED_SEQS`, so all six are exercised |
 | `convtiming_harness.js` | **DRIFTED** (`F4`) | clean cells 499 -> 474; FRONT outright wins **304 -> 233**, so "earlier wins about two thirds of the time" is now 49% |
 | `irmaa_default_harness.js` | **DRIFTED** (`F3`,`F4`) | halfcpi -$79,002 -> -$64,043, halfstep -$11,649 -> -$29,203; "four to five times less" is now about 2x. Verdicts on P3/P4/P5 unchanged |
-| `brokerage_harness.js` | **DRIFTED** (`F2`,`F4`) | cyclic wins 26/45 -> 25/45 and 23/45 -> 19/45, so the basis-stability claim no longer holds; Q4 pairs 2,576 -> 1,981. The no-spiral headline survives (0 capped years) |
+| `brokerage_harness.js` | **FIXED 2026-08-30**, still DRIFTED (`F2`,`F4`) | carried a FIFTH instance of the `F5` defect, found only on the final sweep: its `minlimit` arm returned the `__unrecognized__` baseline arm bit-for-bit while staying filed under the `bracket` family. Re-pointed to bracket @ IRMAA tier 1. Numbers still drifted: cyclic 26/45 -> 25/45 and 23/45 -> 19/45, Q4 pairs 2,576 -> 1,981. The no-spiral headline survives (0 capped years) |
 | `gapfill_harness.js` | **DRIFTED** (`F2`,`F4`) | 227/360 -> **242/360** cells move. w=0 still best; the conclusion survives |
 | `endgame_harness.js` | **DRIFTED** (`F2`) | seq-CRB 88/108 -> 84/108; Roth-early 100/108 -> 94/101. All five verdicts unchanged |
 | `unifiedconv_harness.js` | **DRIFTED** | drifted again past its own 2026-08-24 re-baseline: negative in 26/60 -> 29/60, worst -$633,605 -> -$635,692 |
@@ -101,17 +101,45 @@ evidence of currency.
 
 ### Suggested order
 
-1. `bracketbasis` and `convopt_ceiling` - both print their own alarm, and `convopt_ceiling`'s
-   published headline is now wrong rather than stale. `CONVERSION_SEARCH_CEILINGS.md` and
-   `research/README.md` line 34 both state 61 of 61.
-2. `phased` and `ordered_fill` - re-point at the shipped enumeration before anything is read off them.
-3. `convtiming` - the only DRIFTED entry whose headline changes direction; `README.md` line 15 says
-   "two to one".
-4. The four IRMAA harnesses as one pass - they share `F3`, and `irmaa_margin`/`irmaa_cpi_risk` were
-   measured before `F1` as well.
-5. The rest are safe to quote qualitatively; only their tables have moved.
+Items 1 and 2 were done on 2026-08-30 and are recorded above; 3 onward are open.
 
-`research/README.md` carries drifted figures in its own prose at lines 15, 18 and 34.
+1. ~~`bracketbasis` and `convopt_ceiling`~~ - DONE. Both printed their own alarm and kept printing
+   tables underneath it, which is the failure mode worth naming: **an alarm that does not stop the
+   run reads as a caveat, and gets quoted past.** Both now exit non-zero instead.
+2. ~~`ordered_fill` coverage~~ - DONE, and `phased` needed no code change at all.
+3. `convtiming` - the only DRIFTED entry whose headline changes direction (FRONT's outright wins
+   304 -> 233, so "earlier wins about two thirds of the time" is now 49%). `README.md` line 15 still
+   says "two to one".
+4. `phased` - re-derive the report against the shipped 148 arms.
+5. The four IRMAA harnesses as one pass - they share `F3`, and `irmaa_margin`/`irmaa_cpi_risk` were
+   measured before `F1` as well.
+6. The rest are safe to quote qualitatively; only their tables have moved.
+
+### The fifth instance, and why grep found what the run did not
+
+`brokerage_harness.js` was classified DRIFTED because it ran clean and its headline held. It also
+carried the same dead strategy, and nothing in its output said so: `minlimit` matched no withdrawal
+branch and returned the harness's own `__unrecognized__` baseline arm **bit-for-bit** (IRA spend
+584,280, Brokerage draw 355,937 on both), while `FAMILY` still counted it as a `bracket` row. So a
+baseline run was being averaged into the bracket family, in a harness whose entire subject is which
+family draws Brokerage. The arm it was always describing - `stratRate: 0, stratIRMAATier: 1` - is
+bracket at IRMAA tier 1, which draws nearly twice as much (1,106,839 / 1,580,968).
+
+It was found by grepping for the retired name after the four fixes were done, not by reading output.
+**A silently duplicated arm produces no alarm at all** - it is strictly worse than the two that
+announced themselves, and the only defence is checking the names a harness passes to the engine
+against the engine.
+
+### What the two genuine breakages had in common
+
+Neither was a crash, and both printed a correct diagnosis of themselves that was then buried under
+the output it invalidated. `convopt_ceiling` said `every result below is suspect` and printed 270
+cells of results; `bracketbasis` said `flag armed: BROKEN` and scored four predictions anyway. A
+harness that detects its own premise has failed should exit, not narrate - that is the one change
+made to both.
+
+`research/README.md` carried drifted figures in its own prose at lines 15, 18 and 34; line 34
+(`61 of 61`) was corrected on 2026-08-30. Lines 15 and 18 are still stale.
 
 
 ## betr_harness.js  (node)

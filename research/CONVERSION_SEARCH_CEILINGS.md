@@ -9,6 +9,29 @@ families.
 61 measured. But excluding them would throw away a median of $53,990 and up to $1,546,930 of real
 gain. The answer is to mark the rows, not to drop them.
 
+> **RE-RUN 2026-08-30, and the verdict survives the correction.** This study was measured with a
+> `Min Limit 24%` family in the grid. `P94` (`46f7bb6`) deleted that strategy, after which those 30
+> cells ran an unknown strategy that sets no ceiling at all, and the harness's own setup check began
+> reporting `1 families are labelled wrongly - every result below is suspect` while still printing
+> the tables. On that corrupted grid `C2` read **44 breach / 15 do not**, which looked like the
+> headline had been overturned.
+>
+> It had not. All 15 non-breaching picks were the dead family. With it removed the grid is **8
+> families, 240 cells, 150 of them ceiling**, and the numbers below become:
+>
+> | | as published | corrected |
+> |---|---|---|
+> | ceiling cells picking non-zero | 61 of 180 | **44 of 150** |
+> | of those, breaching their own ceiling | 61 of 61 | **44 of 44** |
+> | median gain | $53,990 | **$99,362** |
+> | largest gain | $1,546,930 | **$1,208,089** |
+> | `C5` heirs-rate spread vs spend-rate spread | 3 against 25 | **2 against 20** |
+>
+> **C1, C2, C3 and C4 all still HOLD and C5 is still BROKEN**, so "mark, do not drop" stands. Quote
+> the corrected column. Note that the largest gain published above - the $1,546,930 row on line 71 -
+> was itself a `Min Limit 24%` row, so the single most quotable number in this report was carried by
+> the strategy that no longer exists.
+
 Harness:
 [`.test_harnesses/convopt_ceiling_harness.js`](https://github.com/nightskyguy/retirement_assets/blob/main/.test_harnesses/convopt_ceiling_harness.js)
 

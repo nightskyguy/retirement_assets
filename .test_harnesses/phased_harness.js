@@ -6,10 +6,13 @@
  *
  * Round 1 deliberately differs from the P36 section's full 90-cell design: death timing,
  * deathBasisStepUp and survivorSpendPct are ROUND 2 axes -- they detect nothing until P35's
- * Phased engine ships. Round 1 instead measures the SHIPPED SWEEP AS ENUMERATED: the same
- * ~176 rows buildStrategyFamilies() emits for the Optimizer table (nerdknob configuration,
- * cash clones included), ranked by the same exported rankRowsByObjective() the UI uses, over
- * a crossed 45-cell grid. That answers P36's question B (how many swept variations never
+ * Phased engine ships. Round 1 instead measures the SHIPPED SWEEP AS ENUMERATED: whatever rows
+ * buildStrategyFamilies() emits for the Optimizer table (nerdknob configuration, cash clones
+ * included), ranked by the same exported rankRowsByObjective() the UI uses, over a crossed 45-cell
+ * grid. The arm COUNT is deliberately not pinned here -- it is read from the engine and printed at
+ * the top of every run, because it moves whenever the sweep does: it was ~176 when this was written
+ * and 148 after `8d42cca`/`9369e28` cut the IRA Draw and Reduce ladders. Any figure quoted "of N
+ * arms" is only good for the run that printed it. That answers P36's question B (how many swept variations never
  * produce a top result) against the real sweep rather than a hand-picked arm list.
  *
  * GRID -- crossed, not hand-picked (P28 round 2 confounded mix with strain; round 4 overturned
@@ -18,7 +21,7 @@
  *                import -- the harnesses must not couple)
  *   wealth (3)   x0.5 / x1 / x3 on every account balance
  *   spend (3)    4% / 6% / 8% of total assets
- *   = 45 cells x ~176 arms ~ 7,900 sims (computeOC doubles converting rows).
+ *   = 45 cells x the shipped arm count (computeOC doubles converting rows).
  *
  * SCORING -- the UI's own recipe, reproduced from optimizer_ui.js:560-568 and :981:
  *   sharedRate = cell's first row (Proportional 0%) totals.futureIRARate   [the "auto" path]

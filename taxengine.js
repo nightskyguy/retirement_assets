@@ -1113,7 +1113,7 @@ function findUpperLimitByAmount(entity, status, amount, inflation = 1) {
     // answer for the 21 flat-rate and no-tax jurisdictions, and Infinity is exactly what a caller
     // doing Math.min(stateLimit, fedLimit) needs to see. This returned 0 until v11.14xx, which
     // zeroed the federal ceiling and stopped Fill Bracket / IRMAA Ceiling / ACA converting anything
-    // in those states, stopped `minlimit` converting anywhere, and zeroed `yr.goalLimit` (hence
+    // in those states, and zeroed `yr.goalLimit` (hence
     // `targetSpend`) for every strategy outside the bracket/ordered/GK set.
     if (idx === -1) return { limit: brks[0].l * inflation - 1, rate: 0, nominalRate: 0 };
 

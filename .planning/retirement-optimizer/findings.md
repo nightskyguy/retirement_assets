@@ -3279,3 +3279,166 @@ chain was orphaned; checking is what stopped it.
 
 **Noted, out of scope:** `targetSpend` capping non-bracket strategies at `goalLimit` means
 Proportional's spending is silently limited by a tax bracket top.
+
+## 2026-08-29 - P94: what the `minlimit` removal actually measured
+
+**The strategy-enumeration goldens are a removal proof, not just a regression test.** `sweep_golden.js`
+was not touched by this change and both `MC_GOLDEN` and `OPT_GOLDEN` still reproduce, which is a
+direct measurement that neither the Optimizer sweep nor the Monte Carlo sweep ever emitted
+`minlimit`. That is stronger than the 0-of-111 / 0-of-156 counts recorded when the phase was opened,
+because it is checked on every run from here on.
+
+**`minlimit` and `bracket` are NOT interchangeable, even on the IRMAA-tier path where the deleted
+clamp never executed.** The suite's earlier note said the two differ in one column, `timing`, with
+every money field identical. On a fixture that drains every account, that timing difference IS a
+money difference: `_stratImpliesConversion` (`optimizer_core.js:1330`) lists `bracket` and never
+listed `minlimit`, so year 0 flips from a month-11 withdrawal to a month-1 one, and one year of
+growth on one year's draw compounds. Measured on the P32h fixture, thirteen years out: total
+stranded 27,529 -> 29,368, Brokerage headline 1,027,282 -> 1,016,150, over the same ten years, worst
+single year unmoved. **This is the P28j coupling arriving on its own**, and it is the first
+measurement of its size on a real fixture rather than a synthetic one.
+
+**`yr.IRMAALimit` had exactly one consumer and that consumer was the clamp.** Deleting the clamp took
+`_irmaaEffCpi`, `IRMAABracket`, `_irmaaMargin`, the field itself, the `IRMAALimit` parameter of
+`computeBracketCeiling` and all three call sites' arguments with it. `yr.goalLimit`,
+`goalFedBracketLimit` and `goalStateBracketLimit` survive and are load-bearing, as the phase plan
+warned: `goalLimit` caps `targetSpend` for non-bracket strategies and the two `.rate` fields set the
+marginal rates.
+
+**Correction to the plan's own structural claim:** `computeBracketCeiling` did not go from three
+branches to two. Its three branches are IRMAA tier / ACA / federal, and the clamp lived inside the
+federal one. The function got shorter, not structurally simpler.
+
+**An unknown value in a `<select>` is silent and total.** `selectedIndex` goes to -1, `.value` reads
+`""`, `getInputs().strategy` matches no withdrawal branch, and the plan computes $0 with no message.
+Verified before the fix on `?str=minlimit`, and after it on `?str=minlimit` and `?str=totalNonsense`,
+both of which now load Proportional Withdraw +% at 20 and a real plan (finalNW $638,557).
+
+**Pre-existing and unrelated, found while verifying: an ACA share link does not round-trip.**
+`?str=bracket&sr=aca400` - which is exactly what `buildShareURL` emits for an ACA plan - lands the
+ceiling dropdown on `10`, so `stratACAMultiple` reads 0 and the plan loads as Fill Bracket 10%.
+Confirmed pre-existing: the P94 diff against `main` touches no `stratRate` code. Opened as P95.
+
+## 2026-08-29 - P92a: which deduction can a ceiling actually use, and what filling costs
+
+**The circularity is not solvable, so the question changes.** A federal bracket top is a
+taxable-income threshold and the ceiling built from it is spent as a MAGI ceiling; the gap is the
+year's deduction. But the OBBBA senior deduction phases out against federal AGI, which is exactly
+what the ceiling is about to determine, so the year's own deduction cannot be known when the ceiling
+is placed. The useful question is not "use the right one" but "how wrong is each obtainable one".
+
+Measured over 3,960 plan-years on the P87a grid (`.test_harnesses/ceilded_harness.js`), scored
+against `-fedDeduction`, the deduction `calculateTaxes()` actually charged:
+
+| candidate | median | p90 | worst | fails where |
+|---|---:|---:|---:|---|
+| last year's charged, re-indexed | $0 | $763 | **$35,505** | every filing-status change: an MFJ number carried into a Single year |
+| statutory std + age bumps, re-derived | $0 | $4,300 | $6,000 | a second source of truth, and no more accurate for it |
+| **ask `calculateTaxes()` twice, at a provisional year** | **$0** | **$0** | $6,000 | only years the plan never reaches its ceiling |
+
+**The second pass is load-bearing and the reason is general.** Asking at the bracket top evaluates
+the phase-out about one deduction too low, so the deduction comes back too LARGE and the ceiling
+overshoots - $1,338 of taxable income into the next bracket on one plan. Asking again at the ceiling
+the first pass implies gives an $80 undershoot. The phase-out rate is 6%, so each pass cuts the
+error by that factor and a third is not worth its call. **Any fixed point evaluated at the input
+rather than the output has this bias**; it is not specific to deductions.
+
+**Two extra `calculateTaxes()` calls a year cost nothing measurable**: 0.813 ms/sim against 0.820 on
+the release before, alternating runs on a 40-year Fill Bracket plan. The engine already makes four to
+six a year.
+
+**The shipped cost, measured against `main` on the P87a grid** - 71 clean cells, same delivered
+spending both sides: net worth up in 18, down in 49, median **-$47,549**, best +$1,517,175, worst
+-$2,589,357. By bracket: 12% **+$157,572**, 22% **-$200,350**, 24% -$12,741. This reproduces P87a's
+arm (-$47,092) closely enough to say the arm was measuring the right thing.
+
+**Median conversion change: $0.** P87a section 7's largest finding survives untouched - nothing sizes
+a conversion against the ceiling, so the extra headroom becomes IRA-funded spending displacing
+Brokerage and Cash draws, not conversion. That gap is still open and is larger than the one just
+closed.
+
+**A consequence worth carrying forward, found through a test fixture.** A Fill Bracket ceiling on the
+true bracket top drains `STEPUP_BASE`'s IRA to zero by the terminal year, which drops the survivor's
+income into the **0% long-term capital-gains band**. An IRC 1014 step-up on gains that would be taxed
+at 0% is worth exactly nothing, so `finalNW` and the pre-step-up liquidation value become equal. Two
+step-up tests went vacuously false on that alone. A user filling a 22% bracket can reach the same
+state, and nothing on screen says the step-up stopped being worth anything.
+
+## 2026-08-29 - P92e: two income ladders, one axis, and what the display was quietly adding
+
+**The display was aging the tax tables by a year that had already happened.** `TAX_DATA_BASE_YEAR`
+was hardcoded `2025` in `optimizer_ui.js` while `TAXData.FEDERAL.YEAR` and `TAXData.IRMAA.YEAR` both
+declare `2026`, so the Limit dropdown compounded one extra year of CPI over figures already current:
+`$217,319` displayed where the engine built the same plan's ceiling on `$211,400`, which is
+211,400 x 1.028 to the dollar. The ACA rows were worse by one more year again, compounding
+`currentYear - FPL_BASE_YEAR + 1`. **A constant that restates something the data already says will
+drift the moment the data moves**; both now derive from the table's own declared year.
+
+**`sim.cpiRate` does NOT open at 1.** It compounds from the table year to the plan's FIRST year, so a
+plan starting 2035 logs `-cpiFactor` 1.282 in year 0 and a deduction inflated by the same. Anything
+reading a year-0 log field as "table-year dollars" has to divide by that factor. Measured, not
+assumed, and it is the difference between a correct cross-ladder conversion and one that is 28% out
+for anyone retiring in the future.
+
+**The two ladders can share an axis only after the deduction is added to the federal side.** On MFJ
+2026 figures: the 22% bracket ends at $243,600 of total income, IRMAA Tier 1 runs $218,000 to
+$274,000, and the 24% bracket ends at $435,750. So **Tier 1 opens inside 22% and closes inside 24%** -
+filling it is a 24% decision - and `24% Fed` sits above Tier 3 and above Tier 4's start.
+
+**Sorting the menu on that comparable axis fixes one inversion and creates a worse-looking one.**
+`24% Fed - $404k` correctly moves after `IRMAA Tier 3 - $410k`, and `10% Fed - $24.8k` moves between
+the $63k and $84k ACA rows, because its MAGI equivalent is $57k. A visible column reading
+42k, 52.5k, 63k, 24.8k, 84k reads as a bug on sight, on every load, where the inversion is subtle and
+can be stated in words. **A list of numbers on different bases has no ordering that is both correct
+and legible**; the choice is which of the two failures to take, and the annotation plus the picture
+are what make the legible one honest.
+
+**Two tests broke, both because they read a display string for a number.** The reference-entry checks
+recovered `$769,001` out of an option label to prove a one-dollar relationship, which is invisible at
+three significant figures. `updateBracketFeedback()` did the same thing for the ceiling it feeds off.
+Numbers now travel on a `data-limit` attribute. **A label is a thing to read, not an API.**
+
+**Two formatter bugs that only showed up by running it**, both in code that reads as obviously
+correct: carrying a rounded value up into the next unit by recursion never terminates above the
+largest unit (stack overflow at a billion), and searching a descending unit table from the end
+returns the SMALLEST unit that fits, so a billion formatted as "k". Neither was visible in the
+source; both were the first thing a printed table of outputs showed.
+
+## 2026-08-30 - P87c CONFIRMED: a plan leaves exactly 15% of its Social Security unused
+
+**The user rejected a claim of mine and was right, and chasing why turned up a live defect.** I had
+repeated P87a's "nothing sizes a conversion against the ceiling" as though it described the
+mechanism. It does not: on a Fill Bracket 22% plan with Convert Excess to Roth, MAGI lands on
+`BracketTarget` to the dollar and the conversion is its residual after spending ($243,600 ceiling,
+$238,179 drawn, $145,721 to spending, **$92,458 converted**). The conversion is governed by the limit,
+exactly as the user said. Corrected in the report, the index and the task plan.
+
+**What the challenge exposed.** Looking at that same run properly, the plan reaches its ceiling every
+year until 2031 and never again. `short / SSincome` = **0.150000**, minimum equal to maximum, in
+every affected year and on every ceiling family:
+
+| ceiling | under-filled years | headroom never used |
+|---|---:|---:|
+| Fill Bracket 22% | 17 | **$168,500** |
+| IRMAA Tier 1 | 11 | $97,380 |
+| IRMAA Tier 2 | 5 | $36,054 |
+
+The sizing aggregate subtracts the FULL benefit (`yr.fixedInc`) from the ceiling while at most 85% of
+the benefit reaches MAGI, so the untaxed 15% is treated as consuming ceiling it never occupies. **The
+same shape as the deduction error P92a fixed** - a quantity on one income basis measured against a
+threshold on another - and NOT fixed by it, because this one sits under every ceiling rather than in
+the federal ceiling's own value.
+
+**Three arms identify it beyond argument:** remove Social Security and the persistent short vanishes
+entirely; claim at 62 and it starts sooner; keep it and it starts in the first year any benefit is
+paid.
+
+**Two regimes had to be separated first, and conflating them is what made it look mysterious.** Once
+the IRA empties the short jumps to $170k-$390k because there is nothing left to draw. That is not a
+defect. The defect is the small persistent short - $2,546 rising to $12,597 - while the IRA still
+holds millions. A raw table of shortfalls shows both and looks like noise.
+
+**A wrong statement of mine, corrected:** I said 2031 was before that plan's Social Security started.
+It is not - person 2 claims at 67 in 2031. I had checked only person 1, whose benefit starts in 2032.
+The 2031 short is the first SS year, not a counter-example, and treating it as one nearly sent this
+after the wrong mechanism.

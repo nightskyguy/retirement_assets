@@ -23,6 +23,46 @@
     return '$' + Math.round(val).toLocaleString('en-US');
   }
 
+  // P92e. A SHORT dollar for places that show several amounts side by side and have no room for
+  // full digits - the Limit dropdown, where every entry now carries its position on the other
+  // income ladder as well as its own figure.
+  //
+  // Three significant figures, so the low end keeps the precision that makes it meaningful:
+  // $24.8k rather than $25k, while $211,400 is simply $211k. Round thousands lose the trailing
+  // zeros ($274k, not $274.0k).
+  //
+  // NOT compactNum() in optimizer_core.js, which looks like this and is not: that one compresses a
+  // number to the shortest string parseShorthand() decodes back EXACTLY, for share URLs, so it
+  // renders 100000 as "1e5" and gives up entirely on anything that will not round-trip. This one is
+  // lossy on purpose and is for reading.
+  var SHORT_UNITS = [[1e9, 'B'], [1e6, 'M'], [1e3, 'k']];
+  function formatDollarShort(val) {
+    // null/undefined/'' explicitly, because Number() turns all three into 0 and "$0" is a lie about
+    // a missing value in a place that is showing real thresholds.
+    if (val === null || val === undefined || val === '') return '';
+    var n = Number(val);
+    if (!isFinite(n)) return '';
+    var sign = n < 0 ? '-$' : '$';
+    n = Math.abs(n);
+    var u = -1;
+    // Forward, so the FIRST match is the LARGEST unit that fits; backwards would call a billion "k".
+    for (var i = 0; i < SHORT_UNITS.length; i++) if (n >= SHORT_UNITS[i][0]) { u = i; break; }
+    if (u < 0) return sign + Math.round(n).toLocaleString('en-US');
+    // 3 significant figures across the scaled value's whole 1..999 range.
+    var scaled = n / SHORT_UNITS[u][0];
+    var out = scaled.toFixed(scaled >= 100 ? 0 : (scaled >= 10 ? 1 : 2));
+    // Rounding can push a value up into the next unit ($999,500 -> "1000k"), which belongs there
+    // rather than here. Step up ONCE, and only when there is a unit to step up into - iterating
+    // instead would not terminate above the largest one.
+    if (parseFloat(out) >= 1000 && u > 0) {
+      u -= 1;
+      scaled = n / SHORT_UNITS[u][0];
+      out = scaled.toFixed(scaled >= 100 ? 0 : (scaled >= 10 ? 1 : 2));
+    }
+    if (out.indexOf('.') >= 0) out = out.replace(/\.?0+$/, '');
+    return sign + out + SHORT_UNITS[u][1];
+  }
+
   // ── Input attachment ─────────────────────────────────────────────────────
 
   // Attaches smart numeric behaviour to a <input type="text"> element.
@@ -161,6 +201,7 @@
   window.DisplayHelpers = {
     parseShorthand: parseShorthand,
     formatDollar: formatDollar,
+    formatDollarShort: formatDollarShort,
     attachNumericDollarInput: attachNumericDollarInput,
     setDollarValue: setDollarValue,
     registerChartDismissal: registerChartDismissal,

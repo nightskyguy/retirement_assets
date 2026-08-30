@@ -254,9 +254,41 @@ The engine already separates the two on BREACH behavior - bracket and IRMAA are 
 the third pass force a draw above the ceiling, ACA is strict and records `acaBreach` instead. It
 does not separate them on FILL behavior, and that is where the target case is being let down.
 
-### And nothing sizes a conversion against the ceiling at all
+### The extra headroom mostly did not become conversion
 
-Measured on the same 74 clean cells, this turns out to be the larger gap.
+**CORRECTED 2026-08-30. This section was headed "And nothing sizes a conversion against the ceiling
+at all", and that heading is wrong.** It was read back as a claim about the MECHANISM - that a
+bracket strategy's conversion is not governed by the limit - and repeated that way in the task plan
+and in this report's own index row. The user challenged it, and measuring says the user is right.
+
+On a Fill Bracket 22% plan with Convert Excess to Roth on, in a year the ceiling binds:
+
+| | |
+|---|---|
+| ceiling (`BracketTarget`) | $243,600 |
+| MAGI it landed on | **$243,600**, to the dollar |
+| IRA drawn | $238,179 |
+| of which funded spending | $145,721 |
+| of which **converted** | **$92,458** |
+
+The draw reaches the ceiling and the conversion is what is left of it after spending. **That is
+exactly the model in the table below headed "what a user picking a limit expects."** The two models
+do not diverge in the ordinary case; the table overstates the difference.
+
+What the measurement in this section actually supports is narrower, and it is a statement about the
+MARGIN rather than the mechanism: when the ceiling MOVED by one deduction, only 32% of the extra
+draw came out as extra conversion. Nor is that obviously a defect - the other 68% funded spending
+that would otherwise have come from Brokerage and Cash, so the household still converts whatever
+the ceiling leaves after spending, at a ceiling that is now higher.
+
+Section 8's "median conversion change $0" carries the same correction: it is not evidence of a
+missing mechanism. AT years are the minority (section 2), so in the median cell the ceiling was not
+binding and raising it could not change anything.
+
+**What survives as a real open question** is not conversion sizing at all. It is that a plan stops
+REACHING its ceiling once Social Security starts - and that has now been measured. See section 9.
+
+The original measurement, unchanged:
 
 | family | n | conversions up | unchanged | down | largest conversion gain |
 |---|---|---|---|---|---|
@@ -280,14 +312,18 @@ surplus happens to remain, capped by `netWithdrawals.IRA`. `applyConversionGross
 up that existing surplus and never reads `yr.limit`. "Maximize Conversions" in the UI is those two
 flags together (`optimizer_ui.js:4705`), not "convert up to the limit".
 
-So two models are in play and they coincide only by accident:
+So two descriptions are in play:
 
 | | |
 |---|---|
 | what a user picking a limit expects | limit minus needed spending = conversion headroom |
 | what the engine does | the limit sizes the IRA WITHDRAWAL; spending is funded first; the after-tax leftover becomes surplus; surplus is reallocated to Roth, capped by the IRA draw |
 
-They agree only when the extra draw actually leaves a surplus. Measured: 32% of the time, by dollars.
+**They describe the same outcome in the ordinary case**, which is what the correction at the top of
+this section measured: the draw reaches the ceiling, spending takes what it needs, the rest converts.
+The original text here said they "coincide only by accident" and read the 32% figure as how often
+they agree. That is not what 32% measures - it is the share of the EXTRA draw, at a ceiling that
+moved, which came out as conversion rather than as spending displacing Brokerage and Cash.
 
 ### What follows for the phase
 
@@ -297,7 +333,10 @@ They agree only when the extra draw actually leaves a surplus. Measured: 32% of 
   bracket rows will convert and withdraw more, and that saved plans will not reproduce.
 - **`P87f` stays valuable but is no longer the whole answer.** Labelling which income the ceiling is
   helps a reader; it does not deliver the headroom they asked for.
-- **The conversion-sizing gap deserves its own item**, and it is larger than the deduction. Nothing
+- **CORRECTED: there is no conversion-sizing gap of the kind this bullet claimed.** See the
+  correction at the head of the previous section. What deserves an item is the under-fill measured
+  there: a plan that stops reaching its ceiling in later years. The rest of this bullet is left as
+  written, because the design questions it raises are real even though its premise was not. Nothing
   today converts into the ceiling on purpose. A "convert the remaining headroom" behavior is a
   design decision, not a bug fix, and it interacts with the Cash Reserve, the gap-fill order and
   `fundConversionWithCash`.
@@ -308,3 +347,96 @@ They agree only when the extra draw actually leaves a surplus. Measured: 32% of 
   overage add-back were not armed here. P87d gains weight from the target/cap split above: the ACA
   entry is the one control in the dropdown whose job is to stay UNDER, so its overage reading is
   the number that matters for it.
+
+---
+
+## 8. It shipped (P92a), and WHICH deduction turned out to be the hard part
+
+The fix landed in v11.16aa. Section 3's cost held on the shipped implementation, measured the same
+way against the release before it: 71 clean cells, terminal after-tax net worth up in 18 and down in
+49, median **-$47,549** (this report's arm said -$47,092), best +$1,517,175, worst -$2,589,357, and
+the same split by bracket - 12% gains a median $157,572, 22% loses $200,350, 24% is near flat at
+-$12,741. Median conversion change: **$0**, which is section 7's last finding surviving intact.
+
+The open question this report left was section 6's first approximation: the arm used LAST year's
+charged deduction, re-indexed, because the senior deduction phases out against the AGI the ceiling is
+about to determine. That circularity does not go away, so the shipped question was not "use the right
+deduction" but "how wrong is each obtainable one".
+
+Harness:
+[`.test_harnesses/ceilded_harness.js`](https://github.com/nightskyguy/retirement_assets/blob/main/.test_harnesses/ceilded_harness.js).
+3,960 plan-years on this report's grid, every candidate scored against `-fedDeduction`, the deduction
+`calculateTaxes()` actually charged that year.
+
+| candidate | what it is | median err | p90 | worst |
+|---|---|---:|---:|---:|
+| **PRIOR** | last year's charged deduction, re-indexed - this report's arm | $0 | $763 | **$35,505** |
+| **STAT** | statutory standard deduction plus age bumps, re-derived | $0 | $4,300 | $6,000 |
+| **DIRECT** | ask `calculateTaxes()` about a provisional year, twice - **shipped** | **$0** | **$0** | $6,000 |
+
+Against a median charged deduction of $47,744.
+
+- **PRIOR is exact in the median and catastrophic in one kind of year.** In the 120 plan-years where
+  the filing status changes it is wrong by $35,505 - the whole difference between the MFJ deduction
+  it carried forward and the Single one now charged. DIRECT is exact in those years, because it asks
+  about THIS year's status.
+- **STAT re-derives the deduction, which is the failure mode to avoid** - a second source of truth
+  that can drift from the tax engine - and it is no more accurate for it.
+- **DIRECT is asked TWICE, and the second pass is not polish.** The first asks at the bracket top,
+  which is about one deduction below where the plan will land, so the senior deduction is
+  under-phased-out and comes back too large. On one plan that overshot the bracket top by $1,338 of
+  taxable income. Asking again at the ceiling the first pass implies turns that into an $80
+  undershoot. The phase-out rate is 6%, so a third pass is not worth its call.
+- **The residual is $6,000 - one senior deduction - and only in years the plan never reaches its
+  ceiling**, where the realized AGI is nowhere near the provisional one. It is logged rather than
+  argued: `-ceilDedAddBack` (what the ceiling used) sits beside `-fedDeduction` (what was charged) in
+  every row, so the gap is recoverable from any finished run.
+
+The measured cost of the whole two-pass estimate is zero: 0.813 ms/sim against 0.820 on the release
+before it, on a 40-year Fill Bracket plan, alternating runs.
+
+---
+
+## 9. A second basis error, same shape, still shipped: 15% of Social Security
+
+Measured 2026-08-30, chasing the under-fill named in the correction to section 7.
+
+**A plan stops exactly 15% of its Social Security benefit short of the ceiling it was told to fill.**
+Not approximately - `short / SSincome` is `0.150000` in every affected year, minimum equal to
+maximum, on every ceiling family.
+
+Harness: `.test_harnesses/underfill_harness.js`. Fixture is a 2026 MFJ couple, $2.8M across two
+IRAs, Fill Bracket 22%, Convert Excess to Roth on, TX so no state ceiling can bind first.
+
+| ceiling | under-filled years | short / SS | headroom never used |
+|---|---:|---|---:|
+| Fill Bracket 22% | 17 | 0.15000 exactly | **$168,500** |
+| Fill Bracket 24% | 2 | 0.15000 exactly | $8,634 |
+| IRMAA Tier 1 | 11 | 0.15000 exactly | $97,380 |
+| IRMAA Tier 2 | 5 | 0.15000 exactly | $36,054 |
+
+Years are restricted to those where Social Security is paid AND the IRA still has money, because a
+drained IRA cannot reach any ceiling and that is not a defect.
+
+**The mechanism, and it is P87c.** The sizing aggregate subtracts the FULL benefit
+(`yr.fixedInc = yr.s1 + yr.s2`) from the ceiling, while only the taxable share of the benefit - at
+most 85% - ever reaches MAGI. The draw is therefore sized as though the untaxed 15% consumed ceiling
+that it never occupies, and the plan leaves exactly that much unused. Same shape as the deduction
+error P92a fixed: a quantity on one income basis compared against a threshold on another.
+
+### Three arms that identify it
+
+| arm | under-filled years | reading |
+|---|---:|---|
+| baseline | 28 of 33 | short begins in 2031, the first year any benefit is paid |
+| **no Social Security at all** | 16 of 33 | **the small persistent short disappears entirely**; the 16 remaining are a drained IRA |
+| Social Security claimed at 62 | 33 of 33 | the short begins sooner, with the benefit |
+
+Two regimes have to be told apart in the raw output, and conflating them is what made this look
+mysterious at first. Once the IRA empties (2048 on this fixture) the short jumps to $170k-$390k
+because there is nothing left to draw - not a defect. The defect is the small persistent short of
+$2,546 rising to $12,597 while the IRA still holds millions.
+
+**It reaches IRMAA tiers as well as federal brackets**, which places it in the sizing rather than in
+either ceiling. P92a's deduction fix cannot have addressed it: that one raised the federal ceiling,
+and this leaves an equal 15% unused underneath every ceiling.

@@ -6517,3 +6517,303 @@ Also fixed the documentation entry, which said "Enter balances in today's dollar
 misreading this phase exists to stop.
 
 No calculation changed. Suites 366/61/22.
+
+## 2026-08-29 (cont.) - P94 START: remove the `minlimit` strategy
+
+Branch is level with `main` (0 ahead, 0 behind), tree clean, so this starts a new changelog entry.
+Baseline captured before touching anything: suites **366 / 61 / 22**, all green. The strategy-
+enumeration goldens are asserted inside `optimizer_core.tests.js` (`:5508`, `:5526`), so a passing
+core suite IS the proof that neither sweep ever emitted `minlimit`.
+
+Grep confirms the plan's inventory: `optimizer_core.js` clamp at `:984`, cascade at `:1458`-`:1472`,
+five dispatch/coexist conditions, three UI sites, seven test fixtures to re-point and two tests to
+delete. `taxengine.js:1584`'s `IRMAALimit` is a DIFFERENT thing - a local in the Medicare-premium
+helper - and stays.
+
+## 2026-08-29 (cont.) - P94 DONE: `minlimit` is gone, v11.16aa
+
+All five steps landed. Suites **364 / 61 / 22** in node, badge green in the browser at 850 total
+(403 in-page + 447 node), `?runtests` with zero unsafe skips.
+
+**The goldens are the proof.** `sweep_golden.js` was not touched, and both enumeration goldens still
+reproduce, so neither the Optimizer sweep nor the Monte Carlo sweep ever emitted `minlimit`.
+
+**Three things the plan got wrong, all found by doing it:**
+
+1. **`computeBracketCeiling` does NOT drop a branch.** Its three branches are IRMAA tier / ACA /
+   federal; the `minlimit` clamp lived INSIDE the federal one. Two branches became two. The cascade
+   deletion is real - `yr.IRMAALimit`, `_irmaaEffCpi`, `IRMAABracket`, `_irmaaMargin`, the 15-line
+   inertness comment and the `IRMAALimit` parameter with all three call sites - but the function did
+   not get structurally simpler, only shorter.
+2. **The fallback cannot run where the plan said to put it.** "Immediately after the `aca` mapping"
+   is before `applyScenario`'s generic loop, and that loop writes `#strategy` itself - so the guard
+   would inspect a select the loop had not yet broken. It runs AFTER the loop, and separately on the
+   URL path.
+3. **Money moved on one test fixture, and the plan predicted it would not.** Re-pointing the P32h
+   tripwire from `minlimit` to `bracket` at IRMAA tier 1 flipped year 0 from a month-11 withdrawal
+   to a month-1 one, because `_stratImpliesConversion` lists `bracket` and never listed `minlimit`.
+   Total stranded 27,529 -> 29,368 and the Brokerage headline 1,027,282 -> 1,016,150, over the same
+   ten years, worst single year unmoved. Re-pinned with the reason recorded in the test. This is the
+   P28j coupling, arriving unbidden: the fixture now measures a plan a user can actually run.
+
+**Found and fixed because this change would have broken it:** the changelog's `<a id="11.1691">`
+anchor sat above the `## 11.16a9` heading, and `## 11.1691` had none. It only worked because 11.16a9
+was the top entry, so the Details link landed on it by accident. Adding an entry above would have
+sent it to the wrong release. Both anchors now sit on their own headings.
+
+**Extended past the letter of the plan, once:** `?str=aca` on the URL path. `applyScenario` maps
+`aca` -> `bracket`, `loadFromURL` never did, so the guard would have taken a deliberate internal
+name for an unknown one. Same one-line mapping added there, and verified both ways.
+
+`resetUnknownStrategy` falls back to the markup defaults when `OPT_DEFAULTS` is empty. That is not
+belt-and-braces: the self-check suite runs BEFORE `captureDefaults()`, so the first version silently
+did nothing under test while working in production. The test caught it.
+
+**Left alone deliberately:** the five files in `.test_harnesses/` still name `minlimit`. They are
+dated research records whose conclusions were measured against the strategy as it was; re-pointing
+them would change what they measured and invalidate their own prose. They will not run correctly
+again, which is true of their line-number references already.
+
+**Found while verifying, NOT fixed, and pre-existing on `main`:** an ACA share link does not
+round-trip. `?str=bracket&sr=aca400` lands on stratRate `10`, not `aca400`, so `stratACAMultiple`
+reads 0 and the plan silently loads as Fill Bracket 10% instead of an ACA cap. `buildShareURL` emits
+exactly that pair, so every shared ACA plan is affected. Confirmed pre-existing: `git diff main`
+touches no stratRate code. Recorded in task_plan as its own item.
+
+## 2026-08-29 (cont.) - P92a DONE: the bracket ceiling adds the deduction, v11.16aa
+
+Suites **367 / 61 / 22**, browser badge green at 853. The ceiling raise is unconditional; the P87a
+research flag `bracketCeilingAddDeduction` is gone from the engine.
+
+**The plan's instruction could not be followed literally, and measuring said what to do instead.**
+It asked for "the SAME deduction calculateTaxes() charges". That deduction does not exist when the
+ceiling is placed - the senior deduction phases out against the AGI the ceiling is about to
+determine - so the real question was how wrong each OBTAINABLE deduction is. New harness
+`.test_harnesses/ceilded_harness.js`, 3,960 plan-years:
+
+| candidate | median | p90 | worst |
+|---|---:|---:|---:|
+| last year's charged, re-indexed (the P87a arm) | $0 | $763 | **$35,505** |
+| statutory std + age bumps, re-derived | $0 | $4,300 | $6,000 |
+| **ask calculateTaxes() about a provisional year, twice - SHIPPED** | **$0** | **$0** | $6,000 |
+
+The prior-year candidate is exact in the median and wrong by the WHOLE $35,505 in the 120 years the
+filing status changes, because it carries an MFJ number into a Single year. That killed it.
+
+**The second pass is not polish.** Asking at the bracket top evaluates the senior deduction about one
+deduction too low, so it comes back too large and the ceiling OVERSHOOTS: measured $1,338 of taxable
+income spilling into the next bracket. Asking again at the ceiling the first pass implies turns that
+into an $80 undershoot. Verified in the browser on the default plan: bracket top $211,400, ceiling
+$252,790, taxable income $207,641 - against $22,308 short before.
+
+**Cost measured, not assumed:** 0.813 ms/sim against main's 0.820 on a 40-year Fill Bracket plan,
+alternating runs. Two extra tax calls a year are lost in the noise.
+
+**Four tests failed and none was a pinned constant.** Every one was a fixture whose assumption the
+ceiling change invalidated, and each was repaired to keep testing its own subject:
+- `soft cap (federal bracket)`: a 22% ceiling on the true top no longer breaches at all, so there
+  was no forced draw left to test. New `CAP_SOFT` at 12%, where the limit still binds.
+- Two `P35g` step-up tests: the ceiling drains that fixture's IRA to zero, which drops the survivor
+  into the **0% long-term capital-gains band** - and a step-up on gains taxed at 0% is worth exactly
+  nothing, so both assertions about its value went vacuously false. `STEPUP_BASE` gains an IRA Goal.
+  Worth keeping in mind: that is a real consequence a user can hit, not only a fixture artifact.
+- `OC: counterfactual pays the RMD counter-effect`: comparing the counterfactual's lifetime tax
+  against the actual run's is confounded now that the actual arm converts ~$1M. Replaced with the
+  causal form its own title claims - same plan, bigger IRA, bigger RMDs, more tax - which holds on
+  main too.
+
+**Disclosed cost, measured against main on the P87a grid:** 71 clean cells, net worth up in 18 and
+down in 49, median **-$47,549**, best +$1,517,175, worst -$2,589,357. By bracket: 12% +$157,572,
+22% -$200,350, 24% -$12,741. Median conversion change $0 - nothing sizes a conversion against the
+ceiling, which is P87a section 7's finding surviving intact and still unaddressed.
+
+`-ceilDedAddBack` is now logged beside `-fedDeduction` so the residual is auditable from a finished
+run. `research/BRACKET_CEILING_BASIS.md` gains section 8 and its index row names it.
+
+## 2026-08-29 (cont.) - P92c DONE: a limit that could not be kept now says so, v11.16ab
+
+Suites **367 / 61 / 22** in node (unchanged - the warning is UI), browser badge green at **860**
+(410 in-page + 450 node). Seven new in-page assertions.
+
+**NO THRESHOLD, and that is the decision.** The Optimizer's `_isBracketInfeasible` calls a row
+infeasible past 50% of years. That is fine for ranking a table and wrong for talking to one reader,
+because both ends of the distribution are common. Measured on the P87a grid, cells with at least one
+forced-overage year:
+
+| family | cells | 0 forced yrs | 1..50% | >50% |
+|---|---:|---:|---:|---:|
+| Fill 12% | 40 | 0 | 4 | 36 |
+| Fill 22% | 40 | 6 | 14 | 20 |
+| Fill 24% | 40 | 37 | 3 | 0 |
+| IRMAA 1 | 40 | 12 | 24 | 4 |
+| IRMAA 3 | 40 | 37 | 3 | 0 |
+
+A single breached year is common and a wholly unfundable limit is common; they are different
+statements and neither is noise. So the COUNT is the message - "in 3 of 25 years" - and only the
+opening sentence hardens past half. ACA gets its own wording off `-acaBreach`, because it is a CAP
+and breaching it forfeits the subsidy rather than paying a higher rate.
+
+**Found and fixed, shipped broken since v11.16a4:** `extraConvCeilingKind()` read
+`val('stratIRMAATier')` and `val('stratACAMultiple')`, and **neither is a form field** - both are
+derived in `getInputs()` from the single Limit dropdown, whose value carries them as `IRMAA2` or
+`aca400`. Both reads were `undefined`, `+undefined` is `NaN`, every comparison against it is false,
+and the function fell through to "the federal bracket ceiling" for every plan in the family. The P88e
+warning has been naming the wrong ceiling from the day it shipped, in the one sentence whose whole
+job is to name the right one. Confirmed on `main`. Now asks `getInputs()`. My own warning inherited
+the bug and is what surfaced it.
+
+**Verified in the browser, all four kinds:** Fill 12% -> "cannot fund this plan: ... 22 of 25 years
+... up to $191,296"; IRMAA tier 0 -> "the IRMAA tier ceiling ... 1 of 25 years ... up to $130"; ACA
+400% -> "income goes over the cap in 2 of 36 years and the premium subsidy is lost"; Proportional ->
+silent.
+
+**Testing gotcha, cost a full false-green run.** I bumped `?v=` to `1116ab` and THEN edited
+`optimizer_tests.js`, so the browser served the cached bundle and reported 403 passing with my new
+tests never executed - a green badge that meant nothing. `runTests.toString().includes(...)` is what
+caught it; `fetch(url, {cache:'reload'})` on the exact `?v=` URL fixed it. **Bump the version AFTER
+editing, not before, or verify the bundle actually contains the new code.**
+
+## 2026-08-29 (cont.) - P96: advice nobody can follow, v11.16ab
+
+User-reported. The ACA gate's note ended "Lower Retirement Start Age to model pre-Medicare years",
+which for a household already past 65 this year is unfollowable - `planFirstYear` clamps a start year
+in the past up to the current one, so every start age gives the same first year and the same ages in
+it. The note named a control that could not change what it was describing.
+
+Split the `bothMedicare` branch on whether Medicare age is already past THIS year, computed from
+`planFirstYear(by1, 0)` - the clamp's own floor - so there is no second age calculation beside the
+shared one. Already past: greyed and silent, per the instruction. Start age is what carries them
+over: unchanged, because there lowering it genuinely helps.
+
+Verified on five profiles: both 65+ today -> greyed, silent; both under 65 with start 70 -> greyed,
+note shown; one on Medicare -> not greyed; single 65+ today -> greyed, silent; single under 65 with
+start 70 -> greyed, note shown. Four in-page assertions. Badge 864, node 367/61/22.
+
+**Bumped the version AFTER editing this time**, and checked `runTests.toString()` and
+`updateACAWarning.toString()` both contained the new code before believing the green badge. The hour
+had not rolled, so the stamp is still 11.16ab and the browser needed an explicit
+`fetch(url, {cache:'reload'})` on the exact `?v=` URLs.
+
+**Recorded tradeoff:** the `bothMedicare` branch carried a comment saying it was deliberately NOT
+gated on the selection, so that a user who cannot pick an ACA row could still learn why. The
+already-past-65 case now loses that explanation. If greyed-with-no-reason reads badly, the answer is
+a short statement of fact with no advice in it, not the old sentence back.
+
+## 2026-08-29 (cont.) - P92e DONE: the Limit menu reads on both ladders, v11.16af
+
+Node **371 / 61 / 22**, browser badge green at **924** (470 in-page + 454 node), zero unsafe skips,
+bundle freshness checked before believing it.
+
+**The base-year defect the user spotted was real and is fixed first.** `TAX_DATA_BASE_YEAR` was
+hardcoded `2025` while `TAXData.FEDERAL.YEAR` and `TAXData.IRMAA.YEAR` both say `2026`, so the menu
+compounded one extra year of CPI over tables that were already current: `$217,319` where the engine
+built the same plan's ceiling on `$211,400`. It now reads the year off the data. Verified against
+`findLimitByRate('FEDERAL', status, rate, 1)` for every federal entry, in a test.
+
+**The ACA rows were off by the same year plus one more.** They compounded
+`currentYear - FPL_BASE_YEAR + 1`, which is two years where the federal rows took one. Measured
+against the engine's own ACA formula before changing anything: a 2026 plan targets $84,049 where the
+menu offered $86,403. They now mirror the engine exactly, `cpiAdj * (1 + cpi)`.
+
+**Deduction source, as planned:** `-fedDeduction` off the plan's first year, divided by that year's
+`-cpiFactor`. That divisor is load-bearing and the plan was right to flag it: `sim.cpiRate` does NOT
+open at 1, it compounds from the table year to the plan's FIRST year, so a plan starting 2035 logs a
+deduction inflated 28%. Measured (`cpiFactorY0` 1.282 on a 2035 plan, 1 on a 2026 one).
+
+**Sorting on the comparable axis was tried and REVERTED, and the reason is worth keeping.** The raw
+sort puts `24% Fed - $404k` above `IRMAA Tier 3 - $410k` while its real ceiling ($435,750 MAGI) is
+below Tier 3 - the inversion I flagged when scoping. Fixing it re-sorts `10% Fed - $24.8k` to sit
+between the $63k and $84k ACA rows, because its MAGI equivalent is $57k, and a visible column
+reading 42k, 52.5k, 63k, 24.8k, 84k looks broken on sight, on every load. Traded a subtle wrong
+ordering for an obvious-looking one; took the subtle one and let the annotation and the ladder carry
+the truth. Recorded in a code comment so it is not re-attempted.
+
+**The ladder is a picture, per instruction, and had three defects found by looking at it:**
+- The IRMAA table's first row is a `-none-` sentinel one dollar below Tier 1, not a tier. Drawing it
+  as one produced a $1 sliver and shifted every tier label by one - the row read `none T2 T4`.
+- Inside a 245px sidebar that clips its overflow the SVG was either illegible or scrolled sideways.
+  Now `position:fixed`, placed under the dropdown and clamped to the viewport, same as
+  `#touch-tooltip`. Clamping only the bottom put it off the TOP of the window when the page was
+  scrolled; both ends now.
+- **User-reported mid-build: no obvious way to dismiss it.** It opens away from the link that opened
+  it, so "click Show me again" is not discoverable. It now has a titled header with `close ✕`,
+  dismisses on a click outside (the share panel's pattern) and on Escape, and the link itself reads
+  `Hide ▾` while open. Four routes, all verified.
+
+**Two old tests broke and both were parsing the label text** - the exact practice this phase removed
+from `updateBracketFeedback()`. The reference-entry checks read `$769,001` out of the label to prove
+the "+1 dollar" relation; at 3 significant figures that is `$769k` on both sides. Re-pointed at
+`data-limit`. The trailing-`+` check now looks for the `+` against the amount, since the label
+continues past it.
+
+**Formatter:** `DisplayHelpers.formatDollarShort`, 3 significant figures with k/M/B. Deliberately NOT
+`compactNum`, which is a lossless share-URL compressor that renders 100000 as `1e5`. Four node tests
+including the carry cases (999,500 -> $1M, 999,999,999 -> $1B) and that it never emits an exponent.
+First version blew the stack on a billion by recursing to carry; the unit search also ran backwards
+and called a billion "k". Both caught by probing the output rather than reasoning about it.
+
+## 2026-08-30 - P97: the limit warning blamed spending for RMDs, v11.16b0
+
+User-reported on a shared URL, and their own diagnosis was right. On that plan - $4M across two IRAs,
+IRMAA Tier 1, TX, person 1 dying 2046 - **all 15 flagged years have `IRAwd` = 0, `ForcedIRA` = 0 and
+`rothConv` = 0**. The plan draws nothing beyond its required distribution and is over anyway: by 2061
+an RMD of **$455,636** against a Tier 1 ceiling of **$370,371**, every flagged year a SGL survivor
+year after the first death halves both ladders. P92c's warning said "The plan withdraws past it to
+pay for spending... Lower the Spend Goal" - advice that cannot work, on the one screen whose job is
+to explain the number above it.
+
+`BracketOverage` conflates two causes that take OPPOSITE advice, and the fix is to tell them apart:
+spending you can lower, against required income you cannot. `limitWarningText()` is now a pure
+function so the classification is testable on rows instead of by driving the page.
+
+**The test is exact rather than estimated, and the reason matters:** `IRAwd` is the voluntary draw
+plus conversion gross (`optimizer_core.js:1067`) and `ForcedIRA` is the third pass's draw, so a year
+with neither is a year in which the plan chose nothing that could have put it over. The estimate I
+first considered - subtract the draws from MAGI and see whether it still clears the ceiling - errs in
+the UNSAFE direction, because IRA income also raises the taxable share of Social Security, so
+removing it takes more out of MAGI than the draw itself and years would be called structural that
+were not.
+
+**Found while checking the other branch:** the plain 12% default plan reported "22 of 25 years" as one
+count and blamed spending for all of it. **6 of those 22 were structural.** Both counts are now
+reported separately.
+
+Suites 371/61/22; badge 934 (480 in-page + 454 node), zero unsafe skips, bundle freshness checked.
+
+**Version-stamp gotcha, cost one wrong number:** my usual one-liner uses
+`Math.floor((now - Dec31)/864e5)` for the day of year, and across the PST-to-PDT boundary that is
+241.96 days on 30 August - floor 241, one day short. `Math.round` is correct. It only shows up when
+the run crosses midnight, which this one did.
+
+## 2026-08-30 (cont.) - PR #203 opened; P87g retracted, P87c measured
+
+**PR:** https://github.com/nightskyguy/retirement_assets/pull/203 - 10 commits, v11.16aa through
+v11.16b0. Node 371/61/22, badge 934. Flagged two things for the reviewer in the PR body: the
+changelog entry is ~1,000 words against the ~150 target, and `.test_harnesses/` still names the
+removed `minlimit` on purpose.
+
+**I was wrong about P87g and the user caught it.** I had repeated P87a section 7's heading - "nothing
+sizes a conversion against the ceiling at all" - as a claim about the mechanism, and used it to call
+P87g the largest remaining gap. The user said the conversion ceiling IS the limit for bracket
+strategies. Measured: MAGI lands on `BracketTarget` to the dollar and the conversion is its residual
+after spending. They were right. Corrected in the report, its index row, and the task plan
+(`b381b7a`), leaving the original measurement tables untouched and changing only the claims drawn
+from them.
+
+**The challenge is what found the real defect.** Looking at that same run properly: the plan reaches
+its ceiling every year until Social Security starts and never again, and `short / SSincome` is
+**0.150000** - min equal to max - in every affected year, on federal brackets and IRMAA tiers alike.
+$168,500 of headroom never used on one $2.8M fixture at Fill Bracket 22%. That is P87c: the sizing
+aggregate subtracts the FULL benefit while at most 85% reaches MAGI. Same shape as the deduction
+error P92a fixed, and not fixed by it. Harness `.test_harnesses/underfill_harness.js`, write-up in
+`research/BRACKET_CEILING_BASIS.md` section 9 (`8260929`).
+
+**Two process notes worth carrying forward.** Separating the regimes was the whole difficulty: a raw
+shortfall table shows a drained IRA ($170k-$390k short, not a defect) beside the real anomaly
+($2.5k-$12.6k short with millions still in the IRA), and together they look like noise. And a wrong
+statement of mine - "2031 is before that plan's SS starts" - nearly sent this after the wrong
+mechanism; person 2 claims at 67 in 2031 and I had checked only person 1.
+
+**Next round: P87c**, at the user's direction. It is the strongest O0 candidate - measured, still
+shipped, known mechanism, bounded cost, and the fix is the move P92a already made in the neighbouring
+place: size against the taxable share of the benefit rather than the gross.

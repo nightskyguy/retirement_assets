@@ -382,10 +382,10 @@ test('P32c: cycleCoexist bracketfill — harvest years regain the IRA draw and c
 });
 
 test('P32c: cycleCoexist MAGI ceiling (IRMAA tier) — coexist must not push a harvest year into a higher tier', () => {
-    // minlimit tier 1: the family ceiling is MAGI-shaped, so the IRA room subtracts the planned
+    // IRMAA tier 1: the family ceiling is MAGI-shaped, so the IRA room subtracts the planned
     // harvest LTCG (two-pass fixed point). The observable contract: the coexist harvest year's
     // IRMAA tier never exceeds the same year's tier with coexist off.
-    const scen = { ...BASE, cyclicEnabled: true, strategy: 'minlimit', stratRate: 0,
+    const scen = { ...BASE, cyclicEnabled: true, strategy: 'bracket', stratRate: 0,
                    stratIRMAATier: 1, birthyear1: 1958, IRA1: 900000, Brokerage: 600000,
                    BrokerageBasis: 200000 };
     const off = simulate({ ...scen });
@@ -421,7 +421,7 @@ test('P32c: cycleHarvestMode spendonly harvests no more than maxbracket', () => 
 
 // A scenario that genuinely reaches the third pass with Cash exhausted and Brokerage left, which is
 // the only state in which either arm can do anything. Asserted, not assumed, in the tests below.
-const P32C_TP = { ...BASE, strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1,
+const P32C_TP = { ...BASE, strategy: 'bracket', stratRate: 0, stratIRMAATier: 1,
                   Cash: 1000, Brokerage: 800000, BrokerageBasis: 150000,
                   ss1: 45000, ss1Age: 66, spendGoal: 130000 };
 const P32C_FIXED = { ...BASE, Cash: 2000, Brokerage: 900000, BrokerageBasis: 200000,
@@ -973,6 +973,12 @@ const STEPUP_BASE = {
     cashYield: 0.02, dividendRate: 0.02,
     dividendReinvest: false,                         // DRIP would raise basis every year and mask
     futureIRATaxRate: 0.28,                          // the two step-ups this section is testing
+    // P92a. The Goal is what keeps this fixture ABOUT the step-up. A Fill Bracket ceiling on the
+    // true bracket top drains this IRA to zero by the terminal year, which drops the survivor's
+    // income into the 0% long-term capital-gains band - and a step-up on gains that would be taxed
+    // at 0% is worth exactly nothing, so every assertion about its value became vacuously false.
+    // The Goal leaves an IRA behind, income with it, and a non-zero rate for the step-up to save.
+    iraBaseGoal: 400000,
 };
 
 test('P35g: every TAXData jurisdiction declares a BasisStepUp of 0.50 or 1.00', () => {
@@ -1225,6 +1231,53 @@ test('GK optimize-spend: floor is GK-specific — propwd reaches a higher spend 
     assert(gk && pw, 'both strategies should return a result');
     assert(pw.optimizedSpend > gk.optimizedSpend,
         `propwd ${Math.round(pw.optimizedSpend)} should exceed floor-capped GK ${Math.round(gk.optimizedSpend)}`);
+});
+
+// ── Compact money for display (formatDollarShort) ─────────────────────────────
+// P92e. The Limit dropdown now prints each entry's own figure AND its position on the other income
+// ladder, so the dollars had to get shorter. Three significant figures, k/M/B.
+//
+// It sits next to compactNum() below and is its opposite: that one is LOSSLESS and for share URLs,
+// this one is LOSSY and for reading. The pair of suites is here so nobody reaches for the wrong one.
+const formatDollarShort = globalThis.window.DisplayHelpers.formatDollarShort;
+
+test('formatDollarShort: three significant figures, and the suffix follows the magnitude', () => {
+    const cases = [
+        [0, '$0'], [999, '$999'],                       // under a thousand stays whole dollars
+        [1000, '$1k'], [1400, '$1.4k'], [24800, '$24.8k'],
+        [100800, '$101k'], [211400, '$211k'], [273999, '$274k'], [403550, '$404k'],
+        [1000000, '$1M'], [1200000, '$1.2M'], [1234567890, '$1.23B'],
+        [-211400, '-$211k'],
+    ];
+    for (const [n, want] of cases) {
+        assert(formatDollarShort(n) === want,
+            `formatDollarShort(${n}) = "${formatDollarShort(n)}", expected "${want}"`);
+    }
+});
+
+test('formatDollarShort: rounding up carries into the next unit instead of reading 1000k', () => {
+    // The boundary this exists for: 999,500 rounds to 1000k, which is not a thing anyone writes.
+    assert(formatDollarShort(999500) === '$1M', `got ${formatDollarShort(999500)}`);
+    assert(formatDollarShort(99950) === '$100k', `got ${formatDollarShort(99950)}`);
+    assert(formatDollarShort(999999999) === '$1B', `got ${formatDollarShort(999999999)}`);
+    // And it never runs away past the largest unit there is.
+    assert(/^\$[\d.]+B$/.test(formatDollarShort(9.9e14)), `got ${formatDollarShort(9.9e14)}`);
+});
+
+test('formatDollarShort is NOT compactNum: it never emits scientific notation', () => {
+    // compactNum('100000') is "1e5" - correct for a URL, unreadable in a menu. Whatever this
+    // returns has to be something a person reads as money.
+    for (const n of [100000, 1e6, 1e9, 12345, 250000]) {
+        const out = formatDollarShort(n);
+        assert(!/e/i.test(out), `formatDollarShort(${n}) = "${out}" contains an exponent`);
+        assert(out.startsWith('$'), `formatDollarShort(${n}) = "${out}" is not money`);
+    }
+});
+
+test('formatDollarShort: a non-number is empty, not "$NaN"', () => {
+    for (const bad of [NaN, Infinity, undefined, null, 'abc']) {
+        assert(formatDollarShort(bad) === '', `formatDollarShort(${String(bad)}) = "${formatDollarShort(bad)}"`);
+    }
 });
 
 // ── Share-URL value compression (compactNum) ────────────────────────────────────
@@ -1716,8 +1769,14 @@ const CAP_BASE = {
 const _sumAbsShortfall = log => log.reduce((s, e) => s + Math.abs(e.shortfall || 0), 0);
 const _sumForcedIRA   = log => log.reduce((s, e) => s + (e.ForcedIRA || 0), 0);
 
+// P92a. CAP_BASE's own 22% ceiling no longer breaches: once the ceiling reaches the true top of
+// the 22% bracket it is above everything this plan needs, so there is no forced draw left to test.
+// The 12% ceiling is the same fixture with a limit that still genuinely binds, which is what the
+// three soft-cap assertions are about.
+const CAP_SOFT = { ...CAP_BASE, stratRate: 0.12 };
+
 test('soft cap (federal bracket): forced IRA funds spending — no lingering shortfall', () => {
-    const r = simulate({ ...CAP_BASE });
+    const r = simulate({ ...CAP_SOFT });
     assert(_sumForcedIRA(r.log) > 100000, `expected substantial forced IRA, got ${Math.round(_sumForcedIRA(r.log))}`);
     assert(_sumAbsShortfall(r.log) < 100, `expected ~0 total shortfall, got ${Math.round(_sumAbsShortfall(r.log))}`);
     assert(r.totals.success, 'plan should succeed once IRA funds the spend');
@@ -1726,10 +1785,59 @@ test('soft cap (federal bracket): forced IRA funds spending — no lingering sho
 });
 
 test('soft cap: forced IRA never exceeds available IRA (no over-draw past depletion)', () => {
-    const r = simulate({ ...CAP_BASE });
+    const r = simulate({ ...CAP_SOFT });
     // Final IRA balance must stay non-negative — the loop is bounded by curBalances.IRA.
     const last = r.log[r.log.length - 1];
     assert((last.TotalIRA ?? 0) >= -1, `IRA went negative: ${last.TotalIRA}`);
+});
+
+// ── P92a: a chosen limit is the limit ───────────────────────────────────────────────────────────
+// A federal bracket top bounds TAXABLE income. Every caller of computeBracketCeiling spends the
+// number it returns as a MAGI ceiling, and nothing converted one to the other, so "fill the 22%
+// bracket" stopped one whole deduction below the top of the 22% bracket - $22,308 short in year 0
+// of the fixture below, growing with indexation and the age-65 bumps. The ceiling is now raised by
+// the year's deduction, so the two are on one basis.
+const CEIL_FILL = { ...BASE, strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1,
+                    stratACAMultiple: 0, IRA1: 2000000, convertExcessToRoth: true, nYears: 5 };
+
+test('P92a: a Fill Bracket ceiling reaches the top of the bracket, not one deduction short', () => {
+    const e = simulate({ ...CEIL_FILL }).log[0];
+    const top = findLimitByRate('FEDERAL', e.status, 0.22, e['-cpiFactor']).limit;
+    // The whole claim, in one line: the plan's federal TAXABLE income lands on the bracket top.
+    // Before, this sat a full deduction below it and the year still counted as "filled".
+    assertNear(e['-fedTaxableInc'], top, 'taxable income must reach the top of the chosen bracket', 500);
+    // And the ceiling it aimed at is that top plus the deduction, which is the conversion between
+    // the two bases and the only thing that changed.
+    assertNear(e.BracketTarget - top, e['-ceilDedAddBack'],
+        'the ceiling is the bracket top plus the deduction it added back', 1);
+    assert(e['-ceilDedAddBack'] > 0, 'a federal-bracket year must have an add-back at all');
+});
+
+test('P92a: the deduction the ceiling used is the one the tax pass charged', () => {
+    // The circularity, pinned rather than argued. The senior deduction phases out against federal
+    // AGI, which is what the ceiling determines, so the year's own deduction is not knowable when
+    // the ceiling is placed; the engine asks calculateTaxes() about a provisional year instead and
+    // iterates twice. This bounds what that estimate can miss - one senior deduction per filer,
+    // which is what a year the plan never reaches the ceiling can cost.
+    const log = simulate({ ...CEIL_FILL, nYears: 20 }).log;
+    const cap = TAXData.OBBBA.SENIOR_DED.perSenior * 2;
+    const bad = log.filter(e => Math.abs((e['-ceilDedAddBack'] || 0) - e['-fedDeduction']) > cap);
+    assert(bad.length === 0,
+        `the ceiling's deduction drifted past one senior deduction in ${bad.length} years: `
+        + bad.slice(0, 3).map(e => `${e.year} used ${Math.round(e['-ceilDedAddBack'])} vs charged ${Math.round(e['-fedDeduction'])}`).join(' | '));
+});
+
+test('P92a: an IRMAA tier and an ACA cap get no add-back at all', () => {
+    // The zero test. Those two ceilings are already MAGI quantities - an IRMAA threshold and an FPL
+    // multiple - so there is nothing to convert and adding a deduction to either would break a
+    // ceiling that was right. P87a measured them unmoved in 80 of 80 cells; this keeps them so.
+    for (const [name, over] of [['IRMAA tier 1', { stratRate: 0, stratIRMAATier: 1 }],
+                                ['ACA 400% FPL', { strategy: 'aca', stratRate: 0, stratIRMAATier: -1,
+                                                   stratACAMultiple: 400, birthyear1: 1975, die1: 95 }]]) {
+        const log = simulate({ ...CEIL_FILL, ...over }).log;
+        assert(log.every(e => (e['-ceilDedAddBack'] || 0) === 0),
+            `${name} must get no deduction add-back, got ${Math.round(log.find(e => e['-ceilDedAddBack'])?.['-ceilDedAddBack'] ?? 0)}`);
+    }
 });
 
 test('soft cap (fixedpct): capped % with spend over cap still funds spending from IRA', () => {
@@ -1924,8 +2032,8 @@ test('true ruin: all accounts incl. IRA exhausted → shortfall still reported',
 // independent defects wearing the same symptom:
 //   (a) shortfall while the IRA still has money  → P38. No IRA leg in the correction passes.
 //   (b) shortfall, IRA empty, Brokerage still has money → P32. Brokerage is deliberately excluded
-//       from the third pass (optimizer_core.js:1649-1653, the cap-gains spiral). Only `minlimit`
-//       exhibits it on this fixture, and no part of P38 fixes it.
+//       from the third pass (optimizer_core.js:1649-1653, the cap-gains spiral). Only the
+//       IRMAA-tier arm exhibits it on this fixture, and no part of P38 fixes it.
 // Folding both into one assertion would leave this test permanently red for a reason P38 is not
 // allowed to address. (b) gets its own pinned tripwire at the bottom of the block.
 const _shortYear = e => Math.abs(e.shortfall || 0) > 1;
@@ -1949,7 +2057,7 @@ const _worst = rows => rows.length ? Math.max(...rows.map(e => Math.abs(e.shortf
 //                  and the pass that would have reached it never runs a second time.
 const FUNDING_ARMS = [
     { name: 'bracket 22%',    over: { strategy: 'bracket',  stratRate: 0.22 },                              iraStranded:  0, worst:      0 },
-    { name: 'minlimit tier1', over: { strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1 },              iraStranded:  0, worst:      0 },
+    { name: 'IRMAA tier1',    over: { strategy: 'bracket',  stratRate: 0, stratIRMAATier: 1 },            iraStranded:  0, worst:      0 },
     { name: 'fixedpct 2%',    over: { strategy: 'fixedpct', iraWithdrawPct: 0.02 },                         iraStranded:  0, worst:      0 },
     { name: 'propwd 0%',      over: { strategy: 'propwd',   propWithdraw: 0,    stratRate: 0 },             iraStranded:  0, worst:      0 },
     { name: 'propwd 10%',     over: { strategy: 'propwd',   propWithdraw: 0.10, stratRate: 0 },             iraStranded:  0, worst:      0 },
@@ -2006,7 +2114,7 @@ test('funding invariant: the fixture actually drains (guards a vacuous green)', 
     // reaches the correction passes, so its zero would mean "not tested", not "correct".
     //
     // The bar is Cash specifically, not "every account". Some arms legitimately end with money in
-    // other places and still exercise the path fully: `minlimit` drains its IRA and leaves
+    // other places and still exercise the path fully: the IRMAA-tier arm drains its IRA and leaves
     // Brokerage (that is the P32 case pinned below).
     //
     // An arm that never empties Cash has to clear a DIFFERENT bar, not be waved through: it must
@@ -2654,21 +2762,21 @@ test('ACA exception ends at Medicare: the lapsed tail IS backstopped', () => {
 
 // ── P32 tripwire, pinned but NOT owned by P38 ─────────────────────────────────
 // Cause (b) from the scope note: IRA fully drained, spending still unfunded, and a large Brokerage
-// balance sitting there. `minlimit` is the only arm on this fixture that reaches it, and it is not
-// a rounding artifact — nine consecutive years, 2041 through 2049, $71,382 stranded in total, the
-// first of them with $945,376 of Brokerage untouched and draining only to fund taxes and growth.
+// balance sitting there. The IRMAA-tier arm is the only one on this fixture that reaches it, and it
+// is not a rounding artifact — nine consecutive years, 2041 through 2049, $71,382 stranded in total,
+// the first of them with $945,376 of Brokerage untouched and draining only to fund taxes and growth.
 // (Eleven years now, 2039-2049 - see the note on the assertions below.)
 // Nothing in P38 fixes this: widening the forced-IRA gate cannot help a year whose IRA is already
 // at zero. Pinned so P32 starts from a measured number rather than a fresh investigation, and so
 // that a change in the meantime has to announce itself.
-test('P32h: minlimit no longer strands spending with Brokerage still funded (was the defect)', () => {
+test('P32h: the IRMAA arm no longer strands spending with Brokerage still funded (was the defect)', () => {
     // irmaaMarginMode is pinned EXPLICITLY rather than left to the default. This is a P32 tripwire,
     // not an IRMAA one: when the default moved from 'halfstep' to 'halfcpi' in v11.15cc it dragged
     // these numbers with it (11 years -> 10) purely because a tighter ceiling drains the IRA on a
     // different schedule. A defect tripwire should not re-pin every time an unrelated knob's default
     // is retuned, so it now names the mode it measures under - the shipped default, so the figures
     // still describe what a user gets.
-    const log = simulate({ ...CAP_BASE, strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1,
+    const log = simulate({ ...CAP_BASE, strategy: 'bracket', stratRate: 0, stratIRMAATier: 1,
                            stratACAMultiple: 0, irmaaMarginMode: 'halfcpi' }).log;
     const stranded = _brokStranded(log);
     // ── P32h, 2026-08-21. THE DEFECT IS FIXED, and this test flipped from tripwire to guard. ──
@@ -2679,12 +2787,12 @@ test('P32h: minlimit no longer strands spending with Brokerage still funded (was
     // P32h), after P32d measured the cap-gains spiral that justified the exclusion and found ZERO
     // capped years in 3,960 armed runs.
     assert(stranded.length === 0,
-        `minlimit must no longer strand spending while Brokerage is funded, got ${stranded.length} ` +
+        `the IRMAA arm must no longer strand spending while Brokerage is funded, got ${stranded.length} ` +
         `years (${stranded.map(e => e.year).join(', ')})`);
     // The control that makes the claim falsifiable: pass 'off' and the ten stranded years come
     // straight back, with the amounts the tripwire pinned. Without this a future refactor could
     // make the count zero for some entirely different reason and still pass.
-    const before = simulate({ ...CAP_BASE, strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1,
+    const before = simulate({ ...CAP_BASE, strategy: 'bracket', stratRate: 0, stratIRMAATier: 1,
                               stratACAMultiple: 0, irmaaMarginMode: 'halfcpi',
                               thirdPassBrokerage: 'off' }).log;
     const strandedBefore = _brokStranded(before);
@@ -2707,7 +2815,7 @@ test('P32h: minlimit no longer strands spending with Brokerage still funded (was
     // targeting the threshold that will actually apply |LOOKBACK| years out instead of today's
     // (irmaaFwdFactor, optimizer_core.js). That is not a fourth failed attempt at this defect - it
     // is a different mechanism entirely. A forward-projected ceiling is ~5% higher at 2.5% CPI, so
-    // `minlimit` draws more IRA earlier, empties it two years sooner, and hands two more years to
+    // the arm draws more IRA earlier, empties it two years sooner, and hands two more years to
     // the third pass that refuses to touch Brokerage. Totals: 27,510 -> 26,869, worst 6,593 ->
     // 6,564, Brokerage 960,183 -> 1,100,390. More money stranded, spread over more years, with a
     // QUARTER of a million more Brokerage sitting unused. The defect got worse, not better, which
@@ -2721,19 +2829,25 @@ test('P32h: minlimit no longer strands spending with Brokerage still funded (was
     // These three pinned the size of the defect. They now describe the 'off' control, which is
     // what the defect COST: unchanged values, different subject.
     assertNear(_worst(strandedBefore), 6575.510146, 'worst single-year unfunded amount with Brokerage left', 1);
-    assertNear(strandedBefore.reduce((s, e) => s + Math.abs(e.shortfall), 0), 27529.424758,
+    // SIXTH move, and the last: the fixture named the removed `minlimit` strategy, which no plan
+    // could reach. It now names the reachable arm it was always measuring - `bracket` at IRMAA tier
+    // 1 - and that arm converts, so year 0 withdraws in month 1 instead of month 11. One year of
+    // growth on one year's draw, compounded thirteen years out: total 27,529 -> 29,368 and the
+    // Brokerage headline 1,027,282 -> 1,016,150, over the same ten years and with the worst single
+    // year unmoved. The subject of the test did not change.
+    assertNear(strandedBefore.reduce((s, e) => s + Math.abs(e.shortfall), 0), 29367.546739,
         'total stranded across the ten years', 1);
     // The headline number: how much was sitting in Brokerage the first year it gave up.
-    assertNear(Math.max(...strandedBefore.map(e => e.Brokerage || 0)), 1027282.093360,
-        'Brokerage balance in the first year minlimit reported an unfunded shortfall', 1);
+    assertNear(Math.max(...strandedBefore.map(e => e.Brokerage || 0)), 1016150.362818,
+        'Brokerage balance in the first year the arm reported an unfunded shortfall', 1);
     assert(strandedBefore.every(e => (e.Cash || 0) <= 1 && (e.Roth || 0) <= 1 && (e.TotalIRA || 0) <= 1),
         'every stranded year must have Cash, Roth and IRA at zero — Brokerage is the only source left');
     // What the fix bought, in the two directions that matter. Funded years up and spending up are
     // the point; terminal wealth DOWN is the price, and it is asserted rather than left implicit so
     // that nobody later reads the change as free.
-    const after = simulate({ ...CAP_BASE, strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1,
+    const after = simulate({ ...CAP_BASE, strategy: 'bracket', stratRate: 0, stratIRMAATier: 1,
                              stratACAMultiple: 0, irmaaMarginMode: 'halfcpi' });
-    const beforeRun = simulate({ ...CAP_BASE, strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1,
+    const beforeRun = simulate({ ...CAP_BASE, strategy: 'bracket', stratRate: 0, stratIRMAATier: 1,
                                  stratACAMultiple: 0, irmaaMarginMode: 'halfcpi',
                                  thirdPassBrokerage: 'off' });
     assert(after.totals.yearsfunded > beforeRun.totals.yearsfunded,
@@ -3018,8 +3132,19 @@ test('OC: counterfactual pays the RMD counter-effect (bigger IRA → bigger RMDs
     assert(cf.log.reduce((s, r) => s + (r.rothConv ?? 0), 0) < 1, 'counterfactual must not convert');
     assert(cf.totals.rmd > actual.totals.rmd + 1000,
         `counterfactual RMDs (${Math.round(cf.totals.rmd)}) must exceed actual (${Math.round(actual.totals.rmd)})`);
-    assert(cf.totals.tax > actual.totals.tax,
-        `counterfactual lifetime tax (${Math.round(cf.totals.tax)}) must exceed actual (${Math.round(actual.totals.tax)}) — RMD taxes priced`);
+    // P92a. This used to compare the counterfactual's lifetime tax against the actual run's, and
+    // that comparison is confounded: the actual run CONVERTS, and a ceiling on the true bracket top
+    // converts nearly $1M here, so the actual arm's own conversion tax now exceeds the RMD tax the
+    // counterfactual pays. The claim in this test's title is causal and is tested causally instead -
+    // hold everything else fixed and give the counterfactual a bigger IRA. Bigger IRA, bigger RMDs,
+    // more tax, with no conversion anywhere in either arm to confuse it.
+    const cfWith = ira => simulate({ ...inputs, IRA1: ira, _cfRun: true, _cfSuppressConversions: true,
+                                     extraConversionAmount: 0, computeOC: false });
+    const cfSmall = cfWith(1000000), cfBig = cfWith(2000000);
+    assert(cfBig.totals.rmd > cfSmall.totals.rmd,
+        `a bigger IRA must produce bigger RMDs: ${Math.round(cfSmall.totals.rmd)} -> ${Math.round(cfBig.totals.rmd)}`);
+    assert(cfBig.totals.tax > cfSmall.totals.tax,
+        `and the counterfactual must PAY for them: ${Math.round(cfSmall.totals.tax)} -> ${Math.round(cfBig.totals.tax)}`);
     // Identity: last convOC equals the finalNW difference - but the two sides are now on DIFFERENT
     // valuation bases and the identity has to name which one it uses. Break Even is deliberately
     // still computed on the liquidation basis (P35g decision 4), while finalNW carries the IRC
@@ -4322,33 +4447,6 @@ test('irmaaMarginMode halfstep: priced off the real tier step, and live at age 6
     assert(row('none').age1 === 63, 'fixture must open at 63');
     assertNear(row('none').BracketTarget - row('halfstep').BracketTarget, step / 2,
         'the margin must still be live at 63, before anyone is enrolled', 0.01);
-});
-
-test('yr.IRMAALimit is inert: it can never differ from yr.goalLimit', () => {
-    // This test used to claim it exercised `minlimit`'s ceiling. It did not, twice over, and both
-    // mistakes are worth naming because either one alone would have kept it green and wrong.
-    //   1. It passed stratIRMAATier: 1, which sends computeBracketCeiling down the IRMAA-TIER branch
-    //      (`stratIRMAATier >= 0`). The minlimit-specific `Math.min(limit, IRMAALimit)` never ran, so
-    //      the test was a duplicate of the tier-ceiling test wearing another name.
-    //   2. The site it meant to test cannot move a number at all:
-    //         yr.goalLimit  = the federal/state band containing sim.spendGoal
-    //         IRMAABracket  = findUpperLimitByAmount('IRMAA', status, yr.goalLimit, effCpi)
-    //         yr.IRMAALimit = min(yr.goalLimit, IRMAABracket.limit)
-    //      findUpperLimitByAmount returns the top of the band CONTAINING its amount, which is >= that
-    //      amount by construction, so the min() always selects goalLimit. True before the forward
-    //      projection was added and after it.
-    // Pinned over the domain rather than argued, so a change to the IRMAA ladder or to
-    // findUpperLimitByAmount turns this site live LOUDLY instead of silently.
-    const violations = [];
-    for (const status of ['MFJ', 'SGL'])
-        for (let goal = 1000; goal <= 900000; goal += 4973)
-            for (const infl of [1, 1.0609, 1.5, 2.4]) {
-                const band = findUpperLimitByAmount('IRMAA', status, goal, infl);
-                if (Math.abs(Math.min(goal, band.limit) - goal) > 1e-9)
-                    violations.push(`${status} goal ${goal} infl ${infl} -> band top ${band.limit}`);
-            }
-    assert(violations.length === 0,
-        `yr.IRMAALimit became live again: ${violations.slice(0, 3).join(' | ')}`);
 });
 
 test('QCD As Needed uses the full projection and ignores the margin setting entirely', () => {
@@ -6119,20 +6217,6 @@ test.critical('Fill Bracket converts in a no-tax state, not just in a graduated 
             `${st} has no state bracket ceiling, so it should convert at least as much as CA ` +
             `($${Math.round(ca)}), got $${Math.round(got)}`);
     }
-});
-
-test('minlimit: the IRMAA ceiling is a real limit below the first tier, not zero', () => {
-    // yr.IRMAALimit is Math.min(goalLimit, IRMAABracket.limit), and the IRMAA table's first
-    // threshold is far above an ordinary spend goal — so this strategy converted nothing at all,
-    // in every state, not only the 21.
-    // stratRate is required: minlimit takes the federal-bracket branch first and clamps it with the
-    // IRMAA limit, so without a named bracket the ceiling is 0 for an entirely different reason.
-    const run = st => simulate({ ...BASE, STATEname: st, strategy: 'minlimit', stratRate: 0.22,
-                                 stratIRMAATier: -1, stratACAMultiple: 0,
-                                 convertExcessToRoth: true, iraBaseGoal: 0 })
-                        .log.reduce((a, e) => a + (e.rothConv || 0), 0);
-    assert(run('CA') > 0, `minlimit must convert something on a $600k IRA, got ${Math.round(run('CA'))}`);
-    assert(run('NV') > 0, `and in a no-tax state too, got ${Math.round(run('NV'))}`);
 });
 
 test.critical('a no-tax state reports honest spend and honest failure', () => {

@@ -17,7 +17,94 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1691"></a>
+<a id="11.16b0"></a>
+
+## 11.16b0
+
+### Fill Fed Bracket now fills the bracket
+
+**Behavior change. Every plan using a Fill Fed Bracket limit will withdraw and convert more, and
+saved plans and shared links will not reproduce their earlier numbers.** Picking "22%" stopped short
+of the top of the 22% bracket by the whole of that year's deduction - about $32,000 in 2026 for a
+married couple, and more each year as the deduction grows. A tax bracket is a limit on income after
+the deduction; the plan was measuring against income before it. The two are now on one footing, so a
+chosen bracket is filled to its top.
+
+**This is not free money, and which way it goes depends on the bracket you picked.** Measured across
+71 plans that fund the same spending either way: terminal net worth rises in 18 and falls in 49. A
+12% limit typically gains about $158,000; a 22% limit typically loses about $200,000, and a 24% limit
+is close to flat. Filling a cheap bracket further is usually worth doing; filling an expensive one
+usually is not, because money leaves the IRA earlier than it needed to and stops compounding there.
+**So a plan on a 22% or 24% limit will usually show a lower End Wealth than this tool gave you for
+the same inputs before** - about $200,000 lower at 22%, in the middle of the range measured. Nothing
+about your plan got worse; the tool was under-filling the bracket you asked for, and the shortfall it
+left behind happened to be worth keeping. If End Wealth is what made you choose that limit, the
+comparison it was based on has moved: worth re-running the Optimizer, or trying a lower limit
+alongside it, before treating the new figure as settled.
+
+Limits that are not federal brackets - IRMAA tiers and the ACA cap - are unchanged, because those
+are already measured on the right income.
+
+### A limit broken by required distributions no longer tells you to spend less
+
+When a plan goes over the limit you picked, the note under it now says **which** of two causes did it,
+because they take opposite advice. If your spending forced the plan past the ceiling, lowering the
+Spend Goal helps. If required distributions, Social Security and a pension already exceed it on their
+own, lowering the Spend Goal changes nothing at all - the plan is taking no more than it must - and
+the note now says so, names the required distribution doing it, and points at what does move it:
+converting more before required distributions begin, a QCD, or a higher limit. A plan with both gets
+both counts.
+
+### The Limit menu says where each limit sits on the other ladder
+
+The menu mixes two kinds of ceiling and used to print both as a bare dollar amount, which invited a
+comparison that does not hold: a federal bracket is a limit on income **after** your deduction, while
+an IRMAA tier is a limit on income **before** it. Each entry now names where it falls on the other
+one, so `22% Fed - $211k (IRMAA Tier 1)` and `IRMAA Tier 1 - $274k (24% Fed)`. Amounts are shortened
+to make room.
+
+Underneath, a sentence describes the limit you picked, including the thing the list cannot show: an
+IRMAA tier **spans** a bracket boundary, so filling Tier 1 starts in the 22% bracket and finishes in
+the 24% one. **Show me** opens a picture of both ladders on one income axis, with your limit and your
+plan's own first-year income marked on it.
+
+**The amounts in that menu were each about 2.8% too high** and are now correct: they were being aged
+one extra year past tax tables that were already current. The top of the 22% bracket reads $211,400
+again, which is what the plan was using all along - only the menu was wrong.
+
+### The plan now tells you when your limit could not be kept
+
+Picking a limit did not stop the plan from going past it. When your Spend Goal could not be funded
+underneath the limit, the plan paid for the spending anyway and drew above the ceiling, and nothing
+on screen said so - only the BracketOverage column in Annual Details recorded it, so the headline
+numbers described a plan running under a limit it had broken. A note now appears under the limit you
+picked, naming how many years of the plan could not stay inside it and by how much at worst. It
+counts only years the spending forced it; a conversion you chose to make going over is reported
+separately, in the note under Extra Annual Roth Conversion.
+
+That note under Extra Annual Roth Conversion also named the wrong ceiling. It said "the federal
+bracket ceiling" whatever you had picked, including on plans set to an IRMAA tier or an ACA cap. It
+now names the one you chose.
+
+### A saved plan naming a strategy this version does not have now loads as the default
+
+A saved plan or a shared link can name a withdrawal strategy that is no longer in the Strategy menu.
+Until now the menu came up with nothing selected and the plan computed as all zeros, with nothing on
+screen to say why. Any strategy the menu does not carry now loads as Proportional Withdraw +% at its
+default setting, so what you get is a working plan you can change rather than a blank one. A plan
+naming a strategy that IS in the menu is unaffected.
+
+### Smaller
+
+If everyone in your plan has already passed 65, the ACA income-cap options are still greyed out but
+the note beside them is gone. It ended by telling you to lower your Retirement Start Age to model
+pre-Medicare years, and that cannot work once the age is behind you: the plan always starts this year
+at the earliest, so no start age reaches a year before Medicare. Where the start age is what puts you
+past 65, the note still appears, because there lowering it does help.
+
+---
+
+<a id="11.16a9"></a>
 
 ## 11.16a9
 
@@ -57,6 +144,10 @@ Smaller: the Cash Reserve note offered "-1", a value the field will not take - i
 Hovering over an income bar on Income & Expenses shows the actual income with the approximate tax
 attributed to it, not the scaled bar height. The Market Return chart names the historical year a
 replayed path came from for everyone.
+
+---
+
+<a id="11.1691"></a>
 
 ## 11.1691
 

@@ -11,8 +11,8 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P94 | Remove the `minlimit` strategy entirely; unknown strategy -> default *(own step)* | `P94a` |
-| **O0** | P92 | A chosen limit is the limit: no silent min, warn when infeasible *(user-decided)* | `P92a` |
+| ~~O0~~ | P92 | A chosen limit is the limit - **a, c, e ALL DONE** v11.16af; b answered by P94 | - |
+| **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
@@ -31,7 +31,7 @@ User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 20
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
 
-## P94: remove the `minlimit` strategy entirely  *(NEW 2026-08-29, user-decided, O0, NOT YET BUILT)*
+## P94: remove the `minlimit` strategy entirely  *(2026-08-29, user-decided, DONE v11.16aa)*
 
 **Goal: simplify the logic and the architecture.** Per the user's standing rule, accuracy and
 comprehensibility outweigh byte-identity - this removal is expected to change nothing for any
@@ -63,14 +63,14 @@ It has also drifted out of step with the strategy it shadows: `_stratImpliesConv
 (`optimizer_core.js:1339`) lists `'bracket'` and omits `'minlimit'`, so an otherwise identical plan
 picks a different year-0 withdrawal month. Nobody noticed because nobody can run it.
 
-- [ ] **P94a** - Delete the arm. The ceiling clamp in `computeBracketCeiling` (`:984`) is the only
+- [x] **P94a** - Delete the arm. The ceiling clamp in `computeBracketCeiling` (`:984`) is the only
       place the strategy DOES anything; then drop `|| inputs.strategy === 'minlimit'` from
       `yr.isBracketStrategy` (`:1716`), the withdrawal dispatch (`:2007`) and the cyclic-coexist
       conditions (`:1923`, `:1938`, `:1946`), plus the comments at `:854`, `:1458`, `:1497`, `:1499`,
       `:1881`, `:1888`, `:1891`, `:2346`, `:3541` and one in `taxengine.js`. UI: three sites -
       the ACA/bracket guard (`optimizer_ui.js:494`), `extraConvCeilingKind`'s "the Min Limit ceiling"
       branch (`:4836`, added by P88e and dead on arrival) and the `ui-bracket` toggle (`:4877`).
-- [ ] **P94b** - **THE CASCADE, and the actual simplification.** `yr.IRMAALimit` has EXACTLY ONE
+- [x] **P94b** - **THE CASCADE, and the actual simplification.** `yr.IRMAALimit` has EXACTLY ONE
       consumer - the clamp being deleted. So it takes with it the `IRMAALimit` parameter of
       `computeBracketCeiling` (**all three call sites shorten**: `:1930`, `:1942`, `:2009`),
       `yr.IRMAALimit` (`:1472`), `_irmaaEffCpi`, `IRMAABracket`, `_irmaaMargin` (`:1468`-`:1471`), and
@@ -80,7 +80,7 @@ picks a different year-0 withdrawal month. Nobody noticed because nobody can run
       orphaned and are not: `goalLimit` caps `targetSpend` for non-bracket strategies at `:1749`, and
       the two `.rate` fields set the marginal rates at `:1778`-`:1779`. Checked before writing this.
       `irmaaMarginDollars` / `irmaaFwdFactor` also stay - the IRMAA-tier branch still uses them.
-- [ ] **P94c** - **Unknown strategy -> silent fallback to the default**, which is `propwd` with
+- [x] **P94c** - **Unknown strategy -> silent fallback to the default**, which is `propwd` with
       `propWithdraw` 20 (first `<option>`, no `selected`; the input carries `value="20"`).
       **Reuse the existing precedent rather than inventing one:** `applyScenario` already maps
       `'aca'` back to `'bracket'` because the dropdown has no option for it. Add a GENERIC guard
@@ -91,7 +91,7 @@ picks a different year-0 withdrawal month. Nobody noticed because nobody can run
       that deliberate case is not swallowed. Same guard on the URL path via one shared helper.
       **This is a user-visible IMPROVEMENT:** a legacy scenario naming `minlimit` currently loads as a
       blank strategy and a $0 plan; it will load as a working default plan.
-- [ ] **P94d** - Tests. Most references are incidental: fixtures passing `stratIRMAATier: 1` take the
+- [x] **P94d** - Tests. Most references are incidental: fixtures passing `stratIRMAATier: 1` take the
       IRMAA branch, so the clamp never executes - the suite already says so at
       `optimizer_core.tests.js:4331`, and it was confirmed empirically (on that path `minlimit` and
       `bracket` differ in exactly ONE column, `timing`, with every money field identical).
@@ -100,7 +100,7 @@ picks a different year-0 withdrawal month. Nobody noticed because nobody can run
       below the first tier` (`:6124`, the only test that genuinely exercises the clamp) and
       `yr.IRMAALimit is inert` (`:4327`, whose subject ceases to exist). **Add one** for the unknown
       strategy falling back to the default. Reconcile counts in all three places.
-- [ ] **P94e** - Changelog: ONE bullet, for the FALLBACK only - "a saved plan naming a strategy this
+- [x] **P94e** - Changelog: ONE bullet, for the FALLBACK only - "a saved plan naming a strategy this
       version does not have now loads as the default instead of coming up blank". The `minlimit`
       removal itself is invisible and, by the in-page rule added this session, has no reader.
 
@@ -113,8 +113,21 @@ the guard proving neither sweep ever emitted `minlimit`.** Then:
 Withdraw +% at 20 with a real plan (today: blank, $0); a normal `?str=bracket` plan is unchanged; and
 `?str=aca` still maps to `bracket`, proving the guard did not swallow the deliberate case.
 
-- **Status:** planned in full, nothing built. Approved plan kept at
-  `~/.claude/plans/abundant-noodling-barto.md`.
+- **Status:** DONE, v11.16aa. Suites 364/61/22 and the browser badge green at 850. The enumeration
+  goldens were left untouched and still reproduce, which is the proof that neither sweep ever emitted
+  it. Approved plan kept at `~/.claude/plans/abundant-noodling-barto.md`.
+- **Three corrections to the plan above, from building it.** (1) `computeBracketCeiling` did NOT drop
+  a branch: its three are IRMAA tier / ACA / federal, and the clamp was inside the federal one. (2)
+  The fallback cannot sit "immediately after the `aca` mapping" - `applyScenario`'s generic loop
+  writes `#strategy` after that point, so the guard runs after the loop, and separately on the URL
+  path. (3) Money DID move on one fixture: re-pointing the P32h tripwire to `bracket` at tier 1 flips
+  year 0 to a month-1 withdrawal, because `_stratImpliesConversion` lists `bracket` and never listed
+  `minlimit` - total stranded 27,529 -> 29,368, re-pinned with the reason in the test. The fixture now
+  measures a plan a user can reach, which is the improvement.
+- **Beyond the plan, once:** `?str=aca` needed the same `aca` -> `bracket` mapping on the URL path
+  that `applyScenario` already had, or the new guard would have swallowed a deliberate internal name.
+- `.test_harnesses/` still names `minlimit` on purpose: those are dated research records, and
+  re-pointing them would change what they measured.
 - **Answers `P92b`**, which asked whether `Min Limit` survives once its `min` is removed. It does not
   need to: there is no user-facing strategy to delete, only dead code, so P92's "strategy deletion
   with migration" worry was mis-scoped.
@@ -124,6 +137,83 @@ Withdraw +% at 20 with a real plan (today: blank, $0); a normal `?str=bracket` p
 `targetSpend` caps non-bracket strategies at `goalLimit` (`optimizer_core.js:1749`), so
 **Proportional's spending is silently limited by a tax bracket top.** Live and load-bearing.
 Recorded rather than folded in.
+
+---
+
+## P97: the limit warning blamed spending for RMDs  *(2026-08-30, user-reported, DONE v11.16b0)*
+
+**User-reported against a real shared plan**, and the user's own diagnosis was right: "the spend goal
+is 130k, and I think what may be popping is the RMDs."
+
+Measured on that plan - $2.5M + $1.5M IRAs, IRMAA Tier 1, TX, person 1 dying 2046 - **all 15 flagged
+years have `IRAwd` = 0, `ForcedIRA` = 0 and `rothConv` = 0.** The plan withdraws nothing beyond its
+required distribution and is still over: by 2061 an RMD of **$455,636** against a Tier 1 ceiling of
+$370,371, every flagged year a SGL survivor year. P92c's warning nonetheless said "The plan withdraws
+past it to pay for spending... Lower the Spend Goal", which is advice that cannot work.
+
+- [x] **P97a** - `limitWarningText(rows, kind, totalYears)` split out of
+      `updateLimitFeasibilityWarning()` as a PURE function, and the flagged years split by cause.
+      The test is exact, not estimated: `IRAwd` is the voluntary draw plus conversion gross and
+      `ForcedIRA` is the third pass's, so a year with neither is one where the plan chose nothing
+      that could have put it over. **Estimating by subtracting draws from MAGI would err the unsafe
+      way** - IRA income also raises the taxable share of Social Security, so removing it takes more
+      out of MAGI than the draw itself.
+- [x] **P97b** - Opposite advice per cause, and both counts when a plan has both. The structural
+      branch names the required distribution and says plainly that lowering the Spend Goal cannot
+      change it; it points at converting before RMDs begin, a QCD, or a higher limit.
+- [x] **P97c** - Six assertions on synthetic rows, no DOM driving, including that the spend-advice
+      string never appears in the structural branch. Badge 934 (480 in-page + 454 node).
+
+**Found while checking the other branch:** the shipped 12% default plan reported "22 of 25 years" as
+one undifferentiated count and blamed spending for all of it. **6 of those 22 were structural.**
+
+---
+
+## P96: the ACA note told a household past 65 to change something that cannot help  *(2026-08-29, user-reported, DONE v11.16ab)*
+
+The gate greys out the ACA rows once everyone in the plan is on Medicare at retirement start, and the
+note explaining it ended **"Lower Retirement Start Age to model pre-Medicare years."** For a
+household ALREADY past 65 this calendar year that is unfollowable: `planFirstYear` clamps a start
+year in the past up to the current one, so every start age yields the same first year and the same
+ages in it. The sentence named a control that could not change the outcome it described.
+
+- [x] **P96a** - `updateACAWarning()` splits the `bothMedicare` branch on whether Medicare age is
+      already past THIS year, computed from `planFirstYear(by1, 0)` - the clamp's own floor, so
+      there is no second age calculation to drift. Already past: options greyed, box silent, on the
+      user's instruction. Not yet past, i.e. the START AGE is what carries them over: unchanged,
+      because there the advice works.
+- [x] **P96b** - Four in-page assertions, both branches, disabled-state and message-state each.
+      Browser badge 864 (414 in-page + 450 node); node suites untouched at 367/61/22.
+
+**The tradeoff, recorded because the code comment it overrides names it.** The `bothMedicare` branch
+was deliberately not gated on the selection so that a user who cannot pick an ACA row could still
+find out why. The already-past-65 case now loses that explanation entirely. That is the instruction,
+and it is defensible - the options are visibly greyed and nothing could be done about it either way -
+but if greyed-with-no-reason reads badly, the fix is a short statement of fact with no advice in it,
+not the old sentence back.
+
+---
+
+## P95: an ACA share link does not round-trip  *(NEW 2026-08-29, found while verifying P94, O1, NOT A REGRESSION)*
+
+`buildShareURL` emits an ACA plan as `?str=bracket&sr=aca400`. Loading that link lands the ceiling
+dropdown on `10`, not `aca400`, so `getInputs().stratACAMultiple` reads **0** and the plan comes up
+as **Fill Bracket 10%** - a different, much tighter strategy than the one shared, with no message.
+
+Measured in the browser at v11.16aa, and **pre-existing on `main`**: `git diff main` on the P94
+branch touches no `stratRate` code at all. `loadFromURL` sets the select correctly and something
+after it rebuilds the option list - `refreshStratRateOptions()` is the obvious suspect, since
+`applyScenario` calls it deliberately at `optimizer_ui.js:5429` and has a comment (`:5384`) about
+exactly this failure mode on the SCENARIO path, where it was already found and fixed once.
+
+- [ ] **P95a** - Find what rebuilds the list after `loadFromURL` and reapply the selection the way
+      `applyScenario` does, or capture and restore it around the rebuild. Then check the IRMAA
+      values (`IRMAA0`..`IRMAA4`) the same way - they are rebuilt by the same function and may have
+      the same defect.
+- [ ] **P95b** - A browser-tier test: every value the ceiling dropdown offers survives a share-URL
+      round trip. A per-value loop, not one case, because the defect is per-option-family.
+
+- **Status:** measured, nothing built. The user has not been asked about priority yet.
 
 ---
 
@@ -193,25 +283,58 @@ obvious: `yr.IRMAALimit = min(goalLimit, IRMAA tier ceiling - margin)` where `go
 bracket top containing the SPENDING GOAL. Measured: it made `Min Limit 24%` target $211,399 where
 `Fill Bracket 24%` targets $403,550, so the percentage the user picked was close to decorative.
 
-- [ ] **P92a** - Raise the federal-mode ceiling by the year's deduction (`P87b` form (i)). The
-      research flag `bracketCeilingAddDeduction` from `P87a` already does exactly this and is
-      measured; promoting it to unconditional is the change. **It must read the SAME deduction
-      `calculateTaxes()` charges** - a second source of truth for the deduction is the failure mode
-      to avoid, and `P88b`'s `adoptTaxBasis` already establishes where that lives.
-      **Disclose the cost:** measured at a median **-$47,092** across 74 clean cells, up to
-      -$2,523,647 on 22% rows and +$1,201,973 on 12% rows. That is a real change to every bracket
-      plan and the changelog must say saved plans will not reproduce.
+- [x] **P92a** - DONE v11.16aa. The federal-mode ceiling is raised by the year's deduction,
+      unconditionally; the `bracketCeilingAddDeduction` flag is gone from the engine.
+      **The instruction "read the SAME deduction `calculateTaxes()` charges" could not be followed
+      literally and measuring said what to do instead.** That deduction does not exist when the
+      ceiling is placed - the senior deduction phases out against the AGI the ceiling determines - so
+      the question was how wrong each obtainable one is. Over 3,960 plan-years
+      (`.test_harnesses/ceilded_harness.js`): last year's charged deduction re-indexed is exact in
+      the median and wrong by the whole **$35,505** in a filing-status-change year; asking
+      `calculateTaxes()` about a provisional year, TWICE, is median $0 / p90 $0 / worst $6,000 and
+      exact in those years. Shipped. The second pass is load-bearing: one pass overshoots the bracket
+      top by $1,338 of taxable income. `-ceilDedAddBack` is logged beside `-fedDeduction` so the
+      residual is auditable. Cost measured at 0.813 ms/sim against main's 0.820 - noise.
+      **Disclosed:** 71 clean cells, net worth up in 18 and down in 49, median **-$47,549**, best
+      +$1,517,175, worst -$2,589,357; 12% +$157,572, 22% -$200,350, 24% -$12,741; median conversion
+      change $0. Changelog says saved plans will not reproduce. `research/BRACKET_CEILING_BASIS.md`
+      section 8 carries the whole measurement.
+      **Four tests failed and not one was a pinned constant** - every one a fixture whose assumption
+      the change invalidated. Notable: a Fill Bracket ceiling on the true bracket top drains
+      `STEPUP_BASE`'s IRA to zero, which drops the survivor into the **0% LTCG band**, and a step-up
+      on gains taxed at 0% is worth nothing. That is a real consequence, not only a fixture artifact.
 - [ ] **P92b** - Drop the `goalLimit` and IRMAA `min` from `minlimit`, then decide whether the
       strategy survives at all. If it is identical to Fill Bracket, remove it and migrate saved
       plans and share URLs rather than leaving a twin in the dropdown.
-- [ ] **P92c** - The infeasibility warning. Per-plan, visible text (not tooltip-only), naming the
-      limit and that the plan fell back to Spend Goal only. The engine already knows: `forcedIRA`
-      and `bracketOverage` are both recorded per year, and `-overageFromConv` (P88c) separates a
-      chosen breach from a forced one - this warning is the FORCED half.
+- [x] **P92c** - DONE v11.16ab. `#limit-warn` under the Limit dropdown, filled from the last run by
+      `updateLimitFeasibilityWarning()`, counting only the FORCED half (`BracketOverage` less
+      `-overageFromConv`), with ACA counted off `-acaBreach` and worded as a cap rather than a target.
+      **No threshold, and that is the decision.** Measured on the P87a grid, both ends are common -
+      IRMAA Tier 1 breaches in 1 to 50% of years in 24 of 40 cells while Fill Bracket 12% breaches in
+      all 40, 36 of them past half - so the COUNT is the message and only the opening sentence
+      hardens past half. Seven in-page assertions; browser badge 860.
+      **Found and fixed on the way, shipped broken since v11.16a4:** `extraConvCeilingKind()` read
+      `val('stratIRMAATier')` and `val('stratACAMultiple')`, neither of which is a form field - both
+      are derived in `getInputs()` from the Limit dropdown - so both were `undefined`, every NaN
+      comparison was false, and the P88e warning named "the federal bracket ceiling" for every plan
+      in the family including IRMAA and ACA ones. Now asks `getInputs()`.
 - [ ] **P92d** - Tests, and the three-site count reconciliation.
-- [ ] **P92e** - `P87f` folds in here: once the ceiling is on the right basis the dropdown should
-      still say WHICH income it means, because IRMAA rows are MAGI and federal rows are taxable
-      income and they will still be different quantities.
+- [x] **P92e** - DONE v11.16af, and larger than "label it" once the user reframed it. Each entry now
+      names its position on the OTHER ladder (`22% Fed - $211k (IRMAA Tier 1)`,
+      `IRMAA Tier 1 - $274k (24% Fed)`), a sentence under the menu adds what a label cannot carry -
+      **an IRMAA tier SPANS a bracket boundary** - and `Show me` opens a static picture of both
+      ladders on one income axis. New `DisplayHelpers.formatDollarShort` (3 significant figures,
+      k/M/B) makes room; it is NOT `compactNum`, which is lossless and for URLs.
+      **A display defect the user found while reviewing this:** `TAX_DATA_BASE_YEAR` was hardcoded
+      2025 against tables that declare 2026, so every limit in the menu was aged one extra year -
+      `$217,319` where the engine used `$211,400`. Now read off `TAXData.FEDERAL.YEAR`; the ACA rows
+      were off by that year plus one more and now mirror the engine's own formula. Pinned by a test
+      against `findLimitByRate`.
+      **Sorting on the comparable axis was tried and REVERTED** - it fixes `24% Fed` vs `IRMAA Tier 3`
+      and moves `10% Fed - $24.8k` between the $63k and $84k ACA rows, which reads as broken. The
+      annotation and the ladder carry the ranking instead. Do not re-attempt without solving that.
+      `updateBracketFeedback()` stopped parsing the option's display text for its number; a
+      `data-limit` attribute carries it, and two old tests that did the same thing were re-pointed.
 
 ### Needs modeling before it can be built - NOT part of P92
 
@@ -235,7 +358,28 @@ paths read `balance.Cash` only (`optimizer_core.js:2869`, `:3113`). So "iff ther
 brokerage to pay the tax" is not implemented for Brokerage at all, and the "iff" is a blend rather
 than a condition. If either should change, that is a decision, not a defect.
 
-- **Status:** decisions recorded, nothing built. `P92a` first.
+- **Status:** COMPLETE. `P92a` v11.16aa, `P92c` v11.16ab, `P92e` v11.16af; `P92b` answered by P94
+  (no `minlimit` left to delete) and `P92d`'s count reconciliation was done by each step as it
+  landed.
+- **`P87g` AS WRITTEN IS WRONG, corrected 2026-08-30 after the user challenged it.** It claimed
+  nothing sizes a conversion against the ceiling. Measured: on a Fill Bracket 22% plan with Convert
+  Excess to Roth, MAGI lands on `BracketTarget` to the dollar and the conversion is its residual
+  after spending ($243,600 ceiling, $238,179 drawn, $145,721 to spending, **$92,458 converted**). The
+  conversion IS governed by the limit, exactly as a user expects. P92a's "median conversion change
+  $0" is not counter-evidence either: AT years are the minority, so the ceiling was not binding in
+  the median cell. `research/BRACKET_CEILING_BASIS.md` section 7 carries the correction.
+- **MEASURED 2026-08-30, and it is `P87c`: the plan stops exactly 15% of its Social Security benefit
+  short of the ceiling.** `short / SSincome` is `0.150000` in every affected year, min equal to max,
+  on Fill Bracket 22% and 24% and on IRMAA Tiers 1 and 2 alike. The sizing aggregate subtracts the
+  FULL benefit (`yr.fixedInc`) from the ceiling while only the taxable share, at most 85%, reaches
+  MAGI - so the untaxed 15% is treated as consuming ceiling it never occupies. On one $2.8M fixture
+  that is **$168,500 of headroom never used** across 17 years at Fill Bracket 22%, $97,380 at IRMAA
+  Tier 1. Identified by three arms: remove SS and the short vanishes; claim at 62 and it starts
+  sooner. Same shape as the deduction error P92a fixed, and NOT fixed by it - it sits under every
+  ceiling, federal and IRMAA. `research/BRACKET_CEILING_BASIS.md` section 9, harness
+  `.test_harnesses/underfill_harness.js`. **My earlier claim that 2031 is before that plan's SS
+  starts was wrong** - person 2 claims at 67 in 2031; I had only checked person 1.
+  **This is the next O0 candidate.**
 
 ---
 

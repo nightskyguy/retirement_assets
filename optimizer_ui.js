@@ -491,7 +491,7 @@ function getInputs() {
     // (stratRate=aca<N>), so derive strategy='aca' whenever an ACA multiple is selected. This
     // also makes legacy scenarios/URLs (strategy=bracket + aca<N>) load with strict semantics.
     let _strategy = val('strategy');
-    if (_strat.stratACAMultiple > 0 && (_strategy === 'bracket' || _strategy === 'minlimit')) {
+    if (_strat.stratACAMultiple > 0 && _strategy === 'bracket') {
         _strategy = 'aca';
     }
     return {
@@ -893,6 +893,7 @@ function runSimulation() {
     updateCharts(res.log);
     updateIRAGoalHint();
     updateExtraConvWarning();  // P88e: after the log exists, so it can say how many years broke
+    updateLimitFeasibilityWarning();   // P92c: same reason - it reports on the run just finished
     refreshSuggestedSpend();   // re-solve the engine-calibrated suggested spend for the ⓘ icon
     // Show computed marginal rate in the auto label when futureIRATaxRate is blank
     const _autoRateEl = document.getElementById('future-ira-tax-auto');
@@ -4829,15 +4830,21 @@ const OPT_FAMILY_OF_STRATEGY = {
 // What the user must not do is believe the ceiling still holds.
 //
 // The strategies this applies to are the ones that carry a ceiling: Fill Bracket (federal rate or
-// IRMAA tier), Min Limit, and the ACA cap. Proportional, Ordered, IRA Draw % and Reduce are
+// IRMAA tier) and the ACA cap. Proportional, Ordered, IRA Draw % and Reduce are
 // bracket-agnostic and have no ceiling to breach, so they say nothing.
+// P92c. This read `val('stratIRMAATier')` and `val('stratACAMultiple')`, and NEITHER IS A FORM
+// FIELD: both are derived in getInputs() from the one Limit dropdown, whose value carries them as
+// "IRMAA2" or "aca400". So both lookups returned undefined, `+undefined` is NaN, and every
+// comparison against it is false - the function fell through to "the federal bracket ceiling" for
+// every plan in the family, IRMAA tiers and ACA caps included. It named the wrong ceiling from the
+// day it shipped, in the one sentence whose whole job is to name the right one. Asking getInputs(),
+// which is where those two values actually exist, is the fix; `strategy` is derived there too, and
+// is the only place 'aca' is ever the answer (the dropdown itself only ever says 'bracket').
 function extraConvCeilingKind() {
-    const m = val('strategy');
-    if (m === 'minlimit') return 'the Min Limit ceiling';
-    if (m === 'aca') return 'the ACA FPL cap';
-    if (m !== 'bracket') return null;
-    if ((+val('stratIRMAATier') ?? -1) >= 0) return 'the IRMAA tier ceiling';
-    if ((+val('stratACAMultiple') ?? 0) > 0) return 'the ACA FPL cap';
+    const i = getInputs();
+    if (i.strategy === 'aca') return 'the ACA FPL cap';
+    if (i.strategy !== 'bracket') return null;
+    if ((i.stratIRMAATier ?? -1) >= 0) return 'the IRMAA tier ceiling';
     return 'the federal bracket ceiling';
 }
 
@@ -4871,10 +4878,156 @@ function updateExtraConvWarning() {
     box.style.display = '';
 }
 
+// P92c. A limit the user picked is a contract, and this is the plan saying when it could not keep
+// it. The engine already falls back to funding the Spend Goal - the third pass forces an IRA draw
+// past a bracket or IRMAA ceiling rather than leaving spending unpaid - but it did that silently,
+// and only the BracketOverage column recorded it. A reader looking at the headline numbers had no
+// way to know the limit on screen was not the limit the plan ran under.
+//
+// NO THRESHOLD. The Optimizer's `_isBracketInfeasible` calls a row infeasible past 50% of years,
+// which is a reasonable way to rank a table and a bad way to talk to one reader: on the P87a grid a
+// single breached year is common (24 of 40 IRMAA Tier 1 cells breach in 1 to 50% of years) while a
+// wholly unfundable limit is also common (all 40 Fill Bracket 12% cells breach, 36 of them past
+// half). Both are worth saying and they are not the same statement, so the COUNT is the message and
+// only the opening sentence changes with it.
+//
+// The forced half only. `-overageFromConv` (P88c) carries overage an Extra Annual Roth Conversion
+// caused, which is the user choosing to go over rather than the plan being unable to stay under;
+// that half is what updateExtraConvWarning() covers.
+// P97. The message this builds, split out from the DOM so it can be tested on rows rather than on a
+// page. Pure: rows in, HTML out, '' when there is nothing to say.
+//
+// TWO CAUSES, AND THEY TAKE OPPOSITE ADVICE. The first version of this warning said "Lower the Spend
+// Goal" whenever a year went over, and on a plan whose IRA is large enough that is simply wrong: a
+// $4M IRA left to a survivor throws off an RMD of $455,636 against an IRMAA Tier 1 ceiling of
+// $370,371, and the plan withdraws NOTHING beyond that RMD in the years it is flagged. Required
+// distributions, Social Security and a pension are income the household must take; no Spend Goal
+// reaches them. Telling that user to spend less is advice that cannot work, on the one screen whose
+// job is to explain the number above it.
+//
+// The test is exact rather than estimated: `IRAwd` is the voluntary draw plus conversion gross
+// (optimizer_core.js, buildSimYearLogRecord) and `ForcedIRA` is the third pass's draw, so a year
+// with neither is a year in which the plan chose nothing that could have put it over. Estimating
+// instead - subtracting the draws from MAGI - would be wrong in the unsafe direction, because IRA
+// income also raises the taxable share of Social Security, so removing it would take more out of
+// MAGI than the draw itself.
+function limitWarningText(rows, kind, totalYears) {
+    const isACA = kind === 'the ACA FPL cap';
+    const forced = r => (r.BracketOverage ?? 0) - (r['-overageFromConv'] ?? 0);
+    const yrs = isACA ? rows.filter(r => r['-acaBreach']) : rows.filter(r => forced(r) > 1);
+    if (!yrs.length) return '';
+
+    const chose = r => (r.IRAwd ?? 0) + (r.ForcedIRA ?? 0);
+    const structural = yrs.filter(r => chose(r) <= 1);      // nothing the plan chose put it over
+    const spendDriven = yrs.filter(r => chose(r) > 1);
+
+    const m = totalYears;
+    const yearWord = m === 1 ? 'year' : 'years';
+    const money = v => DisplayHelpers.formatDollar(v);
+    const worstOf = set => Math.max(...set.map(forced));
+    const ceiling = isACA ? 'the cap' : kind;
+
+    // The structural half first when it is the bigger one, because it is the half whose advice the
+    // reader would otherwise get backwards.
+    if (structural.length && structural.length >= spendDriven.length) {
+        const worstRow = structural.reduce((a, b) => (forced(a) > forced(b) ? a : b));
+        const rmd = worstRow.RMDwd ?? 0;
+        let out = `<b>Income you cannot defer already exceeds ${ceiling} in `
+            + `${structural.length} of ${m} ${yearWord}.</b> `
+            + `In ${structural.length === 1 ? 'that year' : 'those years'} the plan withdraws nothing `
+            + `beyond what it is required to, and still goes over by up to `
+            + `<b>${money(worstOf(structural))}</b>`;
+        if (rmd > 1) {
+            out += `, on a required distribution of ${money(rmd)}`;
+        }
+        out += `. <b>Lowering the Spend Goal cannot change this</b> - required distributions, Social `
+            + `Security and any pension are income the plan has to take. Converting more before `
+            + `required distributions begin, a QCD, or a higher limit are what move it.`;
+        if (spendDriven.length) {
+            out += ` Separately, spending pushes the plan over in ${spendDriven.length} other `
+                + `${spendDriven.length === 1 ? 'year' : 'years'}, by up to ${money(worstOf(spendDriven))}.`;
+        }
+        return out + ` See RMDwd and BracketOverage in Annual Details.`;
+    }
+
+    const n = spendDriven.length, worst = worstOf(spendDriven);
+    const most = n / m > 0.5;
+    let out;
+    if (isACA) {
+        out = `<b>Your spending does not fit under ${kind} in ${n} of ${m} ${yearWord}.</b> `
+            + `The plan pays for the spending anyway, so income goes over the cap in `
+            + `${n === 1 ? 'that year' : 'those years'} and the premium subsidy is lost in `
+            + `${n === 1 ? 'it' : 'them'}. Lower the Spend Goal, or raise the multiple, to keep the cap.`;
+    } else {
+        out = (most
+                ? `<b>${kind.charAt(0).toUpperCase() + kind.slice(1)} you chose cannot fund this plan:</b> `
+                  + `your Spend Goal does not fit inside it in ${n} of ${m} ${yearWord}. `
+                : `<b>Your Spend Goal does not fit inside ${kind} in ${n} of ${m} ${yearWord}.</b> `)
+            + `The plan withdraws past it to pay for spending, by up to <b>${money(worst)}</b>, so `
+            + `${n === 1 ? 'that year satisfies' : 'those years satisfy'} your Spend Goal rather than `
+            + `the limit. Lower the Spend Goal or pick a higher limit to keep it. `
+            + `A conversion you chose to make going over is counted separately, not here.`;
+    }
+    if (structural.length) {
+        out += ` In ${structural.length} further ${structural.length === 1 ? 'year' : 'years'} the `
+             + `plan is over on required income alone, which no Spend Goal reaches.`;
+    }
+    return out + ` See ${isACA ? 'acaBreach and ' : ''}BracketOverage in Annual Details.`;
+}
+
+function updateLimitFeasibilityWarning() {
+    const box = document.getElementById('limit-warn');
+    if (!box) return;
+    const kind = extraConvCeilingKind();   // null for every strategy with no ceiling at all
+    const log  = Array.isArray(lastSimulationLog) ? lastSimulationLog : null;
+    if (!kind || !log || !log.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    const html = limitWarningText(log, kind, log.length);
+    if (!html) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.innerHTML = html;
+    box.style.display = '';
+}
+
+// A saved plan or a shared link can name a strategy this version does not have - `minlimit`, which
+// was removed, or a typo in a hand-edited URL. A <select> handed a value matching no option lands on
+// selectedIndex -1, so getInputs().strategy reads "" and the plan computes $0 with nothing on screen
+// to say why. Fall back to the first option, which is the default strategy, and restore that
+// option's own parameter fields from the defaults captured before any load - so what comes up is a
+// working plan rather than a blank one.
+//
+// The check is generic rather than a list of retired names: any value the dropdown does not carry
+// gets the same treatment, and there is no list to keep in step with the markup. Silent, on
+// instruction. It must run AFTER the deliberate strategy='aca' -> 'bracket' mapping, which is a
+// value the dropdown legitimately does not have; running before would swallow that case.
+function resetUnknownStrategy() {
+    const el = document.getElementById('strategy');
+    if (!el || el.options.length === 0 || el.selectedIndex !== -1) return;
+    el.value = el.options[0].value;
+    // Each strategy's parameters live in its own #ui-<value> group, so the group names itself from
+    // the option value and no mapping table is needed here either.
+    document.querySelectorAll(`#ui-${el.value} input, #ui-${el.value} select`).forEach(f => {
+        // OPT_DEFAULTS is the pristine snapshot captureDefaults() takes at load. It is the right
+        // source when it exists, and it is not always there: the self-check suite runs BEFORE
+        // captureDefaults(). Fall back to the markup's own default rather than leaving whatever the
+        // unusable strategy carried, which is the one outcome this function exists to prevent.
+        const def = OPT_DEFAULTS[f.id];
+        if (f.type === 'checkbox') {
+            f.checked = def ? def.c : f.defaultChecked;
+        } else if (DOLLAR_INPUT_IDS.has(f.id)) {
+            DisplayHelpers.setDollarValue(f.id, def ? (def.n ?? def.v) : f.defaultValue);
+        } else if (def) {
+            f.value = def.v;
+        } else if (f.tagName === 'SELECT') {
+            f.value = ([...f.options].find(o => o.defaultSelected) || f.options[0])?.value ?? f.value;
+        } else {
+            f.value = f.defaultValue;
+        }
+    });
+}
+
 function toggleStrategyUI() {
     let m = val('strategy');
     document.getElementById('ui-fixed').classList.toggle('hidden', m !== 'fixed');
-    document.getElementById('ui-bracket').classList.toggle('hidden', m !== 'bracket' && m !== 'minlimit');
+    document.getElementById('ui-bracket').classList.toggle('hidden', m !== 'bracket');
     document.getElementById('ui-propwd').classList.toggle('hidden', m !== 'propwd');
     document.getElementById('ui-fixedpct').classList.toggle('hidden', m !== 'fixedpct');
     document.getElementById('ui-ordered').classList.toggle('hidden', m !== 'ordered');
@@ -4890,6 +5043,7 @@ function toggleStrategyUI() {
     }
     // document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
     updateExtraConvWarning();   // P88e: the ceiling it warns about is the one just switched to
+    updateLimitFeasibilityWarning();   // P92c: and so is the limit this one reports on
 }
 
 
@@ -5074,6 +5228,12 @@ function loadFromURL() {
             }
         }
     });
+    // 'aca' is an internal strict strategy with no dropdown option of its own; applyScenario maps it
+    // back to 'bracket' + an ACA stratRate, and a link that carries it has to be read the same way or
+    // the unknown-strategy guard below would take it for a name this version does not have.
+    const _stratEl = document.getElementById('strategy');
+    if (_stratEl && params.get('strategy') === 'aca') _stratEl.value = 'bracket';
+    resetUnknownStrategy();
     toggleStrategyUI();
     onConvSubFlagChange();   // .checked set programmatically above → no change event; resync the convenience checkbox
     maybeWarnCashReserveActive();
@@ -5406,6 +5566,9 @@ function applyScenario(data) {
         if (typeof toggleSpouseUI === 'function') toggleSpouseUI();
     }
 
+    // A strategy this version does not have loads as the default rather than as a blank $0 plan.
+    if (typeof resetUnknownStrategy === 'function') resetUnknownStrategy();
+
     // Sync strategy sub-UI to the newly loaded strategy value
     if (typeof toggleStrategyUI === 'function') toggleStrategyUI();
 
@@ -5428,6 +5591,7 @@ function applyScenario(data) {
     if (typeof updateProfileAgeDisplay === 'function') updateProfileAgeDisplay(); // ages / RMD start / projected RMD
     if (typeof refreshStratRateOptions === 'function') refreshStratRateOptions(); // bracket/IRMAA labels (CPI + filing status)
     if (typeof updateBracketFeedback === 'function') updateBracketFeedback();
+    if (typeof updateLimitBasisNote === 'function') updateLimitBasisNote();
     // The loaded scenario is the new restore baseline. spendGoal was set programmatically via
     // setDollarValue, which does NOT fire the field's oninput="_priorSpendGoal=null", so a stale
     // pre-load "Restore: $X" (often the original default) would otherwise cling to the ⓘ icon.
@@ -5799,7 +5963,16 @@ function generateStateOptions() {
 }
 
 // Base year of the TAXData bracket values. Used to CPI-adjust displayed limits.
-const TAX_DATA_BASE_YEAR = 2025;
+//
+// P92e. This was hardcoded to 2025 while the tables it indexes say 2026 (`TAXData.FEDERAL.YEAR`,
+// `TAXData.IRMAA.YEAR`), so every limit in the Limit dropdown was compounded one extra year of CPI
+// over figures that were already current: the menu offered `22% Fed - $217,319` where the engine
+// built that same plan's ceiling on $211,400, which is 211,400 x 1.028 to the dollar. Display only,
+// but it is the number a reader compares against their own tax table. Reading the year off the data
+// is what stops it drifting again the next time the tables are rolled forward.
+//
+// The two tables must share a year for one factor to be right for both; a test pins that.
+const TAX_DATA_BASE_YEAR = TAXData.FEDERAL.YEAR;
 
 /**
  * Returns the filing status (MFJ or SGL) to use for the bracket dropdown.
@@ -5890,17 +6063,13 @@ function updateBracketFeedback() {
 
     const spendGoalStr = (spendGoalEl.value || '140000').toString().replace(/[^\d.-]/g, '');
     const spendGoal = parseFloat(spendGoalStr) || 140000;
-    const label = selectedOption.text; // e.g., "24% Fed  ·  $414,849"
-
-    // Extract bracket limit from option text
-    // Try multiple patterns: "$414,849", "$414849", etc.
-    let bracketLimit = null;
-    const limitMatches = label.match(/\$[\s]*(\d+(?:,\d{3})*|\d+)/g);
-    if (limitMatches && limitMatches.length > 0) {
-        // Get the last dollar amount (usually the limit)
-        const lastMatch = limitMatches[limitMatches.length - 1];
-        bracketLimit = parseInt(lastMatch.replace(/[^\d]/g, ''));
-    }
+    // P92e. The limit comes off the option's `data-limit`, which generateStratRateOptions() writes
+    // from the same number it formatted. This used to run a regex over the option's DISPLAY TEXT and
+    // take the last dollar amount in it - which broke twice over the moment the label changed: the
+    // new compact form is "$211k", whose digits parse as 211, and the label now ends with the OTHER
+    // ladder's position, so "the last dollar amount" would have been the wrong one even in full
+    // digits. A label is a thing to read; the number it shows travels separately.
+    const bracketLimit = Number(selectedOption.dataset.limit);
 
     if (!bracketLimit || isNaN(bracketLimit)) {
         feedbackEl.innerHTML = '';
@@ -6045,6 +6214,7 @@ function refreshStratRateOptions() {
     }
     clampStratRateSelection(sel);
     updateBracketFeedback(); // Update feedback after options change
+    updateLimitBasisNote();  // P92e: same trigger - it describes the option now selected
     updateACAWarning();
 }
 
@@ -6056,6 +6226,204 @@ function refreshStratRateOptions() {
  */
 // bothOnMedicareAtStart() lives in optimizer_core.js - it moved there when the strategy enumeration
 // did and needed it. Pure, and still used by the warning below.
+
+// ── P92e: the sentence under the Limit dropdown, and the picture behind it ────────────────
+// The label says where the selected limit sits on the other ladder in three words. This says it in
+// a sentence, and adds the one fact a label has no room for: an IRMAA tier SPANS a bracket
+// boundary, so the tier a plan is filling can start in one bracket and end in the next.
+function updateLimitBasisNote() {
+    const box = document.getElementById('limit-basis');
+    const panel = document.getElementById('limit-ladder');
+    const sel = document.getElementById('stratRate');
+    if (!box || !sel) return;
+    const showLadder = panel && panel.style.display !== 'none';
+    const opt = sel.options[sel.selectedIndex];
+    const bracketUIVisible = !document.getElementById('ui-bracket')?.classList.contains('hidden');
+    if (!opt || !bracketUIVisible) {
+        box.innerHTML = '';
+        if (panel) { panel.style.display = 'none'; panel.innerHTML = ''; }
+        return;
+    }
+
+    const status = getDropdownStatus();
+    const cpi = (+document.getElementById('cpi')?.value || 2.8) / 100;
+    const cpiAdj = Math.pow(1 + cpi, Math.max(0, new Date().getFullYear() - TAX_DATA_BASE_YEAR));
+    const limit = Number(opt.dataset.limit);
+    const v = opt.value;
+    const isIRMAA = /^irmaa/i.test(v);
+    const isACA = v.startsWith('aca');
+    const money = n => DisplayHelpers.formatDollarShort(n);
+
+    let sentence;
+    if (isIRMAA) {
+        // The tier's own span is the point. Its floor and its ceiling can sit in two different
+        // federal brackets, which is exactly what no label can say.
+        const tier = +v.replace(/[^0-9]/g, '');
+        const brks = TAXData.IRMAA[status]?.brackets ?? [];
+        const floor = tier === 0 ? 0 : Math.round(brks[tier].l * cpiAdj);
+        const ded = dropdownDeduction(status);
+        const topBracket = fedBracketPctAt(Math.max(0, limit - ded), status, cpiAdj);
+        const floorBracket = fedBracketPctAt(Math.max(0, floor - ded), status, cpiAdj);
+        sentence = tier === 0
+            ? `Filling income up to ${money(limit)} keeps you under every IRMAA tier, and lands in the ${topBracket}% bracket.`
+            : (floorBracket === topBracket
+                ? `IRMAA Tier ${tier} runs ${money(floor)} to ${money(limit)}, all of it inside the ${topBracket}% bracket.`
+                : `IRMAA Tier ${tier} runs ${money(floor)} to ${money(limit)}. It <b>begins</b> in the ${floorBracket}% bracket and <b>ends</b> in the ${topBracket}% one, so filling this tier crosses a bracket on the way.`);
+    } else if (isACA) {
+        const ded = dropdownDeduction(status);
+        sentence = `This cap holds income to ${money(limit)}, which is inside the ${fedBracketPctAt(Math.max(0, limit - ded), status, cpiAdj)}% bracket. It is a cap to stay under, not a target to fill.`;
+    } else {
+        const ded = dropdownDeduction(status);
+        const magi = limit + ded;
+        sentence = `The ${opt.value}% bracket tops out at ${money(limit)} of taxable income. After this plan's deduction that is about ${money(magi)} of total income, which reaches ${irmaaBandNameAt(magi, status, cpiAdj)}.`;
+    }
+
+    box.innerHTML = sentence
+        + ` <span id="limit-ladder-link" onclick="toggleLimitLadder()" style="cursor:pointer;color:#2980b9;white-space:nowrap;">`
+        + `${showLadder ? 'Hide ▾' : 'Show me ▸'}</span>`;
+    if (showLadder) {
+        // A titled header with its own close control. The panel opens AWAY from the link that
+        // opened it - it has to, to escape a 245px sidebar - so "click Show me again" is not a
+        // discoverable way out of it. Reported as exactly that.
+        panel.innerHTML =
+            `<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">`
+          + `<b style="font-size:0.85em;color:#78350f;flex:1;">Where the limits sit</b>`
+          + `<span id="limit-ladder-close" onclick="toggleLimitLadder()" `
+          + `style="cursor:pointer;color:#78350f;font-size:0.85em;">close ✕</span></div>`
+          + buildLimitLadderSVG(status, cpiAdj, limit);
+    }
+}
+
+// Click anywhere else to dismiss, the way the share panel does (see setupSmallScreenUX's sibling
+// handler). Registered once, at load, and cheap: it does nothing at all while the panel is closed.
+document.addEventListener('click', e => {
+    const panel = document.getElementById('limit-ladder');
+    if (!panel || panel.style.display === 'none') return;
+    if (panel.contains(e.target)) return;
+    if (e.target.closest && e.target.closest('#limit-ladder-link')) return;   // the toggle's own job
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+    if (typeof updateLimitBasisNote === 'function') updateLimitBasisNote();
+});
+
+// Escape closes it too, since it overlays the page while open.
+document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    const panel = document.getElementById('limit-ladder');
+    if (panel && panel.style.display !== 'none') toggleLimitLadder();
+});
+
+// The DRAWING is a picture. The interactions are the toggle, the close control, a click outside and
+// Escape - all of them ways to get rid of it, none of them inside the graphic.
+//
+// Placed against the viewport rather than flowed into the sidebar: the sidebar is 245px wide and
+// clips its overflow, so an in-flow panel was either illegible or had to scroll sideways. Same
+// approach as #touch-tooltip in setupSmallScreenUX() - measure the control, clamp to the viewport.
+function toggleLimitLadder() {
+    const panel = document.getElementById('limit-ladder');
+    const sel = document.getElementById('stratRate');
+    if (!panel) return;
+    const open = panel.style.display !== 'none';
+    if (open) { panel.style.display = 'none'; panel.innerHTML = ''; updateLimitBasisNote(); return; }
+    panel.style.display = '';
+    updateLimitBasisNote();                     // fills it, so it has a size to place
+    const r = sel ? sel.getBoundingClientRect() : { left: 8, bottom: 8 };
+    const w = panel.offsetWidth || 560;      // offsetWidth, laid out; the rect can read 0 mid-fill
+    const clamp = (v, lo, hi) => Math.round(Math.max(lo, Math.min(v, Math.max(lo, hi))));
+    panel.style.left = clamp(r.left, 8, window.innerWidth - w - 8) + 'px';
+    // Both ends. Clamping only the bottom put the panel off the TOP of the window whenever the page
+    // was scrolled far enough that the dropdown had left it.
+    panel.style.top  = clamp(r.bottom + 6, 8, window.innerHeight - 60) + 'px';
+}
+
+// Two ladders drawn on ONE income axis, which is only possible because a federal bracket top plus
+// the year's deduction is the same measure as an IRMAA threshold. Hand-written SVG rather than
+// Chart.js: every chart in this app is a time series that must be destroyed and re-instantiated on
+// a static canvas, and a canvas inside a hidden panel has no box to measure (montecarlo/mc_tab.js
+// carries that warning). A string of SVG has neither problem.
+//
+// NOTHING IN HERE IS INTERACTIVE. No onclick, no title, no hover. A test pins that.
+function buildLimitLadderSVG(status, cpiAdj, selectedLimit) {
+    const ded = dropdownDeduction(status);
+    const fedBrks = (TAXData.FEDERAL[status]?.brackets ?? []).filter(b => isFinite(b.l));
+    const irmaaBrks = (TAXData.IRMAA[status]?.brackets ?? []).filter(b => isFinite(b.l));
+    if (!fedBrks.length || !irmaaBrks.length) return '';
+
+    // Axis runs to just past the last tier a reader can actually choose, so nothing the dropdown
+    // offers falls off the end. The top federal bracket and top IRMAA tier are unbounded and are
+    // drawn as open-ended bands rather than dropped.
+    const maxX = Math.max(irmaaBrks[irmaaBrks.length - 1].l * cpiAdj,
+                          fedBrks[fedBrks.length - 1].l * cpiAdj + ded) * 1.08;
+    const W = 520, L = 62, R = 10, H = 138;
+    const x = v => L + Math.max(0, Math.min(1, v / maxX)) * (W - L - R);
+    const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const money = n => DisplayHelpers.formatDollarShort(n);
+
+    const FED = ['#dbeafe', '#bfdbfe', '#93c5fd', '#60a5fa', '#3b82f6', '#2563eb', '#1d4ed8'];
+    const IRM = ['#f3f4f6', '#fde68a', '#fcd34d', '#fbbf24', '#f59e0b', '#d97706', '#b45309'];
+    let out = '';
+
+    // Federal band: each bracket drawn where its MAGI equivalent falls, so the two rows line up.
+    let prev = 0;
+    fedBrks.forEach((b, i) => {
+        const top = b.l * cpiAdj + ded;
+        out += `<rect x="${x(prev).toFixed(1)}" y="26" width="${Math.max(0, x(top) - x(prev)).toFixed(1)}" height="26" fill="${FED[i % FED.length]}" stroke="#94a3b8"/>`;
+        if (x(top) - x(prev) > 26) {
+            out += `<text x="${((x(prev) + x(top)) / 2).toFixed(1)}" y="43" font-size="12" text-anchor="middle" fill="#1e293b">${Math.round(b.r * 100)}%</text>`;
+        }
+        prev = top;
+    });
+    out += `<rect x="${x(prev).toFixed(1)}" y="26" width="${(W - R - x(prev)).toFixed(1)}" height="26" fill="${FED[fedBrks.length % FED.length]}" stroke="#94a3b8"/>`;
+
+    // IRMAA band. The table's FIRST row is a `-none-` sentinel sitting one dollar below Tier 1's
+    // start, not a tier - drawing it as one produced a $1 sliver and shifted every tier number
+    // after it by one. So the bands are: 0 to Tier 1's start (no surcharge), then each tier from
+    // its own start to the next one's.
+    const irmaaBand = (from, to, fill, label) => {
+        out += `<rect x="${x(from).toFixed(1)}" y="62" width="${Math.max(0, x(to) - x(from)).toFixed(1)}" height="26" fill="${fill}" stroke="#94a3b8"/>`;
+        if (x(to) - x(from) > 26) {
+            out += `<text x="${((x(from) + x(to)) / 2).toFixed(1)}" y="79" font-size="12" text-anchor="middle" fill="#1e293b">${label}</text>`;
+        }
+    };
+    const tier1Start = irmaaBrks[1].l * cpiAdj;
+    irmaaBand(0, tier1Start, IRM[0], 'none');
+    prev = tier1Start;
+    for (let i = 1; i < irmaaBrks.length; i++) {
+        const next = i + 1 < irmaaBrks.length ? irmaaBrks[i + 1].l * cpiAdj : null;
+        if (next === null) break;
+        irmaaBand(prev, next, IRM[i % IRM.length], 'T' + i);
+        prev = next;
+    }
+    out += `<rect x="${x(prev).toFixed(1)}" y="62" width="${(W - R - x(prev)).toFixed(1)}" height="26" fill="${IRM[irmaaBrks.length % IRM.length]}" stroke="#94a3b8"/>`;
+
+    // The selected limit, on the axis both rows share.
+    const selMagi = /^\d+$/.test(String(document.getElementById('stratRate')?.value ?? ''))
+        ? selectedLimit + ded : selectedLimit;
+    out += `<line x1="${x(selMagi).toFixed(1)}" y1="20" x2="${x(selMagi).toFixed(1)}" y2="96" stroke="#b45309" stroke-width="2" stroke-dasharray="4 3"/>`;
+    out += `<text x="${x(selMagi).toFixed(1)}" y="16" font-size="11" fill="#b45309" text-anchor="middle">your limit</text>`;
+
+    // The plan's own first-year income, when there is a run to read it off.
+    const e = Array.isArray(lastSimulationLog) ? lastSimulationLog[0] : null;
+    const planMagi = e && e.MAGI > 0 ? e.MAGI / (e['-cpiFactor'] || 1) : null;
+    if (planMagi) {
+        out += `<line x1="${x(planMagi).toFixed(1)}" y1="20" x2="${x(planMagi).toFixed(1)}" y2="96" stroke="#334155" stroke-width="1.5"/>`;
+        out += `<text x="${x(planMagi).toFixed(1)}" y="108" font-size="11" fill="#334155" text-anchor="middle">this plan ${esc(money(planMagi))}</text>`;
+    }
+
+    const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => f * maxX);
+    let axis = `<line x1="${L}" y1="118" x2="${W - R}" y2="118" stroke="#999"/>`;
+    for (const t of ticks) axis += `<text x="${x(t).toFixed(1)}" y="130" font-size="10" fill="#777" text-anchor="middle">${esc(money(t))}</text>`;
+
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block" role="img" `
+         + `aria-label="Federal brackets and IRMAA tiers on one total-income axis">`
+         + `<text x="4" y="43" font-size="11" fill="#444">Federal</text>`
+         + `<text x="4" y="79" font-size="11" fill="#444">IRMAA</text>`
+         + out + axis
+         + `</svg>`
+         + `<div style="font-size:0.72em;color:#78350f;margin-top:2px;padding-left:4px;">`
+         + `Both ladders on one axis of total income. Federal brackets are drawn at their top plus `
+         + `this plan's deduction, which is the income the plan measures against.</div>`;
+}
 
 function updateACAWarning() {
     const sel     = document.getElementById('stratRate');
@@ -6083,6 +6451,17 @@ function updateACAWarning() {
     const bothMedicare = bothOnMedicareAtStart(by1, startAge, hasSpouse, by2);
     const oneMedicare  = hasSpouse && (p1Medicare !== p2Medicare);
 
+    // P96. Is Medicare age ALREADY past, this calendar year, for everyone in the plan? If it is,
+    // the advice the bothMedicare message used to end on - "Lower Retirement Start Age to model
+    // pre-Medicare years" - cannot be followed by anybody: planFirstYear clamps a start year in the
+    // past up to the current one, so EVERY start age yields the same first year and the same ages
+    // in it. The message named a control that could not change the outcome it was describing.
+    // `planFirstYear(by1, 0)` is that clamp's own floor, which is today, so this reuses the shared
+    // definition rather than writing a second age calculation beside it.
+    const nowYear = planFirstYear(by1, 0);
+    const medicareAlready = (nowYear - by1) >= medAge
+                         && (!hasSpouse || by2 <= 0 || (nowYear - by2) >= medAge);
+
     // Disable / re-enable ACA <option>s
     for (const opt of sel.options) {
         if (!opt.value.startsWith('aca')) continue;
@@ -6109,7 +6488,11 @@ function updateACAWarning() {
     const you  = `you will be ${p1AgeAtStart}`;
     const them = `your spouse ${p2AgeAtStart}`;
 
-    if (bothMedicare) {
+    if (bothMedicare && medicareAlready) {
+        // Silent, on instruction. The options are greyed out above and nothing here can be acted
+        // on, so the box says nothing rather than describing a control that will not help.
+        warnEl.style.display = 'none';
+    } else if (bothMedicare) {
         warnEl.textContent = hasSpouse
             ? `⚠ At retirement start in ${startYear}, ${you} and ${them} - both on Medicare (age ${medAge}+), so there is no premium subsidy for an income cap to protect. ACA options are unavailable. Lower Retirement Start Age to model pre-Medicare years.`
             : `⚠ At retirement start in ${startYear} ${you}, already on Medicare (age ${medAge}+), so there is no premium subsidy for an income cap to protect. ACA options are unavailable. Lower Retirement Start Age to model pre-Medicare years.`;
@@ -6136,6 +6519,67 @@ function updateACAWarning() {
     }
 }
 
+// ── P92e: reading one income ladder's position on the other ────────────────────────────
+// The Limit menu offers three families of ceiling in one sorted list and they are NOT measured
+// against the same income: a federal entry is a TAXABLE-income threshold, an IRMAA entry is MAGI,
+// an ACA entry is ACA MAGI. Printed as three bare dollar amounts they invite a comparison that is
+// not valid, and the specific thing a reader cannot see is that IRMAA Tier 1 BEGINS inside the 22%
+// bracket and ENDS inside the 24% one - so "fill Tier 1" is a 24% decision.
+//
+// Every annotation goes through these functions, so the dropdown label, the sentence under it and
+// the ladder picture can never disagree about where a limit sits.
+
+// The deduction that converts between the two bases. THE PLAN'S OWN, not a second derivation of it:
+// `-fedDeduction` is what calculateTaxes() charged in the plan's first year - standard or itemized,
+// the age bumps, and the OBBBA senior deduction after its phase-out. Divided by that year's CPI
+// factor to bring it back to the table-year dollars the dropdown prints, since a plan starting in
+// 2035 logs a deduction inflated by nine years.
+//
+// Before the first run there is no log, so this falls back to the bare statutory standard deduction:
+// no age bumps, no senior deduction. Wrong by up to about $7,700 for a couple, and wrong only until
+// the first simulation finishes, which happens on page load.
+//
+// STALENESS, and it is deliberate: refreshStratRateOptions() runs at the TOP of runSimulation(), so
+// labels are built from the PREVIOUS run's deduction. A second simulation to avoid that would cost
+// far more than the drift it removes.
+function dropdownDeduction(status) {
+    const e = Array.isArray(lastSimulationLog) ? lastSimulationLog[0] : null;
+    if (e && e['-fedDeduction'] > 0) return e['-fedDeduction'] / (e['-cpiFactor'] || 1);
+    return TAXData.FEDERAL[status]?.std ?? 0;
+}
+
+// Which IRMAA band a MAGI figure falls in, by the names the dropdown itself uses.
+function irmaaBandNameAt(magi, status, cpiAdj) {
+    const brks = TAXData.IRMAA[status]?.brackets ?? [];
+    let band = 0;
+    for (let i = 1; i < brks.length; i++) {
+        if (isFinite(brks[i].l) && magi >= brks[i].l * cpiAdj) band = i; else break;
+    }
+    return band === 0 ? 'below IRMAA' : `IRMAA Tier ${band}`;
+}
+
+// Which federal bracket a TAXABLE-income figure falls in, as a whole-percent rate. Two callers
+// want two different words around the same number - the dropdown label says "24% Fed" to match its
+// own entries, the sentence below it says "the 24% bracket" - so the number comes back bare and
+// each caller writes its own sentence.
+function fedBracketPctAt(taxable, status, cpiAdj) {
+    const brks = TAXData.FEDERAL[status]?.brackets ?? [];
+    for (const b of brks) if (!isFinite(b.l) || taxable <= b.l * cpiAdj) return Math.round(b.r * 100);
+    return null;
+}
+function fedBracketNameAt(taxable, status, cpiAdj) {
+    const pct = fedBracketPctAt(taxable, status, cpiAdj);
+    return pct == null ? '' : `${pct}% Fed`;
+}
+
+// The annotation. `kind` is the ladder the limit came FROM; the answer is the other one.
+function crossLadderNote(kind, limit, status, cpiAdj) {
+    const ded = dropdownDeduction(status);
+    return kind === 'fed'
+        ? irmaaBandNameAt(limit + ded, status, cpiAdj)                  // taxable top -> MAGI
+        : fedBracketNameAt(Math.max(0, limit - ded), status, cpiAdj);   // MAGI threshold -> taxable
+}
+
 /**
  * Builds the bracket/IRMAA ceiling dropdown options.
  *
@@ -6149,10 +6593,16 @@ function generateStratRateOptions() {
     const status = getDropdownStatus();
     const isMFJ = status === 'MFJ';
 
-    // Compound CPI from TAX_DATA_BASE_YEAR to current year
+    // Compound CPI from TAX_DATA_BASE_YEAR to current year. For tables of the current year this is
+    // 1, which is exactly what the engine uses for a plan starting this year (`sim.cpiRate` opens at
+    // 1 in the plan's first year and compounds from there), so the menu and the engine agree.
     const currentYear = new Date().getFullYear();
     const yearsFromBase = Math.max(0, currentYear - TAX_DATA_BASE_YEAR);
     const cpiAdj = Math.pow(1 + cpi, yearsFromBase);
+    // P92e. Every entry now carries its own figure AND its position on the other ladder, so the
+    // dollars are shortened to make room. 3 significant figures: $24.8k at the bottom of the ladder
+    // where that precision means something, $211k where it does not.
+    const money = n => DisplayHelpers.formatDollarShort(n);
 
     const options = [];
 
@@ -6178,7 +6628,7 @@ function generateStratRateOptions() {
             const floor = prevFedLimit + 1;
             options.push({
                 value: String(ratePct),
-                label: `${ratePct}% Fed  ·  $${floor.toLocaleString()}+`,
+                label: `${ratePct}% Fed  ·  ${money(floor)}+ (${crossLadderNote('fed', floor, status, cpiAdj)})`,
                 limit: floor,
                 disabled: true,
             });
@@ -6188,7 +6638,7 @@ function generateStratRateOptions() {
         prevFedLimit = limit;
         options.push({
             value: String(ratePct),
-            label: `${ratePct}% Fed  ·  $${limit.toLocaleString()}`,
+            label: `${ratePct}% Fed  ·  ${money(limit)} (${crossLadderNote('fed', limit, status, cpiAdj)})`,
             limit,
             defaultSelected: false
         });
@@ -6215,7 +6665,7 @@ function generateStratRateOptions() {
             const floor = Math.round(IRMAABrks[i].l * cpiAdj);
             options.push({
                 value: `IRMAA${i}`,
-                label: `${label}  ·  $${floor.toLocaleString()}+`,
+                label: `${label}  ·  ${money(floor)}+ (${crossLadderNote('magi', floor, status, cpiAdj)})`,
                 limit: floor,
                 disabled: true,
             });
@@ -6224,7 +6674,7 @@ function generateStratRateOptions() {
         const limit = Math.round((IRMAABrks[i + 1].l - 1) * cpiAdj);
         options.push({
             value: `IRMAA${i}`,
-            label: `${label}  ·  $${limit.toLocaleString()}`,
+            label: `${label}  ·  ${money(limit)} (${crossLadderNote('magi', limit, status, cpiAdj)})`,
             limit,
             defaultSelected: i === 0
         });
@@ -6243,9 +6693,17 @@ function generateStratRateOptions() {
     // the Optimizer's ⚠️ row flag is computed from acaBreachYears and is the honest signal.
     //
     // FPL base (2025): 2-person $20,440; 1-person $15,060. CPI-approx for future years.
-    const FPL_BASE_YEAR = 2025;
+    //
+    // P92e. This used to compound from its own FPL_BASE_YEAR with a `+ 1`, which came to two years
+    // where the federal rows took one, so the ACA rows were high by a year on top of the base-year
+    // error the other two families had. It now mirrors the engine's own ACA formula exactly
+    // (`optimizer_core.js`, the stratACAMultiple branch of computeBracketCeiling):
+    //     FPL_2025 * multiple/100 * cpiRate * (1 + cpi)
+    // The trailing `(1 + cpi)` is the engine's, ageing a 2025 FPL figure into the plan's first year,
+    // and `cpiAdj` stands in for `cpiRate` at a plan starting this calendar year. Measured against a
+    // live run before changing: a 2026 plan targets $84,049 where the menu was offering $86,403.
     const fplBase = isMFJ ? 20440 : 15060;
-    const fplCpiAdj = Math.pow(1 + cpi, Math.max(0, currentYear - FPL_BASE_YEAR + 1));
+    const fplCpiAdj = cpiAdj * (1 + cpi);
     const acaEntries = [
         { pct: 200, label: 'ACA 200% FPL' },
         { pct: 250, label: 'ACA 250% FPL' },
@@ -6254,10 +6712,25 @@ function generateStratRateOptions() {
     ];
     for (const { pct, label } of acaEntries) {
         const limit = Math.round(fplBase * pct / 100 * fplCpiAdj);
-        options.push({ value: `aca${pct}`, label: `${label}  ·  $${limit.toLocaleString()}`, limit });
+        options.push({
+            value: `aca${pct}`,
+            label: `${label}  ·  ${money(limit)} (${crossLadderNote('magi', limit, status, cpiAdj)})`,
+            limit
+        });
     }
 
     // ── Sort all options by income limit, lowest → highest ─────────────────────
+    // Sorted on each entry's OWN printed figure, so the column of dollars a reader scans runs
+    // upward. It is not the comparable axis: a federal entry's number is taxable income and an
+    // IRMAA entry's is MAGI, so `24% Fed - $404k` lists before `IRMAA Tier 3 - $410k` while the
+    // ceiling it really imposes ($435,750 of MAGI) is above Tier 3.
+    //
+    // SORTING ON THE COMPARABLE AXIS WAS TRIED AND REVERTED (P92e). It fixes that inversion and
+    // breaks something worse: `10% Fed - $24.8k` then lands between the $63k and $84k ACA entries,
+    // because its MAGI equivalent is $57k, and a column reading 42k, 52.5k, 63k, 24.8k, 84k looks
+    // broken on sight, on every load. The annotation in each label now carries the cross-ladder
+    // truth in words, and the ladder picture under the menu carries it visually. That is where the
+    // ranking belongs; this list is for picking one entry and reading its own number.
     options.sort((a, b) => a.limit - b.limit);
 
     // ── Build HTML ─────────────────────────────────────────────────────────────
@@ -6270,7 +6743,10 @@ function generateStratRateOptions() {
         // Greyed the same way updateACAWarning() greys a lapsed ACA entry, so "listed but not
         // choosable" looks like one thing in this control rather than two.
         const off = opt.disabled ? ' disabled style="color:#aaa"' : '';
-        html += `<option value="${opt.value}"${selected}${off}>${opt.label}</option>\n`;
+        // P92e. The numeric limit travels as a data attribute. updateBracketFeedback() used to
+        // recover it by running a regex over this label's DISPLAY TEXT, which the `k` suffix would
+        // have broken silently - and a label is a thing to read, not an API to parse.
+        html += `<option value="${opt.value}" data-limit="${opt.limit}"${selected}${off}>${opt.label}</option>\n`;
     }
     html += '</optgroup>';
 

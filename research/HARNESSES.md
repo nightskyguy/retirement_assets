@@ -48,6 +48,71 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `bracketbasis_harness.js` | **node** | P87a: the strategy Limit dropdown's federal entries are taxable-income thresholds spent as MAGI ceilings. How much room does that leave unused, and is the room worth anything? |
 | `convopt_ceiling_harness.js` | **node** | P88f: should the Optimizer's conversion search skip the families that target a ceiling? Measures what it picks for them, whether those picks break the ceiling, and what excluding them would cost. |
 | `extraconv_magi_harness.js` | **node** | P88a/P88b: an Extra Roth Conversion never reached MAGI, so the IRMAA lookback charged a figure that omitted it. How wrong was it, and did fixing it move what the characterization predicted? |
+| `ceilded_harness.js` | **node** | P92a: the ceiling cannot ask for the year's own deduction without circularity, so which OBTAINABLE deduction is least wrong? Scores three candidates against the one actually charged. |
+| `underfill_harness.js` | **node** | P87c: a Fill Bracket plan stops exactly 15% of its Social Security short of its own ceiling. Which years, and how much headroom goes unused? |
+
+## Re-evaluation status (2026-08-30)
+
+Five engine changes landed between 2026-08-26 and 2026-08-30, after most of the studies below were
+measured. This section records which of them a harness can still reproduce. It is a **triage record,
+not a re-baseline**: no report's tables have been rewritten, and where a number here disagrees with a
+report, the report is the stale one.
+
+### The changes
+
+| id | change | commit | what it moves |
+|---|---|---|---|
+| `F1` | tax code indexed at each path's own inflation | `d0f27d0` | every CPI-sensitive or Monte Carlo run |
+| `F2` | RMD struck off the prior December 31 balance | `4df83b8` | every plan taking an RMD |
+| `F3` | an Extra Roth Conversion reaches MAGI | `b34e310` | lifetime IRMAA, by +30% to +132% |
+| `F4` | a Fill Fed Bracket ceiling fills the bracket | `4664958` | every bracket-family plan |
+| `F5` | the `minlimit` strategy is removed | `46f7bb6` | any grid naming it |
+
+### Verdicts
+
+`BROKEN` the harness can no longer derive its finding. `DRIFTED` it runs, but recorded numbers do not
+reproduce. `CURRENT` re-run agrees with the report. Every harness exits 0, so running clean is not
+evidence of currency.
+
+| harness | verdict | evidence |
+|---|---|---|
+| `bracketbasis_harness.js` | **BROKEN** (`F4`,`F5`) | prints `flag armed: BROKEN`; `bracketCeilingAddDeduction` is gone, so both arms are identical and B1/B2/B3/B5 all score on $0 |
+| `convopt_ceiling_harness.js` | **BROKEN** (`F5`) | prints `1 families are labelled wrongly - every result below is suspect`; `Min Limit 24%` is 30 of 270 cells. Headline inverted: 61-of-61 breaching is now **44/59 breach, 15 do not** |
+| `phased_harness.js` | **BROKEN** (arm enumeration) | runs **148 arms**, not the 192 the report is computed over; "118 of 192 arms never win" cannot be restated. Leaders are stable (`B-P5` RIGHT) |
+| `ordered_fill_harness.js` | **BROKEN** (coverage) | names 3 sequence codes; the engine has shipped 6 since `dd309bf`, and the missing `CBRI` is the one P30d found best |
+| `convtiming_harness.js` | **DRIFTED** (`F4`) | clean cells 499 -> 474; FRONT outright wins **304 -> 233**, so "earlier wins about two thirds of the time" is now 49% |
+| `irmaa_default_harness.js` | **DRIFTED** (`F3`,`F4`) | halfcpi -$79,002 -> -$64,043, halfstep -$11,649 -> -$29,203; "four to five times less" is now about 2x. Verdicts on P3/P4/P5 unchanged |
+| `brokerage_harness.js` | **DRIFTED** (`F2`,`F4`) | cyclic wins 26/45 -> 25/45 and 23/45 -> 19/45, so the basis-stability claim no longer holds; Q4 pairs 2,576 -> 1,981. The no-spiral headline survives (0 capped years) |
+| `gapfill_harness.js` | **DRIFTED** (`F2`,`F4`) | 227/360 -> **242/360** cells move. w=0 still best; the conclusion survives |
+| `endgame_harness.js` | **DRIFTED** (`F2`) | seq-CRB 88/108 -> 84/108; Roth-early 100/108 -> 94/101. All five verdicts unchanged |
+| `unifiedconv_harness.js` | **DRIFTED** | drifted again past its own 2026-08-24 re-baseline: negative in 26/60 -> 29/60, worst -$633,605 -> -$635,692 |
+| `oracle_harness.js` | **DRIFTED** (arm enumeration) | `P51a` reproduces (`S3-P1` RIGHT 15/15), but champion rows changed (`Reduce 20` -> `Reduce 17`). The `--full` half behind the +$1.08M headline was not re-run |
+| `rmdbasis_harness.js` | **CURRENT** | 0 of 30 timing-dependent, R2 violated in 0 of 30 - the post-fix column exactly |
+| `extraconv_magi_harness.js` | **CURRENT** | self-reports `FIXED BUILD`. Two recorded constants moved under `F4` (M3 $39,920,984 -> $39,693,824; M5 year-0 tax $39,238 -> $49,317) |
+| `underfill_harness.js` | **CURRENT** | reproduces section 9 exactly: 0.150000 every year, $168,500 unused |
+| `ceilded_harness.js` | **CURRENT** | shipped with `F4` |
+| `cpi_index_harness.js` | **CURRENT** | re-run 2026-08-26 carrying the CPI spread |
+| `betr_harness.js` | **UNREVIEWED** | 2026-07-23, the oldest finding here; `F2` and `F3` both bear on it |
+| `stopyear_harness.js` | **UNREVIEWED** | browser console, not runnable in this sweep |
+| `gapfill_objectives_harness.js` | **DRIFTED** | `W4` damping 10x -> 3.0x ($33,203 off vs $10,997 on) |
+| `irmaa_margin_harness.js` | **DRIFTED** (`F3`) | P1/P2/P5 all score WRONG against a header that expected them to hold |
+| `irmaa_cpi_risk_harness.js` | **DRIFTED** (`F1`,`F3`) | 2026-08-20, predates path-following indexation and the MAGI fix it re-bills against |
+| `irmaa_margin_paths_harness.js` | **DRIFTED** (`F3`) | `P1` and `P3` both BROKEN |
+
+### Suggested order
+
+1. `bracketbasis` and `convopt_ceiling` - both print their own alarm, and `convopt_ceiling`'s
+   published headline is now wrong rather than stale. `CONVERSION_SEARCH_CEILINGS.md` and
+   `research/README.md` line 34 both state 61 of 61.
+2. `phased` and `ordered_fill` - re-point at the shipped enumeration before anything is read off them.
+3. `convtiming` - the only DRIFTED entry whose headline changes direction; `README.md` line 15 says
+   "two to one".
+4. The four IRMAA harnesses as one pass - they share `F3`, and `irmaa_margin`/`irmaa_cpi_risk` were
+   measured before `F1` as well.
+5. The rest are safe to quote qualitatively; only their tables have moved.
+
+`research/README.md` carries drifted figures in its own prose at lines 15, 18 and 34.
+
 
 ## betr_harness.js  (node)
 

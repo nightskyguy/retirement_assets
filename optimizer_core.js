@@ -851,7 +851,7 @@ function getLTCGBracketTopRate(ordinaryIncome, totalGains, status, cpiRate) {
     return brackets.length ? brackets[brackets.length - 1].r : 0;
 }
 
-// MAGI ceiling for bracket/minlimit/aca strategies - shared by the normal per-year withdrawal
+// MAGI ceiling for bracket/aca strategies - shared by the normal per-year withdrawal
 // sizing branch and Cycle Brokerage's LTCG top-off logic (Item 4), so a brokerage harvest year
 // still respects whatever IRMAA-tier/ACA-cliff/bracket ceiling the active strategy targets.
 // fedRateCreep/stateRateCreep scale the RATES this function reports (the seeds that drive
@@ -906,7 +906,7 @@ function nominalRateAtLimit(entity, status, limit, inflation, rateCreep = 1) {
 // The invariant that catches this whole class, and the test that pins it: the average rate at a
 // fixed ceiling is INVARIANT ACROSS YEARS. A ceiling names the same real position in the table
 // every year, so its average rate cannot drift. It drifts only when two clocks disagree.
-function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, alive1, alive2, IRMAALimit, fedRateCreep = 1, stateRateCreep = 1, medicareRate = 1, dedAddBack = 0) {
+function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, alive1, alive2, fedRateCreep = 1, stateRateCreep = 1, medicareRate = 1, dedAddBack = 0) {
     let limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit;
 
     if ((inputs.stratIRMAATier ?? -1) >= 0) {
@@ -976,17 +976,9 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         // so a state ceiling still binds on its own terms. The state limit is deliberately NOT
         // lifted even though it carries the same basis error - this arm measures the federal gap
         // alone, and in a state whose table binds first that makes the reading an UNDERSTATEMENT.
-        // The `minlimit` IRMAA min below stays after it: that one is a genuine MAGI cap.
         if (inputs.bracketCeilingAddDeduction) limit += dedAddBack;
 
         limit = Math.min(stateLimit, limit);
-
-        if (inputs.strategy === 'minlimit') {
-            const maxAliveAge = Math.max(alive1 ? age1 : -1, alive2 ? age2 : -1);
-            if (maxAliveAge >= TAXData.IRMAA.ELIGIBILITY_AGE + TAXData.IRMAA.LOOKBACK) {
-                limit = Math.min(limit, IRMAALimit);
-            }
-        }
     }
 
     return { limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit };
@@ -1455,21 +1447,6 @@ function resolveHousehold(sim, yr) {
     yr.goalFedBracketLimit = findUpperLimitByAmount('FEDERAL', yr.status, sim.spendGoal, sim.cpiRate)
     yr.goalStateBracketLimit = findUpperLimitByAmount(STATEname, yr.status, sim.spendGoal, sim.cpiRate)
     yr.goalLimit = Math.min(yr.goalFedBracketLimit.limit, yr.goalStateBracketLimit.limit)
-    // Forward-projected exactly like the tier ceiling in computeBracketCeiling: `minlimit` uses this
-    // to cap THIS year's MAGI, which is charged against the thresholds published |LOOKBACK| years
-    // from now.
-    //   INERT, AND KNOWN TO BE. findUpperLimitByAmount returns the top of the band CONTAINING its
-    // amount, so IRMAABracket.limit >= yr.goalLimit always and the Math.min below always selects
-    // goalLimit. This site cannot change a result - it could not before the forward projection
-    // either. The projection is kept rather than deleted so that the three IRMAA-targeting sites
-    // stay written the same way, and so this one starts behaving correctly the moment a change to
-    // the IRMAA ladder or to findUpperLimitByAmount makes it bind. A test pins the inertness
-    // (optimizer_core.tests.js, "yr.IRMAALimit is inert"), so that day announces itself.
-    const _irmaaEffCpi = sim.cpiRate * irmaaFwdFactor(inputs);
-    let IRMAABracket = findUpperLimitByAmount('IRMAA', yr.status, yr.goalLimit, _irmaaEffCpi)
-    const _irmaaMargin = irmaaMarginDollars(inputs, IRMAABracket.limit + 1, yr.status, _irmaaEffCpi,
-                                            sim.medicareRate, onMedicareAtCharge(yr.age1, yr.age2, yr.alive1, yr.alive2));
-    yr.IRMAALimit = Math.min(yr.goalLimit, IRMAABracket.limit - _irmaaMargin);
     // P87a RESEARCH ARM. The deduction computeBracketCeiling adds back when armed; 0 otherwise, and
     // nothing reads it otherwise. It cannot be THIS year's deduction: the senior deduction phases out
     // against federalAGI (taxengine.js:1470), which is the very quantity the ceiling is about to
@@ -1494,9 +1471,9 @@ function resolveHousehold(sim, yr) {
     yr.totalIncome = 0;
     yr.netIncome = 0;
     yr.capitalGains = 0;
-    yr.limit = undefined;   // MAGI ceiling for bracket/minlimit/aca strategies (see computeBracketCeiling)
+    yr.limit = undefined;   // MAGI ceiling for bracket/aca strategies (see computeBracketCeiling)
     yr.stateLimit = undefined;
-    yr.bracketTarget = 0;  // ceiling being targeted by bracket/minlimit/aca strategies
+    yr.bracketTarget = 0;  // ceiling being targeted by bracket/aca strategies
     yr.bracketOverage = 0; // how far MAGI exceeded bracketTarget (0 when no bracket strategy).
                            // Set in the withdrawal phases, then re-decided by recomputeBracketOverage
                            // once the conversion paths have run (P88c).
@@ -1713,7 +1690,7 @@ function resolveSpendTarget(sim, yr) {
     // `IRAwd = Math.min(yr.curIRA, room)` to `yr.curIRA`, draining the whole above-goal IRA in the
     // crossing year. That is a cliff created by the fix, not a policy.
     yr.isACAStrategy = inputs.strategy === 'aca' && !yr.acaLapsed;
-    yr.isBracketStrategy = inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'fixedpct' || yr.isACAStrategy;
+    yr.isBracketStrategy = inputs.strategy === 'bracket' || inputs.strategy === 'fixedpct' || yr.isACAStrategy;
     yr.isOrderedStrategy = inputs.strategy === 'ordered';
 
     // Phase 22: Guyton-Klinger dynamic spend adjustment (runs before targetSpend resolution)
@@ -1878,17 +1855,17 @@ function planPrimaryWithdrawals(sim, yr) {
         // spend - this realizes gains + steps up basis even when spend doesn't need it.
         // If spend needs force realization beyond the target, top off whichever LTCG bracket
         // the forced amount actually lands in (capture the room in the bracket you're already
-        // paying for) - but never past the active bracket/minlimit/aca strategy's own MAGI
+        // paying for) - but never past the active bracket/aca strategy's own MAGI
         // ceiling (`limit`), if one is in effect this year.
         //
         // P32c research inputs, BOTH default off / today's behavior, no UI sets either:
         //   cycleHarvestMode  'maxbracket' (default, today) | 'spendonly' - spendonly draws only
         //                     what spending needs, skipping the bracket top-off entirely (Q5).
         //   cycleCoexist      'off' (default, today) | 'bracketfill' - the harvest year ALSO runs
-        //                     the family's own IRA sizing (v1: bracket/minlimit/aca + fixedpct).
+        //                     the family's own IRA sizing (v1: bracket/aca + fixedpct).
         //                     The IRA draw is sized FIRST, then the harvest is sized against the
         //                     raised ordinary floor, so the draw's LTCG push-up is respected by
-        //                     construction. For MAGI-shaped ceilings (IRMAA tier / ACA / minlimit)
+        //                     construction. For MAGI-shaped ceilings (IRMAA tier / ACA)
         //                     the room subtracts the planned harvest's realized LTCG via a
         //                     one-iteration two-pass fixed point (pass 1 sizes the harvest at
         //                     IRAwd=0; pass 2 re-sizes it against the final floor). A pure
@@ -1920,14 +1897,14 @@ function planPrimaryWithdrawals(sim, yr) {
             let _room = (_nextRate !== undefined)
                 ? getLTCGBracketRoom(ordFloor, yr.status, _nextRate, sim.cpiRate)
                 : _spendGrossNeeded;   // already in the top LTCG bracket - no higher ceiling to top off to
-            if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || yr.isACAStrategy) {
+            if (inputs.strategy === 'bracket' || yr.isACAStrategy) {
                 // Don't let the LTCG top-off push total realized income past the active
                 // strategy's own ceiling (IRMAA tier / ACA cliff / bracket ceiling). This
                 // branch (isBrokerageYear) runs INSTEAD of the ceiling-computing branch this
                 // year, so compute it fresh here rather than reading a stale/undefined `limit`.
                 // yr.isACAStrategy, not inputs.strategy: a lapsed ACA year has no ceiling to
                 // respect, and computeBracketCeiling would still hand back the FPL cap if asked.
-                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack).limit;
+                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack).limit;
                 _room = Math.min(_room, Math.max(0, _ceil - ordFloor));
             }
             return Math.max(yr.additionalSpendNeeded, _room * (1 - yr.capGainsPercentage * sim.capitalGainsRate));
@@ -1935,15 +1912,14 @@ function planPrimaryWithdrawals(sim, yr) {
         // cycleCoexist: size the family's IRA draw FIRST (v1 families only), then harvest above it.
         let _coexistIRAwd = 0;
         if ((inputs.cycleCoexist ?? 'off') === 'bracketfill') {
-            if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || yr.isACAStrategy) {
+            if (inputs.strategy === 'bracket' || yr.isACAStrategy) {
                 // Same ceiling call and field assignments as the family's own branch below, so a
                 // coexist harvest year looks to downstream passes like the family branch ran.
                 ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit } =
-                    computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack));
+                    computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack));
                 yr.bracketTarget = yr.limit;
                 let _iraRoom = Math.max(0, yr.limit - _baseOrdinaryInc);
-                const _magiShaped = (inputs.stratIRMAATier ?? -1) >= 0
-                    || inputs.strategy === 'minlimit' || yr.isACAStrategy;
+                const _magiShaped = (inputs.stratIRMAATier ?? -1) >= 0 || yr.isACAStrategy;
                 if (_magiShaped) {
                     // Pass 1 of the fixed point: harvest sized at IRAwd=0; its realized LTCG
                     // occupies MAGI room the IRA draw must not double-book.
@@ -2004,9 +1980,9 @@ function planPrimaryWithdrawals(sim, yr) {
     // yr.isACAStrategy rather than inputs.strategy === 'aca': once the cap has lapsed this chain
     // must NOT match, so the year falls through fixedpct/propwd/ordered (none of which name 'aca')
     // to the baseline `else` below - Proportional 0%, which is the intended successor.
-    } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || yr.isACAStrategy) {
+    } else if (inputs.strategy === 'bracket' || yr.isACAStrategy) {
         ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit } =
-            computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack));
+            computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack));
 
         yr.bracketTarget = yr.limit;
 
@@ -2343,7 +2319,7 @@ function resolveResidualAndForcedIRA(sim, yr) {
             // stops at 85% and LTCG tops out at 20%, so each pass recovers a shrinking fraction.
             // Cost of the old behavior, on the same grid: $372,455 of spending the plan had
             // promised and could not pay, against $1,711 of new unfunded spending from allowing it.
-            // Every scenario it rescued was an IRMAA Ceiling (`minlimit`) plan, the case this was
+            // Every scenario it rescued was an IRMAA Ceiling plan, the case this was
             // pinned on - Brokerage the only money left, and the engine refusing to touch it.
             // See `research/BROKERAGE_DRAW.md`, section Q2.
             // P28 flag: only 'fillRothThenCash' changes the third pass. The pass is already Cash then
@@ -3538,8 +3514,7 @@ function simulate(inputs) {
      *   strategy='bracket' - "Fill Federal Tax Bracket" / "IRMAA Ceil" / "ACA Cliff"
      *       Draws IRA up to a ceiling (federal bracket top, an IRMAA tier, or
      *       an ACA FPL multiple). Spending shortfall fills from Cash →
-     *       Brokerage → Roth. Also covers strategy='minlimit' (Lesser of
-     *       IRMAA or Tax Bracket).
+     *       Brokerage → Roth.
      *       WithdrawalOrder = [IRA up to ceiling, then gap-fill]
      *
      *   strategy='fixedpct' - "IRA Draw %"

@@ -2379,6 +2379,46 @@ assertEqual(
 		}
 	})();
 
+	// ===== A strategy this version does not have loads as the default, not as a blank $0 plan =====
+	// A <select> handed a value matching no option lands on selectedIndex -1 and reports "", so
+	// getInputs().strategy is empty, no withdrawal branch matches, and the page renders a $0 plan
+	// with nothing on screen to say why. That is what a saved plan or a shared link naming the
+	// removed `minlimit` strategy did. The guard is generic - any unknown value, not a list of
+	// retired names - and it also restores the default strategy's own parameter fields, so the plan
+	// that comes up is one the engine can actually run.
+	// ⚠ UNSAFE - MUTATES: #strategy and the default strategy's parameter group. Both are snapshotted
+	// and restored below, but a reader who saw the intermediate state would see a strategy they did
+	// not pick.
+	(function unknownStrategyFallsBackToTheDefault() {
+		if (!unsafeTest('unknownStrategyFallsBackToTheDefault')) return;   // writes #strategy
+		const sel = document.getElementById('strategy');
+		if (!sel || typeof resetUnknownStrategy !== 'function') return;
+		const boost = document.getElementById('propWithdraw');
+		const wasStrategy = sel.value, wasBoost = boost ? boost.value : null;
+		try {
+			// The exact failure a legacy link produced: a value the dropdown does not carry.
+			sel.value = 'minlimit';
+			assertEqual(sel.selectedIndex, -1, 'an unknown strategy leaves the select with nothing chosen');
+			if (boost) boost.value = '175';
+			resetUnknownStrategy();
+			assertEqual(sel.value, sel.options[0].value,
+				'an unknown strategy falls back to the first option, which is the default');
+			// The markup default, not OPT_DEFAULTS: this suite runs before captureDefaults() does,
+			// which is exactly the ordering the fallback in resetUnknownStrategy() covers.
+			if (boost) assertEqual(boost.value, boost.defaultValue,
+				"and the default strategy's own parameter comes back with it");
+			// A value the dropdown DOES carry must be left exactly alone, or the guard would quietly
+			// overwrite every real plan it is called on.
+			sel.value = 'bracket';
+			resetUnknownStrategy();
+			assertEqual(sel.value, 'bracket', 'a strategy the dropdown has is never touched');
+		} finally {
+			sel.value = wasStrategy;
+			if (boost && wasBoost !== null) boost.value = wasBoost;
+			toggleStrategyUI?.();
+		}
+	})();
+
 	// ===== Annual Details: one cell per column, in every row =====
 	// The header row and the body rows are built from the same key list but used to apply DIFFERENT
 	// filters to it - the body skipped `inflationFactor` and the header did not. From that column
@@ -2797,7 +2837,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 366, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 364, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

@@ -11,8 +11,8 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P94 | Remove the `minlimit` strategy entirely; unknown strategy -> default *(own step)* | `P94a` |
 | **O0** | P92 | A chosen limit is the limit: no silent min, warn when infeasible *(user-decided)* | `P92a` |
+| **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
@@ -31,7 +31,7 @@ User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 20
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
 
-## P94: remove the `minlimit` strategy entirely  *(NEW 2026-08-29, user-decided, O0, NOT YET BUILT)*
+## P94: remove the `minlimit` strategy entirely  *(2026-08-29, user-decided, DONE v11.16aa)*
 
 **Goal: simplify the logic and the architecture.** Per the user's standing rule, accuracy and
 comprehensibility outweigh byte-identity - this removal is expected to change nothing for any
@@ -63,14 +63,14 @@ It has also drifted out of step with the strategy it shadows: `_stratImpliesConv
 (`optimizer_core.js:1339`) lists `'bracket'` and omits `'minlimit'`, so an otherwise identical plan
 picks a different year-0 withdrawal month. Nobody noticed because nobody can run it.
 
-- [ ] **P94a** - Delete the arm. The ceiling clamp in `computeBracketCeiling` (`:984`) is the only
+- [x] **P94a** - Delete the arm. The ceiling clamp in `computeBracketCeiling` (`:984`) is the only
       place the strategy DOES anything; then drop `|| inputs.strategy === 'minlimit'` from
       `yr.isBracketStrategy` (`:1716`), the withdrawal dispatch (`:2007`) and the cyclic-coexist
       conditions (`:1923`, `:1938`, `:1946`), plus the comments at `:854`, `:1458`, `:1497`, `:1499`,
       `:1881`, `:1888`, `:1891`, `:2346`, `:3541` and one in `taxengine.js`. UI: three sites -
       the ACA/bracket guard (`optimizer_ui.js:494`), `extraConvCeilingKind`'s "the Min Limit ceiling"
       branch (`:4836`, added by P88e and dead on arrival) and the `ui-bracket` toggle (`:4877`).
-- [ ] **P94b** - **THE CASCADE, and the actual simplification.** `yr.IRMAALimit` has EXACTLY ONE
+- [x] **P94b** - **THE CASCADE, and the actual simplification.** `yr.IRMAALimit` has EXACTLY ONE
       consumer - the clamp being deleted. So it takes with it the `IRMAALimit` parameter of
       `computeBracketCeiling` (**all three call sites shorten**: `:1930`, `:1942`, `:2009`),
       `yr.IRMAALimit` (`:1472`), `_irmaaEffCpi`, `IRMAABracket`, `_irmaaMargin` (`:1468`-`:1471`), and
@@ -80,7 +80,7 @@ picks a different year-0 withdrawal month. Nobody noticed because nobody can run
       orphaned and are not: `goalLimit` caps `targetSpend` for non-bracket strategies at `:1749`, and
       the two `.rate` fields set the marginal rates at `:1778`-`:1779`. Checked before writing this.
       `irmaaMarginDollars` / `irmaaFwdFactor` also stay - the IRMAA-tier branch still uses them.
-- [ ] **P94c** - **Unknown strategy -> silent fallback to the default**, which is `propwd` with
+- [x] **P94c** - **Unknown strategy -> silent fallback to the default**, which is `propwd` with
       `propWithdraw` 20 (first `<option>`, no `selected`; the input carries `value="20"`).
       **Reuse the existing precedent rather than inventing one:** `applyScenario` already maps
       `'aca'` back to `'bracket'` because the dropdown has no option for it. Add a GENERIC guard
@@ -91,7 +91,7 @@ picks a different year-0 withdrawal month. Nobody noticed because nobody can run
       that deliberate case is not swallowed. Same guard on the URL path via one shared helper.
       **This is a user-visible IMPROVEMENT:** a legacy scenario naming `minlimit` currently loads as a
       blank strategy and a $0 plan; it will load as a working default plan.
-- [ ] **P94d** - Tests. Most references are incidental: fixtures passing `stratIRMAATier: 1` take the
+- [x] **P94d** - Tests. Most references are incidental: fixtures passing `stratIRMAATier: 1` take the
       IRMAA branch, so the clamp never executes - the suite already says so at
       `optimizer_core.tests.js:4331`, and it was confirmed empirically (on that path `minlimit` and
       `bracket` differ in exactly ONE column, `timing`, with every money field identical).
@@ -100,7 +100,7 @@ picks a different year-0 withdrawal month. Nobody noticed because nobody can run
       below the first tier` (`:6124`, the only test that genuinely exercises the clamp) and
       `yr.IRMAALimit is inert` (`:4327`, whose subject ceases to exist). **Add one** for the unknown
       strategy falling back to the default. Reconcile counts in all three places.
-- [ ] **P94e** - Changelog: ONE bullet, for the FALLBACK only - "a saved plan naming a strategy this
+- [x] **P94e** - Changelog: ONE bullet, for the FALLBACK only - "a saved plan naming a strategy this
       version does not have now loads as the default instead of coming up blank". The `minlimit`
       removal itself is invisible and, by the in-page rule added this session, has no reader.
 
@@ -113,8 +113,21 @@ the guard proving neither sweep ever emitted `minlimit`.** Then:
 Withdraw +% at 20 with a real plan (today: blank, $0); a normal `?str=bracket` plan is unchanged; and
 `?str=aca` still maps to `bracket`, proving the guard did not swallow the deliberate case.
 
-- **Status:** planned in full, nothing built. Approved plan kept at
-  `~/.claude/plans/abundant-noodling-barto.md`.
+- **Status:** DONE, v11.16aa. Suites 364/61/22 and the browser badge green at 850. The enumeration
+  goldens were left untouched and still reproduce, which is the proof that neither sweep ever emitted
+  it. Approved plan kept at `~/.claude/plans/abundant-noodling-barto.md`.
+- **Three corrections to the plan above, from building it.** (1) `computeBracketCeiling` did NOT drop
+  a branch: its three are IRMAA tier / ACA / federal, and the clamp was inside the federal one. (2)
+  The fallback cannot sit "immediately after the `aca` mapping" - `applyScenario`'s generic loop
+  writes `#strategy` after that point, so the guard runs after the loop, and separately on the URL
+  path. (3) Money DID move on one fixture: re-pointing the P32h tripwire to `bracket` at tier 1 flips
+  year 0 to a month-1 withdrawal, because `_stratImpliesConversion` lists `bracket` and never listed
+  `minlimit` - total stranded 27,529 -> 29,368, re-pinned with the reason in the test. The fixture now
+  measures a plan a user can reach, which is the improvement.
+- **Beyond the plan, once:** `?str=aca` needed the same `aca` -> `bracket` mapping on the URL path
+  that `applyScenario` already had, or the new guard would have swallowed a deliberate internal name.
+- `.test_harnesses/` still names `minlimit` on purpose: those are dated research records, and
+  re-pointing them would change what they measured.
 - **Answers `P92b`**, which asked whether `Min Limit` survives once its `min` is removed. It does not
   need to: there is no user-facing strategy to delete, only dead code, so P92's "strategy deletion
   with migration" worry was mis-scoped.
@@ -124,6 +137,29 @@ Withdraw +% at 20 with a real plan (today: blank, $0); a normal `?str=bracket` p
 `targetSpend` caps non-bracket strategies at `goalLimit` (`optimizer_core.js:1749`), so
 **Proportional's spending is silently limited by a tax bracket top.** Live and load-bearing.
 Recorded rather than folded in.
+
+---
+
+## P95: an ACA share link does not round-trip  *(NEW 2026-08-29, found while verifying P94, O1, NOT A REGRESSION)*
+
+`buildShareURL` emits an ACA plan as `?str=bracket&sr=aca400`. Loading that link lands the ceiling
+dropdown on `10`, not `aca400`, so `getInputs().stratACAMultiple` reads **0** and the plan comes up
+as **Fill Bracket 10%** - a different, much tighter strategy than the one shared, with no message.
+
+Measured in the browser at v11.16aa, and **pre-existing on `main`**: `git diff main` on the P94
+branch touches no `stratRate` code at all. `loadFromURL` sets the select correctly and something
+after it rebuilds the option list - `refreshStratRateOptions()` is the obvious suspect, since
+`applyScenario` calls it deliberately at `optimizer_ui.js:5429` and has a comment (`:5384`) about
+exactly this failure mode on the SCENARIO path, where it was already found and fixed once.
+
+- [ ] **P95a** - Find what rebuilds the list after `loadFromURL` and reapply the selection the way
+      `applyScenario` does, or capture and restore it around the rebuild. Then check the IRMAA
+      values (`IRMAA0`..`IRMAA4`) the same way - they are rebuilt by the same function and may have
+      the same defect.
+- [ ] **P95b** - A browser-tier test: every value the ceiling dropdown offers survives a share-URL
+      round trip. A per-value loop, not one case, because the defect is per-option-family.
+
+- **Status:** measured, nothing built. The user has not been asked about priority yet.
 
 ---
 

@@ -491,7 +491,7 @@ function getInputs() {
     // (stratRate=aca<N>), so derive strategy='aca' whenever an ACA multiple is selected. This
     // also makes legacy scenarios/URLs (strategy=bracket + aca<N>) load with strict semantics.
     let _strategy = val('strategy');
-    if (_strat.stratACAMultiple > 0 && (_strategy === 'bracket' || _strategy === 'minlimit')) {
+    if (_strat.stratACAMultiple > 0 && _strategy === 'bracket') {
         _strategy = 'aca';
     }
     return {
@@ -4829,11 +4829,10 @@ const OPT_FAMILY_OF_STRATEGY = {
 // What the user must not do is believe the ceiling still holds.
 //
 // The strategies this applies to are the ones that carry a ceiling: Fill Bracket (federal rate or
-// IRMAA tier), Min Limit, and the ACA cap. Proportional, Ordered, IRA Draw % and Reduce are
+// IRMAA tier) and the ACA cap. Proportional, Ordered, IRA Draw % and Reduce are
 // bracket-agnostic and have no ceiling to breach, so they say nothing.
 function extraConvCeilingKind() {
     const m = val('strategy');
-    if (m === 'minlimit') return 'the Min Limit ceiling';
     if (m === 'aca') return 'the ACA FPL cap';
     if (m !== 'bracket') return null;
     if ((+val('stratIRMAATier') ?? -1) >= 0) return 'the IRMAA tier ceiling';
@@ -4871,10 +4870,47 @@ function updateExtraConvWarning() {
     box.style.display = '';
 }
 
+// A saved plan or a shared link can name a strategy this version does not have - `minlimit`, which
+// was removed, or a typo in a hand-edited URL. A <select> handed a value matching no option lands on
+// selectedIndex -1, so getInputs().strategy reads "" and the plan computes $0 with nothing on screen
+// to say why. Fall back to the first option, which is the default strategy, and restore that
+// option's own parameter fields from the defaults captured before any load - so what comes up is a
+// working plan rather than a blank one.
+//
+// The check is generic rather than a list of retired names: any value the dropdown does not carry
+// gets the same treatment, and there is no list to keep in step with the markup. Silent, on
+// instruction. It must run AFTER the deliberate strategy='aca' -> 'bracket' mapping, which is a
+// value the dropdown legitimately does not have; running before would swallow that case.
+function resetUnknownStrategy() {
+    const el = document.getElementById('strategy');
+    if (!el || el.options.length === 0 || el.selectedIndex !== -1) return;
+    el.value = el.options[0].value;
+    // Each strategy's parameters live in its own #ui-<value> group, so the group names itself from
+    // the option value and no mapping table is needed here either.
+    document.querySelectorAll(`#ui-${el.value} input, #ui-${el.value} select`).forEach(f => {
+        // OPT_DEFAULTS is the pristine snapshot captureDefaults() takes at load. It is the right
+        // source when it exists, and it is not always there: the self-check suite runs BEFORE
+        // captureDefaults(). Fall back to the markup's own default rather than leaving whatever the
+        // unusable strategy carried, which is the one outcome this function exists to prevent.
+        const def = OPT_DEFAULTS[f.id];
+        if (f.type === 'checkbox') {
+            f.checked = def ? def.c : f.defaultChecked;
+        } else if (DOLLAR_INPUT_IDS.has(f.id)) {
+            DisplayHelpers.setDollarValue(f.id, def ? (def.n ?? def.v) : f.defaultValue);
+        } else if (def) {
+            f.value = def.v;
+        } else if (f.tagName === 'SELECT') {
+            f.value = ([...f.options].find(o => o.defaultSelected) || f.options[0])?.value ?? f.value;
+        } else {
+            f.value = f.defaultValue;
+        }
+    });
+}
+
 function toggleStrategyUI() {
     let m = val('strategy');
     document.getElementById('ui-fixed').classList.toggle('hidden', m !== 'fixed');
-    document.getElementById('ui-bracket').classList.toggle('hidden', m !== 'bracket' && m !== 'minlimit');
+    document.getElementById('ui-bracket').classList.toggle('hidden', m !== 'bracket');
     document.getElementById('ui-propwd').classList.toggle('hidden', m !== 'propwd');
     document.getElementById('ui-fixedpct').classList.toggle('hidden', m !== 'fixedpct');
     document.getElementById('ui-ordered').classList.toggle('hidden', m !== 'ordered');
@@ -5074,6 +5110,12 @@ function loadFromURL() {
             }
         }
     });
+    // 'aca' is an internal strict strategy with no dropdown option of its own; applyScenario maps it
+    // back to 'bracket' + an ACA stratRate, and a link that carries it has to be read the same way or
+    // the unknown-strategy guard below would take it for a name this version does not have.
+    const _stratEl = document.getElementById('strategy');
+    if (_stratEl && params.get('strategy') === 'aca') _stratEl.value = 'bracket';
+    resetUnknownStrategy();
     toggleStrategyUI();
     onConvSubFlagChange();   // .checked set programmatically above → no change event; resync the convenience checkbox
     maybeWarnCashReserveActive();
@@ -5405,6 +5447,9 @@ function applyScenario(data) {
         hasSpouseEl.checked = data.hasSpouse !== undefined ? !!data.hasSpouse : (data.birthyear2 > 0);
         if (typeof toggleSpouseUI === 'function') toggleSpouseUI();
     }
+
+    // A strategy this version does not have loads as the default rather than as a blank $0 plan.
+    if (typeof resetUnknownStrategy === 'function') resetUnknownStrategy();
 
     // Sync strategy sub-UI to the newly loaded strategy value
     if (typeof toggleStrategyUI === 'function') toggleStrategyUI();

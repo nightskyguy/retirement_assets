@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.16a9</title>
+    <title>Retirement Optimizer 11.16aa</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -58,13 +58,13 @@
     .share-panel .share-status { font-family:monospace; font-size:10px; color:#1a7a1a; margin-top:.35rem; min-height:14px; }
 	</style>
 	<base target="_blank">	
-	<script src="taxengine.js?v=111662"></script>
-	<script src="optimizer_core.js?v=1116a4"></script>
+	<script src="taxengine.js?v=1116aa"></script>
+	<script src="optimizer_core.js?v=1116aa"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=1116a9"></script>
-	<script src="optimizer_tests.js?v=1116a4"></script>
+	<script src="optimizer_ui.js?v=1116aa"></script>
+	<script src="optimizer_tests.js?v=1116aa"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -875,6 +875,11 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li><b>11.16aa</b>
+					<strong>A saved plan naming a strategy this version does not have now loads as the default.</strong>
+					A saved plan or shared link naming a withdrawal strategy that is no longer in the Strategy menu used to come up with nothing selected and compute as all zeros. It now loads as Proportional Withdraw +% at its default setting, so you get a working plan you can change rather than a blank one.
+					<a href="optimizer_changelog.md#11.16aa" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="behavior"><b>11.16a9</b>
 					<strong>The Stress Test could report on the wrong plan, and Roth conversions now count toward IRMAA.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1503,7 +1508,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1116a4';
+    const V = '?v=1116aa';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

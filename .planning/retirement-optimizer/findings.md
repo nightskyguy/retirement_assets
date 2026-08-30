@@ -3279,3 +3279,42 @@ chain was orphaned; checking is what stopped it.
 
 **Noted, out of scope:** `targetSpend` capping non-bracket strategies at `goalLimit` means
 Proportional's spending is silently limited by a tax bracket top.
+
+## 2026-08-29 - P94: what the `minlimit` removal actually measured
+
+**The strategy-enumeration goldens are a removal proof, not just a regression test.** `sweep_golden.js`
+was not touched by this change and both `MC_GOLDEN` and `OPT_GOLDEN` still reproduce, which is a
+direct measurement that neither the Optimizer sweep nor the Monte Carlo sweep ever emitted
+`minlimit`. That is stronger than the 0-of-111 / 0-of-156 counts recorded when the phase was opened,
+because it is checked on every run from here on.
+
+**`minlimit` and `bracket` are NOT interchangeable, even on the IRMAA-tier path where the deleted
+clamp never executed.** The suite's earlier note said the two differ in one column, `timing`, with
+every money field identical. On a fixture that drains every account, that timing difference IS a
+money difference: `_stratImpliesConversion` (`optimizer_core.js:1330`) lists `bracket` and never
+listed `minlimit`, so year 0 flips from a month-11 withdrawal to a month-1 one, and one year of
+growth on one year's draw compounds. Measured on the P32h fixture, thirteen years out: total
+stranded 27,529 -> 29,368, Brokerage headline 1,027,282 -> 1,016,150, over the same ten years, worst
+single year unmoved. **This is the P28j coupling arriving on its own**, and it is the first
+measurement of its size on a real fixture rather than a synthetic one.
+
+**`yr.IRMAALimit` had exactly one consumer and that consumer was the clamp.** Deleting the clamp took
+`_irmaaEffCpi`, `IRMAABracket`, `_irmaaMargin`, the field itself, the `IRMAALimit` parameter of
+`computeBracketCeiling` and all three call sites' arguments with it. `yr.goalLimit`,
+`goalFedBracketLimit` and `goalStateBracketLimit` survive and are load-bearing, as the phase plan
+warned: `goalLimit` caps `targetSpend` for non-bracket strategies and the two `.rate` fields set the
+marginal rates.
+
+**Correction to the plan's own structural claim:** `computeBracketCeiling` did not go from three
+branches to two. Its three branches are IRMAA tier / ACA / federal, and the clamp lived inside the
+federal one. The function got shorter, not structurally simpler.
+
+**An unknown value in a `<select>` is silent and total.** `selectedIndex` goes to -1, `.value` reads
+`""`, `getInputs().strategy` matches no withdrawal branch, and the plan computes $0 with no message.
+Verified before the fix on `?str=minlimit`, and after it on `?str=minlimit` and `?str=totalNonsense`,
+both of which now load Proportional Withdraw +% at 20 and a real plan (finalNW $638,557).
+
+**Pre-existing and unrelated, found while verifying: an ACA share link does not round-trip.**
+`?str=bracket&sr=aca400` - which is exactly what `buildShareURL` emits for an ACA plan - lands the
+ceiling dropdown on `10`, so `stratACAMultiple` reads 0 and the plan loads as Fill Bracket 10%.
+Confirmed pre-existing: the P94 diff against `main` touches no `stratRate` code. Opened as P95.

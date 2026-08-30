@@ -6517,3 +6517,65 @@ Also fixed the documentation entry, which said "Enter balances in today's dollar
 misreading this phase exists to stop.
 
 No calculation changed. Suites 366/61/22.
+
+## 2026-08-29 (cont.) - P94 START: remove the `minlimit` strategy
+
+Branch is level with `main` (0 ahead, 0 behind), tree clean, so this starts a new changelog entry.
+Baseline captured before touching anything: suites **366 / 61 / 22**, all green. The strategy-
+enumeration goldens are asserted inside `optimizer_core.tests.js` (`:5508`, `:5526`), so a passing
+core suite IS the proof that neither sweep ever emitted `minlimit`.
+
+Grep confirms the plan's inventory: `optimizer_core.js` clamp at `:984`, cascade at `:1458`-`:1472`,
+five dispatch/coexist conditions, three UI sites, seven test fixtures to re-point and two tests to
+delete. `taxengine.js:1584`'s `IRMAALimit` is a DIFFERENT thing - a local in the Medicare-premium
+helper - and stays.
+
+## 2026-08-29 (cont.) - P94 DONE: `minlimit` is gone, v11.16aa
+
+All five steps landed. Suites **364 / 61 / 22** in node, badge green in the browser at 850 total
+(403 in-page + 447 node), `?runtests` with zero unsafe skips.
+
+**The goldens are the proof.** `sweep_golden.js` was not touched, and both enumeration goldens still
+reproduce, so neither the Optimizer sweep nor the Monte Carlo sweep ever emitted `minlimit`.
+
+**Three things the plan got wrong, all found by doing it:**
+
+1. **`computeBracketCeiling` does NOT drop a branch.** Its three branches are IRMAA tier / ACA /
+   federal; the `minlimit` clamp lived INSIDE the federal one. Two branches became two. The cascade
+   deletion is real - `yr.IRMAALimit`, `_irmaaEffCpi`, `IRMAABracket`, `_irmaaMargin`, the 15-line
+   inertness comment and the `IRMAALimit` parameter with all three call sites - but the function did
+   not get structurally simpler, only shorter.
+2. **The fallback cannot run where the plan said to put it.** "Immediately after the `aca` mapping"
+   is before `applyScenario`'s generic loop, and that loop writes `#strategy` itself - so the guard
+   would inspect a select the loop had not yet broken. It runs AFTER the loop, and separately on the
+   URL path.
+3. **Money moved on one test fixture, and the plan predicted it would not.** Re-pointing the P32h
+   tripwire from `minlimit` to `bracket` at IRMAA tier 1 flipped year 0 from a month-11 withdrawal
+   to a month-1 one, because `_stratImpliesConversion` lists `bracket` and never listed `minlimit`.
+   Total stranded 27,529 -> 29,368 and the Brokerage headline 1,027,282 -> 1,016,150, over the same
+   ten years, worst single year unmoved. Re-pinned with the reason recorded in the test. This is the
+   P28j coupling, arriving unbidden: the fixture now measures a plan a user can actually run.
+
+**Found and fixed because this change would have broken it:** the changelog's `<a id="11.1691">`
+anchor sat above the `## 11.16a9` heading, and `## 11.1691` had none. It only worked because 11.16a9
+was the top entry, so the Details link landed on it by accident. Adding an entry above would have
+sent it to the wrong release. Both anchors now sit on their own headings.
+
+**Extended past the letter of the plan, once:** `?str=aca` on the URL path. `applyScenario` maps
+`aca` -> `bracket`, `loadFromURL` never did, so the guard would have taken a deliberate internal
+name for an unknown one. Same one-line mapping added there, and verified both ways.
+
+`resetUnknownStrategy` falls back to the markup defaults when `OPT_DEFAULTS` is empty. That is not
+belt-and-braces: the self-check suite runs BEFORE `captureDefaults()`, so the first version silently
+did nothing under test while working in production. The test caught it.
+
+**Left alone deliberately:** the five files in `.test_harnesses/` still name `minlimit`. They are
+dated research records whose conclusions were measured against the strategy as it was; re-pointing
+them would change what they measured and invalidate their own prose. They will not run correctly
+again, which is true of their line-number references already.
+
+**Found while verifying, NOT fixed, and pre-existing on `main`:** an ACA share link does not
+round-trip. `?str=bracket&sr=aca400` lands on stratRate `10`, not `aca400`, so `stratACAMultiple`
+reads 0 and the plan silently loads as Fill Bracket 10% instead of an ACA cap. `buildShareURL` emits
+exactly that pair, so every shared ACA plan is affected. Confirmed pre-existing: `git diff main`
+touches no stratRate code. Recorded in task_plan as its own item.

@@ -17,7 +17,21 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1691"></a>
+<a id="11.16aa"></a>
+
+## 11.16aa
+
+### A saved plan naming a strategy this version does not have now loads as the default
+
+A saved plan or a shared link can name a withdrawal strategy that is no longer in the Strategy menu.
+Until now the menu came up with nothing selected and the plan computed as all zeros, with nothing on
+screen to say why. Any strategy the menu does not carry now loads as Proportional Withdraw +% at its
+default setting, so what you get is a working plan you can change rather than a blank one. A plan
+naming a strategy that IS in the menu is unaffected.
+
+---
+
+<a id="11.16a9"></a>
 
 ## 11.16a9
 
@@ -57,6 +71,10 @@ Smaller: the Cash Reserve note offered "-1", a value the field will not take - i
 Hovering over an income bar on Income & Expenses shows the actual income with the approximate tax
 attributed to it, not the scaled bar height. The Market Return chart names the historical year a
 replayed path came from for everyone.
+
+---
+
+<a id="11.1691"></a>
 
 ## 11.1691
 

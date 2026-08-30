@@ -31,6 +31,34 @@ User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 20
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
 
+## P93: name the year the assets belong to  *(2026-08-29, user-decided, DONE v11.16a9)*
+
+**Raised as a modelling gap, resolved as a labelling one, and the user's framing is the right one.**
+I reported that the portfolio does not grow between today and a future retirement year - typed $1M
+gives a year-0 IRA of $1,050,154 starting 2026 and $1,046,082 starting 2030, where four years at 6%
+would be about $1.26M. The user's answer: the section is titled **"Assets at Retirement Age"**, so
+the balances were never meant to be today's. **This tool has no accumulation phase, and the reader is
+responsible for forecasting the assets to that year.** The defect is that the year was nowhere on
+screen.
+
+- [x] **P93a** - The heading now names it: `2. Assets at Retirement Age (2035)`. Computed from
+      `planFirstYear` (P89), the SAME definition the engine's `startInYear` uses, so the label cannot
+      drift from the year actually simulated.
+- [x] **P93b** - Wired to both inputs that move it. `updateProfileAgeDisplay()` already fired on
+      birth year and month; `startAge` had its own inline `oninput` that only refreshed the ACA
+      warning, so it needed adding there too. Verified across four cases: born 1958 with start age
+      72 -> (2030), 75 -> (2033), 60 (already passed) -> (2026, clamped), and born 1975 with 60 ->
+      (2035). Every one matches `planFirstYear`.
+- [x] **P93c** - The documentation entry said "Enter balances in today's dollars", which is the exact
+      misreading this phase exists to stop. It now says the balances are the ones expected in the
+      year the plan starts, that there is no accumulation phase, and that forecasting to that year is
+      the reader's job.
+- **Status:** DONE, shipped v11.16a9 in the branch's single changelog entry. No calculation changed.
+- **Not done, and not a defect:** the tool still models no accumulation. That is the design, now
+  stated rather than implied.
+
+---
+
 ## P92: a chosen limit is the limit - no silent min, and say so when it cannot be met  *(NEW 2026-08-29, user-decided, O0)*
 
 **Supersedes the open half of P87.** `P87a` measured the federal ceiling's basis and `P88` fixed the
@@ -888,6 +916,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
 | **O1** | P34 | Cost of finding a profitable conversion; worker + per-row memo | `P34a` | nothing |
 | **O1** | P84 | Annual advisor / AUM fee, **plus RMDs off the prior Dec 31 balance** (today they key off a mid-year balance whose growth depends on whether the plan converted) *(new 2026-08-28)* | `P84k` (the RMD half; runs before `P84a`) | nothing |
+| ~~DONE~~ | ~~P93~~ | ~~Name the year the assets belong to~~ - **COMPLETE v11.16a9.** "Assets at Retirement Age" now names its year, from the same `planFirstYear` the engine uses. The tool has no accumulation phase and now says so instead of implying it | - | - |
 | ~~DONE~~ | ~~P91~~ | ~~Stress Test's first result used a stale plan horizon~~ - **COMPLETE v11.16a5.** A displaced stress refresh was dropped and never retried, so the headline settled on the pre-load plan: `8 / 36` where the truth is `0 / 40`. Coalesced; the full sweep's silent staleness fixed with it | - | - |
 | ~~DONE~~ | ~~P90~~ | ~~Two chart fixes~~ - **COMPLETE v11.16a4.** The Market Return chart's historical source year is no longer nerdknob-only, and the Income & Expenses tooltip reports what a source actually paid instead of its scaled bar height | - | - |
 | ~~DONE~~ | ~~P89~~ | ~~The ACA age gate read a year the plan does not start in~~ - **COMPLETE v11.16a4.** The advisory fired for every Limit choice, named a year and two ages the plan never used, and the same unclamped expression decided whether ACA rows reach the Optimizer. One shared `planFirstYear` now; measured at 22.2% disagreement, one-way | - | - |

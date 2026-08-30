@@ -6499,3 +6499,21 @@ covered in the browser tier. Suites unchanged 366/61/22.
 because the branch keeps earning entries - six user-visible items now, three of them behavior
 changes. Noting it rather than shaving further: cutting more would drop things a reader has to act
 on, and the stress fix in particular tells them to re-check a number they may have believed.
+
+## 2026-08-29 (cont.) - P93: the assets heading names its year, v11.16a9
+
+I reported the no-growth-before-retirement finding as a possible modelling gap. The user reframed it
+and the reframing is right: the section is titled "Assets at Retirement Age", so the balances were
+never meant to be today's. **The tool has no accumulation phase and the reader forecasts to that
+year** - the defect was only that the year appeared nowhere on screen.
+
+Heading now reads `2. Assets at Retirement Age (2035)`, computed from `planFirstYear` - the same
+definition the engine's `startInYear` uses (P89), so the label cannot drift from the simulated year.
+Wired to both inputs that move it: `updateProfileAgeDisplay()` already covered birth year and month,
+but `startAge` had its own inline `oninput` that only refreshed the ACA warning, so it needed adding.
+Verified across four cases including the already-passed clamp.
+
+Also fixed the documentation entry, which said "Enter balances in today's dollars" - the exact
+misreading this phase exists to stop.
+
+No calculation changed. Suites 366/61/22.

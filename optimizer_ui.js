@@ -618,7 +618,27 @@ function getInputs() {
  *
  *
  */
+// P93. The heading over the balance fields says "Assets at Retirement Age", and the year it means
+// is not on screen anywhere. That matters more here than a label usually does, because THE TOOL HAS
+// NO ACCUMULATION PHASE: it never grows the typed balances between today and a later retirement
+// year. A reader who types today's balances and a Retirement Start Age still ahead of them is
+// modelling a smaller portfolio than they will actually have, and nothing says so - measured at
+// $1,050,154 starting 2026 against $1,046,082 starting 2030 for the same typed $1M, where four
+// years at 6% would be about $1.26M.
+//
+// Naming the year turns that from a hidden assumption into an instruction: these are the balances
+// AS OF this year, and forecasting them to it is the reader's job. Reads the same `planFirstYear`
+// the engine's `startInYear` uses (P89), so the label cannot drift from the year actually simulated.
+function updateAssetsYearLabel() {
+    const el = document.getElementById('assets-year-label');
+    if (!el) return;
+    const by1 = +val('birthyear1') || 0;
+    if (!by1) { el.textContent = ''; return; }
+    el.textContent = ' (' + planFirstYear(by1, +val('startAge') || 0) + ')';
+}
+
 function updateProfileAgeDisplay() {
+    updateAssetsYearLabel();   // P93: birth year moves the start year, so it moves this label
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;

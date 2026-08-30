@@ -80,7 +80,7 @@ evidence of currency.
 | `convopt_ceiling_harness.js` | **FIXED 2026-08-30** | was BROKEN (`F5`): printed `every result below is suspect` and kept going. Dead family dropped, setup check now stops the run. `C2` restored to **44 of 44** - see the re-run note in the report |
 | `phased_harness.js` | **DRIFTED** (not broken) | reads `buildStrategyFamilies()` and self-adapts - it printed **148 arms** at runtime. The harness is sound; the REPORT is stale at 192, so "118 of 192 arms never win" needs re-deriving. Leaders stable (`B-P5` RIGHT) |
 | `ordered_fill_harness.js` | **COVERAGE FIXED 2026-08-30** (not broken) | its restart proof is explicitly sequence-independent, so the finding always stood; but it hard-coded 3 of the 6 codes shipped since `dd309bf`. Now reads `core.ORDERED_SEQS`, so all six are exercised |
-| `convtiming_harness.js` | **DRIFTED** (`F4`) | clean cells 499 -> 474; FRONT outright wins **304 -> 233**, so "earlier wins about two thirds of the time" is now 49% |
+| `convtiming_harness.js` | **RE-BASELINED 2026-08-30** | was DRIFTED (`F3`,`F4`): clean cells 499 -> 474, FRONT outright wins 304 -> 233. `CONVERSION_TIMING.md` is now the third run throughout |
 | `irmaa_default_harness.js` | **DRIFTED** (`F3`,`F4`) | halfcpi -$79,002 -> -$64,043, halfstep -$11,649 -> -$29,203; "four to five times less" is now about 2x. Verdicts on P3/P4/P5 unchanged |
 | `brokerage_harness.js` | **FIXED 2026-08-30**, still DRIFTED (`F2`,`F4`) | carried a FIFTH instance of the `F5` defect, found only on the final sweep: its `minlimit` arm returned the `__unrecognized__` baseline arm bit-for-bit while staying filed under the `bracket` family. Re-pointed to bracket @ IRMAA tier 1. Numbers still drifted: cyclic 26/45 -> 25/45 and 23/45 -> 19/45, Q4 pairs 2,576 -> 1,981. The no-spiral headline survives (0 capped years) |
 | `gapfill_harness.js` | **DRIFTED** (`F2`,`F4`) | 227/360 -> **242/360** cells move. w=0 still best; the conclusion survives |
@@ -107,9 +107,10 @@ Items 1 and 2 were done on 2026-08-30 and are recorded above; 3 onward are open.
    tables underneath it, which is the failure mode worth naming: **an alarm that does not stop the
    run reads as a caveat, and gets quoted past.** Both now exit non-zero instead.
 2. ~~`ordered_fill` coverage~~ - DONE, and `phased` needed no code change at all.
-3. `convtiming` - the only DRIFTED entry whose headline changes direction (FRONT's outright wins
-   304 -> 233, so "earlier wins about two thirds of the time" is now 49%). `README.md` line 15 still
-   says "two to one".
+3. ~~`convtiming`~~ - DONE 2026-08-30. The headline did change direction: FRONT's outright wins fell
+   304 -> 233, below a majority, while `C1` (a head-to-head prediction) went on HOLDING - recorded in
+   that report's section 9 as a seventh scorer defect, **a prediction too weak to notice its own
+   subject changing.** `README.md` line 15 updated with it.
 4. `phased` - re-derive the report against the shipped 148 arms.
 5. The four IRMAA harnesses as one pass - they share `F3`, and `irmaa_margin`/`irmaa_cpi_risk` were
    measured before `F1` as well.
@@ -139,7 +140,7 @@ harness that detects its own premise has failed should exit, not narrate - that 
 made to both.
 
 `research/README.md` carried drifted figures in its own prose at lines 15, 18 and 34; line 34
-(`61 of 61`) was corrected on 2026-08-30. Lines 15 and 18 are still stale.
+(`61 of 61`) and line 15 (`two to one`) were corrected on 2026-08-30. Line 18 is still stale.
 
 
 ## betr_harness.js  (node)
@@ -419,19 +420,23 @@ column names invite exactly this confusion.
 
 Headline findings:
 
-**Re-run 2026-08-28 after `P84l` and after adding the IRA Goal axis. The first run's headline RMD
-finding did not survive either change; the numbers below are the second run.**
+**Re-baselined 2026-08-30 (THIRD run), after `P88a-e` charged IRMAA on conversions and `P92a`
+corrected the bracket ceiling. The headline changed direction; the numbers below are the third run.**
 
-1. **Earlier wins about two thirds of the time, not always.** FRONT ahead of BACK in 353 of 499
-   clean comparisons; FRONT the outright winner in 304, LEVEL in 102, BACK in 93.
-2. **The RMD claim is NOT universal.** FRONT has lower lifetime RMDs in 375 of 499, with **124
-   counterexamples, every one of them the bracket family at a live IRA Goal.** Front-loading eats
+1. **Earlier wins head-to-head, but is no longer the best of three.** FRONT ahead of BACK in 284 of
+   474 clean comparisons (60%); FRONT the outright winner in only **233**, against LEVEL 125 and
+   BACK 116 - so the two non-front shapes take 51% of cells between them.
+2. **The RMD claim is NOT universal, and inside the bracket family it is now exceptionless the other
+   way.** FRONT has lower lifetime RMDs in 356 of 474, with **118 counterexamples - every one the
+   bracket family at a live IRA Goal, and now every one of that family's 118 cells.** Front-loading eats
    the above-goal headroom early, `curIRA` throttles the strategy's own withdrawals for the rest of
    the plan, and the bigger surviving IRA throws bigger RMDs. Conversions ignore the goal
    (`_availIRA`, not `curIRA`); withdrawals respect it.
-3. **Compounding is what pays.** Zero out growth and the advantage collapses to 4.8% of itself
-   (paired on 72: $449,889 -> $21,724). N3, which holds terminal pre-tax IRA equal, now has signal
-   (18 of 60 usable) and FRONT still leads - so the advantage survives with the RMD stock held flat.
+3. **Compounding is what pays.** Zero out growth and the advantage collapses to 4.2% of itself
+   (paired on 72: $449,889 -> $18,832). N3, which holds terminal pre-tax IRA equal, has signal
+   (17 of 60 usable) and FRONT still leads - so the advantage survives with the RMD stock held flat.
+   The IRMAA channel, by contrast, CLOSED: its median was -1 year and is 0 now that a conversion is
+   billed for it, so one of the three mechanisms this study credited was an artifact.
 4. **At an 8% spend rate the sign flips**, and in 750 of 1,440 comparisons an aggressive front-loaded
    schedule is not even deliverable - the IRA does not hold it. Both are real constraints on the
    phase P5 per-year conversion schedule.

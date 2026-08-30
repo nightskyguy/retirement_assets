@@ -35,9 +35,15 @@ chosen bracket is filled to its top.
 12% limit typically gains about $158,000; a 22% limit typically loses about $200,000, and a 24% limit
 is close to flat. Filling a cheap bracket further is usually worth doing; filling an expensive one
 usually is not, because money leaves the IRA earlier than it needed to and stops compounding there.
-If your plan uses a 22% or 24% limit and you chose it expecting the old behavior, this is worth
-re-reading before you rely on the new numbers. Limits that are not federal brackets - IRMAA tiers and
-the ACA cap - are unchanged, because those are already measured on the right income.
+**So a plan on a 22% or 24% limit will usually show a lower End Wealth than this tool gave you for
+the same inputs before** - about $200,000 lower at 22%, in the middle of the range measured. Nothing
+about your plan got worse; the tool was under-filling the bracket you asked for, and the shortfall it
+left behind happened to be worth keeping. If End Wealth is what made you choose that limit, the
+comparison it was based on has moved: worth re-running the Optimizer, or trying a lower limit
+alongside it, before treating the new figure as settled.
+
+Limits that are not federal brackets - IRMAA tiers and the ACA cap - are unchanged, because those
+are already measured on the right income.
 
 ### A limit broken by required distributions no longer tells you to spend less
 

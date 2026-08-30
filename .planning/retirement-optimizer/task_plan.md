@@ -140,6 +140,31 @@ Recorded rather than folded in.
 
 ---
 
+## P96: the ACA note told a household past 65 to change something that cannot help  *(2026-08-29, user-reported, DONE v11.16ab)*
+
+The gate greys out the ACA rows once everyone in the plan is on Medicare at retirement start, and the
+note explaining it ended **"Lower Retirement Start Age to model pre-Medicare years."** For a
+household ALREADY past 65 this calendar year that is unfollowable: `planFirstYear` clamps a start
+year in the past up to the current one, so every start age yields the same first year and the same
+ages in it. The sentence named a control that could not change the outcome it described.
+
+- [x] **P96a** - `updateACAWarning()` splits the `bothMedicare` branch on whether Medicare age is
+      already past THIS year, computed from `planFirstYear(by1, 0)` - the clamp's own floor, so
+      there is no second age calculation to drift. Already past: options greyed, box silent, on the
+      user's instruction. Not yet past, i.e. the START AGE is what carries them over: unchanged,
+      because there the advice works.
+- [x] **P96b** - Four in-page assertions, both branches, disabled-state and message-state each.
+      Browser badge 864 (414 in-page + 450 node); node suites untouched at 367/61/22.
+
+**The tradeoff, recorded because the code comment it overrides names it.** The `bothMedicare` branch
+was deliberately not gated on the selection so that a user who cannot pick an ACA row could still
+find out why. The already-past-65 case now loses that explanation entirely. That is the instruction,
+and it is defensible - the options are visibly greyed and nothing could be done about it either way -
+but if greyed-with-no-reason reads badly, the fix is a short statement of fact with no advice in it,
+not the old sentence back.
+
+---
+
 ## P95: an ACA share link does not round-trip  *(NEW 2026-08-29, found while verifying P94, O1, NOT A REGRESSION)*
 
 `buildShareURL` emits an ACA plan as `?str=bracket&sr=aca400`. Loading that link lands the ceiling

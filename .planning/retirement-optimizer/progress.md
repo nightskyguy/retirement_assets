@@ -6672,3 +6672,29 @@ silent.
 tests never executed - a green badge that meant nothing. `runTests.toString().includes(...)` is what
 caught it; `fetch(url, {cache:'reload'})` on the exact `?v=` URL fixed it. **Bump the version AFTER
 editing, not before, or verify the bundle actually contains the new code.**
+
+## 2026-08-29 (cont.) - P96: advice nobody can follow, v11.16ab
+
+User-reported. The ACA gate's note ended "Lower Retirement Start Age to model pre-Medicare years",
+which for a household already past 65 this year is unfollowable - `planFirstYear` clamps a start year
+in the past up to the current one, so every start age gives the same first year and the same ages in
+it. The note named a control that could not change what it was describing.
+
+Split the `bothMedicare` branch on whether Medicare age is already past THIS year, computed from
+`planFirstYear(by1, 0)` - the clamp's own floor - so there is no second age calculation beside the
+shared one. Already past: greyed and silent, per the instruction. Start age is what carries them
+over: unchanged, because there lowering it genuinely helps.
+
+Verified on five profiles: both 65+ today -> greyed, silent; both under 65 with start 70 -> greyed,
+note shown; one on Medicare -> not greyed; single 65+ today -> greyed, silent; single under 65 with
+start 70 -> greyed, note shown. Four in-page assertions. Badge 864, node 367/61/22.
+
+**Bumped the version AFTER editing this time**, and checked `runTests.toString()` and
+`updateACAWarning.toString()` both contained the new code before believing the green badge. The hour
+had not rolled, so the stamp is still 11.16ab and the browser needed an explicit
+`fetch(url, {cache:'reload'})` on the exact `?v=` URLs.
+
+**Recorded tradeoff:** the `bothMedicare` branch carried a comment saying it was deliberately NOT
+gated on the selection, so that a user who cannot pick an ACA row could still learn why. The
+already-past-65 case now loses that explanation. If greyed-with-no-reason reads badly, the answer is
+a short statement of fact with no advice in it, not the old sentence back.

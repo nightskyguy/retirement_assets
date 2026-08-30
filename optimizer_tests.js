@@ -2379,6 +2379,52 @@ assertEqual(
 		}
 	})();
 
+	// ===== Advice nobody can follow is not shown =====
+	// The ACA gate greys out the FPL options once every person in the plan is on Medicare at
+	// retirement start, and the note explaining it ended "Lower Retirement Start Age to model
+	// pre-Medicare years". For a household ALREADY past 65 this calendar year that instruction cannot
+	// be followed by anyone: planFirstYear clamps a start year in the past up to the current one, so
+	// every start age produces the same first year and the same ages in it. The options still grey
+	// out; the sentence about the control that cannot help is gone. When the start age is what pushes
+	// them past 65, the advice IS followable and the note stays.
+	// ⚠ UNSAFE - MUTATES: the birth years, spouse flag and Retirement Start Age. All restored below.
+	(function acaAdviceOnlyWhenItCanBeFollowed() {
+		if (!unsafeTest('acaAdviceOnlyWhenItCanBeFollowed')) return;   // writes the profile fields
+		const warn = document.getElementById('aca-age-warn'), sel = document.getElementById('stratRate');
+		const by1 = document.getElementById('birthyear1'), by2 = document.getElementById('birthyear2');
+		const spouse = document.getElementById('hasSpouse'), start = document.getElementById('startAge');
+		if (!warn || !sel || !by1 || !spouse || !start || typeof updateACAWarning !== 'function') return;
+		const snap = [[by1, by1.value], [start, start.value]].concat(by2 ? [[by2, by2.value]] : []);
+		const wasSpouse = spouse.checked;
+		const acaOpts = () => [...sel.options].filter(o => o.value.startsWith('aca'));
+		const setUp = (b1, b2, age) => {
+			by1.value = String(b1); spouse.checked = true;
+			if (by2) by2.value = String(b2);
+			start.value = String(age);
+			toggleSpouseUI?.(); refreshStratRateOptions?.(); updateACAWarning();
+		};
+		try {
+			if (!acaOpts().length) return;   // the menu is not offering ACA rows in this build
+			// Both already past 65 this year: no start age can produce a pre-Medicare year.
+			const nowYear = new Date().getFullYear();
+			setUp(nowYear - 74, nowYear - 76, 74);
+			assertEqual(acaOpts().every(o => o.disabled), true,
+				'a household already past 65 cannot select an ACA cap');
+			assertEqual(warn.style.display, 'none',
+				'and is not told to lower a start age that cannot change anything');
+			// Both under 65 today, but the start age puts them past it: the advice works, so it stays.
+			setUp(nowYear - 50, nowYear - 48, 70);
+			assertEqual(acaOpts().every(o => o.disabled), true,
+				'a start age past 65 still greys the ACA rows out');
+			assertEqual(warn.style.display !== 'none', true,
+				'and there the note stays, because lowering the start age really would help');
+		} finally {
+			for (const [el, v] of snap) el.value = v;
+			spouse.checked = wasSpouse;
+			toggleSpouseUI?.(); refreshStratRateOptions?.(); updateACAWarning();
+		}
+	})();
+
 	// ===== The ceiling a warning names is the ceiling you picked =====
 	// extraConvCeilingKind() read val('stratIRMAATier') and val('stratACAMultiple'). NEITHER IS A FORM
 	// FIELD: both are derived in getInputs() from the single Limit dropdown, whose value carries them

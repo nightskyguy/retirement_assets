@@ -61,6 +61,14 @@ screen to say why. Any strategy the menu does not carry now loads as Proportiona
 default setting, so what you get is a working plan you can change rather than a blank one. A plan
 naming a strategy that IS in the menu is unaffected.
 
+### Smaller
+
+If everyone in your plan has already passed 65, the ACA income-cap options are still greyed out but
+the note beside them is gone. It ended by telling you to lower your Retirement Start Age to model
+pre-Medicare years, and that cannot work once the age is behind you: the plan always starts this year
+at the earliest, so no start age reaches a year before Medicare. Where the start age is what puts you
+past 65, the note still appears, because there lowering it does help.
+
 ---
 
 <a id="11.16a9"></a>

@@ -6190,6 +6190,17 @@ function updateACAWarning() {
     const bothMedicare = bothOnMedicareAtStart(by1, startAge, hasSpouse, by2);
     const oneMedicare  = hasSpouse && (p1Medicare !== p2Medicare);
 
+    // P96. Is Medicare age ALREADY past, this calendar year, for everyone in the plan? If it is,
+    // the advice the bothMedicare message used to end on - "Lower Retirement Start Age to model
+    // pre-Medicare years" - cannot be followed by anybody: planFirstYear clamps a start year in the
+    // past up to the current one, so EVERY start age yields the same first year and the same ages
+    // in it. The message named a control that could not change the outcome it was describing.
+    // `planFirstYear(by1, 0)` is that clamp's own floor, which is today, so this reuses the shared
+    // definition rather than writing a second age calculation beside it.
+    const nowYear = planFirstYear(by1, 0);
+    const medicareAlready = (nowYear - by1) >= medAge
+                         && (!hasSpouse || by2 <= 0 || (nowYear - by2) >= medAge);
+
     // Disable / re-enable ACA <option>s
     for (const opt of sel.options) {
         if (!opt.value.startsWith('aca')) continue;
@@ -6216,7 +6227,11 @@ function updateACAWarning() {
     const you  = `you will be ${p1AgeAtStart}`;
     const them = `your spouse ${p2AgeAtStart}`;
 
-    if (bothMedicare) {
+    if (bothMedicare && medicareAlready) {
+        // Silent, on instruction. The options are greyed out above and nothing here can be acted
+        // on, so the box says nothing rather than describing a control that will not help.
+        warnEl.style.display = 'none';
+    } else if (bothMedicare) {
         warnEl.textContent = hasSpouse
             ? `⚠ At retirement start in ${startYear}, ${you} and ${them} - both on Medicare (age ${medAge}+), so there is no premium subsidy for an income cap to protect. ACA options are unavailable. Lower Retirement Start Age to model pre-Medicare years.`
             : `⚠ At retirement start in ${startYear} ${you}, already on Medicare (age ${medAge}+), so there is no premium subsidy for an income cap to protect. ACA options are unavailable. Lower Retirement Start Age to model pre-Medicare years.`;

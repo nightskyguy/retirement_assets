@@ -6784,3 +6784,36 @@ Suites 371/61/22; badge 934 (480 in-page + 454 node), zero unsafe skips, bundle 
 `Math.floor((now - Dec31)/864e5)` for the day of year, and across the PST-to-PDT boundary that is
 241.96 days on 30 August - floor 241, one day short. `Math.round` is correct. It only shows up when
 the run crosses midnight, which this one did.
+
+## 2026-08-30 (cont.) - PR #203 opened; P87g retracted, P87c measured
+
+**PR:** https://github.com/nightskyguy/retirement_assets/pull/203 - 10 commits, v11.16aa through
+v11.16b0. Node 371/61/22, badge 934. Flagged two things for the reviewer in the PR body: the
+changelog entry is ~1,000 words against the ~150 target, and `.test_harnesses/` still names the
+removed `minlimit` on purpose.
+
+**I was wrong about P87g and the user caught it.** I had repeated P87a section 7's heading - "nothing
+sizes a conversion against the ceiling at all" - as a claim about the mechanism, and used it to call
+P87g the largest remaining gap. The user said the conversion ceiling IS the limit for bracket
+strategies. Measured: MAGI lands on `BracketTarget` to the dollar and the conversion is its residual
+after spending. They were right. Corrected in the report, its index row, and the task plan
+(`b381b7a`), leaving the original measurement tables untouched and changing only the claims drawn
+from them.
+
+**The challenge is what found the real defect.** Looking at that same run properly: the plan reaches
+its ceiling every year until Social Security starts and never again, and `short / SSincome` is
+**0.150000** - min equal to max - in every affected year, on federal brackets and IRMAA tiers alike.
+$168,500 of headroom never used on one $2.8M fixture at Fill Bracket 22%. That is P87c: the sizing
+aggregate subtracts the FULL benefit while at most 85% reaches MAGI. Same shape as the deduction
+error P92a fixed, and not fixed by it. Harness `.test_harnesses/underfill_harness.js`, write-up in
+`research/BRACKET_CEILING_BASIS.md` section 9 (`8260929`).
+
+**Two process notes worth carrying forward.** Separating the regimes was the whole difficulty: a raw
+shortfall table shows a drained IRA ($170k-$390k short, not a defect) beside the real anomaly
+($2.5k-$12.6k short with millions still in the IRA), and together they look like noise. And a wrong
+statement of mine - "2031 is before that plan's SS starts" - nearly sent this after the wrong
+mechanism; person 2 claims at 67 in 2031 and I had checked only person 1.
+
+**Next round: P87c**, at the user's direction. It is the strongest O0 candidate - measured, still
+shipped, known mechanism, bounded cost, and the fix is the move P92a already made in the neighbouring
+place: size against the taxable share of the benefit rather than the gross.

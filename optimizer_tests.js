@@ -2586,6 +2586,55 @@ assertEqual(
 		}
 	})();
 
+	// ===== A limit broken by required income takes the opposite advice =====
+	// Reported against a real plan: a $4M IRA left to a survivor throws off a required distribution of
+	// $455,636 against an IRMAA Tier 1 ceiling of $370,371, and in all 15 flagged years the plan drew
+	// NOTHING beyond that RMD - no voluntary withdrawal, no forced draw, no conversion. The warning
+	// nonetheless said "The plan withdraws past it to pay for spending. Lower the Spend Goal", which is
+	// advice that cannot work: required distributions, Social Security and a pension are income the
+	// household has to take, and no Spend Goal reaches them.
+	//
+	// limitWarningText() is pure - rows in, HTML out - so these run on synthetic rows rather than by
+	// driving the page, and they cost nothing to keep.
+	(function requiredIncomeGetsItsOwnAdvice() {
+		if (typeof limitWarningText !== 'function') return;
+		// A year the plan did not choose: it is over, and it drew nothing it had a say in.
+		const structural = { BracketOverage: 290427, IRAwd: 0, ForcedIRA: 0, RMDwd: 455636 };
+		// A year spending drove: the third pass forced a draw past the ceiling to fund the goal.
+		const spendDriven = { BracketOverage: 97095, IRAwd: 40000, ForcedIRA: 12000, RMDwd: 0 };
+		const clean = { BracketOverage: 0, IRAwd: 0, ForcedIRA: 0, RMDwd: 0 };
+
+		const onlyRequired = limitWarningText([structural, structural, clean], 'the IRMAA tier ceiling', 3);
+		assertEqual(/cannot defer/.test(onlyRequired), true,
+			'a limit broken by required income says so: ' + onlyRequired);
+		assertEqual(/Lowering the Spend Goal cannot change this/.test(onlyRequired), true,
+			'and says plainly that spending less will not help');
+		assertEqual(onlyRequired.includes('$455,636'), true,
+			'and names the required distribution that is doing it');
+		// The wrong advice must not survive anywhere in this branch.
+		assertEqual(/Lower the Spend Goal or pick a higher limit/.test(onlyRequired), false,
+			'and never tells this reader to lower a Spend Goal that is not the cause');
+
+		const onlySpending = limitWarningText([spendDriven, spendDriven, clean], 'the federal bracket ceiling', 3);
+		assertEqual(/Lower the Spend Goal or pick a higher limit/.test(onlySpending), true,
+			'a limit broken by spending keeps the advice that does work: ' + onlySpending);
+		assertEqual(/cannot defer/.test(onlySpending), false,
+			'and does not claim required income is involved when it is not');
+
+		// Both causes in one plan: both counts are reported, neither is folded into the other.
+		const mixed = limitWarningText([spendDriven, spendDriven, structural, clean], 'the federal bracket ceiling', 4);
+		assertEqual(/2 of 4/.test(mixed), true, 'the mixed case counts the spending years: ' + mixed);
+		assertEqual(/1 further year/.test(mixed), true, 'and reports the required-income year separately');
+
+		// Nothing over the ceiling says nothing at all.
+		assertEqual(limitWarningText([clean, clean], 'the federal bracket ceiling', 2), '',
+			'a plan that stayed inside its limit raises no warning');
+		// A conversion the user chose is still not counted here - that half has its own note.
+		const convOnly = { BracketOverage: 50000, '-overageFromConv': 50000, IRAwd: 60000, ForcedIRA: 0 };
+		assertEqual(limitWarningText([convOnly, clean], 'the federal bracket ceiling', 2), '',
+			'an overage a conversion caused belongs to the conversion note, not this one');
+	})();
+
 	// ===== A limit that could not be kept says so =====
 	// The engine already fell back to funding the Spend Goal - the third pass forces a draw past a
 	// bracket or IRMAA ceiling rather than leave spending unpaid - and said nothing about it. Only

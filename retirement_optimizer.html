@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.16af</title>
+    <title>Retirement Optimizer 11.16b0</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -63,8 +63,8 @@
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=1116af"></script>
-	<script src="optimizer_tests.js?v=1116af"></script>
+	<script src="optimizer_ui.js?v=1116b0"></script>
+	<script src="optimizer_tests.js?v=1116b0"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -891,15 +891,16 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.16af</b>
+				<li data-flag="behavior"><b>11.16b0</b>
 					<strong>Fill Fed Bracket now fills the bracket.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li><strong>Behavior change - saved plans and shared links will not reproduce their earlier numbers.</strong> Picking "22%" stopped short of the top of the 22% bracket by that year's whole deduction, about $32,000 in 2026 for a married couple and more each year after. A chosen bracket is now filled to its top, so these plans withdraw and convert more. <strong>Which way that lands depends on the bracket:</strong> across 71 plans funding the same spending either way, terminal net worth rose in 18 and fell in 49 - a 12% limit typically gains about $158,000, a 22% limit typically loses about $200,000. If your plan uses a 22% or 24% limit, re-read it before relying on the new numbers. IRMAA tiers and the ACA cap are unchanged.</li>
+					<li><strong>A limit broken by required distributions no longer tells you to spend less.</strong> The note under a limit now says which of two causes put the plan over it, because they take opposite advice: spending you can lower, against required distributions and Social Security you cannot. Where required income alone exceeds the limit, the note says lowering the Spend Goal will not change it, names the distribution doing it, and points at converting earlier, a QCD, or a higher limit instead.</li>
 					<li><strong>The Limit menu now says where each limit sits on the other ladder.</strong> A federal bracket limits income after your deduction and an IRMAA tier limits it before, so the two dollar amounts were never comparable. Entries now read <em>22% Fed - $211k (IRMAA Tier 1)</em> and <em>IRMAA Tier 1 - $274k (24% Fed)</em>, with a sentence underneath and a <strong>Show me</strong> picture of both ladders on one income axis. <strong>The amounts were also about 2.8% too high</strong> and are now correct - the top of the 22% bracket reads $211,400 again, which is what your plan was using all along.</li>
 					<li><strong>The plan now tells you when your limit could not be kept.</strong> If your Spend Goal cannot be funded underneath the limit you picked, the plan pays for the spending and draws above the ceiling anyway - and said nothing about it. A note under the limit now names how many years could not stay inside it and by how much at worst. The note under Extra Annual Roth Conversion also said "the federal bracket ceiling" whatever you had picked; it now names the ceiling you chose.</li>
 					<li>A saved plan or shared link naming a withdrawal strategy that is no longer in the Strategy menu used to come up with nothing selected and compute as all zeros. It now loads as Proportional Withdraw +% at its default setting, so you get a working plan you can change rather than a blank one.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.16af" target="_blank" rel="noopener">Details</a>
+					<a href="optimizer_changelog.md#11.16b0" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="behavior"><b>11.16a9</b>
 					<strong>The Stress Test could report on the wrong plan, and Roth conversions now count toward IRMAA.</strong>
@@ -1529,7 +1530,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1116af';
+    const V = '?v=1116b0';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

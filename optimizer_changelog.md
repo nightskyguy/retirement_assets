@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.16af"></a>
+<a id="11.16b0"></a>
 
-## 11.16af
+## 11.16b0
 
 ### Fill Fed Bracket now fills the bracket
 
@@ -38,6 +38,16 @@ usually is not, because money leaves the IRA earlier than it needed to and stops
 If your plan uses a 22% or 24% limit and you chose it expecting the old behavior, this is worth
 re-reading before you rely on the new numbers. Limits that are not federal brackets - IRMAA tiers and
 the ACA cap - are unchanged, because those are already measured on the right income.
+
+### A limit broken by required distributions no longer tells you to spend less
+
+When a plan goes over the limit you picked, the note under it now says **which** of two causes did it,
+because they take opposite advice. If your spending forced the plan past the ceiling, lowering the
+Spend Goal helps. If required distributions, Social Security and a pension already exceed it on their
+own, lowering the Spend Goal changes nothing at all - the plan is taking no more than it must - and
+the note now says so, names the required distribution doing it, and points at what does move it:
+converting more before required distributions begin, a QCD, or a higher limit. A plan with both gets
+both counts.
 
 ### The Limit menu says where each limit sits on the other ladder
 

@@ -4894,40 +4894,96 @@ function updateExtraConvWarning() {
 // The forced half only. `-overageFromConv` (P88c) carries overage an Extra Annual Roth Conversion
 // caused, which is the user choosing to go over rather than the plan being unable to stay under;
 // that half is what updateExtraConvWarning() covers.
+// P97. The message this builds, split out from the DOM so it can be tested on rows rather than on a
+// page. Pure: rows in, HTML out, '' when there is nothing to say.
+//
+// TWO CAUSES, AND THEY TAKE OPPOSITE ADVICE. The first version of this warning said "Lower the Spend
+// Goal" whenever a year went over, and on a plan whose IRA is large enough that is simply wrong: a
+// $4M IRA left to a survivor throws off an RMD of $455,636 against an IRMAA Tier 1 ceiling of
+// $370,371, and the plan withdraws NOTHING beyond that RMD in the years it is flagged. Required
+// distributions, Social Security and a pension are income the household must take; no Spend Goal
+// reaches them. Telling that user to spend less is advice that cannot work, on the one screen whose
+// job is to explain the number above it.
+//
+// The test is exact rather than estimated: `IRAwd` is the voluntary draw plus conversion gross
+// (optimizer_core.js, buildSimYearLogRecord) and `ForcedIRA` is the third pass's draw, so a year
+// with neither is a year in which the plan chose nothing that could have put it over. Estimating
+// instead - subtracting the draws from MAGI - would be wrong in the unsafe direction, because IRA
+// income also raises the taxable share of Social Security, so removing it would take more out of
+// MAGI than the draw itself.
+function limitWarningText(rows, kind, totalYears) {
+    const isACA = kind === 'the ACA FPL cap';
+    const forced = r => (r.BracketOverage ?? 0) - (r['-overageFromConv'] ?? 0);
+    const yrs = isACA ? rows.filter(r => r['-acaBreach']) : rows.filter(r => forced(r) > 1);
+    if (!yrs.length) return '';
+
+    const chose = r => (r.IRAwd ?? 0) + (r.ForcedIRA ?? 0);
+    const structural = yrs.filter(r => chose(r) <= 1);      // nothing the plan chose put it over
+    const spendDriven = yrs.filter(r => chose(r) > 1);
+
+    const m = totalYears;
+    const yearWord = m === 1 ? 'year' : 'years';
+    const money = v => DisplayHelpers.formatDollar(v);
+    const worstOf = set => Math.max(...set.map(forced));
+    const ceiling = isACA ? 'the cap' : kind;
+
+    // The structural half first when it is the bigger one, because it is the half whose advice the
+    // reader would otherwise get backwards.
+    if (structural.length && structural.length >= spendDriven.length) {
+        const worstRow = structural.reduce((a, b) => (forced(a) > forced(b) ? a : b));
+        const rmd = worstRow.RMDwd ?? 0;
+        let out = `<b>Income you cannot defer already exceeds ${ceiling} in `
+            + `${structural.length} of ${m} ${yearWord}.</b> `
+            + `In ${structural.length === 1 ? 'that year' : 'those years'} the plan withdraws nothing `
+            + `beyond what it is required to, and still goes over by up to `
+            + `<b>${money(worstOf(structural))}</b>`;
+        if (rmd > 1) {
+            out += `, on a required distribution of ${money(rmd)}`;
+        }
+        out += `. <b>Lowering the Spend Goal cannot change this</b> - required distributions, Social `
+            + `Security and any pension are income the plan has to take. Converting more before `
+            + `required distributions begin, a QCD, or a higher limit are what move it.`;
+        if (spendDriven.length) {
+            out += ` Separately, spending pushes the plan over in ${spendDriven.length} other `
+                + `${spendDriven.length === 1 ? 'year' : 'years'}, by up to ${money(worstOf(spendDriven))}.`;
+        }
+        return out + ` See RMDwd and BracketOverage in Annual Details.`;
+    }
+
+    const n = spendDriven.length, worst = worstOf(spendDriven);
+    const most = n / m > 0.5;
+    let out;
+    if (isACA) {
+        out = `<b>Your spending does not fit under ${kind} in ${n} of ${m} ${yearWord}.</b> `
+            + `The plan pays for the spending anyway, so income goes over the cap in `
+            + `${n === 1 ? 'that year' : 'those years'} and the premium subsidy is lost in `
+            + `${n === 1 ? 'it' : 'them'}. Lower the Spend Goal, or raise the multiple, to keep the cap.`;
+    } else {
+        out = (most
+                ? `<b>${kind.charAt(0).toUpperCase() + kind.slice(1)} you chose cannot fund this plan:</b> `
+                  + `your Spend Goal does not fit inside it in ${n} of ${m} ${yearWord}. `
+                : `<b>Your Spend Goal does not fit inside ${kind} in ${n} of ${m} ${yearWord}.</b> `)
+            + `The plan withdraws past it to pay for spending, by up to <b>${money(worst)}</b>, so `
+            + `${n === 1 ? 'that year satisfies' : 'those years satisfy'} your Spend Goal rather than `
+            + `the limit. Lower the Spend Goal or pick a higher limit to keep it. `
+            + `A conversion you chose to make going over is counted separately, not here.`;
+    }
+    if (structural.length) {
+        out += ` In ${structural.length} further ${structural.length === 1 ? 'year' : 'years'} the `
+             + `plan is over on required income alone, which no Spend Goal reaches.`;
+    }
+    return out + ` See ${isACA ? 'acaBreach and ' : ''}BracketOverage in Annual Details.`;
+}
+
 function updateLimitFeasibilityWarning() {
     const box = document.getElementById('limit-warn');
     if (!box) return;
     const kind = extraConvCeilingKind();   // null for every strategy with no ceiling at all
     const log  = Array.isArray(lastSimulationLog) ? lastSimulationLog : null;
     if (!kind || !log || !log.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
-
-    // ACA is a CAP, not a target: breaching it forfeits the premium subsidy rather than paying a
-    // higher bracket rate, so it is counted off its own flag and worded as a different event.
-    const isACA = kind === 'the ACA FPL cap';
-    const forced = r => (r.BracketOverage ?? 0) - (r['-overageFromConv'] ?? 0);
-    const yrs = isACA ? log.filter(r => r['-acaBreach']) : log.filter(r => forced(r) > 1);
-    if (!yrs.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
-
-    const n = yrs.length, m = log.length;
-    const worst = Math.max(...yrs.map(forced));
-    const most = n / m > 0.5;
-    const yearWord = m === 1 ? 'year' : 'years';   // "1 of 25 years" - the plural is the TOTAL's
-    if (isACA) {
-        box.innerHTML = `<b>Your spending does not fit under ${kind} in ${n} of ${m} ${yearWord}.</b> `
-            + `The plan pays for the spending anyway, so income goes over the cap in ${n === 1 ? 'that year' : 'those years'} `
-            + `and the premium subsidy is lost in ${n === 1 ? 'it' : 'them'}. Lower the Spend Goal, or raise the `
-            + `multiple, to keep the cap. See acaBreach and BracketOverage in Annual Details.`;
-    } else {
-        box.innerHTML = (most
-                ? `<b>${kind.charAt(0).toUpperCase() + kind.slice(1)} you chose cannot fund this plan:</b> `
-                  + `your Spend Goal does not fit inside it in ${n} of ${m} ${yearWord}. `
-                : `<b>Your Spend Goal does not fit inside ${kind} in ${n} of ${m} ${yearWord}.</b> `)
-            + `The plan withdraws past it to pay for spending, by up to `
-            + `<b>${DisplayHelpers.formatDollar(worst)}</b>, so ${n === 1 ? 'that year satisfies' : 'those years satisfy'} `
-            + `your Spend Goal rather than the limit. Lower the Spend Goal or pick a higher limit to keep it. `
-            + `A conversion you chose to make going over is counted separately, not here. `
-            + `See BracketOverage in Annual Details.`;
-    }
+    const html = limitWarningText(log, kind, log.length);
+    if (!html) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.innerHTML = html;
     box.style.display = '';
 }
 

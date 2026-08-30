@@ -6751,3 +6751,36 @@ continues past it.
 including the carry cases (999,500 -> $1M, 999,999,999 -> $1B) and that it never emits an exponent.
 First version blew the stack on a billion by recursing to carry; the unit search also ran backwards
 and called a billion "k". Both caught by probing the output rather than reasoning about it.
+
+## 2026-08-30 - P97: the limit warning blamed spending for RMDs, v11.16b0
+
+User-reported on a shared URL, and their own diagnosis was right. On that plan - $4M across two IRAs,
+IRMAA Tier 1, TX, person 1 dying 2046 - **all 15 flagged years have `IRAwd` = 0, `ForcedIRA` = 0 and
+`rothConv` = 0**. The plan draws nothing beyond its required distribution and is over anyway: by 2061
+an RMD of **$455,636** against a Tier 1 ceiling of **$370,371**, every flagged year a SGL survivor
+year after the first death halves both ladders. P92c's warning said "The plan withdraws past it to
+pay for spending... Lower the Spend Goal" - advice that cannot work, on the one screen whose job is
+to explain the number above it.
+
+`BracketOverage` conflates two causes that take OPPOSITE advice, and the fix is to tell them apart:
+spending you can lower, against required income you cannot. `limitWarningText()` is now a pure
+function so the classification is testable on rows instead of by driving the page.
+
+**The test is exact rather than estimated, and the reason matters:** `IRAwd` is the voluntary draw
+plus conversion gross (`optimizer_core.js:1067`) and `ForcedIRA` is the third pass's draw, so a year
+with neither is a year in which the plan chose nothing that could have put it over. The estimate I
+first considered - subtract the draws from MAGI and see whether it still clears the ceiling - errs in
+the UNSAFE direction, because IRA income also raises the taxable share of Social Security, so
+removing it takes more out of MAGI than the draw itself and years would be called structural that
+were not.
+
+**Found while checking the other branch:** the plain 12% default plan reported "22 of 25 years" as one
+count and blamed spending for all of it. **6 of those 22 were structural.** Both counts are now
+reported separately.
+
+Suites 371/61/22; badge 934 (480 in-page + 454 node), zero unsafe skips, bundle freshness checked.
+
+**Version-stamp gotcha, cost one wrong number:** my usual one-liner uses
+`Math.floor((now - Dec31)/864e5)` for the day of year, and across the PST-to-PDT boundary that is
+241.96 days on 30 August - floor 241, one day short. `Math.round` is correct. It only shows up when
+the run crosses midnight, which this one did.

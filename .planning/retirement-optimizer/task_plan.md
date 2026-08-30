@@ -140,6 +140,35 @@ Recorded rather than folded in.
 
 ---
 
+## P97: the limit warning blamed spending for RMDs  *(2026-08-30, user-reported, DONE v11.16b0)*
+
+**User-reported against a real shared plan**, and the user's own diagnosis was right: "the spend goal
+is 130k, and I think what may be popping is the RMDs."
+
+Measured on that plan - $2.5M + $1.5M IRAs, IRMAA Tier 1, TX, person 1 dying 2046 - **all 15 flagged
+years have `IRAwd` = 0, `ForcedIRA` = 0 and `rothConv` = 0.** The plan withdraws nothing beyond its
+required distribution and is still over: by 2061 an RMD of **$455,636** against a Tier 1 ceiling of
+$370,371, every flagged year a SGL survivor year. P92c's warning nonetheless said "The plan withdraws
+past it to pay for spending... Lower the Spend Goal", which is advice that cannot work.
+
+- [x] **P97a** - `limitWarningText(rows, kind, totalYears)` split out of
+      `updateLimitFeasibilityWarning()` as a PURE function, and the flagged years split by cause.
+      The test is exact, not estimated: `IRAwd` is the voluntary draw plus conversion gross and
+      `ForcedIRA` is the third pass's, so a year with neither is one where the plan chose nothing
+      that could have put it over. **Estimating by subtracting draws from MAGI would err the unsafe
+      way** - IRA income also raises the taxable share of Social Security, so removing it takes more
+      out of MAGI than the draw itself.
+- [x] **P97b** - Opposite advice per cause, and both counts when a plan has both. The structural
+      branch names the required distribution and says plainly that lowering the Spend Goal cannot
+      change it; it points at converting before RMDs begin, a QCD, or a higher limit.
+- [x] **P97c** - Six assertions on synthetic rows, no DOM driving, including that the spend-advice
+      string never appears in the structural branch. Badge 934 (480 in-page + 454 node).
+
+**Found while checking the other branch:** the shipped 12% default plan reported "22 of 25 years" as
+one undifferentiated count and blamed spending for all of it. **6 of those 22 were structural.**
+
+---
+
 ## P96: the ACA note told a household past 65 to change something that cannot help  *(2026-08-29, user-reported, DONE v11.16ab)*
 
 The gate greys out the ACA rows once everyone in the plan is on Medicare at retirement start, and the

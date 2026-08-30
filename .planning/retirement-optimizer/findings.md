@@ -3238,3 +3238,44 @@ engine first rows 2026/2030 at ages 68/72. **But the portfolio does NOT grow bet
 future start year** - typed $1M gives a year-0 IRA of $1,050,154 starting 2026 and $1,046,082
 starting 2030, where four years at 6% would be ~$1.26M. Balances are treated as AT RETIREMENT, not
 today. Defensible for a drawdown model; a decision rather than a defect, and unrecorded until now.
+
+## P94 - `minlimit` is unreachable, and the evidence (2026-08-29)
+
+Measured before proposing removal, because "nobody uses it" is the kind of claim that is usually
+wrong:
+
+| surface | result |
+|---|---|
+| strategy dropdown | 6 options; `minlimit` is not one |
+| Optimizer sweep | **0 of 111** families emit it |
+| Monte Carlo sweep | **0 of 156** variations emit it |
+| `?str=minlimit` URL | **already broken** - select goes blank (`selectedIndex: -1`), `getInputs().strategy` is `""`, plan computes **$0** |
+| `sweep_golden.js` | 0 references |
+| README / ARCHITECTURE | 0 references |
+
+**The URL result is the one that settles it.** A share link or saved scenario naming `minlimit` does
+not silently fall back today - it produces no plan at all. So there are no working plans to migrate,
+and removal costs nothing.
+
+**It has drifted out of step with the strategy it shadows.** `_stratImpliesConversion`
+(`optimizer_core.js:1339`) lists `'bracket'` and omits `'minlimit'`, so an otherwise identical plan
+picks a different year-0 withdrawal month. On the IRMAA-tier path `minlimit` and `bracket` differ in
+exactly ONE log column, `timing`, with every money field identical - that is unmaintained code, and
+it is the concrete instance.
+
+**Two corrections to my own earlier statements, both from not checking which term of a `min` binds:**
+
+1. I told the user that fixing the ceiling basis (P87b) and the conversion sizing (P87g) would fix
+   `Min Limit` being decorative. It would not - `goalLimit` is an independent term and dominates.
+2. I then said "a user choosing 24% vs 12% here may be changing nothing." **No user can choose it at
+   all.** The finding was real but the framing implied a reachable control.
+
+**The cascade, verified rather than assumed.** `yr.IRMAALimit` has exactly one consumer, so it dies
+with the clamp along with `_irmaaEffCpi`, `IRMAABracket`, `_irmaaMargin`, the `IRMAALimit` parameter
+(three call sites) and a 15-line comment block. **But `yr.goalLimit` SURVIVES** - it caps
+`targetSpend` for non-bracket strategies at `:1749`, and `goalFedBracketLimit.rate` /
+`goalStateBracketLimit.rate` set the marginal rates at `:1778`-`:1779`. I nearly wrote that the whole
+chain was orphaned; checking is what stopped it.
+
+**Noted, out of scope:** `targetSpend` capping non-bracket strategies at `goalLimit` means
+Proportional's spending is silently limited by a tax bracket top.

@@ -11,6 +11,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
+| **O0** | P94 | Remove the `minlimit` strategy entirely; unknown strategy -> default *(own step)* | `P94a` |
 | **O0** | P92 | A chosen limit is the limit: no silent min, warn when infeasible *(user-decided)* | `P92a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
@@ -24,12 +25,107 @@ the ten captured paths; prev/next is one 46-stop ring; the Market Return chart n
 **P84 COMPLETE, SHIPPED v11.168d** - advisor/AUM fee + RMDs off the prior Dec 31 balance; suites **353**/61/22. **P85 RE-RUN**: earlier still wins 353 of 499, but the RMD claim BROKE (124 counterexamples, all bracket at a live IRA Goal). O0 stays `P35i`; `P72` still pending.
 
 **P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
-
 **P88, P89, P90 COMPLETE v11.16a4** - conversions reach MAGI so IRMAA charges them (+30% to +132% at $100k); warnings name the ceilings they break; the ACA gate reads the plan's real first year; two chart fixes. Suites **366**/61/22. **P91 DONE v11.16a5: the Stress Test's first result was computed on a STALE horizon (8/36 where the truth is 0/40) because a refresh displaced by an in-flight one was DROPPED, never retried; now coalesced. The full sweep was silently stale the same way and now raises its Out-of-date banner. Was on `main` too - never a regression from this branch.**
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. Full index next.
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
+
+## P94: remove the `minlimit` strategy entirely  *(NEW 2026-08-29, user-decided, O0, NOT YET BUILT)*
+
+**Goal: simplify the logic and the architecture.** Per the user's standing rule, accuracy and
+comprehensibility outweigh byte-identity - this removal is expected to change nothing for any
+reachable plan, but that is a consequence, not the point.
+
+**To be done as its OWN step**, on the user's instruction, because extirpating it may break
+something: not folded into P92 or any other phase.
+
+### Why it goes
+
+`minlimit` ("Lesser of") predates the tool's IRMAA modelling. It meant *the lesser of the chosen
+federal bracket and a nearby IRMAA threshold*, and partly guarded against a runaway taxation spiral.
+**Both reasons are gone:** IRMAA tiers are modelled directly (the `IRMAA Ceil` family sweeps tiers
+0-4 through `strategy: 'bracket'`), and the spiral was measured and REFUTED in P32 - 0 capped years
+in 3,960 armed runs.
+
+It is unreachable, measurably:
+
+| surface | result |
+|---|---|
+| strategy dropdown | 6 options; `minlimit` is not one |
+| Optimizer sweep | **0 of 111** families emit it |
+| Monte Carlo sweep | **0 of 156** variations emit it |
+| `?str=minlimit` URL | **already broken** - select goes blank (`selectedIndex: -1`), `getInputs().strategy` is `""`, plan computes **$0** |
+| `sweep_golden.js` | 0 references |
+| README / ARCHITECTURE | 0 references |
+
+It has also drifted out of step with the strategy it shadows: `_stratImpliesConversion`
+(`optimizer_core.js:1339`) lists `'bracket'` and omits `'minlimit'`, so an otherwise identical plan
+picks a different year-0 withdrawal month. Nobody noticed because nobody can run it.
+
+- [ ] **P94a** - Delete the arm. The ceiling clamp in `computeBracketCeiling` (`:984`) is the only
+      place the strategy DOES anything; then drop `|| inputs.strategy === 'minlimit'` from
+      `yr.isBracketStrategy` (`:1716`), the withdrawal dispatch (`:2007`) and the cyclic-coexist
+      conditions (`:1923`, `:1938`, `:1946`), plus the comments at `:854`, `:1458`, `:1497`, `:1499`,
+      `:1881`, `:1888`, `:1891`, `:2346`, `:3541` and one in `taxengine.js`. UI: three sites -
+      the ACA/bracket guard (`optimizer_ui.js:494`), `extraConvCeilingKind`'s "the Min Limit ceiling"
+      branch (`:4836`, added by P88e and dead on arrival) and the `ui-bracket` toggle (`:4877`).
+- [ ] **P94b** - **THE CASCADE, and the actual simplification.** `yr.IRMAALimit` has EXACTLY ONE
+      consumer - the clamp being deleted. So it takes with it the `IRMAALimit` parameter of
+      `computeBracketCeiling` (**all three call sites shorten**: `:1930`, `:1942`, `:2009`),
+      `yr.IRMAALimit` (`:1472`), `_irmaaEffCpi`, `IRMAABracket`, `_irmaaMargin` (`:1468`-`:1471`), and
+      the 15-line comment block at `:1458`-`:1467` explaining why the field is provably inert.
+      `computeBracketCeiling` drops from three branches to two.
+      **DO NOT remove `yr.goalLimit` / `goalFedBracketLimit` / `goalStateBracketLimit`.** They look
+      orphaned and are not: `goalLimit` caps `targetSpend` for non-bracket strategies at `:1749`, and
+      the two `.rate` fields set the marginal rates at `:1778`-`:1779`. Checked before writing this.
+      `irmaaMarginDollars` / `irmaaFwdFactor` also stay - the IRMAA-tier branch still uses them.
+- [ ] **P94c** - **Unknown strategy -> silent fallback to the default**, which is `propwd` with
+      `propWithdraw` 20 (first `<option>`, no `selected`; the input carries `value="20"`).
+      **Reuse the existing precedent rather than inventing one:** `applyScenario` already maps
+      `'aca'` back to `'bracket'` because the dropdown has no option for it. Add a GENERIC guard
+      immediately after that - the user asked for "`minlimit` OR ANY non-named strategy", and a name
+      list would need maintaining. If the select matches no option (`selectedIndex === -1`), reset to
+      the first option and restore its parameter default from `OPT_DEFAULTS`
+      (`optimizer_ui.js:4941`). **Silent, per the instruction.** Must run AFTER the `aca` mapping so
+      that deliberate case is not swallowed. Same guard on the URL path via one shared helper.
+      **This is a user-visible IMPROVEMENT:** a legacy scenario naming `minlimit` currently loads as a
+      blank strategy and a $0 plan; it will load as a working default plan.
+- [ ] **P94d** - Tests. Most references are incidental: fixtures passing `stratIRMAATier: 1` take the
+      IRMAA branch, so the clamp never executes - the suite already says so at
+      `optimizer_core.tests.js:4331`, and it was confirmed empirically (on that path `minlimit` and
+      `bracket` differ in exactly ONE column, `timing`, with every money field identical).
+      **Re-point to `strategy: 'bracket'`**, expecting no money change: `:388`, `:424`, `:1952`,
+      `:2671`, `:2687`, `:2734`, `:2736`. **Delete** `minlimit: the IRMAA ceiling is a real limit
+      below the first tier` (`:6124`, the only test that genuinely exercises the clamp) and
+      `yr.IRMAALimit is inert` (`:4327`, whose subject ceases to exist). **Add one** for the unknown
+      strategy falling back to the default. Reconcile counts in all three places.
+- [ ] **P94e** - Changelog: ONE bullet, for the FALLBACK only - "a saved plan naming a strategy this
+      version does not have now loads as the default instead of coming up blank". The `minlimit`
+      removal itself is invisible and, by the in-page rule added this session, has no reader.
+
+### Verification
+
+`sweep_golden.js` is untouched, so the strategy-enumeration goldens must still reproduce - **that is
+the guard proving neither sweep ever emitted `minlimit`.** Then:
+`grep -rn "minlimit" --include=*.js --include=*.html .` returns nothing outside `.planning/` and
+`research/`. In the browser: `?str=minlimit` and `?str=totalNonsense` both land on Proportional
+Withdraw +% at 20 with a real plan (today: blank, $0); a normal `?str=bracket` plan is unchanged; and
+`?str=aca` still maps to `bracket`, proving the guard did not swallow the deliberate case.
+
+- **Status:** planned in full, nothing built. Approved plan kept at
+  `~/.claude/plans/abundant-noodling-barto.md`.
+- **Answers `P92b`**, which asked whether `Min Limit` survives once its `min` is removed. It does not
+  need to: there is no user-facing strategy to delete, only dead code, so P92's "strategy deletion
+  with migration" worry was mis-scoped.
+
+### Found while exploring, OUT OF SCOPE
+
+`targetSpend` caps non-bracket strategies at `goalLimit` (`optimizer_core.js:1749`), so
+**Proportional's spending is silently limited by a tax bracket top.** Live and load-bearing.
+Recorded rather than folded in.
+
+---
 
 ## P93: name the year the assets belong to  *(2026-08-29, user-decided, DONE v11.16a9)*
 

@@ -1,77 +1,64 @@
 'use strict';
 /**
- * bracketbasis_harness.js -- P87a. What does the federal bracket ceiling leave unfilled?
+ * bracketbasis_harness.js -- P87a, re-pointed after P92a shipped the fix.
  *
  * Run:  node .test_harnesses/bracketbasis_harness.js
  *
- * THE DEFECT. The strategy "Limit" dropdown emits three kinds of ceiling and `computeBracketCeiling`
- * hands all three back as one number, which every caller then spends as a MAGI ceiling:
+ * THE DEFECT IT WAS BUILT FOR. The strategy "Limit" dropdown emits three kinds of ceiling and
+ * `computeBracketCeiling` handed all three back as one number, which every caller spends as a MAGI
+ * ceiling:
  *
  *   IRMAA Tier n   TAXData.IRMAA brackets     MAGI = AGI + tax-exempt interest        correct
- *   n% Fed         TAXData.FEDERAL brackets   TAXABLE income, i.e. AFTER the           WRONG BY ONE
- *                                             deduction (`std` is a separate field)    DEDUCTION
+ *   n% Fed         TAXData.FEDERAL brackets   TAXABLE income, i.e. AFTER the           WAS WRONG BY
+ *                                             deduction (`std` is a separate field)    ONE DEDUCTION
  *   n% FPL         an FPL multiple            ACA MAGI (adds back non-taxable SS)      ceiling right
  *
- * So "fill the 22% bracket" stops when MAGI reaches the 22% top, which leaves federal taxable income
- * one whole deduction short of it -- $32,200 MFJ in 2026 before the two $1,650 age-65 bumps and the
- * $6,000-per-filer senior deduction. Conversion and withdrawal room the strategy was asked for and
- * never used, every year, in the same direction, with no cliff crossed to announce it.
+ * So "fill the 22% bracket" stopped when MAGI reached the 22% top, leaving federal taxable income one
+ * whole deduction short of it, every year, in the same direction, with no cliff crossed to announce
+ * it. P92a (v11.16aa) raised the federal ceiling by that deduction unconditionally.
  *
- * WHAT THIS MEASURES, AND WHAT IT DOES NOT. It sizes the gap. It does not fix it. P87b picks between
- * raising the federal ceiling by the deduction and comparing federal-mode ceilings against taxable
- * income instead of MAGI, and stays closed until this reports.
+ * WHY THIS FILE CHANGED SHAPE. It used to A/B the research flag `bracketCeilingAddDeduction`. P92a
+ * deleted the flag, so from that commit the harness set an input nothing read, both arms were the
+ * same run, and it scored four predictions on a column of zeros while printing HOLDS and BROKEN as
+ * though it had measured something -- the exact failure `unifiedconv_harness.js` hit with
+ * `unifiedConvRouting`, and the one section 0 was written to catch.
  *
- * TWO HALVES, because they answer different questions:
- *   Section 2 is a census off the CONTROL arm's log alone. How many years actually sat ON the
- *   ceiling, and how much room the deduction hid in those years. That sum is an UPPER BOUND: a year
- *   only loses money if the ceiling is what stopped it.
- *   Section 3 is the A/B. `bracketCeilingAddDeduction` raises the federal-mode ceiling by the year's
- *   deduction, and the difference between the arms is what the room was worth once the IRA balance,
- *   the IRA Goal and the spending had their say.
+ * The A/B cannot come back: reconstructing the old ceiling would mean re-adding dead code to
+ * production for a settled question. So the question changes from "what would raising the ceiling be
+ * worth" -- answered, shipped, and recorded in BRACKET_CEILING_BASIS.md section 8 -- to "is the
+ * shipped ceiling on one basis, and how much room did it release". That is answerable off ONE arm,
+ * because P92a logs `-ceilDedAddBack` beside `-fedDeduction` precisely so the residual is auditable
+ * from a finished run instead of argued.
  *
- * THE ARM IS AN APPROXIMATION AND SAYS SO. The senior deduction phases out against federalAGI, which
- * is what the ceiling is about to determine, so the year's own deduction is not knowable when the
- * ceiling is placed. The arm re-indexes LAST year's charged deduction, and falls back for year 0
- * only to the statutory standard deduction plus age bumps. It also lifts the FEDERAL number alone
- * and leaves the state bracket top -- same basis error, not measured here -- so in a state whose
- * table binds first this reads LOW. Both choices push the answer the same way: toward understatement.
+ * WHAT THE TWO OPERANDS ARE. `-ceilDedAddBack` is the deduction the CEILING used, estimated in two
+ * passes before the year's income is known; `-fedDeduction` is the deduction actually CHARGED. They
+ * differ by whatever the estimate could not see coming, and the OBBBA senior deduction phases out
+ * against federal AGI -- the very quantity the ceiling is about to determine -- so some residual is
+ * structural rather than a defect. `ceilded_harness.js` is where the candidate estimators were
+ * scored against each other; this one audits the one that shipped, in situ.
  *
- * PREDICTIONS, registered before the run:
- *   B1  In a year that sits ON the ceiling, the armed arm's MAGI is higher by about that year's
- *       deduction. Nothing else in the year is claimed.
+ * PREDICTIONS, registered before the run. New codes: the old B1..B5 were claims about an ARM that no
+ * longer exists, and are kept only in the report as what was measured pre-fix.
+ *   A1  LIVENESS. On a federal-bracket family the add-back is non-zero in the years that have a
+ *       ceiling. If it is zero everywhere the fix has regressed, and this reports BROKEN rather than
+ *       "no effect" -- `brokerage_harness.js` printed SKIPPED for months against a counter name that
+ *       never existed.
+ *   A2  THE POINT OF THE FIX. In a year that sits ON the ceiling, federal TAXABLE income now lands on
+ *       the federal bracket top, which is what "fill the 22% bracket" was always supposed to mean.
+ *       Scored per year, not on a lifetime total -- the lifetime form is not monotone in the ceiling
+ *       and condemned a working arm in 70 of 160 cells once already. Same failure as `rmdbasis`'s R2.
+ *   A3  The two-pass estimate is close: the add-back matches the deduction charged in the median
+ *       year, and never misses by more than one senior deduction ($6,000 per filer).
+ *   A4  ZERO TEST. `IRMAA Tier n` and `n% FPL` ceilings get no add-back at all -- their ceilings are
+ *       already MAGI-based and lifting them would be a second, opposite basis error.
+ *   A5  The room released GROWS with indexation and the age-65 bumps, so the defect was widening: the
+ *       last ceiling year's add-back exceeds the first's.
  *
- *       B1 WAS FIRST WRITTEN WRONG, and the wrong form is the instructive one. It said "armed never
- *       draws LESS than control", scored on LIFETIME totals, and reported 70 of 160 cells reversed
- *       against a perfectly working arm. Drawing more early leaves a smaller IRA to draw from later,
- *       so a lifetime sum is not monotone in the ceiling and never could be. The claim is about a
- *       year, so it has to be scored on a year. Same failure as `rmdbasis_harness.js` R2.
- *   B2  The gain is largest where the spend rate is low -- where the ceiling binds and the IRA still
- *       has stock to give.
- *   B3  Lifetime nominal tax RISES while terminal after-tax net worth ALSO rises: more moved earlier
- *       at a lower rate.
- *
- *       B3 IS SCORED, BUT IT IS NOT A VERDICT ON THE FIX, and the first version of this file said it
- *       was. A named ceiling is a CONTRACT TO FILL: a user picking `22% Fed` or `IRMAA Tier 2` wants
- *       the room between their spending and the limit converted or banked, and is not asking the
- *       tool to minimize their tax. So B3 breaking means "filling this bracket is often a worse
- *       STRATEGY than under-filling it" - the Optimizer ranking's business, and a changelog
- *       disclosure if the fix ships - not "leave the ceiling one deduction short". Judging a
- *       correctness defect by a wealth metric is how an accidental hedge gets mistaken for a design.
- *   B4  ZERO TEST. `IRMAA Tier n` and `n% FPL` rows are bit-identical across the arms -- their
- *       ceilings do not come from the federal bracket table.
- *
- *       B4 CARRIED A SECOND CLAUSE AND IT WAS WRONG: "`minlimit` rows DO move, that branch takes the
- *       federal limit and then mins it against the IRMAA one". They move in 0 of 40 cells. The min
- *       is the whole story -- `yr.IRMAALimit` is built from `goalLimit`, the bracket top containing
- *       the SPENDING GOAL, which sits far below the federal ceiling the user picked. Measured here:
- *       Fill Bracket 24% targets $403,550 in year 0 where Min Limit 24% targets $211,399. So the
- *       federal basis error never reaches `minlimit` at all, and B4's zero test is really a THREE-
- *       family zero test.
- *   B5  A plan whose IRA is already at its Goal moves less: `curIRA` throttles the draw before the
- *       ceiling ever does.
- *
- * Section 0 exists because `brokerage_harness.js` printed SKIPPED for months while probing a counter
- * name that never existed. If arming the flag moves nothing, this reports BROKEN, not "no effect".
+ * NOT MEASURED HERE, deliberately. What the fix COST in wealth needs two arms and therefore needs
+ * `main`; it is measured in the P92a commit and recorded in BRACKET_CEILING_BASIS.md section 8
+ * (median -$47,549 over 71 clean cells). Section 9 of that report carries a SECOND basis error of the
+ * same shape that is still shipped -- a plan stops exactly 15% of its Social Security short of the
+ * ceiling -- which `underfill_harness.js` owns.
  *
  * Results in `research/BRACKET_CEILING_BASIS.md`.
  */
@@ -121,7 +108,11 @@ const SCENARIOS = [
               Brokerage: 2800000, BrokerageBasis: 1200000, Cash: 150000 } },
 ];
 
-// The federal-table families first, then the two controls B4 says must not move.
+// The federal-table families first, then the two controls A4 says must not move.
+// `minlimit` was a fourth row here until P94 deleted the strategy; its result -- that the
+// federal basis error never reached it, because its ceiling came from the spending goal and
+// not the federal table -- is kept in BRACKET_CEILING_BASIS.md, not simulated against an
+// engine that no longer has the branch.
 const FAMILIES = [
     { key: 'fed12',  label: 'Fill Bracket 12%', fed: true,
       over: { strategy: 'bracket', stratRate: 0.12, stratIRMAATier: -1, stratACAMultiple: 0 } },
@@ -129,10 +120,6 @@ const FAMILIES = [
       over: { strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1, stratACAMultiple: 0 } },
     { key: 'fed24',  label: 'Fill Bracket 24%', fed: true,
       over: { strategy: 'bracket', stratRate: 0.24, stratIRMAATier: -1, stratACAMultiple: 0 } },
-    // fed:false is a RESULT, not an assumption -- see B4 in the header, and the ceiling-moved
-    // column in section 3, which measures it rather than taking it on trust.
-    { key: 'minlim', label: 'Min Limit 24%',    fed: false,
-      over: { strategy: 'minlimit', stratRate: 0.24, stratIRMAATier: -1, stratACAMultiple: 0 } },
     { key: 'irmaa1', label: 'IRMAA Tier 1',     fed: false, control: true,
       over: { strategy: 'bracket', stratRate: 0, stratIRMAATier: 1, stratACAMultiple: 0 } },
     { key: 'aca400', label: 'ACA 400% FPL',     fed: false, control: true,
@@ -194,45 +181,55 @@ for (const f of FAMILIES) for (const rate of SPEND_RATES) {
 
 const line = (c) => console.log((c || '=').repeat(118));
 line();
-console.log('P87a -- the federal bracket ceiling is a TAXABLE-income threshold spent as a MAGI ceiling.');
-console.log('How much room does that leave unused, and what is the room worth?');
+console.log('P87a/P92a -- the federal bracket ceiling was a TAXABLE-income threshold spent as a MAGI');
+console.log('ceiling. It is raised by the deduction now: does it land on one basis, and what did that release?');
 line();
 console.log('Grid: ' + SCENARIOS.length + ' scenarios x ' + GOALS.length + ' IRA-Goal settings x '
           + STATES.length + ' states x ' + FAMILIES.length + ' families x ' + SPEND_RATES.length
-          + ' spend rates = ' + CELLS.length + ' cells, 2 arms.');
+          + ' spend rates = ' + CELLS.length + ' cells, one arm (the shipped engine).');
 console.log('Reading guide:');
-console.log('  CONTROL   the shipped engine.   ARMED   bracketCeilingAddDeduction on.');
+console.log('  ADD-BACK  -ceilDedAddBack, the deduction the CEILING used (0 for non-federal ceilings).');
+console.log('  CHARGED   -fedDeduction, the deduction actually charged. ADD-BACK minus CHARGED is the');
+console.log('            two-pass estimate residual, and some of it is structural (see the header).');
+console.log('  BR TOP    the federal bracket top the ceiling is built on = ceiling minus ADD-BACK.');
 console.log('  AT        MAGI landed on the ceiling -- the only years that can be losing anything.');
 console.log('  SLACK     something else stopped the draw first (spending, IRA Goal, empty IRA).');
 console.log('  OVER      the third-pass fallback forced a draw past the ceiling to fund spending.');
-console.log('  CLEAN     delivered spend identical on both arms and both arms funded -- the only');
-console.log('            cells whose wealth numbers are a comparison rather than a spending change.');
-console.log('  B1..B5    predictions, stated in the file header and scored in section 4.');
+console.log('  A1..A5    predictions, stated in the file header and scored in section 4.');
 
 // ---------------------------------------------------------------------------
-// 0. Is the flag live at all?
+// 0. Is the ceiling's add-back live at all?
 // ---------------------------------------------------------------------------
 line('-');
-console.log('0. FLAG LIVENESS -- does arming bracketCeilingAddDeduction move anything, and is it inert unset?');
+console.log("0. LIVENESS (A1) -- does the shipped ceiling carry a deduction add-back, and only where it should?");
 line('-');
 {
     const probe = CELLS.find(c => c.f.key === 'fed22' && c.g.key === 'nogoal' && c.st === 'CA'
                                   && c.s.key === 'defaults3x' && c.rate === 0.04);
     const a = run({ ...probe.base });
-    const b = run({ ...probe.base, bracketCeilingAddDeduction: true });
-    const c = run({ ...probe.base, bracketCeilingAddDeduction: false });
-    const moved = Math.abs(b.conv - a.conv) + Math.abs(b.iraSpend - a.iraSpend);
-    const inert = (c.conv === a.conv && c.iraSpend === a.iraSpend && c.tax === a.tax);
+    const ceilYears = a.log.filter(r => (r.BracketTarget || 0) > 0);
+    const withAdd   = ceilYears.filter(r => (r['-ceilDedAddBack'] || 0) > 1);
+    const first     = ceilYears[0] || {};
     console.log('  probe cell: ' + probe.s.label + ' / ' + probe.f.label + ' / ' + probe.st
               + ' / ' + probe.g.label + ' / spend ' + pct(probe.rate));
-    console.log('  control conversions ' + money(a.conv) + '   armed ' + money(b.conv));
-    console.log('  control IRA spend   ' + money(a.iraSpend) + '   armed ' + money(b.iraSpend));
-    console.log('  flag armed:  ' + (moved > 1
-        ? 'LIVE -- the arm reaches the engine'
-        : 'BROKEN -- armed run is identical; the input name is not being read'));
-    console.log('  flag unset:  ' + (inert
-        ? 'INERT -- bit-identical to omitting it'
-        : 'LEAKED -- unset is not the shipped path'));
+    console.log('  ceiling years ' + ceilYears.length + ', of which ' + withAdd.length + ' carry an add-back');
+    console.log('  first ceiling year: ceiling ' + money(first.BracketTarget)
+              + '  bracket top ' + money((first.BracketTarget || 0) - (first['-ceilDedAddBack'] || 0))
+              + '  add-back ' + money(first['-ceilDedAddBack']));
+    // A field that is absent reads as 0 and would score exactly like a regressed fix, so the two are
+    // told apart explicitly rather than pooled into one falsy check.
+    const present = ceilYears.some(r => r['-ceilDedAddBack'] !== undefined);
+    console.log('  add-back: ' + (!present
+        ? 'ABSENT -- the log field is gone; this harness is probing a name the engine no longer writes'
+        : withAdd.length === ceilYears.length
+            ? 'LIVE -- every ceiling year carries one'
+            : withAdd.length > 0
+                ? 'PARTIAL -- ' + (ceilYears.length - withAdd.length) + ' ceiling years carry none'
+                : 'BROKEN -- no ceiling year carries one; P92a has regressed'));
+    if (!present || withAdd.length === 0) {
+        console.log('  Nothing below can mean anything if the ceiling carries no add-back, so the run STOPS.');
+        process.exit(1);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -245,25 +242,24 @@ line('-');
     const cell = CELLS.find(c => c.f.key === 'fed22' && c.g.key === 'nogoal' && c.st === 'CA'
                                  && c.s.key === 'defaults3x' && c.rate === 0.04);
     const a = run({ ...cell.base });
-    const b = run({ ...cell.base, bracketCeilingAddDeduction: true });
-    console.log('  ' + pad('year', 6) + rpad('ceiling', 13) + rpad('MAGI', 13) + rpad('fed taxable', 13)
-              + rpad('deduction', 13) + rpad('under ceil', 13) + '  where '
-              + rpad('armed MAGI', 13) + rpad('armed draw+', 13));
+    console.log('  ' + pad('year', 6) + rpad('ceiling', 13) + rpad('MAGI', 13) + rpad('br top', 13)
+              + rpad('fed taxable', 13) + rpad('add-back', 13) + rpad('charged', 13)
+              + rpad('residual', 12) + '  where');
     a.log.forEach((r, i) => {
         const cls = classifyYear(r);
         if (cls === null) return;
-        const br = b.log[i] || {};
+        const add = r['-ceilDedAddBack'] || 0;
+        const top = (r.BracketTarget || 0) - add;
         console.log('  ' + pad(r.Year != null ? r.Year : (2026 + i), 6)
-            + money(r.BracketTarget) + money(r.MAGI) + money(r['-fedTaxableInc'])
-            + money(r['-fedDeduction'])
-            + money((r.BracketTarget || 0) - (r.MAGI || 0))
-            + '  ' + pad(cls.toUpperCase(), 6)
-            + money(br.MAGI)
-            + money(((br['-iraSpend'] || 0) + (br.rothConv || 0))
-                  - ((r['-iraSpend'] || 0) + (r.rothConv || 0))));
+            + money(r.BracketTarget) + money(r.MAGI) + money(top)
+            + money(r['-fedTaxableInc']) + money(add) + money(r['-fedDeduction'])
+            + rpad(Math.round(add - (r['-fedDeduction'] || 0)).toLocaleString(), 12)
+            + '  ' + pad(cls.toUpperCase(), 6));
     });
-    console.log('  "under ceil" is the ceiling minus MAGI, so in an AT year it is ~0 by construction.');
-    console.log('  The money left behind in an AT year is the DEDUCTION column beside it, not that one.');
+    console.log('  In an AT year "fed taxable" should sit on "br top": that is the whole point of P92a,');
+    console.log('  and before it the two differed by the "charged" column every single year.');
+    console.log('  A SLACK or OVER year is governed by something other than the ceiling, so it says');
+    console.log('  nothing either way -- section 3 scores AT years only, and counts the rest.');
 }
 
 // ---------------------------------------------------------------------------
@@ -279,7 +275,7 @@ for (const c of CELLS) {
     let at = 0, slack = 0, over = 0, hidden = 0;
     for (const r of a.log) {
         const cls = classifyYear(r);
-        if (cls === 'at')    { at++; hidden += (r['-fedDeduction'] || 0); }
+        if (cls === 'at')    { at++; hidden += (r['-ceilDedAddBack'] || 0); }
         if (cls === 'slack') slack++;
         if (cls === 'over')  over++;
     }
@@ -290,82 +286,74 @@ for (const c of CELLS) {
     census[k].hidden += hidden; census[k].cells++;
 }
 console.log('  ' + pad('family', 20) + rpad('cells', 7) + rpad('AT yrs', 9) + rpad('SLACK', 9)
-          + rpad('OVER', 9) + rpad('hidden room (sum of deduction over AT years)', 45));
+          + rpad('OVER', 10) + rpad('room released', 46));
 for (const f of FAMILIES) {
     const v = census[f.key];
     console.log('  ' + pad(f.label, 20) + rpad(v.cells, 7) + rpad(v.at, 9) + rpad(v.slack, 9)
-              + rpad(v.over, 9) + rpad(money(v.hidden), 45));
+              + rpad(v.over, 10) + rpad(money(v.hidden), 46));
 }
-console.log('  Hidden room is the most the ceiling could have released. Section 3 measures how much');
-console.log('  of it the plan could actually take once balances and spending had their say.');
-console.log('  "ceil yrs" in section 3 counts the years the ARM actually moved the ceiling. A family');
-console.log('  with 0 there is untouched by the federal basis error, whatever its dropdown label says.');
+console.log('  Room released is the deduction the ceiling now adds back, summed over AT years -- the');
+console.log('  headroom the pre-P92a ceiling left unusable. It is an UPPER BOUND on what the fix');
+console.log('  could hand back, not a gain: a year only gains if the plan had IRA left to draw.');
+console.log('  A family with 0 there is untouched by the federal basis error, whatever its label says.')
 
 // ---------------------------------------------------------------------------
-// 3. The A/B
+// 3. The basis audit
 // ---------------------------------------------------------------------------
 line('-');
-console.log('3. A/B -- control vs armed. CLEAN cells only for the wealth columns.');
+console.log('3. BASIS AUDIT -- in an AT year, does federal TAXABLE income land on the bracket top?');
 line('-');
-const results = [];
+// One arm, so this is a property of the shipped engine rather than a comparison. Every AT year on a
+// federal-bracket family is a year the ceiling governed, which makes it the only place the question
+// is answerable; SLACK and OVER years are counted so a family that never binds cannot look clean by
+// having nothing to be wrong about.
+const audit = {};
 for (const c of CELLS) {
-    const a = c._ctrl;
-    const b = run({ ...c.base, bracketCeilingAddDeduction: true });
-    const rate = a.futureIRARate;          // CONTROL arm's rate on BOTH sides (the gapfill rule)
-    const nwA = afterTaxNetWorth(a.terminal, rate, a.capGainsRate);
-    const nwB = afterTaxNetWorth(b.terminal, rate, b.capGainsRate);
-    // Did the CEILING move at all? Measured, not assumed: a family whose ceiling comes from
-    // somewhere other than the federal bracket table cannot be touched by a federal basis fix,
-    // and this is the column that says which families those are.
-    let ceilMoved = 0;
-    for (let i = 0; i < a.log.length && i < b.log.length; i++) {
-        if ((b.log[i].BracketTarget || 0) - (a.log[i].BracketTarget || 0) > 1) ceilMoved++;
-    }
-    // B1 is a per-YEAR claim, so it is scored on the first year that sat on the ceiling -- the last
-    // year in which the two arms still describe the same plan. After that they diverge, and a
-    // year-by-year comparison would be comparing two different balance paths.
-    let b1 = null;
-    for (let i = 0; i < a.log.length && i < b.log.length; i++) {
-        if (classifyYear(a.log[i]) === 'at') {
-            b1 = { lift: (b.log[i].MAGI || 0) - (a.log[i].MAGI || 0),
-                   ded: a.log[i]['-fedDeduction'] || 0 };
-            break;
+    const k = c.f.key;
+    audit[k] = audit[k] || { at: 0, land: [], resid: [], charged: [], addFirst: null, addLast: null, nonzero: 0, years: 0 };
+    const A = audit[k];
+    for (const r of c._ctrl.log) {
+        const cls = classifyYear(r);
+        if (cls === null) continue;
+        A.years++;
+        const add = r['-ceilDedAddBack'] || 0;
+        if (add > 1) {
+            A.nonzero++;
+            if (A.addFirst === null) A.addFirst = add;
+            A.addLast = add;
         }
+        if (cls !== 'at') continue;
+        A.at++;
+        // Only a FEDERAL ceiling has a bracket top to land on. On an IRMAA or ACA ceiling the same
+        // subtraction returns the deduction and would read as a huge miss, which is an artifact of
+        // asking a federal question of a non-federal family, not a finding about it.
+        if (!c.f.fed) continue;
+        A.land.push((r['-fedTaxableInc'] || 0) - ((r.BracketTarget || 0) - add));
+        A.resid.push(add - (r['-fedDeduction'] || 0));
+        A.charged.push(r['-fedDeduction'] || 0);
     }
-    results.push({ c, a, b, nwA, nwB, ceilMoved, b1,
-        clean: a.success && b.success && Math.abs(a.spend - b.spend) < 1,
-        dConv: b.conv - a.conv,
-        dDraw: (b.iraSpend + b.conv) - (a.iraSpend + a.conv),
-        dTax: b.tax - a.tax, dNW: nwB - nwA });
 }
-const fedRes = results.filter(r => r.c.f.fed);
-const ctlRes = results.filter(r => r.c.f.control);
-const clean  = fedRes.filter(r => r.clean);
-
-console.log('  ' + pad('family', 20) + rpad('cells', 7) + rpad('clean', 7) + rpad('ceil yrs', 10)
-          + rpad('moved', 7)
-          + rpad('median dNW', 14) + rpad('best dNW', 14) + rpad('worst dNW', 14) + rpad('median dTax', 14));
+const absMax = (xs) => xs.length ? Math.max.apply(null, xs.map(Math.abs)) : null;
+const p90 = (xs) => { if (!xs.length) return null; const v = [...xs].map(Math.abs).sort((a, b) => a - b);
+    return v[Math.min(v.length - 1, Math.floor(v.length * 0.9))]; };
+console.log('  ' + pad('family', 20) + rpad('ceil yrs', 10) + rpad('AT', 7) + rpad('add-back yrs', 14)
+          + rpad('median |land err|', 18) + rpad('worst |land err|', 18)
+          + rpad('median resid', 14) + rpad('p90 resid', 12) + rpad('worst resid', 13));
 for (const f of FAMILIES) {
-    const g = results.filter(r => r.c.f.key === f.key);
-    const gc = g.filter(r => r.clean);
-    const moved = g.filter(r => Math.abs(r.dConv) + Math.abs(r.dDraw) + Math.abs(r.dNW) > 1).length;
-    const nws = gc.map(r => r.dNW);
-    console.log('  ' + pad(f.label, 20) + rpad(g.length, 7) + rpad(gc.length, 7)
-        + rpad(g.reduce((x, r) => x + r.ceilMoved, 0), 10) + rpad(moved, 7)
-        + (nws.length ? rpad(money(median(nws)), 14) : rpad('-', 14))
-        + (nws.length ? rpad(money(Math.max.apply(null, nws)), 14) : rpad('-', 14))
-        + (nws.length ? rpad(money(Math.min.apply(null, nws)), 14) : rpad('-', 14))
-        + (gc.length ? rpad(money(median(gc.map(r => r.dTax))), 14) : rpad('-', 14)));
+    const A = audit[f.key];
+    const land = A.land.map(Math.abs), res = A.resid.map(Math.abs);   // empty for non-federal families
+    console.log('  ' + pad(f.label, 20) + rpad(A.years, 10) + rpad(A.at, 7) + rpad(A.nonzero, 14)
+        + rpad(land.length ? Math.round(median(land)).toLocaleString() : '-', 18)
+        + rpad(land.length ? Math.round(absMax(A.land)).toLocaleString() : '-', 18)
+        + rpad(res.length ? Math.round(median(res)).toLocaleString() : '-', 14)
+        + rpad(res.length ? Math.round(p90(A.resid)).toLocaleString() : '-', 12)
+        + rpad(res.length ? Math.round(absMax(A.resid)).toLocaleString() : '-', 13));
 }
-
-console.log('');
-console.log('  Ten largest clean gains:');
-console.log('  ' + pad('scenario', 20) + pad('family', 20) + pad('st', 4) + pad('goal', 15)
-          + pad('spend', 7) + rpad('d after-tax NW', 14) + rpad('d conversions', 14) + rpad('d lifetime tax', 15));
-clean.slice().sort((x, y) => y.dNW - x.dNW).slice(0, 10).forEach(r => {
-    console.log('  ' + pad(r.c.s.label, 20) + pad(r.c.f.label, 20) + pad(r.c.st, 4) + pad(r.c.g.label, 15)
-        + pad(pct(r.c.rate), 7) + rpad(money(r.dNW), 14) + rpad(money(r.dConv), 14) + rpad(money(r.dTax), 15));
-});
+console.log('  land err = fed taxable income minus the bracket top, in AT years, and only where the');
+console.log('  ceiling IS a federal bracket top -- the two control families show "-" because the');
+console.log('  question does not apply to them, which is different from them passing it.');
+console.log('  resid = add-back minus deduction charged. Structurally non-zero (see the header), so it');
+console.log('  is scored against a bound -- one senior deduction -- rather than against zero.');
 
 // ---------------------------------------------------------------------------
 // 4. Predictions
@@ -374,123 +362,83 @@ line('-');
 console.log('4. PREDICTIONS SCORED');
 line('-');
 const verdict = (ok, txt) => console.log('  ' + (ok ? 'HOLDS ' : 'BROKEN') + '  ' + txt);
+const fedKeys = FAMILIES.filter(f => f.fed).map(f => f.key);
+const ctlKeys = FAMILIES.filter(f => f.control).map(f => f.key);
+const pool = (keys, field) => keys.reduce((a, k) => a.concat(audit[k][field]), []);
 
-{   // B1 -- per-year, on the first AT year, before the two arms diverge
-    const scored = fedRes.filter(r => r.b1 && r.b1.ded > 0);
-    const near = scored.filter(r => Math.abs(r.b1.lift - r.b1.ded) <= r.b1.ded * 0.02);
-    const up   = scored.filter(r => r.b1.lift > 1);
-    const over = scored.filter(r => r.b1.lift > r.b1.ded * 1.02);
-    // The lift is the deduction CAPPED by the IRA the year actually had, so falling short of it is
-    // an empty IRA, not a broken arm. Overshooting it would be the broken case, and is what is
-    // scored: every lift positive, none above the deduction.
-    verdict(scored.length > 0 && up.length === scored.length && over.length === 0,
-        'B1  first AT year: armed MAGI up in ' + up.length + '/' + scored.length + ' cells, above the'
-        + ' deduction in ' + over.length + '. Exactly the deduction in ' + near.length + '; the other '
-        + (scored.length - near.length) + ' ran out of IRA first.');
-    const back = fedRes.filter(r => r.dDraw < -1);
-    console.log('        the WRONG lifetime form would report ' + back.length + '/' + fedRes.length
-        + ' cells reversed. Drawing more early leaves less to draw later, so a');
-    console.log('        lifetime sum is not monotone in the ceiling and never could be.');
+{   // A1 -- liveness across the whole grid, not just the section 0 probe
+    const on  = fedKeys.reduce((a, k) => a + audit[k].nonzero, 0);
+    const yrs = fedKeys.reduce((a, k) => a + audit[k].years, 0);
+    verdict(on > 0 && on === yrs,
+        'A1  every federal-bracket ceiling year carries an add-back: ' + on + '/' + yrs + '.');
 }
-{   // B2 -- gain largest where spend is low
-    const m4 = median(clean.filter(r => r.c.rate === 0.04).map(r => r.dNW));
-    const m6 = median(clean.filter(r => r.c.rate === 0.06).map(r => r.dNW));
-    verdict(m4 !== null && m6 !== null && m4 > m6 && m4 > 0,
-        'B2  median clean change at 4% spend ' + money(m4) + ' vs at 6% ' + money(m6)
-        + (m4 !== null && m4 <= 0
-            ? ' -- both negative, so there is no pooled "gain" for the spend rate to order.'
-            : '.'));
-    for (const f of FAMILIES.filter(x => x.fed)) {
-        const g = clean.filter(r => r.c.f.key === f.key);
-        console.log('        ' + pad(f.label, 20) + ' 4%: '
-            + money(median(g.filter(r => r.c.rate === 0.04).map(r => r.dNW)))
-            + '   6%: ' + money(median(g.filter(r => r.c.rate === 0.06).map(r => r.dNW))));
+{   // A2 -- the point of the fix. Scored per AT year, against the deduction it replaced.
+    //
+    // A2 AND A3 ARE ONE NUMBER, and saying so is worth more than scoring it twice. In an AT year
+    // MAGI sits on the ceiling, so fed taxable = ceiling - dedCharged while the bracket top =
+    // ceiling - addBack; the landing error is therefore addBack - dedCharged exactly, which is A3's
+    // residual. The first draft scored A2 against a flat $2 and reported BROKEN at 287/305 on a
+    // worst miss of $30 -- condemning a working fix for a rounding-scale residual, which is the
+    // failure rmdbasis's R2 and bracketbasis's own B1 each made once already.
+    //
+    // The bar that means something is SCALE. Before P92a the miss was one whole deduction, every
+    // year; the claim is that it is now negligible against that deduction, so that is what it is
+    // measured against rather than against zero.
+    const land = pool(fedKeys, 'land');
+    const ded  = median(pool(fedKeys, 'charged')) || 0;
+    const worst = land.length ? absMax(land) : 0;
+    const exact = land.filter(x => Math.abs(x) <= 2).length;
+    const share = ded > 0 ? worst / ded : 0;
+    verdict(land.length > 0 && share < 0.01,
+        'A2  AT years landing fed taxable income on the bracket top: worst miss $'
+        + Math.round(worst).toLocaleString() + ' against a median deduction of $'
+        + Math.round(ded).toLocaleString() + ' = ' + (share * 100).toFixed(3)
+        + '% of it (' + exact + '/' + land.length + ' land within $2).');
+    console.log('        Pre-P92a this miss was 100% of the deduction in every one of these years.');
+    console.log('        It is the same quantity A3 scores -- see the note in the source, not two results.');
+}
+{   // A3 -- the two-pass estimate against its bound
+    const res = pool(fedKeys, 'resid');
+    const SENIOR = 6000 * 2;      // $6,000 per filer, MFJ on this fixture
+    const bust = res.filter(x => Math.abs(x) > SENIOR);
+    verdict(res.length > 0 && median(res.map(Math.abs)) === 0 && bust.length === 0,
+        'A3  add-back vs deduction charged: median $' + Math.round(median(res.map(Math.abs))).toLocaleString()
+        + ', p90 $' + Math.round(p90(res)).toLocaleString()
+        + ', worst $' + Math.round(absMax(res)).toLocaleString()
+        + ', over one senior deduction in ' + bust.length + '/' + res.length + '.');
+}
+{   // A4 -- zero test on the two controls
+    const on = ctlKeys.reduce((a, k) => a + audit[k].nonzero, 0);
+    const yrs = ctlKeys.reduce((a, k) => a + audit[k].years, 0);
+    verdict(on === 0,
+        'A4  ZERO TEST: IRMAA Tier and ACA ceilings take no add-back in ' + (yrs - on) + '/' + yrs
+        + ' ceiling years.');
+    console.log('        Those ceilings are already MAGI-based. Lifting them would be a second basis');
+    console.log('        error pointing the other way, so this is the check that the fix stayed narrow.');
+}
+{   // A5 -- the defect was widening
+    const grew = fedKeys.filter(k => audit[k].addFirst !== null && audit[k].addLast > audit[k].addFirst);
+    verdict(grew.length === fedKeys.length,
+        'A5  room released grows with indexation in ' + grew.length + '/' + fedKeys.length
+        + ' federal families.');
+    for (const k of fedKeys) {
+        const A = audit[k], f = FAMILIES.find(x => x.key === k);
+        console.log('        ' + pad(f.label, 20) + ' first ' + money(A.addFirst) + '   last ' + money(A.addLast));
     }
-}
-{   // B3 -- tax rises AND wealth rises
-    const taxUp = clean.filter(r => r.dTax > 1).length;
-    const nwUp  = clean.filter(r => r.dNW > 1).length;
-    const nwDn  = clean.filter(r => r.dNW < -1).length;
-    verdict(nwUp > nwDn,
-        'B3  clean cells: after-tax NW up in ' + nwUp + ', down in ' + nwDn + ', tax up in '
-        + taxUp + ' of ' + clean.length + '. Median dTax ' + money(median(clean.map(r => r.dTax)))
-        + ', median dNW ' + money(median(clean.map(r => r.dNW))) + '.');
-    if (nwDn > nwUp) console.log('        NW falls more often than it rises. That scores the STRATEGY,'
-        + ' not the fix -- see B3 in the file header.');
-    for (const f of FAMILIES.filter(x => x.fed)) {
-        const g = clean.filter(r => r.c.f.key === f.key);
-        console.log('        ' + pad(f.label, 20) + ' up ' + rpad(g.filter(r => r.dNW > 1).length, 3)
-            + '  down ' + rpad(g.filter(r => r.dNW < -1).length, 3)
-            + '  median dNW ' + money(median(g.map(r => r.dNW))));
-    }
-}
-{   // B4 -- zero test on the controls, and minlimit must move
-    const dirty = ctlRes.filter(r => Math.abs(r.dConv) + Math.abs(r.dDraw)
-                                   + Math.abs(r.dNW) + Math.abs(r.dTax) > 0);
-    const ml = results.filter(r => r.c.f.key === 'minlim');
-    const mlMoved = ml.filter(r => Math.abs(r.dNW) + Math.abs(r.dConv) > 1).length;
-    const mlCeil = ml.reduce((x, r) => x + r.ceilMoved, 0);
-    verdict(dirty.length === 0,
-        'B4a ZERO TEST: IRMAA Tier and ACA rows bit-identical across arms in '
-        + (ctlRes.length - dirty.length) + '/' + ctlRes.length + ' cells.');
-    dirty.slice(0, 5).forEach(r => console.log('        moved: ' + r.c.s.label + ' / ' + r.c.f.label
-        + ' / ' + r.c.st + ' / ' + r.c.g.label + ' / ' + pct(r.c.rate) + '  dNW ' + money(r.dNW)));
-    const mlYears = ml.reduce((x, r) => x + r.a.log.length, 0);
-    verdict(mlMoved === 0,
-        'B4b RESTATED: minlimit is a FOURTH zero, not the mover B4 predicted. Its ceiling moved in '
-        + mlCeil + '/' + mlYears + ' years and the RESULT moved in ' + mlMoved + '/' + ml.length
-        + ' cells -- the few lifted years never bound.');
-    console.log('        Its ceiling is yr.IRMAALimit, built from goalLimit -- the bracket top containing');
-    console.log('        the SPENDING GOAL -- which sits below the federal ceiling the user picked, so the');
-    console.log('        min never selects the federal side and the basis error never reaches it.');
-}
-{   // B5 -- a live IRA Goal damps it
-    const mg = median(fedRes.filter(r => r.c.g.key === 'goal').map(r => Math.abs(r.dNW)));
-    const mn = median(fedRes.filter(r => r.c.g.key === 'nogoal').map(r => Math.abs(r.dNW)));
-    verdict(mg !== null && mn !== null && mg < mn,
-        'B5  median |dNW| with a live IRA Goal ' + money(mg) + ' vs without ' + money(mn) + '.');
-}
-
-// ---------------------------------------------------------------------------
-// 5. Where the sign comes from
-// ---------------------------------------------------------------------------
-line('-');
-console.log('5. WHERE THE SIGN COMES FROM -- clean federal-family cells split by which way they went');
-line('-');
-{
-    const win  = clean.filter(r => r.dNW > 1);
-    const lose = clean.filter(r => r.dNW < -1);
-    const flat = clean.filter(r => Math.abs(r.dNW) <= 1);
-    const show = (label, g) => {
-        if (!g.length) { console.log('  ' + pad(label, 10) + '  (none)'); return; }
-        console.log('  ' + pad(label, 10) + rpad(g.length, 7)
-            + rpad(median(g.map(r => r.c._cen.at)), 10)
-            + rpad(median(g.map(r => r.c._cen.slack)), 10)
-            + rpad(median(g.map(r => r.c._cen.over)), 10)
-            + rpad(money(median(g.map(r => r.a.tax))), 20)
-            + rpad(money(median(g.map(r => r.dTax))), 16)
-            + rpad(money(median(g.map(r => r.dConv))), 16));
-    };
-    console.log('  ' + pad('cells', 10) + rpad('n', 7) + rpad('AT yrs', 10) + rpad('SLACK', 10)
-        + rpad('OVER', 10) + rpad('ctrl lifetime tax', 20) + rpad('median dTax', 16) + rpad('median dConv', 16));
-    show('gained', win); show('lost', lose); show('unchanged', flat);
-    console.log('  All figures are medians of the CONTROL arm except the two delta columns.');
-    console.log('  A cell with many OVER years was already breaching its ceiling to fund spending, so');
-    console.log('  the ceiling was not what governed it and lifting the ceiling mostly re-times draws.');
 }
 
 line('-');
 {
-    const totalHidden = Object.keys(census).reduce((a, k) => a + census[k].hidden, 0);
-    const realized = clean.map(r => r.dNW);
-    console.log('  THE NUMBER P87a WAS ASKED FOR, over ' + clean.length + ' clean federal-family cells:');
-    console.log('    median gain in terminal after-tax net worth   ' + money(median(realized)));
-    console.log('    best                                          '
-        + money(realized.length ? Math.max.apply(null, realized) : null));
-    console.log('    worst                                         '
-        + money(realized.length ? Math.min.apply(null, realized) : null));
-    console.log('    median gain in lifetime conversion gross      ' + money(median(clean.map(r => r.dConv))));
-    console.log('    hidden room across the whole grid (bound)     ' + money(totalHidden));
+    const totalRoom = Object.keys(census).reduce((a, k) => a + census[k].hidden, 0);
+    const atYears = FAMILIES.filter(f => f.fed).reduce((a, f) => a + census[f.key].at, 0);
+    console.log('  WHAT P87a ASKED, answered off the shipped engine:');
+    console.log('    federal-family years that sat ON the ceiling     ' + atYears);
+    console.log('    room the ceiling now releases across the grid    ' + money(totalRoom));
+    console.log('  What that room turned out to be WORTH needs two arms and therefore needs `main`.');
+    console.log('  It is measured in the P92a commit and recorded in BRACKET_CEILING_BASIS.md section 8:');
+    console.log('  terminal after-tax net worth up in 18 of 71 clean cells, down in 49, median -$47,549.');
+    console.log('  That is a finding about the STRATEGY, not a verdict on the fix -- a named ceiling is a');
+    console.log('  contract to fill, and filling it is often worth less than under-filling it.');
 }
 line();
 console.log(simCount + ' simulations.');

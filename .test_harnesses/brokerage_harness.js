@@ -33,7 +33,7 @@
  * Q1, by strategy family, fraction of simulated years drawing any Brokerage:
  *   P1. baseline/propwd/gk/fixed HIGHEST and earliest. Their gap fill is proportional, not
  *       sequential, so Brokerage is touched in the very first year that opens a gap.
- *   P2. bracket/minlimit/fixedpct LOWER and LATER. Cash comes first in their chain, so nothing
+ *   P2. bracket/IRMAA-tier/fixedpct LOWER and LATER. Cash comes first in their chain, so nothing
  *       reaches Brokerage until Cash is exhausted.
  *   P3. ordered BIRC ~100% from year 0 (Brokerage first); CBIR high (Brokerage second); RIBC
  *       LOWEST of the three and latest (Brokerage third, behind Roth and the whole IRA).
@@ -94,7 +94,13 @@ const SCENARIOS = [
 
 const ARMS = [
     ['bracket22',  { strategy: 'bracket',  stratRate: 0.22 }],
-    ['minlimit',   { strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1 }],
+    // Was `strategy: 'minlimit'` until 2026-08-30. P94 (`46f7bb6`) deleted that strategy, after which
+    // this arm matched no withdrawal branch and returned the `baseline` arm below BIT-FOR-BIT while
+    // still being filed under the 'bracket' family in FAMILY -- a baseline run counted as a bracket
+    // one, in a harness whose whole subject is which family draws Brokerage. Re-pointed the way P94
+    // re-pointed its own seven fixtures: to bracket at IRMAA tier 1, the reachable arm these
+    // parameters (stratRate 0, stratIRMAATier 1) always described.
+    ['irmaa1',     { strategy: 'bracket',  stratRate: 0, stratIRMAATier: 1 }],
     ['fixedpct2',  { strategy: 'fixedpct', iraWithdrawPct: 0.02 }],
     ['propwd0',    { strategy: 'propwd',   propWithdraw: 0, stratRate: 0 }],
     ['gk',         { strategy: 'gk' }],
@@ -107,7 +113,7 @@ const ARMS = [
 ];
 // Which gap-fill branch each arm lands in, from the dispatch at optimizer_core.js:1591-1629.
 const FAMILY = {
-    bracket22: 'bracket', minlimit: 'bracket', fixedpct2: 'bracket',
+    bracket22: 'bracket', irmaa1: 'bracket', fixedpct2: 'bracket',
     propwd0: 'baseline', gk: 'baseline', fixed: 'baseline', baseline: 'baseline',
     'ord-CBIR': 'ordered', 'ord-RIBC': 'ordered', 'ord-BIRC': 'ordered',
     cyclic: 'cyclic',

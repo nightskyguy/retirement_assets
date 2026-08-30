@@ -110,8 +110,6 @@ const FAMILIES = [
       over: { strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1, stratACAMultiple: 0 } },
     { key: 'fed24',   label: 'Fill Bracket 24%', ceiling: true,
       over: { strategy: 'bracket', stratRate: 0.24, stratIRMAATier: -1, stratACAMultiple: 0 } },
-    { key: 'minlim',  label: 'Min Limit 24%',    ceiling: true,
-      over: { strategy: 'minlimit', stratRate: 0.24, stratIRMAATier: -1, stratACAMultiple: 0 } },
     { key: 'irmaa1',  label: 'IRMAA Tier 1',     ceiling: true,
       over: { strategy: 'bracket', stratRate: 0, stratIRMAATier: 1, stratACAMultiple: 0 } },
     { key: 'irmaa2',  label: 'IRMAA Tier 2',     ceiling: true,
@@ -152,7 +150,7 @@ console.log('  score gain    baselineScore at optConv minus the same at $0. What
 console.log('  breach yrs    years where the CONVERSION put MAGI over that row own ceiling, counted');
 console.log('                from -overageFromConv (added by P88c). NOT spending going over: that is');
 console.log('                a different cause and is deliberately tracked apart from this one.');
-console.log('  CEILING       Fill Bracket, Min Limit, IRMAA Tier. AGNOSTIC: Proportional, Ordered,');
+console.log('  CEILING       Fill Bracket, IRMAA Tier. AGNOSTIC: Proportional, Ordered,');
 console.log('                IRA Draw - no ceiling to break.');
 console.log('  heirs         assumed future tax rate on inherited IRA dollars. "auto" = the plan own.');
 console.log('  C1..C5        predictions, stated in the file header, scored in section 4.');
@@ -181,9 +179,18 @@ line('-');
             + (has ? 'engine sets a BracketTarget' : 'engine sets no BracketTarget')
             + (has === f.ceiling ? '' : '   <-- MISMATCH'));
     }
-    console.log('  ' + (bad === 0
-        ? 'The split is the engine measurement, not a harness assertion.'
-        : bad + ' families are labelled wrongly - every result below is suspect.'));
+    if (bad === 0) {
+        console.log('  The split is the engine measurement, not a harness assertion.');
+    } else {
+        // Printing the alarm and then printing the results anyway is how a retired strategy went on
+        // supplying 30 of these cells after P94 deleted it: the run said "suspect" and the tables
+        // below still looked quotable. A family whose ceiling the engine does not agree about is not
+        // a degraded reading, it is a different question, so the run stops here instead.
+        console.log('  ' + bad + ' families are labelled wrongly. A family the engine does not agree');
+        console.log('  about cannot be scored on whether it breaks a ceiling, so this run STOPS');
+        console.log('  rather than printing tables that read as if it could.');
+        process.exit(1);
+    }
 }
 
 // ---------------------------------------------------------------------------

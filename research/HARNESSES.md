@@ -48,6 +48,100 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `bracketbasis_harness.js` | **node** | P87a: the strategy Limit dropdown's federal entries are taxable-income thresholds spent as MAGI ceilings. How much room does that leave unused, and is the room worth anything? |
 | `convopt_ceiling_harness.js` | **node** | P88f: should the Optimizer's conversion search skip the families that target a ceiling? Measures what it picks for them, whether those picks break the ceiling, and what excluding them would cost. |
 | `extraconv_magi_harness.js` | **node** | P88a/P88b: an Extra Roth Conversion never reached MAGI, so the IRMAA lookback charged a figure that omitted it. How wrong was it, and did fixing it move what the characterization predicted? |
+| `ceilded_harness.js` | **node** | P92a: the ceiling cannot ask for the year's own deduction without circularity, so which OBTAINABLE deduction is least wrong? Scores three candidates against the one actually charged. |
+| `underfill_harness.js` | **node** | P87c: a Fill Bracket plan stops exactly 15% of its Social Security short of its own ceiling. Which years, and how much headroom goes unused? |
+
+## Re-evaluation status (2026-08-30)
+
+Five engine changes landed between 2026-08-26 and 2026-08-30, after most of the studies below were
+measured. This section records which of them a harness can still reproduce. It is a **triage record,
+not a re-baseline**: no report's tables have been rewritten, and where a number here disagrees with a
+report, the report is the stale one.
+
+### The changes
+
+| id | change | commit | what it moves |
+|---|---|---|---|
+| `F1` | tax code indexed at each path's own inflation | `d0f27d0` | every CPI-sensitive or Monte Carlo run |
+| `F2` | RMD struck off the prior December 31 balance | `4df83b8` | every plan taking an RMD |
+| `F3` | an Extra Roth Conversion reaches MAGI | `b34e310` | lifetime IRMAA, by +30% to +132% |
+| `F4` | a Fill Fed Bracket ceiling fills the bracket | `4664958` | every bracket-family plan |
+| `F5` | the `minlimit` strategy is removed | `46f7bb6` | any grid naming it |
+
+### Verdicts
+
+`BROKEN` the harness can no longer derive its finding. `DRIFTED` it runs, but recorded numbers do not
+reproduce. `CURRENT` re-run agrees with the report. Every harness exits 0, so running clean is not
+evidence of currency.
+
+| harness | verdict | evidence |
+|---|---|---|
+| `bracketbasis_harness.js` | **FIXED 2026-08-30** | was BROKEN (`F4`): printed `flag armed: BROKEN` and scored four predictions on a column of zeros. Re-pointed onto `-ceilDedAddBack` as a one-arm audit of the shipped ceiling; `A1`-`A5` all HOLD |
+| `convopt_ceiling_harness.js` | **FIXED 2026-08-30** | was BROKEN (`F5`): printed `every result below is suspect` and kept going. Dead family dropped, setup check now stops the run. `C2` restored to **44 of 44** - see the re-run note in the report |
+| `phased_harness.js` | **DRIFTED** (not broken) | reads `buildStrategyFamilies()` and self-adapts - it printed **148 arms** at runtime. The harness is sound; the REPORT is stale at 192, so "118 of 192 arms never win" needs re-deriving. Leaders stable (`B-P5` RIGHT) |
+| `ordered_fill_harness.js` | **COVERAGE FIXED 2026-08-30** (not broken) | its restart proof is explicitly sequence-independent, so the finding always stood; but it hard-coded 3 of the 6 codes shipped since `dd309bf`. Now reads `core.ORDERED_SEQS`, so all six are exercised |
+| `convtiming_harness.js` | **RE-BASELINED 2026-08-30** | was DRIFTED (`F3`,`F4`): clean cells 499 -> 474, FRONT outright wins 304 -> 233. `CONVERSION_TIMING.md` is now the third run throughout |
+| `irmaa_default_harness.js` | **DRIFTED** (`F3`,`F4`) | halfcpi -$79,002 -> -$64,043, halfstep -$11,649 -> -$29,203; "four to five times less" is now about 2x. Verdicts on P3/P4/P5 unchanged |
+| `brokerage_harness.js` | **FIXED 2026-08-30**, still DRIFTED (`F2`,`F4`) | carried a FIFTH instance of the `F5` defect, found only on the final sweep: its `minlimit` arm returned the `__unrecognized__` baseline arm bit-for-bit while staying filed under the `bracket` family. Re-pointed to bracket @ IRMAA tier 1. Numbers still drifted: cyclic 26/45 -> 25/45 and 23/45 -> 19/45, Q4 pairs 2,576 -> 1,981. The no-spiral headline survives (0 capped years) |
+| `gapfill_harness.js` | **DRIFTED** (`F2`,`F4`) | 227/360 -> **242/360** cells move. w=0 still best; the conclusion survives |
+| `endgame_harness.js` | **DRIFTED** (`F2`) | seq-CRB 88/108 -> 84/108; Roth-early 100/108 -> 94/101. All five verdicts unchanged |
+| `unifiedconv_harness.js` | **DRIFTED** | drifted again past its own 2026-08-24 re-baseline: negative in 26/60 -> 29/60, worst -$633,605 -> -$635,692 |
+| `oracle_harness.js` | **DRIFTED** (arm enumeration) | `P51a` reproduces (`S3-P1` RIGHT 15/15), but champion rows changed (`Reduce 20` -> `Reduce 17`). The `--full` half behind the +$1.08M headline was not re-run |
+| `rmdbasis_harness.js` | **CURRENT** | 0 of 30 timing-dependent, R2 violated in 0 of 30 - the post-fix column exactly |
+| `extraconv_magi_harness.js` | **CURRENT** | self-reports `FIXED BUILD`. Two recorded constants moved under `F4` (M3 $39,920,984 -> $39,693,824; M5 year-0 tax $39,238 -> $49,317) |
+| `underfill_harness.js` | **CURRENT** | reproduces section 9 exactly: 0.150000 every year, $168,500 unused |
+| `ceilded_harness.js` | **CURRENT** | shipped with `F4` |
+| `cpi_index_harness.js` | **CURRENT** | re-run 2026-08-26 carrying the CPI spread |
+| `betr_harness.js` | **UNREVIEWED** | 2026-07-23, the oldest finding here; `F2` and `F3` both bear on it |
+| `stopyear_harness.js` | **UNREVIEWED** | browser console, not runnable in this sweep |
+| `gapfill_objectives_harness.js` | **DRIFTED** | `W4` damping 10x -> 3.0x ($33,203 off vs $10,997 on) |
+| `irmaa_margin_harness.js` | **DRIFTED** (`F3`) | P1/P2/P5 all score WRONG against a header that expected them to hold |
+| `irmaa_cpi_risk_harness.js` | **DRIFTED** (`F1`,`F3`) | 2026-08-20, predates path-following indexation and the MAGI fix it re-bills against |
+| `irmaa_margin_paths_harness.js` | **DRIFTED** (`F3`) | `P1` and `P3` both BROKEN |
+
+### Suggested order
+
+Items 1 and 2 were done on 2026-08-30 and are recorded above; 3 onward are open.
+
+1. ~~`bracketbasis` and `convopt_ceiling`~~ - DONE. Both printed their own alarm and kept printing
+   tables underneath it, which is the failure mode worth naming: **an alarm that does not stop the
+   run reads as a caveat, and gets quoted past.** Both now exit non-zero instead.
+2. ~~`ordered_fill` coverage~~ - DONE, and `phased` needed no code change at all.
+3. ~~`convtiming`~~ - DONE 2026-08-30. The headline did change direction: FRONT's outright wins fell
+   304 -> 233, below a majority, while `C1` (a head-to-head prediction) went on HOLDING - recorded in
+   that report's section 9 as a seventh scorer defect, **a prediction too weak to notice its own
+   subject changing.** `README.md` line 15 updated with it.
+4. `phased` - re-derive the report against the shipped 148 arms.
+5. The four IRMAA harnesses as one pass - they share `F3`, and `irmaa_margin`/`irmaa_cpi_risk` were
+   measured before `F1` as well.
+6. The rest are safe to quote qualitatively; only their tables have moved.
+
+### The fifth instance, and why grep found what the run did not
+
+`brokerage_harness.js` was classified DRIFTED because it ran clean and its headline held. It also
+carried the same dead strategy, and nothing in its output said so: `minlimit` matched no withdrawal
+branch and returned the harness's own `__unrecognized__` baseline arm **bit-for-bit** (IRA spend
+584,280, Brokerage draw 355,937 on both), while `FAMILY` still counted it as a `bracket` row. So a
+baseline run was being averaged into the bracket family, in a harness whose entire subject is which
+family draws Brokerage. The arm it was always describing - `stratRate: 0, stratIRMAATier: 1` - is
+bracket at IRMAA tier 1, which draws nearly twice as much (1,106,839 / 1,580,968).
+
+It was found by grepping for the retired name after the four fixes were done, not by reading output.
+**A silently duplicated arm produces no alarm at all** - it is strictly worse than the two that
+announced themselves, and the only defence is checking the names a harness passes to the engine
+against the engine.
+
+### What the two genuine breakages had in common
+
+Neither was a crash, and both printed a correct diagnosis of themselves that was then buried under
+the output it invalidated. `convopt_ceiling` said `every result below is suspect` and printed 270
+cells of results; `bracketbasis` said `flag armed: BROKEN` and scored four predictions anyway. A
+harness that detects its own premise has failed should exit, not narrate - that is the one change
+made to both.
+
+`research/README.md` carried drifted figures in its own prose at lines 15, 18 and 34; line 34
+(`61 of 61`) and line 15 (`two to one`) were corrected on 2026-08-30. Line 18 is still stale.
+
 
 ## betr_harness.js  (node)
 
@@ -326,19 +420,23 @@ column names invite exactly this confusion.
 
 Headline findings:
 
-**Re-run 2026-08-28 after `P84l` and after adding the IRA Goal axis. The first run's headline RMD
-finding did not survive either change; the numbers below are the second run.**
+**Re-baselined 2026-08-30 (THIRD run), after `P88a-e` charged IRMAA on conversions and `P92a`
+corrected the bracket ceiling. The headline changed direction; the numbers below are the third run.**
 
-1. **Earlier wins about two thirds of the time, not always.** FRONT ahead of BACK in 353 of 499
-   clean comparisons; FRONT the outright winner in 304, LEVEL in 102, BACK in 93.
-2. **The RMD claim is NOT universal.** FRONT has lower lifetime RMDs in 375 of 499, with **124
-   counterexamples, every one of them the bracket family at a live IRA Goal.** Front-loading eats
+1. **Earlier wins head-to-head, but is no longer the best of three.** FRONT ahead of BACK in 284 of
+   474 clean comparisons (60%); FRONT the outright winner in only **233**, against LEVEL 125 and
+   BACK 116 - so the two non-front shapes take 51% of cells between them.
+2. **The RMD claim is NOT universal, and inside the bracket family it is now exceptionless the other
+   way.** FRONT has lower lifetime RMDs in 356 of 474, with **118 counterexamples - every one the
+   bracket family at a live IRA Goal, and now every one of that family's 118 cells.** Front-loading eats
    the above-goal headroom early, `curIRA` throttles the strategy's own withdrawals for the rest of
    the plan, and the bigger surviving IRA throws bigger RMDs. Conversions ignore the goal
    (`_availIRA`, not `curIRA`); withdrawals respect it.
-3. **Compounding is what pays.** Zero out growth and the advantage collapses to 4.8% of itself
-   (paired on 72: $449,889 -> $21,724). N3, which holds terminal pre-tax IRA equal, now has signal
-   (18 of 60 usable) and FRONT still leads - so the advantage survives with the RMD stock held flat.
+3. **Compounding is what pays.** Zero out growth and the advantage collapses to 4.2% of itself
+   (paired on 72: $449,889 -> $18,832). N3, which holds terminal pre-tax IRA equal, has signal
+   (17 of 60 usable) and FRONT still leads - so the advantage survives with the RMD stock held flat.
+   The IRMAA channel, by contrast, CLOSED: its median was -1 year and is 0 now that a conversion is
+   billed for it, so one of the three mechanisms this study credited was an artifact.
 4. **At an 8% spend rate the sign flips**, and in 750 of 1,440 comparisons an aggressive front-loaded
    schedule is not even deliverable - the IRA does not hold it. Both are real constraints on the
    phase P5 per-year conversion schedule.

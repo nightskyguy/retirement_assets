@@ -17,10 +17,10 @@
  *        draws first, so it is pulled back first next year. Roth/IRA are contribution-limited and
  *        cannot receive arbitrary surplus, so they are never fill targets.
  *
- * WHAT "FUNDABLE-FIRST" RESOLVES TO
- *   CBIR (Cash,Brokerage,IRA,Roth) -> Cash       (no change from legacy)
- *   RIBC (Roth,IRA,Brokerage,Cash) -> Brokerage  (Brokerage @3 beats Cash @4)
- *   BIRC (Brokerage,IRA,Roth,Cash) -> Brokerage  (Brokerage @1 beats Cash @4)
+ * WHAT "FUNDABLE-FIRST" RESOLVES TO -- printed per sequence in Q_B rather than listed here, since
+ * the sequence menu is the engine's (`core.ORDERED_SEQS`) and has grown once already. A sequence
+ * that draws Cash before Brokerage banks to Cash, which is what legacy did for every code; one that
+ * reaches Brokerage first banks there instead, so its surplus is pulled back first next year.
  */
 
 const taxengine = require('../taxengine.js');
@@ -29,12 +29,13 @@ const core = require('../optimizer_core.js');
 const simulate = core.simulate;
 
 const money = n => (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString();
-const SEQS = ['CBIR', 'RIBC', 'BIRC'];
-const SEQ_ORDER = {
-    CBIR: ['Cash', 'Brokerage', 'IRA', 'Roth'],
-    RIBC: ['Roth', 'IRA', 'Brokerage', 'Cash'],
-    BIRC: ['Brokerage', 'IRA', 'Roth', 'Cash'],
-};
+// Taken from the engine, never listed here. This file hard-coded three codes and went on covering
+// three after `dd309bf` shipped six, so it silently stopped exercising half the menu -- including
+// CBRI, the sequence P30d measured as the outright best. A hand-kept copy of a shipped list is a
+// second source of truth, and this is what happens to one.
+const SEQS = core.ORDERED_SEQS;
+const ACCOUNT_OF = { C: 'Cash', B: 'Brokerage', I: 'IRA', R: 'Roth' };
+const SEQ_ORDER = Object.fromEntries(SEQS.map(q => [q, [...q].map(ch => ACCOUNT_OF[ch])]));
 // First account in each sequence that can actually receive a surplus deposit (taxable only).
 const FUNDABLE_FIRST = seq => SEQ_ORDER[seq].find(a => a === 'Cash' || a === 'Brokerage');
 
@@ -70,10 +71,11 @@ function proveRestart() {
     console.log('Q_C  Does the sequence restart every year? (Cash drawn to ~0, later refilled, drawn again)');
     console.log('='.repeat(100));
 
-    // runOrderedWithdrawal is a single stateless function shared by all three sequences, so
+    // runOrderedWithdrawal is a single stateless function shared by every sequence, so
     // demonstrating the exhaust -> refill -> redraw loop on ONE sequence proves it for all. The loop
     // only shows up where the first-drawn account actually refills; under legacy all-to-cash routing
-    // that is Cash, i.e. CBIR. RIBC/BIRC draw Cash last, so Cash there just accumulates.
+    // that is Cash, i.e. the C-first codes. A code drawing Cash last just accumulates it, so it
+    // reports n/a rather than failing -- the claim is about the shared function, not about a code.
     let anyPass = false;
     for (const seq of SEQS) {
         const log = run(seq).log;
@@ -114,7 +116,8 @@ function proveRestart() {
 function surplusLanding() {
     console.log('\n' + '='.repeat(100));
     console.log('Q_B  Lifetime surplus banking + terminal balances, by sequence');
-    console.log('     expect after (b): CBIR unchanged; RIBC/BIRC shift surplus Cash -> Brokerage');
+    console.log('     expect: a Cash-before-Brokerage code banks to Cash (unchanged from legacy);');
+    console.log('             a code reaching Brokerage first banks there instead.');
     console.log('='.repeat(100));
     console.log('\n  seq   fund-first   surplus->Cash   surplus->Brok     endCash    endBrok   totalWealth');
     for (const seq of SEQS) {

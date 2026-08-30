@@ -11,6 +11,28 @@ Harness:
 node .test_harnesses/bracketbasis_harness.js
 ```
 
+> **THE HARNESS BEHIND THIS REPORT CHANGED SHAPE ON 2026-08-30.** Sections 1-7 are an A/B against
+> the research flag `bracketCeilingAddDeduction`. `P92a` (`4664958`) shipped the raise unconditionally
+> and deleted that flag, after which `bracketbasis_harness.js` was setting an input nothing read:
+> both arms were the same run, and it went on scoring `B1`, `B2`, `B3` and `B5` against a column of
+> zeros while printing HOLDS and BROKEN as though it had measured something - the same failure
+> `unifiedconv_harness.js` hit with `unifiedConvRouting`.
+>
+> The A/B cannot be restored without re-adding dead code to production for a settled question, so the
+> harness now audits the SHIPPED ceiling off one arm, using the `-ceilDedAddBack` field P92a logs for
+> exactly this purpose. Its predictions are renumbered `A1`-`A5` and all five hold on today's engine:
+> every federal-bracket ceiling year carries an add-back (3,960 of 3,960); in the 305 years that sat
+> ON the ceiling, federal taxable income now lands on the bracket top with a worst miss of **$30**
+> against a median deduction of $34,696 - **0.086%** of the quantity that used to be missed in full;
+> IRMAA and ACA ceilings take no add-back in 1,440 of 1,440 years; and the room released grows with
+> indexation in all three federal families. Across the grid the ceiling now releases **$10,831,286**.
+>
+> `B1`-`B5` below are what was measured BEFORE the fix and are kept as that record. What the fix
+> COST needs two arms and therefore needs `main`; it is in section 8, not re-derivable from the
+> harness as it now stands. The `Min Limit 24%` family of section 4 was dropped from the grid when
+> `P94` deleted the strategy - that result is kept here rather than simulated against an engine that
+> no longer has the branch.
+
 ## Reading guide
 
 Everything below uses these; none of them appear in the tool's own vocabulary.

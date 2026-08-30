@@ -25,7 +25,7 @@
  */
 
 globalThis.performance={now:()=>0};globalThis.window={};globalThis.document={getElementById:()=>null,addEventListener:()=>{}};
-const R='C:/Users/starc/source/retirement_assets/.claude/worktrees/readme-review-updates-c9df11/';
+const R='../';
 Object.assign(globalThis, require(R+'taxengine.js'));require(R+'displayhelpers.js');
 const {simulate}=require(R+'optimizer_core.js');
 const BASE={STATEname:'TX',nYears:20,birthyear1:1962,birthmonth1:6,die1:92,birthyear2:1964,birthmonth2:3,die2:94,hasSpouse:true,

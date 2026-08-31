@@ -1305,6 +1305,51 @@ function calculateTaxableSocialSecurity(status, provisionalIncome, totalSS) {
     return Math.min(tier2Rate * totalSS, tier1Amount + tier2Amount);
 }
 
+// P87c. The inverse of the line above, in the one direction a ceiling-filling strategy needs it.
+//
+// THE PROBLEM IT SOLVES. A strategy that fills a MAGI ceiling has to answer "how much NON-Social-
+// Security income can this year hold before MAGI reaches L?" That is not `L - totalSS`: only the
+// taxable share of the benefit ever enters MAGI, and how large that share is depends on the very
+// income being sized. Reading taxengine's own definitions (see calculateTaxes STEP 2 and STEP 3),
+//
+//     MAGI        = federalAGI + taxExemptInterest
+//     provisional = (MAGI - taxableSS) + provisionalIncomeRate x totalSS
+//
+// so with N = the non-SS part of MAGI the whole relation collapses to one scalar equation:
+//
+//     MAGI(N) = N + calculateTaxableSocialSecurity(status, N + r x totalSS, totalSS)
+//
+// This returns the N that solves MAGI(N) = magiTarget.
+//
+// WHY BISECTION AND NOT ALGEBRA. MAGI(N) is piecewise linear with slope 1, 1.5, 1.85 or 1 again -
+// four segments, whose knots sit at the two statutory thresholds and at the two points where the
+// formula's `min()` caps saturate. Solving those four cases in closed form is possible and was
+// rejected: it would be a SECOND SOURCE OF TRUTH for the SS split, free to drift from the function
+// actually charging the tax. This calls that function instead, and leans only on the property the
+// statute guarantees - MAGI(N) is monotone non-decreasing in N - which is all bisection needs. If
+// the formula ever gains a tier, this keeps working with no edit.
+//
+// Returns magiTarget unchanged when there is no benefit, which is the correct answer and skips the
+// loop on every pre-Social-Security year.
+function nonSSIncomeForMAGI(status, magiTarget, totalSS) {
+    if (!(totalSS > 0)) return magiTarget;
+    const ssBrackets = getRateBracket('SOCIALSECURITY', status);
+    if (!ssBrackets) return magiTarget;
+    const r = ssBrackets[1].r ?? 0;
+    const magiOf = (N) => N + calculateTaxableSocialSecurity(status, N + r * totalSS, totalSS);
+    // MAGI(N) >= N, so the answer is never above magiTarget; and MAGI is at most N + 0.85 x SS, so
+    // magiTarget - 0.85 x SS is a lower bound. Both bounds are exact, which is what lets the loop
+    // run a fixed number of times instead of testing for convergence.
+    let lo = magiTarget - ssBrackets[2].r * totalSS, hi = magiTarget;
+    if (magiOf(lo) >= magiTarget) return lo;
+    // 60 halvings take any bracket reachable here to well under a cent.
+    for (let i = 0; i < 60; i++) {
+        const mid = (lo + hi) / 2;
+        if (magiOf(mid) < magiTarget) lo = mid; else hi = mid;
+    }
+    return lo;
+}
+
 /**
  * Calculates Federal, State, Capital Gains, NIIT, and IRMAA taxes.
  *
@@ -1643,7 +1688,8 @@ if (typeof module !== 'undefined' && module.exports) {
         TAXData, RMD_TABLE, getRateBracket,
         findLimitByRate, findUpperLimitByAmount, calculateProgressive,
         calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATierTargetMAGI,
-        getQCDLimit, isQCDEligible
+        getQCDLimit, isQCDEligible,
+        calculateTaxableSocialSecurity, nonSSIncomeForMAGI
     };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser. The page itself does NOT need this - every name above is
@@ -1656,6 +1702,7 @@ if (typeof module !== 'undefined' && module.exports) {
         TAXData, RMD_TABLE, getRateBracket,
         findLimitByRate, findUpperLimitByAmount, calculateProgressive,
         calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATierTargetMAGI,
-        getQCDLimit, isQCDEligible
+        getQCDLimit, isQCDEligible,
+        calculateTaxableSocialSecurity, nonSSIncomeForMAGI
     };
 }

@@ -2223,6 +2223,37 @@ assertEqual(
 			'no ACA option carries an uncomputed warning triangle');
 	})();
 
+	// ===== P100b1: the "Optimize for" goal survives a share link and a saved scenario =====
+	// It is UI state, not an engine input, so the buildShareURL field loop and the applyScenario
+	// getElementById loop BOTH miss it. Without this a shared link reopens on Tax Flexibility and the
+	// recipient is shown a different winner, a different anchor baseline and a different Rank column
+	// for the same plan. Same shape as propTax, which had the same gap and the same fix.
+	// UNSAFE - MUTATES: OptimizerState.objective and the #opt-objective control. Restored at the end.
+	(function objectiveRoundTrips() {
+		if (!unsafeTest('objectiveRoundTrips')) return;
+		if (typeof setOptObjective !== 'function' || typeof buildShareURL !== 'function') return;
+		const before = OptimizerState.objective;
+		try {
+			// Non-default goals travel.
+			setOptObjective('mintax');
+			assertEqual(/[?&]obj=mintax(&|$)/.test(buildShareURL()), true,
+				'a non-default goal is emitted into the share URL');
+			// The control follows the state, not only the other way round - a select showing one goal
+			// while the table is ranked by another is worse than not restoring it at all.
+			const sel = document.getElementById('opt-objective');
+			if (sel) assertEqual(sel.value, 'mintax', 'the selector follows a programmatic goal change');
+			// The default is NOT emitted, so links made before this feature are byte-identical.
+			setOptObjective('taxflex');
+			assertEqual(/[?&]obj=/.test(buildShareURL()), false,
+				'the default goal adds no parameter to the share URL');
+			// An unknown key falls back rather than throwing or ranking on a metric that does not exist.
+			setOptObjective('notARealObjective');
+			assertEqual(OptimizerState.objective, 'taxflex', 'an unknown goal falls back to the default');
+		} finally {
+			setOptObjective(before);
+		}
+	})();
+
 	// ===== Mode presets report state, not history =====
 	// The three buttons on the Monte Carlo tab are lit from the parameter VALUES, so that editing a
 	// box in Advanced Parameters clears them and a preset the reader arrived at by hand still shows.
@@ -3232,7 +3263,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 371, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 375, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

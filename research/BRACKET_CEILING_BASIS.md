@@ -462,3 +462,92 @@ $2,546 rising to $12,597 while the IRA still holds millions.
 **It reaches IRMAA tiers as well as federal brackets**, which places it in the sizing rather than in
 either ceiling. P92a's deduction fix cannot have addressed it: that one raised the federal ceiling,
 and this leaves an equal 15% unused underneath every ceiling.
+
+## 10. Which taxable-SS regime a ceiling year sits in, and the fix that follows  *(P87c, 2026-08-31)*
+
+Section 9 left the mechanism named but the fix undecided. `short / SSincome` was `0.150000` exactly,
+min equal to max, which is itself evidence: a CONSTANT ratio means the taxable share was pinned at
+its 85% statutory cap in every one of those years, not varying with the draw. If that held
+everywhere, the fix would be a flat subtraction of `0.85 x SS` and the circularity named in `P87c`
+would be inert.
+
+### 10.1 The regime split
+
+`.test_harnesses/ssbasis_harness.js`. 720 cells: 10 ceiling families x 4 benefit sizes x 3 IRA sizes
+x 3 spend levels x 2 filing statuses. A **ceiling-bound year** is one where the benefit is paid, the
+IRA still holds money (a drained IRA cannot reach any ceiling and its short is not a defect) and a
+ceiling was computed. 5,182 such years.
+
+| regime | definition | years | share |
+|---|---|---:|---:|
+| ZERO | `taxableSS` = 0 | 6 | 0.1% |
+| **SLOPED** | 0 < `taxableSS` < 0.85 x SS | **184** | **3.6%** |
+| CAPPED | `taxableSS` = 0.85 x SS | 4,992 | 96.3% |
+
+SLOPED is not empty, and it is not scattered: it appears in 31 of 270 populated cells and every one
+of the top 15 by count is `Fed 10%` or `Fed 12%`. The low ceilings are where a household's provisional
+income can still sit below the second statutory threshold.
+
+### 10.2 A wrong claim, and the correction
+
+The first reading of 10.1 was that a flat `0.85 x SS` would **overshoot** in the sloped years. **It
+cannot, and the user corrected it the same day.** With `N = L - 0.85 SS`, MAGI is `N + taxableSS`,
+and `taxableSS <= 0.85 SS` by statute, so `MAGI <= L` in every tier, always. **85% is the MAXIMUM
+taxable share, which makes assuming it the CONSERVATIVE assumption.** Flat 85% under-fills in the
+lower tiers; it never breaches.
+
+That changed the question. Both candidate forms are safe, so what separates them is how much of the
+headroom each one recovers, which is a measurement.
+
+### 10.3 Three arms
+
+`.test_harnesses/ssbasis_arms_harness.js`, same grid.
+
+| arm | what it does | under-filled years | headroom never used | breach $ | summed final NW | summed lifetime tax | summed conversions |
+|---|---|---:|---:|---:|---:|---:|---:|
+| OFF | today: subtract the FULL benefit | 1,670 | $16,777,935 | $2,466,897,543 | $9,635,380,505 | $2,195,213,324 | $602,941,620 |
+| `flat85` | subtract 0.85 x benefit | 144 | $3,586,302 | $2,452,011,992 | $9,645,177,584 | $2,190,857,792 | $612,592,921 |
+| **`exact`** | solve `MAGI(N) = limit` for N | **0** | **$0** | **$2,447,324,881** | **$9,648,225,425** | **$2,189,662,668** | **$613,746,844** |
+
+**There is no trade to make.** `exact` fills every ceiling-bound year to the dollar while breaching
+LESS than today, ending richer, paying less lifetime tax and converting more. `flat85` recovers 79%
+of the headroom and is strictly safe, so it stands as a fallback, but it wins on no axis.
+
+Two readings to keep straight. **The breach column falls as the plan draws MORE**, by the mechanism
+section 3 already found: voluntary draws inside the ceiling shrink the IRA, so the forced RMDs that
+later blow through it are smaller. And **the year counts differ across arms** (5,182 / 5,154 / 5,124),
+because the fuller draws empty the IRA marginally sooner in a few cells, so the three columns are not
+over an identical year set.
+
+`exact` also closed section 9's loose end: the six ZERO-regime years carrying $213k of unexplained
+short land on the ceiling exactly under it, so that residual was the same basis error read through a
+tier where the taxable share is 0 rather than 0.85.
+
+### 10.4 The inversion, and why it is not algebra
+
+`taxengine.js` defines both quantities within ten lines of each other:
+
+    MAGI        = federalAGI + taxExemptInterest
+    provisional = (MAGI - taxableSS) + r x totalSS
+
+so with `N` = the non-SS part of MAGI the whole relation is one scalar equation,
+`MAGI(N) = N + taxableSS(N + r x SS)`, and sizing a draw to a ceiling `L` is `N = f-inverse(L)`. The
+shipped form is `nonSSIncomeForMAGI` (`taxengine.js`), which **bisects on the real
+`calculateTaxableSocialSecurity`** rather than solving the four segments in closed form. The closed
+form exists; it was rejected because it would be a SECOND SOURCE OF TRUTH for the SS split, free to
+drift from the function actually charging the tax, which is the failure mode `P92a` named for the
+deduction. Bisection needs only monotonicity, which the statute guarantees, and survives a new tier
+with no edit.
+
+**ACA keeps the full benefit.** ACA MAGI adds non-taxable Social Security back by statute, so the
+whole benefit really does occupy that cap. The fork is therefore on the ceiling's KIND, decided inside
+`computeBracketCeiling` because it is the only place that knows which branch built the number: a
+call site testing `stratACAMultiple` would miss that the IRMAA branch wins when both are set, and
+would answer 'aca' for a year whose cap has lapsed.
+
+### 10.5 What it cost to pin
+
+One tripwire moved, `P32h`, for its seventh recorded time: total stranded 29,367.55 -> 24,836.15 and
+the Brokerage headline 1,016,150.36 -> 1,000,311.35, with the COUNT still 10 and still 2040-2049. The
+arm draws its headroom earlier and reaches the stranded tail with less unfunded. The subject of that
+test did not change.

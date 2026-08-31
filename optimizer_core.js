@@ -908,8 +908,16 @@ function nominalRateAtLimit(entity, status, limit, inflation, rateCreep = 1) {
 // every year, so its average rate cannot drift. It drifts only when two clocks disagree.
 function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, alive1, alive2, fedRateCreep = 1, stateRateCreep = 1, medicareRate = 1, dedAddBack = 0) {
     let limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit;
+    // P87c. WHICH of the three ceilings this is, decided here and returned, because callers need it
+    // and the test they would otherwise write is not the same test. Reading `inputs.stratACAMultiple`
+    // at a call site would miss that the IRMAA branch wins when both are set, and would also answer
+    // 'aca' for a year whose ACA cap has lapsed. The branch that built the number is the only place
+    // that knows. It matters because the three do not share an income definition: ACA MAGI counts
+    // the WHOLE Social Security benefit, federal and IRMAA MAGI count at most 85% of it.
+    let kind;
 
     if ((inputs.stratIRMAATier ?? -1) >= 0) {
+        kind = 'irmaa';
         // IRMAA tier ceiling mode: fill MAGI up to the top of the chosen IRMAA tier - as that tier
         // will be indexed when THIS year's MAGI is actually charged, |LOOKBACK| years from now, less
         // whatever safety margin irmaaMarginMode asks for. See the irmaaFwdFactor block above.
@@ -935,6 +943,7 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         marginalStateTaxRate = stAtLimit.rate * stateRateCreep;
         nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, cpiRate, stateRateCreep);
     } else if ((inputs.stratACAMultiple ?? 0) > 0) {
+        kind = 'aca';
         // ACA FPL cliff mode: fill MAGI up to a multiple of the Federal Poverty Level.
         // NO AGE TEST HERE, ON PURPOSE. The IRMAA branch above can degrade in place (drop the tier
         // ceiling, keep a federal one); this branch cannot, because every ACA row carries
@@ -952,6 +961,7 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         marginalStateTaxRate = stAtLimit.rate * stateRateCreep;
         nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, cpiRate, stateRateCreep);
     } else {
+        kind = 'federal';
         // Federal bracket ceiling mode (original logic)
         // stratRate names a bracket ("fill the 22% bracket"), which is a threshold concept - the
         // lookup stays on statutory rates so the ceiling doesn't move when rates creep.
@@ -983,7 +993,7 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         limit = Math.min(stateLimit, limit);
     }
 
-    return { limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit };
+    return { limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit, kind };
 }
 
 let simulationCount = 0;
@@ -1124,6 +1134,11 @@ function buildSimYearLogRecord(p) {
         // the bare `std` field, so the name is narrower than the number.
         '-fedTaxableInc': p.tax.federalTaxableIncome,
         '-fedDeduction': p.tax.federalStdDeduction,
+        // P87c. The other half of the same basis question. The sizing aggregate subtracts the FULL
+        // benefit (`yr.fixedInc`) from a MAGI ceiling, but only this much of it ever reaches MAGI -
+        // at most 85%, and less in the two lower tiers. The gap between this and `SSincome` is the
+        // ceiling the plan is told to fill and then does not.
+        '-taxableSS': p.tax.taxableSS,
         // P92a. The deduction the CEILING used, beside the one that was CHARGED. They differ by
         // whatever the two-pass estimate could not see coming, and keeping both is what makes that
         // residual auditable from a finished run instead of an argument. 0 for every ceiling that
@@ -2030,14 +2045,41 @@ function planPrimaryWithdrawals(sim, yr) {
     // must NOT match, so the year falls through fixedpct/propwd/ordered (none of which name 'aca')
     // to the baseline `else` below - Proportional 0%, which is the intended successor.
     } else if (inputs.strategy === 'bracket' || yr.isACAStrategy) {
-        ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit } =
+        ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit, kind: yr.ceilingKind } =
             computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack));
 
         yr.bracketTarget = yr.limit;
 
+        // P87c. How much of the Social Security benefit this ceiling's own income definition counts.
+        //
+        // Federal-bracket and IRMAA ceilings are spent against `tax.MAGI`, which carries only the
+        // TAXABLE share of the benefit - at most 85%, and less in the two lower statutory tiers.
+        // Subtracting the FULL benefit here therefore charges the ceiling for income it never
+        // receives, and the plan stops exactly that much short of the limit it was told to fill:
+        // measured at `short / SSincome` = 0.150000, min equal to max, worth $168,500 on one $2.8M
+        // Fill Bracket 22% plan (research/BRACKET_CEILING_BASIS.md sections 9 and 10).
+        //
+        // ACA IS DIFFERENT AND KEEPS THE FULL BENEFIT. ACA MAGI adds non-taxable Social Security
+        // back by statute, so the whole benefit really does occupy that cap. This is why the fork is
+        // on the ceiling's KIND and not one global change - and why `kind` is decided inside
+        // computeBracketCeiling, which is the only place that knows which branch built the number.
+        //
+        // The room is found by INVERTING the MAGI relation - nonSSIncomeForMAGI answers "what non-SS
+        // income puts MAGI exactly on this limit" - rather than by subtracting a fixed share of the
+        // benefit. Subtracting the statutory MAXIMUM share, 0.85, would also be safe (the true share
+        // is never higher, so MAGI could not exceed the limit) and was measured as a candidate: it
+        // recovers 79% of the unused headroom. The inversion recovers all of it, because in the two
+        // lower statutory tiers MAGI rises 1.5x or 1.85x as fast as the draw and a flat subtraction
+        // leaves that difference unused. Across a 720-cell grid the inversion filled every
+        // ceiling-bound year to the dollar while breaching LESS than the full-benefit form did, so
+        // there was no trade to make (research/BRACKET_CEILING_BASIS.md section 10).
+        const _ssCeilRoom = (yr.ceilingKind === 'aca')
+            ? yr.limit - yr.fixedInc
+            : nonSSIncomeForMAGI(yr.status, yr.limit, yr.fixedInc);
+
         // Cap IRA draw at the bracket ceiling; any spending shortfall is filled from
         // Cash → Brokerage → Roth in the gap-fill pass below (bracket-strategy path).
-        const iRAbracketRoom = Math.max(0, yr.limit - yr.taxableInc - yr.fixedInc - yr.taxableInterest - yr.taxableDividends);
+        const iRAbracketRoom = Math.max(0, _ssCeilRoom - yr.taxableInc - yr.taxableInterest - yr.taxableDividends);
         const IRAwd = Math.min(yr.curIRA, iRAbracketRoom);
         yr.withdrawals = { IRA: IRAwd, netAmount: IRAwd };
 

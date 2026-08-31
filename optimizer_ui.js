@@ -80,7 +80,14 @@ const OptimizerState = {
     // Relative view: every comparable column reads as a difference from the reference row rather
     // than as its own value. Nerdknob-gated while it is being lived with.
     relativeView: false,
-    objective: 'taxflex',       // PF13: default ranking = Tax Flexibility (most-requested)
+    // P100b1: seeded from `?obj=` so a shared link reproduces the goal it was shared under.
+    // Read HERE rather than in an init hook because renderOptimizerTable and the anchor baseline
+    // pick both read this before any load hook would have run; an unknown or absent key falls back
+    // to the default, so an old link and a typo behave the same way.
+    objective: (() => {
+        const k = new URLSearchParams(location.search).get('obj');
+        return (k && typeof OPTIMIZER_OBJECTIVES !== 'undefined' && OPTIMIZER_OBJECTIVES[k]) ? k : 'taxflex';
+    })(),                       // PF13: default ranking = Tax Flexibility (most-requested)
     sharedFutureIRARate: 0,     // PF13: heirs rate for widowrmd/taxflex metrics; set each runOptimizer
     perfStats: null,
     noSolutionFloor: null,
@@ -200,6 +207,12 @@ function renderObjectiveBlurb() {
 
 function setOptObjective(key) {
     OptimizerState.objective = OPT_OBJECTIVE_LABELS[key] ? key : 'taxflex';
+    // P100b1. The <select> is the CALLER when a user changes the goal by hand, but not when the
+    // goal arrives from `?obj=` or from a loaded scenario - and a control showing one goal while
+    // the table is ranked by another is worse than not restoring it at all. Written back
+    // unconditionally, which is a no-op in the by-hand case.
+    const _objSel = document.getElementById('opt-objective');
+    if (_objSel && _objSel.value !== OptimizerState.objective) _objSel.value = OptimizerState.objective;
     // Changing the objective re-follows it for the body order (drop any user column override).
     OptimizerState.sortState = { colKey: '__objective__', direction: 'desc' };
     renderObjectiveBlurb();
@@ -5277,6 +5290,13 @@ function buildShareURL() {
     // Incoming `afm` is still ACCEPTED by loadFromURL, so links already generated keep working.
     // P64e: these have no DOM field, so the loop above cannot see them. Re-emit them or a shared
     // link silently drops a figure the recipient never had a way to re-enter.
+    // P100b1: the "Optimize for" goal is UI state, not an engine input, so the field loop above
+    // cannot see it - and without it a shared link silently reopens on Tax Flexibility, showing the
+    // recipient a different winner and a different anchor baseline for the same plan. Emitted only
+    // when it differs from the default, so existing links are unchanged.
+    if (OptimizerState.objective && OptimizerState.objective !== 'taxflex') {
+        params.set('obj', OptimizerState.objective);
+    }
     if (PROP_TAX_STATE) {
         params.set('ptx', String(PROP_TAX_STATE.propTax));
         if (PROP_TAX_STATE.propTaxGrowthMode !== 'inflation') params.set('ptxm', PROP_TAX_STATE.propTaxGrowthMode);
@@ -5542,7 +5562,10 @@ function saveScenario() {
 
         scenarios[scenarioName] = {
             version: SCENARIO_VERSION,
-            data: inputs,
+            // P100b1: `optObjective` rides along beside the engine inputs. It is NOT added to
+            // getInputs() on purpose - that object feeds simulate() and the MC cache hash, and a
+            // ranking preference has no business changing either.
+            data: { ...inputs, optObjective: OptimizerState.objective },
             savedAt: new Date().toISOString()
         };
 
@@ -5661,7 +5684,17 @@ function applyScenario(data) {
         };
     }
 
+    // P100b1. Same shape as propTax above: the "Optimize for" goal has no engine input to travel
+    // in, so it is restored explicitly. An unknown key falls back to the default rather than
+    // throwing, and an absent key leaves the current goal alone - a scenario saved before this
+    // feature does not carry it.
+    if (data.optObjective !== undefined && typeof setOptObjective === 'function') {
+        setOptObjective(data.optObjective);
+    }
+
     for (const [key, value] of Object.entries(data)) {
+        // optObjective is UI state restored above, and has no form element of its own
+        if (key === 'optObjective') continue;
         // stratIRMAATier has no standalone form element; handled above via stratRate dropdown
         if (key === 'stratIRMAATier') continue;
         if (key === 'stratACAMultiple') continue;

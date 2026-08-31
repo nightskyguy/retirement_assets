@@ -22,6 +22,11 @@
  *
  * Fixture: 2026 MFJ couple, $2.8M across two IRAs, TX so no state ceiling binds first.
  * Results in research/BRACKET_CEILING_BASIS.md section 9.
+ *
+ * THE DEFECT SHIPPED FIXED IN v11.16d4 (P87c), so this file has flipped from measurement to
+ * check: it now prints 0.000000 and $0 on the same fixture. The numbers in the header above are
+ * the PRE-FIX record and are kept verbatim - they are what section 9 reports, and they are what
+ * makes the zero below mean anything. Section 10 covers the regime split and the fix.
  */
 
 globalThis.performance={now:()=>0};globalThis.window={};globalThis.document={getElementById:()=>null,addEventListener:()=>{}};

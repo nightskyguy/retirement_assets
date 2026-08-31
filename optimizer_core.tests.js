@@ -1840,6 +1840,90 @@ test('P92a: an IRMAA tier and an ACA cap get no add-back at all', () => {
     }
 });
 
+// -- P87c: the other half of the same basis question, and it is Social Security ----------------
+// A federal-bracket or IRMAA ceiling is spent against MAGI, which carries only the TAXABLE share of
+// the benefit - at most 85%. The sizing aggregate subtracted the FULL benefit, so the untaxed share
+// was charged against a ceiling it never occupies and every plan stopped exactly that much short:
+// `short / SSincome` measured 0.150000, min equal to max, on federal brackets and IRMAA tiers alike.
+// ACA is the exception and keeps the full benefit, because ACA MAGI adds non-taxable SS back.
+const CEIL_SS = { ...CEIL_FILL, ss1: 40000, ss1Age: 62, nYears: 12, IRA1: 3000000, spendGoal: 90000 };
+
+test('P87c: nonSSIncomeForMAGI inverts the MAGI relation it claims to invert', () => {
+    // The unit test, and it does not go near the engine. Rebuild MAGI from the returned non-SS
+    // income exactly as calculateTaxes does - N + taxableSS(N + 0.5 x SS) - and it must land on the
+    // target. Spanning both filing statuses and, deliberately, targets low enough to fall in the
+    // 50% tier and the zero tier as well as the 85% cap, since those are the cases a flat
+    // subtraction gets wrong.
+    for (const status of ['MFJ', 'SGL']) {
+        const r = getRateBracket('SOCIALSECURITY', status)[1].r;
+        for (const ss of [0, 12000, 40000, 94000]) {
+            for (const target of [20000, 35000, 50000, 120000, 400000]) {
+                const N = nonSSIncomeForMAGI(status, target, ss);
+                const magi = N + calculateTaxableSocialSecurity(status, N + r * ss, ss);
+                assertNear(magi, target, `${status} target ${target} with ${ss} of benefit`, 0.01);
+            }
+        }
+    }
+});
+
+test('P87c: a Fill Bracket plan with Social Security lands MAGI on its ceiling', () => {
+    const log = simulate({ ...CEIL_SS }).log;
+    const rows = log.filter(e => e.SSincome > 0 && e.TotalIRA > 1000 && e.BracketTarget > 0);
+    assert(rows.length > 0, 'fixture must produce ceiling-bound years with the benefit being paid');
+    // The defect, stated as the thing it can no longer be: a short worth 15% of the benefit.
+    const worst = Math.max(...rows.map(e => (e.BracketTarget - e.MAGI) / e.SSincome));
+    assert(worst < 0.01,
+        `MAGI must reach the ceiling, worst year still short by ${(worst * 100).toFixed(2)}% of the benefit`);
+});
+
+test('P87c: filling the ceiling more fully never breaches it', () => {
+    // The direction that matters for a CAP. Subtracting the taxable share RAISES the room, so the
+    // guard is that the room is still bounded by the limit rather than overshooting it.
+    //
+    // THE FIXTURE IS THE TEST. Three other mechanisms can put MAGI over a ceiling - a conversion
+    // (P88), a forced draw for spending the ceiling cannot fund, and an RMD - and each has its own
+    // tests. Leaving any of them armed here measures them instead of the sizing line, and the two
+    // failed drafts of this test are both worth recording: the first used CEIL_SS unchanged and
+    // reported 17 breached years that were surplus conversions, and the second turned conversions
+    // off and cut the spend goal and reported the SAME 17 years to the dollar, because CEIL_SS
+    // inherits a household already 74 years old and a $3M IRA whose RMD alone clears the ceiling.
+    // An unchanged number after a change that should have moved it is the tell.
+    //
+    // So: conversions off, the spend goal well inside the ceiling, and RMD years excluded outright,
+    // since an RMD is a mandatory claimant the sizing line has no discretion over. Excluded rather
+    // than aged out of the horizon, because `nYears` does NOT bound the run - the fixture below
+    // returns 27 rows and ends at the death year, not at year 10 - which is the third thing this
+    // test got wrong before it got it right.
+    const SIZED = { ...CEIL_SS, convertExcessToRoth: false, spendGoal: 40000,
+                    birthyear1: 1962, die1: 90 };
+    for (const [name, over] of [['Fill Bracket 22%', {}],
+                                ['Fill Bracket 12%', { stratRate: 0.12 }],
+                                ['IRMAA tier 1', { stratRate: 0, stratIRMAATier: 1 }]]) {
+        const log = simulate({ ...SIZED, ...over }).log;
+        const rows = log.filter(e => e.BracketTarget > 0 && (e.ForcedIRA || 0) === 0
+                                     && (e.RMDwd || 0) === 0);
+        assert(rows.length > 0, `${name} must produce ceiling years with no forced draw and no RMD`);
+        const bad = rows.filter(e => e.MAGI - e.BracketTarget > 1);
+        assert(bad.length === 0,
+            `${name} breached its own ceiling with only the sizing line drawing, in ${bad.length} years: `
+            + bad.slice(0, 3).map(e => `${e.year} MAGI ${Math.round(e.MAGI)} vs ${Math.round(e.BracketTarget)}`).join(' | '));
+    }
+});
+
+test('P87c: an ACA cap still counts the WHOLE benefit', () => {
+    // The fork, and the reason it is on the ceiling's kind rather than applied globally. ACA MAGI
+    // adds non-taxable Social Security back by statute, so the full benefit really does occupy that
+    // cap and treating 15% of it as free room would push a household over a cliff. The ACA year's
+    // room must therefore still be limit - full benefit, which shows up as MAGI landing SHORT of
+    // the cap by no more than rounding rather than reaching it the way a bracket year now does.
+    const log = simulate({ ...CEIL_SS, strategy: 'aca', stratRate: 0, stratIRMAATier: -1,
+                           stratACAMultiple: 400, birthyear1: 1975, die1: 95, ss1Age: 62 }).log;
+    const rows = log.filter(e => e.SSincome > 0 && e.BracketTarget > 0 && e.TotalIRA > 1000);
+    assert(rows.length > 0, 'fixture must produce live ACA years with the benefit being paid');
+    assert(rows.every(e => e.MAGI - e.BracketTarget <= 1),
+        'an ACA cap may never be exceeded by the sizing line');
+});
+
 test('soft cap (fixedpct): capped % with spend over cap still funds spending from IRA', () => {
     const r = simulate({ ...CAP_BASE, strategy: 'fixedpct', iraWithdrawPct: 0.02 });
     assert(_sumForcedIRA(r.log) > 0, 'fixedpct should force IRA when 2% draw + buffers underfund spend');
@@ -2835,10 +2919,18 @@ test('P32h: the IRMAA arm no longer strands spending with Brokerage still funded
     // growth on one year's draw, compounded thirteen years out: total 27,529 -> 29,368 and the
     // Brokerage headline 1,027,282 -> 1,016,150, over the same ten years and with the worst single
     // year unmoved. The subject of the test did not change.
-    assertNear(strandedBefore.reduce((s, e) => s + Math.abs(e.shortfall), 0), 29367.546739,
+    // SEVENTH move, P87c. The ceiling sizing stopped subtracting the FULL Social Security benefit
+    // from a MAGI ceiling that counts at most 85% of it, so this IRMAA arm draws the headroom it
+    // was always entitled to, earlier, and arrives at the stranded tail with less left unfunded:
+    // total 29,367.55 -> 24,836.15, Brokerage headline 1,016,150.36 -> 1,000,311.35. The COUNT is
+    // still 10 and still 2040-2049, and the worst single year moved by fifty cents (6,575.51 ->
+    // 6,575.01), inside the tolerance and left pinned where it was rather than re-stamped for
+    // rounding. Every year that strands still strands - the third pass refusing Brokerage is
+    // untouched - so the subject of the test is unchanged and only the size of what it costs moved.
+    assertNear(strandedBefore.reduce((s, e) => s + Math.abs(e.shortfall), 0), 24836.150317,
         'total stranded across the ten years', 1);
     // The headline number: how much was sitting in Brokerage the first year it gave up.
-    assertNear(Math.max(...strandedBefore.map(e => e.Brokerage || 0)), 1016150.362818,
+    assertNear(Math.max(...strandedBefore.map(e => e.Brokerage || 0)), 1000311.354759,
         'Brokerage balance in the first year the arm reported an unfunded shortfall', 1);
     assert(strandedBefore.every(e => (e.Cash || 0) <= 1 && (e.Roth || 0) <= 1 && (e.TotalIRA || 0) <= 1),
         'every stranded year must have Cash, Roth and IRA at zero — Brokerage is the only source left');
@@ -4102,6 +4194,90 @@ function objRow(id, opts = {}) {
         },
     };
 }
+
+// -- P100b3: the shared secondary ranking --------------------------------------------------------
+// An objective that cannot separate two rows used to leave them in input-array order and the table
+// printed that as a Rank. Measured on a real scenario, 133 of 136 successful rows scored IDENTICALLY
+// under conveffect (only 12 rows are ever evaluated for it, only 3 produce a figure), so a rank was
+// a position in a tie and moved when the user adopted a different plan.
+const rankIds = (rows, obj) => rankRowsByObjective(rows, obj, 0).map(r => r._id).join(',');
+
+test('P100b3: rows tied on the objective are ordered by the secondary chain, not array order', () => {
+    // conveffect reads _convSavings; none of these has one, so all three tie at -Infinity - exactly
+    // the shipped situation. Deliberately supplied WORST-FIRST so passing cannot be array order.
+    const rows = [objRow('low', { nw: 100 }), objRow('high', { nw: 900 }), objRow('mid', { nw: 500 })];
+    const got = rankIds(rows, 'conveffect');
+    assert(got === 'high,mid,low', `a fully tied objective must fall through to net wealth, got ${got}`);
+});
+
+test('P100b3: the chain runs in priority order, each key breaking only what the one above left tied', () => {
+    const T = roth => ({ ira: 0, roth, cash: 0, brokerage: 0, basis: 0 });
+    // All three tie on net wealth, so key 2 (final Roth) decides; 'a' and 'b' tie there too, so
+    // key 3 (spend) separates them. That is the property - not merely "some tie-break happened".
+    const rows = [
+        objRow('a', { nw: 100, spend: 10, terminal: T(50) }),
+        objRow('b', { nw: 100, spend: 90, terminal: T(50) }),
+        objRow('c', { nw: 100, spend: 99, terminal: T(10) }),
+    ];
+    const got = rankIds(rows, 'conveffect');
+    assert(got === 'b,a,c', `final Roth must outrank spend, and spend break what Roth left tied, got ${got}`);
+});
+
+test('P100b3: the ordering does not depend on the order rows arrive in', () => {
+    // The defect in one assertion: shuffle the input, the ranking must not move. Every row here is
+    // identical on every chain key except _id, which is the total-order backstop.
+    const mk = () => [objRow('x', { nw: 7 }), objRow('y', { nw: 7 }), objRow('z', { nw: 7 })];
+    const fwd = rankIds(mk(), 'conveffect');
+    const rev = rankIds(mk().reverse(), 'conveffect');
+    assert(fwd === rev, `a reversed input must produce the same ranking, got ${fwd} vs ${rev}`);
+});
+
+test('P100b3: a row that never breaks even sorts last on that key, never first', () => {
+    // _convBEYear is absent on most rows. A missing year must read as "worst", not as year 0.
+    const withBE = objRow('yr2040', { nw: 5 });
+    withBE._convBEYear = 2040;
+    const got = rankIds([objRow('none', { nw: 5 }), withBE], 'conveffect');
+    assert(got === 'yr2040,none', `an absent break-even year must rank below a real one, got ${got}`);
+});
+
+test('P100b3: the DEFAULT chain leads on net wealth', () => {
+    // mintax names no override, so it inherits the default. All three tie on the metric (tax 0), so
+    // the chain decides, and net wealth leads it. Roth is deliberately set OPPOSITE to net wealth,
+    // so a run that led on Roth would produce the reverse and this would fail.
+    const T = roth => ({ ira: 0, roth, cash: 0, brokerage: 0, basis: 0 });
+    const rows = [
+        objRow('a', { nw: 100, tax: 0, terminal: T(900) }),
+        objRow('b', { nw: 900, tax: 0, terminal: T(100) }),
+    ];
+    const got = rankIds(rows, 'mintax');
+    assert(got === 'b,a', `the default chain must lead on net wealth, got ${got}`);
+});
+
+test('P100b3: conveffect OVERRIDES the default and leads on final Roth', () => {
+    // The user's priority order for this objective (2026-08-31): when two plans save the same tax by
+    // converting, more Roth wins before more wealth does. Same two rows as the test above, ranked
+    // under conveffect instead - and the answer must INVERT. Two objectives disagreeing on identical
+    // rows is the whole point of allowing an override, so this is the test that earns it.
+    const T = roth => ({ ira: 0, roth, cash: 0, brokerage: 0, basis: 0 });
+    const rows = [
+        objRow('a', { nw: 100, tax: 0, terminal: T(900) }),
+        objRow('b', { nw: 900, tax: 0, terminal: T(100) }),
+    ];
+    const got = rankIds(rows, 'conveffect');
+    assert(got === 'a,b', `conveffect must lead on final Roth, not net wealth, got ${got}`);
+    assert(rankIds(rows, 'mintax') === 'b,a',
+        'the same rows must rank the other way under an objective that uses the default');
+});
+
+test('P100b3: the chain never overrides the objective itself', () => {
+    // The safety property. 'lo' wins every chain key but loses on the metric, so it must still lose.
+    const lo = objRow('lo', { nw: 999, spend: 999, tax: 0 });
+    const hi = objRow('hi', { nw: 1, spend: 1, tax: 999 });
+    lo._convSavings = 10;
+    hi._convSavings = 20;
+    const got = rankIds([lo, hi], 'conveffect');
+    assert(got === 'hi,lo', `the objective must decide whenever it can; the chain only breaks ties, got ${got}`);
+});
 
 test('rankRowsByObjective: failed rows always sort last, whatever the metric', () => {
     const rows = [

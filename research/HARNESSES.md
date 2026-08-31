@@ -50,6 +50,8 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `extraconv_magi_harness.js` | **node** | P88a/P88b: an Extra Roth Conversion never reached MAGI, so the IRMAA lookback charged a figure that omitted it. How wrong was it, and did fixing it move what the characterization predicted? |
 | `ceilded_harness.js` | **node** | P92a: the ceiling cannot ask for the year's own deduction without circularity, so which OBTAINABLE deduction is least wrong? Scores three candidates against the one actually charged. |
 | `underfill_harness.js` | **node** | P87c: a Fill Bracket plan stops exactly 15% of its Social Security short of its own ceiling. Which years, and how much headroom goes unused? |
+| `ssbasis_harness.js` | **node** | P87c1: in a year where a ceiling binds, is the taxable share of Social Security pinned at its 85% cap, in a sloped tier, or zero? Decides whether the fix can be a flat subtraction or has to solve the fixed point. |
+| `ssbasis_arms_harness.js` | **node** | P87c2: three arms over 720 cells - full benefit (the defect), flat 0.85, and inverting the MAGI relation. Neither armed form can breach, so the question is how much headroom each recovers. |
 
 ## Re-evaluation status (2026-08-30)
 
@@ -89,7 +91,9 @@ evidence of currency.
 | `oracle_harness.js` | **DRIFTED** (arm enumeration) | `P51a` reproduces (`S3-P1` RIGHT 15/15), but champion rows changed (`Reduce 20` -> `Reduce 17`). The `--full` half behind the +$1.08M headline was not re-run |
 | `rmdbasis_harness.js` | **CURRENT** | 0 of 30 timing-dependent, R2 violated in 0 of 30 - the post-fix column exactly |
 | `extraconv_magi_harness.js` | **CURRENT** | self-reports `FIXED BUILD`. Two recorded constants moved under `F4` (M3 $39,920,984 -> $39,693,824; M5 year-0 tax $39,238 -> $49,317) |
-| `underfill_harness.js` | **CURRENT** | reproduces section 9 exactly: 0.150000 every year, $168,500 unused |
+| `underfill_harness.js` | **SUPERSEDED by its own fix** | measured the defect P87c then shipped (v11.16d4). It now reads 0.000000 and $0 on the same fixture, which is the check it has become; section 9's numbers are the pre-fix record |
+| `ssbasis_harness.js` | **CURRENT** | 2026-08-31, section 10.1. Run against the PRE-fix engine; re-running it post-fix measures the new sizing, not the regime split |
+| `ssbasis_arms_harness.js` | **SUPERSEDED by its own fix** | its OFF and flat85 arms were removed from the engine when `exact` shipped unconditionally, so the three-way comparison is no longer reproducible. Section 10.3 is the record |
 | `ceilded_harness.js` | **CURRENT** | shipped with `F4` |
 | `cpi_index_harness.js` | **CURRENT** | re-run 2026-08-26 carrying the CPI spread |
 | `betr_harness.js` | **UNREVIEWED** | 2026-07-23, the oldest finding here; `F2` and `F3` both bear on it |

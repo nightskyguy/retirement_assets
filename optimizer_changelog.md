@@ -17,6 +17,38 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.16d7"></a>
+
+## 11.16d7
+
+### A chosen limit is now filled even after Social Security starts
+
+**Behavior change: saved plans and shared links will not reproduce their earlier numbers.**
+
+Once Social Security begins, a plan on a **Fill Fed Bracket** or **IRMAA Tier** limit stopped 15% of
+the yearly benefit short of the limit it was told to fill, and stayed short every year after. On one
+$2.8M plan at the 22% limit that was $168,500 of room left unused across 17 years. Only the taxable
+part of a benefit counts toward these limits, at most 85% of it, and the untaxed remainder was being
+charged against the limit as though it counted.
+
+These plans now withdraw and convert more in those years. **Which way that lands on End Wealth still
+depends on the limit**, the same as it did in 11.16b0, so re-run the Optimizer before treating a new
+figure as settled.
+
+**Optimizer row ranking is improved**, especially when *Optimize for* resulted in a small number of
+matching strategies, as is common in *Roth Conversion Effectiveness*. Those unmatched were treated as
+ties and the ranks assigned were meaningless. That meaninglessness led to rank instability. Now all
+non-matching rows are sorted by secondary criteria.
+
+**Separately, the "Optimize for" goal now travels with your plan.** A shared link or a saved
+scenario kept every input but not the goal the table was ranked by, so it reopened on Tax Flexibility
+and showed a different best plan than the one you sent. Links made before this release are unchanged.
+
+**ACA Cliff plans are unchanged.** An ACA cap counts the whole benefit, taxable or not, so for those
+plans the earlier treatment was already right.
+
+---
+
 <a id="11.16d0"></a>
 
 ## 11.16d0

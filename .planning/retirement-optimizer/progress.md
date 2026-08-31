@@ -6861,3 +6861,413 @@ none of its five suites changed). Commit `92f2d1e` on `worktrees/optimizer-menu-
 pushed. No PR opened.
 
 **Next round is still P87c** - unchanged by this. P98 was an interrupt, not a re-prioritization.
+
+
+## 2026-08-31 (cont.) - P87c: the ceiling now counts the benefit the way the tax does
+
+**Shipped v11.16d4.** A federal-bracket or IRMAA ceiling is spent against MAGI, which carries at most
+85% of a Social Security benefit. The sizing aggregate subtracted the FULL benefit, so every plan on
+a chosen limit stopped exactly 15% of its benefit short of it, every year the benefit was paid.
+`nonSSIncomeForMAGI` (`taxengine.js`) now inverts the MAGI relation and the room is solved for
+instead of estimated. ACA keeps the full benefit, because its own MAGI counts it.
+
+**Verified in the browser, not inferred.** Plain load and `?runtests` both green: 956 tests (498
+in-page + 458 node), 0 failed. Running the original defect fixture through the shipped page's own
+`simulate` returns `short/SS` of exactly 0 on Fill 22%, Fill 24% and IRMAA Tier 1, against 0.150000
+before. Suites **375**/61/22; `TestTiers.EXPECTED` and `.githooks/README.md` both reconciled.
+
+**THE USER OVERTURNED A CLAIM MID-ROUND, AND THE CORRECTION IMPROVED THE WORK.** I wrote that a flat
+`0.85 x SS` subtraction would OVERSHOOT the ceiling in the low tiers. It cannot: 85% is the MAXIMUM
+taxable share, so assuming it is the conservative assumption, and `MAGI = (L - 0.85 SS) + taxableSS
+<= L` in every tier. Their framing - start at 85% and raise the ceiling only where the share is
+demonstrably lower - is exactly what the shipped inversion does, stated procedurally. Corrected in
+`findings.md` in place, with the wrong claim quoted rather than deleted, since it is the reason the
+phase measured three arms instead of arguing about two.
+
+**The measurement is what settled it, not the argument.** `ssbasis_harness.js` found 96.3% of
+ceiling-bound years pinned at the 85% cap and 3.6% sloped, all on `Fed 10%` / `Fed 12%`. Then
+`ssbasis_arms_harness.js` ran three arms over 720 cells: OFF left 1,670 years under-filled and
+$16.8M unused, `flat85` left 144 and $3.6M, `exact` left **zero**. `exact` also breached LESS than
+the shipped code ($2.4473B vs $2.4669B), ended richer and paid less tax, so there was no trade to
+make and no reason to keep the flag. Shipped unconditionally, `P92a` precedent.
+
+**Bisection over a closed form, deliberately.** The four segments are solvable by hand. That was
+rejected because it would be a second source of truth for the SS split, free to drift from the
+function charging the tax - the failure mode `P92a` named for the deduction. The shipped inverse
+CALLS `calculateTaxableSocialSecurity` and leans only on monotonicity.
+
+**Three process notes worth carrying.**
+
+- **The breach test took three drafts, and each wrong one was informative.** Draft 1 used the phase
+  fixture unchanged and reported 17 breached years that were surplus conversions. Draft 2 turned
+  conversions off and cut the spend goal, and reported **the same 17 years to the dollar** - an
+  unchanged number after a change that should have moved it is the tell; the household was 74 with a
+  $3M IRA and the RMD alone cleared the ceiling. Draft 3 excludes RMD years outright.
+- **`nYears` does not bound a run.** The draft-2 fixture set `nYears: 10` and returned 27 rows ending
+  at the death year. Anything reasoning about a horizon has to filter on what it actually means.
+- **`serve.py --help` starts a server**, which my own note from 2026-08-31 already said and which I
+  did anyway, burning a two-minute timeout. Use `preview_start` with a `launch.json` entry.
+
+**`P32h` moved for the seventh time**, and only in size: total stranded 29,367.55 -> 24,836.15,
+Brokerage headline 1,016,150.36 -> 1,000,311.35, count still 10 and still 2040-2049. The arm draws
+its headroom earlier and reaches the stranded tail with less unfunded. Re-pinned with the reason.
+
+**Bookkeeping fixed at the top of the round:** the NOW table still carried a struck-out `P92` row as
+its only O0 and did not list `P87c` at all, while `progress.md` had named it next for two sessions.
+`P87` now holds that row. Next item in the phase is **`P87d`** - the ACA overage reads low because
+`tax.MAGI` has no non-taxable-SS add-back - which the target/cap split makes the one that matters
+most for the only ceiling whose job is to stay UNDER.
+
+
+## 2026-08-31 (cont.) - backlog cleanup, Phased to O1, and the 40/60 closed
+
+**User instruction:** stop carrying work nobody is doing; move Phased to O1; confirm whether
+"Roth before Brokerage" already answers P28; and put the `[40,60]` to bed permanently.
+
+**P28: the user was right, and it was pure bookkeeping.** `P28f`/`g`/`h` shipped 2026-08-24 in
+v11.162B - the *Roth before Brokerage* switch plus the 🅡 clone pass in `buildStrategyFamilies` -
+and the section's own Status line already said "Nothing else in P28 is open." The three boxes were
+still unchecked, so the plan read as open work that had shipped a week earlier. Only `P28j` remains
+and it is a DIFFERENT question (withdrawal timing keying off `rothConv`, and the bare `1000`).
+
+**The 40/60 is closed in a new `P30i`, and the close is a reframe rather than an answer.** Three
+studies asked which weight is right: `P30b` (w=40 best in 0 of 82 clean cells), `P30c` (bracket
+branch's Cash-first is right, 21 of 23) and `P30h` (w=40 wins ZERO cells on all seven objectives,
+every winner an endpoint, objectives split 3-3). **A fourth sweep would re-derive the same thing.**
+The question is being asked as a measurement when it is a policy choice. `P30a` already shipped
+`gapFillWeights` as a validated input with verified monotone endpoints, so the close is to LABEL it -
+three positions (Cash first / Blend / Brokerage first), default unchanged so every saved plan
+reproduces, `P30h`'s 3-3 split as the tooltip. Rule recorded: `[40,60]` is not to be re-swept;
+reopening needs a new question, and the only two are `conveffect` and `breakeven`.
+
+**Phased to O1**, leaving `P87` the sole O0. Recorded WHY on the row: Phased cannot land on the
+"ideal" withdrawal strategy while the optimization questions behind it are open - `P36` round 2 is
+literally `P35`'s PR 7, and `P75` is the year-by-year mix study that defines what "ideal" would mean.
+Building `P35i` first would ship an engine whose target is not yet defined.
+
+**The cleanup, in numbers.** 34 stale boxes closed under phases their own status called shipped -
+`P84a`-`P84o` (v11.168c/d; confirmed against the `P84l` comment live in `optimizer_core.js`, not from
+the Status line, which was stale and still read "filed, not started"), `P23a`-`P23l` (COMPLETE,
+shipped differently from the spec), `P28f`/`g`/`h`, `P92b` (answered when `P94` removed `minlimit`),
+`P92d`, `P24g`, `P32j`, `P91a-old`. Then **29 never-started phases moved to `task_parked.md`** -
+every one `pending` / `not started` / `deferred` / `unprioritized`, none named as a blocker by a live
+O0 or O1. **Nothing deleted, sections verbatim, IDs unchanged so cross-references still resolve.**
+
+Open boxes **210 -> 52**, across **41 phases -> 12**. `task_plan.md` 6,998 -> 5,739 lines.
+
+**One item was rescued rather than parked.** `P91d` sat inside a DONE phase: the Monte Carlo controls
+are in neither the saved scenario nor the share URL, so paths, seed and stress window reset on every
+load and cannot be shared. That is a real gap, not a plan, and it was about to be invisible. Marked
+as the one live item in an otherwise finished phase.
+
+**Kept live deliberately:** `P72` (the year-0 RMD basis in `P72k` is a known correctness gap) and
+`P19` (state coverage - 13 uncoded jurisdictions the README's own Tax Torpedo table names).
+
+
+## 2026-08-31 (cont.) - P100 written up as a staged investigation
+
+**User asked for the whole Optimizer-ranking discussion as one phase, ordered by code dependency and
+by bang for the buck.** Written as `P100`, six gated stages, 16 items, now the second O0 row.
+
+**The instability was TRACED, not theorized, and that is what makes the phase buildable.** Four
+links: `_convSavings` exists only on `⇌` rows (`optimizer_ui.js:1546`); `conveffect` ranks on
+`_convSavings ?? -Infinity` (`optimizer_core.js:4357`), so a row with no twin is dumped BELOW every
+row that has one; only 12 rows get a twin (`selectConversionCandidates(results, 12)`,
+`optimizer_ui.js:1438`); and the pool is chosen by `_baselineScore`, computed with
+`sharedFutureIRARate = base.futureIRATaxRate ?? results[0].totals.futureIRARate`
+(`optimizer_ui.js:1428`). Change the user's own plan and the pool membership changes, so 105th to
+24th is a SET DIFFERENCE, not a scoring wobble.
+
+**The user's own workaround turned out to be the design.** They described picking a row at 85th with
+higher net worth AND higher final Roth for a slightly later break-even - which is Pareto reasoning
+done by hand. So Stage D computes the non-dominated set instead of asking anyone to weight five
+objectives. **A weighted blend is explicitly rejected in the phase**: it replaces one choice with
+five, and the weights are undefendable.
+
+**Five predictions stated before the harness exists** (`H1`-`H5`), per the `P87a`/`P30b` convention.
+`H4` ("more than 50% of rows are dominated") and `H5` ("the hand-picked row is on the frontier, the
+nominal winner is not") are the GATE on Stage D: if the frontier is 80 rows wide it is not a
+simplification and the phase stops after Stage C.
+
+**Ordering rationale, since the user asked for it explicitly.** Stage A characterizes and must be
+first because nothing after it is verifiable otherwise - and `P100a1` needs the USER'S scenario, not
+an invented one. Stage B is three live defects that need no engine change and are each shippable
+alone; `P100b1` (persist the objective) is the highest payoff per line in the phase, and `P100b3`
+(stop ranking rows nobody evaluated) is the single biggest reduction in the confusion reported,
+because ~114 of ~126 rows are currently ordered on a value never computed for them. Stage C fixes
+the metric the user says is measuring the wrong thing. Stage D is the payoff. Stage E is gated on
+`P34`, which is why the phase recommends `P34` to O0 if accepted.
+
+**Rejections recorded in the phase so they are not re-derived:** weighted blend; objective-as-strategy
+(the user's option B - it crosses 9 objectives x 12 strategies into 108 menu entries); pick-one-and-fix
+(option C, right for the default only); and `P30i`'s three-position gap-fill control, superseded by
+`P100e2` because it was one more knob.
+
+**Blocked on the user for `P100a1`:** the actual scenario where their plan sits at 105th.
+
+**NOW table bookkeeping:** adding the `P100` row would have pushed the LINE-30 marker to 31, so a
+wrapped two-line paragraph below the table was joined into one. Content identical, marker still on 30.
+
+
+## 2026-08-31 (cont.) - P100 Stage A: reproduced, and it refuted my own hypothesis
+
+**Reproduced exactly on the user's own scenario** (`.test_harnesses/fixtures_rankstability.local.json` (gitignored - real personal data, public repo), saved
+from their file, not invented): plan at **103rd** under `Roth Conversion Effectiveness`; adopt
+`IRA Draw 9%`; re-run; the IRMAA Tier 2 plan comes back at **20th**. User reported 103 and 22.
+
+**H1, H2 and H3 - the pool-churn story I wrote into the phase yesterday - are REFUTED.** The pool is
+byte-identical across both runs (same 3 labels) and `sharedFutureIRARate` is 0.12 both times. I had
+read the code, found a plausible chain, and written it up as the mechanism. The measurement did not
+support it. **The real cause is one link earlier in the same chain and much simpler.**
+
+**Only 3 of 136 successful rows are ever evaluated for that objective.** `_convSavings` is written
+only on `⇌` rows; `conveffect` ranks on `_convSavings ?? -Infinity`; so **133 rows are mutually tied**
+and - verified directly, `tieOrderIsArrayOrder: true` - displayed in INPUT-ARRAY ORDER. "Rank 103"
+means "position 100 of 133 rows that all scored identically." The plan moved 103 -> 20 **with nothing
+about it re-measured**: no `_convSavings` either time. It moved because it stopped being the pinned
+current-plan row and became an ordinary swept row, which is a different array position.
+
+**A second finding that kills the obvious fix.** Raising the pool cap does not close the tie: 9 of
+the 12 candidates returned `optConv === 0` and produced no row at all, so a bigger pool yields more
+evaluated rows, never a complete table. `P100e1` is therefore not the answer to this defect either.
+
+**Consequence for the phase.** `P100b3` (stop ranking unevaluated rows) is promoted to the primary
+fix of the whole phase - it is a comparator and display change, no engine work, and on this scenario
+it converts a dishonest 136-row ranking into an honest 3-row one with 133 rows plainly marked
+unmeasured. `P100b2` (the `results[0]` rate fallback) stays worth fixing as a fragility but is
+explicitly NOT this defect.
+
+**Report:** `research/OPTIMIZER_RANK_STABILITY.md`, indexed in `research/README.md` the same commit.
+Row count is **152**, not the ~126 I had been quoting from `P30e`'s older capture.
+
+**Process note worth carrying: I wrote a mechanism into the plan from a code read and it was wrong.**
+The chain was real - every link exists - but the defect fires before it. Writing H1-H3 down first is
+what made the refutation cheap and visible; had they been left implicit I would have "confirmed" the
+pool story by finding the pool code and stopping there. Predictions stated up front are worth most
+when they fail.
+
+
+## 2026-08-31 (cont.) - P100b1 shipped, P100a3 measured
+
+**`P100b1` SHIPPED v11.16d5.** The "Optimize for" goal now travels with the plan. Four sites, all
+following the `propTax` precedent for a field with no engine input to ride in: seeded from `?obj=` at
+the `OptimizerState` declaration (not in an init hook - `renderOptimizerTable` and the anchor-baseline
+pick both read it before one would run), emitted by `buildShareURL` only when non-default so existing
+links are byte-identical, saved as `optObjective` **beside** `getInputs()` rather than inside it (that
+object feeds `simulate()` and the MC cache hash; a ranking preference must not change either),
+restored by `applyScenario`, and `setOptObjective` now writes the `<select>` back - a control showing
+one goal while the table is ranked by another is worse than not restoring it.
+
+Verified in the browser on both loads: `?runtests&obj=mintax` gives **960 / 0** (502 in-page + 458
+node) with the state AND the selector on `mintax`; a plain load gives 766 / 0 and `taxflex`. Node
+suites 375/61/22 unchanged, so `TestTiers.EXPECTED` needed no edit - it pins node counts only, and
+the in-page suite grew by 4.
+
+**`P100a3` measured. `H4` CONFIRMED, `H5` SPLIT.**
+
+| metric set | dominated | frontier | % |
+|---|---:|---:|---:|
+| NW + Roth | 118 | 18 | 86.8% |
+| NW + Roth + tax | 109 | 27 | 80.1% |
+| NW + Roth + spend + tax | 90 | 46 | 66.2% |
+| + break-even | 84 | 52 | 61.8% |
+
+`H4` predicted ">50% dominated" and every metric set clears it. **`H5` splits:** the user's
+hand-picked plan IS non-dominated, but so is the `conveffect` winner - **that clause is refuted, and
+it matters.** The objective never picked a bad plan; it just said nothing about the other 133 rows.
+The defect was always silence, not a wrong answer.
+
+**The finding that shapes Stage D: the metric SET is the knob.** 18 rows on two metrics, 52 on five.
+"Show the frontier" moves the choice from *which objective* to *which metrics count* rather than
+removing it, and the phase now says so instead of implying the trade disappeared. It is still much
+weaker - metrics are columns the table already prints, and widening the set is monotone safe (a row
+on the frontier for a set stays on it for any superset). Recommended default is the four core
+metrics: 46 of 136, a 3x cut, **honestly not "a handful"**, which is how I had been describing it.
+
+Break-even is deliberately excluded from the default: 133 of these rows have no break-even year, so
+including it mostly measures whether a row was ever evaluated - Part 1's defect leaking into a second
+place.
+
+**Two cheap properties to pin as tests when Stage D builds:** the argmax of any reported metric is
+never dominated (so suppression can never hide an objective's winner - this is the safety argument
+for defaulting it on), and widening the metric set only ever grows the frontier.
+
+Report: `research/OPTIMIZER_RANK_STABILITY.md` Part 2, index row updated.
+
+
+## 2026-08-31 (cont.) - user challenge reshapes P100b3; the "mark it" answer was half an answer
+
+**User:** *"What's the point of marking unevaluated rows? Wouldn't a better strategy be to evaluate
+all rows using perhaps a second generic system (e.g. Net Wealth) so that there is still some meaning
+to the ordering?"* **Correct, and `P100b3` is rewritten around it.** Marking is honest but leaves 133
+of 136 rows ungraded, which does not help anyone CHOOSE - a table that refuses to order itself has
+swapped one problem for another.
+
+**Measuring the challenge turned up a fact neither of us had.** The 133 unranked rows are TWO groups,
+not one: **9 were fully evaluated and came back "conversions do not pay" - a measured $0 that the
+code discards** (`continue` on `optConv === 0` never records it) - and only 124 are genuinely unknown.
+Recording those zeros takes the graded set from 3 to 12 for free. Blank currently means both
+"measured, the answer is nothing" and "never asked", which are different facts.
+
+**Cost of the obviously-right answer, measured rather than asserted:** base sweep 1,535 ms; with the
+pool of 12, 6,238 ms; **392 ms per candidate**; **all 136 projects to ~55 seconds**. That is the real
+reason the cap exists and the concrete case for `P34` - a number, not a preference for a smaller
+table.
+
+**Revised design: two-key ordering, NOT a blended score.** Evaluated rows by effectiveness, then the
+rest by net wealth and labelled as such. A single blended number is rejected because conversion
+savings top out at $2.28M here while net wealth runs ~$10M - a naive blend sorts by scale and "rank
+40" would silently mean "40th by net wealth" under a column headed effectiveness, a new lie replacing
+the old one.
+
+**And it fixes the instability, which marking alone would not have.** A row's net wealth does not
+move when the user adopts a recommendation. **New hard dependency recorded:** that holds only once
+`P100b2` lands, because `afterTaxNWCurrentDollars` reads `sharedFutureIRARate`, which falls back to
+`results[0]` when the heirs rate is unset - measured identical (0.12) across both runs, but an
+observation, not a guarantee. `P100b2` must ship with or before `P100b3`.
+
+**Process note.** This is the second time in two days that a user challenge to a conclusion I had
+already written into the plan produced a better design (the first was the flat-0.85 correction in
+`P87c`). Both times the fix was to MEASURE the challenge rather than defend the position, and both
+times the measurement turned up a fact that neither the challenge nor the original had.
+
+`research/OPTIMIZER_RANK_STABILITY.md` Part 3; index row updated.
+
+
+## 2026-08-31 (cont.) - the priority-list proposal, named and measured
+
+**User generalized the fallback into a priority list over every metric** ("first by conversion tax
+savings, second by final Roth, third by break even, fourth by net wealth..."). Adopted; it supersedes
+the two-key ordering, which was the 2-level case of it.
+
+**Named precisely, because the phase now uses both and they are different tools.** This is
+LEXICOGRAPHIC ordering. **Pareto FILTERS** (drops rows beaten on every metric, 136 -> 46) and returns
+a set with no order; **lexicographic ORDERS** and filters nothing. They compose in that order.
+
+**The failure mode, measured before endorsing it.** A tie-break fires only when the higher key ties,
+and continuous dollar metrics essentially never do. Distinct values in 133 rows: net wealth **118**,
+lifetime tax 117, remaining IRA 102, final Roth 78, spend 39, break-even 15 (+67 missing). **With net
+wealth leading, priorities 2-8 would decide 15 rows** - an eight-level list would be seven levels of
+decoration.
+
+**Tolerance bands rescue it, and the number is good.** At a band of 1% of the metric's range:
+39 groups, **priority 2 decides 118 of 133 rows**, top group **10 plans**. That top group is exactly
+the shortlist the user was assembling by hand. 0.5% -> 108 rows; 5% -> 130 rows but the top group
+swells to 34.
+
+**Two per-metric facts worth encoding once.** `spend` collapses to 3 groups at EVERY band (nearly
+every plan funds the same goal) - a poor leading key, a good late tie-break. `breakEven` is an
+integer year, heavy ties, and missing on 67 rows.
+
+**New sub-item `P100b3c`, and it is a maintenance argument rather than a design one.** Nine
+objectives x eight metrics is 72 ordering decisions to author and defend - the kind of table that
+rots. One shared default order, per-objective overrides of the leading metric or two only.
+
+**What does NOT change:** the evaluated / not-evaluated partition survives, because lexicographic
+cannot order rows on a key they do not have and `conveffect`'s leading key exists for 12 rows of 136.
+`P100b3a` (record the zeros) is still needed. And a single blended score stays rejected.
+
+Report: `research/OPTIMIZER_RANK_STABILITY.md` Part 4; findings and index updated.
+
+
+## 2026-08-31 (cont.) - P101 opened: worked examples served from the site
+
+**User:** *"Maintaining a list of worked examples that can be loaded from the server via Load. For
+that each example will also need a notes/description."* Filed as `P101`, O2, not started.
+
+**The origin is the argument.** The scenario that reproduced `P100` was a worked example from a
+YouTuber's video. Two things followed: nothing in the tool could load it except a manual import, and
+it could not be committed, because it arrived under a real surname and this repo is public. A curated
+set fixes both - examples are publishable by construction and they ship with the tool.
+
+**The under-sold benefit: it is a test corpus.** Every example is a regression fixture. `P100` needed
+exactly that and had to settle for a gitignored local file, so its reproduction cannot be re-run by
+anyone else or by CI.
+
+**Four design facts worth having before anyone starts.**
+
+- **The directory must not start with an underscore.** This site is served by Jekyll (`_includes/`
+  exists), which treats `_`-prefixed directories as source and does not publish them. `examples/`.
+- **A manifest is required** - GitHub Pages serves no directory index, so the page cannot discover
+  files. `examples/index.json`, with the notes IN THE MANIFEST so the scenario files stay plain
+  `saveScenario` output and nothing new has to thread through `getInputs`, the URL or the version
+  check.
+- **`SCENARIO_VERSION` is the rot risk and it is not hypothetical.** It is 4, and `loadScenario`
+  filters on EXACT equality (`optimizer_ui.js:5598`), so every shipped example dies silently at the
+  next schema bump. Mitigation is a TEST (`P101b`), not discipline: a stale example must fail the
+  build rather than the user.
+- **Attribution and privacy are requirements, not courtesies.** An example reproducing published
+  material names and links its source, does not use anyone's name as an identifier, and says it is a
+  reconstruction. A real private user's plan never qualifies - which is what the `*.local.json`
+  gitignore rule added earlier today is for.
+
+Three open questions recorded rather than guessed: whether loading also switches tab or auto-runs;
+whether an example needs anything extra to be shareable (probably not - the `?`-URL carries the
+inputs); and what marks a loaded example on screen so it is not mistaken for the user's own plan.
+
+
+## 2026-08-31 (cont.) - P100b3b/b3c SHIPPED v11.16d6: secondary ranking
+
+**User approved option C**: one shared default chain, plus a `conveffect` override in their own
+priority order. Shipped as `OPT_TIEBREAK_KEYS` + `OPT_TIEBREAK_DEFAULT` in `optimizer_core.js`, with
+an optional `tiebreak` array on any objective.
+
+- **Default:** net wealth, final Roth, spend, lifetime tax, remaining IRA, break-even, then `_id`.
+- **`conveffect` override (the user's order):** final Roth, break-even, net wealth, remaining IRA,
+  account spread, lifetime tax, spend.
+- **`taxflex` and `earliestbe` untouched** - custom rankers with their own tie handling; a blanket
+  re-sort would undo what makes them custom.
+
+**Verified on the user's own scenario, and this is the number that matters.** Run the sweep, adopt
+`IRA Draw 9%`, run again: **151 of 152 rows are common to both runs and their relative order is
+IDENTICAL - zero positions differ.** Only the current-plan row changes, which it should. Under
+v11.16d4 the same action moved a row from 103rd to 20th. The top of the table now reads: three
+measured `⇌` rows, then the rest ordered by final Roth (20.4M, 20.2M, 20.2M...) instead of by array
+position.
+
+**EXACT ties only; tolerance bands are NOT built.** That is the remaining half of `b3b` and it is
+not the urgent half here - `conveffect`'s 133 rows tie exactly, so the chain fires on all of them.
+Bands matter for objectives whose leading metric already discriminates (net wealth has 118 distinct
+values in 133 rows).
+
+**A test caught a real weakness rather than confirming the design.** `_id` was inside the subtracting
+chain, so a non-numeric id produced `NaN`, which is falsy, and the total-order guarantee silently
+evaporated - re-introducing array-order ranking one level down, invisibly. Now compared with `<`/`>`
+outside the chain. The test that found it ranked rows keyed `'x'/'y'/'z'`. Worth carrying: a
+comparator built on subtraction is only total for numbers, and "the ids are always numeric" is an
+assumption a fixture can break without anyone noticing.
+
+Suites **382**/61/22; `TestTiers.EXPECTED` and `.githooks/README.md` reconciled. Seven new node tests,
+including two that discriminate the default from the override by ranking the SAME rows both ways.
+
+
+## 2026-08-31 (cont.) - user correction: perf claims need a target machine, not a percentage
+
+**User:** *"the user running this tool may have a much slower system than what is being tested on, so
+efficiency does matter."* Right, and it corrects the SHAPE of my argument rather than one number.
+
+**The reference machine is an AMD Ryzen AI 9 HX 370** - 12c/24t, a 2025 flagship - and I never said
+so beside any timing. Scaled by single-core speed (the sweep is single-threaded, which is what
+`P34`'s worker item is for): the 6.2 s sweep becomes **12.5 s at 2x, 21.8 s at 3.5x, 37.4 s at 6x,
+62.4 s at 10x**. The audience is people planning retirement, so a ten-year-old laptop is an ordinary
+machine. At 22 to 62 seconds a user concludes the page has hung.
+
+**The reasoning error, stated plainly so it is not repeated.** "0.02% of the sweep" is
+machine-INVARIANT and stays true at every tier - which is exactly what makes it seductive. It is not
+a verdict on its own. It becomes one only after the ABSOLUTE total is shown acceptable on the slowest
+machine that matters. I used the ratio to mean "not worth caring about", and that inference does not
+survive a device where the thing it is a percentage of has become unusable.
+
+**Where it points, and it is NOT the bisection I just changed.** `nonSSIncomeForMAGI` is 0.021% of
+the sweep at every tier - 13 ms even at 10x. **The conversion search is 75.4%**, also at every tier.
+So the whole slow-machine problem is `P34`, and this finally gives that phase the target it was
+missing: not "make it faster" but **a sweep that stays usable at 3.5x to 6x slower single-core
+speed**. A sweep under ~10 s at 3.5x implies under ~3 s at reference, which is a 2x cut and a number
+to profile against.
+
+Recorded in `findings.md`, in the `P34` phase as a target section, on the NOW-table row, and saved to
+memory as a standing rule (state the reference machine; give the absolute on a slow target; scale by
+SINGLE-core speed for browser tools).
+
+**I have NOT re-prioritized `P34`** - it sits at O1. There are now two independent arguments for O0:
+it gates `P100` Stage E, and it is the entire slow-machine story. That is the user's call.

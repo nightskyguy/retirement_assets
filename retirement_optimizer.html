@@ -65,7 +65,6 @@
 	     Keep the plain hex form on the next version bump. -->
 	<script src="optimizer_ui.js?v=1116d0"></script>
 	<script src="optimizer_tests.js?v=1116d0"></script>
-	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
 
@@ -1396,13 +1395,6 @@ function updateCompAdvisory() {
         rtnEl.textContent = r == null ? '—' : (r >= 0 ? '+' : '') + (r * 100).toFixed(1) + '%';
     }
 }
-
-document.addEventListener('DOMContentLoaded', function() {
-    // document.getElementById('drawer-changelog').innerHTML = drawerContent.changelog;
-    // document.getElementById('drawer-howto').innerHTML = drawerContent.howToUse;
-    // document.getElementById('drawer-planned').innerHTML = drawerContent.planned;
-    // document.getElementById('drawer-background').innerHTML = drawerContent.background;
-});
 
 // Show the selected state's tax-data year (+ staleness) and any caveat note below the State picker.
 function updateStateNote() {

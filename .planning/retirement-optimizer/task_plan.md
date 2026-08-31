@@ -17,7 +17,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O1** | P35 | Phased; **O1 by user 2026-08-31** - cannot be "ideal" until P75/P36 land | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
-| **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
+| **O1** | P34 | Conversion search is 75% of a sweep; 22-62 s on an older laptop | `P34a` |
 | **O1** | P28j | Withdrawal timing keys off conversion; the $1,000 nobody chose | `P28ja` |
 
 **P86 COMPLETE on this branch, v11.1690, commits bd2c875..976452e.** Every displayed dollar honors the Future-$/Current-$ toggle: running totals are UI-computed sums of deflated years (Spendable renamed SumSpendable), RMD/QCD/fee-average/ConvTax/BreakEven follow, and the whole MC tab deflates each path by its OWN inflation (flat-CAGR kept only as stale-worker fallback). Suites **358**/61/22.
@@ -4339,6 +4339,38 @@ Break Even dual-sim (`optimizer_core.js:2455-2498`) is +1 sim per converting row
 - **Q4.** Does a two-level cache change any displayed number? The answer must be zero.
 
 **Tasks:**
+### The target, set 2026-08-31 after a user correction, and it is what this phase was missing
+
+**The user's point:** *"the user running this tool may have a much slower system than what is being
+tested on, so efficiency does matter."* Every timing in this repo was taken on an **AMD Ryzen AI 9
+HX 370** - a 2025 flagship - and none of them said so. Scaled by single-core speed, because the sweep
+is single-threaded, which is exactly what the worker item here is for:
+
+| device | x | full sweep | conversion search / candidate |
+|---|---:|---:|---:|
+| reference, 2025 flagship | 1 | 6.2 s | 392 ms |
+| mid laptop ~2020 | 2 | 12.5 s | 784 ms |
+| older laptop ~2016 | 3.5 | **21.8 s** | 1.4 s |
+| budget Chromebook / tablet | 6 | **37.4 s** | 2.4 s |
+| very old or throttled | 10 | **62.4 s** | 3.9 s |
+
+**The audience is people planning retirement, so a ten-year-old laptop is an ordinary machine, not an
+edge case.** At 22 to 62 seconds a user concludes the page has hung.
+
+**Measured decomposition:** base sweep 1,535 ms, with the pool of 12 candidates 6,238 ms. **The
+conversion search is 75.4% of the sweep**, at every device tier, because a ratio does not change with
+clock speed. Everything else is noise by comparison - `nonSSIncomeForMAGI`, the phase's most recently
+questioned inner loop, is 0.021% and stays 13 ms even at 10x.
+
+**SO THE TARGET IS NOT "make it faster".** It is: **the sweep stays usable at 3.5x to 6x slower
+single-core speed**, which means the conversion search has to stop being three quarters of it. Pick
+a number before building - a sweep under ~10 s at 3.5x implies under ~3 s at reference, a 2x cut -
+and profile against it rather than against a stopwatch on a fast machine.
+
+**And state the reference machine on every timing this phase records.** A relative figure is
+machine-invariant and stays true everywhere, but it is only a verdict once the ABSOLUTE is shown
+acceptable on the slowest machine that matters.
+
 - [ ] **P34a** — **Baseline profile FIRST**, before P29/P31/P32 add sweep arms, so later phases have a comparison
 - [ ] **P34b** — Q1 instrumentation with scored predictions
 - [ ] **P34c** — Tier-1 #3 (lazy stop-year) — smallest, zero-risk, ship it standalone

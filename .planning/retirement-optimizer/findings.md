@@ -3668,3 +3668,38 @@ closure and the initial `magiOf(lo)` - not by the loop body.
 `feedback_mc_bench_paths` already says to alternate arms and compare minima, and I did not, on a
 difference of a few percent. The rule earns its keep on small deltas, which is exactly when it is
 tempting to skip.
+
+
+## Perf claims must name the machine, and "% of the total" is not a verdict  *(2026-08-31, user correction)*
+
+**The user's point:** *"the user running this tool may have a much slower system than what is being
+tested on, so efficiency does matter."* Correct, and it corrects the SHAPE of the argument I used,
+not just one figure.
+
+**The reference machine for every timing in this file is an AMD Ryzen AI 9 HX 370** (12 cores / 24
+threads, 2025 flagship mobile). That is close to best-case consumer hardware, and it was never stated
+alongside the numbers. Scaled by single-core speed - the Optimizer sweep is single-threaded, which is
+exactly what `P34`'s worker item is for:
+
+| device | x | full sweep | conversion search / candidate |
+|---|---:|---:|---:|
+| reference (Ryzen AI 9 HX 370, 2025) | 1 | **6.2 s** | 392 ms |
+| mid laptop ~2020 (i5-1035G1) | 2 | 12.5 s | 784 ms |
+| older laptop ~2016 (i5-6200U) | 3.5 | **21.8 s** | 1.4 s |
+| budget Chromebook / low-end tablet | 6 | **37.4 s** | 2.4 s |
+| very old or thermally throttled | 10 | **62.4 s** | 3.9 s |
+
+**The tool's audience is people planning retirement.** A ten-year-old laptop is an ordinary machine
+for that audience, not an edge case. A 22-to-62 second sweep is not slow, it is broken - a user will
+conclude the page has hung.
+
+**The rule this establishes.** A relative figure like "0.02% of the sweep" is machine-INVARIANT and
+stays true at every tier - but it is not a verdict on its own. It only becomes one after the ABSOLUTE
+total is shown to be acceptable on the slowest machine that matters. I used the ratio to mean "not
+worth caring about", and that inference does not survive a device where the thing it is a percentage
+OF has become unusable. **State the reference machine, then state the absolute on the slow target.**
+
+**Where it points, and it is not the bisection.** `nonSSIncomeForMAGI` stays at 0.021% of the sweep
+on every tier - 13 ms even at 10x. The conversion search is **75.4%** of the sweep at every tier.
+So the slow-machine problem is entirely `P34`, and this gives `P34` the target it has been missing:
+not "make it faster" but **a sweep that stays usable at 3.5x to 6x slower single-core speed**.

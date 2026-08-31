@@ -7239,3 +7239,35 @@ assumption a fixture can break without anyone noticing.
 
 Suites **382**/61/22; `TestTiers.EXPECTED` and `.githooks/README.md` reconciled. Seven new node tests,
 including two that discriminate the default from the override by ranking the SAME rows both ways.
+
+
+## 2026-08-31 (cont.) - user correction: perf claims need a target machine, not a percentage
+
+**User:** *"the user running this tool may have a much slower system than what is being tested on, so
+efficiency does matter."* Right, and it corrects the SHAPE of my argument rather than one number.
+
+**The reference machine is an AMD Ryzen AI 9 HX 370** - 12c/24t, a 2025 flagship - and I never said
+so beside any timing. Scaled by single-core speed (the sweep is single-threaded, which is what
+`P34`'s worker item is for): the 6.2 s sweep becomes **12.5 s at 2x, 21.8 s at 3.5x, 37.4 s at 6x,
+62.4 s at 10x**. The audience is people planning retirement, so a ten-year-old laptop is an ordinary
+machine. At 22 to 62 seconds a user concludes the page has hung.
+
+**The reasoning error, stated plainly so it is not repeated.** "0.02% of the sweep" is
+machine-INVARIANT and stays true at every tier - which is exactly what makes it seductive. It is not
+a verdict on its own. It becomes one only after the ABSOLUTE total is shown acceptable on the slowest
+machine that matters. I used the ratio to mean "not worth caring about", and that inference does not
+survive a device where the thing it is a percentage of has become unusable.
+
+**Where it points, and it is NOT the bisection I just changed.** `nonSSIncomeForMAGI` is 0.021% of
+the sweep at every tier - 13 ms even at 10x. **The conversion search is 75.4%**, also at every tier.
+So the whole slow-machine problem is `P34`, and this finally gives that phase the target it was
+missing: not "make it faster" but **a sweep that stays usable at 3.5x to 6x slower single-core
+speed**. A sweep under ~10 s at 3.5x implies under ~3 s at reference, which is a 2x cut and a number
+to profile against.
+
+Recorded in `findings.md`, in the `P34` phase as a target section, on the NOW-table row, and saved to
+memory as a standing rule (state the reference machine; give the absolute on a slow target; scale by
+SINGLE-core speed for browser tools).
+
+**I have NOT re-prioritized `P34`** - it sits at O1. There are now two independent arguments for O0:
+it gates `P100` Stage E, and it is the entire slow-machine story. That is the user's call.

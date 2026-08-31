@@ -3,3 +3,6 @@ removed_functions.js
 v6i_retirementopt_styles.css
 /.claude/
 netcitizen.us.*
+
+# P100: real user scenarios used as reproduction fixtures. Personal financial data - never commit.
+*.local.json

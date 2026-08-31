@@ -3483,3 +3483,141 @@ Prefer the first. The badge a user sees is the plain-load one.
 an in-page suite makes (here 1 -> 6 on load) needs no reconciliation there, and neither does
 `.githooks/README.md`. That is the opposite of the repo's usual test-count rule, so it is worth
 stating rather than assuming.
+
+
+## P87c1: which taxable-SS regime a ceiling-filling year sits in  *(2026-08-31)*
+
+**The question that decides the fix.** `underfill_harness.js` found the short is `0.150000` of the
+benefit, min equal to max. A constant ratio means the taxable share was pinned at its **85% cap** in
+every one of those years, so it did not move with the draw and the P87c circularity was inert there.
+If that held everywhere, the fix would be a closed-form subtraction of `0.85 x SS`.
+
+**It does not hold.** `.test_harnesses/ssbasis_harness.js`, 720 cells (10 ceiling families x 4
+benefit sizes x 3 IRA sizes x 3 spend levels x 2 filing statuses), 5,182 ceiling-bound years - years
+where Social Security is paid, the IRA still holds money, and a ceiling was computed:
+
+| regime | years | share | under-filled | headroom never used |
+|---|---:|---:|---:|---:|
+| ZERO (`taxableSS` = 0) | 6 | 0.1% | 6 | $213,043 |
+| **SLOPED** (0 < `taxableSS` < 0.85 SS) | **184** | **3.6%** | **144** | **$4,359,006** |
+| CAPPED (`taxableSS` = 0.85 SS) | 4,992 | 96.3% | 1,520 | $12,205,886 |
+
+SLOPED appears in **31 of 270 populated cells** and is concentrated exactly where predicted: the LOW
+ceilings. Every one of the top 15 is `Fed 10%` or `Fed 12%`.
+
+**A WRONG CLAIM WAS MADE HERE AND THE USER CORRECTED IT, SAME DAY.** The first version of this note
+said a flat `0.85 x SS` subtraction would OVERSHOOT the ceiling in those sloped years. It cannot, and
+the algebra is one line: with `N = L - 0.85 SS`, MAGI is `N + taxableSS`, and `taxableSS <= 0.85 SS`
+by statute, so `MAGI <= L` in every tier, always. **85% is the MAXIMUM taxable share, so assuming it
+is the CONSERVATIVE assumption, not an aggressive one.** Flat 85% under-fills in the lower tiers; it
+never breaches. The user's framing is the right one: start from 85% and raise the ceiling only where
+the taxable share is demonstrably lower.
+
+That correction changes what `P87c2` has to prove. Both candidate forms are safe, so the question is
+not safety but how much headroom each one recovers - which is a measurement, not an argument.
+
+### The inversion, and why it is one line of algebra and not a case analysis
+
+Read out of `taxengine.js:1404-1413`, MAGI and provisional income differ by exactly two terms:
+
+    MAGI        = federalAGI + taxExemptInterest
+    provisional = (MAGI - taxableSS) + 0.5 x SS
+
+So with `N` = the non-SS part of MAGI, the whole relation is `MAGI = N + taxableSS(N + 0.5 SS)`.
+Call that `f(N)`. It is **monotone non-decreasing** with slope in {1, 1.5, 1.85, 1} - the four
+segments of the statutory formula - and sizing a draw to a ceiling `L` is just `N = f-inverse(L)`,
+after which the room is `N` minus the non-SS base the year already has. The engine's current line
+uses `N = L - fullSS`, which is the defect stated in inverse form.
+
+**Invert by bisection on `f`, calling `calculateTaxableSocialSecurity` itself.** A hand-derived
+closed form is available (the knots are at `P = T1`, `P = T2`, and the two `min()` saturations) but
+it would be a SECOND SOURCE OF TRUTH for the SS split - precisely the failure mode `P92a` named for
+the deduction, where the ceiling and the tax must not be able to disagree. Monotonicity makes
+bisection exact to floating point and immune to the case analysis being wrong. Cost is ~50 evaluations
+of a 10-line pure function per ceiling-bound year; measure it against `P34` rather than assuming it
+free.
+
+**Watch the ZERO row.** Six years, but $213k of short - about $35k a year against a $30k single
+benefit, so something beyond the SS term contributes there. Not diagnosed; it is 0.1% of years and
+does not change the fix, but it is not fully explained either.
+
+## P87c2: three arms, and the exact inversion dominates on every axis  *(2026-08-31)*
+
+`.test_harnesses/ssbasis_arms_harness.js`, same 720-cell grid as `P87c1`, three arms of the research
+input `ceilingSSTaxableBasis`:
+
+| arm | under-filled years | headroom never used | breach $ | summed final NW | summed lifetime tax | summed conversions |
+|---|---:|---:|---:|---:|---:|---:|
+| OFF (today, full benefit) | 1,670 | $16,777,935 | $2,466,897,543 | $9,635,380,505 | $2,195,213,324 | $602,941,620 |
+| `flat85` (subtract 0.85 x SS) | 144 | $3,586,302 | $2,452,011,992 | $9,645,177,584 | $2,190,857,792 | $612,592,921 |
+| **`exact`** (invert MAGI) | **0** | **$0** | **$2,447,324,881** | **$9,648,225,425** | **$2,189,662,668** | **$613,746,844** |
+
+**There is no trade to make.** `exact` fills every ceiling-bound year to the dollar, and it does so
+while breaching LESS than today ($2.4473B against $2.4669B), ending richer, paying less lifetime tax
+and converting more. `flat85` recovers 79% of the unused headroom and is strictly safe, so it is a
+legitimate fallback - but it leaves $3.59M on the table across the grid for no gain anywhere.
+
+**Why the breach total FALLS when the plan draws MORE.** Same mechanism `P87a` found: voluntary draws
+taken inside the ceiling shrink the IRA, so the forced RMDs that later blow through the ceiling are
+smaller. The breach column is dominated by those forced years, not by the sizing line, which is what
+makes it a useful control here - the fix could not have hidden a new breach behind it.
+
+**Read the year counts as a caveat, not a result.** Ceiling-bound years fall 5,182 -> 5,154 -> 5,124
+across the arms, because the filter requires the IRA to still hold money and the fuller draws empty
+it marginally sooner in a few cells. The three columns are therefore not over an identical year set.
+The direction is unaffected - `exact` reaches zero short on its own year set, and the OFF arm's
+$16.8M is measured on the largest set of the three.
+
+**It also closed the `P87c1` loose end.** Six ZERO-regime years carried $213k of short that the SS
+term alone did not explain. Under `exact` they land on the ceiling exactly, so the residual was the
+same basis error read through a tier where the taxable share is 0 rather than 0.85.
+
+
+## The `w` notation in the gap-fill weight sweeps, defined once  *(2026-08-31, after it confused a reader)*
+
+Every P30 table uses a bare `w`. It was never defined in any of them, and it is ambiguous in the one
+way that matters: read it as the Cash share and every result inverts.
+
+`gapFillWeights` is a PAIR, ordered `[Brokerage, Cash]` (`optimizer_core.js:2318` sets
+`order = ['Brokerage','Cash']` and `weight = [40,60]` by default). **`w` is a single percentage -
+Brokerage's share - and the pair is always `[w, 100 - w]`.** The harness sweeps exactly that
+(`gapfill_harness.js:159`) and prints its own legend at `:209`: "Weights are Brokerage's share;
+w=40 is today."
+
+| `w` | pair | gap fill draws |
+|---|---|---|
+| 0 | `[0, 100]` | all from Cash, spilling to Brokerage once Cash is gone |
+| 40 | `[40, 60]` | today: 40% Brokerage, 60% Cash |
+| 100 | `[100, 0]` | all from Brokerage, spilling to Cash once Brokerage is gone |
+
+**Neither endpoint is "that account only",** because `calculateWithdrawals` cascades the shortfall.
+`[0,100]` drains Cash then draws Brokerage, which IS the bracket family's sequence - the reframing
+that made `P30h` worth running, since it turned "which weight" into "should the blend exist at all".
+
+**The lesson, and it is the same one `research/README.md` already carries for report codes:** a
+single-letter parameter that appears in every table has to be defined where the tables are, not only
+in the harness that emitted them. This one survived three studies and a shipped decision before
+anyone asked what it meant.
+
+
+## Lexicographic vs Pareto, and why a priority list needs tolerance bands  *(2026-08-31, P100)*
+
+**They are different tools and the phase uses both.** Pareto FILTERS - it drops rows beaten on every
+metric, 136 -> 46 on the measured scenario - and produces a set with no order. Lexicographic ORDERS -
+sort by metric 1, ties broken by metric 2 - and filters nothing. Compose them in that order.
+
+**A strict priority list degenerates to its first key.** A tie-break only fires when the higher key
+actually ties, and continuous dollar metrics essentially never do. Measured over 133 rows: net wealth
+118 distinct values, lifetime tax 117, remaining IRA 102, final Roth 78, spend 39, break-even year 15
+(plus 67 rows with none). **With net wealth leading, priorities 2 through 8 would decide 15 rows.**
+
+**Tolerance bands are what make it work.** Treat rows within a band of the leading key as tied. At
+**1% of the metric's range**: 39 groups, **priority 2 decides 118 of 133 rows**, top group 10 plans.
+At 0.5%: 108 rows. At 5%: 130 rows but the top group swells to 34.
+
+**Per-metric shape matters and should be encoded once.** `spend` collapses to 3 groups at every band,
+because nearly every plan funds the same goal - a poor leading key, a good late tie-break.
+`breakEven` is an integer year with heavy ties and 67 rows missing it entirely.
+
+**Authoring cost is the trap.** Nine objectives x eight metrics is 72 ordering decisions. Define ONE
+default priority order and let each objective override only its leading metric or two.

@@ -3442,3 +3442,44 @@ holds millions. A raw table of shortfalls shows both and looks like noise.
 It is not - person 2 claims at 67 in 2031. I had checked only person 1, whose benefit starts in 2032.
 The 2031 short is the first SS year, not a counter-example, and treating it as one nearly sent this
 after the wrong mechanism.
+
+
+## 2026-08-31 - P98: in-page tests run at PARSE time, and three controls are empty then
+
+**The finding is a rule, not a number.** `retirement_optimizer.html` calls `runTests?.()` at TOP
+LEVEL. Three controls on that page are filled by the `DOMContentLoaded` handler and are therefore
+EMPTY (or holding a markup placeholder) while the whole in-page suite runs:
+
+| control | filled by | what a test reads instead |
+|---|---|---|
+| `#stratRate` | `generateStratRateOptions()` | one `<option value="24">` with no `data-limit` |
+| `#STATEname` | `generateStateOptions()` | whatever the markup ships |
+| nerdknob visibility | `applyNerdKnobVisibility()` | the markup default only |
+
+A test that reads one of these live is measuring WHEN IT RAN, not what it claims. The failure mode is
+silent in the direction that matters: `Number(undefined)` is `NaN`, and `assertEqual(NaN, x)` fails
+with a message that names the data rather than the emptiness.
+
+**`?runtests` can mask it, and did.** Unsafe suites gated behind that flag may BUILD the control as a
+side effect - `acaOptionsUngated` calls `refreshStratRateOptions()` - so a check placed after one of
+them is green with the flag and red without it. **A check whose verdict depends on the URL is the
+signature of this defect.** That asymmetry is the diagnostic; look for it first.
+
+**Two safe patterns, and which to pick:**
+
+- The builder is PURE (`generateStratRateOptions`, `generateStateOptions`): build a detached copy -
+  `const sel = document.createElement('select'); sel.innerHTML = generateStratRateOptions();` - and
+  assert on that. No `unsafeTest()` gate needed, so the check still runs on plain loads, which is
+  where a reader sees the badge.
+- The builder MUTATES the live page (`refreshStratRateOptions`, which ends in
+  `clampStratRateSelection()`): gate with `unsafeTest()` and accept that it only runs with
+  `?runtests`. This is what `acaOptionsUngated` does, and its comment at `optimizer_tests.js:2205`
+  already stated the parse-time trap - the later `dropdownLimitsMatchTheEngine` simply did not
+  inherit it.
+
+Prefer the first. The badge a user sees is the plain-load one.
+
+**Counting note:** `TestTiers.EXPECTED` pins the NODE suite totals only. Changing how many assertions
+an in-page suite makes (here 1 -> 6 on load) needs no reconciliation there, and neither does
+`.githooks/README.md`. That is the opposite of the repo's usual test-count rule, so it is worth
+stating rather than assuming.

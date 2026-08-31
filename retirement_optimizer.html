@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.16cf</title>
+    <title>Retirement Optimizer 11.16d0</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -45,7 +45,7 @@
 	     entry's HTML into the LATEST CHANGE banner during parse, and this has to sweep
 	     the document after that copy exists. See doclinks.js. -->
 	<script src="doclinks.js?v=1113d0" defer></script>
-	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=111670">
+	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=1116d0">
 	<style>
     .toggle { display: flex !important; }
     .share-panel { display:none; position:fixed; top:60px; right:1.5rem; z-index:800; background:#fff; border:1px solid #27ae60; border-radius:8px; padding:.85rem 1rem; width:min(520px,calc(100vw - 3rem)); box-shadow:0 8px 32px rgba(0,0,0,.2); }
@@ -59,12 +59,12 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1116aa"></script>
-	<script src="optimizer_core.js?v=1116aa"></script>
+	<script src="optimizer_core.js?v=1116d0"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=1116b0"></script>
-	<script src="optimizer_tests.js?v=1116cf"></script>
+	<script src="optimizer_ui.js?v=1116d0"></script>
+	<script src="optimizer_tests.js?v=1116d0"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -891,10 +891,14 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="display"><b>11.16cf</b>
-					<strong>The Documentation tab no longer reports a test failure that was not one.</strong>
-					The Documentation tab read <strong>Documentation ❌ tests failed</strong> on every load, over one failed test about the Limit menu's 24% entry. <strong>No calculation was affected, and nothing in the menu was wrong.</strong>
-					<a href="optimizer_changelog.md#11.16cf" target="_blank" rel="noopener">Details</a>
+				<li data-flag="display"><b>11.16d0</b>
+					<strong>The column a note points at is now one click away.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>Where a note names a column in Annual Details, that name is now a link. Clicking it opens Annual Details, turns on the category the column belongs to, scrolls to the column and highlights it for a moment. <strong>The columns you already had stay exactly as you left them</strong>, and nothing about your plan is recalculated or reloaded. If the column is all zeros, Show Zero is turned on so it is still there to read. The same links are in the How To, on the columns and tabs it sends you to.</li>
+					<li><strong>ACA Cliff plans get a new acaBreach column</strong>, marked Yes in each year the cap could not be held alongside the Spend Goal. It is blank on plans not using an ACA cap, and hidden when it is blank throughout. The note under an ACA cap named this column before it existed.</li>
+					<li>The Documentation tab read <strong>Documentation ❌ tests failed</strong> on every load, over one failed test about the Limit menu's 24% entry. <strong>No calculation was affected, and nothing in the menu was wrong.</strong></li>
+					</ul>
+					<a href="optimizer_changelog.md#11.16d0" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="behavior"><b>11.16b0</b>
 					<strong>Fill Fed Bracket now fills the bracket.</strong>
@@ -1042,9 +1046,9 @@
 				</li>
 				<li><strong>What is &ldquo;Break Even&rdquo;?</strong> When your plan does Roth conversions, the tool quietly runs your entire plan a second time with the conversions removed: the money stays in the traditional IRA, no conversion tax is paid, and that bigger IRA later forces bigger Required Minimum Distributions, taxed in whatever bracket you are actually in those years (including the higher Single rates a surviving spouse pays, and any Medicare IRMAA surcharges the RMDs trigger). Each year the two plans are compared on equal footing, and the earliest year the converting plan pulls ahead <strong>and stays ahead for the rest of the plan</strong> is marked as <strong>Break Even</strong>. A year where the converting plan is only briefly ahead before falling behind again does not count. It only appears if conversions actually happen, and shows &ldquo;&mdash;&rdquo; if the lead never becomes permanent. When it does show &ldquo;&mdash;&rdquo;, a &#9432; appears next to it; click that to pinpoint exactly which conversion year is the one that erases the lead for good, and how far the plan got before that.
 				<p style="margin:6px 0 0;">Both plans are compared by after-tax portfolio <strong>value</strong>: taxable (IRA) assets are reduced by the tax that will eventually be owed on them, and non-taxable (Roth) assets count at face value. The net figure is shown as <i>Total Wealth</i> on the main chart. The IRA discount rate is either each plan's own current tax rate, or the Marginal Heirs Tax if you entered one (see 4. Assumptions). Conversions pay tax early, so the no-conversion plan usually leads at first; the crossover often lands when RMDs ramp up, or when one spouse passes away and the survivor&rsquo;s tax rate jumps when filing Single, aka &ldquo;the widow penalty&rdquo;.</p>
-				<p style="margin:6px 0 0;">The year-by-year numbers are in <i>Annual Details</i> &rarr; <i>Opp. Cost</i> (the <i>convOC</i> column; <i>excessOC</i> is the same comparison for surplus IRA withdrawals banked to Cash, using the same permanent-crossover definition of Break Even). One caveat: with <i>Guyton-Klinger</i> guardrails the no-conversion plan may adjust spending on different years, since the guardrails react to that plan's own portfolio. That is the honest comparison, not an error.</p>
+				<p style="margin:6px 0 0;">The year-by-year numbers are in <span onclick="showAnnualColumns('convOC','excessOC')" style="cursor:pointer;color:#2980b9;text-decoration:underline;text-decoration-style:dotted;"><i>Annual Details</i> &rarr; <i>Opp. Cost</i></span> (the <i>convOC</i> column; <i>excessOC</i> is the same comparison for surplus IRA withdrawals banked to Cash, using the same permanent-crossover definition of Break Even). One caveat: with <i>Guyton-Klinger</i> guardrails the no-conversion plan may adjust spending on different years, since the guardrails react to that plan's own portfolio. That is the honest comparison, not an error.</p>
 				</li>
-				<li><strong>What does &ldquo;Optimize for&rdquo; do?</strong> The Optimizer always tests the same set of strategies. What changes is how they are <em>ranked</em>. The <i>Optimize for</i> selector at the top of the Optimizer tab picks the goal used to sort the table, so the best plan for that goal appears first, the &#9875; baseline moves to the best no-conversion plan under the same goal, and the <i>Rank</i> column renumbers to match. It also decides <strong>which columns the table shows</strong>: each goal keeps the handful of columns that answer its own question and puts the rest away, so you read ten columns instead of twenty-one. It never changes the underlying numbers, only which plan the tool puts in front of you and which figures it shows about that plan. Nothing is discarded - the <strong>Show all columns</strong> link beside the selector puts every column back on screen at once, and the goal still sets the row order. Clicking any visible column header sorts by that column instead; changing the goal, or switching the columns back, returns the table to goal order. Hover over any row for its spend goal and how many years it funded. The choices:
+				<li><strong>What does &ldquo;Optimize for&rdquo; do?</strong> The <span onclick="goToTab('tab-opt')" style="cursor:pointer;color:#2980b9;text-decoration:underline;text-decoration-style:dotted;">Optimizer</span> always tests the same set of strategies. What changes is how they are <em>ranked</em>. The <i>Optimize for</i> selector at the top of the Optimizer tab picks the goal used to sort the table, so the best plan for that goal appears first, the &#9875; baseline moves to the best no-conversion plan under the same goal, and the <i>Rank</i> column renumbers to match. It also decides <strong>which columns the table shows</strong>: each goal keeps the handful of columns that answer its own question and puts the rest away, so you read ten columns instead of twenty-one. It never changes the underlying numbers, only which plan the tool puts in front of you and which figures it shows about that plan. Nothing is discarded - the <strong>Show all columns</strong> link beside the selector puts every column back on screen at once, and the goal still sets the row order. Clicking any visible column header sorts by that column instead; changing the goal, or switching the columns back, returns the table to goal order. Hover over any row for its spend goal and how many years it funded. The choices:
 					<ul style="margin:6px 0 0;">
 						<li><strong>Tax Flexibility</strong> (the default) favors plans that finish with your money spread evenly across the three tax treatments: pre-tax (IRA), Roth, and taxable (brokerage and cash). An even spread means that in any future year you can draw from whichever account is cheapest at the time, rather than being forced into whatever one account you have left. Because a plan that simply runs out of money would technically be perfectly &ldquo;even&rdquo; at zero, this only compares plans that also finish among the wealthiest, then picks the most evenly divided of those.</li>
 						<li><strong>Maximum Net Wealth</strong> ranks by after-tax wealth remaining at the end of the plan, with the tax still owed on the IRA subtracted first. This is the estate or legacy view.</li>
@@ -1066,7 +1070,7 @@
 					<strong>Seeing real (inflation-adjusted) values.</strong> All dollar amounts in Annual Details are shown in <em>future nominal dollars</em> by default. Use the <strong>Future $ / Current $</strong> toggle in the tab bar (left of Annual Details / Charts / Optimizer / Monte Carlo) to restate every balance and income figure in today's purchasing power - this is the clearest way to judge whether your plan preserves your standard of living over time.
 					<br><br>
 					<i>Cash Interest</i> is for HYSA and money-market holdings. <i>Inflation</i> drives spending-goal escalation; <i>CPI/COLA</i> drives bracket indexing and SS cost-of-living adjustments (they often differ). Medicare/IRMAA dollar amounts grow at <i>CPI + Inflation</i> combined.</li>
-				<li><strong>After Changes...</strong> Changes to any input - balances, rates, ages, strategy switches, or any other value - trigger an immediate recalculation. On the <i>Annual Details</i> table, rows are highlighted yellow when filing status changes to Single; pink/red means the portfolio cannot cover the required draw (a real shortfall - for the strict <i>ACA Cliff</i> strategy this means the plan is untenable at that spend, and for <i>Ordered</i> a small residual can remain because the strategy will not step outside your chosen sequence). The <code>ForcedIRA</code> column shows where spending was funded by drawing extra IRA after Cash, Brokerage and Roth ran out; for the soft <i>Fill Bracket / IRMAA</i> strategies that draw goes above the ceiling and <code>BracketOverage</code> shows by how much. The <i>Balances</i> chart has a <i>Both / Mine / Spouse</i> toggle. The <i>Optimizer</i> sweeps all strategy variations and highlights the best result per column. The <i>Monte Carlo</i> tab runs all variations against stochastic return sequences and reports survival rates. Both tabs skip a full rebuild if inputs are unchanged. Use <i>Import/Export</i> to save, load, or delete named scenarios.</li>
+				<li><strong>After Changes...</strong> Changes to any input - balances, rates, ages, strategy switches, or any other value - trigger an immediate recalculation. On the <i>Annual Details</i> table, rows are highlighted yellow when filing status changes to Single; pink/red means the portfolio cannot cover the required draw (a real shortfall - for the strict <i>ACA Cliff</i> strategy this means the plan is untenable at that spend, and for <i>Ordered</i> a small residual can remain because the strategy will not step outside your chosen sequence). The <span onclick="showAnnualColumns('ForcedIRA')" style="cursor:pointer;color:#2980b9;text-decoration:underline;text-decoration-style:dotted;"><code>ForcedIRA</code></span> column shows where spending was funded by drawing extra IRA after Cash, Brokerage and Roth ran out; for the soft <i>Fill Bracket / IRMAA</i> strategies that draw goes above the ceiling and <span onclick="showAnnualColumns('BracketOverage')" style="cursor:pointer;color:#2980b9;text-decoration:underline;text-decoration-style:dotted;"><code>BracketOverage</code></span> shows by how much. The <i>Balances</i> chart has a <i>Both / Mine / Spouse</i> toggle. The <span onclick="goToTab('tab-opt')" style="cursor:pointer;color:#2980b9;text-decoration:underline;text-decoration-style:dotted;"><i>Optimizer</i></span> sweeps all strategy variations and highlights the best result per column. The <span onclick="goToTab('tab-mc')" style="cursor:pointer;color:#2980b9;text-decoration:underline;text-decoration-style:dotted;"><i>Monte Carlo</i></span> tab runs all variations against stochastic return sequences and reports survival rates. Both tabs skip a full rebuild if inputs are unchanged. Use <i>Import/Export</i> to save, load, or delete named scenarios.</li>
 			</ul></div>
 
 			<p>For limitations and features not currently modeled, see the <a href="https://github.com/nightskyguy/retirement_assets" target="_blank">README.md</a>.</p>

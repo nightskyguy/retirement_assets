@@ -6817,3 +6817,47 @@ mechanism; person 2 claims at 67 in 2031 and I had checked only person 1.
 **Next round: P87c**, at the user's direction. It is the strongest O0 candidate - measured, still
 shipped, known mechanism, bounded cost, and the fix is the move P92a already made in the neighbouring
 place: size against the taxable share of the benefit rather than the gross.
+
+
+## 2026-08-31 - P98: a self-check that measured run order, not the menu
+
+**User report:** v11.16b0 showed `Documentation ❌ tests failed` on load, one assertion, and
+**"oddly, it doesn't report this failure when using `?runtests`."** That second sentence is the whole
+diagnosis - a check whose verdict depends on a URL flag is not testing what it says it tests.
+
+`dropdownLimitsMatchTheEngine` read `#stratRate` live, but `runTests()` is called at top level from
+`retirement_optimizer.html`, before the `DOMContentLoaded` handler fills that control. It was reading
+the markup placeholder - a lone `<option value="24">` with no `data-limit` - so `Number(undefined)`
+went up against the engine's `403550`. Exactly one failure, and `24%` only because that is the value
+the placeholder carries. Nothing in the menu, the builder or the engine was wrong.
+
+`?runtests` was green by accident: `acaOptionsUngated` sits earlier in the file, is gated behind that
+flag, and calls `refreshStratRateOptions()`, which builds the real list before the check reaches it.
+The parse-time trap is already spelled out in that suite's own comment at `optimizer_tests.js:2205`;
+this later check did not inherit it.
+
+**Fix:** build a detached copy from `generateStratRateOptions()`. The builder is pure, so the check
+is now about the builder rather than about when the suite ran, and it needs no `unsafeTest()` gate.
+On load it goes from 1 assertion to 6 (fed rates 10/12/22/24/32/35; 37 skipped, `l` is the Infinity
+sentinel).
+
+**Verified in the browser, not inferred:** on load 753 passed / 0 failed (302 in-page + 451 node);
+with `?runtests` 934 / 0 (480 + 454). Node suites 371/61/22 unchanged. `TestTiers.EXPECTED` pins node
+counts only, so the in-page +5 needed no reconciliation.
+
+**Changelog wording corrected by the user.** I first wrote "the dot beside the version number turned
+red". The badge is `<strong id="testsFailed">` inside the Documentation tab BUTTON
+(`retirement_optimizer.html:539`), so what a reader actually sees is `Documentation ❌ tests
+failed`. Entry and heading now say that. Worth carrying: describe a symptom by where the user's eye
+lands, not by where the element lives in the DOM.
+
+**Two process notes.** The preview server had to be restarted on a fresh port - the browser served a
+cached copy of the HTML and kept showing the old `<title>`, so the first "fix verified" read would
+have been a lie. And `serve.py` swallows `--help` and just starts serving, which is how a server
+ended up registered before I meant to start one.
+
+v11.16b0 -> v11.16cf (title + `optimizer_tests.js` cache token; the tier-2 loader's `V` left alone,
+none of its five suites changed). Commit `92f2d1e` on `worktrees/optimizer-menu-limit-test-04e131`,
+pushed. No PR opened.
+
+**Next round is still P87c** - unchanged by this. P98 was an interrupt, not a re-prioritization.

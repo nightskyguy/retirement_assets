@@ -1151,11 +1151,19 @@ function buildSimYearLogRecord(p) {
         // future warning can tell a forced breach from a chosen one.
         '-overageFromConv': p.overageFromConv ?? 0,
         'ForcedIRA': p.forcedIRA,
-        // acaBreach has been passed into this builder since the strict-ACA strategy shipped and was
-        // never emitted, so the year a cap actually bound was only ever visible as a total. Leading
-        // '-' → no table column, same as '-iraG': this is a diagnostic, and the user-facing signal
-        // for a breach year is already the red shortfall row.
-        '-acaBreach': p.acaBreach,
+        // A real column, as of P99. It was emitted as '-acaBreach', and a leading '-' means no table
+        // column, while the note under an ACA limit told the reader to "See acaBreach in Annual
+        // Details" - naming something that could not be shown. One of the two had to give.
+        //
+        // 'Yes'/'' rather than a boolean or 1/0, and all three consumers are why. The cell renderer
+        // takes the numeric branch on `!isNaN(value)`, which a boolean passes: `true` would print as
+        // 1 and then be DIVIDED by inflationFactor in the Current $ view, printing 0. And
+        // analyzeColumnContent() asks `!isNaN(v) && parseFloat(v) !== 0`, where parseFloat(false) is
+        // NaN and NaN !== 0, so an all-false column would count as having content and appear on
+        // every plan that never touched ACA. A string falls to the untouched else branch in the
+        // first, and to the `v !== ''` skip in the second. Truthiness is unchanged either way, which
+        // is all the engine tests and the note's own filter read.
+        'acaBreach': p.acaBreach ? 'Yes' : '',
         // Balances
         IRA1: p.balance.IRA1,
         IRA2: p.balance.IRA2,

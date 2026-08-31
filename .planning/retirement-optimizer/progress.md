@@ -7168,3 +7168,39 @@ cannot order rows on a key they do not have and `conveffect`'s leading key exist
 `P100b3a` (record the zeros) is still needed. And a single blended score stays rejected.
 
 Report: `research/OPTIMIZER_RANK_STABILITY.md` Part 4; findings and index updated.
+
+
+## 2026-08-31 (cont.) - P101 opened: worked examples served from the site
+
+**User:** *"Maintaining a list of worked examples that can be loaded from the server via Load. For
+that each example will also need a notes/description."* Filed as `P101`, O2, not started.
+
+**The origin is the argument.** The scenario that reproduced `P100` was a worked example from a
+YouTuber's video. Two things followed: nothing in the tool could load it except a manual import, and
+it could not be committed, because it arrived under a real surname and this repo is public. A curated
+set fixes both - examples are publishable by construction and they ship with the tool.
+
+**The under-sold benefit: it is a test corpus.** Every example is a regression fixture. `P100` needed
+exactly that and had to settle for a gitignored local file, so its reproduction cannot be re-run by
+anyone else or by CI.
+
+**Four design facts worth having before anyone starts.**
+
+- **The directory must not start with an underscore.** This site is served by Jekyll (`_includes/`
+  exists), which treats `_`-prefixed directories as source and does not publish them. `examples/`.
+- **A manifest is required** - GitHub Pages serves no directory index, so the page cannot discover
+  files. `examples/index.json`, with the notes IN THE MANIFEST so the scenario files stay plain
+  `saveScenario` output and nothing new has to thread through `getInputs`, the URL or the version
+  check.
+- **`SCENARIO_VERSION` is the rot risk and it is not hypothetical.** It is 4, and `loadScenario`
+  filters on EXACT equality (`optimizer_ui.js:5598`), so every shipped example dies silently at the
+  next schema bump. Mitigation is a TEST (`P101b`), not discipline: a stale example must fail the
+  build rather than the user.
+- **Attribution and privacy are requirements, not courtesies.** An example reproducing published
+  material names and links its source, does not use anyone's name as an identifier, and says it is a
+  reconstruction. A real private user's plan never qualifies - which is what the `*.local.json`
+  gitignore rule added earlier today is for.
+
+Three open questions recorded rather than guessed: whether loading also switches tab or auto-runs;
+whether an example needs anything extra to be shareable (probably not - the `?`-URL carries the
+inputs); and what marks a loaded example on screen so it is not mistaken for the user's own plan.

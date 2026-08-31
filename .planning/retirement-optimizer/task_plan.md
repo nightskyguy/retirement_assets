@@ -26,10 +26,82 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 **P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 **P88, P89, P90 COMPLETE v11.16a4** - conversions reach MAGI so IRMAA charges them (+30% to +132% at $100k); warnings name the ceilings they break; the ACA gate reads the plan's real first year; two chart fixes. Suites **366**/61/22. **P91 DONE v11.16a5: the Stress Test's first result was computed on a STALE horizon (8/36 where the truth is 0/40) because a refresh displaced by an in-flight one was DROPPED, never retried; now coalesced. The full sweep was silently stale the same way and now raises its Out-of-date banner. Was on `main` too - never a regression from this branch.**
-User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. 2026-08-31: P98 opened and closed - an in-page test read the Limit menu before `DOMContentLoaded` built it. **2026-08-31 CLEANUP (user):** P35 to **O1** (cannot be "ideal" until P75/P36 land), leaving P87 the sole O0; 34 stale boxes closed under phases already shipped; **29 never-started phases moved to `.planning/retirement-optimizer/task_parked.md`** (nothing deleted); P28f/g/h confirmed shipped v11.162B; the 40/60 closed for good in **`P30i`**. Full index next.
+User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. 2026-08-31: P98 opened and closed - an in-page test read the Limit menu before `DOMContentLoaded` built it. **2026-08-31 CLEANUP (user):** P35 to **O1** (cannot be "ideal" until P75/P36 land), leaving P87 the sole O0; 34 stale boxes closed under phases already shipped; **29 never-started phases moved to `.planning/retirement-optimizer/task_parked.md`** (nothing deleted); P28f/g/h confirmed shipped v11.162B; the 40/60 closed for good in **`P30i`**. **P101 opened** (2026-08-31, user): worked examples served from `examples/` and loadable by name, with notes - O2. Full index next.
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
+
+## P101: worked examples, served from the site and loadable by name  *(NEW 2026-08-31, user-raised, O2, not started)*
+
+**The user's idea:** *"Maintaining a list of worked examples that can be loaded from the server via
+Load. For that each example will also need a notes/description."*
+
+**Where it came from, and it is the strongest argument for it.** The scenario that reproduced `P100`
+was a worked example from a YouTuber's video, sent as a file. Two things followed: nothing in the
+tool could load it except a manual import, and it could not be committed, because it arrived under a
+real surname and this repository is public. A curated example set fixes both - the examples are
+publishable by construction, and they arrive with the tool.
+
+### What it is worth beyond the obvious
+
+- **A test corpus that pays for itself.** Every worked example is a regression fixture. `P100`
+  needed exactly this and had to fall back on a gitignored local file, so the reproduction cannot be
+  re-run by anyone else or by CI.
+- **Teaching surface.** "IRMAA tier plan for a $4M IRA couple" is a better on-ramp than an empty
+  form, and the notes field is where the *why* lives.
+- **Comparison against published advice.** A worked example from a video can be loaded and then
+  argued with, which is a use the tool currently makes hard.
+
+### Design notes - the parts that are not obvious
+
+- **Directory must NOT start with an underscore.** This site is served by Jekyll (`_includes/`
+  exists), which treats `_`-prefixed directories as source and does not publish them. `examples/`,
+  not `_examples/`.
+- **A manifest, not a directory listing.** GitHub Pages serves no index, so the page cannot discover
+  files. `examples/index.json` carries one entry per example: id, title, one-line summary, the
+  longer notes, and the scenario filename. The scenario files themselves stay PLAIN `saveScenario`
+  output so an example can be produced by saving one, with nothing hand-edited.
+- **Notes live in the MANIFEST, not in the scenario.** Keeping `data` byte-compatible with
+  `saveScenario`/`applyScenario` means no new field to thread through `getInputs`, the URL, or the
+  version check.
+- **`SCENARIO_VERSION` is the rot risk, and it is not hypothetical.** It is 4 today and
+  `loadScenario` filters on EXACT equality (`optimizer_ui.js:5598`), so every shipped example dies
+  silently the next time the schema moves. **The mitigation is a test, not discipline:** a node
+  suite that loads every file in `examples/` and asserts it parses, matches `SCENARIO_VERSION`, and
+  round-trips through `applyScenario`. A stale example must fail the build, not the user.
+- **One dialog, two sources.** Examples belong in the existing Load dialog under their own heading,
+  beside the user's saved scenarios - not behind a second button. Loading one must not overwrite a
+  saved scenario, and the user should be told the load replaced their current inputs.
+- **Attribution, and it is a requirement rather than a courtesy.** An example reproducing published
+  material names the source and links it. It does not use anyone's name as an identifier, does not
+  imply endorsement, and carries a line saying the figures are a reconstruction for comparison.
+- **NEVER a real private user's plan.** The `*.local.json` gitignore rule added 2026-08-31 exists for
+  exactly this. An example is publishable only if its numbers are published already, or invented.
+
+### Open questions to settle before building
+
+- Does an example load into the inputs only, or also switch tab / auto-run the Optimizer?
+- Should a loaded example be shareable? Its `?`-URL would carry the inputs anyway, so probably yes
+  and nothing extra is needed - confirm rather than assume.
+- Is there an "example" marker in the UI after loading, so a reader does not mistake it for their own
+  plan? A saved scenario has a name; an example needs at least as much.
+
+- [ ] **P101a** - `examples/index.json` schema plus two examples, one of them the `P100` scenario
+      reconstructed from published figures with attribution. Schema first, because everything else
+      keys off it.
+- [ ] **P101b** - node test: every entry in the manifest resolves, parses, matches
+      `SCENARIO_VERSION`, and round-trips. **This is the item that keeps the feature alive**; without
+      it the set rots at the next schema bump.
+- [ ] **P101c** - Load dialog: an Examples section listing title + summary, with the longer notes
+      shown on selection. Reuses `applyScenario`; no engine change.
+- [ ] **P101d** - after-load affordance: name the loaded example on screen so it is not mistaken for
+      the user's own plan.
+- [ ] **P101e** - `examples/README.md`: how to add one (save a scenario, drop the file in, add the
+      manifest row), and the attribution and privacy rules stated where an author will see them.
+- **Status:** NOT STARTED, O2. No dependency on any other phase; `P100` would have used it.
+- **Depends on:** nothing.
+
+---
 
 ## P100: the Optimizer recommends unstably, scores the wrong thing, and asks the user the wrong question  *(NEW 2026-08-31, user-raised, O0, MEASURE FIRST)*
 

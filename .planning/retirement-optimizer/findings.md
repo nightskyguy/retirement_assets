@@ -3621,3 +3621,50 @@ because nearly every plan funds the same goal - a poor leading key, a good late 
 
 **Authoring cost is the trap.** Nine objectives x eight metrics is 72 ordering decisions. Define ONE
 default priority order and let each objective override only its leading metric or two.
+
+
+## `nonSSIncomeForMAGI`: how often it runs, and what the bisection actually costs  *(2026-08-31, user-challenged)*
+
+The user read `for (let i = 0; i < 60; i++)` and called it lazy. It was. The measurement is worth
+keeping because most of it is counter-intuitive.
+
+**HOW OFTEN.** One call site (`optimizer_core.js`, the bracket/IRMAA branch), once per ceiling-bound
+year - 36 calls per `simulate()` on the measured scenario.
+
+**HALF OF THEM NEVER ENTER THE LOOP, and on the reported scenario NONE do.** The guard
+`if (magiOf(lo) >= magiTarget) return lo` catches every year where the 85% cap binds, because there
+`lo = target - 0.85 x SS` IS the answer, exactly: `taxableSS <= 0.85 x SS` always, so
+`magiOf(lo) <= magiTarget` always, and with the `>=` test it can only be equal. It cannot overshoot.
+Across 14,994 synthetic cases, 50.5% returned before the loop; on the IRMAA Tier 2 scenario, 36 of 36.
+
+**HOW MANY PASSES ARE ACTUALLY NEEDED.** The interval starts at `0.85 x totalSS` and halves. Worst
+error over 4,000 sloped-tier cases:
+
+| passes | worst error on N | worst on MAGI |
+|---:|---:|---:|
+| 16 | $1.94 | $3.58 |
+| 18 | $0.48 | $0.88 |
+| 20 | $0.12 | $0.22 |
+| 24 | $0.008 | $0.014 |
+
+So **18 for dollar accuracy, 20 for half a dollar, 24 for a cent** - against the 60 that shipped.
+
+**CUTTING IT MOVED NO ENGINE RESULT.** At 18 and at 20 passes the ONLY failing assertion in 382 was
+this function's own unit test at its `0.01` tolerance. No ceiling-fill test, no breach guard, no
+`P32h` pin. That is the distinction to hold on to: a suite failure can be a test's tolerance rather
+than a behavior change, and the two demand different responses.
+
+**WHAT SHIPPED: an interval break, not a smaller count.** `hi - lo > 0.005`, capped at 40. A fixed
+count silently loses precision as the benefit grows - 20 passes are half a cent on a $40k benefit and
+eight cents on a $1M one - where stopping on the interval holds the same accuracy at every size.
+Measured after: 21 to 26 passes, median 25, worst error $0.005 on N and $0.009 on MAGI.
+
+**THE SPEED RESULT IS THE SURPRISE, AND IT IS NEARLY NOTHING.** Best of 7 ALTERNATED rounds:
+fixed-60 0.253 us/call, fixed-25 0.243, interval 0.243. **Cutting 60 passes to 25 buys 3.8%**, not
+the 2.4x the pass count suggests, because the per-call cost is dominated by the bracket lookup, the
+closure and the initial `magiOf(lo)` - not by the loop body.
+
+**AND I MISMEASURED IT FIRST.** A single un-alternated run reported the interval version 20% SLOWER.
+`feedback_mc_bench_paths` already says to alternate arms and compare minima, and I did not, on a
+difference of a few percent. The rule earns its keep on small deltas, which is exactly when it is
+tempting to skip.

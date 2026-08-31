@@ -1337,13 +1337,25 @@ function nonSSIncomeForMAGI(status, magiTarget, totalSS) {
     if (!ssBrackets) return magiTarget;
     const r = ssBrackets[1].r ?? 0;
     const magiOf = (N) => N + calculateTaxableSocialSecurity(status, N + r * totalSS, totalSS);
-    // MAGI(N) >= N, so the answer is never above magiTarget; and MAGI is at most N + 0.85 x SS, so
-    // magiTarget - 0.85 x SS is a lower bound. Both bounds are exact, which is what lets the loop
-    // run a fixed number of times instead of testing for convergence.
+    // MAGI(N) >= N, so the answer is never above magiTarget; and MAGI is at most 0.85 x SS above N,
+    // so magiTarget - 0.85 x SS is a lower bound. Both bounds are exact.
     let lo = magiTarget - ssBrackets[2].r * totalSS, hi = magiTarget;
+    // THE COMMON CASE NEVER ENTERS THE LOOP, and this line is why. Where the 85% cap binds - which
+    // is 96% of the ceiling-bound years measured in research/OPTIMIZER_RANK_STABILITY.md - `lo` IS
+    // the answer, and exactly so: taxableSS <= 0.85 x SS always, so magiOf(lo) <= magiTarget always,
+    // and combined with the test below it can only be EQUAL. It cannot overshoot.
     if (magiOf(lo) >= magiTarget) return lo;
-    // 60 halvings take any bracket reachable here to well under a cent.
-    for (let i = 0; i < 60; i++) {
+    // Bisect until the interval is settled to half a cent, NOT for a fixed count. The starting span
+    // is 0.85 x totalSS, so a fixed count silently loses precision as the benefit grows: 20 halvings
+    // are half a cent on a $40k benefit and eight cents on a $1M one. Stopping on the interval holds
+    // the same accuracy at every benefit size and lets small ones exit sooner - typically 22 to 24
+    // passes, against the 60 this used to run unconditionally.
+    //
+    // MAGI's slope in N is 1, 1.5 or 1.85, so half a cent on N is at worst about one cent on MAGI.
+    // The 40 is a backstop against a non-finite input, not the mechanism: 40 halvings cover a
+    // benefit of $5.5 billion. Measured, dropping to 18 or 20 passes moves no engine result at all -
+    // the only thing that noticed was this function's own unit test at its 0.01 tolerance.
+    for (let i = 0; i < 40 && hi - lo > 0.005; i++) {
         const mid = (lo + hi) / 2;
         if (magiOf(mid) < magiTarget) lo = mid; else hi = mid;
     }

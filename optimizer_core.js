@@ -4354,7 +4354,12 @@ const OPTIMIZER_OBJECTIVES = {
     maxspend: { dir: 'desc', metric: r => r.totals?.spendCurrentDollars ?? -Infinity },
     maxroth:  { dir: 'desc', metric: r => r.totals?.terminal?.roth ?? -Infinity },
     balanced: { dir: 'desc', metric: r => r._baselineScore ?? -Infinity },
-    conveffect:{ dir: 'desc', metric: r => r._convSavings ?? -Infinity },
+    // P100b3, user's own priority order for this objective (2026-08-31): when two plans save the
+    // same tax by converting, the one that ends with more Roth is the better answer, then the one
+    // that breaks even sooner, and only then the wealthier one. Net-wealth-first is the right
+    // DEFAULT but a poor lead for a question about conversions.
+    conveffect:{ dir: 'desc', metric: r => r._convSavings ?? -Infinity,
+                 tiebreak: ['finalRoth', 'breakEven', 'netWealth', 'remainIRA', 'spread', 'lifeTax', 'spend'] },
     // Earliest Break Even: the year a strategy's conversions permanently overtake the same strategy
     // without them. Ties are common (the year is an integer and many strategies cross together), so
     // they break on real-dollar after-tax net wealth -- the same measure `networth` and the ⚓
@@ -4625,20 +4630,77 @@ function strategySortKey(r) {
     return fam + param + mod + variant;
 }
 
+// P100b3. The SHARED secondary ranking, applied after whatever the objective ranks on.
+//
+// WHY IT EXISTS. An objective that cannot separate two rows used to leave them in whatever order the
+// results array happened to hold, and the table printed that as a Rank. On a measured scenario 133
+// of 136 successful rows scored IDENTICALLY under `conveffect` - only 12 rows are ever evaluated for
+// it and only 3 produce a figure - so "rank 103" meant "position 100 of 133 rows that tied", and the
+// row moved to 20th when the user adopted a different plan without anything about it being
+// re-measured. See research/OPTIMIZER_RANK_STABILITY.md.
+//
+// ONE default list plus per-objective OVERRIDES, rather than a list per objective. Nine objectives
+// times eight metrics is 72 ordering decisions to author and defend, which is the kind of table that
+// rots; an objective that wants a different second key names one, and inherits the rest.
+const OPT_TIEBREAK_KEYS = Object.freeze({
+    netWealth: { dir: -1, get: r => r.afterTaxNWCurrentDollars ?? -Infinity },
+    finalRoth: { dir: -1, get: r => r.totals?.terminal?.roth ?? -Infinity },
+    spend:     { dir: -1, get: r => r.totals?.spendCurrentDollars ?? -Infinity },
+    lifeTax:   { dir:  1, get: r => r.totals?.taxCurrentDollars ?? Infinity },
+    // Pre-tax IRA left behind: the survivor's and the heirs' RMD exposure. Smaller is better.
+    remainIRA: { dir:  1, get: r => r.totals?.terminal?.ira ?? Infinity },
+    // Integer year, and absent on most rows - a row that never breaks even sorts last, never first.
+    breakEven: { dir:  1, get: r => r._convBEYear ?? 9999 },
+    // How unequal the three after-tax buckets are. Smaller is more freedom to draw from whichever is
+    // tax-advantaged in a given year, which is why `taxflex` ranks on it ascending.
+    spread:    { dir:  1, get: (r, rate) => afterTaxBucketSpread(r, rate) },
+});
+
+// The default order, used by every objective that does not name its own.
+const OPT_TIEBREAK_DEFAULT = Object.freeze(
+    ['netWealth', 'finalRoth', 'spend', 'lifeTax', 'remainIRA', 'breakEven']);
+
+// Compare two rows down a chain of key names, then by `_id` as the total-order backstop.
+//
+// `_id` IS NOT ONE OF THE KEYS, and that is not tidiness. The keys subtract, and buildVariations
+// assigns a numeric `_id` - but a caller with a STRING id would make `a - b` produce NaN, which is
+// falsy, so the backstop would silently do nothing and the ordering would fall back to input-array
+// order: exactly the defect this exists to remove, one level down and invisible. A test that ranked
+// rows keyed 'x'/'y'/'z' is what caught it. Compared with < / > here, total for numbers and strings.
+function compareByTiebreakChain(a, b, rate = 0, chain = OPT_TIEBREAK_DEFAULT) {
+    for (const name of chain) {
+        const t = OPT_TIEBREAK_KEYS[name];
+        if (!t) continue;                       // an unknown name is skipped, never a thrown sort
+        const d = t.dir * (t.get(a, rate) - t.get(b, rate));
+        if (d) return d;
+    }
+    const ia = a?._id ?? 0, ib = b?._id ?? 0;
+    return ia < ib ? -1 : ia > ib ? 1 : 0;
+}
+
 // Rank rows best->worst under an objective. Successful rows ALWAYS outrank failed ones (a depleted
-// plan can show inflated terminal wealth), then the objective's own order. Pure.
+// plan can show inflated terminal wealth), then the objective's own order, then the shared secondary
+// chain above. Pure.
 function rankRowsByObjective(rows, objKey, rate = 0) {
     const obj = OPTIMIZER_OBJECTIVES[objKey] || OPTIMIZER_OBJECTIVES.taxflex;
+    const chain = obj.tiebreak || OPT_TIEBREAK_DEFAULT;
     const succ = rows.filter(r => r.totals && r.totals.success);
     const fail = rows.filter(r => !(r.totals && r.totals.success));
     let orderedSucc;
     if (obj.rank) {
+        // Custom rankers carry their own tie handling - `earliestbe` already breaks on after-tax net
+        // wealth, `taxflex` runs a two-stage sort - so the chain is not imposed on them here. They
+        // are the two objectives whose ordering is not a single metric, and a blanket re-sort would
+        // undo the thing that makes them custom.
         orderedSucc = obj.rank(succ, rate);
     } else {
         const sign = obj.dir === 'asc' ? 1 : -1;
-        orderedSucc = [...succ].sort((a, b) => sign * (obj.metric(a, rate) - obj.metric(b, rate)));
+        orderedSucc = [...succ].sort((a, b) =>
+            (sign * (obj.metric(a, rate) - obj.metric(b, rate))) || compareByTiebreakChain(a, b, rate, chain));
     }
-    return [...orderedSucc, ...fail];
+    // Failed rows are ordered too. They all rank below every successful row, but among themselves
+    // the same argument applies: array order is not a ranking.
+    return [...orderedSucc, ...[...fail].sort((a, b) => compareByTiebreakChain(a, b, rate, chain))];
 }
 
 // True when BOTH people are already on Medicare when the plan opens, which is when an ACA income
@@ -5286,7 +5348,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -5294,7 +5356,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

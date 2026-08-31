@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.16d5</title>
+    <title>Retirement Optimizer 11.16d6</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,12 +59,12 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1116d4"></script>
-	<script src="optimizer_core.js?v=1116d4"></script>
+	<script src="optimizer_core.js?v=1116d6"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
 	<script src="optimizer_ui.js?v=1116d5"></script>
-	<script src="optimizer_tests.js?v=1116d5"></script>
+	<script src="optimizer_tests.js?v=1116d6"></script>
 </head>
 <body>
 
@@ -890,13 +890,14 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.16d5</b>
+				<li data-flag="behavior"><b>11.16d6</b>
 					<strong>A chosen limit is now filled even after Social Security starts.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li><strong>Behavior change - saved plans and shared links will not reproduce their earlier numbers.</strong> Once Social Security began, a plan on a <i>Fill Fed Bracket</i> or <i>IRMAA Tier</i> limit stopped 15% of the yearly benefit short of the limit it was told to fill, and stayed short every year after; on one $2.8M plan at the 22% limit that was $168,500 of room left unused across 17 years. Only the taxable part of a benefit counts toward these limits, at most 85% of it. <strong>These plans now withdraw and convert more in those years</strong>, and which way that lands on End Wealth still depends on the limit, so re-run the Optimizer before treating a new figure as settled. <strong>ACA Cliff plans are unchanged</strong>, because an ACA cap counts the whole benefit either way.</li>
+					<li><strong>Optimizer rows that tie now break the tie on what you would look at next.</strong> When the goal you picked cannot separate two plans, the table used to leave them in whatever order they were generated in and number that as a Rank. It now falls through to end wealth, then final Roth, then spending, then lifetime taxes, then the pre-tax IRA left behind, then the break-even year. <i>Roth Conversion Effectiveness</i> leads with final Roth and the break-even year instead. That goal measures only a handful of plans, so the rest shared one score and their rank moved whenever you adopted a different plan; ranks are now stable.</li>
 					<li>The <i>Optimize for</i> goal now travels with your plan. A shared link or a saved scenario kept every input but not the goal the table was ranked by, so it reopened on <i>Tax Flexibility</i> and showed a different best plan than the one you sent. Links made before this release are unchanged.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.16d5" target="_blank" rel="noopener">Details</a>
+					<a href="optimizer_changelog.md#11.16d6" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="display"><b>11.16d0</b>
 					<strong>The column a note points at is now one click away.</strong>
@@ -1542,7 +1543,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1116d4';
+    const V = '?v=1116d6';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

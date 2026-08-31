@@ -206,8 +206,8 @@ Ordered by payoff per line of code. All three are live defects today, independen
         been MEASURED: its conversion effectiveness is $0. Set it on the base row instead of
         skipping. Nearly free, and it takes the graded set from **3 to 12** on this scenario. "$0"
         and "not evaluated" must then render differently - `$0` vs `-`.
-  - [ ] **P100b3b** - **BANDED LEXICOGRAPHIC ordering over all metrics, in a per-objective
-        priority order.** Superseded the two-key fallback on 2026-08-31 when the user generalized it:
+  - [x] **P100b3b** - **SHIPPED v11.16d6, 2026-08-31, EXACT-TIE form. Bands NOT built - see below.**
+        BANDED LEXICOGRAPHIC ordering over all metrics, in a per-objective priority order. Superseded the two-key fallback on 2026-08-31 when the user generalized it:
         *"evaluate all rows by ALL known facts - what changes is the weight/priority. Roth Conversion
         Effectiveness might rank first by conversion tax savings, second by final Roth, third by
         break even, fourth by net wealth, fifth by remaining RMD, sixth by account spread, seventh by
@@ -228,7 +228,7 @@ Ordered by payoff per line of code. All three are live defects today, independen
         **A single blended score stays rejected**: conversion savings top out at $2.28M here while
         net wealth runs ~$10M, so a blend sorts by scale and "rank 40" would silently mean "40th by
         net wealth" under a column headed effectiveness - a new lie replacing the old one.
-  - [ ] **P100b3c** - **ONE shared default priority order, per-objective OVERRIDES only.** Nine
+  - [x] **P100b3c** - **SHIPPED v11.16d6 with `b3b`.** ONE shared default priority order, per-objective OVERRIDES only. Nine
         objectives x ~8 metrics is 72 ordering decisions to author and defend, which is exactly the
         kind of table that rots. Each objective overrides its leading metric or two and inherits the
         rest. Nine short overrides instead of seventy-two choices, and a new objective costs a line.
@@ -248,6 +248,27 @@ Ordered by payoff per line of code. All three are live defects today, independen
       EVALUATED and must be shown as such - a distinct marker, sorted into their own group, never
       silently ordered as though measured. **This alone removes most of the reported confusion**,
       because **133 of 136 successful rows** are currently ranked on a value nobody computed for them - measured, not estimated. **Raising the pool cap alone does NOT fix this**: 9 of the 12 candidates returned `optConv === 0` and produced no row, so a bigger pool shrinks the tie without closing it - unless `P100b3a` also records those zeros, after which a bigger pool does convert directly into a bigger graded set.
+
+  - **WHAT SHIPPED, and what did NOT.** `OPT_TIEBREAK_KEYS` + `OPT_TIEBREAK_DEFAULT` in
+        `optimizer_core.js`, with an optional `tiebreak` array on any objective. Default order
+        (user-approved 2026-08-31, option C): net wealth, final Roth, spend, lifetime tax, remaining
+        IRA, break-even, then `_id` as a total-order backstop. **`conveffect` overrides it with the
+        user's own order** - final Roth, break-even, net wealth, remaining IRA, account spread,
+        lifetime tax, spend - because when two plans save the same tax by converting, more Roth is
+        the better answer and net-wealth-first is a poor lead for a question about conversions.
+        `taxflex` and `earliestbe` are untouched: they have custom rankers with their own tie
+        handling and a blanket re-sort would undo what makes them custom.
+        **EXACT ties only. Tolerance bands are NOT built** - that is the remaining half of `b3b`,
+        and on the measured scenario it is not the urgent half, because `conveffect`'s 133 rows tie
+        EXACTLY. Bands matter for objectives whose leading metric already discriminates.
+  - **Verified on the user's own scenario, not inferred.** 151 of 152 rows are common to a run
+        before and after adopting `IRA Draw 9%`, and **their relative order is identical - zero
+        positions differ.** Only the current-plan row itself changes, which it should. Under
+        v11.16d4 the same action moved a row from 103rd to 20th. Badge 967 (502 in-page + 465 node).
+  - **A test caught a real weakness in the backstop.** `_id` was inside the subtracting chain, so a
+        non-numeric id produced NaN, which is falsy, and the total-order guarantee silently
+        evaporated - re-introducing array-order ranking one level down. It is now compared with
+        `<`/`>` outside the chain. The test that found it ranked rows keyed `'x'/'y'/'z'`.
 
 #### Stage C - SCORE THE RIGHT THING. Depends on Stage A only.
 

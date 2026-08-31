@@ -4195,6 +4195,90 @@ function objRow(id, opts = {}) {
     };
 }
 
+// -- P100b3: the shared secondary ranking --------------------------------------------------------
+// An objective that cannot separate two rows used to leave them in input-array order and the table
+// printed that as a Rank. Measured on a real scenario, 133 of 136 successful rows scored IDENTICALLY
+// under conveffect (only 12 rows are ever evaluated for it, only 3 produce a figure), so a rank was
+// a position in a tie and moved when the user adopted a different plan.
+const rankIds = (rows, obj) => rankRowsByObjective(rows, obj, 0).map(r => r._id).join(',');
+
+test('P100b3: rows tied on the objective are ordered by the secondary chain, not array order', () => {
+    // conveffect reads _convSavings; none of these has one, so all three tie at -Infinity - exactly
+    // the shipped situation. Deliberately supplied WORST-FIRST so passing cannot be array order.
+    const rows = [objRow('low', { nw: 100 }), objRow('high', { nw: 900 }), objRow('mid', { nw: 500 })];
+    const got = rankIds(rows, 'conveffect');
+    assert(got === 'high,mid,low', `a fully tied objective must fall through to net wealth, got ${got}`);
+});
+
+test('P100b3: the chain runs in priority order, each key breaking only what the one above left tied', () => {
+    const T = roth => ({ ira: 0, roth, cash: 0, brokerage: 0, basis: 0 });
+    // All three tie on net wealth, so key 2 (final Roth) decides; 'a' and 'b' tie there too, so
+    // key 3 (spend) separates them. That is the property - not merely "some tie-break happened".
+    const rows = [
+        objRow('a', { nw: 100, spend: 10, terminal: T(50) }),
+        objRow('b', { nw: 100, spend: 90, terminal: T(50) }),
+        objRow('c', { nw: 100, spend: 99, terminal: T(10) }),
+    ];
+    const got = rankIds(rows, 'conveffect');
+    assert(got === 'b,a,c', `final Roth must outrank spend, and spend break what Roth left tied, got ${got}`);
+});
+
+test('P100b3: the ordering does not depend on the order rows arrive in', () => {
+    // The defect in one assertion: shuffle the input, the ranking must not move. Every row here is
+    // identical on every chain key except _id, which is the total-order backstop.
+    const mk = () => [objRow('x', { nw: 7 }), objRow('y', { nw: 7 }), objRow('z', { nw: 7 })];
+    const fwd = rankIds(mk(), 'conveffect');
+    const rev = rankIds(mk().reverse(), 'conveffect');
+    assert(fwd === rev, `a reversed input must produce the same ranking, got ${fwd} vs ${rev}`);
+});
+
+test('P100b3: a row that never breaks even sorts last on that key, never first', () => {
+    // _convBEYear is absent on most rows. A missing year must read as "worst", not as year 0.
+    const withBE = objRow('yr2040', { nw: 5 });
+    withBE._convBEYear = 2040;
+    const got = rankIds([objRow('none', { nw: 5 }), withBE], 'conveffect');
+    assert(got === 'yr2040,none', `an absent break-even year must rank below a real one, got ${got}`);
+});
+
+test('P100b3: the DEFAULT chain leads on net wealth', () => {
+    // mintax names no override, so it inherits the default. All three tie on the metric (tax 0), so
+    // the chain decides, and net wealth leads it. Roth is deliberately set OPPOSITE to net wealth,
+    // so a run that led on Roth would produce the reverse and this would fail.
+    const T = roth => ({ ira: 0, roth, cash: 0, brokerage: 0, basis: 0 });
+    const rows = [
+        objRow('a', { nw: 100, tax: 0, terminal: T(900) }),
+        objRow('b', { nw: 900, tax: 0, terminal: T(100) }),
+    ];
+    const got = rankIds(rows, 'mintax');
+    assert(got === 'b,a', `the default chain must lead on net wealth, got ${got}`);
+});
+
+test('P100b3: conveffect OVERRIDES the default and leads on final Roth', () => {
+    // The user's priority order for this objective (2026-08-31): when two plans save the same tax by
+    // converting, more Roth wins before more wealth does. Same two rows as the test above, ranked
+    // under conveffect instead - and the answer must INVERT. Two objectives disagreeing on identical
+    // rows is the whole point of allowing an override, so this is the test that earns it.
+    const T = roth => ({ ira: 0, roth, cash: 0, brokerage: 0, basis: 0 });
+    const rows = [
+        objRow('a', { nw: 100, tax: 0, terminal: T(900) }),
+        objRow('b', { nw: 900, tax: 0, terminal: T(100) }),
+    ];
+    const got = rankIds(rows, 'conveffect');
+    assert(got === 'a,b', `conveffect must lead on final Roth, not net wealth, got ${got}`);
+    assert(rankIds(rows, 'mintax') === 'b,a',
+        'the same rows must rank the other way under an objective that uses the default');
+});
+
+test('P100b3: the chain never overrides the objective itself', () => {
+    // The safety property. 'lo' wins every chain key but loses on the metric, so it must still lose.
+    const lo = objRow('lo', { nw: 999, spend: 999, tax: 0 });
+    const hi = objRow('hi', { nw: 1, spend: 1, tax: 999 });
+    lo._convSavings = 10;
+    hi._convSavings = 20;
+    const got = rankIds([lo, hi], 'conveffect');
+    assert(got === 'hi,lo', `the objective must decide whenever it can; the chain only breaks ties, got ${got}`);
+});
+
 test('rankRowsByObjective: failed rows always sort last, whatever the metric', () => {
     const rows = [
         objRow('a', { nw: 100 }),

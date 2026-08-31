@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.16d5"></a>
+<a id="11.16d6"></a>
 
-## 11.16d5
+## 11.16d6
 
 ### A chosen limit is now filled even after Social Security starts
 
@@ -34,6 +34,17 @@ charged against the limit as though it counted.
 These plans now withdraw and convert more in those years. **Which way that lands on End Wealth still
 depends on the limit**, the same as it did in 11.16b0, so re-run the Optimizer before treating a new
 figure as settled.
+
+**Optimizer rows that tie now break the tie on what you would look at next.** When the goal you
+picked cannot separate two plans, the table used to leave them in whatever order they were generated
+in and number that as a Rank. It now falls through to end wealth, then final Roth, then spending,
+then lifetime taxes, then the pre-tax IRA left behind, then the break-even year. **Roth Conversion
+Effectiveness leads with final Roth and the break-even year instead**, because when two plans save
+the same tax by converting, the one holding more Roth is the better answer.
+
+This matters most on that goal, where only a handful of plans in the table are ever measured for it.
+Their rank was a position among plans that all scored the same, so it moved when you adopted a
+different plan. Ranks are now stable and mean something the whole way down the table.
 
 **Separately, the "Optimize for" goal now travels with your plan.** A shared link or a saved
 scenario kept every input but not the goal the table was ranked by, so it reopened on Tax Flexibility

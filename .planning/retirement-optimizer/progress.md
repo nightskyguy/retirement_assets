@@ -7204,3 +7204,38 @@ anyone else or by CI.
 Three open questions recorded rather than guessed: whether loading also switches tab or auto-runs;
 whether an example needs anything extra to be shareable (probably not - the `?`-URL carries the
 inputs); and what marks a loaded example on screen so it is not mistaken for the user's own plan.
+
+
+## 2026-08-31 (cont.) - P100b3b/b3c SHIPPED v11.16d6: secondary ranking
+
+**User approved option C**: one shared default chain, plus a `conveffect` override in their own
+priority order. Shipped as `OPT_TIEBREAK_KEYS` + `OPT_TIEBREAK_DEFAULT` in `optimizer_core.js`, with
+an optional `tiebreak` array on any objective.
+
+- **Default:** net wealth, final Roth, spend, lifetime tax, remaining IRA, break-even, then `_id`.
+- **`conveffect` override (the user's order):** final Roth, break-even, net wealth, remaining IRA,
+  account spread, lifetime tax, spend.
+- **`taxflex` and `earliestbe` untouched** - custom rankers with their own tie handling; a blanket
+  re-sort would undo what makes them custom.
+
+**Verified on the user's own scenario, and this is the number that matters.** Run the sweep, adopt
+`IRA Draw 9%`, run again: **151 of 152 rows are common to both runs and their relative order is
+IDENTICAL - zero positions differ.** Only the current-plan row changes, which it should. Under
+v11.16d4 the same action moved a row from 103rd to 20th. The top of the table now reads: three
+measured `⇌` rows, then the rest ordered by final Roth (20.4M, 20.2M, 20.2M...) instead of by array
+position.
+
+**EXACT ties only; tolerance bands are NOT built.** That is the remaining half of `b3b` and it is
+not the urgent half here - `conveffect`'s 133 rows tie exactly, so the chain fires on all of them.
+Bands matter for objectives whose leading metric already discriminates (net wealth has 118 distinct
+values in 133 rows).
+
+**A test caught a real weakness rather than confirming the design.** `_id` was inside the subtracting
+chain, so a non-numeric id produced `NaN`, which is falsy, and the total-order guarantee silently
+evaporated - re-introducing array-order ranking one level down, invisibly. Now compared with `<`/`>`
+outside the chain. The test that found it ranked rows keyed `'x'/'y'/'z'`. Worth carrying: a
+comparator built on subtraction is only total for numbers, and "the ids are always numeric" is an
+assumption a fixture can break without anyone noticing.
+
+Suites **382**/61/22; `TestTiers.EXPECTED` and `.githooks/README.md` reconciled. Seven new node tests,
+including two that discriminate the default from the override by ranking the SAME rows both ways.

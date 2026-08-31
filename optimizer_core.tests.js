@@ -1938,8 +1938,8 @@ test('ACA lapse: mid-plan crossing stops the breaches instead of releasing the c
     const pre  = r.log.filter(e => _minLivingAge(e) !== null && _minLivingAge(e) <  medAge);
     const post = r.log.filter(e => _minLivingAge(e) !== null && _minLivingAge(e) >= medAge);
     assert(pre.length > 0 && post.length > 0, 'fixture must span the crossing');
-    assert(pre.some(e => e['-acaBreach']), 'the cap must actually bind while both are pre-Medicare');
-    assert(!post.some(e => e['-acaBreach']), 'no year may breach a cap that has lapsed');
+    assert(pre.some(e => e['acaBreach']), 'the cap must actually bind while both are pre-Medicare');
+    assert(!post.some(e => e['acaBreach']), 'no year may breach a cap that has lapsed');
     // The rejected alternative shows up here. Releasing the ceiling collapses
     // IRAwd = min(curIRA, room) to curIRA, so the crossing year drains the whole above-goal IRA at
     // once. Proportional 0% draws for spending, so the crossing year must stay in the same league
@@ -1992,9 +1992,9 @@ test('ACA lapse: it is LIVING spouses, not both people — a survivor past 65 la
     const married = r.log.filter(e => typeof e.age1 === 'number');
     const widowed = r.log.filter(e => e.age1 === '—');
     assert(married.length > 0 && widowed.length > 0, 'fixture must span the death');
-    assert(widowed.every(e => !e['-acaBreach']),
+    assert(widowed.every(e => !e['acaBreach']),
         'once the only pre-Medicare spouse is gone the cap must lapse for the survivor');
-    assert(married.some(e => e['-acaBreach']),
+    assert(married.some(e => e['acaBreach']),
         'and it must have been binding while the younger spouse was alive (else the test proves nothing)');
 });
 
@@ -2747,10 +2747,10 @@ test('ACA exception ends at Medicare: the lapsed tail IS backstopped', () => {
     assert(live.length > 0 && lapsed.length > 0, 'fixture must span the crossing');
     // Live side: refuses to draw, strands spending, flags every year.
     assert(live.every(e => (e.ForcedIRA || 0) === 0), 'no live-cap year may force IRA');
-    assert(live.every(e => e['-acaBreach']), 'every live-cap year here breaches on unavoidable income alone');
+    assert(live.every(e => e['acaBreach']), 'every live-cap year here breaches on unavoidable income alone');
     // Lapsed side: draws, and funds the goal for as long as the IRA lasts.
     assert(lapsed.some(e => (e.ForcedIRA || 0) > 0), 'the lapsed tail must be backstopped');
-    assert(lapsed.every(e => !e['-acaBreach']), 'a lapsed cap cannot be breached');
+    assert(lapsed.every(e => !e['acaBreach']), 'a lapsed cap cannot be breached');
     const fundedRun = lapsed.filter(e => !_shortYear(e)).length;
     assert(fundedRun >= 20,
         `the lapsed tail should fund the goal for as long as the IRA lasts, got ${fundedRun} funded year(s)`);

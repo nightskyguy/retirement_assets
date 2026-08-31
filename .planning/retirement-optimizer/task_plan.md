@@ -26,10 +26,53 @@ the ten captured paths; prev/next is one 46-stop ring; the Market Return chart n
 
 **P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 **P88, P89, P90 COMPLETE v11.16a4** - conversions reach MAGI so IRMAA charges them (+30% to +132% at $100k); warnings name the ceilings they break; the ACA gate reads the plan's real first year; two chart fixes. Suites **366**/61/22. **P91 DONE v11.16a5: the Stress Test's first result was computed on a STALE horizon (8/36 where the truth is 0/40) because a refresh displaced by an in-flight one was DROPPED, never retried; now coalesced. The full sweep was silently stale the same way and now raises its Out-of-date banner. Was on `main` too - never a regression from this branch.**
-User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. Full index next.
+User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. 2026-08-31: P98 opened and closed - an in-page test read the Limit menu before `DOMContentLoaded` built it. Full index next.
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
+
+## P98: the Documentation tab reported a test failure that was not one  *(2026-08-31, user-reported, DONE v11.16cf)*
+
+**Shipped defect, on `main` at v11.16b0.** Every load of the page put `Documentation ❌ tests
+failed` on the tab button, over exactly one assertion at `optimizer_tests.js:2551`:
+
+    the menu's 24% limit is the one the engine uses for a plan starting this year
+
+The user's own observation is what pointed at the mechanism: **the same page with `?runtests` was
+green.** A check that passes or fails on the URL flag is not measuring what it claims to measure.
+
+### The mechanism
+
+`dropdownLimitsMatchTheEngine` read `#stratRate` live. `runTests()` is called at TOP LEVEL from
+`retirement_optimizer.html`, which is before the `DOMContentLoaded` handler that fills that control,
+so what it read was the markup placeholder - one option, no `data-limit`:
+
+    <option value="24" selected>24% : 40300 MFJ / 201000 SGL</option>
+
+`Number(undefined)` is `NaN` against the engine's `403550`. Hence exactly ONE failure, and `24%` is
+simply the value that placeholder happens to carry - nothing about the menu, the builder or the
+engine was ever wrong.
+
+`?runtests` hid it by accident of ordering: `acaOptionsUngated`, an unsafe suite gated behind that
+flag, sits ABOVE this one in the file and calls `refreshStratRateOptions()`, so by the time the check
+ran the real list existed. The same trap is documented at `optimizer_tests.js:2205` for that suite;
+this check was written later and did not inherit the lesson.
+
+### The fix, and the rule it carries
+
+Build a detached copy from `generateStratRateOptions()` instead of reading the live control. The
+builder is pure, so the check is now about the BUILDER rather than about when the suite happened to
+run, and it needs no `unsafeTest()` gate - the live page is untouched. On load this goes from 1
+assertion (the placeholder) to 6 (fed rates 10/12/22/24/32/35; 37 is skipped, its `l` is the Infinity
+sentinel).
+
+**Rule for any future in-page test that reads a BUILT control:** `runTests()` runs at parse time. A
+control filled by `DOMContentLoaded` is not filled yet. Build it, detached, or the test measures run
+order. `#stratRate` and `#STATEname` are both in that class.
+
+Commit `92f2d1e` on `worktrees/optimizer-menu-limit-test-04e131`, pushed, no PR opened yet. Suites
+371/61/22 unchanged - `TestTiers.EXPECTED` pins node counts only, not the in-page count, so nothing
+to reconcile there. Badge: 753 on load (302 in-page + 451 node), 934 with `?runtests` (480 + 454).
 
 ## P94: remove the `minlimit` strategy entirely  *(2026-08-29, user-decided, DONE v11.16aa)*
 

@@ -17,6 +17,30 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.16d0"></a>
+
+## 11.16d0
+
+### The column a note points at is now one click away
+
+Where a note names a column in Annual Details, that name is now a link. Clicking it opens Annual
+Details, turns on the category the column belongs to, scrolls to the column and highlights it for a
+moment. **The columns you already had stay exactly as you left them**, and nothing about your plan is
+recalculated or reloaded. If the column is all zeros, Show Zero is turned on so it is still there to
+read. The same links are in the How To, on the columns and tabs it sends you to.
+
+**ACA Cliff plans get a new acaBreach column**, marked Yes in each year the cap could not be held
+alongside the Spend Goal. It is blank on plans not using an ACA cap, and hidden when it is blank
+throughout. The note under an ACA cap named this column before it existed.
+
+### The Documentation tab no longer reports a test failure that was not one
+
+The Documentation tab read **Documentation ❌ tests failed** on every load, over one failed test
+about the Limit menu's 24% entry. **No calculation was affected, and nothing in the menu was wrong.**
+The tab reads 🟢 again on load, as it already did with `?runtests` on the address.
+
+---
+
 <a id="11.16b0"></a>
 
 ## 11.16b0

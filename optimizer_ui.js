@@ -2563,6 +2563,7 @@ const columnCategories = {
     'StateCap': ['Taxation'],
     'BracketTarget': ['Taxation'],
     'BracketOverage': ['Taxation'],
+    'acaBreach': ['Taxation'],
     'ForcedIRA': ['Taxation', 'IRA Δ'],
 
     // IRA Changes - withdrawals, RMDs, and conversions
@@ -2641,7 +2642,8 @@ const columnGroupDefs = {
     'IRMAA': 'Taxes', 'Medicare': 'Taxes', 'totalTax': 'Taxes', 'FedTax': 'Taxes', 'StateTax': 'Taxes',
     'CapGains': 'Taxes', 'MAGI': 'Taxes', 'NominalRate%': 'Taxes',
     'FedCap': 'Taxes', 'StateCap': 'Taxes', 'SumTaxes': 'Taxes',
-    'BracketTarget': 'Taxes', 'BracketOverage': 'Taxes', 'ForcedIRA': 'Withdrawals',
+    'BracketTarget': 'Taxes', 'BracketOverage': 'Taxes', 'acaBreach': 'Taxes',
+    'ForcedIRA': 'Withdrawals',
     'IRA1': 'Balances', 'IRA2': 'Balances', 'TotalIRA': 'Balances',
     'Roth1': 'Balances', 'Roth2': 'Balances',
     'Cash': 'Balances', 'Roth': 'Balances', 'Brokerage': 'Balances',
@@ -2703,20 +2705,24 @@ function computeRunningTotals(log, inCurrentDollars) {
     return out;
 }
 
+// The category -> checkbox id map, in the order the boxes appear in the markup.
+//
+// One copy, because there were three: getActiveCategories() and showSpendingOnly() each spelled the
+// same ten ids out by hand, and showAnnualColumns() would have made a fourth. A category added to
+// `columnCategories` without a checkbox here is simply not reachable from the pickers, which is
+// already true of 'Withdrawals', 'Taxes', 'Who' and 'Market' - those are GROUP labels
+// (`columnGroupDefs`), a different vocabulary that happens to overlap.
+const CATEGORY_CHECKBOXES = {
+    'Summary': 'cat-summary', 'Balances': 'cat-balances', 'Income': 'cat-income',
+    'Taxation': 'cat-taxation', 'IRA Δ': 'cat-ira', 'Roth Δ': 'cat-roth',
+    'Brokerage Δ': 'cat-brokerage', 'Cash Δ': 'cat-cash', 'Opp. Cost': 'cat-oppcost',
+    'Spending': 'cat-spending',
+};
+
 // Get active categories based on checkbox state
 function getActiveCategories() {
-    const categories = [];
-    if (document.getElementById('cat-summary')?.checked) categories.push('Summary');
-    if (document.getElementById('cat-balances')?.checked) categories.push('Balances');
-    if (document.getElementById('cat-income')?.checked) categories.push('Income');
-    if (document.getElementById('cat-taxation')?.checked) categories.push('Taxation');
-    if (document.getElementById('cat-ira')?.checked) categories.push('IRA Δ');
-    if (document.getElementById('cat-roth')?.checked) categories.push('Roth Δ');
-    if (document.getElementById('cat-brokerage')?.checked) categories.push('Brokerage Δ');
-    if (document.getElementById('cat-cash')?.checked) categories.push('Cash Δ');
-    if (document.getElementById('cat-oppcost')?.checked) categories.push('Opp. Cost');
-    if (document.getElementById('cat-spending')?.checked) categories.push('Spending');
-    return categories;
+    return Object.keys(CATEGORY_CHECKBOXES)
+        .filter(cat => document.getElementById(CATEGORY_CHECKBOXES[cat])?.checked);
 }
 
 // Check if a column should be visible based on category filters
@@ -2842,18 +2848,152 @@ function updateColumnVisibility() {
 }
 
 // Phase P21: isolate the "Spending" category (unchecks all other cat-* boxes)
+//
+// Deliberately NOT built on showAnnualColumns() below. Its verb is "only": it is a button in the
+// table's own toolbar, pressed by a reader who can see what they are clearing. showAnnualColumns()
+// is the opposite operation - additive, fired from a sentence elsewhere on the page - and folding
+// the two together would give one of them the wrong behavior.
 function showSpendingOnly() {
-    const catIds = ['cat-summary', 'cat-income', 'cat-balances', 'cat-taxation',
-        'cat-ira', 'cat-roth', 'cat-brokerage', 'cat-cash', 'cat-oppcost'];
-    catIds.forEach(id => {
+    Object.values(CATEGORY_CHECKBOXES).forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.checked = false;
+        if (el) el.checked = (id === 'cat-spending');
     });
     const showAll = document.getElementById('show-all');
     if (showAll) showAll.checked = false;
-    const spending = document.getElementById('cat-spending');
-    if (spending) spending.checked = true;
     updateColumnVisibility();
+}
+
+// ── Sending a reader to a column, from anywhere on the page ─────────────────
+//
+// Several notes end "See BracketOverage in Annual Details." Following that by hand is four steps:
+// switch tabs, work out which category the column belongs to, tick that category, then find the
+// column among twenty-odd others. Two of those notes name a column that is OFF by default, so a
+// reader who followed the instruction literally arrived at a table that did not contain it.
+//
+// ADDITIVE, not isolating. The click comes from the sidebar, where the reader cannot see the table
+// they are about to disturb, so silently wiping their column selection would be a bigger action
+// than the one they asked for - and it has no undo. Findability is bought with the scroll and the
+// flash instead. Whatever they had checked stays checked.
+//
+// Returns true if it showed something, false if it changed nothing. The false case is what makes a
+// dead link impossible: `acaBreach` was named by a note for months while being an internal field
+// the table strips, and a test walks the links to keep that from coming back.
+let _colRevealTimer = null;
+function showAnnualColumns(...keys) {
+    keys = keys.flat().filter(Boolean);
+    if (!keys.length) return false;
+
+    // The Documentation tab can be read before anything has been simulated, so the table may not
+    // exist yet. Build it the way #btn-tbl does rather than sending the reader to an empty tab.
+    let table = document.getElementById('main-table');
+    let head = table?.tHead?.rows[table.tHead.rows.length - 1];
+    if (!head || !head.cells.length) {
+        if (typeof runSimulation === 'function') runSimulation();
+        table = document.getElementById('main-table');
+        head = table?.tHead?.rows[table.tHead.rows.length - 1];
+    }
+    if (!head || !head.cells.length) return false;
+
+    // Match on the rendered header text, which is `displayKey` - a trailing '!' is stripped at
+    // render time - never on the raw log key.
+    const cells = [...head.cells];
+    const found = [];
+    keys.forEach(key => {
+        const idx = cells.findIndex(th => th.textContent.trim() === key);
+        if (idx >= 0) found.push({ key, idx, th: cells[idx] });
+    });
+    if (!found.length) return false;   // nothing to show: leave the page exactly as it was
+
+    // Turn on only what is missing, and only the first category that has a picker.
+    const showAll = document.getElementById('show-all');
+    found.forEach(({ key }) => {
+        if (isColumnVisible(key)) return;
+        const cat = (columnCategories[key] ?? []).find(c => CATEGORY_CHECKBOXES[c]);
+        const box = cat && document.getElementById(CATEGORY_CHECKBOXES[cat]);
+        if (box) box.checked = true;
+        else if (showAll) showAll.checked = true;   // categorized outside the pickers
+    });
+
+    // A column of all zeros stays hidden behind its own switch. Ticking the switch - rather than
+    // stripping .hidden-column off the one cell - keeps updateColumnVisibility() the single
+    // authority, and shows the reader why the rest of the table changed with it.
+    const showEmpty = document.getElementById('show-empty-columns');
+    if (showEmpty && !showEmpty.checked && found.some(f => f.th.classList.contains('empty-column'))) {
+        showEmpty.checked = true;
+    }
+
+    // BEFORE the two steps below: inside a hidden card every rect reads 0, so syncTopScroll() would
+    // hide the mirror scrollbar and the scroll maths would land on 0.
+    showTab('tab-tbl');
+    updateColumnVisibility();
+
+    // Centre the first named column. Centring rather than left-aligning also clears the sticky
+    // `year` column, which would otherwise sit on top of it.
+    const sc = document.getElementById('tbl-scroll');
+    if (sc) {
+        const scRect = sc.getBoundingClientRect(), thRect = found[0].th.getBoundingClientRect();
+        const delta = (thRect.left - scRect.left) - Math.max(0, (scRect.width - thRect.width) / 2);
+        sc.scrollLeft = Math.max(0, sc.scrollLeft + delta);
+    }
+    // On a phone the sidebar is a full-width header above the table, so the table can be a screen
+    // away. Only scroll the page when it actually is.
+    const card = document.getElementById('tab-tbl');
+    if (card) {
+        const r = card.getBoundingClientRect();
+        if (r.top < 0 || r.top > window.innerHeight * 0.6) {
+            // NOT behavior:'smooth', which the other two scrollIntoView calls in this repo use.
+            // Measured on a 375x812 viewport with the table card 1,421px down the page: 'smooth'
+            // left scrollY at 0 and the reader saw nothing move, while the default 'auto' scrolled.
+            // A phone is exactly where this call matters, so it does not get to be the case that
+            // silently does nothing. No stylesheet here sets scroll-behavior, so 'auto' is a jump.
+            card.scrollIntoView({ block: 'start' });
+        }
+    }
+
+    // Say which column was the answer. A revealed column in a table of twenty is otherwise
+    // indistinguishable from the nineteen the reader did not ask for.
+    if (_colRevealTimer) { clearTimeout(_colRevealTimer); _colRevealTimer = null; }
+    document.querySelectorAll('.col-reveal').forEach(el => el.classList.remove('col-reveal'));
+    const bodyRows = table.querySelectorAll('tbody tr');
+    found.forEach(({ idx, th }) => {
+        th.classList.add('col-reveal');
+        bodyRows.forEach(row => row.cells[idx]?.classList.add('col-reveal'));
+    });
+    _colRevealTimer = setTimeout(() => {
+        document.querySelectorAll('.col-reveal').forEach(el => el.classList.remove('col-reveal'));
+        _colRevealTimer = null;
+    }, 2200);
+
+    return true;
+}
+
+// Prose that points at a TAB rather than a column. It clicks the real tab button instead of calling
+// showTab() directly, because the buttons do more than switch: #btn-opt runs the sweep, #btn-tbl
+// re-runs the simulation. A link that only called showTab('tab-opt') would land the reader on an
+// empty Optimizer. Clicking the button also means this can never drift from what the button does.
+function goToTab(tabId) {
+    const btn = document.querySelector(`.tab-btn[onclick*="${tabId}"]`);
+    if (!btn) return false;
+    btn.click();
+    return true;
+}
+
+// The two link builders. House style: a <span> with inline styles calling a bare global. No <a>,
+// and no href="#" - a fragment on the URL is exactly the reload risk these links exist to avoid.
+//
+// Deliberately no title=. setupSmallScreenUX() exempts only button/a/select/input/textarea from its
+// tap-popover conversion, so a titled span would both fire its onclick AND leave a popover floating
+// over the tab it just opened. The sentence around the link is the affordance.
+const _LINK_STYLE = 'cursor:pointer;color:#2980b9;text-decoration:underline;'
+                  + 'text-decoration-style:dotted;';
+function annualLink(...keys) {
+    keys = keys.flat().filter(Boolean);
+    const args = keys.map(k => `'${k}'`).join(',');
+    return `<span onclick="showAnnualColumns(${args})" style="${_LINK_STYLE}">`
+         + `${keys.join(' and ')}</span>`;
+}
+function tabLink(tabId, text) {
+    return `<span onclick="goToTab('${tabId}')" style="${_LINK_STYLE}">${text}</span>`;
 }
 
 // Rebuild the group header row based on currently visible columns
@@ -2953,6 +3093,7 @@ function updateTable(log) {
         'StateCap': 'Upper boundary of the current state tax bracket.',
         'BracketTarget': 'MAGI ceiling targeted by the bracket/IRMAA strategy this year (0 for other strategies).',
         'BracketOverage': 'Amount MAGI exceeded the bracket target. Two things put it above: spending needs that could not be funded inside the ceiling, and an Extra Annual Roth Conversion, which is added on top of the ceiling rather than fitted inside it.',
+        'acaBreach': 'Yes in a year an ACA Cliff plan could not both stay under its income cap and fund the Spend Goal. Two outcomes reach it: MAGI went over the cap anyway, which shows as BracketOverage, or the plan held the cap and left spending unfunded, which shows as shortfall. Blank on every plan that is not using an ACA FPL cap, and on cap years that held without costing anything.',
         'ForcedIRA': 'Extra IRA withdrawn to fund mandatory spending after Cash, Brokerage and Roth were exhausted. For the Fill Bracket and IRMAA Tier strategies this draw goes above their ceiling, which is what makes those ceilings soft. ACA Cliff never does this while its cap is in force: an IRA withdrawal is taxable income and crossing the cap forfeits the premium subsidy, so it leaves a shortfall instead. Once that cap ends at Medicare it is funded like any other strategy.',
         'spendGoal': 'This amount increases by inflation less Spend Delta%.',
         'Roth': 'Combined Roth balance at year end.',
@@ -3106,7 +3247,12 @@ function updateTable(log) {
                 const isPercent = key.toLowerCase().includes('%');
                 const isYear = key.toLowerCase().includes('yr') || key.toLowerCase().includes('year');
 
-                if (value != null && !isNaN(value)) {
+                // `value !== ''` is load-bearing: isNaN('') is FALSE, because Number('') is 0, so an
+                // empty cell took the numeric branch and printed "0". P99 found it on `acaBreach`,
+                // whose blank years read as a real zero beside the years that read "Yes". It is the
+                // only key in any log that holds '', so this is that column and nothing else -
+                // measured, not assumed - but the rule is general: an empty cell is not a zero.
+                if (value != null && value !== '' && !isNaN(value)) {
                     if (isPercent) {
                         // Format as percentage (convert from decimal)
                         td.textContent = (value * 100).toFixed(2);
@@ -4874,7 +5020,7 @@ function updateExtraConvWarning() {
         + `Your strategy fills income up to the ceiling, then this amount goes over it.${measured} `
         + `That can be exactly what you want - a ceiling paces ordinary withdrawals, while a `
         + `conversion moves money from IRA to Roth rather than out of the household - but the `
-        + `ceiling will not hold while it is set. See BracketOverage and IRMAA in Annual Details.`;
+        + `ceiling will not hold while it is set. See ${annualLink('BracketOverage','IRMAA')} in Annual Details.`;
     box.style.display = '';
 }
 
@@ -4914,7 +5060,7 @@ function updateExtraConvWarning() {
 function limitWarningText(rows, kind, totalYears) {
     const isACA = kind === 'the ACA FPL cap';
     const forced = r => (r.BracketOverage ?? 0) - (r['-overageFromConv'] ?? 0);
-    const yrs = isACA ? rows.filter(r => r['-acaBreach']) : rows.filter(r => forced(r) > 1);
+    const yrs = isACA ? rows.filter(r => r['acaBreach']) : rows.filter(r => forced(r) > 1);
     if (!yrs.length) return '';
 
     const chose = r => (r.IRAwd ?? 0) + (r.ForcedIRA ?? 0);
@@ -4947,7 +5093,7 @@ function limitWarningText(rows, kind, totalYears) {
             out += ` Separately, spending pushes the plan over in ${spendDriven.length} other `
                 + `${spendDriven.length === 1 ? 'year' : 'years'}, by up to ${money(worstOf(spendDriven))}.`;
         }
-        return out + ` See RMDwd and BracketOverage in Annual Details.`;
+        return out + ` See ${annualLink('RMDwd','BracketOverage')} in Annual Details.`;
     }
 
     const n = spendDriven.length, worst = worstOf(spendDriven);
@@ -4972,7 +5118,7 @@ function limitWarningText(rows, kind, totalYears) {
         out += ` In ${structural.length} further ${structural.length === 1 ? 'year' : 'years'} the `
              + `plan is over on required income alone, which no Spend Goal reaches.`;
     }
-    return out + ` See ${isACA ? 'acaBreach and ' : ''}BracketOverage in Annual Details.`;
+    return out + ` See ${isACA ? annualLink('acaBreach','BracketOverage') : annualLink('BracketOverage')} in Annual Details.`;
 }
 
 function updateLimitFeasibilityWarning() {

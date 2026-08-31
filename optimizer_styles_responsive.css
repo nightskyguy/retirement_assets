@@ -62,6 +62,23 @@ table td.hidden-column {
     display: none;
 }
 
+/* The column a "See X in Annual Details" link just revealed, for about two seconds.
+   Set by showAnnualColumns(); a revealed column in a table of twenty is otherwise
+   indistinguishable from the nineteen the reader did not ask for.
+
+   No @keyframes and no transition. A transition declared HERE cannot fade the class out: it leaves
+   with the class, so the removal is instant either way, and the honest thing is not to imply
+   otherwise. Fading it properly would mean a transition on every table cell, which then fires on
+   each of the many rebuilds updateTable() does.
+
+   Yellow rather than the red of .highlight-input, because a column someone asked to see is not an
+   error. !important beats the per-cell inline background the renderer paints (IRMAA tier tints,
+   the orange BracketOverage cells), which would otherwise win over a class. */
+table th.col-reveal,
+table td.col-reveal {
+    background-color: #fff3b0 !important;
+}
+
 /* Optional: Style empty columns differently when visible */
 table th.empty-column {
     background-color: #f0f0f0;
@@ -536,29 +553,6 @@ th[title] {
     border: 1px solid #ddd;
 }
 
-.drawer-grid { 
-    display: grid; 
-    grid-template-columns: 1fr;
-    gap: 20px; 
-}
-
-.drawer-section h4 { 
-    border-bottom: 1px solid #eee; 
-    padding-bottom: 5px; 
-    margin-top: 0; 
-    color: #2c3e50; 
-}
-
-.drawer-section ul { 
-    padding-left: 20px; 
-}
-
-.drawer-section li { 
-    margin-bottom: 10px; 
-    line-height: 1.4; 
-    color: #555; 
-}
-
 .log-entry { 
     font-size: 0.85rem; 
     margin-bottom: 12px; 
@@ -819,11 +813,6 @@ table th.empty-column {
         top: 100%;
         width: 100%;
         margin-top: 5px;
-    }
-    
-    .drawer-grid {
-        grid-template-columns: 1fr 1fr;
-        gap: 40px;
     }
     
     .drawer-content {

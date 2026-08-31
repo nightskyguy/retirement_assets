@@ -8,7 +8,7 @@ renamed, or repurposed — it's a map, not a changelog (changelog-style history 
 
 | File | What it is |
 |---|---|
-| `retirement_optimizer.html` | The main tool — withdrawal/conversion strategy optimizer, Monte Carlo, Annual Details. Loads `optimizer_core.js`, `optimizer_ui.js`, `optimizer_text.js`, `optimizer_tests.js`, `optimizer_styles_responsive.css`, `taxengine.js`, `displayhelpers.js`, `doclinks.js`, `other_tools.js`, and `montecarlo/*`. |
+| `retirement_optimizer.html` | The main tool — withdrawal/conversion strategy optimizer, Monte Carlo, Annual Details. Loads `optimizer_core.js`, `optimizer_ui.js`, `optimizer_tests.js`, `optimizer_styles_responsive.css`, `taxengine.js`, `displayhelpers.js`, `doclinks.js`, `other_tools.js`, and `montecarlo/*`. |
 | `Retirement_Projection.html` | Simpler, chart-forward projection tool (2 IRAs, 1 Brokerage, 1 Cash, 1 Roth). Shares `taxengine.js` with the Optimizer. |
 | `RetirementTaxPlanner.html` | Single-year "how do I actually pay this tax bill" planner (withholding vs. quarterly estimates vs. mixed). Opened by the Optimizer's Annual Details table (click a year or the `totalTax` column) with that year's numbers pre-filled. |
 | `standalone/RealReturns.html` | Historical Real Returns — inflation-adjusted growth of $10k across equities/bonds/T-bills/gold/etc, 1928–2025. Uses `standalone/real_returns_data.js` and `montecarlo/historical_returns.js`. |
@@ -47,7 +47,6 @@ same stub pattern, just within `standalone/` rather than at root.)
 | `taxengine.js` | Shared Federal + state tax calculation engine (`TAXData`, `calculateProgressive`, IRMAA, NIIT, SS taxation, retirement-income exclusions). Used by the Optimizer, Retirement Projection, and Income Tax Planner. |
 | `optimizer_core.js` | Pure simulation engine for the Optimizer — no DOM/localStorage access, so it's independently `node`-testable. Year-by-year withdrawal/conversion/tax simulation, optimizer sweep, Break-Even/Stop-Year diagnostics. |
 | `optimizer_ui.js` | All DOM/chart/share-URL/scenario-persistence code for `retirement_optimizer.html`. Depends on `optimizer_core.js` + `taxengine.js` being loaded first; shares global scope (not a module). |
-| `optimizer_text.js` | Long-form static content for the Optimizer's Documentation/How-to-Use tab. |
 | `optimizer_styles_responsive.css` | Responsive/mobile layout CSS for the Optimizer. |
 | `displayhelpers.js` | Shared numeric-input parsing/formatting + tooltip helpers, used across multiple tools. |
 | `other_tools.js` | Shared "Other Tools" cross-link widget (the `TOOLS` list) rendered on multiple pages so each tool can link to the others. |

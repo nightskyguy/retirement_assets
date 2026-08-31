@@ -2540,8 +2540,16 @@ assertEqual(
 		// One factor serves both families, so the two tables have to share a year.
 		assertEqual(TAXData.IRMAA.YEAR, TAXData.FEDERAL.YEAR,
 			'the federal and IRMAA tables are the same vintage');
-		const sel = document.getElementById('stratRate');
-		if (!sel) return;
+		// Built here, DETACHED, rather than read off #stratRate. runTests() is called at parse time
+		// from retirement_optimizer.html, which is BEFORE the DOMContentLoaded handler fills that
+		// control - so reading it live reads the markup placeholder, a lone `<option value="24">`
+		// with no data-limit, and the check collapses to NaN vs the engine's 24% ceiling. That is
+		// the single failure the badge showed on every load and never with ?runtests, where the
+		// mutating acaOptionsUngated suite above happens to build the real list first. The builder
+		// is pure, so building a copy asserts about the builder instead of about run order.
+		if (typeof generateStratRateOptions !== 'function') return;
+		const sel = document.createElement('select');
+		sel.innerHTML = generateStratRateOptions();
 		const status = getDropdownStatus();
 		for (const o of sel.options) {
 			if (!/^\d+$/.test(o.value)) continue;
@@ -2633,6 +2641,104 @@ assertEqual(
 		const convOnly = { BracketOverage: 50000, '-overageFromConv': 50000, IRAwd: 60000, ForcedIRA: 0 };
 		assertEqual(limitWarningText([convOnly, clean], 'the federal bracket ceiling', 2), '',
 			'an overage a conversion caused belongs to the conversion note, not this one');
+
+		// ===== The columns the note names are a link, and the link names real columns =====
+		// P99. "See BracketOverage in Annual Details" was an instruction, four steps long, ending in
+		// a column that is off by default. It is now the click itself.
+		assertEqual(/showAnnualColumns\('RMDwd','BracketOverage'\)/.test(onlyRequired), true,
+			'the required-income note links both columns it names');
+		assertEqual(/showAnnualColumns\('BracketOverage'\)/.test(onlySpending), true,
+			'and the spending note links the one it names');
+
+		// The ACA branch. It said "See acaBreach and BracketOverage in Annual Details" while
+		// acaBreach was emitted as '-acaBreach', which the table strips - a column that could not be
+		// shown, named in the one sentence whose job was to send the reader to it.
+		const acaYear = { BracketOverage: 12000, acaBreach: 'Yes', IRAwd: 30000, ForcedIRA: 0 };
+		const acaOut = limitWarningText([acaYear, clean], 'the ACA FPL cap', 2);
+		assertEqual(/showAnnualColumns\('acaBreach','BracketOverage'\)/.test(acaOut), true,
+			'the ACA note links acaBreach, which is now a column: ' + acaOut);
+
+		// ===== A note may not name a column that does not exist =====
+		// The invariant, not the instance. Walk every link these notes can produce and check the key
+		// against the same two rules the table itself uses to decide what becomes a column. Any
+		// future "See X in Annual Details" naming a non-column fails here, on rows in and HTML out,
+		// with no page to drive.
+		if (typeof columnCategories !== 'undefined' && typeof isTableColumnKey === 'function') {
+			[onlyRequired, onlySpending, acaOut, mixed].forEach(html => {
+				for (const m of html.matchAll(/showAnnualColumns\(([^)]*)\)/g)) {
+					m[1].split(',').map(a => a.trim().replace(/^'|'$/g, '')).forEach(key => {
+						assertEqual(columnCategories.hasOwnProperty(key) && isTableColumnKey(key), true,
+							`the note links "${key}", which has to be a real Annual Details column`);
+					});
+				}
+			});
+		}
+	})();
+
+	// ===== An empty cell is not a zero =====
+	// `isNaN('')` is FALSE, because Number('') is 0, so an empty string took the renderer's NUMERIC
+	// branch and printed "0". Found on acaBreach the moment it became a column: its non-breach years
+	// read as a hard "0" beside the years reading "Yes", which says "measured, and it was none"
+	// rather than "does not apply". acaBreach is the only key in any log that holds '', so this pins
+	// the rule on the one column that exercises it.
+	// ⚠ UNSAFE - MUTATES: rebuilds the Annual Details table from a synthetic log.
+	(function anEmptyCellIsNotAZero() {
+		if (!unsafeTest('anEmptyCellIsNotAZero')) return;   // rebuilds #main-table
+		if (typeof updateTable !== 'function') return;
+		try {
+			// Two rows, one of each, so the column is not all-empty and therefore not hidden.
+			updateTable([{ year: 2026, acaBreach: 'Yes' }, { year: 2027, acaBreach: '' }]);
+			const hs = [...document.querySelectorAll('#main-table thead tr:last-child th')];
+			const i = hs.findIndex(h => h.textContent.trim() === 'acaBreach');
+			if (i < 0) return;
+			const rows = [...document.querySelectorAll('#main-table tbody tr')];
+			assertEqual(rows[0].cells[i].textContent, 'Yes', 'a breach year says so');
+			assertEqual(rows[1].cells[i].textContent, '',
+				'and a year that did not breach is BLANK, not the "0" an empty string used to print');
+		} finally {
+			if (window.lastSimulationLog) updateTable(window.lastSimulationLog);
+		}
+	})();
+
+	// ===== The link opens the tab, reveals the column, and keeps the reader's other columns =====
+	// The contract is ADDITIVE. A reader clicking from the sidebar cannot see the table they are
+	// about to disturb, so the click turns on what the named column needs and nothing else; wiping
+	// their selection would be a bigger action than the one they asked for, with no undo.
+	// ⚠ UNSAFE - MUTATES: the column checkboxes, the active tab, and the Annual Details table.
+	(function annualColumnLinkRevealsTheColumn() {
+		if (!unsafeTest('annualColumnLinkRevealsTheColumn')) return;   // writes the column pickers
+		if (typeof showAnnualColumns !== 'function' || typeof updateTable !== 'function') return;
+		const tax = document.getElementById('cat-taxation'), summ = document.getElementById('cat-summary');
+		const card = document.getElementById('tab-tbl');
+		if (!tax || !summ || !card) return;
+		const wasTax = tax.checked, wasSumm = summ.checked, wasHidden = card.classList.contains('hidden');
+		try {
+			updateTable(simulate(getInputs()).log);
+			summ.checked = true; tax.checked = false;
+			updateColumnVisibility();
+
+			assertEqual(showAnnualColumns('BracketOverage'), true,
+				'a link to a real column reports that it showed it');
+			assertEqual(tax.checked, true, 'and turns on the category that column lives in');
+			assertEqual(summ.checked, true,
+				'while leaving every category the reader already had, which is the whole contract');
+			assertEqual(card.classList.contains('hidden'), false, 'and opens Annual Details');
+			const th = [...document.querySelectorAll('#main-table thead tr:last-child th')]
+				.find(h => h.textContent.trim() === 'BracketOverage');
+			assertEqual(!!th && !th.classList.contains('hidden-column'), true,
+				'and the column itself is on screen, not merely permitted');
+
+			// The guard that makes a dead link impossible.
+			summ.checked = true; tax.checked = false;
+			updateColumnVisibility();
+			assertEqual(showAnnualColumns('nosuchcolumn'), false,
+				'a link to a column that does not exist reports that it showed nothing');
+			assertEqual(tax.checked, false, 'and changes no checkbox on its way out');
+		} finally {
+			tax.checked = wasTax; summ.checked = wasSumm;
+			updateColumnVisibility();
+			if (wasHidden) card.classList.add('hidden');
+		}
 	})();
 
 	// ===== A limit that could not be kept says so =====

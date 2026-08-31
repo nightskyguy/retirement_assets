@@ -33,7 +33,6 @@ flowchart TD
     subgraph uilayer["UI layer - all DOM, charts, URL, storage"]
         UI["optimizer_ui.js<br/>getInputs, runSimulation, runOptimizer<br/>updateTable, updateCharts, updateStats"]
         DH["displayhelpers.js<br/>parseShorthand, setDollarValue, tooltips"]
-        TEXT["optimizer_text.js<br/>drawerContent - docs and help copy"]
         TESTS["optimizer_tests.js<br/>runTests - in-browser console suite"]
         OTHER["other_tools.js<br/>shared Other Tools widget"]
         CSS["optimizer_styles_responsive.css"]
@@ -63,7 +62,6 @@ flowchart TD
     HTML -->|3| CORE
     HTML -->|4| UI
     HTML -->|5| TESTS
-    HTML -->|6| TEXT
     HTML --> OTHER
     HTML --> MCTAB
     HTML --> MCCTL
@@ -76,7 +74,6 @@ flowchart TD
     UI --> CORE
     UI --> DH
     UI --> CHARTJS
-    UI --> TEXT
     MCTAB --> MCCTL
     MCTAB --> CORE
     MCTAB -->|getInputs| UI
@@ -99,7 +96,7 @@ flowchart TD
     classDef pure fill:#0d3b2e,stroke:#2f9e79,color:#e6fff5
     classDef dom fill:#26303f,stroke:#5b8def,color:#e8eefc
     class TAX,CORE pure
-    class UI,DH,TEXT,TESTS,OTHER dom
+    class UI,DH,TESTS,OTHER dom
 ```
 
 **The contract that matters:** `optimizer_core.js` and `taxengine.js` touch no DOM, no
@@ -312,7 +309,6 @@ size to zero and still makes the draw.
 | `optimizer_core.js` | engine | `simulate`, year steps `beginYear` .. `endYear`, `optimizeSpend`, `optimizeSpendDown`, `optimizeConversionAmount`, `bestTimeLimitedConversion`, `bestConversionStopYear`, `breakEvenHeirsRate`, `lowestBreakEvenHeirsRate`, `selectConversionCandidates`, `baselineScoreOf`, `rankRowsByObjective`, `buildStrategyFamilies` (the strategy enumeration both sweeps share, with `MC_GRIDS` / `OPTIMIZER_GRIDS`), `buildVariations`, `calculateWithdrawals`, `computeBracketCeiling`, `splitPreferLarger` |
 | `optimizer_ui.js` | UI | `getInputs`, `runSimulation`, `runOptimizer`, `renderOptimizerTable`, `loadOptimizerResult`, `updateTable`, `updateStats`, `updateCharts`, `openTaxPlanner`, `buildShareURL`, `loadFromURL`, `saveScenario`, `applyScenario`, `setOptObjective`, `applyConvStopYear` |
 | `displayhelpers.js` | UI | `DisplayHelpers.setDollarValue`, `parseShorthand`, formatting and tooltip helpers |
-| `optimizer_text.js` | UI | `drawerContent` - How to Use, Documentation, FAQ copy |
 | `optimizer_tests.js` | UI | `runTests` - in-browser console suite |
 | `other_tools.js` | UI | shared Other Tools widget across all pages |
 | `doclinks.js` | UI | `DocLinks.docHref` - maps `.md` hrefs to the `.html` pages Pages generates |

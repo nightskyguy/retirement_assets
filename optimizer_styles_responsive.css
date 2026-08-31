@@ -553,29 +553,6 @@ th[title] {
     border: 1px solid #ddd;
 }
 
-.drawer-grid { 
-    display: grid; 
-    grid-template-columns: 1fr;
-    gap: 20px; 
-}
-
-.drawer-section h4 { 
-    border-bottom: 1px solid #eee; 
-    padding-bottom: 5px; 
-    margin-top: 0; 
-    color: #2c3e50; 
-}
-
-.drawer-section ul { 
-    padding-left: 20px; 
-}
-
-.drawer-section li { 
-    margin-bottom: 10px; 
-    line-height: 1.4; 
-    color: #555; 
-}
-
 .log-entry { 
     font-size: 0.85rem; 
     margin-bottom: 12px; 
@@ -836,11 +813,6 @@ table th.empty-column {
         top: 100%;
         width: 100%;
         margin-top: 5px;
-    }
-    
-    .drawer-grid {
-        grid-template-columns: 1fr 1fr;
-        gap: 40px;
     }
     
     .drawer-content {

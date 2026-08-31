@@ -17,6 +17,18 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.16cf"></a>
+
+## 11.16cf
+
+### The Documentation tab no longer reports a test failure that was not one
+
+The Documentation tab read **Documentation ❌ tests failed** on every load, over one failed test
+about the Limit menu's 24% entry. **No calculation was affected, and nothing in the menu was wrong.**
+The tab reads 🟢 again on load, as it already did with `?runtests` on the address.
+
+---
+
 <a id="11.16b0"></a>
 
 ## 11.16b0

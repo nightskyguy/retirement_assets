@@ -2540,8 +2540,16 @@ assertEqual(
 		// One factor serves both families, so the two tables have to share a year.
 		assertEqual(TAXData.IRMAA.YEAR, TAXData.FEDERAL.YEAR,
 			'the federal and IRMAA tables are the same vintage');
-		const sel = document.getElementById('stratRate');
-		if (!sel) return;
+		// Built here, DETACHED, rather than read off #stratRate. runTests() is called at parse time
+		// from retirement_optimizer.html, which is BEFORE the DOMContentLoaded handler fills that
+		// control - so reading it live reads the markup placeholder, a lone `<option value="24">`
+		// with no data-limit, and the check collapses to NaN vs the engine's 24% ceiling. That is
+		// the single failure the badge showed on every load and never with ?runtests, where the
+		// mutating acaOptionsUngated suite above happens to build the real list first. The builder
+		// is pure, so building a copy asserts about the builder instead of about run order.
+		if (typeof generateStratRateOptions !== 'function') return;
+		const sel = document.createElement('select');
+		sel.innerHTML = generateStratRateOptions();
 		const status = getDropdownStatus();
 		for (const o of sel.options) {
 			if (!/^\d+$/.test(o.value)) continue;

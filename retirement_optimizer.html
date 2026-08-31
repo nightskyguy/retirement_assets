@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.16b0</title>
+    <title>Retirement Optimizer 11.16cf</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -64,7 +64,7 @@
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
 	<script src="optimizer_ui.js?v=1116b0"></script>
-	<script src="optimizer_tests.js?v=1116b0"></script>
+	<script src="optimizer_tests.js?v=1116cf"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -891,6 +891,11 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="display"><b>11.16cf</b>
+					<strong>The Documentation tab no longer reports a test failure that was not one.</strong>
+					The Documentation tab read <strong>Documentation ❌ tests failed</strong> on every load, over one failed test about the Limit menu's 24% entry. <strong>No calculation was affected, and nothing in the menu was wrong.</strong>
+					<a href="optimizer_changelog.md#11.16cf" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="behavior"><b>11.16b0</b>
 					<strong>Fill Fed Bracket now fills the bracket.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">

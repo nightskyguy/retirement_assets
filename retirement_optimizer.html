@@ -60,16 +60,59 @@
 	<base target="_blank">	
 	<script src="taxengine.js?v=1116d7"></script>
 	<script src="optimizer_core.js?v=1116d6"></script>
-	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
-	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
-	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=1116d5"></script>
-	<script src="optimizer_tests.js?v=1116d6"></script>
+	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
+	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
+	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
+	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
+	     rule the maintenance note further down states. -->
+	<script src="optimizer_ui.js?v=1116f0"></script>
+	<script src="optimizer_tests.js?v=1116f0"></script>
 </head>
 <body>
 
 <div class="container">
 	<div class="sidebar">
+		<!-- P102b1. Goal-first mode: an ALTERNATIVE surface, not a replacement. Every control
+		     here DRIVES the classic controls below, through the same adopt paths the ⓘ suggestions
+		     already use. Nothing here is read by getInputs(), reaches the engine, or appears in a
+		     share URL - so turning the nerdknob off leaves the sidebar holding exactly the plan this
+		     panel built. The fallback is the existing UI, already populated, never a rollback.
+		     display:none is in the markup as well as in applyNerdKnobVisibility(), so the panel stays
+		     hidden even if that function never runs. Gated on ?nerdknob=goal, not the plain knob
+		     (P102b7): kept, but not accidentally findable.
+
+		     It is a SIBLING of #strategy-container, deliberately, not a child of it. Inside, it
+		     inherited that box's orange border and read as part of "5. Withdrawal Strategy" - which is
+		     the one thing it is not: it asks what you want, where the box below asks how to get it.
+		     Being outside also keeps it clear of the #strategy-container .input-group override that
+		     strips borders and padding from anything nested in there. -->
+		<div id="goalfirst-panel" style="display:none;margin-bottom:10px;padding:8px 10px;background:#eef4fb;border:1px solid #c9dcf0;border-radius:6px;">
+			<div style="font-size:0.85em;font-weight:700;color:#1a4d70;margin-bottom:6px;letter-spacing:0.02em;">GOAL FIRST (EXPERIMENTAL)</div>
+			<div style="font-size:0.82em;color:#555;margin-bottom:8px;line-height:1.35;">State the goal and the tool sets the controls below to match. Whatever it picks stays visible down there, so you can always see what it chose and change it by hand.</div>
+			<div class="input-group">
+				<!-- The SAME control as "Optimize for" on the Optimizer tab, not a second setting.
+				     Both drive setOptObjective(), which writes the value back to whichever select did
+				     not raise it, so the two can never disagree. It is mirrored here because it is the
+				     goal every other answer is measured against, and asking it two tabs away from the
+				     conversion question made a dance out of one decision. Options are BUILT from
+				     OPT_OBJECTIVE_ORDER so this list cannot drift from the one over there. -->
+				<label style="display:block;" title="The goal the Optimizer ranks every strategy by. It changes which plan the tool puts in front of you and which columns the table shows; it never changes the numbers themselves. This is the same setting as Optimize for at the top of the Optimizer tab.">Optimize for
+				<select id="gf-objective" data-no-share onchange="setOptObjective(this.value)" style="width:100%;max-width:none;"></select></label>
+				<div id="gf-objective-note" style="font-size:0.8em;color:#555;margin-top:4px;line-height:1.3;"></div>
+			</div>
+			<div class="input-group">
+				<label style="display:block;" title="Let the tool decide leaves every conversion control at its own setting and lets the Optimizer keep searching for a conversion amount. Never convert turns off Maximize Conversions, Convert Excess to Roth and Use Cash, sets Extra Annual Roth Conversion to 0, and turns off Optimize Conversions on the Optimizer tab. Switch back to Let the tool decide and your previous settings return.">Roth conversions
+				<select id="gf-conv-mode" data-no-share onchange="onGoalConvModeChange()" style="width:100%;max-width:none;">
+					<option value="auto" selected>Let the tool decide</option>
+					<option value="never">Never convert</option>
+				</select></label>
+				<!-- Visible text, not a tooltip: a phone cannot hover, and a reader who chose "never"
+				     has to know the table is still showing them what they turned down. -->
+				<div id="gf-conv-note" style="display:none;font-size:0.8em;color:#555;margin-top:4px;line-height:1.3;">Your plan now converts nothing. The Optimizer table still lists strategies that do convert, so you can see what you are turning down.</div>
+			</div>
+			<div style="font-size:0.8em;color:#555;margin-top:8px;line-height:1.3;">Your other goal, <b>After-Tax Spend</b>, is just below. Whether to stop converting is part of <b>Stop conversions after</b>, further down.</div>
+		</div>
+
 		<div id="strategy-container">
 			<div style="font-size:0.85em;font-weight:700;color:#e65100;margin-bottom:6px;letter-spacing:0.02em;">5. Withdrawal Strategy</div>
 		    <div class="row"><div  id="spending">
@@ -183,12 +226,23 @@
 				<div id="extraConv-warn" style="display:none;margin-top:4px;padding:6px 8px;border-left:3px solid #d97706;background:#fffbeb;color:#78350f;font-size:0.85em;line-height:1.35;"></div>
 			</div>
 			<div class="input-group" id="convEndYear-wrap" style="margin-top:4px;">
-				<label title="Stop Roth conversions after this point. Enter a CALENDAR YEAR (4+ digits, e.g. 2031) or an AGE for you (fewer than 4 digits, e.g. 71) - that is the LAST year conversions run; they cease the year after. Blank = convert for the whole plan (today's behavior). Evidence shows converting past the point where the tax paid stops earning its keep can leave you worse off than never converting; the Break Even ⓘ suggests the year that maximized after-tax wealth in this plan. Scope: 'all conversions' stops both your strategy's own bracket-fill AND the Extra Annual Roth Conversion (the stronger lever); 'extra only' stops just the Extra Annual Roth Conversion and lets the strategy keep filling brackets.">Stop conversions after (year or age)
+				<label title="Stop Roth conversions after this point. Enter a CALENDAR YEAR (4+ digits, e.g. 2031) or an AGE for you (fewer than 4 digits, e.g. 71) - that is the LAST year conversions run; they cease the year after. Blank = convert for the whole plan (today's behavior). Evidence shows converting past the point where the tax paid stops earning its keep can leave you worse off than never converting. Scope: 'all conversions' stops both your strategy's own bracket-fill AND the Extra Annual Roth Conversion (the stronger lever); 'extra only' stops just the Extra Annual Roth Conversion and lets the strategy keep filling brackets. 'when they stop paying' searches for the year that ended with the most after-tax wealth and fills the box in for you, keeping it current as the plan changes; the box is then read-only because the tool owns it.">Stop conversions after (year or age)
 				<input type="text" id="convEndYear" value="" placeholder="never" data-plain style="width:70px;font-size:14px;">
-				<select id="convEndMode" style="font-size:0.9em;margin-left:4px;">
+				<!-- P102b2 v2. "when they stop paying" is a third POSITION of the same question rather
+				     than a switch beside it: the answer is still a stop year, the only difference is who
+				     works it out. It also removes a control that read as live while conversions were
+				     switched off entirely.
+				     The option is nerdknob-gated by refreshConvEndModeOptions(), the way the ACA entries
+				     in the Limit menu are; the engine never sees it, because getInputs() already maps
+				     anything that is not 'extra' to 'all', which is the scope this position implies
+				     (P24 measured extra-only stopping as much weaker). -->
+				<select id="convEndMode" onchange="onConvEndModeChange()" style="font-size:0.9em;margin-left:4px;">
 					<option value="all" selected>all conversions</option>
 					<option value="extra">extra only</option>
 				</select></label>
+				<!-- Visible text, not a tooltip: a phone cannot hover, and when the search comes back
+				     with nothing the empty box needs to say why. Filled by syncAutoStopYear(). -->
+				<div id="convEndAuto-note" style="display:none;font-size:0.8em;color:#555;margin-top:4px;line-height:1.3;"></div>
 			</div>
 			<div class="input-group" style="margin-top:4px;">
 				<label class="toggle" title="Cycle Brokerage: alternates IRA draw years with brokerage harvest years. Spends N IRA years then 1 brokerage Long-Term Capital Gains (LTCG) harvest year. Enables Dividend Reinvestment (DRIP). Surplus reinvests into Brokerage. Optimizer and Monte Carlo (MC) run IRA-first and brokerage-first orders. See changelog for caveats (ACA/IRMAA income spikes, basis depletion).">

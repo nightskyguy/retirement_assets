@@ -11,14 +11,14 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P100 | Optimizer ranks unstably and scores tax not outcome; Stage A first | `P100a1` |
+| **O0** | P103 | The ceiling, then the rules: re-run the oracle, close its two holes, unify P75/P5, regime bake-offs | `P103a` |
 | **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
-| **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
-| **O1** | P35 | Phased; **O1 by user 2026-08-31** - cannot be "ideal" until P75/P36 land | `P35i` |
-| **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
-| **O1** | P34 | Conversion search is 75% of a sweep; 22-62 s on an older laptop | `P34a` |
-| **O1** | P28j | Withdrawal timing keys off conversion; the $1,000 nobody chose | `P28ja` |
+| **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
+| **O1** | P35 | Phased is the CARRIER for whatever rules `P103d` picks; `P35i` waits on that evidence | `P35i` |
+| **O1** | P36 | round 2 measures against the `P103a` ceiling, not rank-among-arms | `P36b` |
+| **O1** | P34 | NOT a P103 prerequisite (a-d are node harnesses); still the whole slow-machine story | `P34a` |
+| **O1** | P28j | `P28jf` is the one RESULT item here: the timing rule moves every converting row | `P28jb` |
 
 **P86 COMPLETE on this branch, v11.1690, commits bd2c875..976452e.** Every displayed dollar honors the Future-$/Current-$ toggle: running totals are UI-computed sums of deflated years (Spendable renamed SumSpendable), RMD/QCD/fee-average/ConvTax/BreakEven follow, and the whole MC tab deflates each path by its OWN inflation (flat-CAGR kept only as stale-worker fallback). Suites **358**/61/22.
 **P81, P78, P79, P82 and P80 all COMPLETE on this branch, v11.1667-v11.1671.** Social Security and a capped pension survive a deflationary year; a replay survives editing; the survival chart draws the ten captured paths; prev/next is one 46-stop ring; the Market Return chart names the year replayed.
@@ -26,10 +26,331 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 **P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 **P88, P89, P90 COMPLETE v11.16a4** - conversions reach MAGI so IRMAA charges them (+30% to +132% at $100k); warnings name the ceilings they break; the ACA gate reads the plan's real first year; two chart fixes. Suites **366**/61/22. **P91 DONE v11.16a5: the Stress Test's first result was computed on a STALE horizon (8/36 where the truth is 0/40) because a refresh displaced by an in-flight one was DROPPED, never retried; now coalesced. The full sweep was silently stale the same way and now raises its Out-of-date banner. Was on `main` too - never a regression from this branch.**
-User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. 2026-08-31: P98 opened and closed - an in-page test read the Limit menu before `DOMContentLoaded` built it. **2026-08-31 CLEANUP (user):** P35 to **O1** (cannot be "ideal" until P75/P36 land), leaving P87 the sole O0; 34 stale boxes closed under phases already shipped; **29 never-started phases moved to `.planning/retirement-optimizer/task_parked.md`** (nothing deleted); P28f/g/h confirmed shipped v11.162B; the 40/60 closed for good in **`P30i`**. **P101 opened** (2026-08-31, user): worked examples served from `examples/` and loadable by name, with notes - O2. Full index next.
+User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. 2026-08-31: P98 opened and closed - an in-page test read the Limit menu before `DOMContentLoaded` built it. **2026-08-31 CLEANUP (user):** P35 to **O1** (cannot be "ideal" until P75/P36 land), leaving P87 the sole O0; 34 stale boxes closed under phases already shipped; **29 never-started phases moved to `.planning/retirement-optimizer/task_parked.md`** (nothing deleted); P28f/g/h confirmed shipped v11.162B; the 40/60 closed for good in **`P30i`**. **P101 opened** (2026-08-31, user): worked examples served from `examples/` and loadable by name, with notes - O2. **P102 opened and Stage B SHIPPED** (2026-09-01, user): goal-first mode, an ALTERNATIVE nerdknob-gated surface that drives the classic controls and never replaces them; `P30i` closed inside it. **P103 opened, O0** (2026-09-01, user: "reorder as you proposed"): the ceiling then the rules - `P75` and parked `P5` merged into it, `P100` to O1 as SELECTION not RESULT, `P102` Stages C/D deferred behind `P103d`. Full index next.
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
+
+## P103: the ceiling, then the rules  *(NEW 2026-09-01, user-raised, O0, MEASURE FIRST)*
+
+**The user's question, 2026-09-01:** *"Ultimately what I think is best is to exhaustively solve for the
+'ideal' solution - determine what that cost is and then decide how to change the UI/search/tool. The
+problem is that I am not confident the engine has the right plumbing to begin with. It is imbued with
+several specific withdrawal strategies, and I'm fairly convinced that no single strategy really is most
+effective. Is there anything in the proposed steps ahead that will actually produce a better financial
+plan as opposed to tweaking around the current architecture and UI?"*
+
+**The answer, verified by seven independent readers and three adversarial passes (2026-09-01;
+session-local transcripts, summarized in the six lines below):** the
+study already exists and priced the gap; the plumbing mostly exists with two named holes; no single
+strategy is optimal though one is often close; and as previously sequenced almost nothing planned
+would move a computed number. This phase reorders around the result. `P75` and parked `P5` are merged
+into it; `P51` is its origin.
+
+### Reading guide - every term used below, defined once  *(added because "oracle" was never explained)*
+
+| term | meaning |
+|---|---|
+| **oracle** | a search that is allowed to CHEAT: it is handed the entire future return path (the assumed 6% / 2.5% every year) before it chooses anything, then picks, year by year, how much to convert and which accounts to draw from, re-running the whole multi-decade simulation for every candidate. Because it knows the future, what it finds is a CEILING no honest strategy can beat on that path. It is not a strategy anyone can follow - real retirees do not know next year's returns - so it is research-only and default-off. Its one product is the GAP. The name is the computer-science sense: a hypothetical machine that answers a question you cannot otherwise answer, used to bound what is possible |
+| **gap** | how far a shipped strategy's best row sits below the oracle, as a percentage of real after-tax wealth, and which lever the shortfall is made of (conversion timing vs draw mix) |
+| **lower bound** | the oracle's search is coordinate descent over a fixed menu - local and coarse - so the TRUE ceiling is at least as high as what it reports. Every gap number is therefore conservative: the real gap is >= the printed one. Cyclic rows beating the oracle in one cell (`defaults @6%`) is the proof |
+| **cell** | one complete scenario: one household, one account mix, one spend rate, simulated over its WHOLE horizon (33 years, 2026-2058, in the harness). A cell is a plan, not a year |
+| **sim** | one full-horizon run of `simulate()`, ~1.2 ms on the dev box. Every oracle candidate is a full re-simulation, because year t's choice changes every later year's state |
+| **regime** | a region of (mix, wealth, basis, spend, life-phase) where one fixed rule wins. `P35n` found the endgame regime; the tail rule flips at roughly $2M of endgame assets |
+| **arm** | one row of the Optimizer sweep. A rule ships as an arm, marked, so the table can find it; it never ships as a silent default |
+| **`to_aTax`** | e-ORP's name for the decision the engine cannot express: withdraw more than spending needs and DEPOSIT the excess into the brokerage account. Cyclic does this by rule; no hook lets a schedule do it by choice |
+
+### What the evidence says, in six lines  *(sources: `research/PERFECT_FORESIGHT_ORACLE.md`, `research/ENDGAME_DRAW_ORDER.md`)*
+
+1. **The gap is priced.** Best shipped row vs oracle: median **4.35%** at default basis (4.47% at 20%
+   basis, 1.83% at 80%); 0-10.47% in non-GK cells, 0.5-20% under strain. Dollars: +$241k (round1 @4%),
+   **+$1.078M** (defaults3x @4%). Mix-dependent: IRA-heavy is 97% conversion timing; balanced (thirds)
+   is the withdrawal split (+$170k split vs +$2k conversions at 4%, +$461k at 6%).
+2. **The yardstick has drifted.** `research/HARNESSES.md` records `oracle_harness.js` DRIFTED: champion
+   rows changed, the `--full` half behind the +$1.078M headline never re-run. The gap table is a
+   2026-08-10 snapshot on engine `5e1075e`.
+3. **The plumbing exists with two holes that matter.** `oracleWithdrawalPlan[y]` and per-year
+   `extraConversionAmount[y]` are on `main`, default-off, node-only. Monte Carlo already spreads
+   inputs into every path (`mc_engine.js:402`). Not expressible: `to_aTax` (surplus to brokerage,
+   cyclic's mechanism) and converting LESS than the base family's own rule - the per-year amount is
+   EXTRA on top. Against e-ORP's six decision families the engine covers two.
+4. **No single strategy is optimal; one is often close.** Winners differ by cell; Ordered CBIR sits AT
+   the ceiling in brokheavy; cyclic beats the oracle in defaults @6%. Caveat: IRA Draw wins 5 of 6
+   measurable non-GK oracle cells at default basis.
+5. **Three unconnected attacks on one problem.** `P51` (research, done, drifted), `P75` (planned; never
+   references `P51`; a different control variable; proposes plumbing that already exists - `P75d`'s
+   "withdrawals do not [accept per-year arrays]" is FALSE), and parked `P5` (the phase `P51`'s own
+   record names as "the shipping phase if a schedule column is ever productized").
+6. **This produced a better plan exactly once, and that is the template.** `P35n`: oracle as ceiling,
+   four static rules as candidates, 108 cells, 27k sims, 11 s. Cash->Roth->Brokerage won 88 of 108,
+   **+$222,745 median**; the oracle added only +$26-29k over it; the oracle's whole-life shape was the
+   WRONG guess for that regime. It shipped as the 🅡 arm (v11.1642). **A fixed rule captured ~90% of
+   the expressible ceiling. The exhaustive solve is the yardstick, not the product.**
+
+### What the ideal costs, stated so it cannot be misread
+
+One cell = one whole plan, all 33 years. The oracle optimizes that plan by running about **11,000
+full-horizon simulations** (165,131 sims / 15 cells; 196 s / 15 = 13.1 s per cell; 1.19 ms per sim; the
+report's own rounded figure is ~10 s per cell for the full oracle). Why 11,000: 33 years x ~25
+conversion candidates per year x up to 6 passes x 3 seeds for the conversion axis, plus 10 draw
+archetypes x 33 years x 4 rounds for the split. **So: ~13 s for a whole 30-year plan on the dev box
+(Ryzen AI 9 HX 370), ~46-79 s at the 3.5x-6x slower single-core target. Per PLAN, not per year.** And
+what comes out is not "the ideal plan": it is the best schedule IF the future is exactly the assumed
+path, and a lower bound on even that. Sixty seconds buys the yardstick for one plan. Not interactive;
+a research instrument and a ship-time check.
+
+### Stages - gated, in order
+
+- [ ] **P103a** - **re-run the oracle on today's engine** and size the "lower bound". Re-run
+      `oracle_harness.js --full` over the 45-cell grid (~10 min node); re-baseline the gap table in
+      `PERFECT_FORESIGHT_ORACLE.md` with the engine commit named. Then **`P51d`**, the independent
+      search cross-check that has been open since 2026-08-10: a second search of a different shape
+      (random restarts, or a finer menu) on 3-5 cells, reporting how far the coordinate descent sits
+      below it. Until that number exists, "lower bound" has no size. **GATE for everything below.**
+- [ ] **P103b** - **close the two plumbing holes as research inputs**, default-off, node-only, the
+      `oracleWithdrawalPlan` discipline exactly: (1) a per-year over-withdraw-and-deposit amount
+      (`to_aTax`), so a schedule can route surplus to Brokerage by choice rather than by cyclic's
+      rule; (2) total-conversion control, so a per-year amount can be LESS than the family's own
+      bracket fill, not only more. Acceptance: the hook throws or no-ops on malformed input, every
+      existing test bit-identical, and the cyclic rows in `defaults @6%` no longer beat the oracle -
+      or the report says why they still do. Re-run `P103a`'s table with the holes closed.
+- [ ] **P103c** - **the unified search** (was `P75a`-`P75c`; absorbs parked `P5`). `P75`'s control
+      variable - two per-year income targets, ordinary income realized and LTCG realized, searched
+      over the ~12-edge MAGI menu - on the oracle's plumbing and in the oracle's role as ceiling.
+      `P75a` stays the gate (edge residency of the best swept rows' realized MAGI; "mostly interior"
+      means stop and redesign). `P75b`'s descent, `P75c`'s cliff-margin pricing, `P5`'s greedy
+      forward pass as the cheap first seed. Build `magiEdgesForYear()` as its first artifact.
+- [ ] **P103d** - **regime bake-offs, the `P35n` template, across regimes.** For each regime the
+      `P103a` table names as fat (candidates: big IRA + ACA years; the widow transition; basis 20%;
+      GK-strain cells): oracle as ceiling, a handful of STATIC rules as candidates, a crossed grid,
+      predictions registered before the run. Winners ship as marked sweep arms, regime-gated, never
+      as silent defaults. `P35`'s Phased engine becomes the CARRIER for whichever rules win, so its
+      phases are chosen by this evidence rather than designed by hand.
+- [ ] **P103e** - **score under many paths before calling anything ideal.** A schedule or rule that
+      wins on the one assumed path is a point estimate. Run the `P103d` winners and the oracle's own
+      schedule through Monte Carlo (the plumbing accepts it today, `mc_engine.js:402`; `P69` replay
+      is done) and report survival and median wealth bands, not the argmax. Extends `P100e3` from
+      frontier ROWS to schedules. This is the step that turns a one-path optimum into a policy.
+
+### What merged in, and what this changes elsewhere
+
+| phase | disposition |
+|---|---|
+| `P51` | ORIGIN. Research complete 2026-08-10, harness drifted; `P103a` re-baselines it |
+| `P75` | MERGED: `a`-`c` -> `P103c`; `d` (product carrier) -> after `P103e`; `e` (LP certificate) stays a stretch item under `P103c`. **Its `P75d` claim that withdrawals do not accept per-year arrays is corrected**: `oracleWithdrawalPlan` does |
+| `P5` | UN-PARKED into `P103c` as the greedy first seed. Its own text already records the per-year lever exists |
+| `P35` | Phased = CARRIER for `P103d`'s rules. `P35i` waits on `P103d` evidence, which is what "cannot be ideal until P75/P36 land" meant |
+| `P36` | round 2 measures against the `P103a` ceiling. Its "gap near 0 -> families are complete; fat gap -> names the missing family" certification is `P103d`'s trigger |
+| `P100` | O0 -> O1. SELECTION: a better-chosen plan from the same set. The ranking defect (`P100b2`) is real and stays; the frontier is not a better plan |
+| `P102` | Stages C/D (worker, search budget) DEFERRED behind `P103d` - until there are arms worth buying time for. Stage E's `e1`/`e2` (gap-fill and stop-year as swept arms) are `P103d` candidates |
+| `P34` | unchanged at O1; NOT a `P103` prerequisite - `a`-`d` are node harnesses |
+
+- **Status:** NOT STARTED. `P103a` is the gate.
+- **Depends on:** nothing. `P103e` needs `P103d`; `P103d` needs `P103a` and `P103b`.
+
+---
+
+## P102: a goal-first alternative UI, and a search budget that replaces three hidden ones  *(NEW 2026-09-01, user-raised, Stage B SHIPPED)*
+
+**The user's reframe, which supersedes `P30i` and rewrites `P100` Stage F.** Twelve sidebar
+controls shape the outcome; only a handful encode something the user actually knows. Four inputs
+matter to them: what they want to spend, what their objective is, whether to do Roth conversions
+at all, and whether to stop them. Everything else, the withdrawal strategy included, they would
+rather have decided for them on evidence. `P34` supplies the missing mechanism: let the user buy
+search TIME, the way Monte Carlo already does, instead of paying for search with knobs.
+
+### The governing constraint (user, 2026-09-01)
+
+**ADDITION, never replacement.** The goal-first orientation is an alternative UI gated behind
+**`?nerdknob=goal`** - one notch deeper than the plain knob, which some users know (`P102b7`,
+2026-09-01: "keep the current work, but make it not accidentally findable"); nothing in the
+existing sidebar is removed, replaced, renamed or demoted. **The
+worker-thread separation is NOT gated** - it changes when work happens, never what is computed,
+which is the rule `applyNerdKnobVisibility` already states for the IRMAA forward projection.
+**The fallback is to re-enable the existing UI**, and the Stage B design makes that free.
+
+### The finding that makes the budget cheap: it already exists, three times, invisibly
+
+| existing budget | site | what it silently drops |
+|---|---|---|
+| clone passes are **additive, never crossed** | `optimizer_core.js:5188`, whose own comment says *"crossing all three dimensions would balloon the row count"* | crossing the four policy dimensions already swept is 37 x 3 x 2 x 2 = **444 rows**. It ships 179 |
+| 1,500-run budget, enforced as `.slice(0, 6)` | `optimizer_ui.js:1462-1467` | half the time-limited conversion candidates. `P34` calls this cap *"a silent quality reduction"* |
+| `selectConversionCandidates(results, 12)` | `optimizer_ui.js:1438` | 124 of 136 rows never evaluated under `conveffect`. `P100e1`: *"the pool cap of 12 IS the instability"* |
+
+### Monte Carlo is not an analogy, it is a port
+
+`montecarlo/worker.js:9` already `importScripts`es `optimizer_core.js`. Reuse, do not rewrite: the
+worker plus its `file://` chunked fallback (`mc_controller.js:10-51`, `:173-203`, already an anytime
+loop yielding on a **16 ms** budget); the self-calibrating cost model (`:97-137`,
+`wall = fixed + msPerSim x sims`, **both terms learned from real runs on this machine**, with the
+one-equation-two-unknowns trap found and documented at `:110-125`); cancel, progress, and buttons
+that state their cost before the click. That model is also the answer to the reference-box versus
+old-laptop problem: `P34`'s "usable at 3.5x to 6x slower" stops being a profiling assumption and
+becomes a runtime measurement.
+
+### Two hard constraints on the budget, both from measurements already in this repo
+
+**C1. A budget may reduce COVERAGE and must say so on screen. It may never apply a heuristic that
+predicts a winner.** "We ran 179 of 444, here is what was skipped" is legal. "We skipped arms we
+predicted would lose" is the failure mode that has hit this repo four times, silently
+(`findings.md:85`, `findings.md:86`, plus the cutoff-axis and account-mix heuristics in `P34`
+Tier 3). `P36`'s standard is unchanged: **only a zero test justifies dropping an arm.**
+
+**C2. Truncation order must be deterministic and plan-independent.** Truncating in build order
+re-creates `P100`'s H2 exactly - *"POSITION IN A 133-ROW TIE, which is input-array order"* - and the
+`RS` acceptance test would then fail by construction.
+
+**Sequencing consequence.** The budget's entire output is MORE ROWS and 66.2% of rows are already
+dominated, so **`P100` Stage D must land before Stage D here**, or this ships a bigger table nobody
+can read.
+
+### Stages
+
+- [ ] **P102a1** - classify every sidebar input FACT / GOAL / POLICY. Promotes `P100f1`; the list IS
+      the deliverable and it will be argued over.
+- [ ] **P102a2** - record the three budgets above as one list, so their replacement can be scored
+      against what it replaced.
+
+**Stage B - SHIPPED 2026-09-01. Goal-first mode: additive, nerdknob-gated, NO ENGINE CHANGE.**
+
+The panel DRIVES the classic controls rather than reaching the engine. Nothing in it is read by
+`getInputs()`, added to a share URL, or written into a saved scenario, and that is what makes the
+fallback free: knob-off leaves the sidebar holding exactly the plan the panel built, populated and
+editable, so "what did it decide?" is answered by looking down the page.
+
+- [x] **P102b1** - the panel (`#goalfirst-panel`), a **SIBLING of `#strategy-container`, above it,
+      never a child of it.** Nested (as it first shipped) it inherited that box's orange border and
+      read as part of "5. Withdrawal Strategy", which is the one thing it is not: it asks what you
+      want, where the box below asks how to get it. Being outside also keeps it clear of the
+      `#strategy-container .input-group` override that strips borders and padding from anything
+      nested there. Pinned by a structural test, since nothing else would catch a re-nesting.
+      `display:none` in its own markup as well as in
+      `applyNerdKnobVisibility()`, plus `goalFirstReset()`. **Reset does NOT hand the borrowed
+      values back** - it drops the panel's own memory and leaves the classic controls holding what
+      the panel wrote. Restoring would silently move a plan at the moment its UI disappeared, which
+      is the one failure of the two a reader could not notice.
+- [x] **P102b2** - the stop year, and **REDESIGNED 2026-09-01 after the first cut shipped wrong.**
+      v1 put "Stop conversions when they stop paying" in the panel as its own toggle, which read as
+      live even while the conversions question directly above it said "Never convert". It is now a
+      THIRD POSITION of the existing scope menu - `all conversions` / `extra only` /
+      **`when they stop paying`** - which is what it always was: the answer is still a stop year,
+      the only difference is who works it out. The year box goes read-only, because the tool owns it.
+      - The option is nerdknob-gated the way the ACA entries in the Limit menu are, and **the engine
+        never sees it**: `getInputs()` already maps anything that is not `'extra'` to `'all'`
+        (`optimizer_ui.js:605`), which is the scope this position implies anyway - `P24` measured
+        extra-only stopping as much weaker.
+      - It adopts `_beStopSuggestion` through `applyConvStopYear()`, the same object and the same
+        function behind the Break Even icon's "Stop after YYYY" link, so the two agree by
+        construction rather than by test.
+      - The apply is DEFERRED out of the `updateStats()` call stack: applying inline lets the inner
+        run paint the new numbers and then lets the outer run paint its stale totals back over them.
+        It converges because `bestConversionStopYear()` strips any stop year the plan already
+        carries. **Verified: 0 re-applies across three further runs.**
+      - **BUG found by looking at a screenshot, not by a test.** `applyConvStopYear()` writes the
+        SCOPE as well as the year, and the scope it carries is `'all'`, so adopting through it
+        deselected the very position that asked for it: the menu snapped back to "all conversions"
+        the instant it found an answer. Fixed by re-asserting `auto` after the apply. Sharing that
+        function is still right - it is what makes this position and the icon agree - and the engine
+        never saw the difference. **NOT covered by a test:** reproducing it needs a real
+        `runSimulation()` plus the deferred timer, and the in-page suite runs at parse time before
+        the page has a plan. The comment at the fix carries the failure mode instead.
+      - **`Never convert` disables the whole stop-conversions row** (both controls, greyed), because
+        a stop year is a question about conversions and stops being a live one when there are none.
+- [x] **P102b3** - "Roth conversions: let the tool decide / never", driving the five controls
+      through their own handlers. The resync in `onConvSubFlagChange()` is **ONE DIRECTION ONLY**:
+      "never" is cleared when conversions reappear and is never SET automatically, because all
+      flags off is also the shipped default of a plan whose Optimizer is still searching for a
+      conversion - inferring "never" from it would answer a question the user was never asked.
+- [x] **P102b6** - **"Optimize for" moved INTO the panel**, as a mirror rather than a second
+      setting. Asking the goal on the Optimizer tab and the conversions question in the sidebar made
+      a dance out of one decision. Both selects call `setOptObjective()`, which now writes the value
+      back to whichever one did not raise it, so they cannot disagree; the mirror's options are
+      BUILT from `OPT_OBJECTIVE_ORDER`/`OPT_OBJECTIVE_LABELS` rather than a second hand-kept
+      `<option>` list that would drift the first time a goal is added, and the objective blurb
+      renders into both places. The panel now holds two of the four goals and points at the third.
+- [x] **P102b4** - the inconsistency, recorded rather than fixed: `buildStrategyFamilies` writes
+      `convertExcessToRoth: convOn` with `convOn = true` onto every swept row, so the sweep never
+      varies a switch the sidebar offers.
+- [ ] **P102b5** - **DEFERRED, with the reason, because the plan's own acceptance test for it was
+      wrong.** "Never convert" does not change what the Optimizer TABLE lists, so it still shows
+      strategies that convert (stated in visible text under the control). Filtering to the
+      `_isNoConv` rows was the planned test and is REJECTED on inspection: those rows also force
+      `cyclicEnabled:false` and `qcdHHMax:0`, so filtering to them would silently remove Cycle
+      Brokerage from anyone who declined conversions - a loss with nothing to do with their choice.
+      The real fix is core-side (stop forcing `convOn` when the user opted out) and belongs with
+      `P102b4`.
+
+**Measured on the shipped Stage B** (reference box, Ryzen AI 9 HX 370; minima of three alternated
+runs). "Never convert" is the cheapest budget lever there is:
+
+| scenario | let the tool decide | never convert | saved | conversion-optimized rows lost |
+|---|---|---|---|---|
+| default | 2,395 ms, 193 rows | 732 ms, 193 rows | **70%** | **0** |
+| $3M IRA, 32% heirs rate | 3,231 ms, 195 rows | 682 ms, 193 rows | **79%** | 2 |
+
+At the 3.5x-6x slower single-core target `P34` names, that is **8.4-14.4 s down to 2.6-4.4 s** on
+the default scenario. **And on that scenario the conversion-optimization pass spends 1.7 s
+searching 12 candidates to add ZERO rows** - a budget argument in its own right, and a `P34` datum.
+
+- [ ] **P102c1/c2 - the enabler, UNGATED.** Move the sweep into a worker reusing
+      `montecarlo/worker.js`'s pattern; pin `startInYear` against the midnight problem; port
+      `recordMCTiming`/`estimateMCMs`, fed by the wall time `setOptimizerBusy` already measures.
+      Acceptance is a zero test: every displayed number identical before and after.
+- [ ] **P102d1/d2/d3 - the declared budget.** Needs C and `P100` Stage D. A **Search depth**
+      control (Quick / Standard / Exhaustive) labelled with its measured estimate on this machine,
+      plus Cancel and progress. Ungated, because **Standard is today's sweep exactly**, so the
+      control removes three hidden constants without moving anybody's numbers. Plus the on-screen
+      statement of what was skipped (**C1**) and the plan-independent priority (**C2**).
+- [ ] **P102e1** - `gapFillWeights` as a swept dimension: a `gapClones` pass mirroring `rothClones`
+      (`optimizer_core.js:5210-5231`), cloning `unmodified` only, both endpoints `[0,100]` and
+      `[100,0]`, `[40,60]` left as the un-cloned row. **+22 rows on ~179.** Gate it as the
+      COMPLEMENT of bracket and ordered (computed, never a hardcoded family list -
+      `ROTH_GAP_EXCLUDED`'s own comment records that lesson) so `P35`'s Phased family is covered
+      automatically. Prerequisite zero test per `P36`: confirm the arms are bit-identical when
+      `Brokerage === 0` or `Cash === 0`, then gate on it the way `cashClones` gates on `Cash > 0`.
+      Carry it into `STRATEGY_SELECTION_FIELDS`/`sameStrategySelection` with a **pair-aware**
+      comparison, not the string helper `rothGapFill` uses; add a `gfw` URL key; make the row-click
+      adopt path write it. The `P30i` three-position sidebar control is its landing pad.
+- [ ] **P102e2** - the stop year as a swept dimension, which is what makes `P102b2`
+      objective-aware. Today it answers one question only, after-tax wealth, and its label says so.
+- [ ] **P102e3** - cross the clone passes instead of adding them: the 179 to 444 step.
+- [ ] **P102f1/f2** - `P100f2`'s flow inside goal-first mode, then graduate it out of the nerdknob
+      following the documented pattern (`optimizer_ui.js:148-150`). **The classic sidebar is not
+      removed even then** - the two become selectable surfaces over one engine.
+
+### `conveffect` is no longer array-ordered, and a claim made here on 2026-09-01 was stale
+
+`P100`'s write-up says only 3 of 136 rows are evaluated under `Roth Conversion Effectiveness` and
+"the other 133 are scored `-Infinity` and displayed in input-array order". **That was fixed on this
+branch and the phase text was not updated.** `optimizer_core.js:4699` is
+`(sign * (metric(a) - metric(b))) || compareByTiebreakChain(a, b, rate, chain)`: two unevaluated rows
+both return `-Infinity`, so the subtraction is `NaN`, `NaN` is falsy, and the chain runs. The 133
+rows now sort `finalRoth -> breakEven -> netWealth -> remainIRA -> spread -> lifeTax -> spend`.
+
+Consequence for `P102`: **auto-adopting the top-ranked row is not the hazard it was described as.**
+Rank 1 under any goal is a measured winner. The residual concerns are `P100c1` (`_convSavings`
+scores tax saved, not outcome) and `P100e1` (only 12 rows get a twin at all) - both real, neither
+about array order.
+
+- **Status:** Stage B COMPLETE and verified. Node suites **382 / 61 / 22 UNCHANGED** (no engine
+  change, which was the design tripwire), in-page **525**, all **990 green under all four**
+  combinations of `?nerdknob` and `?runtests`. **CACHE GOTCHA, hit once here:** the `?v=` token has
+  to move on EVERY edit to a stamped file, not once per session. Editing `optimizer_tests.js`
+  after it was already stamped `1116e9` meant the browser kept the old copy and the badge reported
+  a green that was three assertions short - green on stale code reads exactly like green on fresh
+  code. Caught only because the test COUNT did not move. Now `1116ed`.
+  **What Stage B did NOT do, stated plainly: the
+  withdrawal strategy is still the user's to pick, and the sweep still runs on the main thread.**
+  Those are `P102e`/`P102c`, and the "tool decides the strategy" step is small, because the sweep
+  already ranks every row by the chosen goal and `loadOptimizerResult()` already adopts one. **No changelog entry and no `<title>` bump**: the
+  whole change is nerdknob-gated, so nothing shows in `git diff main...HEAD` that an ungated user
+  can see or feel, and the `<title>` is pinned to the first changelog `<li>` by the maintenance note
+  in the page. The `?v=` cache tokens moved anyway, because they follow the FILE, not the release.
+- **Depends on:** Stage D needs `P34` and `P100` Stage D. Stages A, B and C depend on nothing.
+  **2026-09-01: Stages C and D DEFERRED behind `P103d`** - a worker and a search budget buy time
+  for arms, and the arms worth buying time for are the ones `P103d` has not found yet.
+
+---
 
 ## P101: worked examples, served from the site and loadable by name  *(NEW 2026-08-31, user-raised, O2, not started)*
 
@@ -303,9 +624,11 @@ Ordered by payoff per line of code. All three are live defects today, independen
 - [ ] **P100e1** - **the pool cap of 12 IS the instability.** Either raise it until it stops binding,
       or make membership deterministic and independent of the user's own plan. **Acceptance test
       (`RS`):** change only the user's selected strategy and assert the set of `⇌` rows is unchanged.
-- [ ] **P100e2** - `gapFillWeights` as a sweep dimension rather than a user control. **Supersedes
-      `P30i`'s three-position UI**, which was one more knob - exactly what the user objected to.
-      126 rows x 3 positions = 378 before `P75`/`P35` add an arm, which is why this waits.
+- [ ] **P100e2** - `gapFillWeights` as a sweep dimension. Now `P102e1`; see that phase for the
+      design. **The 378 figure was WRONG and it was the whole objection** - it assumed the dimension
+      crosses every row. Only 3 of 8 families can feel it (Proportional, Reduce, Guyton-Klinger),
+      and the clone passes clone `unmodified` only, so both endpoints cost **+22 rows on ~179**, not
+      378. ~~126 rows x 3 positions = 378 before `P75`/`P35` add an arm.~~
 - [ ] **P100e3** - **re-score the frontier under Monte Carlo before calling anything best.** A winner
       on one deterministic projection is a point estimate. "The tool does all the work" must not
       become "the tool overfit to a point forecast, confidently." Report near-optimal bands, not the
@@ -330,7 +653,7 @@ Ordered by payoff per line of code. All three are live defects today, independen
 | **weighted blend of objectives** | replaces one choice with five; the weights are undefendable and the user asked for LESS fuss |
 | **objective becomes a strategy** (the user's option B) | an objective is a SCORING rule, not a withdrawal rule. Crosses 9 objectives x 12 strategies and rebuilds this problem one level down with 108 menu entries |
 | **pick one objective and fix it** (option C) | right for the DEFAULT - it is what `balanced` already is - but it discards the evidence and does not help the user who wants a compromise |
-| **`P30i`'s three-position gap-fill control** | superseded by `P100e2`. It was one more knob |
+| **`P30i`'s three-position gap-fill control** | ~~superseded by `P100e2`~~. **HALF WRONG, corrected 2026-09-01 (`P102`).** `rothGapFill` shipped BOTH a sidebar control and the sweep clone, and needed both: the row-click adopt path writes into a real control, so a swept dimension with no input is not adoptable. The control is the LANDING PAD for the swept row; `P102f` demotes it |
 
 - **Status:** NOT STARTED. Stage A is the gate and `P100a1` needs the user's scenario.
 - **Depends on:** Stages A-D depend on nothing outside this phase. Stage E depends on `P34`.
@@ -2795,7 +3118,13 @@ Ascending/descending should reverse the family, not scramble the rest.
 
 ---
 
-## P75: Year-by-year withdrawal mix - income-target optimization  *(NEW 2026-08-25, user-raised, O1)*
+## P75: Year-by-year withdrawal mix - income-target optimization  *(2026-08-25, user-raised; **MERGED INTO `P103` 2026-09-01**)*
+
+**MERGED.** `P75a`-`P75c` are now `P103c`; `P75d` follows `P103e`; `P75e` stays a stretch item under
+`P103c`. Kept below as the design record. **One correction:** `P75d` says "withdrawals do not"
+accept per-year arrays. They do - `inputs.oracleWithdrawalPlan[y]`, `optimizer_core.js:1860`,
+shipped with `P51b` and on `main`. This phase never referenced `P51`; the two were unconnected
+attacks on the same problem, which is the reason `P103` exists.
 
 **Why:** every strategy family picks ONE rule and holds it for the whole horizon; the true optimum
 is a per-year schedule. The engine's own evidence says analytic shortcuts fail here (BETR wrong in
@@ -2879,7 +3208,7 @@ no solver.
       importScripts pattern; P34 shares that groundwork.
 - [ ] **P75e** *(stretch)* - LP-relaxation upper bound (convexify the cliffs) -> "best family is
       within X% of the ceiling" certificate; feeds P36 directly.
-- **Status:** pending; P75a is the gate
+- **Status:** MERGED INTO `P103` (2026-09-01). Was: pending; P75a is the gate
 - **Independent:** no phase dependencies; results feed P36 (the gap) and use P69 (replay) when it
       lands
 
@@ -3939,9 +4268,13 @@ number.** Cite this section instead of re-running.
 is then "an arbitrary constant on a small, reserve-damped effect, deliberately retained." What is NOT
 acceptable is leaving it open as though a sweep might still settle it.
 
-- [ ] **P30i** - ship the three-position control (UI, URL key, save/share, tooltip, round-trip test).
-      Default `[40,60]` unchanged. **Or** take the no-UI close above and mark this `[x]` with that
-      decision recorded. Either way the sweeping stops.
+- [x] **P30i** - **CLOSED 2026-09-01 by `P102`, and it is neither of the two options below.**
+      The question was reframed: the weight is not decided by the user (one more knob) and not
+      decided by the objective (`P30h` §5.3) either, because a fixed per-objective map is wrong on
+      **26 of the 84 cells `P30h` decides, 31%**, and for `mintax` it is wrong more often than right
+      (7 right, 9 wrong of 16 decided). It becomes an entry in a declared search budget's priority
+      queue - `P102e1` - with the three-position control as the LANDING PAD the row-click adopt path
+      needs, exactly as `rothGapFill` shipped. **`[40,60]` is not to be re-swept**, unchanged.
 
 ---
 
@@ -4265,9 +4598,13 @@ re-simulation. Those two are worth more than any heuristic and **neither can pro
 
 **Tier 1 — zero risk of a wrong answer. These change WHEN work happens, not WHAT is computed:**
 1. **Move the sweep to a Web Worker.** `optimizer_core.js` is DOM-free by contract (`:4-9`), so it is
-   portable in principle. **One real blocker, named:** `simulate()` mutates two module globals —
+   portable in principle. **CORRECTED 2026-09-01 (`P102`): it is not portable in principle, it is
+   ALREADY PORTED.** `montecarlo/worker.js:9` does `importScripts('../optimizer_core.js')`, so the
+   engine runs inside a worker on every Monte Carlo run. This item is smaller than priced below.
+   **One real blocker, named:** `simulate()` mutates two module globals —
    `simulationCount` (`:2306`) and `STATEname` (`:2307`). `STATEname` is a genuine hidden dependency;
-   two workers on two states would race. Also `new Date().getFullYear()` is read when `startInYear` is
+   two workers on two states would race — but the sweep is one worker at a time, exactly like MC, so
+   this bites only if two sweeps are ever allowed to run concurrently. Also `new Date().getFullYear()` is read when `startInYear` is
    unset (`:1715`, `:2309`, `:2322`), so a worker must be pinned to the same year or results differ
    across midnight. Payoff: the UI stops freezing. Total CPU unchanged.
 2. **Split the cache in two.** The hash is *already* computed in two pieces — `base` is hashed AFTER
@@ -4282,6 +4619,10 @@ re-simulation. Those two are worth more than any heuristic and **neither can pro
    conversions occurred (`optimizer_ui.js:2509-2513`) — a per-keystroke-debounce path — at n+2 sims
    (~46ms for a 26-year plan), to fill a tooltip the user may never hover. Make it lazy on
    hover/expand, or reuse the last result when the input hash is unchanged. Zero risk.
+   **REVERSED 2026-09-01 by `P102b2`, which shipped.** The result is no longer discarded: goal-first's
+   "Stop conversions when they stop paying" adopts that exact object, so the call is load-bearing
+   whenever that toggle is on. Keep it eager while the toggle is on; laziness may still be right when
+   it is off, but the two cases now differ and this item can no longer be done blind.
 4. **Memoize `simulate()` on an input hash.** None exists anywhere. Within one sweep the same inputs
    recur (no-conv baseline arm, OC re-runs, counterfactuals). **Measure the hit rate before building**
    — it may be near zero, and that measurement is the deliverable.
@@ -4625,7 +4966,8 @@ bodies, `findings.md` and `progress.md` cite them; see the ID migration table at
 - [ ] **P35k** *(PR 6)* — all 12 identity sites; URL keys `pcp`/`pam`/`dsu`/`ssp`
 - [ ] **P35l** *(PR 7)* — = **P36 round 2**, the efficiency study with the full factor set
 - [ ] **P35m** *(PR 8)* — Phased sweep arms scoped by P36; surface the stop-year cap reduction
-- **Status:** IN PROGRESS. `P35a`/`P35b` merged as
+- **Status:** **2026-09-01: Phased is the CARRIER for whatever rules `P103d`'s regime bake-offs pick;
+  `P35i` waits on that evidence rather than on a hand-designed state machine.** IN PROGRESS. `P35a`/`P35b` merged as
   [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146); `P35c` as
   [PR #147](https://github.com/nightskyguy/retirement_assets/pull/147), which **already moves
   numbers**, superseding the old "PR 3 is the first one that moves numbers" note; `P35d` as
@@ -4895,7 +5237,9 @@ as a default.
 - [x] **P36d** — `research/STRATEGY_FAMILY_RANKING.md` + a row in `research/HARNESSES.md`
 - [ ] **P36e** — Decide P35's shipped arm count and `survivorSpendPct` default from the output
   (needs round 2)
-- **Status:** round 1 DONE (2026-08-10); round 2 waits on `P35i`. Runs as P35's PR 7.
+- **Status:** round 1 DONE (2026-08-10); round 2 waits on `P35i`. Runs as P35's PR 7. **2026-09-01:**
+  round 2's yardstick is the `P103a` ceiling, not rank-among-arms; its certification ("gap near
+  0 -> families complete; fat gap -> names the missing family") is what triggers each `P103d` bake-off.
 
 ---
 

@@ -24,6 +24,13 @@ const OLD_STORAGE_KEY = 'retirementScenarios';
 // (see setNerdKnob / applyNerdKnobVisibility). Therefore a `let`, not a `const` - it can change
 // after load. The runtime flip is NOT persisted to the URL.
 let NERD_KNOBS = new URLSearchParams(location.search).has('nerdknob');
+// P102b7. Goal-first mode is gated one notch deeper than the nerdknob: it shows only when the knob
+// is set to the literal value 'goal' (?nerdknob=goal). Some users know the plain ?nerdknob and
+// would find it; this is experimental work the user wants kept but not stumbled into. Read once
+// from the URL and never toggled at runtime - the Documentation-page checkbox flips NERD_KNOBS
+// only, and goal-first stays hidden without the URL saying so. ?nerdknob=goal still counts as
+// the plain knob for everything else, because has('nerdknob') is true for it.
+const GOAL_FIRST = new URLSearchParams(location.search).get('nerdknob') === 'goal';
 
 // MONTE_DEMO: the ?montecarlo teaching demo. Lands the reader on the Monte Carlo tab in Synthetic
 // mode with Seed/Paths/Input Distributions exposed and auto-runs the Experiment (see
@@ -157,6 +164,22 @@ function applyNerdKnobVisibility() {
     // inflation, as the IRS and SSA do), not a fallback.
     const fixedIdxWrap = document.getElementById('fixedTaxIndexing-wrap');
     if (fixedIdxWrap) fixedIdxWrap.style.display = NERD_KNOBS ? '' : 'none';
+    // P102b1. Goal-first mode - gated while it is being lived with, and force-reverted on the way
+    // out for the same reason relative view is below: a reader who enabled it once must not be
+    // left holding a plan whose controls they can no longer see. goalFirstReset() hands the
+    // classic fields back their own values, so knob-off lands on the plan the panel built rather
+    // than on a rollback.
+    // P102b7: visible only under ?nerdknob=goal AND with the knob on, so the runtime checkbox can
+    // still hide it (and force-revert it) the way it hides every other gated surface.
+    const goalFirstWrap = document.getElementById('goalfirst-panel');
+    if (goalFirstWrap) goalFirstWrap.style.display = goalFirstOn() ? '' : 'none';
+    buildGoalFirstObjectiveOptions();
+    renderObjectiveBlurb();
+    if (!goalFirstOn() && typeof goalFirstReset === 'function') goalFirstReset();
+    // Ordering matters: goalFirstReset() above already puts the menu back when the knob goes off,
+    // and this covers the knob-ON direction plus the very first call at init.
+    refreshConvEndModeOptions();
+    refreshConvEndEnabled();
     // P84. Advisor fee - gated by the user's 2026-08-28 decision. Hiding it leaves the field at
     // whatever it holds, which is 0 by default and therefore no fee; but a plan LOADED from a URL
     // carrying ?af= keeps its fee and still computes it, because the input is only hidden, never
@@ -199,10 +222,28 @@ function applyNerdKnobVisibility() {
 // setOptObjective and from page init, not only from renderOptimizerTable, because the goal can
 // be changed before any sweep has run and the description should still be right.
 function renderObjectiveBlurb() {
-    const el = document.getElementById('opt-objective-note');
-    if (!el) return;
     const key = OptimizerState.objective || 'taxflex';
-    el.textContent = OPT_OBJECTIVE_BLURB[key] || OPT_OBJECTIVE_BLURB.taxflex;
+    const text = OPT_OBJECTIVE_BLURB[key] || OPT_OBJECTIVE_BLURB.taxflex;
+    for (const id of ['opt-objective-note', 'gf-objective-note']) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+    }
+}
+
+// P102b6. Build the goal-first mirror's options from the SAME constants the Optimizer tab's menu is
+// written from, rather than a second hand-kept <option> list that would drift the first time a goal
+// is added. Idempotent, so applyNerdKnobVisibility() can call it on every knob toggle.
+function buildGoalFirstObjectiveOptions() {
+    const sel = document.getElementById('gf-objective');
+    if (!sel || sel.options.length === OPT_OBJECTIVE_ORDER.length) return;
+    sel.innerHTML = '';
+    for (const key of OPT_OBJECTIVE_ORDER) {
+        const o = document.createElement('option');
+        o.value = key;
+        o.textContent = OPT_OBJECTIVE_LABELS[key];
+        sel.appendChild(o);
+    }
+    sel.value = OptimizerState.objective || 'taxflex';
 }
 
 function setOptObjective(key) {
@@ -211,8 +252,13 @@ function setOptObjective(key) {
     // goal arrives from `?obj=` or from a loaded scenario - and a control showing one goal while
     // the table is ranked by another is worse than not restoring it at all. Written back
     // unconditionally, which is a no-op in the by-hand case.
-    const _objSel = document.getElementById('opt-objective');
-    if (_objSel && _objSel.value !== OptimizerState.objective) _objSel.value = OptimizerState.objective;
+    // P102b6: TWO selects now raise this - the Optimizer tab's and goal-first's mirror - and
+    // neither is written by the caller. Both are set unconditionally, which is a no-op on whichever
+    // one the user just used, so the same goal cannot read differently in two places.
+    for (const _id of ['opt-objective', 'gf-objective']) {
+        const _sel = document.getElementById(_id);
+        if (_sel && _sel.value !== OptimizerState.objective) _sel.value = OptimizerState.objective;
+    }
     // Changing the objective re-follows it for the body order (drop any user column override).
     OptimizerState.sortState = { colKey: '__objective__', direction: 'desc' };
     renderObjectiveBlurb();
@@ -3524,6 +3570,10 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
         diagResultEl.innerHTML = '';
         diagResultEl.style.display = 'none';
     }
+    // P102b2. Immediately after _beStopSuggestion is refreshed, and never before it: the
+    // 'when they stop paying' stop-year position adopts that exact object rather than searching
+    // again, which is what makes it and the Break Even icon agree by construction.
+    syncAutoStopYear();
 
     const avgSpendEl = document.getElementById('stat-avg-spend-rate');
     if (avgSpendEl) {
@@ -4963,6 +5013,226 @@ function onConvSubFlagChange() {
         main.checked = cxr && fcc;
         main.indeterminate = cxr !== fcc;
     }
+    // P102b3. The goal-first "Roth conversions" selector is a second convenience control over the
+    // same flags, so it is kept honest here for exactly the reasons the comment above lists: an
+    // optimizer row, a share URL, a scenario or an MC variation can all switch conversions on
+    // without firing onchange, and a panel still reading "Never convert" would be a lie.
+    //
+    // ONE DIRECTION ONLY. "never" is CLEARED when conversions appear, and is never SET
+    // automatically. All flags off is also the shipped default of a plan whose Optimizer is still
+    // searching for a conversion, so inferring "never" from it would answer a question the user
+    // was never asked, and would switch Optimize Conversions off behind their back.
+    const gfMode = document.getElementById('gf-conv-mode');
+    if (gfMode && gfMode.value === 'never'
+        && (cxr || fcc || (+val('extraConversionAmount') || 0) > 0)) {
+        gfMode.value = 'auto';
+        _gfConvSaved = null;
+        const note = document.getElementById('gf-conv-note');
+        if (note) note.style.display = 'none';
+    }
+}
+
+// -- P102b: goal-first mode --------------------------------------------------------------------
+// An ALTERNATIVE surface over the classic sidebar, not a replacement for it. Every control here
+// DRIVES the shipped controls rather than reaching the engine: nothing below is read by
+// getInputs(), added to a share URL, or written into a saved scenario. Two consequences are the
+// whole design:
+//
+//   1. The fallback is free. Turn the nerdknob off and the sidebar is already holding exactly the
+//      plan this panel built, populated and editable - not a blank form, and not a rollback.
+//   2. "What did it decide?" is answered by looking down the page. The panel cannot hold a value
+//      the classic controls disagree with, because it has no values of its own.
+
+// The conversion controls as they stood when "Never convert" was selected, so choosing it is not a
+// way to lose settings that took work to arrive at. Null whenever the mode is 'auto'.
+let _gfConvSaved = null;
+
+// The one gate for every goal-first surface. URL says 'goal' AND the knob is on.
+function goalFirstOn() { return GOAL_FIRST && NERD_KNOBS; }
+
+// P102b3. "Roth conversions": one GOAL question standing in front of five POLICY switches. It
+// writes them, then leans on onConvSubFlagChange() to keep the Maximize Conversions checkbox
+// honest, the same way every other programmatic writer of those flags does.
+//
+// includeConvOpt lives on the Optimizer tab rather than in the sidebar, and switching it off is
+// the only part of "never" that removes WORK: it skips the conversion-optimization pass entirely.
+function onGoalConvModeChange() {
+    const mode = document.getElementById('gf-conv-mode')?.value || 'auto';
+    const cxr = document.getElementById('convertExcessToRoth');
+    const fcc = document.getElementById('fundConversionWithCash');
+    const ico = document.getElementById('includeConvOpt');
+    const note = document.getElementById('gf-conv-note');
+    if (mode === 'never') {
+        if (_gfConvSaved === null) {
+            _gfConvSaved = {
+                cxr: !!cxr?.checked,
+                fcc: !!fcc?.checked,
+                eca: +val('extraConversionAmount') || 0,
+                ico: !!ico?.checked,
+            };
+        }
+        if (cxr) cxr.checked = false;
+        if (fcc) fcc.checked = false;
+        if (ico) ico.checked = false;
+        DisplayHelpers.setDollarValue('extraConversionAmount', 0);
+    } else if (_gfConvSaved !== null) {
+        if (cxr) cxr.checked = _gfConvSaved.cxr;
+        if (fcc) fcc.checked = _gfConvSaved.fcc;
+        if (ico) ico.checked = _gfConvSaved.ico;
+        DisplayHelpers.setDollarValue('extraConversionAmount', _gfConvSaved.eca);
+        _gfConvSaved = null;
+    }
+    onConvSubFlagChange();
+    if (note) note.style.display = (mode === 'never') ? '' : 'none';
+    // A stop year is a question about conversions, so it stops being a live question when there
+    // are none. This is the "it seems wrong when Never convert is selected" case.
+    refreshConvEndEnabled();
+}
+
+// Re-entrancy guard. applyConvStopYear() re-runs the simulation, which re-enters updateStats(),
+// which calls the sync below again.
+let _gfStopApplying = false;
+
+// P102b2 v2. The user's own stop year, held while the mode is 'auto' so switching back to a manual
+// scope returns what they typed rather than the tool's answer. Null whenever the mode is not 'auto'.
+let _autoStopSaved = null;
+
+function convEndAutoNote(text) {
+    const el = document.getElementById('convEndAuto-note');
+    if (!el) return;
+    el.textContent = text || '';
+    el.style.display = text ? '' : 'none';
+}
+
+// True when the stop year is the tool's to work out rather than the user's.
+function convEndIsAuto() {
+    return val('convEndMode') === 'auto';
+}
+
+// The Stop-conversions row as a whole is meaningless when the plan converts nothing, and a live
+// control that cannot do anything is worse than a disabled one that says so. Disabling rather than
+// hiding, the way the Ordered strategy greys out Roth-before-Brokerage.
+function refreshConvEndEnabled() {
+    const never = document.getElementById('gf-conv-mode')?.value === 'never';
+    const yearEl = document.getElementById('convEndYear');
+    const modeEl = document.getElementById('convEndMode');
+    const wrap = document.getElementById('convEndYear-wrap');
+    if (yearEl) yearEl.disabled = never;
+    if (modeEl) modeEl.disabled = never;
+    if (wrap) wrap.style.opacity = never ? '0.5' : '';
+    // The box is the tool's readout while the mode is 'auto', so it is not typed into. readOnly,
+    // not disabled: a disabled field is skipped by getInputs()' own reads in some browsers and the
+    // year still has to reach the engine.
+    if (yearEl) yearEl.readOnly = !never && convEndIsAuto();
+    if (never) convEndAutoNote('');
+}
+
+// P102b2 v2. 'when they stop paying' is nerdknob-gated the way the ACA entries in the Limit menu
+// are: gated while it is being lived with, and its absence leaves 'all conversions' in force, which
+// is today's behavior rather than a fallback. Removing the option while it is SELECTED would leave
+// a select with no matching entry, so the mode is put back first.
+function refreshConvEndModeOptions() {
+    const sel = document.getElementById('convEndMode');
+    if (!sel) return;
+    const has = [...sel.options].some(o => o.value === 'auto');
+    if (goalFirstOn() && !has) {
+        const o = document.createElement('option');
+        o.value = 'auto';
+        o.textContent = 'when they stop paying';
+        sel.appendChild(o);
+    } else if (!goalFirstOn() && has) {
+        if (sel.value === 'auto') { sel.value = 'all'; onConvEndModeChange(); }
+        [...sel.options].filter(o => o.value === 'auto').forEach(o => o.remove());
+    }
+}
+
+function onConvEndModeChange() {
+    const yearEl = document.getElementById('convEndYear');
+    if (convEndIsAuto()) {
+        if (_autoStopSaved === null) _autoStopSaved = yearEl ? yearEl.value : '';
+        convEndAutoNote('Looking for the best stop year...');
+    } else if (_autoStopSaved !== null) {
+        if (yearEl) yearEl.value = _autoStopSaved;
+        _autoStopSaved = null;
+        convEndAutoNote('');
+    }
+    refreshConvEndEnabled();
+}
+
+// P102b2. "Stop conversions when they stop paying" adopts the answer the Break Even icon already
+// computes on this very path, through applyConvStopYear() - the same function its "Stop after
+// YYYY" link calls. Sharing the object rather than re-deriving it is what makes the toggle and the
+// diagnostic agree by construction instead of by test.
+//
+// Called from the end of updateStats(), where _beStopSuggestion has just been refreshed.
+//
+// The apply is DEFERRED out of this call stack. applyConvStopYear() runs a fresh simulation
+// synchronously, so applying inline would let the inner updateStats() paint the new numbers and
+// then let the outer one paint its own stale totals straight back over them.
+//
+// Convergence: bestConversionStopYear() strips any stop year the plan already carries before it
+// searches, so re-running against the applied year returns that same year, the value guard below
+// matches, and nothing further is scheduled.
+function syncAutoStopYear() {
+    if (!convEndIsAuto() || _gfStopApplying) return;
+    const yearEl = document.getElementById('convEndYear');
+    if (!yearEl) return;
+    const sugg = _beStopSuggestion;
+    if (!sugg || sugg.year == null) {
+        const converts = lastSimulationLog?.some(r => (r.rothConv ?? 0) > 1) ?? false;
+        convEndAutoNote(!converts
+            ? 'This plan converts nothing, so there is nothing to stop.'
+            : (_beDiagnosisMsg
+                ? 'Converting nothing may beat this plan. See the Break Even note above.'
+                : 'Converting all the way through was best here, so no stop year was set.'));
+        return;
+    }
+    if (yearEl.value.trim() === String(sugg.year)) {
+        convEndAutoNote('Stopping after ' + sugg.year + ' kept the most after-tax wealth.');
+        return;
+    }
+    _gfStopApplying = true;
+    setTimeout(() => {
+        try { applyConvStopYear(sugg.year, sugg.mode); }
+        finally { _gfStopApplying = false; }
+        // applyConvStopYear() writes the SCOPE as well as the year, and the scope it carries is
+        // 'all' - so adopting through it deselects the very position that asked for it, and the
+        // menu snapped back to "all conversions" the moment it found an answer. Re-assert it.
+        // Sharing that function is deliberate and worth this line: it is what makes this position
+        // and the Break Even icon agree by construction rather than by test. The engine never saw
+        // the difference, because getInputs() maps anything that is not 'extra' to 'all'.
+        const _m = document.getElementById('convEndMode');
+        if (_m && [...(_m.options)].some(o => o.value === 'auto')) _m.value = 'auto';
+        refreshConvEndEnabled();
+        convEndAutoNote('Stopping after ' + sugg.year + ' kept the most after-tax wealth.');
+    }, 0);
+}
+
+// Knob off means the panel stops DRIVING. It does NOT mean the plan changes under the reader.
+//
+// The classic controls keep exactly what the panel last wrote them, and that is the whole point:
+// the sidebar is the fallback because it is already holding the plan, populated and editable, not
+// because anything is rolled back. Handing the borrowed values back instead would silently move a
+// plan at the very moment its UI disappeared - the worse of the two failures, and the one a reader
+// would have no way to notice.
+//
+// The panel's own memory IS dropped. A later re-enable starts from whatever the controls now say,
+// which is the truth about the plan; a remembered "before" from a previous session of the panel
+// would be a second, stale source of it.
+function goalFirstReset() {
+    const modeEl = document.getElementById('gf-conv-mode');
+    if (modeEl) modeEl.value = 'auto';
+    _gfConvSaved = null;
+    const note = document.getElementById('gf-conv-note');
+    if (note) note.style.display = 'none';
+    // The stop year itself is NOT reverted, for the same reason the conversion switches are not:
+    // it is in the classic field, visible and editable, and taking it away would move the plan at
+    // the moment its UI disappeared. Only the AUTO position goes, because its option does - and
+    // dropping it is numerically a no-op, since getInputs() already maps it to 'all'.
+    _autoStopSaved = null;
+    refreshConvEndModeOptions();
+    refreshConvEndEnabled();
+    convEndAutoNote('');
 }
 
 function toggleSpouseUI() {

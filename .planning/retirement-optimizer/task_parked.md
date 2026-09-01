@@ -156,6 +156,8 @@ nothing here is user-visible.
 ---
 
 ## P5: Per-Year Conversion Schedule - Greedy Forward Search (was Phase 23b, "greedy DP")
+
+**UN-PARKED 2026-09-01 into `P103c` (task_plan.md) as the greedy first seed of the unified per-year search. Kept here as the design record.**
 **Why:** Phase 23 implemented `optimizeConversionAmount()` as a scalar sweep: ONE conversion amount,
 reused every year. A plan wants a different amount each year - larger in the low-income years before
 Social Security and RMDs start, tapering toward $0 once the brackets fill on their own. This phase

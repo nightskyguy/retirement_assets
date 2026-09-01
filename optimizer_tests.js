@@ -3217,6 +3217,274 @@ assertEqual(
 			"P80: the source year is stated once, not once per series");
 	})();
 
+	// ===== P102b: goal-first mode drives the classic controls, and hands them back =====
+	// The whole safety argument for this panel is that it owns no values. It writes the shipped
+	// controls and reads nothing back, so the engine, the share URL and every saved scenario are
+	// untouched, and switching the nerdknob off leaves the sidebar holding the plan the panel
+	// built. These check that property directly rather than checking that the panel looks right.
+	(function goalFirstPanelIsGatedInMarkup() {
+		const panel = document.getElementById('goalfirst-panel');
+		if (!panel) { console.log('SKIP: goal-first panel absent'); return; }
+		// ONE DIRECTION, because that is the direction that matters and it is the only one true
+		// at every point in the page's life: the panel is never visible without the knob.
+		//
+		// "Visible exactly when the knob is on" is NOT assertable here and asserting it was P98's
+		// mistake made twice. runTests() runs at PARSE time, before the DOMContentLoaded handler
+		// calls applyNerdKnobVisibility(), so under ?nerdknob there is a real window where the
+		// knob is already true and the panel is still hidden by its own markup. That window is
+		// correct behavior - hidden-by-default is what makes the gate survive a page where the
+		// visibility sweep never runs at all - and a test that fails during it is testing the
+		// clock rather than the gate.
+		// P102b7: one notch deeper than the knob. ?nerdknob alone must NOT show it.
+		assertEqual(panel.style.display === 'none' || (typeof goalFirstOn === 'function' && goalFirstOn()), true,
+			'P102b7: the goal-first panel is never visible without ?nerdknob=goal');
+		// Neither control may be readable by the engine or by a share link.
+		assertEqual(typeof OPT_LONG_TO_SHORT['gf-conv-mode'], 'undefined',
+			'P102b1: the goal-first conversion mode is not a share-URL field');
+		assertEqual(typeof OPT_LONG_TO_SHORT['gf-objective'], 'undefined',
+			'P102b1: the goal-first objective mirror is not a share-URL field');
+		const inputs = typeof getInputs === 'function' ? getInputs() : {};
+		assertEqual(Object.keys(inputs).some(k => k.startsWith('gf-')), false,
+			'P102b1: no goal-first control reaches the engine inputs');
+		// A SIBLING of the strategy box, above it - never a child. Nested, it inherited that box's
+		// orange border and read as part of "5. Withdrawal Strategy", which is the one thing it is
+		// not: it asks what you want, where the box below asks how to get it.
+		const box = document.getElementById('strategy-container');
+		if (box) {
+			assertEqual(box.contains(panel), false,
+				'P102b1: the goal-first panel is not inside the Withdrawal Strategy box');
+			assertEqual(!!(panel.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING), true,
+				'P102b1: and it comes above it');
+			assertEqual(panel.parentElement === box.parentElement, true,
+				'P102b1: as its sibling, so the sidebar-wide recalc listener still reaches it');
+		}
+	})();
+
+	(function goalFirstNeverConvertWritesTheFiveControls() {
+		const sel = document.getElementById('gf-conv-mode');
+		const cxr = document.getElementById('convertExcessToRoth');
+		const fcc = document.getElementById('fundConversionWithCash');
+		const ico = document.getElementById('includeConvOpt');
+		if (!sel || !cxr || !fcc || !ico || typeof onGoalConvModeChange !== 'function') {
+			console.log('SKIP: goal-first conversion controls absent'); return;
+		}
+		const was = { sel: sel.value, cxr: cxr.checked, fcc: fcc.checked, ico: ico.checked,
+		              eca: +val('extraConversionAmount') || 0 };
+		try {
+			// Start from conversions ON so the restore has something distinctive to give back.
+			cxr.checked = true; fcc.checked = true; ico.checked = true;
+			DisplayHelpers.setDollarValue('extraConversionAmount', 25000);
+			sel.value = 'never';
+			onGoalConvModeChange();
+			assertEqual([cxr.checked, fcc.checked, ico.checked, +val('extraConversionAmount')],
+				[false, false, false, 0],
+				'P102b3: "Never convert" switches off all four conversion controls');
+			assertEqual(document.getElementById('gf-conv-note').style.display, '',
+				'P102b3: and says so in visible text, because a phone cannot hover over a tooltip');
+			sel.value = 'auto';
+			onGoalConvModeChange();
+			assertEqual([cxr.checked, fcc.checked, ico.checked, +val('extraConversionAmount')],
+				[true, true, true, 25000],
+				'P102b3: switching back returns the settings it borrowed, not the defaults');
+		} finally {
+			cxr.checked = was.cxr; fcc.checked = was.fcc; ico.checked = was.ico;
+			DisplayHelpers.setDollarValue('extraConversionAmount', was.eca);
+			sel.value = was.sel;
+			onConvSubFlagChange?.();
+			const note = document.getElementById('gf-conv-note');
+			if (note) note.style.display = 'none';
+		}
+	})();
+
+	(function goalFirstNeverIsClearedButNeverInferred() {
+		const sel = document.getElementById('gf-conv-mode');
+		const cxr = document.getElementById('convertExcessToRoth');
+		const fcc = document.getElementById('fundConversionWithCash');
+		if (!sel || !cxr || !fcc || typeof onConvSubFlagChange !== 'function') {
+			console.log('SKIP: goal-first conversion controls absent'); return;
+		}
+		const was = { sel: sel.value, cxr: cxr.checked, fcc: fcc.checked,
+		              eca: +val('extraConversionAmount') || 0 };
+		try {
+			// An optimizer row, a share URL or a scenario can switch conversions on without firing
+			// onchange. A panel still reading "Never convert" would then be a lie.
+			sel.value = 'never';
+			cxr.checked = true;
+			onConvSubFlagChange();
+			assertEqual(sel.value, 'auto',
+				'P102b3: conversions reappearing clears "Never convert"');
+			// The other direction must NOT hold. All flags off is also the shipped DEFAULT of a
+			// plan whose Optimizer is still searching for a conversion, so inferring "never" from
+			// it would answer a question the user was never asked.
+			sel.value = 'auto';
+			cxr.checked = false; fcc.checked = false;
+			DisplayHelpers.setDollarValue('extraConversionAmount', 0);
+			onConvSubFlagChange();
+			assertEqual(sel.value, 'auto',
+				'P102b3: conversions being off is never read as the user asking for "never"');
+		} finally {
+			cxr.checked = was.cxr; fcc.checked = was.fcc;
+			DisplayHelpers.setDollarValue('extraConversionAmount', was.eca);
+			sel.value = was.sel;
+			onConvSubFlagChange();
+		}
+	})();
+
+	// ===== P102b2 v2: "when they stop paying" is a POSITION of the stop question =====
+	// It used to be a separate toggle in the goal-first panel, which read as live even when the
+	// conversions question right above it said "Never convert". Folding it into the scope menu says
+	// what it really is: the answer is still a stop year, the only difference is who works it out.
+	(function convEndAutoIsAThirdPositionOfTheSameQuestion() {
+		const modeEl = document.getElementById('convEndMode');
+		const yearEl = document.getElementById('convEndYear');
+		if (!modeEl || !yearEl || typeof onConvEndModeChange !== 'function'
+			|| typeof refreshConvEndModeOptions !== 'function') {
+			console.log('SKIP: stop-conversions controls absent'); return;
+		}
+		const was = { mode: modeEl.value, year: yearEl.value, ro: yearEl.readOnly };
+		try {
+			refreshConvEndModeOptions();
+			// Gated exactly like the ACA entries in the Limit menu: present only behind the knob,
+			// and its absence leaves 'all conversions', which is today's behavior not a fallback.
+			assertEqual([...modeEl.options].some(o => o.value === 'auto'), goalFirstOn(),
+				'P102b7: the "when they stop paying" position shows only under ?nerdknob=goal');
+			if (!goalFirstOn()) return;
+			yearEl.value = '2037';
+			modeEl.value = 'extra';
+			onConvEndModeChange();
+			assertEqual(yearEl.readOnly, false,
+				'P102b2: a scope the user chose leaves the year box theirs to type in');
+			modeEl.value = 'auto';
+			onConvEndModeChange();
+			// The search runs from updateStats(), never from the menu: applying here too would
+			// simulate the plan twice for one change. The box is untouched at this point.
+			assertEqual([yearEl.value, yearEl.readOnly], ['2037', true],
+				'P102b2: choosing it makes the box read-only without yet rewriting it');
+			modeEl.value = 'all';
+			onConvEndModeChange();
+			assertEqual([yearEl.value, yearEl.readOnly], ['2037', false],
+				'P102b2: going back to a manual scope returns the year the user typed');
+		} finally {
+			modeEl.value = was.mode; yearEl.value = was.year; yearEl.readOnly = was.ro;
+			if (typeof convEndAutoNote === 'function') convEndAutoNote('');
+			if (typeof refreshConvEndEnabled === 'function') refreshConvEndEnabled();
+		}
+	})();
+
+	(function convEndGoesDeadWhenThePlanConvertsNothing() {
+		const sel = document.getElementById('gf-conv-mode');
+		const modeEl = document.getElementById('convEndMode');
+		const yearEl = document.getElementById('convEndYear');
+		if (!sel || !modeEl || !yearEl || typeof refreshConvEndEnabled !== 'function') {
+			console.log('SKIP: goal-first conversion controls absent'); return;
+		}
+		const was = { sel: sel.value, cxr: document.getElementById('convertExcessToRoth').checked,
+		              fcc: document.getElementById('fundConversionWithCash').checked,
+		              ico: document.getElementById('includeConvOpt').checked,
+		              eca: +val('extraConversionAmount') || 0 };
+		try {
+			sel.value = 'never';
+			onGoalConvModeChange();
+			assertEqual([yearEl.disabled, modeEl.disabled], [true, true],
+				'P102b2: "Never convert" makes the stop-conversions question dead, not live');
+			sel.value = 'auto';
+			onGoalConvModeChange();
+			assertEqual([yearEl.disabled, modeEl.disabled], [false, false],
+				'P102b2: and it comes back when conversions do');
+		} finally {
+			sel.value = was.sel;
+			document.getElementById('convertExcessToRoth').checked = was.cxr;
+			document.getElementById('fundConversionWithCash').checked = was.fcc;
+			document.getElementById('includeConvOpt').checked = was.ico;
+			DisplayHelpers.setDollarValue('extraConversionAmount', was.eca);
+			onConvSubFlagChange();
+			refreshConvEndEnabled();
+			const note = document.getElementById('gf-conv-note');
+			if (note) note.style.display = 'none';
+		}
+	})();
+
+	// ===== P102b6: one goal, two places to set it, never two answers =====
+	// Asking the objective on the Optimizer tab and the conversions question in the sidebar made a
+	// dance out of a single decision. The mirror is the SAME setting, so the test that matters is
+	// that neither select can hold a value the other does not.
+	(function goalFirstObjectiveMirrorsRatherThanDuplicates() {
+		const gf = document.getElementById('gf-objective');
+		const opt = document.getElementById('opt-objective');
+		if (!gf || !opt || typeof setOptObjective !== 'function'
+			|| typeof buildGoalFirstObjectiveOptions !== 'function') {
+			console.log('SKIP: objective selects absent'); return;
+		}
+		const was = OptimizerState.objective;
+		try {
+			buildGoalFirstObjectiveOptions();
+			// Built from the constants, not a second hand-kept <option> list that could drift.
+			assertEqual([...gf.options].map(o => o.value), OPT_OBJECTIVE_ORDER,
+				'P102b6: the mirror offers exactly the goals the ranker knows, in the same order');
+			assertEqual([...gf.options].map(o => o.textContent),
+				OPT_OBJECTIVE_ORDER.map(k => OPT_OBJECTIVE_LABELS[k]),
+				'P102b6: and the same labels, so the two menus cannot drift apart');
+			setOptObjective('mintax');
+			assertEqual([gf.value, opt.value], ['mintax', 'mintax'],
+				'P102b6: setting the goal anywhere sets it everywhere');
+			setOptObjective('maxroth');
+			assertEqual([gf.value, opt.value], ['maxroth', 'maxroth'],
+				'P102b6: including from the other direction');
+			const note = document.getElementById('gf-objective-note');
+			assertEqual(note ? note.textContent : OPT_OBJECTIVE_BLURB.maxroth,
+				OPT_OBJECTIVE_BLURB.maxroth,
+				'P102b6: and the panel says what the chosen goal ranks by');
+		} finally {
+			setOptObjective(was || 'taxflex');
+		}
+	})();
+
+	(function goalFirstResetLeavesNothingDriving() {
+		const sel = document.getElementById('gf-conv-mode');
+		const yearEl = document.getElementById('convEndYear');
+		const modeEl = document.getElementById('convEndMode');
+		if (!sel || !yearEl || !modeEl || typeof goalFirstReset !== 'function') {
+			console.log('SKIP: goal-first panel absent'); return;
+		}
+		const was = { sel: sel.value, year: yearEl.value, mode: modeEl.value,
+		              cxr: document.getElementById('convertExcessToRoth').checked,
+		              fcc: document.getElementById('fundConversionWithCash').checked,
+		              ico: document.getElementById('includeConvOpt').checked,
+		              eca: +val('extraConversionAmount') || 0 };
+		try {
+			// Knob off means hidden AND inert. Hidden-but-still-driving would leave a reader with a
+			// plan they cannot see the controls for, which is the failure relative view records.
+			document.getElementById('convertExcessToRoth').checked = true;
+			DisplayHelpers.setDollarValue('extraConversionAmount', 12345);
+			sel.value = 'never';
+			onGoalConvModeChange();
+			yearEl.value = '2041';
+			goalFirstReset();
+			assertEqual(sel.value, 'auto',
+				'P102b1: goalFirstReset puts the goal-first control back to inert');
+			// The classic controls keep what the panel WROTE them. Handing the borrowed values
+			// back would move the plan at the moment its UI disappeared, which is the one failure
+			// a reader could not notice. "never" wrote conversions off, so off is what stays.
+			assertEqual([document.getElementById('convertExcessToRoth').checked,
+			             +val('extraConversionAmount'), yearEl.value],
+				[false, 0, '2041'],
+				'P102b1: and leaves the classic controls holding the plan the panel built');
+			assertEqual(yearEl.disabled, false,
+				'P102b1: with the stop question live again, since the panel is no longer driving it');
+		} finally {
+			sel.value = was.sel; yearEl.value = was.year; modeEl.value = was.mode;
+			document.getElementById('convertExcessToRoth').checked = was.cxr;
+			document.getElementById('fundConversionWithCash').checked = was.fcc;
+			document.getElementById('includeConvOpt').checked = was.ico;
+			DisplayHelpers.setDollarValue('extraConversionAmount', was.eca);
+			onConvSubFlagChange();
+			if (typeof convEndAutoNote === 'function') convEndAutoNote('');
+			if (typeof refreshConvEndEnabled === 'function') refreshConvEndEnabled();
+			const note = document.getElementById('gf-conv-note');
+			if (note) note.style.display = 'none';
+		}
+	})();
+
     console.log('\n========================================');
     console.log(`   RESULTS: ${passed} passed, ${failed} failed`
 		+ (skippedUnsafe ? `, ${skippedUnsafe} unsafe suites skipped (add ?runtests)` : ''));

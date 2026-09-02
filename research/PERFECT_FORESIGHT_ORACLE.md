@@ -72,7 +72,9 @@ consequences:
    NW on the conversion axis** (below). The withdrawal-split axis is still un-cross-checked.
 2. The negative gap is itself the attribution: **cyclic's residual edge lives in surplus routing,
    not in draw order** - consistent with the Q3 surplus-routing confound in [`BROKERAGE_DRAW.md`](BROKERAGE_DRAW.md).
-   It is now 1 row in 1 cell of 45, down from 2 rows in the 2026-08-10 run.
+   It is now 1 row in 1 cell of 45, down from 2 rows in the 2026-08-10 run. **And `P103b1`, below,
+   shows it is a HARNESS artifact: hold surplus routing constant with `--reserve0` and no row beats
+   the ceiling at all.** The engine reaches Brokerage three ways; this grid armed none of them.
 
 ## P51a - conversions-only (champion base, 45/45 cells)
 
@@ -128,7 +130,8 @@ in most cells; conversion timing dominates only in the IRA-heavy `defaults` / `d
 four largest single gains in the run are all split, not conversions. `brokheavy @4%` remains the
 boundary case in both directions: at default and 80% basis Ordered CBRI already sits AT the
 expressible ceiling and the oracle changes nothing, while at b20 the same mix leaves +$394,657 on
-the table.
+the table. **`P103b1` retires even the conversion exception** - `defaults3x @4%`'s 96% is a
+surplus-routing artifact, and with routing held constant the split dominates in all six.
 
 **Answer to question C (the absolute half):** "Proportional is default-optimal" stays **REFUTED**,
 but by a smaller margin than before - where Proportional has an eligible row its gap runs
@@ -182,6 +185,64 @@ cross-check bounds nothing; it only fails to find more. **What P51d establishes 
 one-directional: an equally-costed search of a different shape cannot beat the descent by a
 meaningful margin. It is not a proof of optimality**, and it says nothing at all about the
 withdrawal-split axis, which needs the `oracleWithdrawalPlan` hook and a menu of its own.
+
+## P103b1 - the surplus-routing confound, and what it costs
+
+**Run:** 2026-09-01, same engine, `node .test_harnesses/oracle_harness.js --full --reserve0`.
+391,160 sims, 359.6s. The flag is opt-in; a bare run still reproduces every number above.
+
+**Why it exists.** The published grid leaves `CashReserve` unset, which is the shipped default and
+the legacy all-surplus-to-Cash behavior. Cyclic rows bank surplus in Brokerage instead, and an
+Ordered brokerage-first sequence does too. So the default grid compares arms that differ in **where
+surplus lands** as well as in how it is drawn. `--reserve0` sets `CashReserve: 0`, which routes
+every arm's surplus to Brokerage (`optimizer_core.js:2774`: overflow above the buffer is reinvested,
+and a buffer of zero means all of it), isolating draw order from routing.
+
+**Result 1: no shipped row beats the ceiling any more.** Negative gaps go **1 -> 0**. The cyclic
+`IRA Draw 5% [ira-first]` row that beat the oracle by $6,597 in `defaults @6%` does not beat it once
+the non-cyclic arms can bank where it banks. **The "surplus routing is outside the oracle's menu"
+hole is a harness confound, not an engine limitation** - the engine already reaches Brokerage three
+ways, and the harness armed none of them.
+
+**Result 2: the routing setting is worth more than the ceiling gap.** Base row, reserve unset ->
+`CashReserve: 0`:
+
+| cell | base row (unset -> reserve 0) | base score | change |
+|---|---|---|---|
+| defaults @4% | Reduce 17 yrs [cash] -> **IRA Draw 11% [cash]** | $5,892,838 -> $5,993,491 | **+$100,653** |
+| defaults @6% | Ordered BCIR -> **IRA Draw 5%** | $3,316,566 -> $3,400,888 | **+$84,322** |
+| defaults3x @4% | Ordered BCIR -> **Ordered CIBR** | $7,610,436 -> $7,730,560 | **+$120,124** |
+| thirds @4% | IRA Draw 5% -> **Ordered CBRI** | $11,621,135 -> $11,707,467 | +$86,332 |
+| round1 @4% | Ordered CIBR (same) | $8,790,819 -> $8,801,596 | +$10,777 |
+| brokheavy @4% | Ordered CBRI (same) | unchanged | $0 |
+
+**The winning STRATEGY changes in four of six cells.** That is a larger effect than most of the
+gaps this report measures, and it is driven by an input most users never touch.
+
+**Result 3: the gap gets WIDER, because the oracle exploits routing better than the rules do.**
+Median best-family gap at default basis **1.58% -> 2.03%**; `S3-P2` stays RIGHT. Per cell it moves
+both ways - `defaults @4%` 0.64% -> 2.03% and `defaults @6%` −0.19% -> 1.97%, but `defaults3x @4%`
+1.58% -> **0.28%** and `thirds @4%` 0.49% -> **0.00%**. `B-P4` stays WRONG (b20's median is 2.03%,
+equal to default basis, not above it); its Proportional half still holds and gets stronger, 3.9% at
+b20 and 3.8% at b80. `S3-P3` 1/6 and `S3-P4` 45/45 are unchanged.
+
+**Result 4, and it retires this report's own attribution claim: conversion timing was mostly a
+routing artifact.** `defaults3x @4%` was the one cell where conversions carried 96% of the gain.
+With routing equalized its conversions-only gain falls from **+$14,297 (0.19%) to $825 (0.01%)**,
+and its decomposition flips to +$825 conversions against +$21,171 split. **With surplus free to
+compound in Brokerage, the withdrawal split dominates in every one of the six headline cells,
+including the IRA-heavy mix.** The flat scalar still finds $0 in 45/45, and the b20 conversion
+prizes are untouched (`defaults3x @8% b20` remains 13.49%).
+
+**Which run is the right yardstick depends on the question, so both are kept.** The bare run is what
+a user actually gets, because the reserve is unset by default. The `--reserve0` run is the correct
+control for comparing draw STRATEGIES, since it is the only one that holds routing constant.
+`P103d`'s bake-offs should use `--reserve0`; anything reported as "what a plan leaves on the table"
+should use the bare run and say so.
+
+**One open item this raises, outside `P103`:** leaving Cash Reserve blank costs $84k-$120k of real
+after-tax wealth in four of these six cells, and changes which strategy wins. Whether the shipped
+default should change is a user-visible question and is NOT decided here.
 
 ## P51f - trajectory post-mortem (observation only, ships nothing)
 

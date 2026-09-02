@@ -5,6 +5,18 @@
  * Run:  node .test_harnesses/oracle_harness.js            (P51a: conversions-only)
  *       node .test_harnesses/oracle_harness.js --full     (adds P51c: withdrawal-split oracle;
  *                                                          needs the P51b engine hook)
+ *       node .test_harnesses/oracle_harness.js --reserve0 (arms CashReserve = 0, so EVERY arm banks
+ *                                                          its surplus in Brokerage; combinable with
+ *                                                          --full)
+ *
+ * WHY --reserve0 EXISTS (P103b, 2026-09-01). The published grid leaves CashReserve unset, which is
+ * the legacy all-surplus-to-Cash default. Cyclic rows bank their surplus in Brokerage instead, and
+ * an Ordered brokerage-first sequence does too, so the default grid compares strategies that differ
+ * in WHERE surplus lands as well as in how it is drawn. That confound is the whole reason a cyclic
+ * row beats the "ceiling" in defaults @6%. With --reserve0 every arm banks in Brokerage
+ * (optimizer_core.js: CashReserve != null -> overflow above the buffer is reinvested, and a buffer
+ * of 0 means all of it), which isolates draw order from surplus routing. Opt-in, so a bare run still
+ * reproduces PERFECT_FORESIGHT_ORACLE.md exactly.
  *
  * WHAT THIS IS: an UPPER-BOUND DIAGNOSTIC. The optimizer sees the whole deterministic return
  * path in advance, so its result is a perfect-foresight ceiling -- NOT a shippable policy. It
@@ -50,6 +62,7 @@ const {
 
 const money = n => (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString();
 const FULL = process.argv.includes('--full');
+const RESERVE0 = process.argv.includes('--reserve0');
 
 // ── Grid: the Stage-1 ladder at wealth x1 only (15 cells) ───────────────────────────────────
 const COMMON = {
@@ -68,6 +81,10 @@ const COMMON = {
     gkGuard: 0.20, gkAdjPct: 0.10, cycleLTCGTarget: 0.15,
     qcdHHMax: 0, qcdMode: 'asneeded', computeOC: false,
 };
+// P103b: arm the reserve so surplus routing is identical across every arm. Mutating COMMON before
+// any cell is built is deliberate - the flag must reach the champion selection too, not just the
+// oracle, or the two halves would disagree about which plan they are optimizing.
+if (RESERVE0) COMMON.CashReserve = 0;
 const MIXES = [
     { key: 'defaults',   over: { IRA1: 1000000, IRA2: 400000, Roth: 50000, Roth2: 20000,
                                  Brokerage: 100000, BrokerageBasis: 50000, Cash: 50000 } },
@@ -173,7 +190,8 @@ function conversionsOracle(cellBase, overrides, sharedRate, horizon, seeds, base
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────────────────────
-console.log('P51 oracle harness -- ' + (FULL ? 'FULL (P51a + P51c)' : 'P51a conversions-only'));
+console.log('P51 oracle harness -- ' + (FULL ? 'FULL (P51a + P51c)' : 'P51a conversions-only') +
+    (RESERVE0 ? '  [--reserve0: CashReserve = 0, every arm banks surplus in Brokerage]' : ''));
 console.log('45 cells (5 mixes x spend 4/6/8% x basis default/20%/80%, wealth x1). Objective: wealth-only at the cell\'s');
 console.log('shared heirs rate, spend pinned (shortfall > $1 discarded). Upper-bound diagnostic;');
 console.log('never a shippable policy.\n');

@@ -3762,3 +3762,52 @@ both extremes (1.2% each).
 three basis arms return byte-identical scores, because those champions never sell brokerage, so
 the basis they would sell at never enters the arithmetic. Those rows are not evidence about basis
 in either direction.
+
+
+## Surplus routing was confounding the whole oracle grid  *(2026-09-01, `P103b1`)*
+
+**Codes:** *reserve0* = `CashReserve: 0`, which routes every arm's surplus to Brokerage instead of
+Cash. *base row* = the non-cyclic row the full oracle optimizes from. Other terms are defined in the
+`P103a` section above.
+
+Run: `oracle_harness.js --full --reserve0`, 45 cells, 391,160 sims, 359.6 s, engine `1b7b366`. The
+flag is opt-in, so a bare run still reproduces `research/PERFECT_FORESIGHT_ORACLE.md` exactly.
+
+**The question it settles.** The published grid leaves `CashReserve` unset, which is the shipped
+default and the legacy all-surplus-to-Cash behavior. Cyclic rows bank surplus in Brokerage; an
+Ordered brokerage-first sequence does too. So the grid was comparing arms that differ in **where
+surplus lands** as well as in how it is drawn - and that, not a missing engine capability, is why a
+cyclic row beat the "ceiling".
+
+**Negative gaps 1 -> 0.** With routing held constant no shipped row beats the oracle. The engine
+reaches Brokerage three ways (`cyclicEnabled`, `CashReserve != null`, Ordered brokerage-first) and
+the harness armed none of them.
+
+**The routing setting is worth more than the gaps this study measures.** Base row, unset -> reserve0:
+`defaults @4%` **+$100,653** (and the winner changes, Reduce 17 yrs -> IRA Draw 11%), `defaults @6%`
+**+$84,322**, `defaults3x @4%` **+$120,124**, `thirds @4%` **+$86,332** (winner IRA Draw 5% ->
+Ordered CBRI). Four of six headline cells change which strategy wins.
+
+**The gap gets WIDER: median 1.58% -> 2.03%** at default basis. The oracle exploits Brokerage
+banking better than the rules do. Per cell it moves both ways - `defaults @4%` 0.64% -> 2.03%, but
+`defaults3x @4%` 1.58% -> 0.28% and `thirds @4%` 0.49% -> 0.00%.
+
+**It retires `P103a`'s own attribution claim.** `defaults3x @4%` was the single cell where conversion
+timing carried 96% of the gain. Routing-controlled, its conversions-only gain falls from +$14,297
+(0.19%) to **$825 (0.01%)** and its decomposition flips to split-dominant. **With surplus free to
+compound in Brokerage the withdrawal split dominates in all six headline cells.** The b20 conversion
+prizes are unaffected (`defaults3x @8% b20` still 13.49%), so the "conversion timing matters more off
+mid-basis" finding survives.
+
+**Both runs are kept, because they answer different questions.** The bare run is what a user gets,
+since the reserve is unset by default. `--reserve0` is the only control that holds routing constant,
+so it is the right yardstick for comparing draw STRATEGIES and `P103d` uses it.
+
+**The generalizable lesson.** Two arms that differ in more than one respect cannot attribute their
+difference to either. The oracle's whole product is an attribution, and it had been reading a
+routing difference as a draw-order difference for three weeks. **Before a bake-off, enumerate what
+the arms differ in and equalize everything that is not the variable under test.**
+
+**A product question this opens, not decided here:** leaving Cash Reserve blank costs $84k-$120k in
+four of six cells and changes the recommended strategy. Whether the shipped default should change is
+user-visible and needs its own measurement across the wider Stage-1 grid (`P103b1x`).

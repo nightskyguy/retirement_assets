@@ -7369,3 +7369,48 @@ routes IRA-sourced surplus to Roth, `surplusToBrokerage` reinvests Cash Reserve 
 hole is per-year CHOICE, not the destination** - nothing lets a schedule decide, year by year, to
 over-withdraw and bank the excess in Brokerage. `P103b` already scoped it that way; the glossary
 entry said "cannot express", which overstated it, and now says what is actually missing.
+
+
+## 2026-09-01 (cont.) - two user corrections, then P103b1: the grid was confounded
+
+**Correction 1, and it was right.** I wrote that "nothing lets a schedule decide, year by year, to
+over-withdraw and bank the excess in Brokerage." User: *"some can: IRA Draw, any bracket with a
+limit above required spend, reduce in N years."* Correct - those all over-withdraw by construction,
+which is where the surplus in my own probe came from. The missing thing is narrower than I stated:
+one `x`, one limit, one `N` for the whole plan, with the year shape imposed by the rule. Never an
+arbitrary per-year magnitude.
+
+**Correction 2 was a proposal.** *"if the goal is a strategy with ultimate flexibility perhaps that
+should be built (even if only used internally)."* Agreed, and reading the code to scope it turned up
+the constraint that shapes it - `optimizer_core.js:1849`: *"Fractions, not dollars: dollar plans
+desync from endogenous taxes/growth; weights are always feasible."* A per-year dollar schedule is
+chosen against the previous iteration's tax outcome and taxes are endogenous. A per-year INCOME
+TARGET is solved inside the year. **That is exactly `P75`/`P103c`'s control variable, so the
+flexible strategy and the unified search are the same object** - they had been planned as separate
+work. `P103b` restructured around it: `b2` the `strategy: 'schedule'` carrier whose acceptance is a
+replay-identity test (compile each shipped family into a schedule, assert bit-identical), `b3` total-
+conversion control, `b4` the re-run.
+
+**User chose measure-first, and the measurement changed more than it was run for.**
+
+`P103b1`: new opt-in `--reserve0` flag on `oracle_harness.js` sets `CashReserve: 0` so every arm
+banks surplus in Brokerage. 45 cells, 391,160 sims, 359.6 s.
+
+- **Negative gaps 1 -> 0.** Hole (i) is a HARNESS CONFOUND, not an engine hole. `surplusTo` dropped
+  from the schedule design.
+- **The routing setting is worth more than the gaps this study measures**: +$100,653 / +$84,322 /
+  +$120,124 / +$86,332 on the base row, and **the winning strategy changes in 4 of 6 headline cells**.
+- **The gap gets WIDER**, median 1.58% -> 2.03%, because the oracle exploits Brokerage banking better
+  than the rules do.
+- **It retires `P103a`'s attribution claim from this morning.** `defaults3x @4%`'s conversions-only
+  gain falls from +$14,297 to **$825**; the split now dominates in all six headline cells.
+
+**What I should have caught before running `P103a` at all.** The oracle's entire product is an
+attribution, and the grid differed in two things at once - draw order AND where surplus lands.
+Enumerate what the arms differ in and equalize everything that is not the variable under test. Saved
+to findings as the generalizable form.
+
+**Kept both runs.** The bare run is what a user gets (reserve unset by default); `--reserve0` is the
+only routing-controlled yardstick, so `P103d` uses it. New item `P103b1x`, deliberately NOT decided
+here: blank Cash Reserve costs $84k-$120k in four of six cells and changes the recommendation, so
+whether the shipped default should change is a product question needing its own measurement.

@@ -11,7 +11,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P103 | **`P103a` DONE 2026-09-01**: gap re-baselined 4.35% -> **1.58%**, ceiling proven near-tight (<=0.013%) | `P103b` |
+| **O0** | P103 | `P103a`+`P103b1` DONE: gap 4.35% -> 1.58% (2.03% routing-controlled); **nothing beats the ceiling once routing is held constant** | `P103b2` |
 | **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
@@ -120,13 +120,86 @@ a research instrument and a ship-time check.
       budget, and it is WORSE in one cell. `X-P1` RIGHT 5/5, `X-P2` and `X-P3` WRONG. One-directional:
       it shows an equally-costed different search cannot beat the descent, not that the descent is
       optimal, and it says nothing about the split axis.
-- [ ] **P103b** - **close the two plumbing holes as research inputs**, default-off, node-only, the
-      `oracleWithdrawalPlan` discipline exactly: (1) a per-year over-withdraw-and-deposit amount
-      (`to_brokerage`), so a schedule can route surplus to Brokerage by choice rather than by
-      cyclic's rule; (2) total-conversion control, so a per-year amount can be LESS than the family's own
-      bracket fill, not only more. Acceptance: the hook throws or no-ops on malformed input, every
-      existing test bit-identical, and the cyclic rows in `defaults @6%` no longer beat the oracle -
-      or the report says why they still do. Re-run `P103a`'s table with the holes closed.
+- [ ] **P103b** - **RESTRUCTURED 2026-09-01 (user).** Was "close the two plumbing holes". Two user
+      corrections reshaped it, both right, both measured before being written down:
+      **(i) surplus ROUTING to Brokerage is already shipped three ways** - `cyclicEnabled`,
+      `CashReserve != null` (a buffer of 0 sends all of it), and an Ordered brokerage-first sequence
+      (`optimizer_core.js:2774`). `P103a` armed none of them, so it compared Brokerage-banking arms
+      against Cash-banking ones. Probe on `defaults @6%`: `CashReserve: 0` hands the best non-cyclic
+      row **+$84,322** and collapses cyclic's edge from **$98,770 (2.98%) to $14,448 (0.42%)**.
+      **(ii) over-withdrawal is already shipped too** - `IRA Draw x%`, any bracket fill whose limit
+      sits above the spend need, and `Reduce N yrs` all draw more than the year needs. What is
+      missing is not the ability but the FREEDOM: one `x`, one limit, one `N` for the whole plan,
+      with the year-to-year shape imposed by the rule. Never an arbitrary per-year magnitude.
+      **User, 2026-09-01:** *"if the goal is a strategy with ultimate flexibility perhaps that should
+      be built (even if only used internally)."* Agreed, and scoped **measure-first** at the user's
+      choice.
+- [x] **P103b1 DONE 2026-09-01** - the measurement, and it CLOSED hole (i). `oracle_harness.js
+      --full --reserve0` over all 45 cells (391,160 sims, 359.6 s; flag is opt-in so a bare run still
+      reproduces the published report). **Negative gaps 1 -> 0**: hold surplus routing constant and no
+      shipped row beats the ceiling, so "routing is outside the oracle's menu" was a harness confound,
+      not an engine hole. **`surplusTo` therefore drops out of `P103b2`/`P103b3`.**
+      **Three results that outrank the one it was run for:**
+      **(a) the routing setting is worth more than the gaps this study measures.** Arming the reserve
+      moves the base row +$100,653 / +$84,322 / +$120,124 / +$86,332 in four of the six headline
+      cells, and **changes which strategy wins in four of six** (`defaults @4%` Reduce 17 -> IRA Draw
+      11%; `thirds @4%` IRA Draw 5% -> Ordered CBRI).
+      **(b) the gap gets WIDER, not narrower** - median 1.58% -> **2.03%** at default basis - because
+      the oracle exploits Brokerage banking better than the rules do. Per cell it moves both ways:
+      `defaults @4%` 0.64% -> 2.03%, but `defaults3x @4%` 1.58% -> **0.28%** and `thirds @4%` 0.49% ->
+      **0.00%**.
+      **(c) `P103a`'s attribution claim is retired.** `defaults3x @4%` was the one cell where
+      conversions carried 96% of the gain; with routing equalized its conversions-only gain falls from
+      +$14,297 (0.19%) to **$825 (0.01%)** and its decomposition flips to split-dominant. **With
+      surplus free to compound in Brokerage the withdrawal split dominates in all six headline
+      cells.** The b20 conversion prizes are untouched (`defaults3x @8% b20` still 13.49%).
+      **Which run is the yardstick depends on the question, so both are kept.** The bare run is what a
+      user actually gets (the reserve is unset by default); `--reserve0` is the only control that
+      holds routing constant, so **`P103d`'s bake-offs use it** and anything phrased as "what a plan
+      leaves on the table" uses the bare run and says so.
+- [ ] **P103b1x** - **NEW, user-visible, NOT decided here.** Leaving Cash Reserve blank costs
+      **$84k-$120k** of real after-tax wealth in four of six headline cells and changes which strategy
+      the tool would recommend. Whether the shipped default should change from blank (legacy
+      all-to-cash) is a product question with a changelog entry attached, not a research one. Needs
+      its own measurement across the wider Stage-1 grid before anyone proposes a new default.
+- [ ] **P103b2** - **`strategy: 'schedule'`, the flexible carrier.** A research strategy, default-off
+      and node-only, on the `oracleWithdrawalPlan` discipline. One per-year entry:
+      `{ ordTarget, ltcgTarget, split, convert, surplusTo }` - gross ordinary income to realize,
+      long-term gains to realize, the account split (reusing the existing
+      `{IRA,Brokerage,Cash,Roth}` / `{seq}` / `{prop}` entry forms), the TOTAL conversion, and where
+      the year's surplus lands. Engine keeps enforcing the RMD floor, the spend need and
+      non-negative balances; an infeasible entry produces a shortfall and the candidate is discarded,
+      which is the rule the oracle already uses.
+      **Targets, NOT dollars, and the reason is already in the file.** `optimizer_core.js:1849`:
+      *"Fractions, not dollars: dollar plans desync from endogenous taxes/growth; weights are always
+      feasible."* A per-year dollar amount is chosen against the previous iteration's tax outcome and
+      taxes are endogenous, so it stops being feasible. An income target is solved INSIDE the year
+      against that year's realized taxes. That is exactly `P75`/`P103c`'s control variable, so the
+      flexible strategy and the unified search are **the same object** - they had been planned as
+      separate work.
+      **Acceptance is a replay-identity test, not a gap number:** compile each shipped family's
+      realized decisions into a schedule, re-run, assert **bit-identical**. A family that cannot
+      reproduce itself proves the representation is wrong, and it fails in a test rather than in a
+      gap table. Plus: malformed input throws or no-ops, and every existing test is bit-identical.
+- [ ] **P103b3** - **total-conversion control** as the schedule's `convert` field. Today
+      `extraConversionAmount[y]` is EXTRA on top of the arm's own fill (`optimizer_core.js:2849`), and
+      the only suppressions are whole-plan cutoffs - `convEndYear`/`convEndMode` and the
+      `_cfSuppressConversions*` internals (`optimizer_core.js:2647`). So a schedule can convert MORE
+      than the rule, never LESS, and "convert $40k in 2031, nothing in 2032, $90k in 2033" on a Fill
+      Bracket arm is inexpressible. This matters directly to `P103a`'s finding that conversion timing
+      is the whole game in the IRA-heavy mixes: **the oracle is searching a one-sided axis there**,
+      so its ceiling is understated by whatever WITHHOLDING a conversion would have been worth.
+      **`surplusTo` is OUT of scope**: `P103b1` measured routing as a harness confound, and the
+      engine already reaches all three destinations. The schedule's `surplusTo` field is dropped;
+      a schedule inherits routing from `CashReserve` like every other arm.
+- [ ] **P103b4** - re-run `P103a`'s table on the schedule representation and report whether anything
+      still beats the ceiling.
+      **The cost that decides how far this goes, stated up front:** ~33 years x 4 knobs is ~130 search
+      axes against today's ~33. At the current ~25 candidates per axis per pass the oracle already
+      costs 8.3 s per plan, so this is 10-30x that - minutes per cell, not seconds. **That is why
+      e-ORP is an LP and not a descent.** Building the representation does not oblige us to search it
+      exhaustively; its first jobs are as a carrier and a verifier. Whether the search becomes an LP
+      is its own decision, deferred to `P103c`.
 - [ ] **P103c** - **the unified search** (was `P75a`-`P75c`; absorbs parked `P5`). `P75`'s control
       variable - two per-year income targets, ordinary income realized and LTCG realized, searched
       over the ~12-edge MAGI menu - on the oracle's plumbing and in the oracle's role as ceiling.
@@ -159,7 +232,8 @@ a research instrument and a ship-time check.
 | `P102` | Stages C/D (worker, search budget) DEFERRED behind `P103d` - until there are arms worth buying time for. Stage E's `e1`/`e2` (gap-fill and stop-year as swept arms) are `P103d` candidates |
 | `P34` | unchanged at O1; NOT a `P103` prerequisite - `a`-`d` are node harnesses |
 
-- **Status:** **`P103a` COMPLETE 2026-09-01** (see its box). `P103b` is next; `P103c`-`e` behind it.
+- **Status:** **`P103a` and `P103b1` COMPLETE 2026-09-01.** `P103b2` (the `schedule` strategy) is
+  next; `P103b3`, `P103b4`, `P103c`-`e` behind it. `P103b1x` is a separate product question.
 - **Depends on:** nothing. `P103e` needs `P103d`; `P103d` needs `P103a` and `P103b`.
 
 ---

@@ -235,15 +235,6 @@ a research instrument and a ship-time check.
       `round1 @4%` is feasible at 0.70, infeasible at 0.80, feasible again at 0.90-1.10.
       `totals.success` is a per-year `netIncome < targetSpend * 0.99` test, so a plan can dip under
       and recover. **No bisection for the maximum sustainable spend.**
-- [ ] **P103b5** - **`spendGoal` as a schedule field** (NEW 2026-09-01, user-raised). The one field
-      that would let Guyton-Klinger be carried, and the one that widens what "the ideal" means: every
-      gap number in `PERFECT_FORESIGHT_ORACLE.md` is currently conditional on the base row's delivered
-      spend. A strategy that delivers MORE lifetime spending for the same wealth, or the same spending
-      with a higher floor under a bad sequence, is invisible in those tables. **The spend pin exists
-      for a real reason and must not just be removed:** without it a spend-adaptive arm "wins" by
-      cutting spending, which is how a GK base once showed a fake +81%. So this needs a two-dimensional
-      objective (wealth AND delivered spend, or wealth at matched spend) before the axis can be
-      searched at all - that design decision is the first item, not the field.
 - [x] **P103b4 DONE 2026-09-01** - **the representation is worth money, and this is the first item in
       `P103` to MOVE a computed number rather than describe one.** Harness:
       `.test_harnesses/schedule_oracle_harness.js`. Report: `PERFECT_FORESIGHT_ORACLE.md`, `P103b4`.
@@ -277,20 +268,21 @@ a research instrument and a ship-time check.
       cutting spending, which is how a GK base once showed a fake +81%. So this needs a two-dimensional
       objective (wealth AND delivered spend, or wealth at matched spend) before the axis can be
       searched at all - that design decision is the first item, not the field.
-- [ ] **P103b4** - re-run `P103a`'s table on the schedule representation and report whether anything
-      still beats the ceiling.
-      **The cost that decides how far this goes, stated up front:** ~33 years x 4 knobs is ~130 search
-      axes against today's ~33. At the current ~25 candidates per axis per pass the oracle already
-      costs 8.3 s per plan, so this is 10-30x that - minutes per cell, not seconds. **That is why
-      e-ORP is an LP and not a descent.** Building the representation does not oblige us to search it
-      exhaustively; its first jobs are as a carrier and a verifier. Whether the search becomes an LP
-      is its own decision, deferred to `P103c`.
 - [ ] **P103c** - **the unified search** (was `P75a`-`P75c`; absorbs parked `P5`). `P75`'s control
       variable - two per-year income targets, ordinary income realized and LTCG realized, searched
       over the ~12-edge MAGI menu - on the oracle's plumbing and in the oracle's role as ceiling.
       `P75a` stays the gate (edge residency of the best swept rows' realized MAGI; "mostly interior"
       means stop and redesign). `P75b`'s descent, `P75c`'s cliff-margin pricing, `P5`'s greedy
       forward pass as the cheap first seed. Build `magiEdgesForYear()` as its first artifact.
+      **The search-cost question, and `P103b4` shrank it.** The worry this phase carried from the
+      start: ~33 years x 4 schedule knobs is ~130 axes against today's ~33, which at ~25 candidates
+      per axis per pass would be 10-30x the oracle's 8.3 s per plan - minutes per cell, and the
+      reason e-ORP is an LP rather than a descent. **`P103b4` measured the opposite on the axes it
+      actually searched:** the schedule descent converged on roughly an EIGHTH of the conversion
+      oracle's compute (1,021 sims against 9,575), because multiplicative candidates are scale-free
+      where a $25k absolute grid is not. So the cost has to be re-derived per axis rather than
+      assumed from the axis COUNT, and whether an LP is needed at all is now an open measurement
+      instead of a foregone conclusion.
 - [ ] **P103d** - **regime bake-offs, the `P35n` template, across regimes.** `P103a` has now NAMED the
       fat regimes and they are not the ones this bullet guessed: **the GK-strain cells at 6-8% spend
       (0.35-20.9%) and the 20%-basis arm**, not `defaults3x @4%`, which was fat under the old numbers

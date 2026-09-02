@@ -639,6 +639,61 @@ family `P103b5` already showed the schedule dominating on both axes. The candida
 are draw rules under a GK spend rule, which is exactly the composition `spendRule: 'gk'` was built
 for.
 
+### The bake-off: GK decides the spend well and the DRAW badly
+
+**Run:** 2026-09-01, `node .test_harnesses/gk_drawrule_harness.js`. 390 sims. Both fixtures
+controlled (`CashReserve: 0`, spend −1%/yr real), because `P103b5c` showed correcting them one at a
+time relocates the confound.
+
+**The comparison.** Incumbent is `strategy: 'gk'` - GK deciding both spend and draw. Each candidate
+is `strategy: X, spendRule: 'gk'` - GK deciding the spend, a SHIPPED family deciding the draw. A
+candidate wins a cell only by delivering **no less lifetime spend AND more real terminal wealth**,
+both plans funded. Candidates are shipped families on purpose: a winner can become a marked sweep arm,
+where a schedule could not.
+
+**GK's draw is beaten in 24 of 30 cells - 80%.**
+
+| | cells beaten | note |
+|---|---|---|
+| at **6% spend** | **15 of 15** | GK's draw is improvable in every one |
+| at 8% spend | 9 of 15 | the six unbeaten cells are all here |
+| total wealth GK leaves on the table | **$6,564,797** | across the 24 beaten cells |
+| median gain in a beaten cell | **$231,345** | |
+| largest single gain | **$713,401** | `brokheavy @6% b20`, IRA Draw 5% |
+
+**`G-P1` WRONG, and the way it fails is the finding.** It asked whether ONE rule dominates GK in a
+majority of cells. The best single rule, Ordered CIBR, dominates in 14 of 30 - just under half. But
+that is not "GK's draw is usually fine": some rule beats it in 80% of cells. **The right conclusion
+is that the replacement is regime-dependent, not that there is no replacement.**
+
+**`G-P2` RIGHT - six distinct winners across the 30 cells:**
+
+| rule | cells where it is the BEST candidate |
+|---|---|
+| Ordered CIBR | 8 |
+| Fill Bracket 22% | 6 |
+| IRA Draw 5% | 5 |
+| Ordered CBIR | 2 |
+| IRA Draw 9% | 2 |
+| Fill Bracket 24% | 1 |
+
+**`G-P3` WRONG.** I predicted rules reaching Brokerage or Cash before the IRA would win more often,
+reasoning that GK's guardrails already cut spending when the portfolio falls and §1014 makes held
+brokerage cheap to heirs. IRA-first rules win 14 of the per-cell bests against 10 for
+cash/brokerage-first. Under a GK spend rule the IRA is the account worth draining early, which is the
+opposite of the `P35n` endgame result and worth understanding before anything ships.
+
+**What this licenses.** A **regime-gated marked arm**: "GK spend rule + Ordered CIBR draw" and its
+siblings, offered where the regime map says they win, never as a silent default. Every candidate here
+is a shipped family, so this is a sweep-table change rather than an engine one. It is still ONE
+deterministic path - `P103e` is where a survivor gets scored under many.
+
+**The honest caveat.** This measures the best draw rule PER CELL with hindsight over the cell's own
+outcome. A user picks one rule up front. The shippable version is the sweep already doing this
+search, which is what the Optimizer table is; the finding is that GK's own draw should not be assumed
+to be the right partner for GK's spend rule, and the sweep should offer the combination.
+
+
 
 ## P51f - trajectory post-mortem (observation only, ships nothing)
 

@@ -39,6 +39,7 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `oracle_crosscheck.js` | **node** | P51d: is the oracle's ceiling really a ceiling? Runs a search of a different shape at the same sim cost and reports how much more it finds. |
 | `schedule_replay_harness.js` | **node** | P103b2: what can `strategy: 'schedule'` carry? Compiles each shipped family into a per-year schedule, replays it, and prints where the representation runs out. |
 | `schedule_oracle_harness.js` | **node** | P103b4: does the wider representation reach higher? Searches per-year ceilings against the same base row and budget as the conversions-only oracle. |
+| `gk_drawrule_harness.js` | **node** | P103d: which DRAW rule belongs under a Guyton-Klinger SPEND rule? Runs every shipped family with `spendRule: 'gk'` against GK deciding both. |
 | `spend_objective_harness.js` | **node** | P103b5a: can the spend axis be searched, and under what objective? Traces the (spend, wealth) frontier and asks where each candidate objective's optimum lands. |
 | `endgame_harness.js` | **node** | P35n: once the IRA sits at its target, what should the tail draw from? |
 | `irmaa_margin_harness.js` | **node** | Does an explicit IRMAA safety margin buy anything, now that the tier ceiling is projected forward? |
@@ -95,6 +96,7 @@ evidence of currency.
 | `oracle_harness.js` | **RE-BASELINED 2026-09-01** (`P103a`) | was DRIFTED. Both halves re-run on engine `1b7b366`: median best-family gap **4.35% -> 1.58%**, the +$1.08M conversion headline is now +$122k, and the dominant lever flipped from conversion timing to the withdrawal split. `S3-P2` WRONG -> RIGHT, `B-P4` RIGHT -> WRONG. Report is the second run throughout |
 | `oracle_harness.js --spendchange` | **CURRENT, first result CORRECTED** | new 2026-09-01 (`P103b5c`). Alone it looked like the median gap DOUBLES on a declining path; crossed with `--reserve0` it does not move at all (2.03% -> 1.94%), and the flat-scalar headline holds ($0 in 44/44 on both paths). **The two fixtures interact - vary them together or the confound just moves.** What survives: max conversions-only gain 0.57% -> 9.55%, `S3-P4` flips WRONG, and the regime map relocates to 8%-spend cells |
 | `oracle_harness.js --reserve0` | **CURRENT** | new 2026-09-01 (`P103b1`). Holds surplus routing constant across arms. Negative gaps 1 -> **0**, median gap 1.58% -> 2.03%, and the winning strategy changes in 4 of 6 headline cells |
+| `gk_drawrule_harness.js` | **CURRENT** | new 2026-09-01 (`P103d`). **GK's draw is beaten in 24 of 30 cells (80%)** - 15/15 at 6% spend - worth a median $231,345 and $6.56M in total. Six distinct winners, so the replacement is regime-gated. `G-P1` and `G-P3` WRONG, `G-P2` RIGHT |
 | `spend_objective_harness.js` | **CURRENT** | new 2026-09-01 (`P103b5a`). The model trades **1.38-3.31** dollars of terminal wealth per dollar of lifetime spending, against a `SPENDABLE_WEIGHT` of 1.10, so the scalarized optimum sits at MINIMUM spend in 3/3 cells. `O-P1` WRONG (opposite direction), `O-P2` and `O-P3` RIGHT. Also finds feasibility NON-monotone in the spend goal |
 | `schedule_oracle_harness.js` | **CURRENT** | new 2026-09-01 (`P103b4`). Arm S (schedule) beats Arm A (conversions-only) in **6 of 6** cells, +0.25% to +1.82%, on an eighth of the compute in some. `S-P1` RIGHT |
 | `schedule_replay_harness.js` | **CURRENT** | new 2026-09-01 (`P103b2`, widened by `P103b3`). **8 of 11 arms replay EXACTLY**: every ceiling family including ACA across its lapse, plus IRA Draw and Reduce via the quantity lever. Proportional, Ordered and Guyton-Klinger carry nothing - they decide a split or the spend, not an IRA draw. `R-P1` WRONG |
@@ -390,6 +392,26 @@ at all - was WRONG, and the ACA counterexample is what named the missing fallbac
 
 The two exact cases and the two failure modes are pinned as node tests in `optimizer_core.tests.js`;
 this harness is the wider table.
+
+## gk_drawrule_harness.js  (node)
+
+```bash
+node .test_harnesses/gk_drawrule_harness.js          # the 6% and 8% spend cells
+node .test_harnesses/gk_drawrule_harness.js --all    # adds 4%
+```
+
+**Results live in [`PERFECT_FORESIGHT_ORACLE.md`](PERFECT_FORESIGHT_ORACLE.md), section `P103d`.** The regime map
+put the money in high-spend plans where Guyton-Klinger is the best available family, so the
+actionable question is not "what beats GK" but "GK decides the SPEND well - does it also decide the
+DRAW well?" Incumbent is `strategy: 'gk'`; each candidate is a shipped family run with
+`spendRule: 'gk'`, so GK keeps the spend and something else takes the draw. A candidate wins a cell
+only by delivering no less lifetime spend AND more real terminal wealth.
+
+Headline (2026-09-01): **GK's draw is beaten in 24 of 30 cells, including 15 of 15 at 6% spend**,
+leaving $6,564,797 on the table in total and a median $231,345 per beaten cell. **Six different rules
+win different cells** - Ordered CIBR 8, Fill Bracket 22% 6, IRA Draw 5% 5 - so the replacement is
+regime-gated, not a new default. `G-P3` WRONG in an interesting direction: IRA-first rules win more
+often than cash/brokerage-first ones here, the opposite of the `P35n` endgame result.
 
 ## spend_objective_harness.js  (node)
 

@@ -4104,3 +4104,37 @@ the previously-controlled one, or the confound simply relocates.
 
 **Cost of learning this: one extra 345-second run.** Cost of not learning it: two withdrawn claims
 that had already survived a careful write-up, a prediction scoring, and a commit.
+
+
+## GK decides the spend well and the draw badly  *(2026-09-01, `P103d`)*
+
+**Codes:** *incumbent* = `strategy: 'gk'`, GK deciding spend and draw. *candidate* =
+`strategy: X, spendRule: 'gk'` - GK decides the spend, a shipped family decides the draw. *wins a
+cell* = delivers no less lifetime spend AND more real terminal wealth, both plans funded.
+
+Both fixtures controlled (`CashReserve: 0`, spend -1%/yr), because `P103b5c` showed correcting them
+one at a time relocates the confound.
+
+**GK's draw is beaten in 24 of 30 cells - 80% - including 15 of 15 at 6% spend.** Total wealth left
+on the table **$6,564,797**; median gain in a beaten cell **$231,345**; largest **$713,401**
+(`brokheavy @6% b20`, IRA Draw 5%). The six unbeaten cells are all at 8% spend.
+
+**`G-P1` WRONG, and the shape of the failure is the finding.** It asked whether ONE rule beats GK in
+a majority of cells; the best single rule (Ordered CIBR) manages 14 of 30. But some rule beats GK in
+80% of cells. **"No single winner" is not "no winner" - it is a regime-gated winner**, which is the
+standing result of this whole line of work and the reason `P35n`'s arm shipped marked and gated.
+
+**`G-P2` RIGHT: six distinct per-cell winners** - Ordered CIBR 8, Fill Bracket 22% 6, IRA Draw 5% 5,
+Ordered CBIR 2, IRA Draw 9% 2, Fill Bracket 24% 1.
+
+**`G-P3` WRONG, in a direction worth chasing.** I predicted rules reaching Brokerage or Cash before
+the IRA would win more often - GK's guardrails already cut spending when the portfolio falls, and
+§1014 makes held brokerage cheap to heirs. IRA-first rules win 14 of the per-cell bests against 10.
+**Under a GK spend rule the IRA is the account worth draining early, the opposite of `P35n`'s endgame
+result.** Two rules from the same repo pointing opposite ways is either a regime boundary worth
+naming or a mistake in one of them, and it should be settled before either ships.
+
+**The honest limit.** This measures the best rule PER CELL with hindsight over that cell's outcome; a
+user picks one up front. The shippable form is a sweep that searches - which is what the Optimizer
+table already is. The finding is not "use Ordered CIBR"; it is that **GK's own draw should not be
+assumed the right partner for GK's spend rule**, and the sweep should offer the combination.

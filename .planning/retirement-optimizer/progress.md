@@ -7659,3 +7659,22 @@ spend rate is the axis and it is 8%; basis is not, all three basis medians are 1
 **So the bake-off target is derived rather than guessed:** draw rules under a GK spend rule, in
 high-spend plans - the composition `spendRule: 'gk'` was built for, on the family the schedule
 already dominates.
+
+
+## 2026-09-01 (cont.) - P103d: the bake-off, and GK's draw is beaten in 80% of cells
+
+New harness `.test_harnesses/gk_drawrule_harness.js`. Incumbent `strategy: 'gk'`; candidates are
+shipped families run with `spendRule: 'gk'`, so GK keeps the spend and something else takes the draw.
+A candidate wins a cell only on BOTH axes. Both fixtures controlled.
+
+**GK's draw is beaten in 24 of 30 cells (80%), 15 of 15 at 6% spend.** $6,564,797 total, median
+$231,345, largest $713,401. The 6 unbeaten cells are all at 8%.
+
+**`G-P1` WRONG but not in the direction that matters:** no single rule wins a majority (best 14/30),
+yet SOME rule wins 80% of cells. That is a regime-gated winner, not the absence of one. **`G-P2`
+RIGHT** - six distinct winners. **`G-P3` WRONG**: IRA-first rules win 14 per-cell bests against 10
+cash/brokerage-first, the OPPOSITE of `P35n`'s endgame finding. Two results from this repo pointing
+opposite ways - flagged in findings as something to settle before either ships, not glossed.
+
+**Candidates are all shipped families on purpose**, so a winner becomes a marked, regime-gated sweep
+arm rather than an engine change. `P103e` is the last stage: score a survivor under many paths.

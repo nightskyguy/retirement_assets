@@ -11,7 +11,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P103 | `a`-`b5c` DONE + **`P103d` map derived**: fat regimes are **8%-spend, GK-best** (13 of 17 cells >=5%). `b5c`'s doubling claim WITHDRAWN - a routing interaction | `P103d` bake-off |
+| **O0** | P103 | `a`-`d` DONE. **`d`: GK's DRAW is beaten in 24/30 cells** (15/15 at 6% spend), median $231k, six different winners - regime-gated, not a new default | `P103e` |
 | **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
@@ -317,24 +317,31 @@ a research instrument and a ship-time check.
       where a $25k absolute grid is not. So the cost has to be re-derived per axis rather than
       assumed from the axis COUNT, and whether an LP is needed at all is now an open measurement
       instead of a foregone conclusion.
-- [ ] **P103d** - **regime bake-offs, the `P35n` template.** **MAP DERIVED 2026-09-01** from the
-      only fully-controlled run (`--reserve0 --spendchange -1`, 409,277 sims, 0 negative gaps).
-      Report: `PERFECT_FORESIGHT_ORACLE.md` `P103d`.
-      **The target, derived rather than guessed: high-spend plans where Guyton-Klinger is the best
-      available family.** Of the 17 cells with a gap >= 5%, **13 are at 8% spend** (4 at 6%, ZERO at
-      4%) and **13 have GK as the best family** (4 IRA Draw). Fattest: `round1 @8% b20` **22.78%**,
-      `defaults3x @6% b20` 17.95%, `thirds @8% b80` 15.03%, `thirds @8% b20` 14.96%.
-      **The map RELOCATED, it did not just grow.** Flat-path fat cells collapse (`thirds @6%` 14.95%
-      -> 0.58%, `round1 @6% b20` 15.48% -> -0.05%) while near-closed cells become the widest
-      (`thirds @8% b20` 0.00% -> 14.96%). `P103a`'s "GK-strain at 6-8% and the b20 arm" is half
-      right: the spend RATE is the axis and it is 8%; the basis arm is not - all three basis medians
-      are identical at 1.94%.
-      **So the bake-off is draw rules under a GK spend rule**, which is exactly what `spendRule: 'gk'`
-      was built for in `P103b5`, and GK is the family the schedule already dominates on both axes.
-      REMAINING: for each such regime: oracle as ceiling, a handful of STATIC rules as candidates, a crossed grid,
-      predictions registered before the run. Winners ship as marked sweep arms, regime-gated, never
-      as silent defaults. `P35`'s Phased engine becomes the CARRIER for whichever rules win, so its
-      phases are chosen by this evidence rather than designed by hand.
+- [x] **P103d DONE 2026-09-01** - **map derived AND bake-off run.** Report:
+      `PERFECT_FORESIGHT_ORACLE.md` `P103d`. Harness `.test_harnesses/gk_drawrule_harness.js`.
+      **The map**, from the only fully-controlled run (`--reserve0 --spendchange -1`, 409,277 sims,
+      0 negative gaps): of the 17 cells with a gap >= 5%, **13 are at 8% spend** (4 at 6%, ZERO at
+      4%) and **13 have Guyton-Klinger as the best family**. Fattest `round1 @8% b20` **22.78%**.
+      The map RELOCATED rather than growing - `P103a`'s "6-8% and the b20 arm" is half right: the
+      spend RATE is the axis and it is 8%; basis is not (all three basis medians 1.94%).
+      **The bake-off.** Incumbent `strategy: 'gk'` (GK decides both) against each SHIPPED family run
+      with `spendRule: 'gk'` (GK decides spend, the family decides the draw). A candidate wins only by
+      delivering **no less lifetime spend AND more real terminal wealth**.
+      **GK's draw is beaten in 24 of 30 cells (80%), including 15 of 15 at 6% spend.** Total left on
+      the table **$6,564,797**, median gain per beaten cell **$231,345**, largest **$713,401**
+      (`brokheavy @6% b20`, IRA Draw 5%). The 6 unbeaten cells are all at 8%.
+      **`G-P1` WRONG, and how it fails is the point:** no single rule wins a majority (best is Ordered
+      CIBR, dominating 14/30), but SOME rule wins 80% of cells. The replacement is regime-dependent,
+      not absent. **`G-P2` RIGHT** - six distinct per-cell winners: Ordered CIBR 8, Fill Bracket 22%
+      6, IRA Draw 5% 5, Ordered CBIR 2, IRA Draw 9% 2, Fill Bracket 24% 1. **`G-P3` WRONG** -
+      IRA-first rules win 14 of the per-cell bests against 10 cash/brokerage-first, the OPPOSITE of
+      `P35n`'s endgame result and worth understanding before anything ships.
+      **What it licenses:** a regime-gated marked arm, "GK spend rule + a named draw rule", offered where the
+      map says it wins and never as a silent default. Every candidate is a shipped family, so this is
+      a sweep-table change rather than an engine one.
+      **Caveat, stated in the report:** it measures the best rule PER CELL, and a user picks one up
+      front. The shippable form is the sweep doing this search - which is what the Optimizer table
+      already is. Still one deterministic path; `P103e` scores a survivor under many.
 - [ ] **P103e** - **score under many paths before calling anything ideal.** A schedule or rule that
       wins on the one assumed path is a point estimate. Run the `P103d` winners and the oracle's own
       schedule through Monte Carlo (the plumbing accepts it today, `mc_engine.js:402`; `P69` replay
@@ -354,7 +361,9 @@ a research instrument and a ship-time check.
 | `P102` | Stages C/D (worker, search budget) DEFERRED behind `P103d` - until there are arms worth buying time for. Stage E's `e1`/`e2` (gap-fill and stop-year as swept arms) are `P103d` candidates |
 | `P34` | unchanged at O1; NOT a `P103` prerequisite - `a`-`d` are node harnesses |
 
-- **Status:** **`P103a` and `P103b1`-`b5` COMPLETE 2026-09-01.** The schedule now carries every
+- **Status:** **`P103a` through `P103d` COMPLETE 2026-09-01.** `P103e` (score a survivor under many
+  paths) is the last stage and the one that decides whether any of this reaches a user.
+  PRIOR NOTE:  The schedule now carries every
   shipped family's spend and IRA draw; the one remaining field is the ACCOUNT SPLIT, which is what
   stops Proportional, Ordered and Guyton-Klinger reproducing. `P103c`-`e` behind it. `P103b1x` is a
   separate product question.

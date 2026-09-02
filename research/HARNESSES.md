@@ -36,6 +36,7 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `brokerage_harness.js` | **node** | Why is Brokerage barely drawn, and is the third-pass exclusion to blame? |
 | `phased_harness.js` | **node** | P36 round 1: which families rank where under every objective, and do any arms never win? |
 | `oracle_harness.js` | **node** | P51: how far below the perfect-foresight ceiling does each family sit, and is it conversions or the split? |
+| `oracle_crosscheck.js` | **node** | P51d: is the oracle's ceiling really a ceiling? Runs a search of a different shape at the same sim cost and reports how much more it finds. |
 | `endgame_harness.js` | **node** | P35n: once the IRA sits at its target, what should the tail draw from? |
 | `irmaa_margin_harness.js` | **node** | Does an explicit IRMAA safety margin buy anything, now that the tier ceiling is projected forward? |
 | `irmaa_cpi_risk_harness.js` | **node** | Same question with the CPI allowed to come out different from the one the plan assumed. Reverses the answer. |
@@ -88,7 +89,8 @@ evidence of currency.
 | `gapfill_harness.js` | **DRIFTED** (`F2`,`F4`) | 227/360 -> **242/360** cells move. w=0 still best; the conclusion survives |
 | `endgame_harness.js` | **DRIFTED** (`F2`) | seq-CRB 88/108 -> 84/108; Roth-early 100/108 -> 94/101. All five verdicts unchanged |
 | `unifiedconv_harness.js` | **DRIFTED** | drifted again past its own 2026-08-24 re-baseline: negative in 26/60 -> 29/60, worst -$633,605 -> -$635,692 |
-| `oracle_harness.js` | **DRIFTED** (arm enumeration) | `P51a` reproduces (`S3-P1` RIGHT 15/15), but champion rows changed (`Reduce 20` -> `Reduce 17`). The `--full` half behind the +$1.08M headline was not re-run |
+| `oracle_harness.js` | **RE-BASELINED 2026-09-01** (`P103a`) | was DRIFTED. Both halves re-run on engine `1b7b366`: median best-family gap **4.35% -> 1.58%**, the +$1.08M conversion headline is now +$122k, and the dominant lever flipped from conversion timing to the withdrawal split. `S3-P2` WRONG -> RIGHT, `B-P4` RIGHT -> WRONG. Report is the second run throughout |
+| `oracle_crosscheck.js` | **CURRENT** | new 2026-09-01. `X-P1` RIGHT 5/5: an equally-costed search of a different shape beats the oracle's descent by at most **0.013%**, so "lower bound" is near-tight on the conversion axis. `X-P2` and `X-P3` WRONG |
 | `rmdbasis_harness.js` | **CURRENT** | 0 of 30 timing-dependent, R2 violated in 0 of 30 - the post-fix column exactly |
 | `extraconv_magi_harness.js` | **CURRENT** | self-reports `FIXED BUILD`. Two recorded constants moved under `F4` (M3 $39,920,984 -> $39,693,824; M5 year-0 tax $39,238 -> $49,317) |
 | `underfill_harness.js` | **SUPERSEDED by its own fix** | measured the defect P87c then shipped (v11.16d4). It now reads 0.000000 and $0 on the same fixture, which is the check it has become; section 9's numbers are the pre-fix record |
@@ -323,10 +325,35 @@ node .test_harnesses/oracle_harness.js --full   # + P51c-g (needs the oracleWith
 **Full results live in [`PERFECT_FORESIGHT_ORACLE.md`](PERFECT_FORESIGHT_ORACLE.md).** P51: perfect-foresight
 trajectory oracle — per-year `extraConversionAmount[]` + per-year `oracleWithdrawalPlan`
 splits, coordinate descent, spend pinned, backstops instrumented. An upper-bound DIAGNOSTIC
-for one deterministic path, never a policy. Headlines (2026-08-10): flat scalar conversions
-find $0 in 15/15 cells while per-year timing finds up to +$1.08M; "Proportional is
-default-optimal" refuted on the absolute half (gap-to-oracle 2.3-11.6%); cyclic rows BEAT the
-oracle in one cell because surplus ROUTING is outside the menu — cyclic's real residual edge.
+for one deterministic path, never a policy. 45 cells, 418k sims, 373s.
+
+Headlines (**2026-09-01, engine `1b7b366`**): flat scalar conversions still find $0 in 45/45
+cells, but per-year timing is now worth at most +$19.5k at default basis (+$201k at 20% basis)
+where the first run measured +$241k; the **withdrawal split is now the larger lever in most
+cells**; median best-family gap **1.58%**; "Proportional is default-optimal" still refuted
+(gap 1.2-7.1%); one cyclic row still BEATS the oracle because surplus ROUTING is outside the
+menu — cyclic's real residual edge. The 2026-08-10 numbers are superseded; the report's
+before/after table says what moved.
+
+## oracle_crosscheck.js  (node)
+
+```bash
+node .test_harnesses/oracle_crosscheck.js              # equal sim budget
+node .test_harnesses/oracle_crosscheck.js --budget 3   # 3x budget arm
+node .test_harnesses/oracle_crosscheck.js --cells all  # all 45 cells, slow
+```
+
+**Results live in [`PERFECT_FORESIGHT_ORACLE.md`](PERFECT_FORESIGHT_ORACLE.md), section `P51d`.** Answers the
+question the oracle report has carried as open since 2026-08-10: the oracle calls its result a
+ceiling, but its search is coordinate descent over a fixed menu, so every published gap is a lower
+bound of unknown size. Arm A re-runs that descent IN THIS PROCESS; Arm B is a random-restart search
+with block/shift/scale/swap moves at $1k grain, handed the same MEASURED sim count. Equal cost,
+different shape.
+
+Headline (2026-09-01): **Arm B never finds materially more — max +0.013% of after-tax NW at 3x
+budget, and it does WORSE in one cell.** So the descent is close to its menu's own optimum on the
+conversion axis. One-directional evidence only: it shows a different equally-costed search cannot
+beat the descent, not that the descent is optimal, and the withdrawal-split axis is uncovered.
 
 ## endgame_harness.js  (node)
 

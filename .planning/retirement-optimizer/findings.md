@@ -3703,3 +3703,62 @@ OF has become unusable. **State the reference machine, then state the absolute o
 on every tier - 13 ms even at 10x. The conversion search is **75.4%** of the sweep at every tier.
 So the slow-machine problem is entirely `P34`, and this gives `P34` the target it has been missing:
 not "make it faster" but **a sweep that stays usable at 3.5x to 6x slower single-core speed**.
+
+
+## The oracle gap closed by itself, and the dominant lever flipped  *(2026-09-01, `P103a`)*
+
+**Codes used here, defined first.** *oracle* = a search handed the whole future return path before
+it chooses, so its result is a ceiling no honest strategy can beat on that path. *gap* = how far a
+shipped strategy's best row sits below that ceiling, as a percent of real after-tax net worth.
+*cell* = one whole plan (one household, one account mix, one spend rate, 33 years). *b20 / b80* =
+cost basis at 20% / 80% of the Brokerage balance. *GK-strain cell* = a 6-8%-spend cell where
+Guyton-Klinger is the only family that survives at the base row's delivered spend.
+
+`oracle_harness.js --full` re-run on engine `1b7b366`: 45 cells, **418,289 sims, 373.4 s**, ~8.3 s
+per plan on the reference box (Ryzen AI 9 HX 370), so ~29-50 s per plan at the 3.5x-6x slower
+single-core target. Full report: `research/PERFECT_FORESIGHT_ORACLE.md`.
+
+**Three results, in the order they change decisions.**
+
+**1. The gap closed on its own.** Median best-family gap **4.35% -> 1.58%** at default basis
+(4.47% -> 1.13% at b20, 1.83% -> 0.90% at b80). The `+$1.078M` headline that opened `P103` is gone:
+that cell (`defaults3x @4%`) now measures **+$122k**. Three shipped fixes landed between engine
+`5e1075e` and `1b7b366` that all push the same way, by making the SHIPPED arms better rather than
+the oracle worse - `P84` (RMDs and the advisor fee off the prior Dec 31 balance), `P88`
+(conversions reach MAGI so IRMAA prices them), `P87c` (a ceiling-filling year lands ON the limit).
+**Which one did it is NOT measured** and would need a bisect over those three commits. What is
+measured is that the gap closed.
+
+**2. The dominant lever flipped.** The withdrawal split now carries most of the gain in most cells;
+conversion timing dominates only in the IRA-heavy `defaults`/`defaults3x` family (96% of the gain
+at `defaults3x @4%`, the one place the old 97% claim survives). The four largest single gains in
+the run are all split: **+$856k** (`brokheavy @6% b20`), +$656k (`thirds @6%`), +$519k
+(`round1 @6% b20`), +$395k (`brokheavy @4% b20`).
+
+**3. `P51d` is answered: the ceiling is near-tight on the conversion axis.** New harness
+`.test_harnesses/oracle_crosscheck.js`. Arm A re-runs the oracle's own coordinate descent in the
+same process; Arm B is a random-restart search - block add over a run of years, shift between
+years, whole-vector scale, swap - at $1k grain, handed the **measured** sim count Arm A spent on
+that cell. Across five cells Arm B beats Arm A by at most **+0.013%** of after-tax NW at 3x budget
+(+0.001% at equal budget), and is **worse** in one cell.
+
+**The limit of that evidence, stated because it is easy to overclaim.** A negative B-A means Arm B
+is the weaker searcher there, so in that cell the cross-check bounds nothing - it only fails to
+find more. And `X-P3` was WRONG in 3 of 5: tripling the budget still moved Arm B, so Arm B is not
+converged. **What P51d establishes is one-directional: an equally-costed search of a different
+shape cannot beat the descent by a meaningful margin.** It is not a proof of optimality, and the
+withdrawal-split axis - now the dominant lever - has no cross-check at all.
+
+**Where this points `P103d`.** The fat regimes are now named by measurement rather than guessed:
+**the GK-strain cells at 6-8% spend (0.35-20.9%) and the 20%-basis arm**. `defaults3x @4%`, fat
+under the old numbers, is 1.58% and is no longer a bake-off candidate.
+
+**Two prediction flips worth carrying.** `S3-P2` (median gap < 4%) went WRONG -> **RIGHT**.
+`B-P4` (the gap GROWS at 20% basis) went RIGHT -> **WRONG**: b20's median 1.13% is now BELOW
+default basis 1.58%. The half of `B-P4` about Proportional survives - its gap stays above 1% at
+both extremes (1.2% each).
+
+**One artifact to know before reading any b20/b80 row.** In `defaults @4%` and `round1 @4%` all
+three basis arms return byte-identical scores, because those champions never sell brokerage, so
+the basis they would sell at never enters the arithmetic. Those rows are not evidence about basis
+in either direction.

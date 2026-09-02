@@ -11,7 +11,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P103 | The ceiling, then the rules: re-run the oracle, close its two holes, unify P75/P5, regime bake-offs | `P103a` |
+| **O0** | P103 | **`P103a` DONE 2026-09-01**: gap re-baselined 4.35% -> **1.58%**, ceiling proven near-tight (<=0.013%) | `P103b` |
 | **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
@@ -26,7 +26,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 **P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 **P88, P89, P90 COMPLETE v11.16a4** - conversions reach MAGI so IRMAA charges them (+30% to +132% at $100k); warnings name the ceilings they break; the ACA gate reads the plan's real first year; two chart fixes. Suites **366**/61/22. **P91 DONE v11.16a5: the Stress Test's first result was computed on a STALE horizon (8/36 where the truth is 0/40) because a refresh displaced by an in-flight one was DROPPED, never retried; now coalesced. The full sweep was silently stale the same way and now raises its Out-of-date banner. Was on `main` too - never a regression from this branch.**
-User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. 2026-08-31: P98 opened and closed - an in-page test read the Limit menu before `DOMContentLoaded` built it. **2026-08-31 CLEANUP (user):** P35 to **O1** (cannot be "ideal" until P75/P36 land), leaving P87 the sole O0; 34 stale boxes closed under phases already shipped; **29 never-started phases moved to `.planning/retirement-optimizer/task_parked.md`** (nothing deleted); P28f/g/h confirmed shipped v11.162B; the 40/60 closed for good in **`P30i`**. **P101 opened** (2026-08-31, user): worked examples served from `examples/` and loadable by name, with notes - O2. **P102 opened and Stage B SHIPPED** (2026-09-01, user): goal-first mode, an ALTERNATIVE nerdknob-gated surface that drives the classic controls and never replaces them; `P30i` closed inside it. **P103 opened, O0** (2026-09-01, user: "reorder as you proposed"): the ceiling then the rules - `P75` and parked `P5` merged into it, `P100` to O1 as SELECTION not RESULT, `P102` Stages C/D deferred behind `P103d`. Full index next.
+User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. 2026-08-31: P98 opened and closed - an in-page test read the Limit menu before `DOMContentLoaded` built it. **2026-08-31 CLEANUP (user):** P35 to **O1** (cannot be "ideal" until P75/P36 land), leaving P87 the sole O0; 34 stale boxes closed under phases already shipped; **29 never-started phases moved to `.planning/retirement-optimizer/task_parked.md`** (nothing deleted); P28f/g/h confirmed shipped v11.162B; the 40/60 closed for good in **`P30i`**. **P101 opened** (2026-08-31, user): worked examples served from `examples/` and loadable by name, with notes - O2. **P102 opened and Stage B SHIPPED** (2026-09-01, user): goal-first mode, an ALTERNATIVE nerdknob-gated surface that drives the classic controls and never replaces them; `P30i` closed inside it. **P103 opened, O0** (2026-09-01, user: "reorder as you proposed"): the ceiling then the rules - `P75` and parked `P5` merged into it, `P100` to O1 as SELECTION not RESULT, `P102` Stages C/D deferred behind `P103d`. **`P103a` DONE same day**: oracle re-run on `1b7b366`, median gap 4.35% -> 1.58%, dominant lever flipped to the withdrawal split, `P51d` closed at <=0.013%. Full index next.
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
@@ -58,25 +58,29 @@ into it; `P51` is its origin.
 | **sim** | one full-horizon run of `simulate()`, ~1.2 ms on the dev box. Every oracle candidate is a full re-simulation, because year t's choice changes every later year's state |
 | **regime** | a region of (mix, wealth, basis, spend, life-phase) where one fixed rule wins. `P35n` found the endgame regime; the tail rule flips at roughly $2M of endgame assets |
 | **arm** | one row of the Optimizer sweep. A rule ships as an arm, marked, so the table can find it; it never ships as a silent default |
-| **`to_aTax`** | e-ORP's name for the decision the engine cannot express: withdraw more than spending needs and DEPOSIT the excess into the brokerage account. Cyclic does this by rule; no hook lets a schedule do it by choice |
+| **`to_brokerage`** | withdraw more than spending needs and DEPOSIT the excess into the taxable brokerage account. A year's surplus has three possible homes - Cash, Roth, Brokerage - and the engine reaches all three, but Brokerage only BY RULE: `convertExcessToRoth` sends IRA-sourced surplus to Roth, `surplusToBrokerage` reinvests Cash Reserve overflow, cyclic banks its harvest there, and anything left lands in Cash. **The hole is per-year CHOICE, not the destination**: no hook lets a schedule decide, year by year, to over-withdraw and bank the excess in Brokerage. e-ORP calls this `to_aTax` (its name for the after-tax account); renamed here 2026-09-01 (user) because "aTax" reads as a tax, not an account |
 
 ### What the evidence says, in six lines  *(sources: `research/PERFECT_FORESIGHT_ORACLE.md`, `research/ENDGAME_DRAW_ORDER.md`)*
 
-1. **The gap is priced.** Best shipped row vs oracle: median **4.35%** at default basis (4.47% at 20%
-   basis, 1.83% at 80%); 0-10.47% in non-GK cells, 0.5-20% under strain. Dollars: +$241k (round1 @4%),
-   **+$1.078M** (defaults3x @4%). Mix-dependent: IRA-heavy is 97% conversion timing; balanced (thirds)
-   is the withdrawal split (+$170k split vs +$2k conversions at 4%, +$461k at 6%).
-2. **The yardstick has drifted.** `research/HARNESSES.md` records `oracle_harness.js` DRIFTED: champion
-   rows changed, the `--full` half behind the +$1.078M headline never re-run. The gap table is a
-   2026-08-10 snapshot on engine `5e1075e`.
+1. **The gap is priced, and `P103a` re-priced it DOWN.** Best shipped row vs oracle on engine
+   `1b7b366`: median **1.58%** at default basis (1.13% at 20% basis, 0.90% at 80%); 0-1.58% in non-GK
+   cells, 0.35-20.9% under GK strain. Dollars: **+$856k** (brokheavy @6% b20, split) and +$331k
+   (defaults3x @6% b20, conversions); the old **+$1.078M** headline cell is now +$122k. Mix-dependent:
+   IRA-heavy is still conversion timing (96% at defaults3x @4%); **everywhere else the withdrawal
+   split is now the larger lever**, which is the reverse of the first run.
+2. **The yardstick is re-baselined** (`P103a`, 2026-09-01). Both halves re-run on engine `1b7b366`:
+   418,289 sims, 373 s, 45 cells. `S3-P2` flipped WRONG -> RIGHT, `B-P4` RIGHT -> WRONG. `P51d` is
+   closed in the same file: an equally-costed search of a different shape beats the descent by at most
+   **0.013%**, so "lower bound" is near-tight on the conversion axis and the split axis is uncovered.
 3. **The plumbing exists with two holes that matter.** `oracleWithdrawalPlan[y]` and per-year
    `extraConversionAmount[y]` are on `main`, default-off, node-only. Monte Carlo already spreads
-   inputs into every path (`mc_engine.js:402`). Not expressible: `to_aTax` (surplus to brokerage,
-   cyclic's mechanism) and converting LESS than the base family's own rule - the per-year amount is
+   inputs into every path (`mc_engine.js:402`). Not expressible: `to_brokerage` (surplus to brokerage
+   by per-year choice rather than by cyclic's rule) and converting LESS than the base family's own rule - the per-year amount is
    EXTRA on top. Against e-ORP's six decision families the engine covers two.
-4. **No single strategy is optimal; one is often close.** Winners differ by cell; Ordered CBIR sits AT
-   the ceiling in brokheavy; cyclic beats the oracle in defaults @6%. Caveat: IRA Draw wins 5 of 6
-   measurable non-GK oracle cells at default basis.
+4. **No single strategy is optimal; one is often close.** Winners differ by cell; Ordered CBRI sits AT
+   the ceiling in brokheavy @4% (gap 0.00%); a cyclic row still beats the oracle in defaults @6%.
+   Re-measured 2026-09-01: across the six non-GK default-basis cells the best family is **Ordered in 3,
+   IRA Draw in 2, Reduce in 1** - the old "IRA Draw wins 5 of 6" no longer holds.
 5. **Three unconnected attacks on one problem.** `P51` (research, done, drifted), `P75` (planned; never
    references `P51`; a different control variable; proposes plumbing that already exists - `P75d`'s
    "withdrawals do not [accept per-year arrays]" is FALSE), and parked `P5` (the phase `P51`'s own
@@ -89,28 +93,37 @@ into it; `P51` is its origin.
 
 ### What the ideal costs, stated so it cannot be misread
 
-One cell = one whole plan, all 33 years. The oracle optimizes that plan by running about **11,000
-full-horizon simulations** (165,131 sims / 15 cells; 196 s / 15 = 13.1 s per cell; 1.19 ms per sim; the
-report's own rounded figure is ~10 s per cell for the full oracle). Why 11,000: 33 years x ~25
+One cell = one whole plan, all 33 years. The oracle optimizes that plan by running about **9,300
+full-horizon simulations** (measured 2026-09-01: 418,289 sims / 45 cells; 373.4 s / 45 = 8.3 s per cell;
+0.89 ms per sim). Why ~9,300: 33 years x ~25
 conversion candidates per year x up to 6 passes x 3 seeds for the conversion axis, plus 10 draw
-archetypes x 33 years x 4 rounds for the split. **So: ~13 s for a whole 30-year plan on the dev box
-(Ryzen AI 9 HX 370), ~46-79 s at the 3.5x-6x slower single-core target. Per PLAN, not per year.** And
+archetypes x 33 years x 4 rounds for the split. **So: ~8.3 s for a whole 33-year plan on the dev box
+(Ryzen AI 9 HX 370), ~29-50 s at the 3.5x-6x slower single-core target. Per PLAN, not per year.** And
 what comes out is not "the ideal plan": it is the best schedule IF the future is exactly the assumed
 path, and a lower bound on even that. Sixty seconds buys the yardstick for one plan. Not interactive;
 a research instrument and a ship-time check.
 
 ### Stages - gated, in order
 
-- [ ] **P103a** - **re-run the oracle on today's engine** and size the "lower bound". Re-run
-      `oracle_harness.js --full` over the 45-cell grid (~10 min node); re-baseline the gap table in
-      `PERFECT_FORESIGHT_ORACLE.md` with the engine commit named. Then **`P51d`**, the independent
-      search cross-check that has been open since 2026-08-10: a second search of a different shape
-      (random restarts, or a finer menu) on 3-5 cells, reporting how far the coordinate descent sits
-      below it. Until that number exists, "lower bound" has no size. **GATE for everything below.**
+- [x] **P103a DONE 2026-09-01** - the oracle re-run on engine `1b7b366` (418,289 sims, 373 s) and the
+      "lower bound" sized. `PERFECT_FORESIGHT_ORACLE.md` is now the second run throughout, with a
+      before/after table. **Three results that change what comes next:**
+      **(a) the gap closed by itself** - median best-family gap 4.35% -> **1.58%** at default basis,
+      and the +$1.078M headline cell is now +$122k. Three shipped fixes landed between the engines and
+      all push the same way (`P84` RMD/fee basis, `P88` conversions into MAGI, `P87c` ceiling fill);
+      attributing the collapse to any one of them is NOT measured and would need a bisect.
+      **(b) the dominant lever flipped** from conversion timing to the **withdrawal split** in most
+      cells; the four largest single gains in the run are all split.
+      **(c) `P51d` is closed** by a new harness, `.test_harnesses/oracle_crosscheck.js`: Arm A re-runs
+      the descent in-process, Arm B is a random-restart search with block/shift/scale/swap moves at $1k
+      grain on the SAME measured sim count. Arm B never finds materially more - max **+0.013%** at 3x
+      budget, and it is WORSE in one cell. `X-P1` RIGHT 5/5, `X-P2` and `X-P3` WRONG. One-directional:
+      it shows an equally-costed different search cannot beat the descent, not that the descent is
+      optimal, and it says nothing about the split axis.
 - [ ] **P103b** - **close the two plumbing holes as research inputs**, default-off, node-only, the
       `oracleWithdrawalPlan` discipline exactly: (1) a per-year over-withdraw-and-deposit amount
-      (`to_aTax`), so a schedule can route surplus to Brokerage by choice rather than by cyclic's
-      rule; (2) total-conversion control, so a per-year amount can be LESS than the family's own
+      (`to_brokerage`), so a schedule can route surplus to Brokerage by choice rather than by
+      cyclic's rule; (2) total-conversion control, so a per-year amount can be LESS than the family's own
       bracket fill, not only more. Acceptance: the hook throws or no-ops on malformed input, every
       existing test bit-identical, and the cyclic rows in `defaults @6%` no longer beat the oracle -
       or the report says why they still do. Re-run `P103a`'s table with the holes closed.
@@ -120,9 +133,10 @@ a research instrument and a ship-time check.
       `P75a` stays the gate (edge residency of the best swept rows' realized MAGI; "mostly interior"
       means stop and redesign). `P75b`'s descent, `P75c`'s cliff-margin pricing, `P5`'s greedy
       forward pass as the cheap first seed. Build `magiEdgesForYear()` as its first artifact.
-- [ ] **P103d** - **regime bake-offs, the `P35n` template, across regimes.** For each regime the
-      `P103a` table names as fat (candidates: big IRA + ACA years; the widow transition; basis 20%;
-      GK-strain cells): oracle as ceiling, a handful of STATIC rules as candidates, a crossed grid,
+- [ ] **P103d** - **regime bake-offs, the `P35n` template, across regimes.** `P103a` has now NAMED the
+      fat regimes and they are not the ones this bullet guessed: **the GK-strain cells at 6-8% spend
+      (0.35-20.9%) and the 20%-basis arm**, not `defaults3x @4%`, which was fat under the old numbers
+      and is now 1.58%. For each such regime: oracle as ceiling, a handful of STATIC rules as candidates, a crossed grid,
       predictions registered before the run. Winners ship as marked sweep arms, regime-gated, never
       as silent defaults. `P35`'s Phased engine becomes the CARRIER for whichever rules win, so its
       phases are chosen by this evidence rather than designed by hand.
@@ -145,7 +159,7 @@ a research instrument and a ship-time check.
 | `P102` | Stages C/D (worker, search budget) DEFERRED behind `P103d` - until there are arms worth buying time for. Stage E's `e1`/`e2` (gap-fill and stop-year as swept arms) are `P103d` candidates |
 | `P34` | unchanged at O1; NOT a `P103` prerequisite - `a`-`d` are node harnesses |
 
-- **Status:** NOT STARTED. `P103a` is the gate.
+- **Status:** **`P103a` COMPLETE 2026-09-01** (see its box). `P103b` is next; `P103c`-`e` behind it.
 - **Depends on:** nothing. `P103e` needs `P103d`; `P103d` needs `P103a` and `P103b`.
 
 ---

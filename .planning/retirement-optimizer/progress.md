@@ -7271,3 +7271,101 @@ SINGLE-core speed for browser tools).
 
 **I have NOT re-prioritized `P34`** - it sits at O1. There are now two independent arguments for O0:
 it gates `P100` Stage E, and it is the entire slow-machine story. That is the user's call.
+
+
+## 2026-09-01 - P102 Stage B SHIPPED (v11.16d7) and P103 opened at O0
+
+*Backfilled 2026-09-01 from commit `effb35d`, which updated `task_plan.md` only. This session log
+and `findings.md` had no entry for the day.*
+
+**P102 Stage B: a goal-first panel, gated at `?nerdknob=goal`.** An ADDITIVE alternative surface
+above the Withdrawal Strategy box. It drives the classic controls through their own shipped adopt
+paths and owns no values of its own, so it never reaches `getInputs()`, a share URL or a saved
+scenario; turning the gate off leaves the sidebar holding exactly the plan the panel built. No
+engine change - node suites **382/61/22** byte-identical to `main`.
+
+- Gate is one notch deeper than the plain knob (user: "keep the current work, but make it not
+  accidentally findable"). `goalFirstOn() = GOAL_FIRST && NERD_KNOBS`, so the runtime checkbox can
+  still hide and force-revert it like every other gated surface.
+- **Optimize for** is mirrored from the Optimizer tab; both selects call `setOptObjective()`, which
+  writes back to whichever one did not raise it. Options are built from `OPT_OBJECTIVE_ORDER` so the
+  two menus cannot drift.
+- **Roth conversions: let the tool decide / never.** "never" writes the five conversion controls off
+  (restored on the way back) and skips the conversion-optimization pass: default scenario
+  **2,395 ms -> 732 ms, 0 rows lost**; $3M IRA **3,231 ms -> 682 ms, 2 rows lost**.
+- **"when they stop paying"** became a third position of the Stop-conversions scope menu, adopting
+  `_beStopSuggestion` through `applyConvStopYear()` - the same object and function behind the Break
+  Even icon, so the two agree by construction. 0 re-applies across further runs.
+
+**Two bugs found by looking, not by tests.** `applyConvStopYear()` writes the scope too, so adopting
+through it deselected the position that asked for it (now re-asserted after the apply). And an
+edited `optimizer_tests.js` was served from cache because its `?v=` token had not moved, reporting a
+green three assertions short. Carry-forward: **a cache token must move with every edit to the file
+it names.**
+
+No changelog entry and no `<title>` bump - nothing an ungated user can see or feel.
+
+**P103 opened at O0: "the ceiling, then the rules".** After a verified reading of the perfect-
+foresight oracle study (`P51`): the gap is priced (median **4.35%** at default basis, up to 20% under
+strain), the per-year plumbing exists on `main` with two named holes (surplus-to-brokerage routing,
+total-conversion control), and as previously sequenced almost nothing planned would move a computed
+number. `P75` and parked `P5` merge in - `P75d`'s claim that withdrawals do not accept per-year
+arrays is FALSE, `oracleWithdrawalPlan` does. `P100` to O1 as SELECTION not RESULT. `P102` Stages
+C/D deferred behind `P103d`. `P35` becomes the carrier for whatever rules `P103d`'s regime bake-offs
+pick. `P30i` closed. Five stale statements in `P100`/`P34`/`P30i` corrected in place.
+
+**Gate for everything below it is `P103a`**: re-run `oracle_harness.js --full` over the 45-cell grid
+on today's engine (~10 min node), re-baseline the gap table with the engine commit named, then
+`P51d`, the independent cross-check that gives "lower bound" a size.
+
+
+## 2026-09-01 (cont.) - P103a DONE: the oracle re-run, and the gap closed by itself
+
+`P103a` was the gate for all of `P103`. Both halves of `oracle_harness.js --full` re-run on engine
+`1b7b366`: **45 cells, 418,289 sims, 373.4 s**, suites 382/61/22 green on the same build.
+`research/PERFECT_FORESIGHT_ORACLE.md` is now the second run throughout, with a before/after table
+so the old numbers are not silently overwritten.
+
+**The headline that opened this phase is gone.** Median best-family gap **4.35% -> 1.58%**;
+`defaults3x @4%`, the +$1.078M cell, now measures +$122k. Three fixes shipped between the two
+engines all push that way by making the SHIPPED arms better rather than the oracle worse - `P84`,
+`P88`, `P87c`. Which one did it is **not measured**; it would need a bisect, and I did not run one.
+
+**The dominant lever flipped** from conversion timing to the **withdrawal split**. The four largest
+single gains in the run are all split (+$856k, +$656k, +$519k, +$395k); conversions still dominate
+only in the IRA-heavy family.
+
+**`P51d` is closed**, open since 2026-08-10. New harness `.test_harnesses/oracle_crosscheck.js`:
+Arm A re-runs the descent in-process, Arm B is a random-restart search with block/shift/scale/swap
+moves at $1k grain on the same MEASURED sim budget. Arm B beats Arm A by at most **+0.013%** at 3x
+budget and is worse in one cell. So "lower bound" is worth about one part in ten thousand on the
+conversion axis - the published gaps are near-tight.
+
+**I wrote the limit of that into the report rather than the headline.** A negative B-A means Arm B
+is the weaker searcher, not that the descent is optimal; `X-P3` was WRONG in 3 of 5, so Arm B is
+not converged; and the split axis - now the dominant lever - has no cross-check at all. `X-P1`
+RIGHT 5/5, `X-P2` WRONG.
+
+**Three numbers in my own first draft were wrong and were caught by re-reading the raw output**,
+which is the argument for keeping the run file: I had `round1 @4%` carrying a Proportional gap it
+does not have (no eligible row), `defaults3x @4%` marked "not eligible" when it is 7.13%, and an
+archetype run counted as eleven Roth years when it is fourteen.
+
+**What it changes downstream, recorded in `task_plan.md`:** `P103d`'s fat regimes are now named by
+measurement - the GK-strain cells at 6-8% spend and the b20 arm - and `defaults3x @4%` is off that
+list. `P36`'s round-2 certification measures against 1.58%, not 4.35%. `P103b` (the two plumbing
+holes) is next; the surplus-routing hole is still why one cyclic row beats the ceiling.
+
+**Rename, user 2026-09-01: `to_aTax` -> `to_brokerage`.** *"the 'a' in 'aTax' doesn't make sense to
+me. I believe the point is that excess withdrawals can go to: cash, roth, or taxable (brokerage) -
+and the last isn't present."* The `a` was e-ORP's abbreviation for its after-tax account, legible
+only to someone who had read e-ORP. Renamed in the reading guide, in the evidence line and in
+`P103b`'s acceptance text; the e-ORP original is kept in one parenthetical for traceability.
+
+**The user's three-destination model is right and it corrected the definition.** A year's surplus
+does have exactly three homes, and re-reading the engine shows Brokerage is NOT absent: `convertExcessToRoth`
+routes IRA-sourced surplus to Roth, `surplusToBrokerage` reinvests Cash Reserve overflow
+(`optimizer_core.js:2800`), cyclic banks its harvest there, and the remainder lands in Cash. **The
+hole is per-year CHOICE, not the destination** - nothing lets a schedule decide, year by year, to
+over-withdraw and bank the excess in Brokerage. `P103b` already scoped it that way; the glossary
+entry said "cannot express", which overstated it, and now says what is actually missing.

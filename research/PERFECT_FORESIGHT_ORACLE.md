@@ -1,11 +1,17 @@
-# Perfect-foresight oracle: how much a plan leaves on the table  *(phase P51)*
+# Perfect-foresight oracle: how much a plan leaves on the table  *(phases P51, P103a)*
 
-**Run:** 2026-08-10, engine at `5e1075e` + the P51b hook (uncommitted), suite 242/242.
+**Run:** **2026-09-01, engine at `1b7b366`**, suites 382/61/22. Supersedes the 2026-08-10 run at
+engine `5e1075e`; **[what moved between the two runs](#what-changed-between-the-2026-08-10-and-2026-09-01-runs)**
+has the before/after, and it moved a lot.
 **Harness:** `node .test_harnesses/oracle_harness.js` (P51a) / `--full` (P51c-g).
-15 cells (Stage-1 mix ladder x spend 4/6/8%, wealth x1). 165,131 sims, 196s sequential node.
+45 cells (5 mixes x spend 4/6/8% x basis default/20%/80%, wealth x1), 33-year horizon.
+**418,289 sims, 373.4s** sequential node on the reference box (Ryzen AI 9 HX 370); the P51a half is
+175,695 sims / 141.4s. Per cell: **~8.3s**, so roughly **29-50s per plan on a 3.5x-6x slower
+single-core machine**.
 **Objective:** wealth-only real after-tax NW at the cell's shared heirs rate, **spend pinned**
-(candidates with shortfall > $1 or delivered spend ≠ base ± $1 are discarded). Backstops
+(candidates with shortfall > $1 or delivered spend != base +- $1 are discarded). Backstops
 instrumented, never bypassed.
+**Cross-check:** `P51d` is answered below, in [the cross-check section](#p51d---is-the-ceiling-really-a-ceiling-independent-search-cross-check).
 
 ## Reading guide - every label used below, defined once
 
@@ -17,9 +23,16 @@ were answered by a three-stage program: **Stage 1** and **Stage 2** are the scan
 oracle, allocated as phase P51. So "question A" and "question C" below are the user's, and
 "Stage 1's q3" points into `BROKERAGE_DRAW.md`.
 
-**The predictions, `S3-P1` to `S3-P4` and `B-P4`.** All registered in the harness before the numbers
-were looked at; verdicts are in **Predictions scored**, below. `S3-` is the Stage-3 batch, `B-P4`
-the basis-axis extension:
+**What "oracle" means here.** A search allowed to CHEAT: it is handed the entire future return path
+(6% growth, 2.5% inflation, every year) before it chooses anything, then picks, year by year, how
+much to convert and which accounts to draw from, re-simulating the whole 33-year plan for every
+candidate. Because it knows the future, what it finds is a CEILING no honest strategy can beat on
+that path. Nobody can follow it - real retirees do not know next year's returns - so it is
+research-only, default-off, node-only. **Its one product is the GAP.**
+
+**The predictions, `S3-P1` to `S3-P4`, `B-P4`, and `X-P1` to `X-P3`.** All registered in their
+harness before the numbers were looked at; verdicts are in **Predictions scored**, below. `S3-` is
+the Stage-3 batch, `B-P4` the basis-axis extension, `X-` the P51d cross-check:
 
 | id | prediction |
 |---|---|
@@ -28,162 +41,263 @@ the basis-axis extension:
 | **S3-P3** | oracle trajectories show harvest-like alternation - Brokerage-dominant years alternating with IRA-dominant ones - in the thirds / brokheavy mixes |
 | **S3-P4** | accepted oracle solutions show ~zero backstop activity (forced IRA in <5% of years) |
 | **B-P4** | the best-family gap GROWS at 20% basis, and Proportional's gap stays >1% at both basis extremes |
+| **X-P1** | at equal sim budget an independent search beats the oracle's coordinate descent by <1% in most cells |
+| **X-P2** | the cross-check's residual is largest where the descent's own prize is largest |
+| **X-P3** | tripling the cross-check's budget moves it by less than the descent-to-cross-check difference itself |
 
 **Grid labels.** The five mixes are `defaults`, `defaults3x`, `round1`, `thirds`, `brokheavy`; the
 Coverage section below gives each one's balances. `b20` / `b80` name the basis arm - cost basis as a
 share of the Brokerage balance, so low basis means highly appreciated. `CBIR` is an ordered-strategy
 draw sequence, one letter per account (**C**ash, **B**rokerage, **I**RA, **R**oth). `GK` is
 Guyton-Klinger guardrails, and a "GK-base cell" is one where GK is the only family that survives at
-the base row's delivered spend.
+the base row's delivered spend. A bracketed modifier - `[ira-first]`, `[brokerage-first]` - is a
+**cyclic** clone of the row (`cyclicEnabled` plus that `cyclicOrder`); `[cash]` is the
+conversion-funded-from-cash clone.
 
 ---
 
 ## What the oracle IS and IS NOT (read first)
 
 Perfect foresight on ONE deterministic path: an upper-bound **diagnostic**, never a policy.
-And it is a ceiling only over what its two levers control — per-year `extraConversionAmount[]`
+And it is a ceiling only over what its two levers control - per-year `extraConversionAmount[]`
 and the per-year `oracleWithdrawalPlan` split across IRA/Brokerage/Cash/Roth. **It does NOT
-control surplus routing**, and this showed up in the data: in `defaults @6%` two cyclic rows
-BEAT the oracle (gaps −0.31%, −0.19%), because cyclic's surplus-to-Brokerage routing is a
-mechanism the withdrawal menu cannot express, and the hook refuses to compose with cyclic by
-design. Two honest consequences:
+control surplus routing**, and this still shows up in the data: in `defaults @6%` the cyclic row
+`IRA Draw 5% [ira-first]` BEATS the oracle by $6,597 (gap −0.19%), because cyclic's
+surplus-to-Brokerage routing is a mechanism the withdrawal menu cannot express, and the hook
+refuses to compose with cyclic by design (`optimizer_core.js:1908` throws). Two honest
+consequences:
 
-1. Coordinate descent over a 10-archetype menu is local and coarse — treat every oracle number
-   as a LOWER bound on the true ceiling (P51d's cross-check remains open).
-2. The negative gaps are themselves the attribution: **cyclic's residual edge lives in surplus
-   routing, not in draw order** — consistent with the Q3 surplus-routing confound in [`BROKERAGE_DRAW.md`](BROKERAGE_DRAW.md).
+1. Coordinate descent over a 10-archetype menu is local and coarse, so every oracle number is a
+   LOWER bound on the true ceiling. **`P51d` now sizes that phrase: at most 0.013% of after-tax
+   NW on the conversion axis** (below). The withdrawal-split axis is still un-cross-checked.
+2. The negative gap is itself the attribution: **cyclic's residual edge lives in surplus routing,
+   not in draw order** - consistent with the Q3 surplus-routing confound in [`BROKERAGE_DRAW.md`](BROKERAGE_DRAW.md).
+   It is now 1 row in 1 cell of 45, down from 2 rows in the 2026-08-10 run.
 
-## P51a — conversions-only (champion base, 15/15 cells)
+## P51a - conversions-only (champion base, 45/45 cells)
 
 | finding | number |
 |---|---|
-| Oracle gain over the champion row | **0 – 2.87%** (max +$241,415, round1 @4%) |
-| Best flat scalar (core's own `optimizeConversionAmount`) | **$0 in 15 of 15 cells** |
-| `S3-P1` (oracle beats flat by <3% in most cells) | **RIGHT**, 15/15 |
+| Oracle gain over the champion row, **default basis** | **0 - 0.57%** (max +$19,501, `defaults @6%`) |
+| Oracle gain, **basis 20%** | **0 - 13.49%** (max +$201,368, `defaults3x @8% b20`) |
+| Oracle gain, **basis 80%** | **0 - 2.67%** (max +$40,810, `defaults3x @8% b80`) |
+| Best flat scalar (core's own `optimizeConversionAmount`) | **$0 in 45 of 45 cells** |
+| `S3-P1` (oracle beats flat by <3% in most cells) | **RIGHT**, 15/15 default basis; 14/15 at b20 |
 
-The flat sweep finds nothing on champion arms while per-year timing finds up to $241k —
-**per-year conversion shapes are genuinely inexpressible to the flat sweep**, the same
-conclusion `bestTimeLimitedConversion` reached from the other direction. Timing clusters
-mid-plan (post-SS / pre-and-around RMD), not in a single early burst.
+The flat sweep still finds nothing anywhere, so **per-year conversion shapes remain genuinely
+inexpressible to the flat sweep** - the same conclusion `bestTimeLimitedConversion` reached from
+the other direction. What HAS changed is the size of the prize: on today's engine the per-year
+shape is worth at most $19.5k at default basis, where the 2026-08-10 run measured up to $241k.
+The exception is the highly-appreciated brokerage arm, where it is worth far more than before
+(+$201k at `defaults3x @8% b20`, 13.49%).
 
-Two methodology fixes are load-bearing and pinned in the harness comments: champion selection
-must use `baselineScore` (wealth-only lets GK buy the slot by cutting spend), and every
+Timing still clusters mid-plan rather than in one early burst: `defaults @6%` converts in years
+6-14 and 16 of 33 (SS starts around year 4-6, RMDs around year 11), `defaults @4%` in years
+1-4, 8, 9 and 14.
+
+Two methodology fixes remain load-bearing and are pinned in the harness comments: champion
+selection must use `baselineScore` (wealth-only lets GK buy the slot by cutting spend), and every
 candidate must pin delivered spend to the base row (without the pin, a GK base showed a fake
 +81% that was pure spend-shifting).
 
-## P51c/e — full oracle and the gap-to-oracle table (non-cyclic base per cell)
+## P51c/e - full oracle and the gap-to-oracle table (non-cyclic base per cell)
 
-Per-cell decomposition (base → +conversions → +withdrawal-split), non-GK cells first:
+Per-cell decomposition (base -> +conversions -> +withdrawal-split), the six cells the earlier run
+headlined, so the two are directly comparable:
 
 | cell | base row | +conv | +split | best-family gap | Proportional gap |
 |---|---|---|---|---|---|
-| defaults @4% | Reduce 20 [cash] | +$72k | +$35k | 1.53% (IRA Draw) | 2.34% |
-| defaults @6% | IRA Draw 7 [cash] | +$160k | +$19k | **−0.31%** (cyclic IRA Draw) | 5.45% |
-| defaults3x @4% | IRA Draw 5 [cash] | **+$1,078k** | +$36k | 10.47% (IRA Draw) | 11.62% |
-| round1 @4% | IRA Draw 6 [cash] | +$241k | +$105k | 3.89% (IRA Draw) | 10.47% |
-| thirds @4% | IRA Draw 5 | +$2k | +$170k | 1.46% (IRA Draw) | 6.02% |
-| brokheavy @4% | Ordered CBIR | $0 | $0 | **0.00%** | — |
+| defaults @4% | Reduce 17 yrs [cash] | +$11.8k | +$26.1k | 0.64% (Reduce) | 1.19% |
+| defaults @6% | Ordered BCIR | +$91.5k | +$0.7k | **−0.19%** (cyclic IRA Draw) | 5.23% |
+| defaults3x @4% | Ordered BCIR | +$117.6k | +$4.6k | 1.58% (Ordered) | 7.13% |
+| round1 @4% | Ordered CIBR | +$0.5k | +$0.4k | 0.01% (Ordered) | not eligible |
+| thirds @4% | IRA Draw 5% | $0 | +$57.7k | 0.49% (IRA Draw) | not eligible |
+| brokheavy @4% | Ordered CBRI | $0 | $0 | **0.00%** | not eligible |
 
-GK-base cells (6/8% spend, where only GK survives at the base's delivered spend — their gap
-tables contain only GK itself): +split reaches **+$461k** (thirds @6%) and +conv **+$236k**
-(defaults @8%); oracle gains over the GK base run 0.5% – 20%.
+**Median best-family gap: 1.58% at default basis, 1.13% at b20, 0.90% at b80.** The
+2026-08-10 figures were 4.35 / 4.47 / 1.83%.
 
-**Attribution:** conversion timing dominates in IRA-heavy mixes (defaults3x @4%: 97% of the
-gain is conversions); the withdrawal split matters most in balanced/brokerage mixes and
-high-strain GK cells but stays second fiddle. `brokheavy @4%` is the boundary case: Ordered
-CBIR already sits AT the expressible ceiling — the oracle changed nothing.
+GK-base cells (6/8% spend, where only GK survives at the base's delivered spend - their gap tables
+contain only GK itself) are where the money now is: +split reaches **+$856,425** (`brokheavy @6%
+b20`) and **+$655,976** (`thirds @6%`); +conv reaches **+$331,152** (`defaults3x @6% b20`). Oracle
+gains over the GK base run **0.35% - 20.9%**.
 
-**Answer to question C (the absolute half):** "Proportional is default-optimal" is **REFUTED**
-on this grid — its gap to the oracle runs 2.3% – 11.6% where measurable, and IRA Draw
-dominates it in every cell. (The comparative half was already refuted by Stage 1's rankings.)
+**Attribution, and it has FLIPPED since 2026-08-10.** The withdrawal split is now the larger lever
+in most cells; conversion timing dominates only in the IRA-heavy `defaults` / `defaults3x` families
+(`defaults3x @4%`: 96% of the gain is conversions, the one place the old 97% claim survives). The
+four largest single gains in the run are all split, not conversions. `brokheavy @4%` remains the
+boundary case in both directions: at default and 80% basis Ordered CBRI already sits AT the
+expressible ceiling and the oracle changes nothing, while at b20 the same mix leaves +$394,657 on
+the table.
 
-**Answer to question A:** difficulty as measured — conversions-only needed ZERO engine change
-and ~5s/cell; the full dance needed one default-off hook pair (~40 lines) plus this harness at
-~10s/cell. Whole-horizon optimization on this engine is cheap enough to be a standard research
-instrument; it is only its POLICY use that is out of bounds.
+**Answer to question C (the absolute half):** "Proportional is default-optimal" stays **REFUTED**,
+but by a smaller margin than before - where Proportional has an eligible row its gap runs
+**1.2% - 7.1%** (was 2.3% - 11.6%), and IRA Draw or Ordered dominates it in every cell where both
+are eligible. (The comparative half was already refuted by Stage 1's rankings.)
 
-## P51f — trajectory post-mortem (observation only, ships nothing)
+**Answer to question A:** difficulty as measured - conversions-only needs ZERO engine change at
+~3.1s/cell; the full dance needs one default-off hook pair (~40 lines) plus this harness at
+~8.3s/cell. Whole-horizon optimization on this engine is cheap enough to be a standard research
+instrument; it is only its POLICY use that is out of bounds. **What it is NOT cheap enough for is
+interactive use:** ~8.3s per plan on the reference box is ~29-50s on the machines the tool's
+audience actually owns.
 
-- **No harvest-like alternation** (prediction `S3-P3` WRONG: 1/6 thirds/brokheavy cells with ≥3 IRA↔Brok
-  flips). The oracle does not rediscover cyclic's rhythm through the withdrawal menu.
+## P51d - is the ceiling really a ceiling? Independent search cross-check
+
+Open since 2026-08-10 and now answered. **Harness:** `node .test_harnesses/oracle_crosscheck.js`
+(`--budget 3` for the 3x arm). It re-runs the oracle's own coordinate descent **in the same
+process** as Arm A, then hands Arm B - a search of a different shape - the SAME measured sim count.
+
+| | Arm A (the oracle) | Arm B (the cross-check) |
+|---|---|---|
+| shape | cyclic coordinate descent, one year at a time | random restarts, greedy on random moves |
+| starts | 3 fixed seeds (zero / flat scalar / champion replay) | those 3, then random sparse vectors |
+| moves | per-year full scan of the menu | block add over a run of years, shift between years, whole-vector scale, swap, nudge |
+| grain | $25k grid + $5k refinement | $1k |
+| budget | whatever it spends | exactly that, measured (or 3x) |
+
+Five cells, one per mix. **Arm B never finds materially more:**
+
+| cell | descent gain | B − A, equal budget | B − A, 3x budget |
+|---|---|---|---|
+| defaults @6% | $19,501 | +$38 (0.001%) | +$451 (0.013%) |
+| defaults3x @4% | $14,297 | **−$4,397** | **−$10,250** |
+| round1 @4% | $531 | +$82 (0.001%) | +$82 (0.001%) |
+| thirds @4% | $0 | +$12 | +$256 (0.002%) |
+| brokheavy @4% | $0 | $0 | $0 |
+
+- **`X-P1` RIGHT, 5/5.** Max residual **0.001%** of after-tax NW at equal budget, **0.013%** at 3x.
+  So on the conversion axis the phrase "lower bound" is worth about one part in ten thousand, and
+  every published gap-to-oracle above is near-tight rather than wildly conservative.
+- **`X-P2` WRONG.** The residual does not track the size of the prize: the two cells with the
+  largest descent gains produced +0.013% and a NEGATIVE result.
+- **`X-P3` WRONG in 3 of 5** (scored by hand across the two runs; the harness scores `X-P1` and
+  `X-P2` only). Tripling the budget moved Arm B by more than the A-to-B difference itself in
+  `defaults @6%`, `defaults3x @4%` and `thirds @4%`, so Arm B is NOT converged.
+
+**Read the negative cells correctly, because they are the limit of this evidence.** A negative
+B − A means Arm B is the WEAKER searcher there, and it got weaker at 3x budget (−$4,397 ->
+−$10,250) because more restarts bought exploration instead of depth. In those cells the
+cross-check bounds nothing; it only fails to find more. **What P51d establishes is therefore
+one-directional: an equally-costed search of a different shape cannot beat the descent by a
+meaningful margin. It is not a proof of optimality**, and it says nothing at all about the
+withdrawal-split axis, which needs the `oracleWithdrawalPlan` hook and a menu of its own.
+
+## P51f - trajectory post-mortem (observation only, ships nothing)
+
+- **No harvest-like alternation** (prediction `S3-P3` WRONG again: 1/6 thirds/brokheavy cells with
+  >=3 IRA<->Brok flips). The oracle does not rediscover cyclic's rhythm through the withdrawal menu.
 - The recurring shape instead: **family-default or IRA-led years through mid-plan, then a
   solid Roth-spending tail** in the final ~5-10 years, with Brokerage held to the §1014
-  step-up. Rational in-model: Roth compounds tax-free longest, terminal brokerage gains are
-  erased anyway. This is a perfect-foresight artifact to NOTICE, not a rule to ship.
-- Backstops stayed silent everywhere: forced-IRA years = 0 in 15/15 accepted solutions
-  (prediction `S3-P4` RIGHT).
+  step-up. Visible directly in the printed archetype strings - `brokheavy @6% b20` runs
+  `Roth` for fourteen consecutive years before four `Brok` years at the end. Rational in-model:
+  Roth compounds tax-free longest, terminal brokerage gains are erased anyway. This is a
+  perfect-foresight artifact to NOTICE, not a rule to ship.
+- Backstops stayed near-silent: forced-IRA years = 0 in **44 of 45** accepted solutions, and 1 of
+  33 years in the 45th (`defaults3x @8% b80`), so `S3-P4`'s <5% threshold holds everywhere.
 
-## P51g — heirs-rate sensitivity (full re-optimization at 0.15 / 0.35)
+## P51g - heirs-rate sensitivity (full re-optimization at 0.15 / 0.35)
 
-- defaults @6%: gain $183k at rate 0.15 → $254k at 0.35, conversion years 17 → 21.
-  Conversions are worth more when the heirs rate is higher — correct direction, and the oracle
+- `defaults @6%`: gain $106,827 at rate 0.15 -> $174,437 at 0.35, conversion years 5 -> 12.
+  Conversions are worth more when the heirs rate is higher - correct direction, and the oracle
   responds by converting MORE.
-- thirds @6%: gain $755k / $670k with only 3-5 conversion years — the gain here is the
-  Roth-tail split, nearly rate-insensitive.
+- `thirds @6%`: gain **$586,219 at both rates**, with 1 conversion year. The gain here is the
+  Roth-tail split and is now exactly rate-insensitive (2026-08-10: $755k / $670k).
 
 ## Predictions scored
 
-Statements are in the reading guide at the top. `B-P4` is scored in the basis-axis section below.
+Statements are in the reading guide at the top.
 
-| id | prediction | verdict |
+| id | prediction | verdict | 2026-08-10 verdict |
+|---|---|---|---|
+| S3-P1 | conv-only oracle beats flat scalar by <3% in most cells | **RIGHT** (15/15 default basis, max 0.57%) | RIGHT (15/15) |
+| S3-P2 | median best-family gap < 4% | **RIGHT** - median **1.58%** | WRONG - median 4.35% |
+| S3-P3 | harvest-like alternation in brokerage-heavy mixes | **WRONG** - 1/6 | WRONG - 1/6 |
+| S3-P4 | backstops quiet (<5% forced-IRA years) | **RIGHT** - 44/45 at zero, 45th at 1/33 | RIGHT - 0 forced years, 15/15 |
+| B-P4 | best-family gap grows at b20; Proportional > 1% at both extremes | **WRONG** - gap b20 **1.13%** < default 1.58%; the Proportional half holds (1.2% at both) | RIGHT |
+| X-P1 | independent search beats the descent by < 1% in most cells | **RIGHT** - 5/5, max 0.013% | not run |
+| X-P2 | residual largest where the prize is largest | **WRONG** | not run |
+| X-P3 | 3x budget moves Arm B less than the A-to-B difference | **WRONG** in 3/5 | not run |
+
+## What changed between the 2026-08-10 and 2026-09-01 runs
+
+The engine moved from `5e1075e` to `1b7b366`. Everything below is a re-run of the same harness on
+the same grid, so the differences are the engine's, not the method's.
+
+| | 2026-08-10 (`5e1075e`) | 2026-09-01 (`1b7b366`) |
 |---|---|---|
-| S3-P1 | conv-only oracle beats flat scalar by <3% in most cells | **RIGHT** (15/15) |
-| S3-P2 | median best-family gap < 4% | **WRONG** — median 4.35% (GK-only cells inflate it; non-GK cells run 0–10.5%) |
-| S3-P3 | harvest-like alternation in brokerage-heavy mixes | **WRONG** — 1/6; the oracle prefers the Roth tail |
-| S3-P4 | backstops quiet (<5% forced-IRA years) | **RIGHT** — 0 forced years, 15/15 |
+| median best-family gap, default basis | 4.35% | **1.58%** |
+| median best-family gap, b20 / b80 | 4.47% / 1.83% | **1.13% / 0.90%** |
+| largest single decomposition gain | **+$1,078k** conversions (`defaults3x @4%`) | **+$856k** split (`brokheavy @6% b20`) |
+| conv-only gain, default basis | 0 - 2.87% (max +$241k) | **0 - 0.57%** (max +$19.5k) |
+| conv-only gain, b20 | max 9.00% | **max 13.49%** (+$201k) |
+| dominant lever | conversion timing in IRA-heavy mixes | **the withdrawal split**, in most cells |
+| rows beating the oracle | 2 cyclic rows, 1 cell | 1 cyclic row, 1 cell |
+| champion in `defaults @4%` | Reduce 20 yrs | Reduce 17 yrs |
+| S3-P2 / B-P4 | WRONG / RIGHT | **RIGHT / WRONG** |
+| runtime | 511k sims / 562s | 418k sims / 373s |
+
+**The headline the old file carried - "+$1.078M left on the table by conversion timing" - is
+gone.** That cell now measures +$122k in total, 96% of it still conversions. Three changes landed
+between the two engines that all push the same way, by making the SHIPPED arms better rather than
+the oracle worse: RMDs and the advisor fee now compute off the prior Dec 31 balance (`P84`),
+conversions reach MAGI so IRMAA prices them (`P88`), and a ceiling-filling year now lands ON the
+limit instead of under it (`P87c`). **Attributing the collapse to any one of those has not been
+measured** and would need a bisect over those three commits; what is measured is that the gap
+closed.
+
+**What this means for the phases that consume this file.** `P103d`'s regime bake-offs should be
+aimed where the gap still is - the GK-strain cells at 6-8% spend and the b20 arm - and NOT at
+`defaults3x @4%`, which was the fat cell under the old numbers and is now 1.58%. `P36`'s round-2
+certification measures against these numbers, not the old ones.
 
 ## Open
 
-- **P51d** (independent search cross-check) — now sharpened: the cyclic negative gaps prove
-  the menu+descent combination is not a true ceiling; a cross-check should bound how far below
-  the ceiling it sits.
+- **The withdrawal-split axis has no cross-check.** `P51d` covers conversions only. A split-axis
+  equivalent needs a second menu shape run against `oracleWithdrawalPlan`.
+- **Arm B is not converged** (`X-P3` WRONG in 3/5). A stronger cross-check - annealing, or restarts
+  that keep depth as budget grows - would tighten the bound; the current one only shows that a
+  different equally-costed search does not beat the descent.
 - The GK-base cells need a fixed-spend base to produce family gap tables at 6-8% spend
-  (candidate: run those cells at the highest spend a fixed-spend arm survives).
+  (candidate: run those cells at the highest spend a fixed-spend arm survives). This is where the
+  largest gains now live, and it is exactly where the gap tables have one row.
+- **The two plumbing holes are unclosed** and are `P103b`: surplus routing (`to_brokerage`) and
+  total-conversion control. The first is why a cyclic row still beats the ceiling.
 
-## Coverage — what was actually varied (guard against extrapolating past it)
+## Coverage - what was actually varied (guard against extrapolating past it)
 
-The oracle grid is the Stage-1 ladder at **wealth x1 only** — NARROWER than the Stage-1/2
-scans. 15 cells = 5 mixes x spend 4/6/8% of assets:
+The oracle grid is the Stage-1 ladder at **wealth x1 only** - NARROWER than the Stage-1/2
+scans. 45 cells = 5 mixes x spend 4/6/8% of assets x 3 basis arms:
 
 | mix | total | IRA share | Roth share | Brok share | basis/Brok | spend range |
 |---|---|---|---|---|---|---|
-| defaults | $1.62M | 86.4% | 4.3% | 6.2% | 50% | $64.8k – $129.6k |
-| defaults3x | $4.86M | 86.4% | 4.3% | 6.2% | 50% | $194.4k – $388.8k |
-| round1 | $3.90M | 64.1% | 9.0% | 23.1% | 55.6% | $156k – $312k |
-| thirds | $4.35M | 32.2% | 32.2% | 32.2% | 50% | $174k – $348k |
-| brokheavy | $4.55M | 22.0% | 13.2% | 61.5% | 42.9% | $182k – $364k |
+| defaults | $1.62M | 86.4% | 4.3% | 6.2% | 50% | $64.8k - $129.6k |
+| defaults3x | $4.86M | 86.4% | 4.3% | 6.2% | 50% | $194.4k - $388.8k |
+| round1 | $3.90M | 64.1% | 9.0% | 23.1% | 55.6% | $156k - $312k |
+| thirds | $4.35M | 32.2% | 32.2% | 32.2% | 50% | $174k - $348k |
+| brokheavy | $4.55M | 22.0% | 13.2% | 61.5% | 42.9% | $182k - $364k |
 
-So: totals **$1.62M – $4.86M**, IRA share 22–86%, Brokerage share 6–62%, annual spend
-**$64,800 – $388,800**, basis fraction **20% / mix default (43-56%) / 80%** (basis-axis
-extension below). The x0.5 and x3 wealth points of the Stage-1 grid were NOT run through
-the oracle (runtime); every oracle conclusion is untested below $1.6M and above $4.9M, where
-bracket-absolute effects (IRMAA cliffs, 0%-LTCG ceiling vs portfolio size) shift.
+So: totals **$1.62M - $4.86M**, IRA share 22-86%, Brokerage share 6-62%, annual spend
+**$64,800 - $388,800**, basis fraction **20% / mix default (43-56%) / 80%**. The x0.5 and x3 wealth
+points of the Stage-1 grid were NOT run through the oracle (runtime); every oracle conclusion is
+untested below $1.6M and above $4.9M, where bracket-absolute effects (IRMAA cliffs, 0%-LTCG ceiling
+vs portfolio size) shift.
 
 **Held fixed:** couple 64/62, die 92/94 (deaths 2054/2058, only 4 survivor years), SS
 $45k+$24k, no pension, CA, growth 6% / inflation 2.5% / dividends 2%, spend flat, CashReserve
 off. Family gap tables additionally require rows at the base row's exact delivered spend, which
-at 6-8% strain excludes most fixed-spend families in GK-base cells (counted per cell above).
+at 6-8% strain excludes most fixed-spend families in GK-base cells (counted per cell in the raw
+output).
 
-## Basis-axis extension (2026-08-10, closes the 43-56% basis gap)
-
-The grid was rebuilt at basis 20% and 80% — **45 cells total** (5 mixes x 3 spend x 3 basis
-arms), 511k sims / 562s. Prediction **`B-P4` RIGHT** - the best-family gap grows at 20% basis and
-Proportional stays above 1% at both extremes:
-
-- Median best-family gap: **4.47%** at basis 20% > 4.35% at default > **1.83%** at basis 80% —
-  more embedded gain = more tax terrain = more oracle alpha, exactly the §1014-driven direction.
-- **Proportional's minimum gap stays > 2% at both extremes** (2.4% at b20, 2.3% at b80) — the
-  "default-optimal REFUTED" verdict is basis-stable.
-- Conversions-only gains GROW off the default basis: max 2.87% (default) → **9.00%** at b20 and
-  **6.45%** at b80 (e.g. defaults3x @4% b80: +$408k, Ordered CBIR champion). Per-year
-  conversion timing matters MORE when the brokerage is not mid-basis, in both directions.
-- Backstops stayed silent in **45/45** cells (`S3-P4` extended).
-
-The published `S3-P1` to `S3-P4` scores above remain keyed to the default-basis arm for
-comparability.
+**One artifact worth knowing before reading the b20/b80 rows.** In `defaults @4%` and `round1 @4%`
+the three basis arms return byte-identical scores, because the champion in those cells
+(`Reduce 17 yrs [cash]`, `Ordered CIBR`) never sells brokerage, so the basis it would sell at never
+enters the arithmetic. Those rows are not evidence about basis in either direction.
 
 ## Scope limits
 
 One deterministic path (6%/2.5%), CA only, one age/SS profile, wealth x1 only, aggregate basis
 (no lots), one-sided ACA, no SECURE 10-yr heirs, §1014 at terminal row. The oracle overfits
 the known path by construction; nothing here ships without the axis-property + pinned-test bar.
+Every number in this file is a point estimate on ONE path - `P103e` is the step that runs the
+winners through Monte Carlo and reports bands instead.

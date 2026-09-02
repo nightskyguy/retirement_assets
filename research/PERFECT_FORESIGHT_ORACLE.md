@@ -542,6 +542,55 @@ The `P103b5` sweep above is the first thing here to vary it, which is why it spa
 way.** Re-running the grid at a realistic decline is open work.
 
 
+## P103b5c - the flat spend path was understating the gap by about half
+
+**Run:** 2026-09-01, `node .test_harnesses/oracle_harness.js --full --spendchange -1`. 424,399 sims,
+407.9 s. The flag is opt-in, so a bare run still reproduces the published tables.
+
+**Why.** Every cell in this study was run at `spendChange: 0`, a flat real spend path, and a typical
+plan declines around 1% a year (user, 2026-09-01). "Spend is pinned" is a comparison rule and real;
+"spend is flat" was a fixture nobody chose deliberately. This re-runs the whole grid on the realistic
+trajectory.
+
+**`D-P1` RIGHT, and by six times the predicted margin.** I predicted the median best-family gap would
+widen by more than 0.3 percentage points. It roughly doubles:
+
+| | flat path | −1%/yr real | change |
+|---|---|---|---|
+| median best-family gap, default basis | 1.58% | **3.44%** | +1.86 pp |
+| median gap, basis 20% | 1.13% | **3.30%** | +2.17 pp |
+| median gap, basis 80% | 0.90% | **3.23%** | +2.33 pp |
+| max conversions-only gain, default basis | 0.57% | **9.55%** | 17x |
+
+A declining spend leaves more wealth in the plan every year, so there is more balance to manage, more
+RMD pressure and more conversion room late - and the shipped rules, none of which know the spend is
+falling, fall further behind.
+
+**`D-P2` RIGHT, but the margin narrows sharply.** The withdrawal split stays the dominant lever - 27
+of 45 cells on both paths - but conversions nearly double in value while the split falls:
+
+| | flat path | −1%/yr real |
+|---|---|---|
+| total +conv across the grid | $2,042,009 | **$3,800,777** |
+| total +split across the grid | $5,468,972 | **$4,848,706** |
+| conv-dominant / split-dominant cells | 16 / 27 | 15 / 27 |
+
+**One published headline breaks outright.** "The best flat scalar conversion finds **$0 in 45 of 45
+cells**" is one of this report's most-repeated results, and it is a flat-path artifact. On the
+declining path the flat sweep finds money in **3 of 45** cells - up to **$86,640** in
+`defaults @4% b80`, $80,036 in `defaults @4%`, $54,897 in `defaults @4% b20`. So "per-year conversion
+shapes are genuinely inexpressible to the flat sweep" is weaker than stated: it holds on a flat path
+and only mostly holds on a realistic one.
+
+**And `S3-P4` flips to WRONG.** Backstops were silent in 45/45 cells on the flat path. On the
+declining path `brokheavy @6% b20` runs 2 forced-IRA years of 33 - 6%, over the prediction's 5%
+threshold - and `defaults3x @8% b20` runs 1. `S3-P3` is 0/6 (was 1/6) and `B-P4` stays WRONG.
+
+**What this means for everything above.** **Every gap number elsewhere in this report is a flat-path
+number and understates the realistic gap by roughly a factor of two.** The conclusions about WHICH
+lever matters survive; the sizes do not. `P103d`'s bake-offs should run on the declining path, and
+the fat-regime map from `P103a` needs re-deriving there before it is trusted.
+
 ## P51f - trajectory post-mortem (observation only, ships nothing)
 
 - **No harvest-like alternation** (prediction `S3-P3` WRONG again: 1/6 thirds/brokheavy cells with

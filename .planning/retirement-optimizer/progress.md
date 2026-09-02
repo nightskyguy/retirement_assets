@@ -7600,3 +7600,32 @@ rule, so the draw rule is what to replace - `P103d`, now with a measured prize. 
 needs no perfect foresight.
 
 **One field left:** the account SPLIT. Proportional and Ordered still carry nothing.
+
+
+## 2026-09-01 (cont.) - P103b5c: the flat spend fixture was worth a factor of two
+
+Ran the whole 45-cell grid on a realistic -1%/yr spend path, the correction the user made two
+messages earlier. Predictions `D-P1`/`D-P2` registered in `task_plan.md` before the run finished.
+
+**`D-P1` RIGHT by six times the margin I predicted.** Median best-family gap **1.58% -> 3.44%** at
+default basis, b20 1.13% -> 3.30%, b80 0.90% -> 3.23%. Max conversions-only gain 0.57% -> **9.55%**.
+
+**`D-P2` RIGHT but narrowing** - the split stays dominant (27 of 45 both paths) while conversions
+nearly double in total ($2.04M -> $3.80M) and the split falls ($5.47M -> $4.85M).
+
+**A headline I have repeated all session breaks:** "the flat scalar finds $0 in 45 of 45 cells" is a
+flat-path artifact. On the declining path it finds money in 3 cells, up to $86,640. And `S3-P4`
+flips WRONG - backstops are no longer silent everywhere.
+
+**I misread my own output first and caught it before writing.** A quick `awk` put the flat-scalar
+count at 28 of 45; re-extracting with a proper parser gave **3**. The difference between "the
+headline is destroyed" and "the headline is dented" is exactly the kind of thing a sloppy field index
+invents, and it would have gone into the report as a number nobody could reproduce.
+
+**Third fixture-as-finding this session**, and that is now the pattern worth naming: `P103b1`
+(surplus routing confounded the grid), `P103b5` (spend pinned vs spend flat), and this. All three
+were defaults inherited from the first harness and never revisited. Recorded in findings as a rule.
+
+**Consequence:** every other gap number in the report is a flat-path number, understating the
+realistic gap ~2x. `P103d` now has to re-derive its regime map on the declining path FIRST - written
+into its plan item.

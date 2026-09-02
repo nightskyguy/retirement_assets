@@ -93,6 +93,7 @@ evidence of currency.
 | `endgame_harness.js` | **DRIFTED** (`F2`) | seq-CRB 88/108 -> 84/108; Roth-early 100/108 -> 94/101. All five verdicts unchanged |
 | `unifiedconv_harness.js` | **DRIFTED** | drifted again past its own 2026-08-24 re-baseline: negative in 26/60 -> 29/60, worst -$633,605 -> -$635,692 |
 | `oracle_harness.js` | **RE-BASELINED 2026-09-01** (`P103a`) | was DRIFTED. Both halves re-run on engine `1b7b366`: median best-family gap **4.35% -> 1.58%**, the +$1.08M conversion headline is now +$122k, and the dominant lever flipped from conversion timing to the withdrawal split. `S3-P2` WRONG -> RIGHT, `B-P4` RIGHT -> WRONG. Report is the second run throughout |
+| `oracle_harness.js --spendchange` | **CURRENT** | new 2026-09-01 (`P103b5c`). Re-runs the grid on a realistic declining spend path. **The median gap roughly DOUBLES** (1.58% -> 3.44%), the "flat scalar finds $0 in 45/45" headline breaks (3 cells find up to $86,640), and `S3-P4` flips WRONG. Every other number in the report is a flat-path number |
 | `oracle_harness.js --reserve0` | **CURRENT** | new 2026-09-01 (`P103b1`). Holds surplus routing constant across arms. Negative gaps 1 -> **0**, median gap 1.58% -> 2.03%, and the winning strategy changes in 4 of 6 headline cells |
 | `spend_objective_harness.js` | **CURRENT** | new 2026-09-01 (`P103b5a`). The model trades **1.38-3.31** dollars of terminal wealth per dollar of lifetime spending, against a `SPENDABLE_WEIGHT` of 1.10, so the scalarized optimum sits at MINIMUM spend in 3/3 cells. `O-P1` WRONG (opposite direction), `O-P2` and `O-P3` RIGHT. Also finds feasibility NON-monotone in the spend goal |
 | `schedule_oracle_harness.js` | **CURRENT** | new 2026-09-01 (`P103b4`). Arm S (schedule) beats Arm A (conversions-only) in **6 of 6** cells, +0.25% to +1.82%, on an eighth of the compute in some. `S-P1` RIGHT |
@@ -328,6 +329,7 @@ Headline findings (2026-08-10):
 node .test_harnesses/oracle_harness.js          # P51a conversions-only
 node .test_harnesses/oracle_harness.js --full   # + P51c-g (needs the oracleWithdrawalPlan hook)
 node .test_harnesses/oracle_harness.js --full --reserve0   # P103b1: CashReserve = 0, routing held constant
+node .test_harnesses/oracle_harness.js --full --spendchange -1   # P103b5c: spend declines 1%/yr real
 ```
 
 **Full results live in [`PERFECT_FORESIGHT_ORACLE.md`](PERFECT_FORESIGHT_ORACLE.md).** P51: perfect-foresight

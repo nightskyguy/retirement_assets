@@ -11,7 +11,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P103 | `a`-`b5` DONE. **`b5`: the schedule BEATS GK in 10/12 cells** (more spend AND more wealth), no foresight needed. One gap left: the account split | `P103b5c` |
+| **O0** | P103 | `a`-`b5c` DONE. **`b5c`: the flat-spend fixture understated every gap ~2x** (median 1.58% -> 3.44%); `P103d` must re-derive its map there | `P103d` |
 | **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
@@ -280,13 +280,24 @@ a research instrument and a ship-time check.
       now with a measured prize. Second thing in `P103` to move a number, and unlike `P103b4` it
       needs no perfect foresight.
       **One field left: the account SPLIT.** Proportional and Ordered still carry nothing.
-- [ ] **P103b5c** - **re-run the grid on a DECLINING spend path.** User correction, 2026-09-01:
-      *"you've repeatedly said spend is fixed - it is not, usually it is declined by -1% per year."*
-      Two different things were being conflated. **Pinned** is the comparison rule (candidates
-      delivering a different spend are discarded) and is real. **Flat** is a FIXTURE choice: every
-      harness in this study sets `spendChange: 0` while a typical plan declines ~1%/yr, so nothing in
-      the oracle grid exercises a declining path. `P103b5`'s sweep is the first to vary it. Every
-      other gap number in the report is measured on a flat path and has to be read that way.
+- [x] **P103b5c DONE 2026-09-01** - **the flat spend path was understating the gap by about half.**
+      `oracle_harness.js --full --spendchange -1`, 424,399 sims, 407.9 s; flag opt-in so a bare run
+      still reproduces the published tables.
+      **`D-P1` RIGHT, by six times the predicted margin.** Predicted the median gap would widen by
+      >0.3pp; it roughly DOUBLES. Default basis **1.58% -> 3.44%**, b20 1.13% -> 3.30%, b80 0.90% ->
+      3.23%. Max conversions-only gain at default basis 0.57% -> **9.55%**.
+      **`D-P2` RIGHT but narrowing.** The split stays dominant (27 of 45 cells on both paths), yet
+      conversions nearly double while the split falls: totals +conv $2,042,009 -> **$3,800,777**,
+      +split $5,468,972 -> **$4,848,706**.
+      **A published headline BREAKS.** "The best flat scalar finds $0 in 45 of 45 cells" is a
+      flat-path artifact: on the declining path it finds money in **3 of 45**, up to **$86,640**
+      (`defaults @4% b80`). So "per-year conversion shapes are inexpressible to the flat sweep" holds
+      on a flat path and only mostly holds on a realistic one.
+      **`S3-P4` flips WRONG** - backstops were silent 45/45 on the flat path; now `brokheavy @6% b20`
+      runs 2 forced-IRA years of 33 (6%, over the 5% threshold) and `defaults3x @8% b20` runs 1.
+      **Consequence for the rest of `P103`: every other gap number in the report is a flat-path
+      number and understates the realistic gap by roughly 2x.** Which lever matters survives; the
+      sizes do not.
 - [ ] **P103c** - **the unified search** (was `P75a`-`P75c`; absorbs parked `P5`). `P75`'s control
       variable - two per-year income targets, ordinary income realized and LTCG realized, searched
       over the ~12-edge MAGI menu - on the oracle's plumbing and in the oracle's role as ceiling.
@@ -305,7 +316,10 @@ a research instrument and a ship-time check.
 - [ ] **P103d** - **regime bake-offs, the `P35n` template, across regimes.** `P103a` has now NAMED the
       fat regimes and they are not the ones this bullet guessed: **the GK-strain cells at 6-8% spend
       (0.35-20.9%) and the 20%-basis arm**, not `defaults3x @4%`, which was fat under the old numbers
-      and is now 1.58%. For each such regime: oracle as ceiling, a handful of STATIC rules as candidates, a crossed grid,
+      and is now 1.58%. **`P103b5c` then showed that map is a FLAT-PATH map:** on a realistic -1%/yr
+      spend the median gap doubles, so the regime ordering has to be RE-DERIVED on the declining path
+      before this phase aims at anything. That is the first item here.
+      For each such regime: oracle as ceiling, a handful of STATIC rules as candidates, a crossed grid,
       predictions registered before the run. Winners ship as marked sweep arms, regime-gated, never
       as silent defaults. `P35`'s Phased engine becomes the CARRIER for whichever rules win, so its
       phases are chosen by this evidence rather than designed by hand.

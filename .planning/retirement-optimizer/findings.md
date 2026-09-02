@@ -4027,3 +4027,44 @@ Correct, and two different things were being run together:
 `P103b5`'s sweep is the first thing here to vary it, spanning -2.0% to +1.0%. Every other gap number
 in `PERFECT_FORESIGHT_ORACLE.md` is measured on a flat path and has to be read that way; re-running
 the grid at a realistic decline is `P103b5c`.
+
+
+## The flat spend fixture was understating every gap by about half  *(2026-09-01, `P103b5c`)*
+
+**Codes:** *flat path* = `spendChange: 0`, the fixture every harness in this study used. *declining
+path* = `spendChange: -1%`, roughly what a typical plan does. *gap* = how far the best shipped row
+sits below the oracle, in percent of real after-tax net worth.
+
+`oracle_harness.js --full --spendchange -1`, 424,399 sims, 407.9 s, opt-in flag.
+
+**The gap roughly DOUBLES on the realistic path.** Median best-family gap, default basis
+**1.58% -> 3.44%**; b20 1.13% -> 3.30%; b80 0.90% -> 3.23%. Max conversions-only gain at default
+basis 0.57% -> **9.55%**. Prediction `D-P1` said "widens by more than 0.3pp" and was right by six
+times that margin.
+
+**Why, and it is not subtle in hindsight.** A declining spend leaves more wealth in the plan every
+year: more balance to manage, more RMD pressure, more conversion room late. None of the shipped rules
+knows the spend is falling, so they fall further behind a searcher that does.
+
+**The attribution survives but narrows.** The withdrawal split stays the dominant lever - 27 of 45
+cells on both paths - yet conversions nearly double in total value ($2,042,009 -> $3,800,777) while
+the split falls ($5,468,972 -> $4,848,706). `D-P2` RIGHT.
+
+**One published headline breaks outright.** "The best flat scalar conversion finds $0 in 45 of 45
+cells" was among this study's most-repeated results. On the declining path the flat sweep finds money
+in **3 of 45** cells, up to **$86,640**. So "per-year conversion shapes are genuinely inexpressible
+to the flat sweep" holds on a flat path and only mostly holds on a realistic one.
+
+**`S3-P4` flips to WRONG.** Backstops were silent in 45/45 cells on the flat path; on the declining
+path `brokheavy @6% b20` runs 2 forced-IRA years of 33, over the prediction's 5% threshold.
+
+**The lesson, and it is the third time this session a fixture turned out to be the finding.**
+`P103b1` found surplus routing confounding the grid; `P103b5` found spend pinning conflated with
+spend flatness; this found the flat path itself worth a factor of two. **A fixture value nobody chose
+deliberately is a finding waiting to happen.** The three defaults that did the damage here -
+`CashReserve` unset, `spendChange: 0`, one deterministic return path - were all inherited from the
+first harness and never revisited. Everything downstream inherited them too.
+
+**Consequence: every other gap number in `PERFECT_FORESIGHT_ORACLE.md` is a flat-path number** and
+understates the realistic gap by roughly 2x. Which lever matters survives; the sizes do not. `P103d`
+has to re-derive its regime map on the declining path before aiming at anything.

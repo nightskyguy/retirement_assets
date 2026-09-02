@@ -15,7 +15,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
-| **O0** | P35 | **`P104b1` + `P104b1x` DONE 09-02, v11.1701: the phantom-gap fix (+$242k mean to Proportional). Re-baselining `P104a`/`P103a` on the corrected engine, then `b2`** | `P104b2` |
+| **O0** | P35 | **`P104b1` + `P104b1x` DONE 09-02, v11.1701: the phantom-gap fix. `P104a`/`P103a` re-baselined (gap 1.94% -> 1.29%; constants win 8/10, blends x7). `b2` unblocked** | `P104b2` |
 | **O1** | P36 | round 2 measures against the `P103a` ceiling, not rank-among-arms | `P36b` |
 | **O1** | P34 | NOT a P103 prerequisite (a-d are node harnesses); still the whole slow-machine story | `P34a` |
 | **O1** | P28j | `P28jf` is the one RESULT item here: the timing rule moves every converting row | `P28jb` |
@@ -133,11 +133,15 @@ What nobody had measured is the thing that decides what to BUILD: per-year freed
             rewritten as history, three pins re-derived (`P35n` sequence premise, GK triple, `P38`
             forced-IRA), two `test.critical` guards, suites **406**/61/22, changelog + page entry
             marked behavior change, v11.1701. Goldens untouched - they pin enumeration, not results.
-            Findings: "The phantom-gap fix landed" (2026-09-02). **Still open under this item:** the
-            harness in `.test_harnesses/` (the A/B lived in the session scratchpad) and the
-            re-baselines - `P104a` re-run in progress, `P103a` (`oracle_harness.js --full --reserve0
-            --spendchange -1`) next - with `PERFECT_FORESIGHT_ORACLE.md` updated to say which numbers
-            are old-engine.
+            Findings: "The phantom-gap fix landed" (2026-09-02). **Re-baselines DONE 2026-09-02:**
+            `P104a` (constants beat Proportional in 8 of 10, blends win 7, Proportional itself best
+            in both brokheavy cells) and the `P103a` yardstick (controlled declining run: median gap
+            1.94% -> 1.29%, basis extremes 2.23%, cells >=5% 17 -> 13, max conversions-only gain
+            9.55% -> 2.34%, zero negative gaps), both in `PERFECT_FORESIGHT_ORACLE.md` with the old
+            tables kept and an engine note at the top. **Still open:** the A/B harness in
+            `.test_harnesses/` (the proof lived in the session scratchpad), and `P103d`/`P103e`
+            re-runs on v11.1701 before their arm ships - GK's draw is the draw the defect distorted
+            most.
       - [ ] **P104b2** *(PR 2, research, GATES b3; runs on the `P104b1x` engine or its winners
             inherit the confound)* - four measurements, predictions first.
             (i) Recover `P104a`'s per-cell `k=1`/`k=2` winners: the harness prints them and the
@@ -581,6 +585,11 @@ a research instrument and a ship-time check.
   **GK spend rule + Fill Bracket 22% draw**, median-best in 5 of 6 MC cells at 100% survival,
   worth +$57k to +$600k. Remaining in this phase: `P103c` (the unified search) and the account
   SPLIT field from `P103b2`; `P103b1x` is a product question for the user, not research.
+  **Old-engine caveat (2026-09-02):** `P103d`, `P103e` and this shippable result were measured
+  before the `P104b1x` gap-fill fix. On v11.1701 the map's shape survives (GK champions 10 of the
+  13 fat cells, 8% spend dominates) but every number is old-engine, and GK's draw is the draw the
+  defect distorted most. Re-run `gk_drawrule_harness.js` and `gk_drawrule_mc_harness.js` before
+  the arm ships. See the report's "What changed with v11.1701".
   PRIOR NOTE:  The schedule now carries every
   shipped family's spend and IRA draw; the one remaining field is the ACCOUNT SPLIT, which is what
   stops Proportional, Ordered and Guyton-Klinger reproducing. `P103c`-`e` behind it. `P103b1x` is a

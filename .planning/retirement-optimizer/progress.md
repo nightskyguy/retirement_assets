@@ -7937,3 +7937,11 @@ passed (334 in-page + 486 node)", `TestTiers.EXPECTED` 406 in the page, changelo
 11.1701 flagged behavior. **P104a re-run on the corrected engine** and written into the report as a
 superseding subsection: 8 of 10 (was 10 of 10), Proportional the best constant in both brokheavy
 cells, winners moved from `Cash` x5 to blends x7. Oracle yardstick re-run in progress.
+
+
+**Oracle yardstick re-baselined** (`oracle_harness.js --full --reserve0 --spendchange -1`,
+404,511 sims, 359 s): median gap 1.94% -> 1.29%, basis extremes 2.23%, cells >=5% 17 -> 13, max
+conversions-only gain 9.55% -> 2.34%, zero negative gaps, S3-P2/B-P4 RIGHT, S3-P3/S3-P4 WRONG as
+before. Written into `PERFECT_FORESIGHT_ORACLE.md` as "What changed with v11.1701" with an engine
+note at the top of the file; `research/README.md` row extended; plan updated (`b2` unblocked;
+`P103d`/`P103e` flagged as old-engine before their arm ships).

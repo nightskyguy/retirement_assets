@@ -4450,3 +4450,13 @@ still captures 85%+ in 7 of 10 and now beats the per-year descent outright in fi
 from `Cash` x5 to `I5C5` x3, `B4C6` x3, `I4B3C3`, `Cash`, `family` x2: blends in 7 of 10. The
 `Cash` wins had been carrying the defect's involuntary IRA draw. Full table in
 `PERFECT_FORESIGHT_ORACLE.md`, "P104 on the corrected engine".
+
+
+**The oracle yardstick re-baselined on v11.1701** (`--full --reserve0 --spendchange -1`, 404,511
+sims): median best-family gap 1.94% -> **1.29%**; basis extremes 2.23% against 1.29% at default,
+so basis matters again; cells at or above 5% 17 -> 13, still 8%-spend and Guyton-Klinger
+dominated; **the best case for conversion timing fell 9.55% -> 2.34%** - the defect's involuntary
+conversions had been doing part of what the oracle's schedule was credited with; four cells at
+exactly zero, all Ordered; zero negative gaps. `P103d`/`P103e` were measured on the old engine and
+GK's draw is the draw the defect distorted most: re-run before their arm ships. Report section
+"What changed with v11.1701".

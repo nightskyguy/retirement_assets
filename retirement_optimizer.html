@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1702</title>
+    <title>Retirement Optimizer 11.1703</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,14 +59,14 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1116d7"></script>
-	<script src="optimizer_core.js?v=111702"></script>
+	<script src="optimizer_core.js?v=111703"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=111702"></script>
-	<script src="optimizer_tests.js?v=111702"></script>
+	<script src="optimizer_ui.js?v=111703"></script>
+	<script src="optimizer_tests.js?v=111703"></script>
 </head>
 <body>
 
@@ -944,15 +944,17 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.1702</b>
+				<li data-flag="behavior"><b>11.1703</b>
 					<strong>Proportional and Guyton-Klinger plans were withdrawing, and converting, money they did not need.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li><strong>Behavior change - saved plans and shared links that use Proportional or Guyton-Klinger will not reproduce their earlier numbers.</strong> When a year's spending was funded partly from Cash or Roth, the tool counted that money as spent but not as available, so it drew the same amount a second time from the IRA and Brokerage and returned the excess at year end. With <i>Max Conversion</i> on, the excess was converted to Roth instead of returned: a Proportional +0% plan, which asks for no conversions at all, was converting several thousand dollars a year for as long as its Cash lasted.</li>
 					<li><strong>Cash Reserve now defaults to 0</strong> - no cash buffer, every dollar of surplus reinvested in your Brokerage - instead of Off, which left all surplus in Cash. Measured across families and account mixes, 0 is never worse than Off and usually better, and every dollar of buffer costs a little. Type Off to keep the original all-cash routing; a positive amount still keeps that much in Cash. A shared link made before this release that did not carry a Cash Reserve now loads as 0.</li>
+					<li><strong>Annual Details now shows every way money enters Brokerage.</strong> <i>BrokerageG</i> is the market return on the balance plus, when Dividend Reinvestment is on, the dividends reinvested; its tooltip now says so. Two new columns under <i>Brokerage Δ</i> break the rest out: <i>DRIP</i>, the reinvested dividends (already inside BrokerageG), and <i>SurplusBrok</i>, the surplus the Cash Reserve rule routed into Brokerage, which BrokerageG never included. <i>SumBrokIn</i> is the running total of the two: what was put in rather than earned. Last year's Brokerage, minus Brokerage-, plus BrokerageG, plus SurplusBrok is this year's balance.</li>
+					<li><strong>The Balances chart has a Scale control: linear, log10 or log2.</strong> A log scale spreads out the small balances that sit in the looks-like-zero band under a large one; log10 puts gridlines at 1k, 10k, 100k, log2 at every doubling. A zero balance has no point on a log axis and shows as a gap in that line.</li>
 					<li><strong>Annual Details shows your Cash Reserve.</strong> A <i>CashReserve</i> column under <i>Balances</i> and <i>Cash Δ</i> is the part of each year's Cash that is the reserve, so you can see the buffer being held, topped up, or broken into. It stays hidden when there is no reserve (Cash Reserve Off or 0).</li>
 					<li><strong>Spending is unchanged to the dollar. Ending wealth moves</strong>, in most plans upward and in some down, by an amount that depends on how much of each year's spending came from Cash or Roth. Plans whose first draw comes only from the IRA - <i>Fill Fed Bracket</i>, <i>IRMAA Tier</i>, <i>ACA Cliff</i>, <i>IRA Draw %</i> and <i>Reduce IRA</i> - and <i>Ordered</i> plans are unchanged. Re-run the Optimizer before treating an old best row as settled.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.1702" target="_blank" rel="noopener">Details</a>
+					<a href="optimizer_changelog.md#11.1703" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="display"><b>11.16fb</b>
 					<strong>Annual Details now accounts for every dollar that leaves Cash.</strong>
@@ -1255,6 +1257,9 @@
                 <button id="chartPerson_mine"   class="tog"        onclick="setChartPersonView('mine')">Mine</button>
                 <button id="chartPerson_spouse" class="tog"        onclick="setChartPersonView('spouse')">Spouse</button>
               </span>
+              <label style="font-size:0.8em;color:#555;display:inline-flex;align-items:center;gap:4px;" title="Vertical scale for the balances. Linear shows dollars as they are. The log scales spread out small balances, so an account that looks like zero beside a large one becomes readable; log10 puts gridlines at 1k, 10k, 100k and so on, log2 at every doubling. On a log scale a zero balance has no point to draw and shows as a gap in that line.">Scale
+                <select id="assetScale" onchange="setAssetChartScale(this.value)"><option value="linear" selected>linear</option><option value="log10">log10</option><option value="log2">log2</option></select>
+              </label>
               <label style="margin-left:auto;font-size:0.8em;color:#555;display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="Overlay vertical markers for key plan events: the year each person's RMDs begin, each death, each year income falls more than 10% short of your spending goal, each Guyton-Klinger spending cut, each year IRMAA moves to a higher tier, and the Roth conversion break-even year. Applies to both charts.">
                 <input type="checkbox" id="chk-milestones" onchange="toggleMilestones(this)" checked> Show milestones
               </label>

@@ -688,7 +688,7 @@ test.critical('P104b1x: a year funded from Cash by the primary pass is not funde
     // draw nobody asked for, taxed, parked in Cash. The Ordered branch's comment had named the
     // loop since July; the oracle weight path (P51b) and every family with Cash in its primary
     // order ran through it. Those defect numbers are recorded here so the guard reads as what it
-    // is: the fix moved every Proportional and Guyton-Klinger plan (see the changelog at 11.1702).
+    // is: the fix moved every Proportional and Guyton-Klinger plan (see the changelog at 11.1703).
     const y0 = simulate({ ...BASE, strategy: 'split', splitWeights: [0, 0, 1, 0] }).log[0];
     assert((y0.IRAwd ?? 0) < 1, `no IRA may be drawn by choice while Cash covers the year, got IRAwd ${y0.IRAwd} (the defect read 29,292)`);
     assertNear(y0.Cash ?? 0, 13283.38, 'Cash at year end is the balance less the one draw that funded the year (the defect read 38,233)', 5);
@@ -736,6 +736,33 @@ test('11.1702: the log reports the reserve held each year - min(target in nomina
     assert(off.log.every(e => (e.CashReserve ?? 0) === 0), 'Off must report 0 in every year');
     const cyc = simulate({ ...BASE, strategy: 'propwd', propWithdraw: 0, CashReserve: 30000, cyclicEnabled: true });
     assert(cyc.log.every(e => (e.CashReserve ?? 0) === 0), 'cyclic disables the reserve and must report 0');
+});
+
+test('11.1703: Brokerage reconciles on screen - last year minus Brokerage- plus brokerageG plus SurplusBrok', () => {
+    // A fixture whose RMDs exceed the spending need, so surplus arises every year and the Cash
+    // Reserve rule has something to route. Growth and dividends on, no advisor fee, no conversions.
+    const fx = { ...BASE, strategy: 'propwd', propWithdraw: 0, IRA1: 3000000, spendGoal: 60000,
+                 growth: 0.05, dividendRate: 0.02, cashYield: 0.02, inflation: 0.02, cpi: 0.02,
+                 CashReserve: 20000, dividendReinvest: true };
+    const r = simulate(fx);
+    assert(r.log.some(e => (e.SurplusBrok ?? 0) > 1000), 'the fixture must route surplus into Brokerage, or the identity is vacuous');
+    assert(r.log.every(e => Math.abs((e.DRIP ?? 0) - (e.cashDividends ?? 0)) < 0.01), 'with DRIP on, DRIP is the year\'s dividends');
+    for (let y = 1; y < r.log.length; y++) {
+        const a = r.log[y - 1], b = r.log[y];
+        const expect = a.Brokerage - (b['Brokerage-'] ?? 0) + (b.brokerageG ?? 0) + (b.SurplusBrok ?? 0);
+        assertNear(b.Brokerage, expect, `year ${b.year}: Brokerage must reconcile to the three columns`, 1);
+    }
+    // DRIP off: dividends go to Cash, DRIP reads 0, and the identity still holds.
+    const off = simulate({ ...fx, dividendReinvest: false });
+    assert(off.log.every(e => (e.DRIP ?? 0) === 0), 'with DRIP off the column reads 0');
+    for (let y = 1; y < off.log.length; y++) {
+        const a = off.log[y - 1], b = off.log[y];
+        assertNear(b.Brokerage, a.Brokerage - (b['Brokerage-'] ?? 0) + (b.brokerageG ?? 0) + (b.SurplusBrok ?? 0),
+            `year ${b.year} (DRIP off): Brokerage must reconcile`, 1);
+    }
+    // Reserve Off: nothing is routed, SurplusBrok reads 0 every year.
+    const offRes = simulate((() => { const o = { ...fx }; delete o.CashReserve; return o; })());
+    assert(offRes.log.every(e => (e.SurplusBrok ?? 0) === 0), 'with Cash Reserve Off nothing is routed to Brokerage');
 });
 
 test('P104b1: split composes with cyclic the way propwd does - no throw, harvest years draw Brokerage', () => {

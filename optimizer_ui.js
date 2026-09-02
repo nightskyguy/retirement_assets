@@ -2649,6 +2649,9 @@ const columnCategories = {
     // Brokerage Changes - balance, withdrawals, gains, growth
     'Brokerage-': ['Brokerage Δ', 'Income', 'Spending'],
     'brokerageG': ['Brokerage Δ'],
+    'DRIP': ['Brokerage Δ'],
+    'SurplusBrok': ['Brokerage Δ', 'Cash Δ'],
+    'SumBrokIn': ['Brokerage Δ'],
 
     // Cash Changes - balance, withdrawals, growth
     'CashWD': ['Cash Δ', 'Income', 'Spending'],
@@ -2710,7 +2713,8 @@ const columnGroupDefs = {
     'Roth1': 'Balances', 'Roth2': 'Balances',
     'Cash': 'Balances', 'CashReserve': 'Balances', 'Roth': 'Balances', 'Brokerage': 'Balances',
     'Basis': 'Balances', 'totalWealth': 'Balances', 'SumSpendable': 'Balances',
-    'brokerageG': 'Balances', 'cashG': 'Balances', 'rothG': 'Balances', 'RMD%': 'Balances',
+    'brokerageG': 'Balances', 'DRIP': 'Balances', 'SurplusBrok': 'Balances', 'SumBrokIn': 'Balances',
+    'cashG': 'Balances', 'rothG': 'Balances', 'RMD%': 'Balances',
     'ConvTaxCash': 'Withdrawals',
     'ttlCashWD': 'Withdrawals',
     'convOC': 'Opp. Cost', 'excessOC': 'Opp. Cost', 'convTax': 'Opp. Cost', 'excessTax': 'Opp. Cost',
@@ -2739,6 +2743,10 @@ const ANNUAL_RUNNING_TOTALS = {
     // Delivered spend = goal + shortfall (shortfall is <= 0 by construction), the same per-year
     // quantity totals.spend accumulates in the engine, Guyton-Klinger included.
     'SumSpendable':   { after: 'guaranteedIncome', source: r => (r.spendGoal ?? 0) + (r.shortfall ?? 0) },
+    // 11.1703: contributions into Brokerage that are not market growth - reinvested dividends plus
+    // surplus the Cash Reserve rule routed there - so the reader can see how much of the balance
+    // was put in rather than earned.
+    'SumBrokIn':      { after: 'SurplusBrok',      source: r => (r.DRIP ?? 0) + (r.SurplusBrok ?? 0) },
 };
 
 // ONE key list for the Annual Details header row, body rows and content scan: the engine log's own
@@ -3157,8 +3165,12 @@ function updateTable(log) {
         'QCD1': 'Qualified Charitable Distribution from Your IRA. Satisfies RMD requirement and is excluded from taxable income/MAGI (reduces IRMAA exposure). Age 70½+ only.',
         'QCD2': 'Qualified Charitable Distribution from Spouse IRA. Satisfies Spouse RMD requirement and is excluded from taxable income/MAGI (reduces IRMAA exposure). Age 70½+ only.',
         'RMD%': 'The highest percentage RMD required for IRA1 or IRA2.',
-        'Brokerage': 'Year end Brokerage balance',
+        'Brokerage': 'Year end Brokerage balance. Last year\'s Brokerage, minus Brokerage-, plus BrokerageG, plus SurplusBrok (less any advisor fee charged to this account) is this year\'s balance.',
         'Brokerage-': 'Withdrawals from Brokerage account (asset sales/cash withdrawal)',
+        'brokerageG': 'Growth of the Brokerage balance this year: the market return on what was held, PLUS dividends reinvested into it when Dividend Reinvestment is on (that part is shown on its own as DRIP). Does NOT include surplus routed here by the Cash Reserve rule - that is SurplusBrok.',
+        'DRIP': 'Dividends reinvested into Brokerage this year, when Dividend Reinvestment is on. Already inside BrokerageG; shown here so the market return can be read apart from it. Zero when dividends flow to Cash instead.',
+        'SurplusBrok': 'Money the Cash Reserve rule routed into Brokerage this year: the year\'s surplus above the reserve target (with a reserve of 0, all of it). Not part of BrokerageG. Zero when Cash Reserve is Off, since surplus then stays in Cash.',
+        'SumBrokIn': 'Running total of DRIP plus SurplusBrok: every dollar that entered Brokerage as a contribution rather than as market growth. In Current $ mode each year is converted to today\'s purchasing power before it is added.',
         'Basis': 'The amount in brokerage which can be withdrawn tax free.',
         'IRAwd': 'Total voluntary IRA withdrawals this year (IRA1- + IRA2-): spending draws plus Roth conversions. Excludes RMD, which is the involuntary draw shown in the RMD columns.',
         'IRA1-': 'Voluntary withdrawals from IRA1 this year: the spending draw plus any Roth conversions sourced from IRA1. Conversions are taken from whichever of the two IRAs is larger first, spilling to the other only when the larger cannot supply the full amount. Excludes RMD (see RMD1-).',
@@ -4311,6 +4323,54 @@ function setChartPersonView(v) {
     if (lastSimulationLog) updateCharts(lastSimulationLog);
 }
 
+// 11.1703: the balances chart's vertical scale - 'linear' (today's chart), 'log10' or 'log2'.
+// A log axis spreads out the small balances that sit in the looks-like-zero band under a large
+// one. Session-only, like the person view; the page loads linear.
+let assetChartScale = 'linear';
+function setAssetChartScale(v) {
+    assetChartScale = (v === 'log10' || v === 'log2') ? v : 'linear';
+    const sel = document.getElementById('assetScale');
+    if (sel && sel.value !== assetChartScale) sel.value = assetChartScale;
+    if (lastSimulationLog) updateCharts(lastSimulationLog);
+}
+
+// Dollar labels for a log axis: 1k, 10k, 250k, 1M, 2.5M. Chart.js's own log ticks print raw
+// numbers, which at eight digits are unreadable beside a chart.
+function fmtAxisDollars(v) {
+    const n = Number(v);
+    if (!isFinite(n)) return String(v);
+    const f = (x, s) => (Math.round(x * 10) / 10).toString().replace(/\.0$/, '') + s;
+    if (Math.abs(n) >= 1e9) return f(n / 1e9, 'B');
+    if (Math.abs(n) >= 1e6) return f(n / 1e6, 'M');
+    if (Math.abs(n) >= 1e3) return f(n / 1e3, 'k');
+    return String(Math.round(n));
+}
+
+// A log2 axis is a log axis whose gridlines fall on powers of two. Pixel placement is inherited
+// from Chart.js's logarithmic scale untouched - log2 and log10 differ by a constant factor, so
+// the geometry is identical - and only the tick generator changes. Registered on first use, so a
+// page that never leaves linear never touches the registry.
+let _log2ScaleRegistered = false;
+function registerLog2Scale() {
+    if (_log2ScaleRegistered || typeof Chart === 'undefined' || !Chart.LogarithmicScale) return;
+    class Log2Scale extends Chart.LogarithmicScale {
+        buildTicks() {
+            const lo = Math.max(1, this.min || 1);
+            const hi = Math.max(lo * 2, this.max || lo * 2);
+            const p0 = Math.floor(Math.log2(lo)), p1 = Math.ceil(Math.log2(hi));
+            const ticks = [];
+            for (let p = p0; p <= p1; p++) ticks.push({ value: Math.pow(2, p) });
+            this.min = Math.pow(2, p0);
+            this.max = Math.pow(2, p1);
+            return ticks;
+        }
+    }
+    Log2Scale.id = 'log2';
+    Log2Scale.defaults = Chart.LogarithmicScale.defaults;
+    Chart.register(Log2Scale);
+    _log2ScaleRegistered = true;
+}
+
 // #8 - which view the lower (Income & Expenses) chart shows.
 let incomeChartView = 'combined';
 
@@ -4585,11 +4645,21 @@ function updateCharts(log) {
         }
     };
 
+    // 11.1703: the balances chart's vertical scale. On a log axis a zero has nowhere to be drawn,
+    // so a zero balance becomes a gap in that line rather than a point pinned to some floor that
+    // would read as a real balance. `pt` applies that; linear mode passes values through.
+    const logY = assetChartScale !== 'linear';
+    const pt = v => (logY && !(v > 0)) ? null : v;
     const mkLine = (label, color, dataFn) => ({
-        label, data: log.map(dataFn),
+        label, data: log.map(r => pt(dataFn(r))),
         borderColor: color, backgroundColor: color,
         pointBackgroundColor: color, fill: false
     });
+    if (logY) registerLog2Scale();
+    const assetScales = !logY ? {} : { scales: { y: {
+        type: assetChartScale === 'log2' ? 'log2' : 'logarithmic',
+        ticks: { callback: v => '$' + fmtAxisDollars(v) },
+    } } };
 
     const ctxA = document.getElementById('chartAssets').getContext('2d');
     (Chart.getChart(ctxA.canvas) ?? assetChart)?.destroy();
@@ -4617,7 +4687,7 @@ function updateCharts(log) {
                 ...(_replayState?.baselineLog ? [{
                     label: 'Plan (steady assumptions)',
                     data: _replayState.baselineLog.map(r =>
-                        r.totalWealth * (inCurrentDollars ? 1 / (r.inflationFactor || 1) : 1)),
+                        pt(r.totalWealth * (inCurrentDollars ? 1 / (r.inflationFactor || 1) : 1))),
                     borderColor: '#888888', backgroundColor: '#888888',
                     pointBackgroundColor: '#888888',
                     fill: false, borderDash: [6, 4], pointRadius: 0, borderWidth: 2, spanGaps: true,
@@ -4626,6 +4696,7 @@ function updateCharts(log) {
         },
         options: {
             ...sharedTooltip,
+            ...assetScales,
             plugins: {
                 ...sharedTooltip.plugins,
                 legend: { labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 16 }, ...datasetHoverHighlight() }

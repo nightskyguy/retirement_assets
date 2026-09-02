@@ -7965,3 +7965,17 @@ field tooltip updated. One test (407), counts reconciled. Same branch entry, sta
 
 **User's stance recorded:** Cash Reserve is one vehicle, Roth is the backup; no emergency-spending
 feature.
+
+
+## 2026-09-02 (cont.) - BrokerageG explained, DRIP and SurplusBrok columns, chart scale (v11.1703)
+
+User: what BrokerageG contains, a tooltip, a column for money routed into Brokerage by the reserve
+rule and the DRIP; a linear / log10 / log2 choice for the Balances chart.
+
+**Shipped:** engine log field `brokDRIP`; display keys `DRIP` and `SurplusBrok` beside `brokerageG`;
+`SumBrokIn` running total (P86 mechanism, Current-$ aware); tooltips for Brokerage, brokerageG,
+DRIP, SurplusBrok, SumBrokIn stating the reconciliation; a `Scale` select on the Balances chart with
+`setAssetChartScale`, a `Log2Scale` registered on first use, zeros as gaps on log axes, dollar tick
+labels. One test (408): the Brokerage identity to $1 every year, DRIP on and off, reserve routing
+on, reserve Off. Counts reconciled; same branch entry, stamp refreshed; core, ui, tests tokens
+bumped. Findings: "What BrokerageG contains".

@@ -350,6 +350,10 @@ a research instrument and a ship-time check.
       "larger unspent Brokerage" intuition checked before approval: composition yes, cost no - the
       step-up erases terminal gains and lifetime realized gains are identical. Stance recorded: Cash
       Reserve is one vehicle, Roth is the backup; no emergency-spending feature.
+      **Follow-ups shipped same day:** `DRIP` + `SurplusBrok` + `SumBrokIn` columns and the
+      BrokerageG tooltip (the reconciliation identity is now a test); Balances chart Scale
+      linear / log10 / log2. **Open:** a gains-attributable-to-contributions column needs a
+      shadow sub-balance (modeling choice: pro-rata draw attribution), not built.
 - [x] **P103b2 DONE 2026-09-01** - `strategy: 'schedule'` is built, and the acceptance bar is met
       for the families it covers. Research input, default-off, node-only, on the
       `oracleWithdrawalPlan` discipline. Per-year entry `{ ordTarget, kind, rateBasis? }`; suites

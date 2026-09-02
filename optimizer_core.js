@@ -1228,6 +1228,12 @@ function buildSimYearLogRecord(p) {
         portfolioBalance: p.portfolioBalance,
         guaranteedIncome: p.guaranteedIncome,
         brokerageG: p.gains.Brokerage,
+        // 11.1703: the two other ways money enters Brokerage, so the balance reconciles on screen:
+        // Brokerage(t) = Brokerage(t-1) - Brokerage- + brokerageG + SurplusBrok. DRIP is the
+        // reinvested-dividend part already inside brokerageG; SurplusBrok is surplus the Cash
+        // Reserve rule routed here, which brokerageG does NOT include.
+        DRIP: p.brokDRIP ?? 0,
+        SurplusBrok: p.surplusToBrokerage ?? 0,
         cashG: p.gains.Cash,
         rothG: (p.gains.Roth1 || 0) + (p.gains.Roth2 || 0),
         // Chart-only (leading '-' → no table column): IRA investment earnings for the asset-flow view.
@@ -3840,6 +3846,9 @@ function logYear(sim, yr) {
         // the reserve is disabled. Shown in Annual Details as CashReserve (11.1702).
         cashReserve: (sim.inputs.CashReserve != null && !sim.inputs.cyclicEnabled)
             ? Math.min(sim.inputs.CashReserve * sim.inflation, Math.max(0, balance.Cash)) : 0,
+        // Dividends reinvested into Brokerage this year (DRIP on), 0 when they went to Cash. Shown
+        // in Annual Details as DRIP so brokerageG's growth-plus-DRIP total can be read apart.
+        brokDRIP: sim.inputs.dividendReinvest ? (yr.taxableDividends ?? 0) : 0,
         grossUpIRA: yr.grossUpIRA, grossUpTax: yr.grossUpTax, extraConvCashTax: yr.extraConvCashTax,
         fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep,
         _ceilDedAddBack: yr._ceilDedAddBack,

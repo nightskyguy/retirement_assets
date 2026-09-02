@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1702"></a>
+<a id="11.1703"></a>
 
-## 11.1702
+## 11.1703
 
 ### Cash Reserve now defaults to 0
 
@@ -30,6 +30,23 @@ families and account mixes on the corrected engine, 0 is never worse than Off an
 survival is unchanged, and every dollar of buffer costs a little. Type Off to keep the original
 all-cash routing; a positive amount still keeps that much in Cash and reinvests only the overflow.
 Saved scenarios keep whatever they carry.
+
+### Annual Details shows every way money enters Brokerage
+
+**BrokerageG** is the market return on the balance plus, when Dividend Reinvestment is on, the
+dividends reinvested into it; its tooltip now says exactly that. Two new columns under
+**Brokerage Δ** break the rest out: **DRIP**, the reinvested dividends, which are already inside
+BrokerageG, and **SurplusBrok**, the surplus the Cash Reserve rule routed into Brokerage, which
+BrokerageG never included. **SumBrokIn** is the running total of the two: every dollar that was put
+into Brokerage rather than earned there. Last year's Brokerage, minus Brokerage-, plus BrokerageG,
+plus SurplusBrok is this year's balance, and a test now holds the tool to that identity.
+
+### The Balances chart has a Scale control
+
+**Linear, log10 or log2**, beside the Both / Mine / Spouse buttons. A log scale spreads out the
+small balances that sit in the looks-like-zero band under a large one. log10 puts gridlines at 1k,
+10k, 100k and so on; log2 at every doubling. On a log axis a zero balance has no point to draw and
+shows as a gap in that line rather than a false floor. The page opens on linear.
 
 ### Annual Details shows your Cash Reserve
 

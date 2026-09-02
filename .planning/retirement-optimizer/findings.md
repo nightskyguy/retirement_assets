@@ -4529,3 +4529,36 @@ decides whether it compounds at the growth rate or the cash yield. Where no surp
 and a `CashReserve` column in Annual Details (Balances and Cash Δ) reporting min(target in nominal
 dollars, Cash) per year, hidden when there is no reserve. The user's stance for the record: *"Cash
 Reserve is ONE vehicle, but any Roth funds are a backup"* - no emergency-spending feature is wanted.
+
+
+## What BrokerageG contains, and the identity the balance now has to satisfy on screen  *(2026-09-02, user-raised)*
+
+**Codes:** *BrokerageG* = the Annual Details column fed by `yr.gains.Brokerage`. *DRIP* = dividends
+reinvested into Brokerage when Dividend Reinvestment is on. *SurplusBrok* = surplus the Cash
+Reserve rule routed into Brokerage (`yr.surplusToBrokerage`, logged since P2 as the hidden
+`-surplusToBrokerage` and never shown).
+
+`yr.gains.Brokerage` is `applyGrowth`'s market return on the balance for the pre- and post-withdrawal
+periods, PLUS the year's dividends when DRIP is on (`optimizer_core.js:3714-3716`, which adds them
+to both gains and balance). The routed surplus is added to balance and basis only (`:3229-3233`).
+So the user's question "is the routed amount inside BrokerageG?" has the answer NO, and "is it
+only growth?" has the answer NOT QUITE - it carries DRIP too. No column showed either fact, and
+`cashDividends`/`cashInterest` were uncategorized keys, i.e. hidden columns.
+
+**Shipped:** tooltips that say exactly this; `DRIP` and `SurplusBrok` columns under Brokerage Δ
+(SurplusBrok also under Cash Δ); `SumBrokIn`, a running total of the two through the P86
+running-total mechanism so Current $ mode works. BrokerageG's content is unchanged on purpose: the
+asset-flow chart sums it as earnings, and pulling DRIP out would have moved that chart. **A test
+holds the identity Brokerage(t) = Brokerage(t-1) - Brokerage- + brokerageG + SurplusBrok to $1 in
+every year** on a fixture whose RMDs exceed spending (so surplus is routed), with DRIP on and off,
+no advisor fee, no conversions. It held on the first run.
+
+**The gains-attributable-to-contributions column the user floated is not built.** It needs a
+shadow sub-balance (contributions compounding at the brokerage rate, drawn down pro rata with the
+account) - a modeling choice about how draws are attributed, not a logging change. SumBrokIn is the
+exact, cheap half: what was put in. Left as an open item.
+
+**Balances chart scale.** Linear / log10 / log2 beside the person buttons. log2 is Chart.js's
+logarithmic scale subclassed with a tick generator at powers of two: pixel geometry is inherited,
+since log2 and log10 differ by a constant. A zero balance is a gap on a log axis by design, not a
+point pinned to a floor that would read as a real balance.

@@ -7731,6 +7731,33 @@ controlled. Every narrowing of the evidence flattered the answer, in the same di
 Recorded in findings as a working rule.
 
 
+## 2026-09-02 - "GK's draw" is the DEFAULT draw, and the user spotted it
+
+User: *"the default draw rule for gk is 'proportional' and I believe the same rule that the
+'proportional' (propwd) rule uses."* Right, and it is the same code rather than the same idea. No
+`'gk'` case in `planPrimaryWithdrawals`; GK falls through to the baseline `else`, whose three lines
+open the `propwd` branch too, and neither family is in `yr.isBracketStrategy` so the gap fill matches
+as well.
+
+New harness `.test_harnesses/family_equivalence_harness.js` compares two families on every field of
+every log row plus final net worth, with `spendRule: 'gk'` on both arms so only the draw can differ.
+**15 of 15 cells bit-identical.**
+
+Three consequences, all recorded in `PERFECT_FORESIGHT_ORACLE.md` under `P103d`:
+
+1. `P103d`'s headline is about the **legacy default draw**, not about Guyton-Klinger, and generalizes
+   past GK anywhere that default is in play.
+2. `Proportional` was a **null arm** in the `P103d` bake-off - it is the incumbent and can only tie.
+   The results agree (it wins no cell), so nothing is wrong, but a guaranteed tie should not have
+   been listed as a candidate. `P103e` is unaffected: its five rules contain no Proportional entry.
+3. It re-derives the account-split hole from the other direction: every surviving candidate varies
+   how much IRA comes out, never how the non-IRA remainder splits, because the only family that could
+   express that IS the incumbent.
+
+Also fixed a doc block in `optimizer_core.js` that described the fallback branch as unreachable
+("No UI option currently routes here") when Guyton-Klinger reaches it on every run, and never
+documented `'gk'` at all. `ARCHITECTURE.md` §3a and the published diagram carry the equivalence now.
+
 ## 2026-09-01 (cont.) - P103c's gate run, and stopping short of the verdict
 
 `P75a` is the gate on `P103c`: a search over the MAGI edge menu only makes sense if good plans land

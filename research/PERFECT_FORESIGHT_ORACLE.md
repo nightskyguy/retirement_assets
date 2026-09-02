@@ -695,6 +695,47 @@ to be the right partner for GK's spend rule, and the sweep should offer the comb
 
 
 
+### What "GK's draw" actually is  *(added 2026-09-02, user observation)*
+
+**User, 2026-09-02:** *"the default draw rule for gk is 'proportional' and I believe the same rule
+that the 'proportional' (propwd) rule uses."*
+
+**Correct, and stronger than "the same rule" - it is the same code.** There is no `'gk'` case in
+`planPrimaryWithdrawals`. Guyton-Klinger matches none of the branches and falls through to the
+baseline `else`, whose three lines are the same three lines that open the `propwd` branch (same
+order, same per-account rates, same `calculateWithdrawals` call with no explicit weights, so the
+weights come from the account balances). Neither family is in `yr.isBracketStrategy`, so they take
+the same gap fill as well.
+
+**Measured, not read.** `.test_harnesses/family_equivalence_harness.js` runs `strategy: 'gk'` against
+`strategy: 'propwd', propWithdraw: 0` with `spendRule: 'gk'` on both sides - so the guardrail
+adjustment is identical by construction and the draw is the only thing that can differ - and compares
+every field of every log row plus final net worth to half a cent. **15 of 15 cells bit-identical.**
+
+Three things follow.
+
+**1. The headline generalizes past GK.** "GK's draw is beaten in 24 of 30 cells" is a statement about
+the **legacy default proportional draw**, which GK merely inherits. Guyton-Klinger contributes the
+spend rule and nothing else. Anywhere the default draw is in play, the same 24/30 result is the
+prior, and the shippable arm is better described as *"a bracket-filling draw beats the default
+proportional one under a GK spend rule"* than as anything about GK's own design.
+
+**2. `Proportional` was a NULL ARM in the `P103d` bake-off.** It is the incumbent, so it could never
+win a cell - dominance requires strictly more terminal wealth, and it delivers exactly the same. The
+results confirm it: `Proportional` appears in none of the six winner rows. Not a defect, and no
+number changes, but the effective candidate count was one lower than the table implies, and a tie
+that is guaranteed by construction should not have been listed as a candidate. **`P103e` is
+unaffected** - its five rules are GK plus four genuinely distinct draws, with no Proportional entry.
+
+**3. It re-states the account-split hole precisely.** Every surviving candidate varies **how much IRA
+comes out** - a quantity, a ceiling, or a strict sequence. None of them varies **how the non-IRA
+remainder is split**, because the only family that could express that is Proportional, and
+Proportional is the incumbent. That is the same gap recorded under `P103b2` as "the one field left is
+the account split", arrived at from the other direction.
+
+**What does not change:** every measured number in `P103d` and `P103e`, the mode sweep, and the
+recommendation. GK's spend rule is still the part worth keeping.
+
 ## P103e - uncertainty overturns P103d's ranking, and that is the point of the stage
 
 **Run:** 2026-09-01, `node .test_harnesses/gk_drawrule_mc_harness.js`. 100 GBM paths x 33 years x 5

@@ -236,13 +236,25 @@ flowchart LR
     D{"strategy dispatch"} -->|schedule| S1["ceiling / iraDraw / spend override"]
     D -->|bracket, aca| S2["computeBracketCeiling -> fill to ceiling"]
     D -->|fixedpct| S3["% of original IRA"]
-    D -->|propwd| S4["proportional + IRA boost"]
+    D -->|propwd| S4["proportional + IRA boost<br/>at 0% boost: the SAME three lines"]
     D -->|ordered| S5["empty - all in gap fill"]
     D -->|fixed| S6["amortized reduce-to-goal"]
     D -->|"gk (no case!)"| BASE["BASELINE else<br/>order IRA / Brokerage / Cash<br/>NO weights given"]
     BASE --> CW["calculateWithdrawals<br/>weights derived FROM BALANCES<br/>= strictly pro-rata draw,<br/>sized only to the spending gap"]
     CW --> NB["no ceiling, no bracket,<br/>no MAGI awareness"]
+    S4 -.->|"bit-identical, 15/15 cells"| BASE
 ```
+
+**GK's draw IS Proportional +0%** - not similar to it, the same code. The `propwd` branch opens with
+the same three lines as the baseline `else` (same order, same rates, same call), then adds its IRA
+boost; at a 0% boost nothing is added. And neither family is in `yr.isBracketStrategy`, so they share
+the gap fill too. Verified over 15 cells on every field of every log row by
+`.test_harnesses/family_equivalence_harness.js`. In the sweep table, the Guyton-Klinger row and the
+Proportional 0% row differ **only** in the spend rule.
+
+Two consequences worth carrying: `P103d`'s "GK's draw is beaten in 24 of 30 cells" is really a
+statement about the **legacy default draw**, which GK inherits, so it generalizes past GK; and
+`Proportional` was a null arm in that bake-off, since it is the incumbent and can only ever tie.
 
 **GK is a spend rule wearing a strategy's clothes.** All of its intelligence is in the adjustment
 above; its draw is the least considered one in the engine. `research/PERFECT_FORESIGHT_ORACLE.md`

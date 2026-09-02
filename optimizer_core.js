@@ -2448,6 +2448,12 @@ function planPrimaryWithdrawals(sim, yr) {
         /* BASELINE Strategy */
         /*********************/
         // Withdraw enough proportionately to get to spendGoal - including taxes.
+        //
+        // GUYTON-KLINGER LANDS HERE. There is no 'gk' case above, so this is GK's draw, and it is
+        // bit-identical to the propwd branch at propWithdraw 0 (same order, same rates, same call;
+        // and neither family is in yr.isBracketStrategy, so they share the gap fill too). Verified
+        // over 15 cells on every log field. Anything said about "GK's draw" is a statement about
+        // this default, not about Guyton-Klinger - which is why P103d's result generalizes past GK.
         yr.withdrawStrategy.order = ['IRA', 'Brokerage', 'Cash']
         yr.withdrawStrategy.taxrate = [sim.nominalTaxRate, yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit), 0, 0]
         yr.withdrawals = calculateWithdrawals(yr.curBalances, yr.additionalSpendNeeded, yr.withdrawStrategy)
@@ -3966,9 +3972,21 @@ function simulate(inputs) {
      *       Spending shortfall fills from Cash → Brokerage → Roth.
      *       WithdrawalOrder = [IRA first, then gap-fill]
      *
+     *   strategy='gk' - "Guyton-Klinger"
+     *       A SPEND rule and nothing else. There is deliberately NO 'gk' case in
+     *       the withdrawal dispatch, so it falls through to the (else) branch
+     *       below and its draw is bit-identical to propwd at 0% - verified across
+     *       15 cells, every log field, in P103d's follow-up. All of Guyton-Klinger
+     *       is the guardrail spend adjustment in resolveSpendTarget; it inherits
+     *       the legacy default draw. In the sweep table the Guyton-Klinger row and
+     *       the Proportional 0% row therefore differ ONLY in the spend rule.
+     *       WithdrawalOrder = [IRA, Brokerage, Cash] proportionally
+     *
      *   (else / fallback) - legacy proportional baseline
      *       Same proportional logic as propwd at 0%, retained for backwards
-     *       compatibility. No UI option currently routes here.
+     *       compatibility. No UI option SELECTS it directly, but strategy='gk'
+     *       reaches it by falling through, which is not a fallback at all - it is
+     *       Guyton-Klinger's actual draw. See the 'gk' entry above.
      *       WithdrawalOrder = [IRA, Brokerage, Cash] proportionally
      *
      *   NOTE - future strategy='baseline' (not yet implemented):

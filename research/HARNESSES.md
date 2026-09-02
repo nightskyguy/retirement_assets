@@ -40,6 +40,7 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `schedule_replay_harness.js` | **node** | P103b2: what can `strategy: 'schedule'` carry? Compiles each shipped family into a per-year schedule, replays it, and prints where the representation runs out. |
 | `schedule_oracle_harness.js` | **node** | P103b4: does the wider representation reach higher? Searches per-year ceilings against the same base row and budget as the conversions-only oracle. |
 | `gk_drawrule_harness.js` | **node** | P103d: which DRAW rule belongs under a Guyton-Klinger SPEND rule? Runs every shipped family with `spendRule: 'gk'` against GK deciding both. |
+| `family_equivalence_harness.js` | **node** | Are two families the SAME MODEL, or only similar? Compares every log field of every year. Proves Guyton-Klinger's draw IS Proportional +0%. |
 | `magi_edge_gate_harness.js` | **node** | P103c/P75a GATE: do the best rows' realized MAGI land on the MAGI edge menu, or in the interior? Verdict PROVISIONAL. |
 | `gk_drawrule_mc_harness.js` | **node** | P103e: does that survive uncertainty? Re-runs the P103d candidates over Monte Carlo paths and reports medians, p10 and SURVIVAL rather than an argmax. |
 | `spend_objective_harness.js` | **node** | P103b5a: can the spend axis be searched, and under what objective? Traces the (spend, wealth) frontier and asks where each candidate objective's optimum lands. |
@@ -98,6 +99,7 @@ evidence of currency.
 | `oracle_harness.js` | **RE-BASELINED 2026-09-01** (`P103a`) | was DRIFTED. Both halves re-run on engine `1b7b366`: median best-family gap **4.35% -> 1.58%**, the +$1.08M conversion headline is now +$122k, and the dominant lever flipped from conversion timing to the withdrawal split. `S3-P2` WRONG -> RIGHT, `B-P4` RIGHT -> WRONG. Report is the second run throughout |
 | `oracle_harness.js --spendchange` | **CURRENT, first result CORRECTED** | new 2026-09-01 (`P103b5c`). Alone it looked like the median gap DOUBLES on a declining path; crossed with `--reserve0` it does not move at all (2.03% -> 1.94%), and the flat-scalar headline holds ($0 in 44/44 on both paths). **The two fixtures interact - vary them together or the confound just moves.** What survives: max conversions-only gain 0.57% -> 9.55%, `S3-P4` flips WRONG, and the regime map relocates to 8%-spend cells |
 | `oracle_harness.js --reserve0` | **CURRENT** | new 2026-09-01 (`P103b1`). Holds surplus routing constant across arms. Negative gaps 1 -> **0**, median gap 1.58% -> 2.03%, and the winning strategy changes in 4 of 6 headline cells |
+| `family_equivalence_harness.js` | **CURRENT** | new 2026-09-02 (user observation). **Guyton-Klinger's draw is bit-identical to Proportional +0%, 15/15 cells, every field of every year.** GK is a SPEND rule that inherits the legacy default draw, so `P103d`'s "GK's draw is beaten in 24/30 cells" is a statement about the DEFAULT draw and generalizes past GK |
 | `gk_drawrule_mc_harness.js` | **CURRENT** | new 2026-09-01 (`P103e`). **Overturns `P103d`'s ranking in all three MC modes.** The single-path winner (Ordered CIBR) reaches **0% survival** under bootstrap; both ordered sequences are disqualified outright. Fill Bracket 22% wins 12 of 18 mode-cells at 95-100% survival and loses consistently in two. `E-P1`/`E-P3` RIGHT, `E-P2` WRONG |
 | `gk_drawrule_harness.js` | **CURRENT** | new 2026-09-01 (`P103d`). **GK's draw is beaten in 24 of 30 cells (80%)** - 15/15 at 6% spend - worth a median $231,345 and $6.56M in total. Six distinct winners, so the replacement is regime-gated. `G-P1` and `G-P3` WRONG, `G-P2` RIGHT |
 | `spend_objective_harness.js` | **CURRENT** | new 2026-09-01 (`P103b5a`). The model trades **1.38-3.31** dollars of terminal wealth per dollar of lifetime spending, against a `SPENDABLE_WEIGHT` of 1.10, so the scalarized optimum sits at MINIMUM spend in 3/3 cells. `O-P1` WRONG (opposite direction), `O-P2` and `O-P3` RIGHT. Also finds feasibility NON-monotone in the spend goal |
@@ -437,6 +439,28 @@ Bracket, a family that fills a ceiling by construction. Edges now come off the l
 `StateCap`, `BracketTarget`, `-cpiFactor`), and a direct check confirms Fill Bracket 22% sits at
 exactly $0 from its own `BracketTarget` in the years the ceiling binds - 6 of 33 in the cell tested.
 Confirm the binding-year counts per family before treating the gate as failed.
+
+## family_equivalence_harness.js  (node)
+
+```bash
+node .test_harnesses/family_equivalence_harness.js
+```
+
+Answers one question and exits non-zero if the answer is no: **are two strategy families the same
+model, or only similar?** It compares every field of every log row plus final net worth, to half a
+cent - not terminal wealth, because a summary can match while the years underneath differ. Pairs are
+declared in a table at the top; add one rather than editing an existing one.
+
+Written 2026-09-02 for the user's observation that Guyton-Klinger's draw looked like the
+Proportional family's. **It is: 15 of 15 cells bit-identical.** There is no `'gk'` case in
+`planPrimaryWithdrawals`, so GK falls through to the baseline `else`, whose three lines are the same
+three lines that open the `propwd` branch - and neither family is in `yr.isBracketStrategy`, so they
+share the gap fill too.
+
+Both arms run `spendRule: 'gk'`, which is the whole trick: a DRAW comparison is only meaningful when
+the spend is identical by construction. Comparing `strategy: 'gk'` against a plain `propwd` shows
+differences that belong entirely to the spend rule. `gkSpend` and `gkAdj` are excluded as UI labels;
+they are the only exclusions.
 
 ## gk_drawrule_mc_harness.js  (node)
 

@@ -2493,7 +2493,11 @@ function planPrimaryWithdrawals(sim, yr) {
 
     } else if (inputs.strategy === 'ordered') {
         // Ordered strategy: all spending handled in gap-fill to avoid surplus distortion.
-        // Cash draws in the main block don't reduce possibleIncome, causing overdraw + refund loops.
+        // HISTORY: this arrangement was chosen because "Cash draws in the main block don't reduce
+        // possibleIncome, causing overdraw + refund loops" - a real defect, which every OTHER family
+        // with Cash in its primary order carried until P104b1x fixed it in fillSpendingGap
+        // (2026-09-02). Ordered keeps the arrangement: its whole meaning is the sequence, and the
+        // gap fill is where that sequence runs. Nothing here depends on the old loop any more.
         yr.withdrawals = {};
 
     } else {
@@ -2583,7 +2587,25 @@ function fillSpendingGap(sim, yr) {
     yr.possibleIncome = yr.taxableInc + yr.fixedInc + yr.netWithdrawals.IRA +
         yr.capitalGains + (yr.netWithdrawals.BrokerageBasis ?? 0);
 
+    // P104b1x. possibleIncome is INCOME - what the tax passes are computed on - and a Cash or Roth
+    // withdrawal is not income. But this gap is about what the household can SPEND, and a dollar
+    // drawn from Cash or Roth in planPrimaryWithdrawals is exactly as spendable as one drawn from
+    // the IRA. Until 2026-09-02 those two draws were left out here, so a year the primary pass had
+    // funded from Cash or Roth was funded AGAIN by this pass: the remaining Cash drained, the rest
+    // spilled into the IRA (or, for Proportional, into the 40/60 Brokerage/Cash branch below), and
+    // the year-end surplus routine refunded the over-draw - or, with Max Conversion on, CONVERTED
+    // it. A Proportional +0% plan with no boost was converting $7.8k, $7.2k, $6.2k, $3.5k in its
+    // first years on the defaults3x @6% fixture and should convert nothing. Traced on BASE with a
+    // Cash-only split: the primary pass drew the whole $36,717 need from Cash, this pass drew it
+    // again ($13,283 Cash + $29,292 IRA), $38,233 refunded. resolveResidualAndForcedIRA's
+    // incomeAfterGapFill counted all four accounts all along; this line now agrees with it.
+    // Measured on ten cells, real after-tax wealth, spend delivered identical to the dollar:
+    // Proportional +0% +$241,868 mean (up 8 of 10), Guyton-Klinger +$103,349; Fill Bracket, IRA
+    // Draw, an IRA-only split and Ordered exactly $0, because their primary draw never touches Cash
+    // or Roth. Pinned in optimizer_core.tests.js (P104b1x). The Ordered branch's comment in
+    // planPrimaryWithdrawals recorded this loop as the reason it draws nothing in the primary pass.
     let netSpendable = yr.possibleIncome - yr.totalTax
+        + (yr.netWithdrawals.Cash ?? 0) + (yr.netWithdrawals.Roth ?? 0);
     let gap = yr.targetSpend - netSpendable;
 
     inspectForErrors({ netSpendable: netSpendable, gap: gap, totalTax: yr.totalTax });

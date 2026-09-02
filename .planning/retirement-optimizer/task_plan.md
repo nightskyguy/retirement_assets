@@ -15,7 +15,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
-| **O0** | P35 | **`P104b1` DONE 09-02 (405 tests). Its acceptance test found a shipped defect: pass 2 refunds Cash/Roth draws, worth +$242k mean to Proportional. `P104b1x` is YOUR call before `b2`** | `P104b1x` |
+| **O0** | P35 | **`P104b1` + `P104b1x` DONE 09-02, v11.1701: the phantom-gap fix (+$242k mean to Proportional). Re-baselining `P104a`/`P103a` on the corrected engine, then `b2`** | `P104b2` |
 | **O1** | P36 | round 2 measures against the `P103a` ceiling, not rank-among-arms | `P36b` |
 | **O1** | P34 | NOT a P103 prerequisite (a-d are node harnesses); still the whole slow-machine story | `P34a` |
 | **O1** | P28j | `P28jf` is the one RESULT item here: the timing rule moves every converting row | `P28jb` |
@@ -51,6 +51,13 @@ What nobody had measured is the thing that decides what to BUILD: per-year freed
       being constant.
       **`X-P1` RIGHT 7/10: one switch captures 85-100% of the entire per-year optimum.** So the
       answer to the question is "mostly phases, not per-annum".
+      **RE-BASELINED 2026-09-02 on the corrected engine (v11.1701, after `P104b1x`):** `X-P3` is
+      RIGHT in **8 of 10**, $112,096 to $642,131; Proportional is itself the best constant in both
+      brokerage-heavy cells. `X-P1` unchanged at 7/10, and one switch now BEATS the per-year descent
+      in five cells. Winners moved from `Cash` x5 to `I5C5` x3 / `B4C6` x3 / `I4B3C3` / `Cash` /
+      `family` x2 - blends 7 of 10, so the SPLIT field is needed more. The numbers in the lines
+      above are the old engine's; the report's "P104 on the corrected engine" subsection supersedes
+      them.
       **The three exceptions are all brokerage-heavy and they are large** - `brokheavy @6%` gets
       $938,307 from two phases against $1,603,960 per-year, a $665,653 increment (42%).
       **The blend surprise:** the best CONSTANT is a blend in 4 of 10 cells (`B4C6` x3, `prop` x1),
@@ -102,7 +109,7 @@ What nobody had measured is the thing that decides what to BUILD: per-year freed
             `ROTH_GAP_EXCLUDED` (exported), `STRATEGY_SELECTION_FIELDS` with an element-wise compare.
             Eight tests; suites **405**/61/22; counts reconciled. **Replay identity holds to the
             dollar** over four vectors and two mixes: the family IS the oracle path.
-      - [ ] **P104b1x - USER DECISION, O0, gates `b2`.** The acceptance test found a shipped defect
+      - [x] **P104b1x DONE 2026-09-02, v11.1701.** The acceptance test found a shipped defect
             (findings.md 2026-09-02, "The gap fill funds a Cash- or Roth-funded year twice"): pass 2
             sizes its gap from an income sum that omits pass 1's Cash and Roth draws, so those
             draws are made twice and the surplus is refunded, and with Max Conversion on it is
@@ -112,12 +119,25 @@ What nobody had measured is the thing that decides what to BUILD: per-year freed
             10), Guyton-Klinger +$103,349**; Fill Bracket, IRA Draw, IRA-only split and Ordered
             exactly $0. `P104a`'s `Cash` winner LOSES in 7 of 10 on the corrected engine, and the
             `P51`/`P103a` gap tables were measured on the distorted path in both arms.
-            **Recommended path, three steps:** (1) the correction as a research input defaulting to
-            today's behavior + a harness in `.test_harnesses/` + a report row; (2) re-run `P104a`
-            and the `P103a` headline cells on it; (3) flip the default in its own PR - behavior
-            change, changelog ("the tool was converting money you never asked to convert"), golden
-            fixtures regenerated, the `P104b1` pinned-defect test updated. **Not done on this
-            branch:** it moves every Proportional and Guyton-Klinger plan and is a product call.
+            **Path, revised 2026-09-02 after the user's policy** (*"anything that provably improves
+            outcomes and/or run-time performance, or correctness is acceptable. Maintaining backward
+            compatibility is nowhere on the list of objectives"*): the three-step staging behind a
+            research flag was compatibility caution and is withdrawn. **Fix it directly** - the one
+            line in `fillSpendingGap`, the `P104b1` pinned-defect test updated to the corrected
+            numbers, golden fixtures regenerated, a changelog entry telling users their Proportional
+            and Guyton-Klinger numbers moved and why, version bump - then re-run `P104a` and the
+            `P103a` headline cells so the yardstick is measured on a correct engine. A harness in
+            `.test_harnesses/` still ships with it, because the A/B is the proof, not because old
+            plans need sparing.
+            **DONE 2026-09-02 (user: "Go ahead with the fix"):** the one line, Ordered's comment
+            rewritten as history, three pins re-derived (`P35n` sequence premise, GK triple, `P38`
+            forced-IRA), two `test.critical` guards, suites **406**/61/22, changelog + page entry
+            marked behavior change, v11.1701. Goldens untouched - they pin enumeration, not results.
+            Findings: "The phantom-gap fix landed" (2026-09-02). **Still open under this item:** the
+            harness in `.test_harnesses/` (the A/B lived in the session scratchpad) and the
+            re-baselines - `P104a` re-run in progress, `P103a` (`oracle_harness.js --full --reserve0
+            --spendchange -1`) next - with `PERFECT_FORESIGHT_ORACLE.md` updated to say which numbers
+            are old-engine.
       - [ ] **P104b2** *(PR 2, research, GATES b3; runs on the `P104b1x` engine or its winners
             inherit the confound)* - four measurements, predictions first.
             (i) Recover `P104a`'s per-cell `k=1`/`k=2` winners: the harness prints them and the

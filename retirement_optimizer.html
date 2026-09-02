@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.16fb</title>
+    <title>Retirement Optimizer 11.1701</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,14 +59,14 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1116d7"></script>
-	<script src="optimizer_core.js?v=1116fc"></script>
+	<script src="optimizer_core.js?v=111701"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
 	<script src="optimizer_ui.js?v=1116fb"></script>
-	<script src="optimizer_tests.js?v=1116f0"></script>
+	<script src="optimizer_tests.js?v=111701"></script>
 </head>
 <body>
 
@@ -944,6 +944,14 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="behavior"><b>11.1701</b>
+					<strong>Proportional and Guyton-Klinger plans were withdrawing, and converting, money they did not need.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li><strong>Behavior change - saved plans and shared links that use Proportional or Guyton-Klinger will not reproduce their earlier numbers.</strong> When a year's spending was funded partly from Cash or Roth, the tool counted that money as spent but not as available, so it drew the same amount a second time from the IRA and Brokerage and returned the excess at year end. With <i>Max Conversion</i> on, the excess was converted to Roth instead of returned: a Proportional +0% plan, which asks for no conversions at all, was converting several thousand dollars a year for as long as its Cash lasted.</li>
+					<li><strong>Spending is unchanged to the dollar. Ending wealth moves.</strong> On ten test plans, Proportional gained about $242,000 of real after-tax wealth on average and Guyton-Klinger about $103,000, each with one small loss. Plans whose first draw comes only from the IRA - <i>Fill Fed Bracket</i>, <i>IRMAA Tier</i>, <i>ACA Cliff</i>, <i>IRA Draw %</i> and <i>Reduce IRA</i> - and <i>Ordered</i> plans are unchanged. Re-run the Optimizer before treating an old best row as settled.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.1701" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="display"><b>11.16fb</b>
 					<strong>Annual Details now accounts for every dollar that leaves Cash.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">

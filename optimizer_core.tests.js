@@ -569,12 +569,17 @@ test('P51b: an IRA-only year draws IRA, not Brokerage; spill covers the rest of 
 });
 
 test('P35n: oracleWithdrawalPlan {seq} entry — strict sequence, IRA-last is a true backstop', () => {
-    // BASE year 0: Cash $50k < spend need, so a Cash-first sequence must drain Cash, cascade to
-    // Brokerage, and leave the IRA untouched (it is last in the sequence).
+    // A Cash-first sequence must drain Cash, cascade to Brokerage, and leave the IRA untouched (it
+    // is last in the sequence). The need has to EXCEED Cash for the cascade to be real: BASE's
+    // $60k goal needs only $36.7k after the RMD, which $50k of Cash covers alone. This test used
+    // to pass on BASE anyway, and the reason is recorded because it was a defect: the gap fill
+    // did not credit the primary pass's Cash draw, drew the year a second time, and that phantom
+    // second draw is what "cascaded" to Brokerage (P104b1x, fixed 2026-09-02). $90k needs ~$66.7k,
+    // so Cash genuinely runs out and Brokerage is genuinely next.
     const plan = [{ seq: ['Cash', 'Brokerage', 'Roth', 'IRA'] }];
-    const r = simulate({ ...BASE, oracleWithdrawalPlan: plan });
+    const r = simulate({ ...BASE, spendGoal: 90000, oracleWithdrawalPlan: plan });
     const y0 = r.log[0];
-    assert((y0.CashWD ?? 0) > 10000, `seq must drain Cash first, got CashWD ${y0.CashWD}`);
+    assert((y0.CashWD ?? 0) > 45000, `seq must drain Cash first, got CashWD ${y0.CashWD}`);
     assert((y0['Brokerage-'] ?? 0) > 0, `shortfall must cascade to Brokerage, got ${y0['Brokerage-']}`);
     assert((y0.IRAwd ?? 0) < 1, `IRA is last in the sequence and must be untouched, got ${y0.IRAwd}`);
 });
@@ -674,26 +679,45 @@ test('P104b1: a malformed or absent vector runs as the baseline draw, byte-ident
     assert(withV.finalNW !== stripped.finalNW, 'stripping splitWeights must change the result');
 });
 
-test('P104b1x PINNED DEFECT: a Cash-weighted primary draw is drawn twice by the gap fill and the spill lands in the IRA', () => {
-    // BASE year 0: the need is $36,717 and Cash holds $50,000, so a {Cash:1} vector should fund
-    // the year from Cash alone and touch nothing else. Traced 2026-09-02: the primary pass DOES
-    // draw $36,717 of Cash; fillSpendingGap then sizes its gap from yr.possibleIncome, which
-    // counts IRA and Brokerage draws and not Cash or Roth ones, so it sees the same $36,717 gap
-    // again, drains the remaining $13,283 of Cash and spills $29,292 into the IRA; the year-end
-    // surplus routes $38,233 back to Cash. Net effect: an IRA draw nobody asked for, taxed, parked
-    // in Cash. The Ordered branch's own comment names this ("overdraw + refund loops") and Ordered
-    // sidesteps it by drawing only in the gap fill; the oracle weight path (P51b) and therefore
-    // every Cash- or Roth-weighted archetype in P51/P103a/P104a ran through it. The third pass
-    // (resolveResidualAndForcedIRA) counts all four accounts and is not affected.
-    //
-    // Pinned the way FUNDING_ARMS pins its known residuals: these numbers are the DEFECT, not the
-    // spec. When the gap fill credits the primary pass's Cash and Roth draws, IRAwd here reads 0
-    // and the Cash balance reads $13,283 - update the pin, and say so in the changelog, because
-    // that fix moves every Proportional and Guyton-Klinger plan by its Cash share.
+test.critical('P104b1x: a year funded from Cash by the primary pass is not funded again by the gap fill', () => {
+    // BASE year 0: the need is $36,717 and Cash holds $50,000, so a {Cash:1} vector funds the year
+    // from Cash alone and touches nothing else. Until 2026-09-02 it did not: fillSpendingGap sized
+    // its gap from yr.possibleIncome, which counts IRA and Brokerage draws and not Cash or Roth
+    // ones, so it saw the same $36,717 gap again, drained the remaining $13,283 of Cash, spilled
+    // $29,292 into the IRA, and the year-end surplus routine refunded $38,233 to Cash - an IRA
+    // draw nobody asked for, taxed, parked in Cash. The Ordered branch's comment had named the
+    // loop since July; the oracle weight path (P51b) and every family with Cash in its primary
+    // order ran through it. Those defect numbers are recorded here so the guard reads as what it
+    // is: the fix moved every Proportional and Guyton-Klinger plan (see the changelog at 11.1701).
     const y0 = simulate({ ...BASE, strategy: 'split', splitWeights: [0, 0, 1, 0] }).log[0];
-    assertNear(y0.IRAwd ?? 0, 29291.54, 'IRA drawn by choice while Cash remained (the defect)', 1);
-    assertNear(y0.Cash ?? 0, 38232.62, 'Cash left at year end after the surplus refund', 1);
-    assert((y0['Brokerage-'] ?? 0) < 1, `Brokerage is after IRA in the spill and must be untouched, got ${y0['Brokerage-']}`);
+    assert((y0.IRAwd ?? 0) < 1, `no IRA may be drawn by choice while Cash covers the year, got IRAwd ${y0.IRAwd} (the defect read 29,292)`);
+    assertNear(y0.Cash ?? 0, 13283.38, 'Cash at year end is the balance less the one draw that funded the year (the defect read 38,233)', 5);
+    assertNear(y0.CashWD ?? 0, 36716.62, 'the whole need came from Cash, once', 5);
+    assert((y0['Brokerage-'] ?? 0) < 1, `Brokerage must be untouched, got ${y0['Brokerage-']}`);
+});
+
+test.critical('P104b1x: Proportional +0% with Max Conversion on converts nothing while the phantom gap would have', () => {
+    // The user-visible symptom. On this fixture the defect made a Proportional +0% plan - no boost,
+    // so no surplus of its own - convert $7,813, $7,168, $6,195 and $3,480 in its first four years,
+    // because the gap fill's over-draw was routed as surplus into convertExcessToRoth. RMD-driven
+    // surplus is a genuine conversion and is allowed; it does not arise in these four years here.
+    const cell = {
+        STATEname: 'CA', nYears: 20, birthyear1: 1962, birthmonth1: 6, die1: 92,
+        birthyear2: 1964, birthmonth2: 3, die2: 94, hasSpouse: true,
+        ss1: 45000, ss1Age: 70, ss2: 24000, ss2Age: 67, pensionAnnual: 0, survivorPct: 0, pensionCola: false,
+        spendChange: -0.01, iraBaseGoal: 0, inflation: 0.025, cpi: 0.025, growth: 0.06,
+        cashYield: 0.03, dividendRate: 0.02, ssFailYear: 2099, ssFailPct: 1.0,
+        convertExcessToRoth: true, propWithdraw: 0, iraWithdrawPct: 0.06, extraConversionAmount: 0,
+        fundConversionWithCash: false, startInYear: 2026, dividendReinvest: true, CashReserve: 0,
+        IRA1: 3000000, IRA2: 1200000, Roth: 150000, Roth2: 60000, Brokerage: 300000, BrokerageBasis: 150000,
+        Cash: 150000, spendGoal: 291600, strategy: 'propwd',
+    };
+    const r = simulate(cell);
+    for (let y = 0; y < 4; y++) {
+        const conv = r.log[y]['-iraConvGrossTot'] ?? 0;
+        assert(conv < 1, `year ${y}: a +0% Proportional plan must not convert on its own, got ${Math.round(conv)}`);
+    }
+    assert(r.totals.success, 'the fixture must still fund itself');
 });
 
 test('P104b1: split composes with cyclic the way propwd does - no throw, harvest years draw Brokerage', () => {
@@ -978,9 +1002,18 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
     // spend rises (+$30,640) because the plan keeps more of what it draws, and the guardrail count
     // is unchanged at 3 - the same signature this test's own comment above describes for a
     // valuation fix rather than a behavior change in the withdrawal engine.
-    assertNear(gk.totals.spend, 7423663.892587773, 'GK total spend', 0.01);
-    assertNear(gk.totals.tax, 1925648.9171145353, 'GK total tax', 0.01);
-    assertNear(gk.finalNW, 9188056.866411952, 'GK final net worth', 0.01);
+    // Re-pinned at P104b1x (2026-09-02). Guyton-Klinger draws through the baseline branch, whose
+    // primary order includes Cash, and the gap fill used to omit that Cash draw from what the
+    // household could spend - so every year with a Cash draw was funded a second time and the
+    // excess refunded (or, with Max Conversion on, converted; this fixture has it off). Spend
+    // 7,423,663.892588 -> 7,447,682.634423 (+$24,019: the guardrail turns a portfolio that no
+    // longer churns into a slightly higher spend), tax 1,925,648.917115 -> 1,924,412.061480
+    // (-$1,237), final NW 9,188,056.866412 -> 9,239,367.301350 (+$51,310). Adjustment count still 3.
+    // More spending AND more wealth from the same inputs is the signature of a withdrawal that was
+    // being made and unmade rather than a valuation change.
+    assertNear(gk.totals.spend, 7447682.634423317, 'GK total spend', 0.01);
+    assertNear(gk.totals.tax, 1924412.0614801398, 'GK total tax', 0.01);
+    assertNear(gk.finalNW, 9239367.301350132, 'GK final net worth', 0.01);
     assert(gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length === 3,
         `Expected 3 guardrail adjustments, got ${gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length}`);
 });
@@ -2714,7 +2747,14 @@ test('P38: the primary draw funds the tax on guaranteed income, not the backstop
     // balance instead of the same balance after this year's pre-withdrawal growth, so every RMD is
     // smaller. Less income arrives on its own, and the backstop -- which is what ForcedIRA counts --
     // has to reach further. Smaller RMDs and a larger backstop are the SAME finding seen twice.
-    assertNear(_sumForcedIRA(r.log), 33743.833, 'forced-IRA total once the draw is sized correctly', 1);
+    //
+    // 33,744 -> 30,943 at P104b1x (2026-09-02), and DOWN is right. The gap fill used to omit the
+    // primary pass's Cash draw from what the household could spend, so it drew that amount a
+    // second time; the surplus was refunded at year end, but the second draw had already pulled
+    // the residual pass into funding tax on money nobody needed. With the phantom gap gone the
+    // residual is smaller and the backstop reaches less far. The measurement this test exists for
+    // (the primary draw sizing the tax on guaranteed income) is unchanged.
+    assertNear(_sumForcedIRA(r.log), 30942.748, 'forced-IRA total once the draw is sized correctly', 1);
 });
 
 test('P38: sizing by a flat nominal rate would badly over-draw an SS-heavy household', () => {

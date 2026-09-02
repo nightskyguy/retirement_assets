@@ -3531,7 +3531,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 405, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 406, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];
@@ -3594,7 +3594,7 @@ window.TestTiers = {
                      // Say so when the mutating suites sat out. Otherwise the in-page count drops by
                      // a hundred with no explanation, which reads as tests having gone missing.
                      + (t1.skippedUnsafe ? `\n${t1.skippedUnsafe} suite${t1.skippedUnsafe !== 1 ? 's' : ''} that write to the live page were skipped - add ?runtests to include them.` : '')
-                     + (crit.passed ? `\n★ ${crit.passed} critical regression guards passed (dividend/interest double-count, state retirement-income exemptions, no-tax states).` : '');
+                     + (crit.passed ? `\n★ ${crit.passed} critical regression guards passed (dividend/interest double-count, gap-fill phantom draw, state retirement-income exemptions, no-tax states).` : '');
         }
     },
 

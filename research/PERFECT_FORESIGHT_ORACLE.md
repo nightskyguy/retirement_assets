@@ -854,6 +854,14 @@ constant. The unmeasured half is the one that decides what gets BUILT: **a diffe
 year, or a small number of long phases?** A per-year split needs the account SPLIT field `P103b2`
 named and never built, plus a search over it. A phased split is `P35`, which already exists.
 
+**Two runs, and the second supersedes the first.** The table and the scoring immediately below
+were measured on the engine BEFORE `P104b1x` - the gap-fill phantom draw, fixed 2026-09-02 at
+v11.1701: the second withdrawal pass did not credit the first pass's Cash or Roth draws, so every
+Cash- or Roth-weighted archetype year was funded twice and the surplus refunded or, with Max
+Conversion on, converted. They are kept for the record. **The corrected-engine run is at the end of
+this section**, and where a statement below changed, the change is stated there. Read the headline
+numbers from that subsection, not from here.
+
 **Harness:** `.test_harnesses/split_expressiveness_harness.js`, 38,721 sims. An expressiveness
 ladder over the oracle's own archetype menu, so the rungs are comparable with the `+split` column
 above. Base is Proportional +0% - which is also Guyton-Klinger's draw - so spend is held to the
@@ -926,6 +934,60 @@ search. In order: (1) let a family state a fixed account-weight vector, worth $1
 smallest change; (2) let it state one switch, which reaches 85-100% of the ceiling in most regimes;
 (3) revisit per-year freedom only for brokerage-heavy mixes, and only after a Monte Carlo pass,
 because that increment is the part most likely to be hindsight.
+
+### P104 on the corrected engine  *(v11.1701, 2026-09-02, same harness, same 38,721 sims)*
+
+Same ten cells, same archetype menu, same base (Proportional +0%, `CashReserve 0`, spend -1%/yr
+real). The only difference is the engine: the gap fill now credits the primary pass's Cash and Roth
+draws, so an archetype's vector is applied once per year instead of once and then again.
+
+| cell | base NW | k=1 gain | k=2 gain | k=free gain | k=1 % | k=2 % | k=1 winner | k=2 winner |
+|---|---|---|---|---|---|---|---|---|
+| defaults @4% | $6,487,831 | $166,786 | $166,786 | $156,306 | 107% | 107% | `I5C5` | same |
+| defaults @6% | $4,192,076 | $150,991 | $171,290 | $165,654 | 91% | 103% | `I5C5` | `family` -> `Cash` at year 1 |
+| defaults3x @4% | $10,257,477 | $519,033 | $532,684 | $526,706 | 99% | 101% | `B4C6` | `B4C6` -> `Brok` at year 3 |
+| defaults3x @6% | $1,972,670 | $529,381 | $1,027,080 | $929,100 | 57% | 111% | `I4B3C3` | `I4B3C3` -> `Roth` at year 13 |
+| round1 @4% | $10,304,089 | $416,443 | $443,010 | $462,150 | 90% | 96% | `Cash` | `Cash` -> `Brok` at year 13 |
+| round1 @6% | $3,779,101 | $642,131 | $954,967 | $1,063,410 | 60% | 90% | `B4C6` | `Cash` -> `Brok` at year 1 |
+| thirds @4% | $13,242,510 | $112,096 | $397,364 | $383,518 | 29% | 104% | `B4C6` | `I5C5` -> `Brok` at year 2 |
+| thirds @6% | $5,578,079 | $190,302 | $863,010 | $1,271,628 | 15% | **68%** | `I5C5` | `prop` -> `Roth` at year 6 |
+| brokheavy @4% | $12,773,634 | **$0** | $530,699 | $802,080 | 0% | **66%** | `family` | `B4C6` -> `Brok` at year 2 |
+| brokheavy @6% | $4,846,670 | **$0** | $705,834 | $1,014,210 | 0% | **70%** | `family` | `family` -> `Roth` at year 13 |
+
+`family` = no override, i.e. Proportional itself. Percentages over 100% mean the exhaustive
+one-switch search found MORE than the oracle's per-year coordinate descent, which is a local
+search; that happened in one cell on the old engine and in five here.
+
+**What changed, statement by statement.**
+
+- **`X-P3` is now RIGHT in 8 of 10, not 10 of 10.** A better constant beats Proportional by
+  **$112,096 to $642,131** in eight cells; in both brokerage-heavy cells the best constant on the
+  menu IS Proportional. The old $139,928-to-$1,155,056 range was measured with the phantom draw
+  inflating both the base and every Cash-weighted rung. The direction of the headline holds; its
+  size roughly halves; and it no longer holds where Brokerage dominates.
+- **`X-P1` still RIGHT in 7 of 10, with the same three exceptions** (`thirds @6%` 68%,
+  `brokheavy @4%` 66%, `brokheavy @6%` 70%). "Mostly phases" stands. Stronger than before: in
+  five cells one switch beats per-year freedom outright, so the k=2-to-k=free increment - the
+  hindsight-fitted number - is now negative or negligible everywhere except the brokerage-heavy
+  mixes, where it is still $272k-$409k.
+- **The winners moved from Cash toward IRA-inclusive blends.** Old engine: `Cash` five times.
+  Corrected: `I5C5` three, `B4C6` three, `I4B3C3` one, `Cash` one, `family` two. Blends win 7 of
+  10 (was 4 of 10). The `Cash` wins were partly the defect: the phantom second draw spilled into
+  the IRA and, with Max Conversion on, converted it, so "Cash first" had been carrying an
+  involuntary IRA draw that a blend now has to state explicitly. The agreement claimed with
+  `GAPFILL_SPLIT.md`'s `w=0` result is therefore weaker than written above, and `GAPFILL_SPLIT.md`
+  itself was measured on the old engine.
+- **The SPLIT field is needed MORE, not less.** Seven of the eight winning constants are blends no
+  shipped family can express, and two of them draw IRA, Brokerage and Cash together.
+- **`X-P2` still WRONG, `X-P4` still not leaned on** (the blip-collapse operator is negative in
+  four cells here).
+
+**What it licenses, revised.** Unchanged in shape: constant first, one switch second, per-year only
+for brokerage-heavy mixes after a Monte Carlo pass. Changed in two places: the constant's grid must
+come from a Monte Carlo selection on THIS engine (the single-path winners changed identity when the
+engine was corrected, which is the same lesson `P103e` taught from the other direction), and the
+brokerage-heavy mixes are where the constant is worth nothing on the menu and the per-year
+increment is still large - so that is where `P104e` earns its place.
 
 ## P51f - trajectory post-mortem (observation only, ships nothing)
 

@@ -4409,3 +4409,44 @@ research edit. The pattern the repo already uses for exactly this (`gapFillWeigh
 today's behavior, harness it in `.test_harnesses/`, then flip the default in its own PR with the
 golden fixtures regenerated. The `P104b1` test suite pins the defect the way `FUNDING_ARMS` pins
 its residuals, so the fix announces itself when it lands.
+
+
+## The phantom-gap fix landed, and what moved tells you what the defect had been doing  *(2026-09-02, `P104b1x`, v11.1701)*
+
+One line in `fillSpendingGap`: the gap now credits pass 1's Cash and Roth draws. Everything else
+in this entry is what the suite reported when the line changed, which is the cleanest description
+of the defect available.
+
+**Three pins moved; every other test held, including the golden fixtures.** The goldens pin the
+sweep ENUMERATION, not simulation results, so they are indifferent to an engine change - worth
+knowing before the next behavior fix.
+
+| pin | before | after | reading |
+|---|---|---|---|
+| `P35n` `{seq}` test, "Cash $50k < spend need, so the shortfall cascades to Brokerage" | passed | cascade gone | the premise was false: BASE needs $36.7k, Cash covers it alone. The "cascade" it observed for three weeks WAS the phantom second draw. Fixed by giving it a $90k goal so the cascade is real |
+| GK fixture (spend / tax / final NW) | 7,423,664 / 1,925,649 / 9,188,057 | 7,447,683 / 1,924,412 / 9,239,367 | +$24,019 spend AND +$51,310 wealth from the same inputs: a withdrawal that was being made and unmade. Guardrail count 3, unchanged |
+| `P38` forced-IRA total (Proportional +0% on `CAP_BASE`) | $33,744 | $30,943 | the phantom second draw had been pulling the residual pass into funding tax on money nobody needed |
+
+Two `test.critical` guards now pin the corrected behavior (the Cash-only split funds BASE year 0
+once, IRA untouched; Proportional +0% with Max Conversion on converts nothing in the four years the
+defect converted $7.8k, $7.2k, $6.2k, $3.5k). Critical guards 14 -> 16, suite 405 -> 406.
+
+**The rule this adds.** A passing test whose assertion is weaker than its fixture's arithmetic
+allows is a place a defect can live indefinitely. `CashWD > 10,000` against a $50,000 balance and
+a $36,717 need was satisfied by $11,767, and $11,767 was the defect. When a fixture says an
+assertion should be tight, make it tight; a loose bound that "passes anyway" is not caution, it is
+a blind spot with a green light on it.
+
+**What the fix does NOT settle.** Every number in `PERFECT_FORESIGHT_ORACLE.md` was measured on
+the old engine in both arms. `P104a` is being re-run first (cheap); the `P103a` yardstick
+(`oracle_harness.js --full --reserve0 --spendchange -1`, ~6 minutes) follows. Until both are
+re-baselined, "the gap" and "the k=1 winners" are the old engine's numbers.
+
+
+**P104a re-baselined on the corrected engine (v11.1701), same harness, same sims.** A better
+constant beats Proportional in **8 of 10** cells, $112,096 to $642,131 (was 10 of 10, $139,928 to
+$1,155,056); Proportional is the best constant on the menu in both brokerage-heavy cells. One switch
+still captures 85%+ in 7 of 10 and now beats the per-year descent outright in five. Winners moved
+from `Cash` x5 to `I5C5` x3, `B4C6` x3, `I4B3C3`, `Cash`, `family` x2: blends in 7 of 10. The
+`Cash` wins had been carrying the defect's involuntary IRA draw. Full table in
+`PERFECT_FORESIGHT_ORACLE.md`, "P104 on the corrected engine".

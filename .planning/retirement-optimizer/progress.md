@@ -7905,3 +7905,35 @@ the grid cannot come from it, and the oracle gap tables were measured on the dis
 arms. `P104b1x` opened at O0 as the user's decision: correct pass 2 behind a research input, measure,
 then flip the default in its own PR. `P104b2` is gated on it. The pin in the test suite will announce
 the fix when it lands.
+
+
+## 2026-09-02 (cont.) - P104b1x: the phantom-gap fix, v11.1701
+
+User: *"Go ahead with the fix"*, after stating that backward compatibility is not an objective.
+
+**One line in `fillSpendingGap`**: `netSpendable` now adds pass 1's Cash and Roth draws, so a year
+funded from either is not funded again. Ordered's branch comment, which had recorded the loop as
+the reason Ordered draws nothing in pass 1, rewritten as history.
+
+**Three tests re-pinned, each with its derivation in the file:** the `P35n` sequence test, whose
+"cascade to Brokerage" had been the phantom draw itself (now runs at a $90k goal so Cash genuinely
+runs out); the GK triple (+$24,019 spend, -$1,237 tax, +$51,310 final NW, guardrail count still 3);
+the `P38` forced-IRA total ($33,744 -> $30,943). The `P104b1` pinned-defect test became two
+`test.critical` guards for the corrected behavior. Goldens untouched (they pin enumeration).
+Suites **406**/61/22, `TestTiers.EXPECTED`, `.githooks/README.md` and the critical-guard blurb
+reconciled.
+
+**Release:** v11.1701 (day 245, hour 9). Title, `optimizer_core.js` and `optimizer_tests.js`
+cache tokens, one changelog entry marked behavior change, one page `<li data-flag="behavior">`.
+The entry says what a user needs: Proportional and Guyton-Klinger plans were withdrawing and, with
+Max Conversion on, converting money they did not need; spending unchanged to the dollar; ending
+wealth moves; the IRA-first families and Ordered are unchanged.
+
+**Re-baselining started.** `P104a` re-run launched on the corrected engine; the `P103a` yardstick
+follows. `P104b2` stays gated until both report.
+
+**Browser-verified on the worktree preview** (title 11.1701): self-check badge green, "All 820 tests
+passed (334 in-page + 486 node)", `TestTiers.EXPECTED` 406 in the page, changelog list's first entry
+11.1701 flagged behavior. **P104a re-run on the corrected engine** and written into the report as a
+superseding subsection: 8 of 10 (was 10 of 10), Proportional the best constant in both brokheavy
+cells, winners moved from `Cash` x5 to blends x7. Oracle yardstick re-run in progress.

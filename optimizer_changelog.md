@@ -17,6 +17,27 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1701"></a>
+
+## 11.1701
+
+### Proportional and Guyton-Klinger plans were withdrawing, and converting, money they did not need
+
+**Behavior change - saved plans and shared links that use Proportional or Guyton-Klinger will not
+reproduce their earlier numbers.** When a year's spending was funded partly from Cash or Roth, the
+tool counted that money as spent but not as available, so it drew the same amount a second time
+from the IRA and Brokerage and returned the excess at year end. With *Max Conversion* on, the
+excess was converted to Roth instead of returned: a Proportional +0% plan, which asks for no
+conversions at all, was converting several thousand dollars a year for as long as its Cash lasted.
+
+**Spending is unchanged to the dollar. Ending wealth moves.** On ten test plans, Proportional
+gained about $242,000 of real after-tax wealth on average and Guyton-Klinger about $103,000, each
+with one small loss. Plans whose first draw comes only from the IRA - Fill Fed Bracket, IRMAA Tier,
+ACA Cliff, IRA Draw % and Reduce IRA - and Ordered plans are unchanged. Re-run the Optimizer before
+treating an old best row as settled.
+
+---
+
 <a id="11.16fb"></a>
 
 ## 11.16fb

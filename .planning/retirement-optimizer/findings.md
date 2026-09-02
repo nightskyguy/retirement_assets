@@ -4174,3 +4174,37 @@ success, because `buildBanks` destructures `cfg.mu` and `cfg.sigma` for the synt
 supplied neither - `logDrift` went NaN and every balance followed it silently, all the way to a
 terminal of nulls. It was caught by the same reflex as `P103b4`'s one-simulation null: **a clean-
 looking table with an impossible uniformity (every rule at exactly 100%) is a setup bug.**
+
+
+## Every narrowing of the evidence flattered the answer  *(2026-09-01, `P103e` mode sweep)*
+
+Ran the `P103e` comparison under all three Monte Carlo modes rather than GBM alone. GBM draws each
+year independently; **bootstrap replays real historical blocks, so it carries real crashes in real
+order**.
+
+**Survival, min and median across six cells:**
+
+| rule | GBM | bootstrap | AAM |
+|---|---|---|---|
+| Ordered CIBR | min 3%, med 21% | **min 0%**, med 20% | min 3%, med 24% |
+| Ordered CBIR | min 19%, med 65% | min 15%, med 56% | min 19%, med 69% |
+| Fill Bracket 22% | min 100% | min 95% | min 98% |
+| IRA Draw 5% | min 100% | min 100% | min 100% |
+
+**Ordered CIBR reaches 0% survival under bootstrap** - it funds not a single historical path in that
+cell, having been the single-path bake-off's most frequent winner (8 of 30 cells). Both ordered
+sequences are disqualified in every mode.
+
+**Fill Bracket 22% wins 12 of 18 mode-cells**, and the losses are informative rather than noise:
+`defaults3x @6%` is negative in ALL three modes, so GK's own draw is right there; and `thirds @6%`
+flips from +$107,493 under GBM to **−$380,983 under bootstrap**, which is exactly the sequence risk
+GBM cannot represent.
+
+**The pattern across this whole phase, stated once.** One deterministic path picked a rule that fails
+most futures. One synthetic mode overstated how broadly the replacement wins. Earlier, one
+uncontrolled fixture doubled a gap that does not move when controlled. **Every narrowing of the
+evidence flattered the answer, in the same direction, every time.** That is not coincidence: a
+narrower evidence base removes the conditions under which a candidate fails, and a search will
+happily find whatever the narrowing permits. The working rule is to assume a result is optimistic in
+proportion to how little was varied to get it, and to widen the axis you did NOT vary before
+believing a margin.

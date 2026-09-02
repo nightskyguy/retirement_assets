@@ -747,10 +747,58 @@ survival or spending, in five of six tested cells. That is a **shippable, regime
 built entirely from existing families. And the selection MUST be made under Monte Carlo - the
 single-path ranking picked a rule that fails 80% of futures.
 
-**Caveats that stay attached.** One synthetic mode (GBM at mu 7%, sigma 12%, the page's defaults),
+**Caveats that stay attached.** The run above is one synthetic mode (GBM at mu 7%, sigma 12%, the
+page's defaults) - **answered by the mode sweep immediately below, which narrows the claim**,
 100 paths, six cells, one household profile. The p10 column is reported beside the median precisely
 because a median is not a floor. Widening this to the historical and AAM modes, and to the full cell
 grid, is the obvious next measurement.
+
+### All three modes: the ordered rules are disqualified, and the winner is narrower than one mode suggested
+
+**Run:** 2026-09-01, the same harness with `--mode bootstrap` and `--mode aam`. 3,000 sims each.
+GBM draws each year independently from one lognormal; **bootstrap replays real historical blocks and
+therefore carries real crashes in real order**. A rule can look robust under GBM and fail under
+bootstrap, so the shippable claim is only as good as its worst mode.
+
+**Survival, minimum and median across the six cells:**
+
+| rule | GBM | bootstrap | AAM |
+|---|---|---|---|
+| Ordered CIBR | min **3%**, med 21% | min **0%**, med 20% | min 3%, med 24% |
+| Ordered CBIR | min 19%, med 65% | min 15%, med 56% | min 19%, med 69% |
+| **Fill Bracket 22%** | min **100%** | min **95%** | min **98%** |
+| **IRA Draw 5%** | min **100%** | min **100%** | min **100%** |
+
+**Ordered CIBR reaches 0% survival under bootstrap** - it funds not one historical path in that cell.
+It was `P103d`'s most frequent single-path winner, taking 8 of 30 cells. **Both ordered sequences are
+disqualified outright**, in every mode, on survival alone.
+
+**Fill Bracket 22% against GK, median real terminal wealth, by mode:**
+
+| cell | GBM | bootstrap | AAM |
+|---|---|---|---|
+| defaults @6% | **+$600,128** | **+$802,316** | **+$617,854** |
+| brokheavy @6% | +$211,075 | +$322,118 | +$49,204 |
+| round1 @6% | +$56,675 | +$81,762 | +$155,154 |
+| thirds @6% | +$107,493 | **−$380,983** | +$180,089 |
+| thirds @8% | +$99,743 | −$2,983 | +$159,663 |
+| defaults3x @6% | −$282,294 | −$345,257 | −$258,479 |
+
+**It wins 12 of 18 mode-cells and loses consistently in two places**, which corrects the scope of the
+GBM-only claim above. `defaults3x @6%` is negative in ALL THREE modes - GK's own draw is right there.
+And `thirds @6%` flips from +$107k under GBM to **−$381k under bootstrap**, which is precisely the
+sequence risk GBM cannot show.
+
+**So the recommendation narrows and gets more honest.** Not "use Fill Bracket 22%": **pair GK's spend
+rule with a bracket-filling draw in the regimes where it is measured to win, and never with an
+ordered sequence.** `IRA Draw 5%` is the other safe candidate - 100% survival in every mode and every
+cell, with smaller median gains. Both are shipped families, so this remains a marked, regime-gated
+sweep arm rather than an engine change.
+
+**And it re-proves `P103e`'s own point one level up.** One deterministic path picked a rule that
+fails most futures; one MODE overstated how broadly the replacement wins. **Every narrowing of the
+evidence flattered the answer**, which is the shape to expect and the reason the caveats stay
+attached to the number rather than in a footnote.
 
 ## P51f - trajectory post-mortem (observation only, ships nothing)
 

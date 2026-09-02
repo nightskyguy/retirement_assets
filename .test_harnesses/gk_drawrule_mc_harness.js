@@ -4,6 +4,14 @@
  *
  * Run:  node .test_harnesses/gk_drawrule_mc_harness.js
  *       node .test_harnesses/gk_drawrule_mc_harness.js --paths 200
+ *       node .test_harnesses/gk_drawrule_mc_harness.js --mode bootstrap   (historical blocks)
+ *       node .test_harnesses/gk_drawrule_mc_harness.js --mode aam         (arithmetic-average model)
+ *
+ * THE MODE MATTERS AND ONE MODE IS NOT AN ANSWER. GBM draws every year from one lognormal, so it
+ * has no sequence risk beyond what independence produces; bootstrap replays real historical blocks
+ * and therefore carries real crashes in real order. A draw rule can look robust under GBM and fail
+ * under bootstrap for exactly the reason P103e exists - so the shippable claim is only as good as
+ * its worst mode.
  *
  * WHY THIS IS THE STAGE THAT DECIDES ANYTHING. Every number in P103a-P103d comes from ONE
  * deterministic return path (6% growth, 2.5% inflation, every year). A rule that wins on one path
@@ -50,6 +58,8 @@ const { buildBanks, buildPathInputs } = mc;
 const money = n => (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString();
 const argv = process.argv.slice(2);
 const PATHS = argv.includes('--paths') ? Number(argv[argv.indexOf('--paths') + 1]) : 100;
+const MODE  = argv.includes('--mode')  ? argv[argv.indexOf('--mode') + 1] : 'gbm';
+if (!['gbm', 'bootstrap', 'aam'].includes(MODE)) throw new Error('--mode must be gbm|bootstrap|aam');
 const YEARS = 33;
 
 const COMMON = {
@@ -93,7 +103,7 @@ const pct = (arr, p) => {
     return s[Math.min(s.length - 1, Math.max(0, Math.round((p / 100) * (s.length - 1))))];
 };
 
-console.log('P103e  does P103d survive uncertainty?  ' + PATHS + ' paths, ' + YEARS + ' years, GBM.');
+console.log('P103e  does P103d survive uncertainty?  ' + PATHS + ' paths, ' + YEARS + ' years, ' + MODE.toUpperCase() + '.');
 console.log('Same banks and same path index for every rule, so the difference is the RULE.');
 console.log('Reported: median and p10 real terminal wealth, median lifetime spend, success rate.\n');
 
@@ -109,11 +119,11 @@ for (const [label, over, sr] of CELLS) {
     // are asking about the same household.
     const cfg = { years: YEARS, numPaths: PATHS, seed: 42, baseInputs: base,
                   mu: 0.07, sigma: 0.12, inflationRate: base.inflation };
-    const banks = buildBanks(cfg, mulberry32(42), 'gbm');
+    const banks = buildBanks(cfg, mulberry32(42), MODE);
 
     const per = new Map(RULES.map(([n]) => [n, { w: [], spend: [], ok: 0 }]));
     for (let p = 0; p < PATHS; p++) {
-        const pathIn = buildPathInputs(banks, p, YEARS, base, 'gbm');
+        const pathIn = buildPathInputs(banks, p, YEARS, base, MODE);
         for (const [name, ov] of RULES) {
             const inputs = ov ? { ...base, ...pathIn, ...ov, spendRule: 'gk' }
                               : { ...base, ...pathIn, strategy: 'gk' };

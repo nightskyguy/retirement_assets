@@ -11,7 +11,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P103 | **`a`-`e` DONE.** GK spend rule + **Fill Bracket 22%** draw: +$57k-$600k median, 100% survival, 5/6 cells. MC overturned the 1-path pick | `P103c` / ship |
+| **O0** | P103 | **`a`-`e` DONE, 3 MC modes.** GK spend + bracket-fill draw wins 12/18 mode-cells at 95-100% survival; ordered seqs hit **0%** and are out | `P103c` / ship |
 | **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
@@ -363,9 +363,19 @@ a research instrument and a ship-time check.
       cost to survival or spending. Shippable as a regime-gated marked arm from existing families -
       and **the selection must be made under Monte Carlo**, because the single-path ranking picked a
       rule that fails 80% of futures.
-      **Caveats kept attached:** one synthetic mode (GBM, mu 7% / sigma 12%, the page's defaults),
-      100 paths, 6 cells, one household. p10 is reported beside the median because a median is not a
-      floor. Widening to the historical and AAM modes and the full grid is the obvious next step.
+      **MODE SWEEP DONE same day** (`--mode bootstrap` / `--mode aam`), and it NARROWS the claim.
+      **Both ordered sequences are disqualified outright on survival in every mode** - Ordered CIBR
+      reaches **0% under bootstrap**, funding not one historical path in a cell, having been the
+      single-path bake-off's most frequent winner. Fill Bracket 22% wins **12 of 18 mode-cells** at
+      95-100% survival, but loses in `defaults3x @6%` in ALL THREE modes (GK's draw is right there)
+      and flips +$107k -> **-$381k** in `thirds @6%` between GBM and bootstrap, which is the sequence
+      risk GBM cannot show. `IRA Draw 5%` is the other safe candidate: **100% survival in every mode
+      and every cell**, smaller gains.
+      **So the recommendation is narrower:** pair GK's spend rule with a bracket-filling draw *in the
+      regimes where it is measured to win*, never with an ordered sequence.
+      **Every narrowing of the evidence flattered the answer** - one path picked a rule that fails
+      most futures, one mode overstated how broadly the replacement wins. Remaining caveats: 100
+      paths, 6 cells, one household profile.
 ### What merged in, and what this changes elsewhere
 
 | phase | disposition |

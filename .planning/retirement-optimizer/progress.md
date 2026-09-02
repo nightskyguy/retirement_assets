@@ -7705,3 +7705,27 @@ header so the next person does not lose the time.
 **Remaining in P103:** `P103c` (unified search) and the account SPLIT field from `P103b2`.
 `P103b1x` - whether blank Cash Reserve should stop being the default - is a product question and is
 the user's call, not mine.
+
+
+## 2026-09-01 (cont.) - P103e mode sweep: the claim narrows, and the ordered rules are out
+
+Ran `P103e` under bootstrap and AAM as well as GBM. Bootstrap replays real historical blocks, so it
+carries real crashes in real order - the thing GBM cannot show.
+
+**Both ordered sequences are disqualified outright on survival, in every mode.** Ordered CIBR - the
+single-path bake-off's most frequent winner - reaches **0% survival under bootstrap**, funding not one
+historical path in a cell. Ordered CBIR is 15-19% at worst.
+
+**Fill Bracket 22% wins 12 of 18 mode-cells** at 95-100% survival, not the "5 of 6" the GBM-only run
+suggested. It loses in `defaults3x @6%` in all three modes, and flips +$107k -> **-$381k** in
+`thirds @6%` between GBM and bootstrap. `IRA Draw 5%` is the other safe candidate: 100% survival
+everywhere, smaller gains.
+
+**Recommendation narrowed accordingly** in the report, the harness index and the plan: pair GK's
+spend rule with a bracket-filling draw *in the regimes where it is measured to win*, never with an
+ordered sequence.
+
+**The pattern worth carrying out of this whole phase:** one path picked a brittle rule; one mode
+overstated the replacement; one uncontrolled fixture doubled a gap that does not move when
+controlled. Every narrowing of the evidence flattered the answer, in the same direction, every time.
+Recorded in findings as a working rule.

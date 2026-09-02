@@ -695,7 +695,7 @@ The take away: the real point isn't "don't model at all," it's "don't mistake a 
 
 The **Cash Reserve** setting and **Dividend Reinvestment (DRIP)** are independent controls that interact to determine where your annual surplus ends up. Here's how it works:
 
-**Cash Reserve** creates a target cash buffer (if set to a positive amount like $50,000). Each year, the tool calculates your surplus and routes it in order:
+**Cash Reserve** creates a target cash buffer (if set to a positive amount like $50,000). The default is 0: no buffer, every dollar of surplus reinvested in Brokerage; type Off for the original behavior, where all surplus stays in Cash. Each year, the tool calculates your surplus and routes it in order:
 1. First, surplus fills the cash buffer up to your target (inflation-adjusted)
 2. Any excess beyond the buffer overflows to your **Brokerage** account
 

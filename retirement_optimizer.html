@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.16fb</title>
+    <title>Retirement Optimizer 11.1703</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,14 +59,14 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1116d7"></script>
-	<script src="optimizer_core.js?v=1116fc"></script>
+	<script src="optimizer_core.js?v=111703"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=1116fb"></script>
-	<script src="optimizer_tests.js?v=1116f0"></script>
+	<script src="optimizer_ui.js?v=111703"></script>
+	<script src="optimizer_tests.js?v=111703"></script>
 </head>
 <body>
 
@@ -407,7 +407,7 @@
         <hr style="border:none;border-top:1px solid #ddd;margin:8px 0 4px;">
         <div class="row">
             <div><label title="Combined liquid cash balance (HYSA, money market, etc.). Shared between both spouses - the simulation draws from this to cover spending shortfalls before tapping investments.">Cash Balance<input type="text" id="Cash" value="50000"></label></div>
-            <div><label title="Target cash buffer, in today's dollars (inflation-adjusted each year). Controls where money withdrawn beyond your spending needs (surplus, mostly forced RMDs) goes, and protects a cash cushion. Enter Off for the original behavior: all surplus stays in Cash earning the cash yield. Enter 0 to keep no cash buffer and reinvest ALL surplus into your Brokerage (market growth, dividends can compound). Enter a positive amount to keep that much in Cash and reinvest only the surplus above it; spending will not draw the buffer below that level unless every other account is exhausted. For the most benefit, also turn on Dividend Reinvestment, so your dividends compound in the Brokerage at the market growth rate instead of collecting in Cash at the lower cash yield.">Cash Reserve<input type="text" id="CashReserve" value="Off" placeholder="Off"></label></div>
+            <div><label title="Target cash buffer, in today's dollars (inflation-adjusted each year). Controls where money withdrawn beyond your spending needs (surplus, mostly forced RMDs) goes, and protects a cash cushion. The default, 0, keeps no cash buffer and reinvests ALL surplus into your Brokerage (market growth, dividends can compound). Enter a positive amount to keep that much in Cash and reinvest only the surplus above it; spending will not draw the buffer below that level unless every other account is exhausted. Enter Off for the original behavior: all surplus stays in Cash earning the cash yield. Annual Details shows the reserve held each year under Balances. For the most benefit, also turn on Dividend Reinvestment, so your dividends compound in the Brokerage at the market growth rate instead of collecting in Cash at the lower cash yield.">Cash Reserve<input type="text" id="CashReserve" value="0" placeholder="0"></label></div>
         </div>
         <!-- P84. Advisor fee. Sits in Assets because every option in the accounts dropdown names
              a balance typed in this same section. UNGATED as of 2026-08-28: it sat behind the
@@ -944,6 +944,16 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="behavior"><b>11.1703</b>
+					<strong>Proportional and Guyton-Klinger plans were withdrawing, and converting, money they did not need.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li><strong>Proportional and Guyton-Klinger strategies contained an error that has been corrected.</strong> The error was small, but meaningful: spending is unchanged to the dollar, while ending wealth moves, in most plans upward and in some down. See the Details for more information.</li>
+					<li><strong>Cash Reserve now defaults to 0</strong> - no cash buffer, every dollar of surplus reinvested in your Brokerage - instead of Off, which left all surplus in Cash. Measured across families and account mixes, 0 is never worse than Off and usually better, and every dollar of buffer costs a little. Type Off to keep the original all-cash routing; a positive amount still keeps that much in Cash. A shared link made before this release that did not carry a Cash Reserve now loads as 0.</li>
+					<li><strong>Annual Details shows where Cash and Brokerage money comes from and goes.</strong> <i>CashReserve</i>, under <i>Balances</i> and <i>Cash Δ</i>, is the part of each year's Cash that is the reserve, so you can see the buffer held, topped up, or broken into; it stays hidden when there is no reserve. Under <i>Brokerage Δ</i>, <i>DRIP</i> is the dividends reinvested that year, <i>SurplusBrok</i> is the surplus the Cash Reserve rule routed into Brokerage, and <i>SumBrokIn</i> is the running total of the two: what was put in rather than earned. <i>BrokerageG</i> is the market return plus the reinvested dividends, and its tooltip now says so. Last year's Brokerage, minus Brokerage-, plus BrokerageG, plus SurplusBrok is this year's balance.</li>
+					<li><strong>The Balances chart has a Scale control: linear, log10 or log2.</strong> A log scale spreads out the small balances that sit in the looks-like-zero band under a large one; log10 puts gridlines at 1k, 10k, 100k, log2 at every doubling. A zero balance has no point on a log axis and shows as a gap in that line.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.1703" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="display"><b>11.16fb</b>
 					<strong>Annual Details now accounts for every dollar that leaves Cash.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1245,6 +1255,9 @@
                 <button id="chartPerson_mine"   class="tog"        onclick="setChartPersonView('mine')">Mine</button>
                 <button id="chartPerson_spouse" class="tog"        onclick="setChartPersonView('spouse')">Spouse</button>
               </span>
+              <label style="font-size:0.8em;color:#555;display:inline-flex;align-items:center;gap:4px;" title="Vertical scale for the balances. Linear shows dollars as they are. The log scales spread out small balances, so an account that looks like zero beside a large one becomes readable; log10 puts gridlines at 1k, 10k, 100k and so on, log2 at every doubling. On a log scale a zero balance has no point to draw and shows as a gap in that line.">Scale
+                <select id="assetScale" onchange="setAssetChartScale(this.value)"><option value="linear" selected>linear</option><option value="log10">log10</option><option value="log2">log2</option></select>
+              </label>
               <label style="margin-left:auto;font-size:0.8em;color:#555;display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="Overlay vertical markers for key plan events: the year each person's RMDs begin, each death, each year income falls more than 10% short of your spending goal, each Guyton-Klinger spending cut, each year IRMAA moves to a higher tier, and the Roth conversion break-even year. Applies to both charts.">
                 <input type="checkbox" id="chk-milestones" onchange="toggleMilestones(this)" checked> Show milestones
               </label>

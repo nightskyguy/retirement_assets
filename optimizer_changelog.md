@@ -17,6 +17,61 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1703"></a>
+
+## 11.1703
+
+### Cash Reserve now defaults to 0
+
+**Behavior change for new sessions and for shared links that did not carry a Cash Reserve.** The
+field used to default to Off, which left every dollar of surplus in Cash at the cash yield. It now
+defaults to 0: no cash buffer, all surplus reinvested in your Brokerage. Measured across withdrawal
+families and account mixes on the corrected engine, 0 is never worse than Off and usually better,
+survival is unchanged, and every dollar of buffer costs a little. Type Off to keep the original
+all-cash routing; a positive amount still keeps that much in Cash and reinvests only the overflow.
+Saved scenarios keep whatever they carry.
+
+### Annual Details shows every way money enters Brokerage
+
+**BrokerageG** is the market return on the balance plus, when Dividend Reinvestment is on, the
+dividends reinvested into it; its tooltip now says exactly that. Two new columns under
+**Brokerage Δ** break the rest out: **DRIP**, the reinvested dividends, which are already inside
+BrokerageG, and **SurplusBrok**, the surplus the Cash Reserve rule routed into Brokerage, which
+BrokerageG never included. **SumBrokIn** is the running total of the two: every dollar that was put
+into Brokerage rather than earned there. Last year's Brokerage, minus Brokerage-, plus BrokerageG,
+plus SurplusBrok is this year's balance, and a test now holds the tool to that identity.
+
+### The Balances chart has a Scale control
+
+**Linear, log10 or log2**, beside the Both / Mine / Spouse buttons. A log scale spreads out the
+small balances that sit in the looks-like-zero band under a large one. log10 puts gridlines at 1k,
+10k, 100k and so on; log2 at every doubling. On a log axis a zero balance has no point to draw and
+shows as a gap in that line rather than a false floor. The page opens on linear.
+
+### Annual Details shows your Cash Reserve
+
+A **CashReserve** column under **Balances** and **Cash Δ** is the part of each year's Cash balance
+that is the reserve: the smaller of the target, grown with inflation, and the Cash actually held.
+It shows the buffer being held, topped up, or broken into, and hides itself when there is no
+reserve (Cash Reserve Off or 0).
+
+### Proportional and Guyton-Klinger plans were withdrawing, and converting, money they did not need
+
+**Proportional and Guyton-Klinger strategies contained an error that has been corrected. The error
+was small, but meaningful.** When a year's spending was funded partly from Cash or Roth, the
+tool counted that money as spent but not as available, so it drew the same amount a second time
+from the IRA and Brokerage and returned the excess at year end. With *Max Conversion* on, the
+excess was converted to Roth instead of returned: a Proportional +0% plan, which asks for no
+conversions at all, was converting several thousand dollars a year for as long as its Cash lasted.
+
+**Spending is unchanged to the dollar. Ending wealth moves**, in most plans upward and in some
+down, by an amount that depends on how much of each year's spending came from Cash or Roth. Plans
+whose first draw comes only from the IRA - Fill Fed Bracket, IRMAA Tier, ACA Cliff, IRA Draw % and
+Reduce IRA - and Ordered plans are unchanged. Re-run the Optimizer before treating an old best row
+as settled.
+
+---
+
 <a id="11.16fb"></a>
 
 ## 11.16fb

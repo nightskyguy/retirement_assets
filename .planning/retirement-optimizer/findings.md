@@ -4240,3 +4240,325 @@ no ceiling at all, and the MAGI menu describes a minority of the decisions that 
 **Not acted on.** This verdict would send `P103c` back to the drawing board, and a measurement whose
 first version was wrong has not earned that. The confirming step is small: count binding years per
 family directly and check whether 6 of 33 generalizes.
+
+
+## The constant split is a plug, not a solver - and its single-path winner has CIBR's shape  *(2026-09-02, planning `P104b`)*
+
+**Codes:** *split* = how one year's spending draw is divided across IRA, Brokerage, Cash and Roth.
+*constant split* = one relative-weight vector applied every year (`P104a`'s `k=1`). *archetype* = one
+of the ten vectors the oracle harness searches over (`split_expressiveness_harness.js:110-121`):
+`IRA`, `Brok`, `Cash`, `Roth` (single account), `prop` `{IRA:1, Brokerage:1, Cash:1}`, `I6B4`, `B4C6`,
+`I5C5`, `I4B3C3` (blends, digits are tenths), and `family` (no override). *replay identity* = the
+`P103b2` acceptance bar: two runs agree to the dollar on every column.
+
+**The engine already does the arithmetic.** `calculateWithdrawals` (`optimizer_core.js:433`) takes a
+`weight` array on the withdrawal strategy and only derives weights from balances when it is absent
+(`:464-471`); `netTargets = gap * weight` (`:479-483`). Proportional and the baseline `else` (GK's
+draw) never pass one, which is the whole of what makes them "proportional". And `oracleWithdrawalPlan`
+already carries `{IRA, Brokerage, Cash, Roth}` relative weights per year (`:2136-2149`), binding the
+PRIMARY draw (`:2192-2196`) and the GAP FILL (`:2587-2596`) alike. `P104a` measured exactly that path:
+`runSim({...cellBase, oracleWithdrawalPlan: new Array(horizon).fill(w)})`. So a shipped constant-split
+family is the oracle's weight path given a name, and its acceptance test writes itself: **`strategy:
+'split'` with vector `V` must replay `propwd 0 + oracleWithdrawalPlan.fill(V)` to the dollar.** If the
+family binds the weights anywhere the oracle did not, or fails to bind them where it did, `P104a`'s
+numbers do not transfer to it.
+
+**`{Cash: 1}` is not an all-cash draw, and that changes what the k=1 result says.** Phase 2 of
+`calculateWithdrawals` (`:593-600`) walks `order` for whatever the weighted phase left unfunded, and
+the oracle's order is `['IRA', 'Brokerage', 'Cash', 'Roth']`. So `Cash` means Cash, then IRA, then
+Brokerage, then Roth - the shape of Ordered **CIBR**, the rule `P103e` measured at **0% survival under
+bootstrap**. It is not the same code path (Ordered runs `runOrderedWithdrawal`, never takes the
+forced-IRA fallback, and reports a shortfall rather than draining), so this is a prediction and not a
+finding. But `Cash` is the single-path `k=1` winner in 5 of 10 cells, and the report's own caveat
+(`PERFECT_FORESIGHT_ORACLE.md:911-915`) says the coincidence with C-first "must not be assumed" in
+either direction. **The grid for a shipped family cannot be read off `P104a`'s single-path winners.**
+Three studies now point cash-first - `GAPFILL_SPLIT.md` `w=0` in 65 of 82, `P35n`'s Cash -> Roth ->
+Brokerage in 88 of 108, `P104a` cash-dominant in 8 of 10 - and all three are one deterministic path.
+
+**The per-cell winners were never written down.** The harness prints "k=1 winner / k=2 winner" per
+cell (`:245-251`); the report kept only aggregates (`Cash` x5, `B4C6` x3, `prop` x1, one unnamed).
+Re-running it is the only way to recover them.
+
+**The archetype menu is ten points on a continuum.** A constant split over four accounts is a point
+on a 3-simplex; at 10% steps that is 286 vectors, and 286 x 10 cells x ~1.2 ms is about 3.5 s of
+single-path search. The menu need not stay a guess. The `P103e` discipline still applies with more
+force, not less: a finer single-path search is a MORE hindsight-fitted candidate list, so it finds
+candidates and Monte Carlo across all three modes chooses among them, never the reverse.
+
+**What a family must decide that the research input never had to.** (1) Cyclic: the oracle input
+throws when composed with `cyclicEnabled` (`:2184`); a family composes the way `propwd` does, harvest
+years preempting the split (`:2197`), so replay identity holds only with cyclic off. (2) The 🅡
+clone pass (`rothGapFill`) is meaningless when Roth sits in the vector - `ROTH_GAP_EXCLUDED`
+(`:5430`) gains a second member, which also saves rows. (3) IRA Goal: ignored, as by `propwd`, `gk`
+and the baseline (engine survey item 10). (4) The forced-IRA fallback stays on: `isBracketStrategy`
+false, same as Proportional. (5) The `+%` IRA boost is not carried; `P104a`'s base was `+0%`.
+(6) A malformed vector from a share link must not crash the page or model something else silently:
+fall back to balance weights and raise a warning, the `gapFillWeights` convention (`:2644-2659`)
+plus a visible flag.
+
+**Budget, measured before any row is added.** The Optimizer sweep is at **1,711 runs against a
+1,500 cap** (engine survey item 8, `optimizer_ui.js:1043`), absorbed today by trimming conversion
+candidates 12 -> 6; 179 rows shipped. Every base row is paid for roughly four times over the clone
+passes (🗘/🔄 cyclic, 💵), so a family of `G` vectors costs about `4G` Optimizer rows, and Monte
+Carlo multiplies its own copy by the path count. Both golden fixtures pin row counts in eight
+places (`sweep_golden.js`), and the Optimizer half is regenerated only from a browser capture of
+four page states (`sweep_golden.import.js`). `P102e1` priced a comparable two-position dimension at
++22 rows. Rules `C1`/`C2` (task_plan `P102`) bind: a budget may cut coverage and must say so on
+screen; it may never drop an arm on a predicted-winner heuristic; truncation order is deterministic.
+
+**One identity trap, already recorded once.** `STRATEGY_SELECTION_FIELDS` (`:4879`) is a scalar list
+and `sameStrategySelection` compares by value; a vector field needs an element-wise compare or every
+split row silently matches the user's plan. The comment above it records exactly this bug for
+`orderedSeq`, the IRMAA tier, the ACA multiple and the GK guardrails.
+
+**Recovered 2026-09-02 by re-running the harness (38,721 sims, bit-identical aggregates).** The
+unnamed tenth winner is `Brok`, in `brokheavy @4%`. Two shapes in the `k=2` column are worth
+carrying into `P104c`: a switch INTO `Roth` late (years 5, 10, 11, 12 in four cells, a Roth-drain
+endgame), and `Cash -> X at year 1`, which is one year of cash and then the blend - a shape a
+constant cannot state and a switch states trivially.
+
+| cell | k=1 winner | k=2 winner (A -> B at year t) |
+|---|---|---|
+| defaults @4% | `Cash` | same as k=1 |
+| defaults @6% | `Cash` | `I5C5` -> `Roth` at year 1 |
+| defaults3x @4% | `prop` | `Cash` -> `prop` at year 1 |
+| defaults3x @6% | `B4C6` | `B4C6` -> `Roth` at year 11 |
+| round1 @4% | `Cash` | `Cash` -> `Brok` at year 13 |
+| round1 @6% | `B4C6` | `I5C5` -> `Brok` at year 1 |
+| thirds @4% | `B4C6` | `Cash` -> `Brok` at year 1 |
+| thirds @6% | `Cash` | `B4C6` -> `Roth` at year 5 |
+| brokheavy @4% | `Brok` | `Cash` -> `Roth` at year 10 |
+| brokheavy @6% | `Cash` | `Brok` -> `Roth` at year 12 |
+
+
+## The gap fill funds a Cash- or Roth-funded year twice, and the surplus becomes a Roth conversion nobody asked for  *(2026-09-02, found building `P104b1`)*
+
+**Codes:** *pass 1* = `planPrimaryWithdrawals`, the strategy's own draw. *pass 2* = `fillSpendingGap`,
+the shortfall cascade. *pass 3* = `resolveResidualAndForcedIRA`, the tax-residual top-up. *phantom
+gap* = the part of pass 2's gap that pass 1 already funded. *live* = the engine at `c67744f` plus
+`P104b1`. *fixed* = a scratch copy of it with ONE line changed, used only to size the effect; nothing
+on the branch is changed by this entry.
+
+**The mechanism, in one line of code.** Pass 2 sizes its gap as `targetSpend - (possibleIncome -
+totalTax)` with `possibleIncome = taxableInc + fixedInc + netWithdrawals.IRA + capitalGains +
+BrokerageBasis` (`optimizer_core.js:2583-2587`). IRA and Brokerage draws from pass 1 are in that
+sum. Cash and Roth draws are not. So a year that pass 1 funded from Cash or Roth is funded AGAIN in
+pass 2, from whatever pass 2's branch draws. Pass 3 counts all four accounts (`incomeAfterGapFill`,
+`:2790`) and is right. The Ordered branch's own comment names it - "Cash draws in the main block
+don't reduce possibleIncome, causing overdraw + refund loops" (`:2496`, in the tree since at least
+the 2026-07-10 rename) - and Ordered sidesteps it by drawing nothing in pass 1 at all. The oracle
+weight path (`P51b`) draws in pass 1 with any vector, so it is exposed in full, and so is every
+family whose pass-1 order contains Cash: Proportional, Guyton-Klinger and the baseline.
+
+**Traced, not inferred.** BASE, `strategy: 'split'`, `[0, 0, 1, 0]`, year 0: need $36,717; pass 1
+draws Cash $36,717 (correct); pass 2 computes a $36,717 gap again, drains the remaining $13,283 of
+Cash and spills $29,292 into the IRA; the year-end surplus routine refunds $38,233 to Cash. The
+plan ends the year having withdrawn and taxed $29,292 of IRA with $38k of Cash in hand. The oracle's
+own `{seq: ['Cash','IRA','Brokerage','Roth']}` entry produces the identical row, which is how the
+`P51b` sequence test came to assert `CashWD > 10000` on a $50k balance.
+
+**Where the money goes decides the size.** With Max Conversion on, the over-draw is a surplus and
+`convertExcessToRoth` converts it. `defaults3x @6%`, Proportional +0% - a family with no boost that
+should convert nothing - converts $7,813, $7,168, $6,195 and $3,480 in its first years on the live
+engine and $0 on the fixed one, and its Cash reaches $0 by 2036 where the fixed run still holds
+$14,785. The gap also has a REAL part: pass 1 prices IRA tax at the nominal rate, and in that
+cell's year 0 the $28,258 gap is about $19k of genuine tax shortfall plus the $9,027 phantom Cash
+draw. The fix removes only the phantom part; the real part is pass 2 doing its job.
+
+**Sized on ten cells, real after-tax wealth at the incumbent's `futureIRARate`, spend delivered
+identical to the dollar in every cell** (fixture: the replay harness household, the five `P104a`
+mixes at 4% and 6%, `CashReserve: 0`, Max Conversion on):
+
+| cell | Proportional +0% (incumbent) | Guyton-Klinger | split `Cash` | split `I4B3C3` |
+|---|---|---|---|---|
+| defaults @4% | $0 | +$11,359 | -$59,964 | -$34,235 |
+| defaults @6% | -$6,743 | +$5,683 | -$42,351 | -$23,480 |
+| defaults3x @4% | +$250,059 | +$56,783 | -$157,479 | -$38,540 |
+| defaults3x @6% | +$473,338 | -$89,576 | +$114,775 | +$203,295 |
+| round1 @4% | +$133,602 | +$94,454 | -$156,592 | -$81,815 |
+| round1 @6% | +$322,248 | +$262,214 | +$12,130 | +$77,807 |
+| thirds @4% | +$226,308 | +$113,873 | -$92,127 | +$45,823 |
+| thirds @6% | +$367,405 | +$203,172 | -$9,334 | +$161,056 |
+| brokheavy @4% | +$275,947 | +$100,709 | -$118,083 | +$148,186 |
+| brokheavy @6% | +$376,516 | +$274,824 | +$20,259 | +$144,689 |
+| **mean** | **+$241,868** (up 8, down 1, same 1) | **+$103,349** (up 9, down 1) | **-$48,876** (up 3, down 7) | **+$60,279** (up 6, down 4) |
+
+Four controls move by exactly $0 in all ten cells: Fill Bracket 22%, IRA Draw 6%, the IRA-only
+split and Ordered CBIR - the families whose pass-1 draw never touches Cash or Roth. That is the
+signature of the mechanism, not of a fixture.
+
+**The confound this puts on finished work.** `P104a`'s `k=1` winner `Cash` (5 of 10 cells) is
+WORSE on the fixed engine in 7 of 10; the involuntary conversion was part of its win. `B4C6` and
+`Roth` lose in 7 of 10 as well; the IRA-inclusive blend `I4B3C3` gains in 6. Every Cash- or
+Roth-weighted year in `P51`/`P103a`'s oracle descents and every `{prop: true}` entry ran through
+the phantom gap, and so did the incumbent row they were measured against, by its Cash share. The
+gap numbers in `PERFECT_FORESIGHT_ORACLE.md` are therefore measured on a distorted path in both
+arms; the direction of the distortion on the GAP is not known without a re-run.
+
+**Settings change the size, not the mechanism.** Max Conversion off turns the surplus into a Cash
+refund and leaves the Brokerage churn (40% of the phantom gap sold every year in the default
+branch). The shipped Cash Reserve default (blank, all surplus to Cash) grows the Cash balance and
+with it the Cash share of a balance-weighted draw, so the phantom gap GROWS over a plan under the
+defaults. Neither is measured here.
+
+**Not fixed on this branch, on purpose.** The correction is one line - credit pass 1's Cash and
+Roth draws in pass 2's gap - but it moves every Proportional and Guyton-Klinger plan and every
+saved scenario that uses them, which makes it a product decision with a changelog entry, not a
+research edit. The pattern the repo already uses for exactly this (`gapFillWeights`,
+`thirdPassBrokerage`) is the right one: ship the correction as a research input defaulting to
+today's behavior, harness it in `.test_harnesses/`, then flip the default in its own PR with the
+golden fixtures regenerated. The `P104b1` test suite pins the defect the way `FUNDING_ARMS` pins
+its residuals, so the fix announces itself when it lands.
+
+
+## The phantom-gap fix landed, and what moved tells you what the defect had been doing  *(2026-09-02, `P104b1x`, v11.1701)*
+
+One line in `fillSpendingGap`: the gap now credits pass 1's Cash and Roth draws. Everything else
+in this entry is what the suite reported when the line changed, which is the cleanest description
+of the defect available.
+
+**Three pins moved; every other test held, including the golden fixtures.** The goldens pin the
+sweep ENUMERATION, not simulation results, so they are indifferent to an engine change - worth
+knowing before the next behavior fix.
+
+| pin | before | after | reading |
+|---|---|---|---|
+| `P35n` `{seq}` test, "Cash $50k < spend need, so the shortfall cascades to Brokerage" | passed | cascade gone | the premise was false: BASE needs $36.7k, Cash covers it alone. The "cascade" it observed for three weeks WAS the phantom second draw. Fixed by giving it a $90k goal so the cascade is real |
+| GK fixture (spend / tax / final NW) | 7,423,664 / 1,925,649 / 9,188,057 | 7,447,683 / 1,924,412 / 9,239,367 | +$24,019 spend AND +$51,310 wealth from the same inputs: a withdrawal that was being made and unmade. Guardrail count 3, unchanged |
+| `P38` forced-IRA total (Proportional +0% on `CAP_BASE`) | $33,744 | $30,943 | the phantom second draw had been pulling the residual pass into funding tax on money nobody needed |
+
+Two `test.critical` guards now pin the corrected behavior (the Cash-only split funds BASE year 0
+once, IRA untouched; Proportional +0% with Max Conversion on converts nothing in the four years the
+defect converted $7.8k, $7.2k, $6.2k, $3.5k). Critical guards 14 -> 16, suite 405 -> 406.
+
+**The rule this adds.** A passing test whose assertion is weaker than its fixture's arithmetic
+allows is a place a defect can live indefinitely. `CashWD > 10,000` against a $50,000 balance and
+a $36,717 need was satisfied by $11,767, and $11,767 was the defect. When a fixture says an
+assertion should be tight, make it tight; a loose bound that "passes anyway" is not caution, it is
+a blind spot with a green light on it.
+
+**What the fix does NOT settle.** Every number in `PERFECT_FORESIGHT_ORACLE.md` was measured on
+the old engine in both arms. `P104a` is being re-run first (cheap); the `P103a` yardstick
+(`oracle_harness.js --full --reserve0 --spendchange -1`, ~6 minutes) follows. Until both are
+re-baselined, "the gap" and "the k=1 winners" are the old engine's numbers.
+
+
+**P104a re-baselined on the corrected engine (v11.1701), same harness, same sims.** A better
+constant beats Proportional in **8 of 10** cells, $112,096 to $642,131 (was 10 of 10, $139,928 to
+$1,155,056); Proportional is the best constant on the menu in both brokerage-heavy cells. One switch
+still captures 85%+ in 7 of 10 and now beats the per-year descent outright in five. Winners moved
+from `Cash` x5 to `I5C5` x3, `B4C6` x3, `I4B3C3`, `Cash`, `family` x2: blends in 7 of 10. The
+`Cash` wins had been carrying the defect's involuntary IRA draw. Full table in
+`PERFECT_FORESIGHT_ORACLE.md`, "P104 on the corrected engine".
+
+
+**The oracle yardstick re-baselined on v11.1701** (`--full --reserve0 --spendchange -1`, 404,511
+sims): median best-family gap 1.94% -> **1.29%**; basis extremes 2.23% against 1.29% at default,
+so basis matters again; cells at or above 5% 17 -> 13, still 8%-spend and Guyton-Klinger
+dominated; **the best case for conversion timing fell 9.55% -> 2.34%** - the defect's involuntary
+conversions had been doing part of what the oracle's schedule was credited with; four cells at
+exactly zero, all Ordered; zero negative gaps. `P103d`/`P103e` were measured on the old engine and
+GK's draw is the draw the defect distorted most: re-run before their arm ships. Report section
+"What changed with v11.1701".
+
+
+## A Cash Reserve of 0 beats blank everywhere and every dollar of buffer costs  *(2026-09-02, `P103b1x`, v11.1701)*
+
+**Codes:** *blank / Off* = the shipped default, legacy routing, all surplus stays in Cash. *0* =
+routing on, no buffer, all surplus to Brokerage. *$N* = keep N of today's dollars in Cash as a
+breakable floor, route the overflow to Brokerage. *spend* = the cell's first-year spend goal.
+Fixture: the replay household, six mixes (the five P104a mixes plus a $790k `small` plan), 4% and
+6% spend, `dividendReinvest` on, Max Conversion on, corrected engine. Score: real after-tax wealth
+at the cell's `futureIRARate`, delta against blank. 480 single-path sims, then 12,000 Monte Carlo
+sims (100 paths, GBM and bootstrap, six 6%-spend cells, Proportional +0% and Guyton-Klinger).
+
+**Single path, mean delta vs blank (worst cell in parentheses):**
+
+| reserve | Proportional +0% | Guyton-Klinger | Fill Bracket 22% | IRA Draw 5% | Ordered CBIR |
+|---|---|---|---|---|---|
+| 0 | +$657,034 ($0) | +$242,978 ($0) | +$291,804 ($0) | +$525,643 ($0) | +$1,061,233 ($0) |
+| $10k | +$638,280 (-$35,541) | +$235,150 (-$29,467) | +$261,959 (-$48,803) | +$495,045 (-$48,171) | +$926,430 (-$53,032) |
+| $25k | +$610,563 (-$89,667) | +$217,245 (-$66,610) | +$217,481 (-$122,482) | +$448,337 (-$120,413) | +$797,404 (-$120,892) |
+| $50k | +$557,103 (-$191,020) | +$185,716 (-$128,268) | +$144,414 (-$235,340) | +$363,165 (-$240,796) | +$711,555 (-$263,739) |
+| 0.5x spend | +$432,067 (-$634,411) | +$100,419 (-$489,707) | +$2,191 (-$727,575) | +$203,619 (-$667,954) | +$622,455 (-$656,120) |
+| 1x spend | +$290,317 (-$779,563) | +$3,195 (-$634,859) | -$149,888 (-$819,090) | +$21,743 (-$800,094) | +$457,601 (-$808,771) |
+
+**`0` is never worse than blank in any of the 60 family-cells** - its worst delta is exactly $0,
+in the cells where no surplus arises and the setting is inert - and it is best or tied in every
+family. The gain is the ROUTING: surplus compounding in Brokerage at the growth rate instead of
+sitting in Cash at the cash yield. Every dollar of floor then subtracts from it twice: the buffer
+idles, and the breakable floor pushes draws onto taxable accounts. Spend-proportional buffers are
+the worst choices tested. Ordered is the one family a buffer helps in a different way: blank and
+`0` leave 2 of 12 single-path cells unfunded, `$10k` 1, `$25k` and up 0 - Ordered never draws
+outside its sequence, and the floor's last-resort release is a backstop it otherwise lacks.
+
+**Monte Carlo, median real after-tax wealth vs blank, mean over six cells:**
+
+| | Proportional GBM | Proportional bootstrap | GK GBM | GK bootstrap |
+|---|---|---|---|---|
+| 0 | +$476,016 | +$850,518 | +$244,592 | +$207,237 |
+| $10k | +$443,471 | +$848,383 | +$229,787 | +$165,660 |
+| $25k | +$394,692 | +$736,078 | +$222,509 | +$155,599 |
+| 0.5x spend | +$88,007 | +$327,965 | +$99,985 | +$14,030 |
+
+Survival is unchanged by the setting: Proportional min 66% GBM / 69% bootstrap under blank and
+under `0` (the $10k floor costs one path in each mode), Guyton-Klinger 100% throughout. The p10
+moves with the median.
+
+**Proposal:** default `0`, with "Off" kept as the typed word for the legacy behavior, and the
+"this scenario sets a Cash Reserve" warning retired (it would fire for everyone). A user who wants
+a real-life cash cushion can still set one; its cost is now a measured number rather than a guess.
+**Not measured:** `dividendReinvest` off (dividends then land in Cash and the routing decides
+their fate), cyclic (the reserve is disabled there), 8% spend, and any liquidity preference the
+engine does not model - the engine has no emergency spending, so a buffer can only cost it money.
+Script lives in the session scratchpad; a `.test_harnesses/` version ships with the change if the
+default is changed.
+
+
+**The "larger unspent Brokerage" intuition, checked** (user, 2026-09-02, before approving the
+default). Composition: yes. `defaults @6%`, Proportional +0%: Off ends with $810,571 Brokerage and
+$2,785,216 Cash; reserve 0 ends with $5,400,424 Brokerage and $81,329 Cash. Net cost: no. Lifetime
+realized capital gains are identical ($28,339 either way; GK $28,910 vs $37,106), lifetime tax is
+lower under 0 ($1,199,886 vs $1,166,661), terminal basis equals terminal Brokerage in every row
+because the engine's IRC 1014 step-up erases the gain for heirs, and real after-tax wealth is
+$857k higher. The money is unspent under BOTH settings, since spend is pinned; the setting only
+decides whether it compounds at the growth rate or the cash yield. Where no surplus arises
+(`defaults3x`, `round1`, `thirds`, `brokheavy` at 6%) the two settings are byte-identical.
+
+**Shipped 11.1702:** default 0, the load-time "this scenario sets a Cash Reserve" warning retired,
+and a `CashReserve` column in Annual Details (Balances and Cash Δ) reporting min(target in nominal
+dollars, Cash) per year, hidden when there is no reserve. The user's stance for the record: *"Cash
+Reserve is ONE vehicle, but any Roth funds are a backup"* - no emergency-spending feature is wanted.
+
+
+## What BrokerageG contains, and the identity the balance now has to satisfy on screen  *(2026-09-02, user-raised)*
+
+**Codes:** *BrokerageG* = the Annual Details column fed by `yr.gains.Brokerage`. *DRIP* = dividends
+reinvested into Brokerage when Dividend Reinvestment is on. *SurplusBrok* = surplus the Cash
+Reserve rule routed into Brokerage (`yr.surplusToBrokerage`, logged since P2 as the hidden
+`-surplusToBrokerage` and never shown).
+
+`yr.gains.Brokerage` is `applyGrowth`'s market return on the balance for the pre- and post-withdrawal
+periods, PLUS the year's dividends when DRIP is on (`optimizer_core.js:3714-3716`, which adds them
+to both gains and balance). The routed surplus is added to balance and basis only (`:3229-3233`).
+So the user's question "is the routed amount inside BrokerageG?" has the answer NO, and "is it
+only growth?" has the answer NOT QUITE - it carries DRIP too. No column showed either fact, and
+`cashDividends`/`cashInterest` were uncategorized keys, i.e. hidden columns.
+
+**Shipped:** tooltips that say exactly this; `DRIP` and `SurplusBrok` columns under Brokerage Δ
+(SurplusBrok also under Cash Δ); `SumBrokIn`, a running total of the two through the P86
+running-total mechanism so Current $ mode works. BrokerageG's content is unchanged on purpose: the
+asset-flow chart sums it as earnings, and pulling DRIP out would have moved that chart. **A test
+holds the identity Brokerage(t) = Brokerage(t-1) - Brokerage- + brokerageG + SurplusBrok to $1 in
+every year** on a fixture whose RMDs exceed spending (so surplus is routed), with DRIP on and off,
+no advisor fee, no conversions. It held on the first run.
+
+**The gains-attributable-to-contributions column the user floated is not built.** It needs a
+shadow sub-balance (contributions compounding at the brokerage rate, drawn down pro rata with the
+account) - a modeling choice about how draws are attributed, not a logging change. SumBrokIn is the
+exact, cheap half: what was put in. Left as an open item.
+
+**Balances chart scale.** Linear / log10 / log2 beside the person buttons. log2 is Chart.js's
+logarithmic scale subclassed with a tick generator at powers of two: pixel geometry is inherited,
+since log2 and log10 differ by a constant. A zero balance is a gap on a log axis by design, not a
+point pinned to a floor that would read as a real balance.

@@ -13,6 +13,14 @@ single-core machine**.
 instrumented, never bypassed.
 **Cross-check:** `P51d` is answered below, in [the cross-check section](#p51d---is-the-ceiling-really-a-ceiling-independent-search-cross-check).
 
+**Engine note, 2026-09-02.** Everything in this file up to the section "What changed with v11.1701"
+was measured on an engine whose gap fill funded a Cash- or Roth-funded year TWICE (`P104b1x`, fixed
+at v11.1701): the second withdrawal pass did not credit the first pass's Cash and Roth draws, so
+every Cash- or Roth-weighted oracle year, every `{prop: true}` entry and the incumbent's own Cash
+share ran through a phantom second draw whose surplus was refunded or, with Max Conversion on,
+converted. The re-baselines are in "What changed with v11.1701" and "P104 on the corrected engine".
+The old tables are kept for the record and are labelled where they are superseded.
+
 ## Reading guide - every label used below, defined once
 
 **Where this file sits.** The user asked three questions on 2026-08-10: **(A)** how hard
@@ -854,6 +862,14 @@ constant. The unmeasured half is the one that decides what gets BUILT: **a diffe
 year, or a small number of long phases?** A per-year split needs the account SPLIT field `P103b2`
 named and never built, plus a search over it. A phased split is `P35`, which already exists.
 
+**Two runs, and the second supersedes the first.** The table and the scoring immediately below
+were measured on the engine BEFORE `P104b1x` - the gap-fill phantom draw, fixed 2026-09-02 at
+v11.1701: the second withdrawal pass did not credit the first pass's Cash or Roth draws, so every
+Cash- or Roth-weighted archetype year was funded twice and the surplus refunded or, with Max
+Conversion on, converted. They are kept for the record. **The corrected-engine run is at the end of
+this section**, and where a statement below changed, the change is stated there. Read the headline
+numbers from that subsection, not from here.
+
 **Harness:** `.test_harnesses/split_expressiveness_harness.js`, 38,721 sims. An expressiveness
 ladder over the oracle's own archetype menu, so the rungs are comparable with the `+split` column
 above. Base is Proportional +0% - which is also Guyton-Klinger's draw - so spend is held to the
@@ -927,6 +943,60 @@ smallest change; (2) let it state one switch, which reaches 85-100% of the ceili
 (3) revisit per-year freedom only for brokerage-heavy mixes, and only after a Monte Carlo pass,
 because that increment is the part most likely to be hindsight.
 
+### P104 on the corrected engine  *(v11.1701, 2026-09-02, same harness, same 38,721 sims)*
+
+Same ten cells, same archetype menu, same base (Proportional +0%, `CashReserve 0`, spend -1%/yr
+real). The only difference is the engine: the gap fill now credits the primary pass's Cash and Roth
+draws, so an archetype's vector is applied once per year instead of once and then again.
+
+| cell | base NW | k=1 gain | k=2 gain | k=free gain | k=1 % | k=2 % | k=1 winner | k=2 winner |
+|---|---|---|---|---|---|---|---|---|
+| defaults @4% | $6,487,831 | $166,786 | $166,786 | $156,306 | 107% | 107% | `I5C5` | same |
+| defaults @6% | $4,192,076 | $150,991 | $171,290 | $165,654 | 91% | 103% | `I5C5` | `family` -> `Cash` at year 1 |
+| defaults3x @4% | $10,257,477 | $519,033 | $532,684 | $526,706 | 99% | 101% | `B4C6` | `B4C6` -> `Brok` at year 3 |
+| defaults3x @6% | $1,972,670 | $529,381 | $1,027,080 | $929,100 | 57% | 111% | `I4B3C3` | `I4B3C3` -> `Roth` at year 13 |
+| round1 @4% | $10,304,089 | $416,443 | $443,010 | $462,150 | 90% | 96% | `Cash` | `Cash` -> `Brok` at year 13 |
+| round1 @6% | $3,779,101 | $642,131 | $954,967 | $1,063,410 | 60% | 90% | `B4C6` | `Cash` -> `Brok` at year 1 |
+| thirds @4% | $13,242,510 | $112,096 | $397,364 | $383,518 | 29% | 104% | `B4C6` | `I5C5` -> `Brok` at year 2 |
+| thirds @6% | $5,578,079 | $190,302 | $863,010 | $1,271,628 | 15% | **68%** | `I5C5` | `prop` -> `Roth` at year 6 |
+| brokheavy @4% | $12,773,634 | **$0** | $530,699 | $802,080 | 0% | **66%** | `family` | `B4C6` -> `Brok` at year 2 |
+| brokheavy @6% | $4,846,670 | **$0** | $705,834 | $1,014,210 | 0% | **70%** | `family` | `family` -> `Roth` at year 13 |
+
+`family` = no override, i.e. Proportional itself. Percentages over 100% mean the exhaustive
+one-switch search found MORE than the oracle's per-year coordinate descent, which is a local
+search; that happened in one cell on the old engine and in five here.
+
+**What changed, statement by statement.**
+
+- **`X-P3` is now RIGHT in 8 of 10, not 10 of 10.** A better constant beats Proportional by
+  **$112,096 to $642,131** in eight cells; in both brokerage-heavy cells the best constant on the
+  menu IS Proportional. The old $139,928-to-$1,155,056 range was measured with the phantom draw
+  inflating both the base and every Cash-weighted rung. The direction of the headline holds; its
+  size roughly halves; and it no longer holds where Brokerage dominates.
+- **`X-P1` still RIGHT in 7 of 10, with the same three exceptions** (`thirds @6%` 68%,
+  `brokheavy @4%` 66%, `brokheavy @6%` 70%). "Mostly phases" stands. Stronger than before: in
+  five cells one switch beats per-year freedom outright, so the k=2-to-k=free increment - the
+  hindsight-fitted number - is now negative or negligible everywhere except the brokerage-heavy
+  mixes, where it is still $272k-$409k.
+- **The winners moved from Cash toward IRA-inclusive blends.** Old engine: `Cash` five times.
+  Corrected: `I5C5` three, `B4C6` three, `I4B3C3` one, `Cash` one, `family` two. Blends win 7 of
+  10 (was 4 of 10). The `Cash` wins were partly the defect: the phantom second draw spilled into
+  the IRA and, with Max Conversion on, converted it, so "Cash first" had been carrying an
+  involuntary IRA draw that a blend now has to state explicitly. The agreement claimed with
+  `GAPFILL_SPLIT.md`'s `w=0` result is therefore weaker than written above, and `GAPFILL_SPLIT.md`
+  itself was measured on the old engine.
+- **The SPLIT field is needed MORE, not less.** Seven of the eight winning constants are blends no
+  shipped family can express, and two of them draw IRA, Brokerage and Cash together.
+- **`X-P2` still WRONG, `X-P4` still not leaned on** (the blip-collapse operator is negative in
+  four cells here).
+
+**What it licenses, revised.** Unchanged in shape: constant first, one switch second, per-year only
+for brokerage-heavy mixes after a Monte Carlo pass. Changed in two places: the constant's grid must
+come from a Monte Carlo selection on THIS engine (the single-path winners changed identity when the
+engine was corrected, which is the same lesson `P103e` taught from the other direction), and the
+brokerage-heavy mixes are where the constant is worth nothing on the menu and the per-year
+increment is still large - so that is where `P104e` earns its place.
+
 ## P51f - trajectory post-mortem (observation only, ships nothing)
 
 - **No harvest-like alternation** (prediction `S3-P3` WRONG again: 1/6 thirds/brokheavy cells with
@@ -994,6 +1064,72 @@ closed.
 aimed where the gap still is - the GK-strain cells at 6-8% spend and the b20 arm - and NOT at
 `defaults3x @4%`, which was the fat cell under the old numbers and is now 1.58%. `P36`'s round-2
 certification measures against these numbers, not the old ones.
+
+## What changed with v11.1701  *(2026-09-02, the gap-fill fix, `P104b1x`)*
+
+**Source:** `oracle_harness.js --full --reserve0 --spendchange -1` on `ba8515a` (v11.1701) -
+the routing-controlled, declining-spend configuration `P103d` uses as its yardstick - against the
+same run on `1b7b366` (2026-09-01). 404,511 sims, 359.1 s. Same harness, same grid, same flags;
+the differences are the engine's.
+
+| | `1b7b366` (2026-09-01) | v11.1701 (2026-09-02) |
+|---|---|---|
+| median best-family gap, default basis | 1.94% | **1.29%** |
+| median by basis arm, b20 / default / b80 | 1.94 / 1.94 / 1.94 | **2.23 / 1.29 / 2.23** |
+| cells at or above 5% | 17 of 45 | **13 of 45** (0 at 4%, 5 at 6%, 8 at 8%) |
+| of those, best family is Guyton-Klinger | 13 | **10** |
+| fattest cell | `round1 @8% b20` 22.78% | **`brokheavy @8% b20` 17.79%** (`round1 @8% b20` is now 9.97%) |
+| largest split gain | - | **+$669,141** (`brokheavy @6%`, 13.04%) |
+| max conversions-only gain | **9.55%** | **2.34%** (`defaults @8% b20`) |
+| cells with a zero gap | - | 4: `round1 @4%`, `brokheavy @4%`, `brokheavy @4% b80`, `brokheavy @6% b80`, all Ordered |
+| negative gaps | 0 | 0 |
+| `S3-P2` / `B-P4` / `S3-P3` / `S3-P4` | RIGHT / - / WRONG / WRONG 44/45 | RIGHT / RIGHT / WRONG / WRONG 44/45 |
+| Proportional's own gap at 4 / 6 / 8% spend | - | 4.0% / 5.9% / 9.7% |
+
+**The default-basis cells, corrected engine.** `+conv` is the conversions-only oracle over the
+champion row; `+split` is the withdrawal-split oracle added on top; gap is oracle over base.
+
+| cell | champion row | base | +conv | +split | oracle | gap |
+|---|---|---|---|---|---|---|
+| defaults @4% | IRA Draw 11% 💵 | $6,591,446 | $33,571 | $116,452 | $6,741,470 | 2.28% |
+| defaults @6% | IRA Draw 5% | $4,258,726 | $21,157 | $16,809 | $4,296,692 | 0.89% |
+| defaults @8% | IRA Draw 9% | $1,742,759 | $40,664 | $41,527 | $1,824,950 | 4.72% |
+| defaults3x @4% | Ordered CIBR | $9,458,133 | $12,515 | $3,527 | $9,474,175 | 0.17% |
+| defaults3x @6% | Guyton-Klinger | $2,496,290 | $0 | $242,411 | $2,738,701 | 9.71% |
+| defaults3x @8% | Guyton-Klinger | $1,441,930 | $4,690 | $20,501 | $1,467,121 | 1.75% |
+| round1 @4% | Ordered CIBR | $10,144,461 | $0 | $0 | $10,144,461 | **0.00%** |
+| round1 @6% | Ordered CBIR | $4,116,569 | $0 | $53,632 | $4,170,202 | 1.30% |
+| round1 @8% | Guyton-Klinger | $1,872,792 | $0 | $145,244 | $2,018,036 | 7.76% |
+| thirds @4% | IRA Draw 5% | $13,399,023 | $192 | $69,716 | $13,468,931 | 0.52% |
+| thirds @6% | IRA Draw 5% | $6,434,848 | $0 | $38,002 | $6,472,851 | 0.59% |
+| thirds @8% | Guyton-Klinger | $2,667,418 | $0 | $4,125 | $2,671,543 | 0.15% |
+| brokheavy @4% | Ordered CBRI | $13,119,064 | $0 | $0 | $13,119,064 | **0.00%** |
+| brokheavy @6% | IRA Draw 5% | $5,130,666 | $0 | $669,141 | $5,799,807 | **13.04%** |
+| brokheavy @8% | Guyton-Klinger | $2,231,135 | $10,427 | $95,512 | $2,337,074 | 4.75% |
+
+**What the fix did to the yardstick, in four statements.**
+
+1. **The gap narrowed by a third and the split is still the lever.** Median 1.94% -> 1.29%. In
+   every cell above, `+split` is at least as large as `+conv`, and in the five fattest cells
+   `+conv` is $0. The old engine's phantom second draw had been inflating the gap in BOTH arms - the
+   incumbent's Cash share was drawn twice, and so was every Cash- or Roth-weighted oracle year - and
+   the net effect was to overstate what per-year freedom was worth.
+2. **The best case for conversion timing collapsed, 9.55% -> 2.34%.** That 9.55% was the strongest
+   claim `P103b5c` made for a declining spend path. On the corrected engine the largest
+   conversions-only gain anywhere on the grid is 2.34%, and at default basis 2.33%. The involuntary
+   conversion the defect performed every year had been doing part of what the oracle's conversion
+   schedule was credited with.
+3. **Basis matters again.** The three basis medians had converged at 1.94%; now b20 and b80 both
+   sit at 2.23% against 1.29% at default. The Brokerage-heavy cells are where the corrected gap
+   lives (`brokheavy @6%` 13.04%, `@8% b20` 17.79%), and basis is the whole cost of drawing there.
+4. **The regime map's SHAPE survives; its numbers do not.** Guyton-Klinger is still the best
+   family in 10 of the 13 fat cells and 8% spend still dominates (8 of 13), so `P103d`'s targeting
+   stands. But `P103d`'s bake-off (GK's draw beaten in 24 of 30, $6.56M) and `P103e`'s Monte Carlo
+   selection (Fill Bracket 22% wins 12 of 18 mode-cells) were measured on the old engine, and the
+   GK draw is exactly the draw the defect distorted most. **Re-run both before their arm ships.**
+
+`P51g` (heirs-rate sensitivity) was re-run in the same pass and is not re-tabulated; its shape is
+unchanged.
 
 ## Open
 

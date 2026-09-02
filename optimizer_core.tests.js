@@ -120,6 +120,7 @@ const ORDERED_SEQS = core.ORDERED_SEQS;
 const strategySortKey = core.strategySortKey;
 const selectionOf = core.selectionOf;
 const STRATEGY_SELECTION_FIELDS = core.STRATEGY_SELECTION_FIELDS;
+const ROTH_GAP_EXCLUDED = core.ROTH_GAP_EXCLUDED;
 const offGridParamFor = core.offGridParamFor;
 const parseShorthand = globalThis.window.DisplayHelpers.parseShorthand;
 // P35 PR 1 characterization goldens — a RECORDING of what the two strategy enumerations emit,
@@ -568,12 +569,17 @@ test('P51b: an IRA-only year draws IRA, not Brokerage; spill covers the rest of 
 });
 
 test('P35n: oracleWithdrawalPlan {seq} entry — strict sequence, IRA-last is a true backstop', () => {
-    // BASE year 0: Cash $50k < spend need, so a Cash-first sequence must drain Cash, cascade to
-    // Brokerage, and leave the IRA untouched (it is last in the sequence).
+    // A Cash-first sequence must drain Cash, cascade to Brokerage, and leave the IRA untouched (it
+    // is last in the sequence). The need has to EXCEED Cash for the cascade to be real: BASE's
+    // $60k goal needs only $36.7k after the RMD, which $50k of Cash covers alone. This test used
+    // to pass on BASE anyway, and the reason is recorded because it was a defect: the gap fill
+    // did not credit the primary pass's Cash draw, drew the year a second time, and that phantom
+    // second draw is what "cascaded" to Brokerage (P104b1x, fixed 2026-09-02). $90k needs ~$66.7k,
+    // so Cash genuinely runs out and Brokerage is genuinely next.
     const plan = [{ seq: ['Cash', 'Brokerage', 'Roth', 'IRA'] }];
-    const r = simulate({ ...BASE, oracleWithdrawalPlan: plan });
+    const r = simulate({ ...BASE, spendGoal: 90000, oracleWithdrawalPlan: plan });
     const y0 = r.log[0];
-    assert((y0.CashWD ?? 0) > 10000, `seq must drain Cash first, got CashWD ${y0.CashWD}`);
+    assert((y0.CashWD ?? 0) > 45000, `seq must drain Cash first, got CashWD ${y0.CashWD}`);
     assert((y0['Brokerage-'] ?? 0) > 0, `shortfall must cascade to Brokerage, got ${y0['Brokerage-']}`);
     assert((y0.IRAwd ?? 0) < 1, `IRA is last in the sequence and must be untouched, got ${y0.IRAwd}`);
 });
@@ -607,6 +613,176 @@ test('P51b: fidelity — replaying a run\'s own realized draw fractions lands ne
     const rel = Math.abs(replay.finalNW - base.finalNW) / Math.max(1, Math.abs(base.finalNW));
     assert(rel < 0.02,
         `replayed fractions should land within 2% of the source run, got ${(100 * rel).toFixed(2)}%`);
+});
+
+// ── P104b1: strategy 'split' - the constant account split (engine only, no rows, no UI) ────────
+// The acceptance bar is REPLAY IDENTITY against the research input it is built from: the split
+// family with vector V and `propwd 0 + oracleWithdrawalPlan.fill(V)` must agree to the dollar on
+// every log column. P104a's numbers were measured on the oracle path; they transfer to the family
+// only if the family IS that path. Two log fields are excluded from the compare on purpose: the
+// row's `strategy` label, which is the one thing that must differ, and `loopMs`, which is timing.
+const _splitCompareLog = log => log.map(e => { const { strategy, loopMs, ...rest } = e; return rest; });
+const _SPLIT_MIX_B = { ...BASE, IRA1: 800000, Roth: 300000, Brokerage: 600000, BrokerageBasis: 200000,
+                       Cash: 120000, growth: 0.05, inflation: 0.025, cpi: 0.025, spendGoal: 90000,
+                       ss1: 30000, ss1Age: 67 };
+const _SPLIT_VECTORS = [
+    ['IRA only',  [1, 0, 0, 0]],
+    ['B4C6',      [0, 0.4, 0.6, 0]],
+    ['I4B3C3',    [0.4, 0.3, 0.3, 0]],
+    ['Brok/Roth', [0, 0.5, 0, 0.5]],
+];
+
+test('P104b1: replay identity - split with V equals propwd 0 + oracleWithdrawalPlan.fill(V), to the dollar', () => {
+    for (const [mixName, mix] of [['BASE', BASE], ['mix B', _SPLIT_MIX_B]]) {
+        for (const [vName, v] of _SPLIT_VECTORS) {
+            const fam = simulate({ ...mix, strategy: 'split', splitWeights: v });
+            const ora = simulate({ ...mix, strategy: 'propwd', propWithdraw: 0,
+                                   oracleWithdrawalPlan: new Array(60).fill({ IRA: v[0], Brokerage: v[1], Cash: v[2], Roth: v[3] }) });
+            assert(fam.totals.splitWeightsInvalid === false, `${mixName}/${vName}: a valid vector must not be flagged`);
+            assert(JSON.stringify(_splitCompareLog(fam.log)) === JSON.stringify(_splitCompareLog(ora.log)),
+                `${mixName}/${vName}: the split family and the oracle replay must produce identical logs`);
+            assert(fam.finalNW === ora.finalNW, `${mixName}/${vName}: finalNW ${fam.finalNW} vs ${ora.finalNW}`);
+            // The vector has to have done something, or the identity is vacuous: a split must
+            // differ from plain Proportional somewhere in the log.
+            const prop = simulate({ ...mix, strategy: 'propwd', propWithdraw: 0 });
+            assert(JSON.stringify(_splitCompareLog(fam.log)) !== JSON.stringify(_splitCompareLog(prop.log)),
+                `${mixName}/${vName}: the split must not coincide with balance-proportional (vacuous identity)`);
+        }
+    }
+});
+
+test('P104b1: a malformed or absent vector runs as the baseline draw, byte-identical, and is flagged', () => {
+    const prop = _splitCompareLog(simulate({ ...BASE, strategy: 'propwd', propWithdraw: 0 }).log);
+    const bad = [
+        ['absent',        undefined],
+        ['null',          null],
+        ['empty',         []],
+        ['three entries', [1, 2, 3]],
+        ['all zero',      [0, 0, 0, 0]],
+        ['negative',      [-1, 1, 1, 1]],
+        ['infinite',      [Infinity, 1, 1, 1]],
+        ['a string',      ['1', 1, 1, 1]],
+        ['an object',     { IRA: 1 }],
+    ];
+    for (const [name, w] of bad) {
+        const inputs = { ...BASE, strategy: 'split' };
+        if (w !== undefined) inputs.splitWeights = w;
+        const r = simulate(inputs);
+        assert(r.totals.splitWeightsInvalid === true, `${name}: must be flagged as invalid`);
+        assert(JSON.stringify(_splitCompareLog(r.log)) === JSON.stringify(prop),
+            `${name}: the fallback must be the baseline draw exactly, not something else silently`);
+    }
+    // And the strip test the plan asks for: removing the field from a run that was NOT
+    // proportional re-breaks the replay - the field is load-bearing, not decorative.
+    const withV = simulate({ ...BASE, strategy: 'split', splitWeights: [0, 0, 1, 0] });
+    const stripped = simulate({ ...BASE, strategy: 'split' });
+    assert(withV.finalNW !== stripped.finalNW, 'stripping splitWeights must change the result');
+});
+
+test.critical('P104b1x: a year funded from Cash by the primary pass is not funded again by the gap fill', () => {
+    // BASE year 0: the need is $36,717 and Cash holds $50,000, so a {Cash:1} vector funds the year
+    // from Cash alone and touches nothing else. Until 2026-09-02 it did not: fillSpendingGap sized
+    // its gap from yr.possibleIncome, which counts IRA and Brokerage draws and not Cash or Roth
+    // ones, so it saw the same $36,717 gap again, drained the remaining $13,283 of Cash, spilled
+    // $29,292 into the IRA, and the year-end surplus routine refunded $38,233 to Cash - an IRA
+    // draw nobody asked for, taxed, parked in Cash. The Ordered branch's comment had named the
+    // loop since July; the oracle weight path (P51b) and every family with Cash in its primary
+    // order ran through it. Those defect numbers are recorded here so the guard reads as what it
+    // is: the fix moved every Proportional and Guyton-Klinger plan (see the changelog at 11.1703).
+    const y0 = simulate({ ...BASE, strategy: 'split', splitWeights: [0, 0, 1, 0] }).log[0];
+    assert((y0.IRAwd ?? 0) < 1, `no IRA may be drawn by choice while Cash covers the year, got IRAwd ${y0.IRAwd} (the defect read 29,292)`);
+    assertNear(y0.Cash ?? 0, 13283.38, 'Cash at year end is the balance less the one draw that funded the year (the defect read 38,233)', 5);
+    assertNear(y0.CashWD ?? 0, 36716.62, 'the whole need came from Cash, once', 5);
+    assert((y0['Brokerage-'] ?? 0) < 1, `Brokerage must be untouched, got ${y0['Brokerage-']}`);
+});
+
+test.critical('P104b1x: Proportional +0% with Max Conversion on converts nothing while the phantom gap would have', () => {
+    // The user-visible symptom. On this fixture the defect made a Proportional +0% plan - no boost,
+    // so no surplus of its own - convert $7,813, $7,168, $6,195 and $3,480 in its first four years,
+    // because the gap fill's over-draw was routed as surplus into convertExcessToRoth. RMD-driven
+    // surplus is a genuine conversion and is allowed; it does not arise in these four years here.
+    const cell = {
+        STATEname: 'CA', nYears: 20, birthyear1: 1962, birthmonth1: 6, die1: 92,
+        birthyear2: 1964, birthmonth2: 3, die2: 94, hasSpouse: true,
+        ss1: 45000, ss1Age: 70, ss2: 24000, ss2Age: 67, pensionAnnual: 0, survivorPct: 0, pensionCola: false,
+        spendChange: -0.01, iraBaseGoal: 0, inflation: 0.025, cpi: 0.025, growth: 0.06,
+        cashYield: 0.03, dividendRate: 0.02, ssFailYear: 2099, ssFailPct: 1.0,
+        convertExcessToRoth: true, propWithdraw: 0, iraWithdrawPct: 0.06, extraConversionAmount: 0,
+        fundConversionWithCash: false, startInYear: 2026, dividendReinvest: true, CashReserve: 0,
+        IRA1: 3000000, IRA2: 1200000, Roth: 150000, Roth2: 60000, Brokerage: 300000, BrokerageBasis: 150000,
+        Cash: 150000, spendGoal: 291600, strategy: 'propwd',
+    };
+    const r = simulate(cell);
+    for (let y = 0; y < 4; y++) {
+        const conv = r.log[y]['-iraConvGrossTot'] ?? 0;
+        assert(conv < 1, `year ${y}: a +0% Proportional plan must not convert on its own, got ${Math.round(conv)}`);
+    }
+    assert(r.totals.success, 'the fixture must still fund itself');
+});
+
+test('11.1702: the log reports the reserve held each year - min(target in nominal $, Cash) - and 0 when Off', () => {
+    // BASE runs at zero inflation, so the nominal target equals the input. Year 0 holds $50k of
+    // Cash and needs $36.7k; a $30k reserve is hidden from the draw, so the year is funded from the
+    // $20k above it plus the IRA, and year-end Cash sits at the target: the column reads $30,000.
+    const on = simulate({ ...BASE, strategy: 'propwd', propWithdraw: 0, CashReserve: 30000 });
+    assertNear(on.log[0].CashReserve, 30000, 'reserve held at year end with a $30k target', 1);
+    assert(on.log.every(e => (e.CashReserve ?? 0) <= (e.Cash ?? 0) + 0.01), 'the reserve can never exceed the Cash held');
+    assert(on.log.every(e => (e.CashReserve ?? 0) <= 30000.01), 'nor the target');
+    // A target above the balance reports the balance, not the target.
+    const big = simulate({ ...BASE, strategy: 'propwd', propWithdraw: 0, CashReserve: 400000 });
+    assertNear(big.log[0].CashReserve, big.log[0].Cash, 'a target above the balance reports the Cash actually held', 1);
+    // Off (key absent) and cyclic (reserve disabled) both report 0, so the column hides itself.
+    const off = simulate({ ...BASE, strategy: 'propwd', propWithdraw: 0 });
+    assert(off.log.every(e => (e.CashReserve ?? 0) === 0), 'Off must report 0 in every year');
+    const cyc = simulate({ ...BASE, strategy: 'propwd', propWithdraw: 0, CashReserve: 30000, cyclicEnabled: true });
+    assert(cyc.log.every(e => (e.CashReserve ?? 0) === 0), 'cyclic disables the reserve and must report 0');
+});
+
+test('11.1703: Brokerage reconciles on screen - last year minus Brokerage- plus brokerageG plus SurplusBrok', () => {
+    // A fixture whose RMDs exceed the spending need, so surplus arises every year and the Cash
+    // Reserve rule has something to route. Growth and dividends on, no advisor fee, no conversions.
+    const fx = { ...BASE, strategy: 'propwd', propWithdraw: 0, IRA1: 3000000, spendGoal: 60000,
+                 growth: 0.05, dividendRate: 0.02, cashYield: 0.02, inflation: 0.02, cpi: 0.02,
+                 CashReserve: 20000, dividendReinvest: true };
+    const r = simulate(fx);
+    assert(r.log.some(e => (e.SurplusBrok ?? 0) > 1000), 'the fixture must route surplus into Brokerage, or the identity is vacuous');
+    assert(r.log.every(e => Math.abs((e.DRIP ?? 0) - (e.cashDividends ?? 0)) < 0.01), 'with DRIP on, DRIP is the year\'s dividends');
+    for (let y = 1; y < r.log.length; y++) {
+        const a = r.log[y - 1], b = r.log[y];
+        const expect = a.Brokerage - (b['Brokerage-'] ?? 0) + (b.brokerageG ?? 0) + (b.SurplusBrok ?? 0);
+        assertNear(b.Brokerage, expect, `year ${b.year}: Brokerage must reconcile to the three columns`, 1);
+    }
+    // DRIP off: dividends go to Cash, DRIP reads 0, and the identity still holds.
+    const off = simulate({ ...fx, dividendReinvest: false });
+    assert(off.log.every(e => (e.DRIP ?? 0) === 0), 'with DRIP off the column reads 0');
+    for (let y = 1; y < off.log.length; y++) {
+        const a = off.log[y - 1], b = off.log[y];
+        assertNear(b.Brokerage, a.Brokerage - (b['Brokerage-'] ?? 0) + (b.brokerageG ?? 0) + (b.SurplusBrok ?? 0),
+            `year ${b.year} (DRIP off): Brokerage must reconcile`, 1);
+    }
+    // Reserve Off: nothing is routed, SurplusBrok reads 0 every year.
+    const offRes = simulate((() => { const o = { ...fx }; delete o.CashReserve; return o; })());
+    assert(offRes.log.every(e => (e.SurplusBrok ?? 0) === 0), 'with Cash Reserve Off nothing is routed to Brokerage');
+});
+
+test('P104b1: split composes with cyclic the way propwd does - no throw, harvest years draw Brokerage', () => {
+    // The oracle input throws on cyclicEnabled; a family cannot, because the sweep clones the
+    // cyclic modifier onto every family. BASE is built for cyclic (N = 3): the split's [0,0,1,0]
+    // never draws Brokerage on its own, so any Brokerage draw is the harvest year preempting it.
+    let r;
+    try { r = simulate({ ...BASE, strategy: 'split', splitWeights: [0, 0, 1, 0], cyclicEnabled: true }); }
+    catch (e) { assert(false, `must not throw: ${e.message}`); }
+    assert(r.log.some(e => (e['Brokerage-'] ?? 0) > 1), 'a harvest year must have drawn Brokerage');
+    assert(r.totals.splitWeightsInvalid === false, 'the vector is valid and must not be flagged');
+});
+
+test('P104b1: the split binds the gap fill too, not only the primary draw', () => {
+    // A Roth-only vector on mix B (Roth $300k): if the second pass took the default [40,60]
+    // Brokerage/Cash branch instead of the vector, Cash or Brokerage would be drawn in year 0.
+    const y0 = simulate({ ..._SPLIT_MIX_B, strategy: 'split', splitWeights: [0, 0, 0, 1] }).log[0];
+    assert((y0.RothWD ?? 0) > 1000, `Roth must fund year 0, got RothWD ${y0.RothWD}`);
+    assert((y0.CashWD ?? 0) < 1 && (y0['Brokerage-'] ?? 0) < 1,
+        `neither pass may draw Cash or Brokerage while Roth lasts, got Cash ${y0.CashWD} Brok ${y0['Brokerage-']}`);
 });
 
 // ── Phase 12: Withdrawal Timing ───────────────────────────────────────────────
@@ -871,9 +1047,18 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
     // spend rises (+$30,640) because the plan keeps more of what it draws, and the guardrail count
     // is unchanged at 3 - the same signature this test's own comment above describes for a
     // valuation fix rather than a behavior change in the withdrawal engine.
-    assertNear(gk.totals.spend, 7423663.892587773, 'GK total spend', 0.01);
-    assertNear(gk.totals.tax, 1925648.9171145353, 'GK total tax', 0.01);
-    assertNear(gk.finalNW, 9188056.866411952, 'GK final net worth', 0.01);
+    // Re-pinned at P104b1x (2026-09-02). Guyton-Klinger draws through the baseline branch, whose
+    // primary order includes Cash, and the gap fill used to omit that Cash draw from what the
+    // household could spend - so every year with a Cash draw was funded a second time and the
+    // excess refunded (or, with Max Conversion on, converted; this fixture has it off). Spend
+    // 7,423,663.892588 -> 7,447,682.634423 (+$24,019: the guardrail turns a portfolio that no
+    // longer churns into a slightly higher spend), tax 1,925,648.917115 -> 1,924,412.061480
+    // (-$1,237), final NW 9,188,056.866412 -> 9,239,367.301350 (+$51,310). Adjustment count still 3.
+    // More spending AND more wealth from the same inputs is the signature of a withdrawal that was
+    // being made and unmade rather than a valuation change.
+    assertNear(gk.totals.spend, 7447682.634423317, 'GK total spend', 0.01);
+    assertNear(gk.totals.tax, 1924412.0614801398, 'GK total tax', 0.01);
+    assertNear(gk.finalNW, 9239367.301350132, 'GK final net worth', 0.01);
     assert(gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length === 3,
         `Expected 3 guardrail adjustments, got ${gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length}`);
 });
@@ -2148,6 +2333,11 @@ const FUNDING_ARMS = [
     { name: 'propwd 0%',      over: { strategy: 'propwd',   propWithdraw: 0,    stratRate: 0 },             iraStranded:  0, worst:      0 },
     { name: 'propwd 10%',     over: { strategy: 'propwd',   propWithdraw: 0.10, stratRate: 0 },             iraStranded:  0, worst:      0 },
     { name: 'propwd 50%',     over: { strategy: 'propwd',   propWithdraw: 0.50, stratRate: 0 },             iraStranded:  0, worst:      0 },
+    // P104b1. Two split vectors: the cash-first one whose spill is CIBR-shaped, and a blend. Both
+    // are baseline-class (isBracketStrategy false), so the forced-IRA backstop applies and the
+    // target is 0 like propwd's.
+    { name: 'split C100',     over: { strategy: 'split',    splitWeights: [0, 0, 1, 0],       stratRate: 0 }, iraStranded:  0, worst:      0 },
+    { name: 'split I4B3C3',   over: { strategy: 'split',    splitWeights: [0.4, 0.3, 0.3, 0], stratRate: 0 }, iraStranded:  0, worst:      0 },
     { name: 'fixed',          over: { strategy: 'fixed' },                                                  iraStranded:  0, worst:      0 },
     // These moved twice. Fixing the dividend/interest double-credit took RIBC from 2 stranded years
     // to 1; switching OBBBA on moved both again, CBIR to 3 and RIBC back to 2. The direction is not
@@ -2602,7 +2792,14 @@ test('P38: the primary draw funds the tax on guaranteed income, not the backstop
     // balance instead of the same balance after this year's pre-withdrawal growth, so every RMD is
     // smaller. Less income arrives on its own, and the backstop -- which is what ForcedIRA counts --
     // has to reach further. Smaller RMDs and a larger backstop are the SAME finding seen twice.
-    assertNear(_sumForcedIRA(r.log), 33743.833, 'forced-IRA total once the draw is sized correctly', 1);
+    //
+    // 33,744 -> 30,943 at P104b1x (2026-09-02), and DOWN is right. The gap fill used to omit the
+    // primary pass's Cash draw from what the household could spend, so it drew that amount a
+    // second time; the surplus was refunded at year end, but the second draw had already pulled
+    // the residual pass into funding tax on money nobody needed. With the phantom gap gone the
+    // residual is smaller and the backstop reaches less far. The measurement this test exists for
+    // (the primary draw sizing the tax on guaranteed income) is unchanged.
+    assertNear(_sumForcedIRA(r.log), 30942.748, 'forced-IRA total once the draw is sized correctly', 1);
 });
 
 test('P38: sizing by a flat nominal rate would badly over-draw an SS-heavy household', () => {
@@ -5415,11 +5612,29 @@ test('sameStrategySelection: matches each family on its own parameter', () => {
         [{ strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 }, { strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 }, true],
         [{ strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 }, { strategy: 'gk', gkGuard: 0.25, gkAdjPct: 0.10 }, false],
         [{ strategy: 'propwd', propWithdraw: 0 },        { strategy: 'fixed', nYears: 10 },              false],
+        // P104b1. Identity is the NORMALIZED vector; a malformed one is its own identity.
+        [{ strategy: 'split', splitWeights: [1, 1, 0, 0] }, { strategy: 'split', splitWeights: [50, 50, 0, 0] }, true],
+        [{ strategy: 'split', splitWeights: [1, 1, 0, 0] }, { strategy: 'split', splitWeights: [1, 0, 0, 0] },   false],
+        [{ strategy: 'split', splitWeights: [0, 0, 0, 0] }, { strategy: 'split' },                               true],
+        [{ strategy: 'split', splitWeights: [0, 0, 0, 0] }, { strategy: 'split', splitWeights: [0, 0, 1, 0] },   false],
+        [{ strategy: 'split', splitWeights: [0, 0, 1, 0] }, { strategy: 'propwd', propWithdraw: 0 },             false],
     ];
     for (const [a, b, want] of cases) {
         assert(sameStrategySelection(a, b) === want,
             `${a.strategy} vs ${b.strategy}: expected ${want}, got ${sameStrategySelection(a, b)}`);
     }
+});
+
+test('P104b1: splitWeights is a selection field, survives selectionOf, and split is 🅡-excluded', () => {
+    // The field list is what crosses the Monte Carlo worker boundary; a field missing from it
+    // compares as unset on one side and every split row would match the user's plan.
+    assert(STRATEGY_SELECTION_FIELDS.includes('splitWeights'), 'splitWeights must be a selection field');
+    const sel = selectionOf({ strategy: 'split', splitWeights: [1, 2, 3, 4], spendGoal: 1 });
+    assert(JSON.stringify(sel.splitWeights) === '[1,2,3,4]', 'selectionOf must carry the whole vector');
+    assert(sel.spendGoal === undefined, 'and nothing that is not a selection field');
+    // Roth sits inside the vector, so a Roth-position clone would be a twin of its base row.
+    assert(ROTH_GAP_EXCLUDED.has('split') && ROTH_GAP_EXCLUDED.has('ordered') && ROTH_GAP_EXCLUDED.size === 2,
+        'the 🅡 exclusion set must be exactly {ordered, split}');
 });
 
 test('sameStrategySelection: bracket identity includes the IRMAA tier and the ACA multiple', () => {

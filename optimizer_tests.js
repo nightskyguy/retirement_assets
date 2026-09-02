@@ -3594,7 +3594,7 @@ window.TestTiers = {
                      // Say so when the mutating suites sat out. Otherwise the in-page count drops by
                      // a hundred with no explanation, which reads as tests having gone missing.
                      + (t1.skippedUnsafe ? `\n${t1.skippedUnsafe} suite${t1.skippedUnsafe !== 1 ? 's' : ''} that write to the live page were skipped - add ?runtests to include them.` : '')
-                     + (crit.passed ? `\n★ ${crit.passed} critical regression guards passed (dividend/interest double-count, gap-fill phantom draw, state retirement-income exemptions, no-tax states).` : '');
+                     + (crit.passed ? `\n★ ${crit.passed} critical regression guards passed. Each one pins a defect that shipped once and was fixed - the dividend/interest double-count, the gap-fill phantom draw, the state retirement-income exemptions, the no-tax states - so that it cannot come back unnoticed.` : '');
         }
     },
 

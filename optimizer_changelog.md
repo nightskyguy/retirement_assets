@@ -30,11 +30,11 @@ from the IRA and Brokerage and returned the excess at year end. With *Max Conver
 excess was converted to Roth instead of returned: a Proportional +0% plan, which asks for no
 conversions at all, was converting several thousand dollars a year for as long as its Cash lasted.
 
-**Spending is unchanged to the dollar. Ending wealth moves.** On ten test plans, Proportional
-gained about $242,000 of real after-tax wealth on average and Guyton-Klinger about $103,000, each
-with one small loss. Plans whose first draw comes only from the IRA - Fill Fed Bracket, IRMAA Tier,
-ACA Cliff, IRA Draw % and Reduce IRA - and Ordered plans are unchanged. Re-run the Optimizer before
-treating an old best row as settled.
+**Spending is unchanged to the dollar. Ending wealth moves**, in most plans upward and in some
+down, by an amount that depends on how much of each year's spending came from Cash or Roth. Plans
+whose first draw comes only from the IRA - Fill Fed Bracket, IRMAA Tier, ACA Cliff, IRA Draw % and
+Reduce IRA - and Ordered plans are unchanged. Re-run the Optimizer before treating an old best row
+as settled.
 
 ---
 

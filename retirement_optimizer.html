@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.16fa</title>
+    <title>Retirement Optimizer 11.16fb</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,13 +59,13 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1116d7"></script>
-	<script src="optimizer_core.js?v=1116fa"></script>
+	<script src="optimizer_core.js?v=1116fb"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=1116fa"></script>
+	<script src="optimizer_ui.js?v=1116fb"></script>
 	<script src="optimizer_tests.js?v=1116f0"></script>
 </head>
 <body>
@@ -944,14 +944,14 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="display"><b>11.16fa</b>
+				<li data-flag="display"><b>11.16fb</b>
 					<strong>Annual Details now accounts for every dollar that leaves Cash.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>When a Roth conversion's tax is paid from Cash, that money left the account with no column to find it in. On one plan Cash fell from $72,000 to $16,099 in the first year while <i>Cash WD</i> read zero, because $56,512 of it had gone to conversion tax. Two new columns fix that. <strong>ttlCashWD</strong>, beside <i>Cash WD</i> in the Withdrawals band and in <i>Cash Delta</i>, is every dollar that left Cash in the year: last year's Cash minus ttlCashWD, plus interest and growth, is this year's Cash. <strong>ConvTaxCash</strong>, in <i>Cash Delta</i> and <i>Opp. Cost</i>, breaks out the conversion-tax part. Both stay at zero unless <i>Fund conversion taxes from cash</i> is on.</li>
+					<li>When a Roth conversion's tax is paid from Cash, that money left the account with no column to find it in, so the Cash balance could fall with nothing on screen to account for it. <i>Cash WD</i> does not show it, because that column is the draw that funded spending. Two new columns fix it. <strong>ttlCashWD</strong>, beside <i>Cash WD</i> in the Withdrawals band and in <i>Cash Δ</i>, is every dollar that left Cash in the year: last year's Cash minus ttlCashWD, plus interest and growth, is this year's Cash. <strong>ConvTaxCash</strong>, in <i>Cash Δ</i> and <i>Opp. Cost</i>, breaks out the conversion-tax part. Both stay at zero unless <i>Fund conversion taxes from cash</i> is on.</li>
 					<li>In Annual Details a balance column disappeared when that account sat at zero for the whole plan, so a plan holding no Cash showed no Cash column under <i>Balances</i>. A zero balance is a fact about the plan, and a missing column reads as though the tool does not track the account. <strong>Cash, Brokerage, Cost Basis, Total IRA, Roth, Total Wealth and Spendable now keep their columns whatever the balance.</strong> Columns carrying a flow or a rate, such as a tax that is never paid, still hide when every year is zero. The per-person splits stay as they were, because an all-zero <i>Roth 2</i> means there is no second person rather than an empty account.</li>
 					<li>This release also carries <strong>internal structure changes</strong> that do not affect any number your plan produces.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.16fa" target="_blank" rel="noopener">Details</a>
+					<a href="optimizer_changelog.md#11.16fb" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="behavior"><b>11.16d7</b>
 					<strong>A chosen limit is now filled even after Social Security starts.</strong>
@@ -1606,7 +1606,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1116fa';
+    const V = '?v=1116fb';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

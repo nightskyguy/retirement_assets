@@ -17,19 +17,20 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.16fa"></a>
+<a id="11.16fb"></a>
 
-## 11.16fa
+## 11.16fb
 
 ### Annual Details now accounts for every dollar that leaves Cash
 
 When a Roth conversion's tax is paid from Cash, that money left the account with no column to find
-it in. On one plan Cash fell from $72,000 to $16,099 in the first year while **Cash WD** read zero,
-because $56,512 of it had gone to conversion tax. Two new columns fix that. **ttlCashWD**, beside **Cash WD** in the Withdrawals band
-and in **Cash Delta**, is every dollar that left Cash in the year: last year's Cash minus ttlCashWD,
-plus interest and growth, is this year's Cash. **ConvTaxCash**, in
-**Cash Delta** and **Opp. Cost**, breaks out the conversion-tax part. Both stay at zero unless *Fund
-conversion taxes from cash* is on.
+it in, so the Cash balance could fall with nothing on screen to account for it. **Cash WD** does not
+show it, because that column is the draw that funded spending.
+
+Two new columns fix it. **ttlCashWD**, beside **Cash WD** in the Withdrawals band and in **Cash Δ**,
+is every dollar that left Cash in the year: last year's Cash minus ttlCashWD, plus interest and
+growth, is this year's Cash. **ConvTaxCash**, in **Cash Δ** and **Opp. Cost**, breaks out the
+conversion-tax part. Both stay at zero unless *Fund conversion taxes from cash* is on.
 
 ### An account with a zero balance keeps its column
 

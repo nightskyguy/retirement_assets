@@ -695,6 +695,63 @@ to be the right partner for GK's spend rule, and the sweep should offer the comb
 
 
 
+## P103e - uncertainty overturns P103d's ranking, and that is the point of the stage
+
+**Run:** 2026-09-01, `node .test_harnesses/gk_drawrule_mc_harness.js`. 100 GBM paths x 33 years x 5
+rules x 6 cells, 3,000 sims. Every rule sees the SAME paths - same banks, same seed, same path index
+- so the difference is the rule and not the dice. Built on `buildBanks`/`buildPathInputs` from
+`montecarlo/mc_engine.js`, the shipped per-path machinery, rather than a fourth copy of the model.
+
+**`E-P1` RIGHT, 6 of 6.** Some rule beats GK's median terminal wealth in every cell, +$56,674 to
++$620,781. The direction from `P103d` survives uncertainty.
+
+**`E-P3` RIGHT, 6 of 6 - and this is the finding.** The rule chosen on ONE deterministic path is
+**never** the median-best rule under uncertainty. Not "in a substantial minority": in every single
+cell.
+
+**`E-P2` WRONG, and it caught exactly what it was written to catch.** In `defaults3x @6%` the
+median-best rule (Ordered CBIR) survives **57% of paths against GK's 100%**. Its extra median wealth
+was bought with survival, which disqualifies it for someone living on the plan.
+
+**The rule `P103d` crowned is the worst one here.** Ordered CIBR won 8 of 30 cells on the single path
+- more than any other - and under uncertainty it is catastrophic:
+
+| cell | Ordered CIBR survival | GK survival |
+|---|---|---|
+| round1 @6% | **17%** | 100% |
+| thirds @6% | **21%** | 100% |
+| brokheavy @6% | **3%** | 100% |
+| thirds @8% | **21%** | 100% |
+
+A draw order that looks best when every year returns exactly 6% is fatal when returns vary. **This is
+what a one-path bake-off cannot see, and it is why `P103e` exists rather than being optional.**
+
+**The rule that actually survives is Fill Bracket 22%** - median-best in **5 of 6 cells, at 100%
+survival in all six**:
+
+| cell | Fill Bracket 22% median vs GK | survival |
+|---|---|---|
+| defaults @6% | **+$600,128** | 100% vs 100% |
+| brokheavy @6% | **+$211,074** | 100% vs 100% |
+| thirds @6% | +$107,493 | 100% vs 100% |
+| thirds @8% | +$99,743 | 100% vs 100% |
+| round1 @6% | +$56,674 | 100% vs 100% |
+| defaults3x @6% | −$282,294 | 100% vs 100% |
+
+It was ranked SECOND by the single-path bake-off (6 cells to Ordered CIBR's 8). Under uncertainty it
+is the only candidate that improves on GK without costing survival.
+
+**What P103 concludes, after five stages.** GK's spend rule is good and its DRAW is not: pairing it
+with a bracket-filling draw is worth roughly $57k-$600k of median real terminal wealth at no cost to
+survival or spending, in five of six tested cells. That is a **shippable, regime-gated marked arm**
+built entirely from existing families. And the selection MUST be made under Monte Carlo - the
+single-path ranking picked a rule that fails 80% of futures.
+
+**Caveats that stay attached.** One synthetic mode (GBM at mu 7%, sigma 12%, the page's defaults),
+100 paths, six cells, one household profile. The p10 column is reported beside the median precisely
+because a median is not a floor. Widening this to the historical and AAM modes, and to the full cell
+grid, is the obvious next measurement.
+
 ## P51f - trajectory post-mortem (observation only, ships nothing)
 
 - **No harvest-like alternation** (prediction `S3-P3` WRONG again: 1/6 thirds/brokheavy cells with

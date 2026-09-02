@@ -11,7 +11,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P103 | `a`-`d` DONE. **`d`: GK's DRAW is beaten in 24/30 cells** (15/15 at 6% spend), median $231k, six different winners - regime-gated, not a new default | `P103e` |
+| **O0** | P103 | **`a`-`e` DONE.** GK spend rule + **Fill Bracket 22%** draw: +$57k-$600k median, 100% survival, 5/6 cells. MC overturned the 1-path pick | `P103c` / ship |
 | **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
@@ -342,12 +342,30 @@ a research instrument and a ship-time check.
       **Caveat, stated in the report:** it measures the best rule PER CELL, and a user picks one up
       front. The shippable form is the sweep doing this search - which is what the Optimizer table
       already is. Still one deterministic path; `P103e` scores a survivor under many.
-- [ ] **P103e** - **score under many paths before calling anything ideal.** A schedule or rule that
-      wins on the one assumed path is a point estimate. Run the `P103d` winners and the oracle's own
-      schedule through Monte Carlo (the plumbing accepts it today, `mc_engine.js:402`; `P69` replay
-      is done) and report survival and median wealth bands, not the argmax. Extends `P100e3` from
-      frontier ROWS to schedules. This is the step that turns a one-path optimum into a policy.
-
+- [x] **P103e DONE 2026-09-01** - **uncertainty OVERTURNS `P103d`'s ranking, which is the whole
+      reason this stage exists.** Harness `.test_harnesses/gk_drawrule_mc_harness.js`, 100 GBM paths
+      x 33 years x 5 rules x 6 cells. Every rule sees the same banks, seed and path index. Built on
+      `buildBanks`/`buildPathInputs` from `mc_engine.js` - the shipped machinery, not a fourth copy.
+      **`E-P3` RIGHT 6/6, and it is the headline: the rule chosen on ONE path is NEVER the
+      median-best rule under uncertainty.** Not a minority - every cell.
+      **`P103d`'s crowned rule is the worst here.** Ordered CIBR won 8 of 30 single-path cells, more
+      than any other, and survives **3% to 21%** of paths in four of the six MC cells (round1 @6%
+      17%, thirds @6% 21%, brokheavy @6% 3%, thirds @8% 21%) against GK's 100%. A draw order that is
+      best when every year returns exactly 6% is fatal when returns vary.
+      **`E-P1` RIGHT 6/6** - some rule still beats GK's median everywhere, +$56,674 to +$620,781.
+      **`E-P2` WRONG**, and it caught what it was for: in `defaults3x @6%` the median-best rule
+      (Ordered CBIR) survives 57% of paths against GK's 100%. Wealth bought with survival.
+      **The robust winner is Fill Bracket 22%** - median-best in **5 of 6 cells at 100% survival**,
+      +$600,128 / +$211,074 / +$107,493 / +$99,743 / +$56,674, and it was ranked SECOND by the
+      single-path bake-off.
+      **P103's conclusion after five stages:** GK's spend rule is good, its DRAW is not, and pairing
+      it with a bracket-filling draw is worth roughly $57k-$600k of median real terminal wealth at no
+      cost to survival or spending. Shippable as a regime-gated marked arm from existing families -
+      and **the selection must be made under Monte Carlo**, because the single-path ranking picked a
+      rule that fails 80% of futures.
+      **Caveats kept attached:** one synthetic mode (GBM, mu 7% / sigma 12%, the page's defaults),
+      100 paths, 6 cells, one household. p10 is reported beside the median because a median is not a
+      floor. Widening to the historical and AAM modes and the full grid is the obvious next step.
 ### What merged in, and what this changes elsewhere
 
 | phase | disposition |
@@ -361,8 +379,10 @@ a research instrument and a ship-time check.
 | `P102` | Stages C/D (worker, search budget) DEFERRED behind `P103d` - until there are arms worth buying time for. Stage E's `e1`/`e2` (gap-fill and stop-year as swept arms) are `P103d` candidates |
 | `P34` | unchanged at O1; NOT a `P103` prerequisite - `a`-`d` are node harnesses |
 
-- **Status:** **`P103a` through `P103d` COMPLETE 2026-09-01.** `P103e` (score a survivor under many
-  paths) is the last stage and the one that decides whether any of this reaches a user.
+- **Status:** **`P103a` through `P103e` ALL COMPLETE 2026-09-01.** The phase has a shippable result:
+  **GK spend rule + Fill Bracket 22% draw**, median-best in 5 of 6 MC cells at 100% survival,
+  worth +$57k to +$600k. Remaining in this phase: `P103c` (the unified search) and the account
+  SPLIT field from `P103b2`; `P103b1x` is a product question for the user, not research.
   PRIOR NOTE:  The schedule now carries every
   shipped family's spend and IRA draw; the one remaining field is the ACCOUNT SPLIT, which is what
   stops Proportional, Ordered and Guyton-Klinger reproducing. `P103c`-`e` behind it. `P103b1x` is a

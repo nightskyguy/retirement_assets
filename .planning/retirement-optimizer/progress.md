@@ -7678,3 +7678,30 @@ opposite ways - flagged in findings as something to settle before either ships, 
 
 **Candidates are all shipped families on purpose**, so a winner becomes a marked, regime-gated sweep
 arm rather than an engine change. `P103e` is the last stage: score a survivor under many paths.
+
+
+## 2026-09-01 (cont.) - P103e: Monte Carlo overturns P103d, and P103 has a shippable answer
+
+100 GBM paths x 33 years x 5 rules x 6 cells, same banks/seed/path index for every rule, built on the
+shipped `buildBanks`/`buildPathInputs` rather than a fourth copy of the model.
+
+**`E-P3` RIGHT 6/6 - the single-path pick is NEVER the median-best rule.** **`E-P1` RIGHT 6/6** -
+some rule still beats GK's median everywhere (+$56,674 to +$620,781). **`E-P2` WRONG** - in
+`defaults3x @6%` the median-best survives 57% of paths against GK's 100%, wealth bought with
+survival, exactly what that prediction was written to catch.
+
+**`P103d`'s winner is the worst rule here.** Ordered CIBR won more single-path cells than anything
+else and survives 3-21% of paths in four MC cells. **The robust winner is Fill Bracket 22%** -
+median-best in 5 of 6 at 100% survival, +$57k to +$600k - which the single-path bake-off ranked
+second.
+
+**So P103 has a result worth shipping:** GK spend rule + Fill Bracket 22% draw, as a regime-gated
+marked arm built from existing families. And the selection must be made under Monte Carlo.
+
+**First run printed all `$NaN` at 100% success** because the synthetic modes need `cfg.mu`/`cfg.sigma`
+and I passed neither. Caught by the same reflex as `P103b4`'s one-sim null; noted in the harness
+header so the next person does not lose the time.
+
+**Remaining in P103:** `P103c` (unified search) and the account SPLIT field from `P103b2`.
+`P103b1x` - whether blank Cash Reserve should stop being the default - is a product question and is
+the user's call, not mine.

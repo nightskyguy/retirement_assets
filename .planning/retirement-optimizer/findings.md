@@ -4138,3 +4138,39 @@ naming or a mistake in one of them, and it should be settled before either ships
 user picks one up front. The shippable form is a sweep that searches - which is what the Optimizer
 table already is. The finding is not "use Ordered CIBR"; it is that **GK's own draw should not be
 assumed the right partner for GK's spend rule**, and the sweep should offer the combination.
+
+
+## A one-path bake-off picked the rule that fails 80% of futures  *(2026-09-01, `P103e`)*
+
+**Codes:** *median-best* = highest median real terminal wealth across paths. *survival* = share of
+paths the plan funds to the end. *single-path pick* = the winner `P103d` chose on one deterministic
+6%/2.5% path.
+
+100 GBM paths x 33 years x 5 rules x 6 cells, every rule on the SAME banks, seed and path index.
+
+**`E-P3` RIGHT in 6 of 6 cells, and it is the result: the single-path pick is NEVER the median-best
+rule.** Not a substantial minority - every cell.
+
+**The rule the single-path bake-off crowned is the worst under uncertainty.** Ordered CIBR won 8 of
+30 single-path cells, more than any other rule, and survives **3%, 17%, 21% and 21%** of paths in
+four MC cells against GK's 100%. A draw order that is optimal when every year returns exactly 6% is
+fatal when returns vary, and a point estimate cannot show that.
+
+**`E-P2` WRONG, and it did its job.** In `defaults3x @6%` the median-best rule survives 57% of paths
+against GK's 100% - extra median wealth bought with survival, which disqualifies it for someone
+living on the plan. Without a survival column that cell would have read as a win.
+
+**The robust winner was the runner-up.** Fill Bracket 22% is median-best in 5 of 6 cells at **100%
+survival**, worth +$56,674 to +$600,128 against GK. The single-path bake-off ranked it second.
+
+**The generalizable rule, and it is the strongest one from this whole phase.** A deterministic path
+does not just add noise to a ranking - **it systematically favors rules that are brittle**, because
+brittleness has no cost when there is only one future. Any selection among strategies must be made
+under uncertainty; a single-path search is for finding CANDIDATES, never for choosing between them.
+That is now measured rather than asserted: 6 of 6 cells changed their answer.
+
+**And the NaN that nearly ate the run.** The first execution printed a full table of `$NaN` at 100%
+success, because `buildBanks` destructures `cfg.mu` and `cfg.sigma` for the synthetic modes and I
+supplied neither - `logDrift` went NaN and every balance followed it silently, all the way to a
+terminal of nulls. It was caught by the same reflex as `P103b4`'s one-simulation null: **a clean-
+looking table with an impossible uniformity (every rule at exactly 100%) is a setup bug.**

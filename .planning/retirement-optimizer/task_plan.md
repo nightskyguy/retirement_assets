@@ -328,11 +328,28 @@ a research instrument and a ship-time check.
       user actually gets (the reserve is unset by default); `--reserve0` is the only control that
       holds routing constant, so **`P103d`'s bake-offs use it** and anything phrased as "what a plan
       leaves on the table" uses the bare run and says so.
-- [ ] **P103b1x** - **NEW, user-visible, NOT decided here.** Leaving Cash Reserve blank costs
+- [x] **P103b1x** - **DONE v11.1702.** Was: NEW, user-visible, NOT decided here. Leaving Cash Reserve blank costs
       **$84k-$120k** of real after-tax wealth in four of six headline cells and changes which strategy
       the tool would recommend. Whether the shipped default should change from blank (legacy
       all-to-cash) is a product question with a changelog entry attached, not a research one. Needs
       its own measurement across the wider Stage-1 grid before anyone proposes a new default.
+      **MEASURED 2026-09-02 on v11.1701** (user asked for a default proposal): 12 cells (six mixes
+      including a $790k `small` plan, 4%/6%) x 5 families x 8 reserve sizes, 480 sims, plus Monte
+      Carlo (100 paths, GBM + bootstrap, six cells, Proportional and GK, 12,000 sims). **`0` is
+      never worse than blank in any of the 60 family-cells (worst delta $0) and is best or tied in
+      every family: mean +$243k (GK) to +$1.06M (Ordered) real after-tax; survival unchanged.**
+      Every dollar of buffer costs: `$10k` gives up $8k (GK) to $135k (Ordered) of that gain on
+      average with worst cases of -$29k to -$53k; `0.5x` and `1x spend` are the worst choices
+      tested. **Proposal: default `0` - routing on, no floor - "Off" kept for the legacy behavior,
+      the "Cash Reserve active" warning retired.** Not measured: DRIP off, cyclic, 8% spend, and
+      any real-world liquidity preference the engine does not model. Findings 2026-09-02, "A Cash
+      Reserve of 0 beats blank everywhere".
+      **DONE 2026-09-02, v11.1702 (user: "setting the default to 0 is fine").** Default 0, the
+      load-time warning retired, a `CashReserve` column in Annual Details (the field the user
+      remembered was `-cashBreach`, a hidden flag; the held amount was never logged). The user's
+      "larger unspent Brokerage" intuition checked before approval: composition yes, cost no - the
+      step-up erases terminal gains and lifetime realized gains are identical. Stance recorded: Cash
+      Reserve is one vehicle, Roth is the backup; no emergency-spending feature.
 - [x] **P103b2 DONE 2026-09-01** - `strategy: 'schedule'` is built, and the acceptance bar is met
       for the families it covers. Research input, default-off, node-only, on the
       `oracleWithdrawalPlan` discipline. Per-year entry `{ ordTarget, kind, rateBasis? }`; suites

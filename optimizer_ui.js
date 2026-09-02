@@ -2604,6 +2604,7 @@ const columnCategories = {
     'IRA2': ['Balances', 'IRA Δ'],
     'TotalIRA': ['Balances', 'IRA Δ'],
     'Cash': ['Balances', 'Cash Δ'],
+    'CashReserve': ['Balances', 'Cash Δ'],
     'Roth': ['Balances', 'Roth Δ'],
     'Brokerage': ['Balances', 'Brokerage Δ'],
     'Basis': ['Balances', 'Brokerage Δ'],
@@ -2707,7 +2708,7 @@ const columnGroupDefs = {
     'ForcedIRA': 'Withdrawals',
     'IRA1': 'Balances', 'IRA2': 'Balances', 'TotalIRA': 'Balances',
     'Roth1': 'Balances', 'Roth2': 'Balances',
-    'Cash': 'Balances', 'Roth': 'Balances', 'Brokerage': 'Balances',
+    'Cash': 'Balances', 'CashReserve': 'Balances', 'Roth': 'Balances', 'Brokerage': 'Balances',
     'Basis': 'Balances', 'totalWealth': 'Balances', 'SumSpendable': 'Balances',
     'brokerageG': 'Balances', 'cashG': 'Balances', 'rothG': 'Balances', 'RMD%': 'Balances',
     'ConvTaxCash': 'Withdrawals',
@@ -3178,6 +3179,7 @@ function updateTable(log) {
         'Roth2': "Person 2's Roth balance at year end.",
         'rothG': 'Growth in the Roth (added to Roth account)',
         'rothConv': 'Amount that actually landed in Roth this year (IRA→Roth). A conversion owes tax on the amount converted: unless "Use Cash" (under Maximize Conversions) is on, that tax is taken out of the conversion itself, so this reads LOWER than the gross amount withdrawn (e.g. a $20,000 Extra Annual Roth Conversion lands ~$13,700 at a 31% marginal rate). With cash-funding on, the tax is paid from Cash instead and the full amount lands here. See the extraConv column (Opp. Cost category) for the gross figure.',
+        'CashReserve': 'The part of the Cash balance that is your Cash Reserve at year end: the smaller of the reserve target (your Cash Reserve input, grown with inflation) and the Cash actually held. Cash above it is what the routing rule sent, or left, there; a year where this reads below the target is a year spending had to break into the reserve. Hidden when there is no reserve (Cash Reserve Off or 0).',
         'CashWD': 'Cash drawn to fund SPENDING, tax free. This is not every dollar that can leave Cash: when "Use Cash" (under Maximize Conversions) is on, the conversion tax is paid from Cash too and appears in ConvTaxCash instead. The two together are the whole Cash outflow for the year.',
         'ttlCashWD': 'Every dollar that left Cash this year: the spending draw (Cash WD) plus the conversion tax when "Use Cash" funds it (ConvTaxCash). Shown beside Cash WD in the Withdrawals band. Last year’s Cash balance minus this, plus interest and growth, is this year’s Cash balance.',
         'ConvTaxCash': 'Roth conversion tax paid out of Cash rather than netted out of the conversion, which happens only when "Use Cash" (under Maximize Conversions) is on. Kept separate from Cash WD because this money funded a conversion, not spending - the income and asset-flow charts would double-count it as spending money otherwise. Start-of-year Cash minus Cash WD minus ConvTaxCash, plus interest and growth, is the year-end Cash balance.',
@@ -5692,27 +5694,11 @@ function loadFromURL() {
     resetUnknownStrategy();
     toggleStrategyUI();
     onConvSubFlagChange();   // .checked set programmatically above → no change event; resync the convenience checkbox
-    maybeWarnCashReserveActive();
     runSimulation();
 }
 
-// One-time load warning: a shared URL or saved scenario that carries an ACTIVE Cash Reserve
-// (Off/blank/negative = off, so >= 0 is active) now behaves differently than in releases before
-// the surplus-reinvestment feature. Fire only on load (loadFromURL/applyScenario), never on recalc.
-function maybeWarnCashReserveActive() {
-    const raw = (document.getElementById('CashReserve')?.value ?? '').toString().trim();
-    if (raw === '' || raw.toLowerCase() === 'off') return;
-    const n = DisplayHelpers.parseShorthand(raw);
-    const v = (n == null || Number.isNaN(n)) ? +raw : n;
-    if (!Number.isFinite(v) || v < 0) return;   // Off/blank/negative = off, no change to warn about
-    // P91. This used to say "blank (or -1)". `-1` is not typeable: the field is attached with
-    // min: 0, so it is clamped to 0 on blur - and 0 is a DIFFERENT mode (keep no buffer, reinvest
-    // ALL surplus to Brokerage), not the legacy all-cash behavior the sentence was offering. A user
-    // who followed the advice landed in a third mode without being told. Negative values are still
-    // accepted from old saved scenarios and shared links; "Off" is the only value a user can type,
-    // which is what the field's own tooltip and placeholder already say.
-    showMessage('Note: this scenario sets a Cash Reserve, which now reinvests surplus above it into your Brokerage. Results differ from releases before this feature. Type Off in Cash Reserve to restore the original all-cash behavior.', 'warning');
-}
+// The load-time "this scenario sets a Cash Reserve" warning was retired at 11.1702, when 0 became
+// the default: it would have fired for everyone. The changelog carries the change instead.
 
 
 /* Save, Import and Export settings/Scenarios
@@ -6070,8 +6056,6 @@ function applyScenario(data) {
     if (typeof updateSuggestSpendTooltip === 'function') updateSuggestSpendTooltip();
     if (typeof updateIRAGoalHint === 'function') updateIRAGoalHint();
     if (typeof updateCompAdvisory === 'function') updateCompAdvisory();
-
-    maybeWarnCashReserveActive();
 
     // Trigger any recalculations your app needs
     if (typeof runSimulation === 'function') {

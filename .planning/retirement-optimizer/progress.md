@@ -7945,3 +7945,23 @@ conversions-only gain 9.55% -> 2.34%, zero negative gaps, S3-P2/B-P4 RIGHT, S3-P
 before. Written into `PERFECT_FORESIGHT_ORACLE.md` as "What changed with v11.1701" with an engine
 note at the top of the file; `research/README.md` row extended; plan updated (`b2` unblocked;
 `P103d`/`P103e` flagged as old-engine before their arm ships).
+
+
+## 2026-09-02 (cont.) - Cash Reserve default 0, the reserve column, and the changelog trimmed (v11.1702)
+
+User: the ten-plan dollar figures out of the page changelog (done, `abe6934`); a first pass at what
+in the plan and findings reads as unfixed when it is fixed (the badge blurb reworded, an audit
+proposed); a Cash Reserve default. **Measured** (12 cells x 5 families x 8 sizes, plus 12,000 MC
+sims): 0 is never worse than blank and best or tied in every family; every dollar of buffer costs.
+User approved 0 after a check of their intuition that 0 leaves a larger unspent Brokerage:
+composition yes, cost no (findings 2026-09-02).
+
+**Shipped:** the input defaults to 0 (`OPT_DEFAULTS` captures it from the page, so share-URL
+omission follows), the load-time reserve warning retired (it would have fired for everyone), a
+`CashReserve` column in Annual Details (engine `cashReserve` on the log row, display key beside
+`Cash`, bands Balances + Cash Δ, tooltip; hidden when there is no reserve), README FAQ and the
+field tooltip updated. One test (407), counts reconciled. Same branch entry, stamp refreshed to
+11.1702; core, ui and tests cache tokens bumped.
+
+**User's stance recorded:** Cash Reserve is one vehicle, Roth is the backup; no emergency-spending
+feature.

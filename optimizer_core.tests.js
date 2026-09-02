@@ -688,7 +688,7 @@ test.critical('P104b1x: a year funded from Cash by the primary pass is not funde
     // draw nobody asked for, taxed, parked in Cash. The Ordered branch's comment had named the
     // loop since July; the oracle weight path (P51b) and every family with Cash in its primary
     // order ran through it. Those defect numbers are recorded here so the guard reads as what it
-    // is: the fix moved every Proportional and Guyton-Klinger plan (see the changelog at 11.1701).
+    // is: the fix moved every Proportional and Guyton-Klinger plan (see the changelog at 11.1702).
     const y0 = simulate({ ...BASE, strategy: 'split', splitWeights: [0, 0, 1, 0] }).log[0];
     assert((y0.IRAwd ?? 0) < 1, `no IRA may be drawn by choice while Cash covers the year, got IRAwd ${y0.IRAwd} (the defect read 29,292)`);
     assertNear(y0.Cash ?? 0, 13283.38, 'Cash at year end is the balance less the one draw that funded the year (the defect read 38,233)', 5);
@@ -718,6 +718,24 @@ test.critical('P104b1x: Proportional +0% with Max Conversion on converts nothing
         assert(conv < 1, `year ${y}: a +0% Proportional plan must not convert on its own, got ${Math.round(conv)}`);
     }
     assert(r.totals.success, 'the fixture must still fund itself');
+});
+
+test('11.1702: the log reports the reserve held each year - min(target in nominal $, Cash) - and 0 when Off', () => {
+    // BASE runs at zero inflation, so the nominal target equals the input. Year 0 holds $50k of
+    // Cash and needs $36.7k; a $30k reserve is hidden from the draw, so the year is funded from the
+    // $20k above it plus the IRA, and year-end Cash sits at the target: the column reads $30,000.
+    const on = simulate({ ...BASE, strategy: 'propwd', propWithdraw: 0, CashReserve: 30000 });
+    assertNear(on.log[0].CashReserve, 30000, 'reserve held at year end with a $30k target', 1);
+    assert(on.log.every(e => (e.CashReserve ?? 0) <= (e.Cash ?? 0) + 0.01), 'the reserve can never exceed the Cash held');
+    assert(on.log.every(e => (e.CashReserve ?? 0) <= 30000.01), 'nor the target');
+    // A target above the balance reports the balance, not the target.
+    const big = simulate({ ...BASE, strategy: 'propwd', propWithdraw: 0, CashReserve: 400000 });
+    assertNear(big.log[0].CashReserve, big.log[0].Cash, 'a target above the balance reports the Cash actually held', 1);
+    // Off (key absent) and cyclic (reserve disabled) both report 0, so the column hides itself.
+    const off = simulate({ ...BASE, strategy: 'propwd', propWithdraw: 0 });
+    assert(off.log.every(e => (e.CashReserve ?? 0) === 0), 'Off must report 0 in every year');
+    const cyc = simulate({ ...BASE, strategy: 'propwd', propWithdraw: 0, CashReserve: 30000, cyclicEnabled: true });
+    assert(cyc.log.every(e => (e.CashReserve ?? 0) === 0), 'cyclic disables the reserve and must report 0');
 });
 
 test('P104b1: split composes with cyclic the way propwd does - no throw, harvest years draw Brokerage', () => {

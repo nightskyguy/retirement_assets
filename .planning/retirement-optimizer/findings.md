@@ -4460,3 +4460,72 @@ conversions had been doing part of what the oracle's schedule was credited with;
 exactly zero, all Ordered; zero negative gaps. `P103d`/`P103e` were measured on the old engine and
 GK's draw is the draw the defect distorted most: re-run before their arm ships. Report section
 "What changed with v11.1701".
+
+
+## A Cash Reserve of 0 beats blank everywhere and every dollar of buffer costs  *(2026-09-02, `P103b1x`, v11.1701)*
+
+**Codes:** *blank / Off* = the shipped default, legacy routing, all surplus stays in Cash. *0* =
+routing on, no buffer, all surplus to Brokerage. *$N* = keep N of today's dollars in Cash as a
+breakable floor, route the overflow to Brokerage. *spend* = the cell's first-year spend goal.
+Fixture: the replay household, six mixes (the five P104a mixes plus a $790k `small` plan), 4% and
+6% spend, `dividendReinvest` on, Max Conversion on, corrected engine. Score: real after-tax wealth
+at the cell's `futureIRARate`, delta against blank. 480 single-path sims, then 12,000 Monte Carlo
+sims (100 paths, GBM and bootstrap, six 6%-spend cells, Proportional +0% and Guyton-Klinger).
+
+**Single path, mean delta vs blank (worst cell in parentheses):**
+
+| reserve | Proportional +0% | Guyton-Klinger | Fill Bracket 22% | IRA Draw 5% | Ordered CBIR |
+|---|---|---|---|---|---|
+| 0 | +$657,034 ($0) | +$242,978 ($0) | +$291,804 ($0) | +$525,643 ($0) | +$1,061,233 ($0) |
+| $10k | +$638,280 (-$35,541) | +$235,150 (-$29,467) | +$261,959 (-$48,803) | +$495,045 (-$48,171) | +$926,430 (-$53,032) |
+| $25k | +$610,563 (-$89,667) | +$217,245 (-$66,610) | +$217,481 (-$122,482) | +$448,337 (-$120,413) | +$797,404 (-$120,892) |
+| $50k | +$557,103 (-$191,020) | +$185,716 (-$128,268) | +$144,414 (-$235,340) | +$363,165 (-$240,796) | +$711,555 (-$263,739) |
+| 0.5x spend | +$432,067 (-$634,411) | +$100,419 (-$489,707) | +$2,191 (-$727,575) | +$203,619 (-$667,954) | +$622,455 (-$656,120) |
+| 1x spend | +$290,317 (-$779,563) | +$3,195 (-$634,859) | -$149,888 (-$819,090) | +$21,743 (-$800,094) | +$457,601 (-$808,771) |
+
+**`0` is never worse than blank in any of the 60 family-cells** - its worst delta is exactly $0,
+in the cells where no surplus arises and the setting is inert - and it is best or tied in every
+family. The gain is the ROUTING: surplus compounding in Brokerage at the growth rate instead of
+sitting in Cash at the cash yield. Every dollar of floor then subtracts from it twice: the buffer
+idles, and the breakable floor pushes draws onto taxable accounts. Spend-proportional buffers are
+the worst choices tested. Ordered is the one family a buffer helps in a different way: blank and
+`0` leave 2 of 12 single-path cells unfunded, `$10k` 1, `$25k` and up 0 - Ordered never draws
+outside its sequence, and the floor's last-resort release is a backstop it otherwise lacks.
+
+**Monte Carlo, median real after-tax wealth vs blank, mean over six cells:**
+
+| | Proportional GBM | Proportional bootstrap | GK GBM | GK bootstrap |
+|---|---|---|---|---|
+| 0 | +$476,016 | +$850,518 | +$244,592 | +$207,237 |
+| $10k | +$443,471 | +$848,383 | +$229,787 | +$165,660 |
+| $25k | +$394,692 | +$736,078 | +$222,509 | +$155,599 |
+| 0.5x spend | +$88,007 | +$327,965 | +$99,985 | +$14,030 |
+
+Survival is unchanged by the setting: Proportional min 66% GBM / 69% bootstrap under blank and
+under `0` (the $10k floor costs one path in each mode), Guyton-Klinger 100% throughout. The p10
+moves with the median.
+
+**Proposal:** default `0`, with "Off" kept as the typed word for the legacy behavior, and the
+"this scenario sets a Cash Reserve" warning retired (it would fire for everyone). A user who wants
+a real-life cash cushion can still set one; its cost is now a measured number rather than a guess.
+**Not measured:** `dividendReinvest` off (dividends then land in Cash and the routing decides
+their fate), cyclic (the reserve is disabled there), 8% spend, and any liquidity preference the
+engine does not model - the engine has no emergency spending, so a buffer can only cost it money.
+Script lives in the session scratchpad; a `.test_harnesses/` version ships with the change if the
+default is changed.
+
+
+**The "larger unspent Brokerage" intuition, checked** (user, 2026-09-02, before approving the
+default). Composition: yes. `defaults @6%`, Proportional +0%: Off ends with $810,571 Brokerage and
+$2,785,216 Cash; reserve 0 ends with $5,400,424 Brokerage and $81,329 Cash. Net cost: no. Lifetime
+realized capital gains are identical ($28,339 either way; GK $28,910 vs $37,106), lifetime tax is
+lower under 0 ($1,199,886 vs $1,166,661), terminal basis equals terminal Brokerage in every row
+because the engine's IRC 1014 step-up erases the gain for heirs, and real after-tax wealth is
+$857k higher. The money is unspent under BOTH settings, since spend is pinned; the setting only
+decides whether it compounds at the growth rate or the cash yield. Where no surplus arises
+(`defaults3x`, `round1`, `thirds`, `brokheavy` at 6%) the two settings are byte-identical.
+
+**Shipped 11.1702:** default 0, the load-time "this scenario sets a Cash Reserve" warning retired,
+and a `CashReserve` column in Annual Details (Balances and Cash Δ) reporting min(target in nominal
+dollars, Cash) per year, hidden when there is no reserve. The user's stance for the record: *"Cash
+Reserve is ONE vehicle, but any Roth funds are a backup"* - no emergency-spending feature is wanted.

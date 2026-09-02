@@ -17,9 +17,26 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1701"></a>
+<a id="11.1702"></a>
 
-## 11.1701
+## 11.1702
+
+### Cash Reserve now defaults to 0
+
+**Behavior change for new sessions and for shared links that did not carry a Cash Reserve.** The
+field used to default to Off, which left every dollar of surplus in Cash at the cash yield. It now
+defaults to 0: no cash buffer, all surplus reinvested in your Brokerage. Measured across withdrawal
+families and account mixes on the corrected engine, 0 is never worse than Off and usually better,
+survival is unchanged, and every dollar of buffer costs a little. Type Off to keep the original
+all-cash routing; a positive amount still keeps that much in Cash and reinvests only the overflow.
+Saved scenarios keep whatever they carry.
+
+### Annual Details shows your Cash Reserve
+
+A **CashReserve** column under **Balances** and **Cash Δ** is the part of each year's Cash balance
+that is the reserve: the smaller of the target, grown with inflation, and the Cash actually held.
+It shows the buffer being held, topped up, or broken into, and hides itself when there is no
+reserve (Cash Reserve Off or 0).
 
 ### Proportional and Guyton-Klinger plans were withdrawing, and converting, money they did not need
 

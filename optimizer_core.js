@@ -1218,6 +1218,7 @@ function buildSimYearLogRecord(p) {
         IRA2: p.balance.IRA2,
         TotalIRA: p.balance.IRA1 + p.balance.IRA2,
         Cash: p.balance.Cash,
+        CashReserve: p.cashReserve ?? 0,
         Roth: p.balance.Roth1 + p.balance.Roth2,
         Roth1: p.balance.Roth1,
         Roth2: p.balance.Roth2,
@@ -3833,6 +3834,12 @@ function logYear(sim, yr) {
         extraConvGross: yr.extraConvGross,
         advisorFee: yr.advisorFee, advisorFeeBasis: yr.advisorFeeBasis, advisorFeeFromIRA: yr.advisorFeeFromIRA,
         surplusToBrokerage: yr.surplusToBrokerage, cashBreach: yr.cashBreach,
+        // The part of year-end Cash that is the reserve: the smaller of the target in this year's
+        // nominal dollars and the Cash actually held. Same two terms _reserveHidden uses at the top
+        // of the year and the surplus router uses at the bottom; 0 when Off or under cyclic, where
+        // the reserve is disabled. Shown in Annual Details as CashReserve (11.1702).
+        cashReserve: (sim.inputs.CashReserve != null && !sim.inputs.cyclicEnabled)
+            ? Math.min(sim.inputs.CashReserve * sim.inflation, Math.max(0, balance.Cash)) : 0,
         grossUpIRA: yr.grossUpIRA, grossUpTax: yr.grossUpTax, extraConvCashTax: yr.extraConvCashTax,
         fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep,
         _ceilDedAddBack: yr._ceilDedAddBack,

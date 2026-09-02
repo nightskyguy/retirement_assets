@@ -7979,3 +7979,8 @@ DRIP, SurplusBrok, SumBrokIn stating the reconciliation; a `Scale` select on the
 labels. One test (408): the Brokerage identity to $1 every year, DRIP on and off, reserve routing
 on, reserve Off. Counts reconciled; same branch entry, stamp refreshed; core, ui, tests tokens
 bumped. Findings: "What BrokerageG contains".
+
+**PR #209 opened 2026-09-02** (`worktrees/planning-with-files-a83df3` -> `main`, eight commits, v11.1701-11.1703):
+the split family (P104b1), the gap-fill correction (P104b1x), the oracle re-baseline, Cash Reserve default 0
+with its column, the Brokerage columns and the chart scale, and the changelog wording per the user (the
+page entry restored to four bullets after a regex took the middle four with it).

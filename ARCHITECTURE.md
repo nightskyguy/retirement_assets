@@ -4,7 +4,7 @@ Visual reference for `retirement_optimizer.html` and everything it loads. Three 
 
 1. [Module dependency graph](#1-module-dependency-graph) - who loads whom, and the no-DOM boundary
 2. [Runtime data flow](#2-runtime-data-flow) - page load, recalc, render
-3. Feature call-flows - [`simulate()` year pipeline](#3-simulate-per-year-pipeline), [Optimizer sweep and Optimize Conversions](#4-runoptimizer--optimize-conversions), [Monte Carlo](#5-monte-carlo)
+3. Feature call-flows - [`simulate()` year pipeline](#3-simulate-per-year-pipeline), [Guyton-Klinger and the schedule carrier](#3a-guyton-klinger-and-the-schedule-carrier), [Optimizer sweep and Optimize Conversions](#4-runoptimizer--optimize-conversions), [Monte Carlo](#5-monte-carlo)
 
 Plus a [file reference table](#6-file-reference) with the entry points that matter.
 
@@ -164,7 +164,7 @@ flowchart TD
     H -->|alive| FEE["applyAUMFee<br/>advisor fee on the PRIOR Dec 31<br/>balances; never a taxable distribution"]
     FEE --> INC["computeIncome<br/>SS, pension, survivor benefit,<br/>RMD, QCD"]
     INC --> SPT["resolveSpendTarget<br/>spend goal, inflation, spendDelta"]
-    SPT --> PLAN["planPrimaryWithdrawals<br/>strategy dispatch:<br/>propwd / fixed / bracket / fixedpct<br/>ordered / GK"]
+    SPT --> PLAN["planPrimaryWithdrawals<br/>strategy dispatch: schedule / bracket+aca<br/>fixedpct / propwd / ordered / fixed<br/>GK has NO branch - falls to baseline<br/>see section 3a"]
     PLAN --> P1["applyPrimaryAndTaxPass1<br/>calculateTaxes, calcIRMAA"]
     P1 --> GAP["fillSpendingGap<br/>Cash -> Brokerage -> Roth"]
     GAP --> RESID["resolveResidualAndForcedIRA<br/>third pass, forced IRA draw"]
@@ -188,6 +188,111 @@ flowchart TD
 Break Even and Opp. Cost are a **full second simulation** with conversions removed, not a per-dollar
 approximation. `cfRefundIRA()` puts the suppressed withdrawals back into the IRA with a fixed-point
 tax recompute so the counterfactual pays its own larger RMD and IRMAA bills later.
+
+---
+
+## 3a. Guyton-Klinger, and the schedule carrier
+
+Two diagrams, because the pair is the point: GK's **spend** decision is elaborate and its **draw**
+decision does not exist, and the carrier below is what lets one be kept while the other is replaced.
+
+### The spend rule  (`optimizer_core.js`, inside `resolveSpendTarget`)
+
+Runs BEFORE `targetSpend` resolution, so gap fill, surplus routing, the per-year success test and the
+lifetime spend total all read one already-adjusted `sim.spendGoal`. Guarded by `_usesGKSpendRule`,
+which is true for `strategy: 'gk'` OR `spendRule: 'gk'` - that predicate is the whole separation.
+
+```mermaid
+flowchart TD
+    G{"_usesGKSpendRule(inputs)<br/>strategy 'gk' OR spendRule 'gk'"}
+    G -->|no| SKIP["spendGoal untouched<br/>(strategy's own spend path)"]
+    G -->|yes| Y0{"y == 0?"}
+    Y0 -->|yes| SEED["gkIWR = spendGoal / prevPortfolio<br/>the year-0 rate, LOCKED as reference<br/>never re-baselined"]
+    Y0 -->|no| INF{"Inflation rule<br/>priorReturn &lt; 0<br/>AND spendGoal/prevPortfolio &gt; gkIWR ?"}
+    INF -->|yes| NOCPI["skip the CPI raise<br/>label 'no-CPI'"]
+    INF -->|no| CPI["spendGoal *= 1 + yearInflation"]
+    NOCPI --> CWR["_cwr = spendGoal / prevPortfolio<br/>recomputed on the POSSIBLY-RAISED goal"]
+    CPI --> CWR
+    CWR --> BAND{"_cwr vs the band<br/>gkIWR * (1 +/- gkGuard)<br/>guard default 0.20"}
+    BAND -->|above| CAP["Capital preservation<br/>spendGoal *= 1 - gkAdjPct<br/>label '-10%cap'"]
+    BAND -->|below| PROS["Prosperity<br/>spendGoal *= 1 + gkAdjPct<br/>label '+10%pros'"]
+    BAND -->|inside| HOLD["no adjustment"]
+    CAP --> OUT["sim.spendGoal for the year<br/>gkAdjLabel -> the log"]
+    PROS --> OUT
+    HOLD --> OUT
+    SEED --> OUT
+```
+
+Each rail fires **once per year, at a fixed percentage**: a year 50% over the band cuts 10%, not 50%.
+And the band is measured against the **year-0** IWR forever, so it does not drift with the portfolio.
+
+### The draw that isn't there
+
+`planPrimaryWithdrawals` dispatches on `inputs.strategy`. There is no `'gk'` case. GK matches none of
+the branches and lands in the baseline `else`:
+
+```mermaid
+flowchart LR
+    D{"strategy dispatch"} -->|schedule| S1["ceiling / iraDraw / spend override"]
+    D -->|bracket, aca| S2["computeBracketCeiling -> fill to ceiling"]
+    D -->|fixedpct| S3["% of original IRA"]
+    D -->|propwd| S4["proportional + IRA boost"]
+    D -->|ordered| S5["empty - all in gap fill"]
+    D -->|fixed| S6["amortized reduce-to-goal"]
+    D -->|"gk (no case!)"| BASE["BASELINE else<br/>order IRA / Brokerage / Cash<br/>NO weights given"]
+    BASE --> CW["calculateWithdrawals<br/>weights derived FROM BALANCES<br/>= strictly pro-rata draw,<br/>sized only to the spending gap"]
+    CW --> NB["no ceiling, no bracket,<br/>no MAGI awareness"]
+```
+
+**GK is a spend rule wearing a strategy's clothes.** All of its intelligence is in the adjustment
+above; its draw is the least considered one in the engine. `research/PERFECT_FORESIGHT_ORACLE.md`
+(`P103d`, `P103e`) prices that: keeping the spend rule and replacing the draw is worth +$57k to +$800k
+of median real terminal wealth at 95-100% survival.
+
+### The carrier: compile a run, replay it under a different draw
+
+```mermaid
+flowchart TD
+    RUN["a finished run<br/>res.log + srcInputs"] --> C["compileScheduleFromRun(res, srcInputs)"]
+    C --> Q{"per log year:<br/>what WAS the decision?"}
+    Q -->|"BracketTarget &gt; 0"| CEIL["ordTarget + kind + rateBasis + gapFill<br/>exact for Fill Bracket / IRMAA"]
+    Q -->|"spend-adaptive (GK)"| DRAW["iraDraw = -volIRAwd, gapFill 'baseline'<br/>THE DRAW ONLY"]
+    Q -->|"quantity (fixedpct, fixed)"| QTY["iraDraw = -volIRAwd<br/>emitted even when ZERO"]
+    Q -->|otherwise| NUL["null - nothing this schedule can state"]
+
+    RUN --> O["scheduleOptionsForRun(srcInputs)"]
+    O --> OGK{"_usesGKSpendRule?"}
+    OGK -->|yes| ORULE["spendRule 'gk' + gkGuard + gkAdjPct<br/>THE RULE, never the numbers"]
+    OGK -->|no| OFB["scheduleFallback: lapses ? 'baseline' : 'none'"]
+
+    CEIL --> PLAN["schedulePlan array + options"]
+    DRAW --> PLAN
+    QTY --> PLAN
+    NUL --> PLAN
+    ORULE --> PLAN
+    OFB --> PLAN
+
+    PLAN --> REP["simulate with strategy 'schedule'"]
+    REP --> RG["spend: the GK block re-runs each year<br/>against THIS plan's own portfolio"]
+    REP --> RD{"_schedulePlanFor(inputs, y)"}
+    RD -->|"iraDraw set"| RQ["IRAwd = clamp(iraDraw, 0, curIRA)"]
+    RD -->|"ordTarget set"| RC["rates derived at rateBasis,<br/>fill to ceiling"]
+    RD -->|"null"| RF["scheduleFallback:<br/>'none' = draw nothing<br/>'baseline' = proportional"]
+```
+
+**Why the spend numbers are not carried.** Replaying GK's recorded spend under a different draw is a
+hindsight artifact - GK's own guardrails would have reacted to that different draw, so the recorded
+sequence is not a policy anyone could follow. The rule, re-evaluated each year against the portfolio
+the plan actually has, is followable. That is the difference between a scoring trick and a shippable
+arm, and it is why `spendRule` exists as a field separate from `strategy`.
+
+**Two traps the carrier already paid for**, both recorded at their call sites:
+
+- `-volIRAwd` is logged at the moment the branch decides, because a compiler that RECONSTRUCTS the
+  voluntary draw from downstream fields gets it wrong - two attempts, $39,117 and $191,737 short, in
+  different directions. **A carrier compiles from recorded decisions, not reconstructed outcomes.**
+- A zero draw is not an absent draw. An explicit zero and an absent entry are different objects
+  downstream, so quantity and spend-adaptive years are emitted even when the draw is zero.
 
 ---
 

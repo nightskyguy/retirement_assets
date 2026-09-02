@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.16f9"></a>
+<a id="11.16fa"></a>
 
-## 11.16f9
+## 11.16fa
 
 ### Annual Details now accounts for every dollar that leaves Cash
 
@@ -43,6 +43,11 @@ hide themselves when every year is zero, so the table does not fill up with empt
 
 The per-person splits stay as they were. An all-zero **Roth 2** means there is no second person
 rather than an empty account, so it still hides.
+
+### Internal structure changes
+
+This release also carries internal changes that do not affect any number your plan produces. They
+support work in progress, and the commit history has the detail.
 
 ---
 

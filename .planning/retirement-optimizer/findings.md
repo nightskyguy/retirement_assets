@@ -4208,3 +4208,35 @@ narrower evidence base removes the conditions under which a candidate fails, and
 happily find whatever the narrowing permits. The working rule is to assume a result is optimistic in
 proportion to how little was varied to get it, and to widen the axis you did NOT vary before
 believing a margin.
+
+
+## The MAGI-edge gate: provisionally failing, and one bug already found  *(2026-09-01, `P103c1` / `P75a`)*
+
+**Codes:** *edge* = a MAGI threshold the tax code cares about - a federal bracket top, a state cap, an
+IRMAA tier boundary, an LTCG bracket top, an ACA FPL multiple, or the ceiling a family is actively
+filling. *residency* = share of plan-years whose realized MAGI is within a tolerance of the nearest
+edge. *gate* = `P75a`, which says a search over the MAGI menu is only sensible if good plans land on
+it, and "mostly interior" means redesign.
+
+**Measured: 4.2% of 990 best-row plan-years within $1,000 of an edge**; 1.3% at $250, 29.2% at
+$10,000. ACA Cliff 9.1%, Guyton-Klinger 4.9%, Fill Bracket 3.4%, Ordered 1.5%. Fat regimes 4.2%.
+
+**Provisional, because the first version of this measurement was wrong.** It rebuilt the statutory
+tables by hand and scaled them by `inflationFactor` - the SPENDING inflation - when bracket
+indexation uses a different factor with a one-year lag (`P70`), and it ignored the `P92a` deduction
+add-back that lifts a federal ceiling above the statutory top. It reported **1.1% residency for Fill
+Bracket**, a family that fills a ceiling by construction. **That impossibility is what caught it**, and
+it is the third time this session the tell has been an implausibly clean number rather than an error.
+
+**After the fix, a direct check anchors it:** Fill Bracket 22%'s realized MAGI sits at **exactly $0**
+from its own logged `BracketTarget` in the years the ceiling binds - **6 of 33** in the cell tested.
+So plans DO land on their ceilings; ceilings just do not bind most years.
+
+**Which is the interesting part, if it holds.** A ceiling family is only ON its ceiling when the
+ceiling is the binding constraint - the rest of the time spending needs less, or the IRA is spent
+down, and MAGI floats free. Add that the best rows in the fat regimes are Guyton-Klinger, which has
+no ceiling at all, and the MAGI menu describes a minority of the decisions that matter.
+
+**Not acted on.** This verdict would send `P103c` back to the drawing board, and a measurement whose
+first version was wrong has not earned that. The confirming step is small: count binding years per
+family directly and check whether 6 of 33 generalizes.

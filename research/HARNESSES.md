@@ -40,6 +40,7 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `schedule_replay_harness.js` | **node** | P103b2: what can `strategy: 'schedule'` carry? Compiles each shipped family into a per-year schedule, replays it, and prints where the representation runs out. |
 | `schedule_oracle_harness.js` | **node** | P103b4: does the wider representation reach higher? Searches per-year ceilings against the same base row and budget as the conversions-only oracle. |
 | `gk_drawrule_harness.js` | **node** | P103d: which DRAW rule belongs under a Guyton-Klinger SPEND rule? Runs every shipped family with `spendRule: 'gk'` against GK deciding both. |
+| `magi_edge_gate_harness.js` | **node** | P103c/P75a GATE: do the best rows' realized MAGI land on the MAGI edge menu, or in the interior? Verdict PROVISIONAL. |
 | `gk_drawrule_mc_harness.js` | **node** | P103e: does that survive uncertainty? Re-runs the P103d candidates over Monte Carlo paths and reports medians, p10 and SURVIVAL rather than an argmax. |
 | `spend_objective_harness.js` | **node** | P103b5a: can the spend axis be searched, and under what objective? Traces the (spend, wealth) frontier and asks where each candidate objective's optimum lands. |
 | `endgame_harness.js` | **node** | P35n: once the IRA sits at its target, what should the tail draw from? |

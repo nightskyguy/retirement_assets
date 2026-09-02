@@ -7729,3 +7729,24 @@ ordered sequence.
 overstated the replacement; one uncontrolled fixture doubled a gap that does not move when
 controlled. Every narrowing of the evidence flattered the answer, in the same direction, every time.
 Recorded in findings as a working rule.
+
+
+## 2026-09-01 (cont.) - P103c's gate run, and stopping short of the verdict
+
+`P75a` is the gate on `P103c`: a search over the MAGI edge menu only makes sense if good plans land
+on that menu. New harness `.test_harnesses/magi_edge_gate_harness.js`.
+
+**Measured 4.2% of 990 best-row plan-years within $1,000 of an edge** (1.3% at $250, 29.2% at
+$10,000). `U-P1`/`U-P2` WRONG, `U-P3` RIGHT - which reads as the gate FAILING.
+
+**I am not acting on it.** The first version of this measurement was wrong - hand-rebuilt statutory
+tables scaled by the spending inflation factor rather than the CPI indexation one, ignoring the P92a
+add-back - and it reported 1.1% for Fill Bracket, a family that fills a ceiling by construction. The
+impossibility caught it. After the fix a direct check confirms Fill Bracket 22% sits at exactly $0
+from its own BracketTarget in the years the ceiling binds, 6 of 33 in the cell tested.
+
+So the low residency now looks real, and for an interesting reason: ceilings bind in a minority of
+years even for families built to fill them, and the best rows in the fat regimes are GK, which has no
+ceiling. But a verdict that discards planned work should not rest on a measurement whose first
+version was wrong. **Recorded as PROVISIONAL in the plan with the confirming step named** - count
+binding years per family and check 6/33 generalizes. That is the user's call to make, not mine.

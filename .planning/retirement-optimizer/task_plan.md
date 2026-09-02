@@ -302,7 +302,28 @@ a research instrument and a ship-time check.
       Correcting one fixture at a time moved the confound instead of removing it, and produced two
       false positives that survived a full write-up and a commit. A fixture nobody chose deliberately
       has to be crossed with the others, not fixed in isolation.
-- [ ] **P103c** - **the unified search** (was `P75a`-`P75c`; absorbs parked `P5`). `P75`'s control
+- [ ] **P103c1 GATE RUN 2026-09-01, verdict PROVISIONAL - NEEDS THE USER'S CALL.** Harness
+      `.test_harnesses/magi_edge_gate_harness.js`. `P75a` asks whether the best rows' realized MAGI
+      lands ON the MAGI menu, because `P103c`'s whole control variable is a search over that menu;
+      "mostly interior" means stop and redesign.
+      **Measured: 4.2% of 990 best-row plan-years sit within $1,000 of an edge** (1.3% at $250, 29.2%
+      at $10,000). By family: ACA Cliff 9.1%, GK 4.9%, Fill Bracket 3.4%, Ordered 1.5%. In the fat
+      8%-spend regimes, 4.2%. `U-P1` and `U-P2` WRONG, `U-P3` RIGHT.
+      **WHY IT IS ONLY PROVISIONAL.** The first version of this measurement was WRONG: it rebuilt the
+      statutory tables by hand and scaled them by the SPENDING inflation factor rather than the CPI
+      indexation factor (the log carries both, and `P70` gives indexation a one-year lag), and it
+      reported 1.1% for Fill Bracket - a family that fills a ceiling BY CONSTRUCTION. The
+      impossibility of that is what exposed it. Edges now come off the log (`FedCap`, `StateCap`,
+      `BracketTarget`, `-cpiFactor`), and a direct check confirms Fill Bracket 22% sits at **exactly
+      $0** from its own `BracketTarget` in the years the ceiling binds - **6 of 33** in the cell
+      tested.
+      **So the low number now looks real, for a reason that is itself interesting:** a ceiling binds
+      in a MINORITY of years even for the family built to fill it, and the best rows are mostly GK,
+      which has no ceiling at all. **But this verdict would send `P103c` back to the drawing board,
+      and it should not rest on a measurement whose first version was wrong.** Next step before
+      acting: count binding years per family directly and confirm 6/33 generalizes.
+- [ ] **P103c** - **the unified search** (was `P75a`-`P75c`; absorbs parked `P5`). **GATE: see
+      `P103c1` above - PROVISIONALLY FAILING.** Do not build until that is confirmed. `P75`'s control
       variable - two per-year income targets, ordinary income realized and LTCG realized, searched
       over the ~12-edge MAGI menu - on the oracle's plumbing and in the oracle's role as ceiling.
       `P75a` stays the gate (edge residency of the best swept rows' realized MAGI; "mostly interior"

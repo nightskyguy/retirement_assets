@@ -57,8 +57,8 @@ reserve (Cash Reserve Off or 0).
 
 ### Proportional and Guyton-Klinger plans were withdrawing, and converting, money they did not need
 
-**Behavior change - saved plans and shared links that use Proportional or Guyton-Klinger will not
-reproduce their earlier numbers.** When a year's spending was funded partly from Cash or Roth, the
+**Proportional and Guyton-Klinger strategies contained an error that has been corrected. The error
+was small, but meaningful.** When a year's spending was funded partly from Cash or Roth, the
 tool counted that money as spent but not as available, so it drew the same amount a second time
 from the IRA and Brokerage and returned the excess at year end. With *Max Conversion* on, the
 excess was converted to Roth instead of returned: a Proportional +0% plan, which asks for no

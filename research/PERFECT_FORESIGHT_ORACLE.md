@@ -244,6 +244,65 @@ should use the bare run and say so.
 after-tax wealth in four of these six cells, and changes which strategy wins. Whether the shipped
 default should change is a user-visible question and is NOT decided here.
 
+## P103b2 - what a flexible schedule can actually carry
+
+**Run:** 2026-09-01, `node .test_harnesses/schedule_replay_harness.js`. Engine change:
+`strategy: 'schedule'`, a research input, default-off and node-only, on the `oracleWithdrawalPlan`
+discipline. Node suites **389/61/22** (7 new tests), every pre-existing test bit-identical.
+
+**What it is.** A per-year decision vector instead of a named rule. Each entry is
+`{ ordTarget, kind, rateBasis? }`: the year's ceiling on realized ordinary income, which income
+definition it is spent against (`federal` / `irmaa` / `aca`, because ACA MAGI counts the whole Social
+Security benefit and the other two count at most 85%), and optionally the income level the marginal
+rate lookups are keyed on.
+
+**Targets, not dollars, and the reason was already in the file.** From the `oracleWithdrawalPlan`
+comment: *"Fractions, not dollars: dollar plans desync from endogenous taxes/growth."* A per-year
+dollar withdrawal is chosen against the previous iteration's tax outcome, and taxes are endogenous,
+so it stops being feasible. An income target is solved inside the year. **That makes `ordTarget` the
+same control variable `P75`/`P103c` proposed for the unified search** - the flexible carrier and the
+search were planned as separate work and are one object.
+
+**The acceptance bar is replay identity, not a gap number.** Compile a shipped family's realized
+decisions into a schedule, re-run, require agreement to the dollar:
+
+| arm | what it decides per year | scheduled yrs | delta NW | verdict |
+|---|---|---|---|---|
+| Fill Bracket 12% / 22% / 24% | ceiling | 33 / 33 | **$0** | **EXACT** |
+| IRMAA tier 0 / tier 2 | ceiling | 33 / 33 | **$0** | **EXACT** |
+| ACA 400% FPL | ceiling, until it lapses | 3 / 33 | −$841,327 | partial |
+| IRA Draw 5% | a share of the IRA | 0 | −$1,182,054 | carries nothing |
+| Proportional +10% | a spending boost | 0 | −$823,742 | carries nothing |
+| Ordered CBIR | an account sequence | 0 | −$477,380 | carries nothing |
+| Guyton-Klinger | the spend itself | 0 | +$216,996 | carries nothing |
+| Reduce 17 yrs | an amortization | 0 | −$1,469,870 | carries nothing |
+
+**`rateBasis` exists because the replay found a real asymmetry in the engine.** IRMAA and ACA
+ceilings derive their marginal rates at the final limit; a federal bracket ceiling derives them at
+the STATUTORY bracket top, before the `P92a` deduction add-back lifts the limit and before the state
+min can pull it down. Two different numbers, correctly. Deriving at the target instead made a Fill
+Bracket 22% replay pick the 24% marginal rate: **$0.34 adrift in year 8, compounding to $121 over 33
+years.** Nothing had ever needed the distinction named until a schedule had to reproduce a decision
+exactly. It is now returned by `computeBracketCeiling`, logged as `RateBasis`, and pinned by a test
+that asserts stripping it re-breaks the replay.
+
+**Prediction `R-P1` (a family is either fully expressible or not at all) - WRONG**, and the
+counterexample is the useful part. ACA is partial: 3 of 33 years. Its cap lapses at Medicare
+eligibility, and a lapsed year has no ceiling and falls through to baseline Proportional. The
+schedule can say "fill to X" and can say nothing at all, but an absent entry currently means "draw
+nothing voluntarily", not "do what the family would have done". So the coverage boundary is not
+ceiling-versus-quantity; it is **that the schedule has no way to state what happens when there is no
+ceiling.**
+
+**What the gaps name, which is the point of running it.** Three fields, in the order the evidence
+ranks them: a **quantity** lever (a share of the IRA, an amortization, a boost - none of them income
+targets); a **fallback** for unscheduled years (the ACA case); and an account **sequence**, which
+`oracleWithdrawalPlan` already expresses and the schedule has not absorbed. `P103b3` adds
+total-conversion control on top of these.
+
+**Scope, stated plainly:** this is a representation, not a search. Nothing here optimizes anything,
+and the search-cost problem in `P103b4` is untouched - ~130 axes against today's ~33.
+
 ## P51f - trajectory post-mortem (observation only, ships nothing)
 
 - **No harvest-like alternation** (prediction `S3-P3` WRONG again: 1/6 thirds/brokheavy cells with

@@ -3811,3 +3811,47 @@ the arms differ in and equalize everything that is not the variable under test.*
 **A product question this opens, not decided here:** leaving Cash Reserve blank costs $84k-$120k in
 four of six cells and changes the recommended strategy. Whether the shipped default should change is
 user-visible and needs its own measurement across the wider Stage-1 grid (`P103b1x`).
+
+
+## `strategy: 'schedule'` and the shape of what the engine cannot say  *(2026-09-01, `P103b2`)*
+
+**Codes:** *schedule* = `strategy: 'schedule'`, a per-year decision vector replacing a named rule.
+*ordTarget* = that year's ceiling on realized ordinary income, in nominal dollars. *rateBasis* = the
+income level the marginal-rate lookups are keyed on. *replay identity* = compile a family's realized
+decisions into a schedule, re-run, require agreement to the dollar. *R-P1* = the prediction that a
+family is either fully expressible as a schedule or not at all.
+
+Built, tested (suites **389**/61/22, every pre-existing test bit-identical), and measured by
+`.test_harnesses/schedule_replay_harness.js`.
+
+**Targets, not dollars, and the engine had already written down why.** From the
+`oracleWithdrawalPlan` comment: *"Fractions, not dollars: dollar plans desync from endogenous
+taxes/growth."* A per-year dollar withdrawal is chosen against the previous iteration's tax outcome
+and taxes are endogenous, so it stops being feasible; an income target is solved inside the year.
+**This makes `ordTarget` identical to the control variable `P75`/`P103c` proposed for the unified
+search.** The flexible carrier and the search were two plans for one object.
+
+**Replay identity: the ceiling families reproduce themselves exactly.** Fill Bracket 12/22/24% and
+IRMAA tier 0/2 all land at **$0** on final net worth and on every year's wealth. IRA Draw,
+Proportional, Ordered, Guyton-Klinger and Reduce compile to **zero scheduled years** - their per-year
+decision is a quantity, a sequence, or the spend itself.
+
+**`rateBasis` is a real asymmetry the replay surfaced, not a workaround.** IRMAA and ACA ceilings
+derive marginal rates at their final limit; a federal bracket ceiling derives them at the STATUTORY
+bracket top, before the `P92a` deduction add-back lifts the limit and before the state min pulls it
+down. Both correct, and nothing had needed the distinction named until a schedule had to reproduce a
+decision exactly. Deriving at the target instead picked the next bracket up: **$0.34 adrift in year
+8, compounding to $121 over 33 years.**
+
+**`R-P1` WRONG, and the counterexample is worth more than the prediction.** ACA is partial - 3 of 33
+years - because its cap lapses at Medicare eligibility and a lapsed year falls through to baseline
+Proportional. An absent schedule entry means "draw nothing voluntarily", which is a different
+statement. **The coverage boundary is not ceiling-versus-quantity. It is that the schedule can say
+"fill to X" and can say nothing, but cannot say what to do when there is no ceiling.**
+
+**The generalizable lesson, and it is the reason to build a carrier at all.** "The engine is imbued
+with specific withdrawal strategies" was an impression until something tried to restate every
+strategy in one vocabulary. Replay identity converted it into a list: an income target, a quantity,
+a fallback, a sequence. **A representation that must reproduce the thing it replaces is a
+measurement instrument, not just plumbing** - it fails loudly and names the missing concept, where a
+gap table would have shown a number and no reason.

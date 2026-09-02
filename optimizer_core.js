@@ -908,6 +908,14 @@ function nominalRateAtLimit(entity, status, limit, inflation, rateCreep = 1) {
 // every year, so its average rate cannot drift. It drifts only when two clocks disagree.
 function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, alive1, alive2, fedRateCreep = 1, stateRateCreep = 1, medicareRate = 1, dedAddBack = 0) {
     let limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit;
+    // P103b2. The income level the RATE lookups were done at, which is not always the ceiling
+    // this function returns. IRMAA and ACA derive their rates at the final limit; the federal
+    // branch derives at the STATUTORY bracket top, before the P92a deduction add-back lifts the
+    // limit and before the state min can pull it down. Two different numbers, on purpose - the
+    // ceiling is a MAGI target, the rate lookup wants the bracket the plan is actually in. Nothing
+    // read it until a schedule had to reproduce a family's decisions exactly; without it a Fill
+    // Bracket 22% replay picked the 24% marginal rate and drifted $121 over 33 years.
+    let rateBasis;
     // P87c. WHICH of the three ceilings this is, decided here and returned, because callers need it
     // and the test they would otherwise write is not the same test. Reading `inputs.stratACAMultiple`
     // at a call site would miss that the IRMAA branch wins when both are set, and would also answer
@@ -942,6 +950,7 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
         marginalStateTaxRate = stAtLimit.rate * stateRateCreep;
         nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, cpiRate, stateRateCreep);
+        rateBasis = limit;
     } else if ((inputs.stratACAMultiple ?? 0) > 0) {
         kind = 'aca';
         // ACA FPL cliff mode: fill MAGI up to a multiple of the Federal Poverty Level.
@@ -960,6 +969,7 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
         marginalStateTaxRate = stAtLimit.rate * stateRateCreep;
         nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, cpiRate, stateRateCreep);
+        rateBasis = limit;
     } else {
         kind = 'federal';
         // Federal bracket ceiling mode (original logic)
@@ -974,6 +984,7 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         marginalStateTaxRate = stLimit.rate * stateRateCreep;
         stateLimit = stLimit.limit;
         nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, cpiRate, stateRateCreep);
+        rateBasis = limit;   // the statutory top, captured BEFORE dedAddBack and the state min below
 
         // P92a. A federal bracket top is a TAXABLE-income threshold; every caller of this function
         // spends the result as a MAGI ceiling. Raising it by the year's deduction puts the two on
@@ -993,7 +1004,7 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         limit = Math.min(stateLimit, limit);
     }
 
-    return { limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit, kind };
+    return { limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit, kind, rateBasis };
 }
 
 let simulationCount = 0;
@@ -1159,6 +1170,8 @@ function buildSimYearLogRecord(p) {
         'FedCap': p.tax.fedLimit,
         'StateCap': p.tax.stLimit,
         'BracketTarget': p.bracketTarget,
+        'RateBasis': p.rateBasis,          // P103b2: what the marginal-rate lookups were keyed on
+
         'BracketOverage': p.bracketOverage,
         // P88c. The share of BracketOverage caused by a voluntary conversion rather than by
         // spending that could not be funded inside the ceiling. Hidden ('-' prefix) because the
@@ -1357,8 +1370,12 @@ function beginYear(sim, yr) {
     const _a1 = sim.currentYear - sim.birthyear1, _a2 = sim.currentYear - sim.birthyear2;
     const _acaLive = inputs.strategy === 'aca'
         && !acaCapLapsed(_a1, _a2, _a1 <= inputs.die1, _a2 <= inputs.die2);
+    // A scheduled year-0 ceiling implies a conversion for the same reason a bracket ceiling does:
+    // it creates room above spending. Without this a schedule replaying a bracket family would pick
+    // the opposite year-0 withdrawal MONTH and diverge on timing alone.
+    const _sched0 = inputs.strategy === 'schedule' && _schedulePlanFor(inputs, 0) != null;
     const _stratImpliesConversion =
-          ((inputs.strategy === 'bracket' || _acaLive) && !_convSuppressedThisYear(inputs, 0))
+          ((inputs.strategy === 'bracket' || _acaLive || _sched0) && !_convSuppressedThisYear(inputs, 0))
        || _extraConvAmountFor(inputs, 0) > 0;
     const _prevConv    = y > 0 ? (log[y - 1].rothConv ?? 0) : 0;
     yr._useEarly    = y === 0 ? _stratImpliesConversion : (_prevConv > 1000);
@@ -1700,7 +1717,11 @@ function resolveSpendTarget(sim, yr) {
     // `IRAwd = Math.min(yr.curIRA, room)` to `yr.curIRA`, draining the whole above-goal IRA in the
     // crossing year. That is a cliff created by the fix, not a policy.
     yr.isACAStrategy = inputs.strategy === 'aca' && !yr.acaLapsed;
-    yr.isBracketStrategy = inputs.strategy === 'bracket' || inputs.strategy === 'fixedpct' || yr.isACAStrategy;
+    // 'schedule' joins this set because it fills a ceiling exactly as the bracket families do:
+    // it must take the same gap-fill cascade (Cash -> Brokerage -> Roth) and the same
+    // targetSpend treatment, or a schedule could not reproduce the family it was compiled from.
+    yr.isBracketStrategy = inputs.strategy === 'bracket' || inputs.strategy === 'fixedpct'
+        || inputs.strategy === 'schedule' || yr.isACAStrategy;
     yr.isOrderedStrategy = inputs.strategy === 'ordered';
 
     // P92a. The deduction computeBracketCeiling adds back, so that "fill the 22% bracket" reaches the
@@ -1857,6 +1878,76 @@ function resolveSpendTarget(sim, yr) {
 //                                   cascades through the given order (weight [1,0,...]), so
 //                                   'IRA' placed last is a true emergency backstop
 // Returns a { order, weight } withdrawal-strategy fragment, or null for "no override".
+// P103b2: `strategy: 'schedule'` -- the flexible carrier. Research input, default-off, node-only,
+// on the same discipline as oracleWithdrawalPlan. inputs.schedulePlan is an array indexed by plan
+// year; each entry is { ordTarget, kind } or null/undefined.
+//
+//   ordTarget  the year's ceiling on realized ordinary income, in NOMINAL dollars. This is the same
+//              quantity computeBracketCeiling returns as `limit`, which is why a schedule can carry
+//              what a bracket family decided. It is a TARGET, not a dollar withdrawal: the engine
+//              solves the draw against the year's own realized taxes, which is the reason the
+//              oracleWithdrawalPlan comment below gives for refusing dollar plans. A per-year dollar
+//              amount is chosen against the PREVIOUS iteration's tax outcome and taxes are
+//              endogenous, so it stops being feasible; a target is solved inside the year.
+//   kind       which income definition the target is spent against: 'federal' | 'irmaa' | 'aca'.
+//              Not cosmetic - ACA MAGI counts the WHOLE Social Security benefit while federal and
+//              IRMAA MAGI count at most 85% of it, so the same ordTarget means two different draws.
+//              Defaults to 'federal'. Same three values, same meaning, as computeBracketCeiling's.
+//
+// An ABSENT entry means "nothing scheduled this year": no voluntary IRA draw, and spending falls
+// through to the gap-fill cascade. That is the Ordered convention, and it is the only reading that
+// does not invent a decision the schedule did not make. A PRESENT but malformed entry throws -- a
+// typo in a research input must not be silently read as a quiet year.
+function _schedulePlanFor(inputs, y) {
+    if (!Array.isArray(inputs.schedulePlan)) return null;
+    const e = inputs.schedulePlan[y];
+    if (e == null) return null;
+    if (typeof e !== 'object') {
+        throw new Error('schedulePlan[' + y + '] must be an object or null, got ' + typeof e);
+    }
+    const t = e.ordTarget;
+    if (!Number.isFinite(t) || t <= 0) {
+        throw new Error('schedulePlan[' + y + '].ordTarget must be a finite positive number, got ' + t);
+    }
+    const kind = e.kind ?? 'federal';
+    if (kind !== 'federal' && kind !== 'irmaa' && kind !== 'aca') {
+        throw new Error('schedulePlan[' + y + '].kind must be federal|irmaa|aca, got ' + kind);
+    }
+    // rateBasis: the income level the marginal-rate lookups are keyed on, defaulting to the target.
+    // They are the same number for an IRMAA or ACA ceiling and DIFFERENT for a federal bracket one,
+    // whose rates are read at the statutory top while its ceiling is lifted by the deduction
+    // add-back. A searcher never has to supply it; a compiler that wants exact replay does.
+    const rb = e.rateBasis ?? t;
+    if (!Number.isFinite(rb) || rb <= 0) {
+        throw new Error('schedulePlan[' + y + '].rateBasis must be a finite positive number, got ' + rb);
+    }
+    return { ordTarget: t, kind, rateBasis: rb };
+}
+
+// P103b2. Compile a finished run into the schedulePlan that reproduces it. One shared compiler,
+// because a harness that rolled its own would drift from the accessor above and the drift would look
+// like a modeling result. Give it the run and the inputs that produced it.
+//
+// WHAT IT CAN AND CANNOT CARRY, measured rather than assumed (research/PERFECT_FORESIGHT_ORACLE.md,
+// P103b2). Exact, to the dollar, for the CEILING families - Fill Bracket at any rate, IRMAA at any
+// tier - because their whole per-year decision IS the ceiling. It carries only the un-lapsed years
+// of an ACA plan, since a lapsed year has no ceiling and falls through to baseline Proportional.
+// And it carries NOTHING of IRA Draw, Proportional, Ordered, Guyton-Klinger or Reduce: their
+// decision is a QUANTITY (a share of the IRA, a spending boost, an account sequence, an
+// amortization), not an income target, so every year compiles to null and the replay draws nothing.
+// That is the honest coverage of `ordTarget`, and it is what the next field has to fix.
+function compileScheduleFromRun(res, srcInputs) {
+    // Kind precedence mirrors computeBracketCeiling's own: IRMAA wins when both are set.
+    const kind = (srcInputs.stratIRMAATier ?? -1) >= 0 ? 'irmaa'
+        : (srcInputs.stratACAMultiple ?? 0) > 0 ? 'aca' : 'federal';
+    return (res.log || []).map(e => {
+        const t = e['BracketTarget'] ?? 0;
+        if (!(t > 0)) return null;              // no ceiling that year = nothing scheduled
+        const rb = e['RateBasis'];
+        return (rb > 0 && rb !== t) ? { ordTarget: t, kind, rateBasis: rb } : { ordTarget: t, kind };
+    });
+}
+
 function _oracleWithdrawalPlanFor(inputs, y) {
     if (!Array.isArray(inputs.oracleWithdrawalPlan)) return null;
     const e = inputs.oracleWithdrawalPlan[y];
@@ -1907,6 +1998,11 @@ function planPrimaryWithdrawals(sim, yr) {
     const _oracleW = _oracleWithdrawalPlanFor(inputs, y);
     if (_oracleW && inputs.cyclicEnabled) {
         throw new Error('oracleWithdrawalPlan cannot compose with cyclicEnabled (research inputs, pick one)');
+    }
+    // Same rule for the schedule: cyclic owns the withdrawal decision on its harvest years, so a
+    // schedule composed with it would be silently ignored in exactly the years it mattered most.
+    if (inputs.strategy === 'schedule' && inputs.cyclicEnabled) {
+        throw new Error('strategy schedule cannot compose with cyclicEnabled (research inputs, pick one)');
     }
     if (_oracleW) {
         yr.withdrawStrategy.order = _oracleW.order;
@@ -2044,8 +2140,42 @@ function planPrimaryWithdrawals(sim, yr) {
     // yr.isACAStrategy rather than inputs.strategy === 'aca': once the cap has lapsed this chain
     // must NOT match, so the year falls through fixedpct/propwd/ordered (none of which name 'aca')
     // to the baseline `else` below - Proportional 0%, which is the intended successor.
+    } else if (inputs.strategy === 'schedule') {
+        // P103b2. The ceiling comes from the schedule instead of computeBracketCeiling; everything
+        // downstream of the ceiling is the bracket branch's arithmetic, unchanged, so the P87c
+        // Social Security basis fix applies here too.
+        const _e = _schedulePlanFor(inputs, y);
+        if (!_e) {
+            yr.withdrawals = {};                  // unscheduled year: gap-fill handles spending
+        } else {
+            yr.limit = _e.ordTarget;
+            yr.ceilingKind = _e.kind;
+            // Rates are derived at rateBasis, which DEFAULTS to the target and is the same number
+            // for an IRMAA or ACA ceiling. A federal-bracket ceiling is the odd one out: its rates
+            // are read at the statutory bracket top while its limit is lifted by the P92a deduction
+            // add-back, so deriving at the target picks the NEXT bracket up. Measured before it was
+            // fixed: Fill Bracket 22% replayed at 24% and drifted $121 over 33 years, first visible
+            // in year 8 at $0.34 and compounding.
+            yr.rateBasis = _e.rateBasis;
+            const _rb = yr.rateBasis;
+            const _fedAt = findUpperLimitByAmount('FEDERAL', yr.status, _rb, sim.cpiRate);
+            yr.marginalFedTaxRate = _fedAt.rate * yr.fedRateCreep;
+            yr.nominalFedTaxRateAtLimit = nominalRateAtLimit('FEDERAL', yr.status, _rb, sim.cpiRate, yr.fedRateCreep);
+            const _stAt = findUpperLimitByAmount(STATEname, yr.status, _rb, sim.cpiRate);
+            yr.marginalStateTaxRate = _stAt.rate * yr.stateRateCreep;
+            yr.nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, yr.status, _rb, sim.cpiRate, yr.stateRateCreep);
+            yr.stateLimit = _stAt.limit;
+            yr.bracketTarget = yr.limit;
+            const _ssCeilRoom = (yr.ceilingKind === 'aca')
+                ? yr.limit - yr.fixedInc
+                : nonSSIncomeForMAGI(yr.status, yr.limit, yr.fixedInc);
+            const iRAbracketRoom = Math.max(0, _ssCeilRoom - yr.taxableInc - yr.taxableInterest - yr.taxableDividends);
+            const IRAwd = Math.min(yr.curIRA, iRAbracketRoom);
+            yr.withdrawals = { IRA: IRAwd, netAmount: IRAwd };
+        }
+
     } else if (inputs.strategy === 'bracket' || yr.isACAStrategy) {
-        ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit, kind: yr.ceilingKind } =
+        ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit, kind: yr.ceilingKind, rateBasis: yr.rateBasis } =
             computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack));
 
         yr.bracketTarget = yr.limit;
@@ -3394,7 +3524,7 @@ function logYear(sim, yr) {
         surplus: yr.surplus, totalRMD: yr.totalRMD, qcd1: yr.qcd1, qcd2: yr.qcd2, taxableDividends: yr.taxableDividends, taxableInterest: yr.taxableInterest,
         netWithdrawals: yr.netWithdrawals, rmd1: yr.rmd1, rmd2: yr.rmd2, totalConverted: yr.totalConverted, tax: yr.tax, IRMAA: yr.IRMAA, IRMAATier: yr.IRMAATier, medicareBase: yr.medicareBase, cpiRate: sim.cpiRate,
         iraVolSpend1: yr.iraVolSpend1, iraVolSpend2: yr.iraVolSpend2, iraConvGross1: yr.iraConvGross1, iraConvGross2: yr.iraConvGross2,
-        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
+        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, rateBasis: yr.rateBasis, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
         balance: balance, nominalTaxRate: sim.nominalTaxRate, totalWealth: yr.totalWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
         gains: yr.gains, rmd1Pct: yr.rmd1Pct, subCycleLabel: yr.subCycleLabel, convNetValue: null, excessNetValue: null,
         incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,
@@ -5348,7 +5478,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, compileScheduleFromRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -5356,7 +5486,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, compileScheduleFromRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

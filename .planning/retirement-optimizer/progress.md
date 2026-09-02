@@ -7414,3 +7414,40 @@ to findings as the generalizable form.
 only routing-controlled yardstick, so `P103d` uses it. New item `P103b1x`, deliberately NOT decided
 here: blank Cash Reserve costs $84k-$120k in four of six cells and changes the recommendation, so
 whether the shipped default should change is a product question needing its own measurement.
+
+
+## 2026-09-01 (cont.) - P103b2: the schedule carrier, and what it proved cannot be said
+
+PR [#208](https://github.com/nightskyguy/retirement_assets/pull/208) opened for the two research
+commits, then straight into the build the user asked for.
+
+`strategy: 'schedule'` shipped as a research input - default-off, node-only, `oracleWithdrawalPlan`
+discipline. Per-year `{ ordTarget, kind, rateBasis? }`. Suites **389**/61/22, seven new tests, every
+pre-existing test bit-identical. Harness `.test_harnesses/schedule_replay_harness.js`.
+
+**Reading the code to scope it produced the design.** `optimizer_core.js`: *"Fractions, not dollars:
+dollar plans desync from endogenous taxes/growth."* So the schedule takes income TARGETS, solved
+inside the year - which is exactly `P75`/`P103c`'s control variable. Two plans, one object.
+
+**Replay identity holds where the family's decision IS a ceiling.** Fill Bracket 12/22/24% and IRMAA
+tier 0/2: **$0** on every column. Five other families compile to zero scheduled years.
+
+**The replay earned its keep twice.**
+- It found `rateBasis`: federal bracket ceilings derive marginal rates at the STATUTORY top while
+  their limit is lifted by the `P92a` add-back. Deriving at the target picked 24% instead of 22% -
+  $0.34 in year 8, **$121 over 33 years**. Now returned by `computeBracketCeiling`, logged, and
+  pinned by a test that asserts stripping it re-breaks the replay.
+- It broke my own prediction `R-P1`. ACA is partial at 3/33 years, because its cap lapses and a
+  lapsed year falls through to baseline Proportional. **The boundary is not ceiling-versus-quantity;
+  the schedule cannot state what to do when there is no ceiling.**
+
+**`P103b3` now has four fields, not one:** total-conversion control, plus the quantity lever, the
+unscheduled-year fallback and the account sequence that this measured as missing.
+
+**Two process notes.** A patch script written with `io.open(..., newline='')` silently converted
+`optimizer_core.js` from CRLF to LF; git's diff stayed clean because the repo stores LF, but the
+working copy no longer matched a fresh checkout. Every patch script now restores CRLF explicitly,
+and `.githooks/**` is edited in binary because `.gitattributes` pins it to LF. And per the cache-token
+rule from earlier today, the two `?v=` tokens naming `optimizer_core.js` and the test loader moved to
+`1116f4`, plus the stale one in `standalone/IncomeTaxPlanner.html`. No changelog entry and no
+`<title>` bump: the schedule is invisible to an ungated user.

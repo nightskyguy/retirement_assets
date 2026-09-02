@@ -11,7 +11,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P103 | `P103a`+`P103b1` DONE: gap 4.35% -> 1.58% (2.03% routing-controlled); **nothing beats the ceiling once routing is held constant** | `P103b2` |
+| **O0** | P103 | `a`,`b1`,`b2` DONE: gap re-baselined; routing was a confound; `strategy:'schedule'` replays the ceiling families **to the dollar** | `P103b3` |
 | **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
@@ -162,26 +162,37 @@ a research instrument and a ship-time check.
       the tool would recommend. Whether the shipped default should change from blank (legacy
       all-to-cash) is a product question with a changelog entry attached, not a research one. Needs
       its own measurement across the wider Stage-1 grid before anyone proposes a new default.
-- [ ] **P103b2** - **`strategy: 'schedule'`, the flexible carrier.** A research strategy, default-off
-      and node-only, on the `oracleWithdrawalPlan` discipline. One per-year entry:
-      `{ ordTarget, ltcgTarget, split, convert, surplusTo }` - gross ordinary income to realize,
-      long-term gains to realize, the account split (reusing the existing
-      `{IRA,Brokerage,Cash,Roth}` / `{seq}` / `{prop}` entry forms), the TOTAL conversion, and where
-      the year's surplus lands. Engine keeps enforcing the RMD floor, the spend need and
-      non-negative balances; an infeasible entry produces a shortfall and the candidate is discarded,
-      which is the rule the oracle already uses.
-      **Targets, NOT dollars, and the reason is already in the file.** `optimizer_core.js:1849`:
-      *"Fractions, not dollars: dollar plans desync from endogenous taxes/growth; weights are always
-      feasible."* A per-year dollar amount is chosen against the previous iteration's tax outcome and
-      taxes are endogenous, so it stops being feasible. An income target is solved INSIDE the year
-      against that year's realized taxes. That is exactly `P75`/`P103c`'s control variable, so the
-      flexible strategy and the unified search are **the same object** - they had been planned as
-      separate work.
-      **Acceptance is a replay-identity test, not a gap number:** compile each shipped family's
-      realized decisions into a schedule, re-run, assert **bit-identical**. A family that cannot
-      reproduce itself proves the representation is wrong, and it fails in a test rather than in a
-      gap table. Plus: malformed input throws or no-ops, and every existing test is bit-identical.
-- [ ] **P103b3** - **total-conversion control** as the schedule's `convert` field. Today
+- [x] **P103b2 DONE 2026-09-01** - `strategy: 'schedule'` is built, and the acceptance bar is met
+      for the families it covers. Research input, default-off, node-only, on the
+      `oracleWithdrawalPlan` discipline. Per-year entry `{ ordTarget, kind, rateBasis? }`; suites
+      **389**/61/22 with every pre-existing test bit-identical. Harness:
+      `.test_harnesses/schedule_replay_harness.js`. Report: `PERFECT_FORESIGHT_ORACLE.md`, `P103b2`.
+      **Replay identity, measured:** Fill Bracket 12/22/24% and IRMAA tier 0/2 reproduce themselves
+      **to the dollar, $0 on every column**. IRA Draw, Proportional, Ordered, Guyton-Klinger and
+      Reduce compile to **nothing** - their per-year decision is a quantity, a sequence or the spend
+      itself, not an income target.
+      **`rateBasis` exists because the replay found a real asymmetry.** IRMAA and ACA ceilings derive
+      marginal rates at the final limit; a federal bracket ceiling derives them at the STATUTORY top,
+      before the `P92a` add-back and the state min. Deriving at the target made Fill Bracket 22%
+      replay at the 24% rate: $0.34 adrift in year 8, **$121 over 33 years**. Now returned by
+      `computeBracketCeiling`, logged as `RateBasis`, and pinned by a test that asserts stripping it
+      re-breaks the replay.
+      **Prediction `R-P1` WRONG, and the counterexample redraws the boundary.** ACA is partial, 3 of
+      33 years: its cap lapses at Medicare eligibility and a lapsed year falls through to baseline
+      Proportional. An absent entry currently means "draw nothing voluntarily", not "do what the
+      family would have done". So the limit is not ceiling-versus-quantity - it is that **the schedule
+      cannot state what happens when there is no ceiling.**
+      **Three fields the evidence names for `P103b3`, in rank order:** a **quantity** lever (share of
+      IRA / amortization / boost); a **fallback** for unscheduled years; an account **sequence**,
+      which `oracleWithdrawalPlan` already expresses and the schedule has not absorbed.
+      **Scope, stated plainly:** a representation, not a search. Nothing here optimizes anything.
+- [ ] **P103b3** - **four fields, not one.** `P103b2` measured three more before this item's own:
+      a **quantity** lever (a share of the IRA, an amortization, a spending boost - none of them
+      income targets, and between them they are why five shipped families compile to nothing), a
+      **fallback** naming what an unscheduled year does (today "draw nothing voluntarily"; a lapsed
+      ACA year needs "baseline proportional"), and the account **sequence** `oracleWithdrawalPlan`
+      already expresses. Same acceptance bar: every shipped family replays to the dollar.
+      **total-conversion control** as the schedule's `convert` field. Today
       `extraConversionAmount[y]` is EXTRA on top of the arm's own fill (`optimizer_core.js:2849`), and
       the only suppressions are whole-plan cutoffs - `convEndYear`/`convEndMode` and the
       `_cfSuppressConversions*` internals (`optimizer_core.js:2647`). So a schedule can convert MORE
@@ -232,8 +243,10 @@ a research instrument and a ship-time check.
 | `P102` | Stages C/D (worker, search budget) DEFERRED behind `P103d` - until there are arms worth buying time for. Stage E's `e1`/`e2` (gap-fill and stop-year as swept arms) are `P103d` candidates |
 | `P34` | unchanged at O1; NOT a `P103` prerequisite - `a`-`d` are node harnesses |
 
-- **Status:** **`P103a` and `P103b1` COMPLETE 2026-09-01.** `P103b2` (the `schedule` strategy) is
-  next; `P103b3`, `P103b4`, `P103c`-`e` behind it. `P103b1x` is a separate product question.
+- **Status:** **`P103a`, `P103b1` and `P103b2` COMPLETE 2026-09-01.** `P103b3` is next - and it now
+  has FOUR fields to add, not one: total-conversion control plus the quantity lever, the
+  unscheduled-year fallback and the account sequence that `P103b2` measured as missing.
+  `P103b4`, `P103c`-`e` behind it. `P103b1x` is a separate product question.
 - **Depends on:** nothing. `P103e` needs `P103d`; `P103d` needs `P103a` and `P103b`.
 
 ---

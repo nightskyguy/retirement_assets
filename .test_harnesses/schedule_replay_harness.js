@@ -12,7 +12,15 @@
  *
  * The two exact cases and the two failure modes are PINNED as node tests in optimizer_core.tests.js.
  * This harness is the wider table: every shipped family, so the coverage boundary is visible rather
- * than inferred. Report: research/PERFECT_FORESIGHT_ORACLE.md, section P103b2.
+ * than inferred. Report: research/PERFECT_FORESIGHT_ORACLE.md, sections P103b2 to P103b5.
+ *
+ * AND A REPLAY THAT DIFFERS IS NOT AUTOMATICALLY A FAILURE (user, 2026-09-01: "if a draw strategy
+ * improves GK it should be used - that's the point"). A schedule carrying a family's decisions can
+ * land somewhere BETTER, and calling that a coverage gap gets the whole exercise backwards. So every
+ * row now reports the delivered-spend delta beside the wealth delta, and a row that delivers the same
+ * spend with more wealth is labelled DOMINATES rather than partial. Same spend, same survival, more
+ * left over is a strictly better plan, and it is evidence that the family's own draw rule is leaving
+ * money on the table.
  *
  * WHY TARGETS AND NOT DOLLARS, since it is the design decision everything else follows from. The
  * reason is already recorded at optimizer_core.js (the oracleWithdrawalPlan comment): "Fractions,
@@ -77,7 +85,7 @@ const ARMS = [
 console.log('P103b2/b3  schedule replay identity: compile each shipped family to a schedulePlan,');
 console.log('re-run as strategy:\'schedule\', and measure the disagreement. Exact = the schedule');
 console.log('can carry that family. Anything else names a decision ordTarget cannot express.\n');
-console.log('arm                  decides    yrs sched   final NW (orig)    delta NW   max |yr wealth|  verdict');
+console.log('arm                  decides    yrs sched   final NW (orig)    delta NW   spend delta  verdict');
 
 const rows = [];
 for (const [name, decides, ov] of ARMS) {
@@ -98,14 +106,22 @@ for (const [name, decides, ov] of ARMS) {
     else for (let i = 0; i < a.log.length; i++) {
         maxYr = Math.max(maxYr, Math.abs((b.log[i].totalWealth ?? 0) - (a.log[i].totalWealth ?? 0)));
     }
+    const dSpend = (b.totals?.spendCurrentDollars ?? 0) - (a.totals?.spendCurrentDollars ?? 0);
     const exact = maxYr < 0.01 && Math.abs(dNW) < 0.01;
+    // Dominance is "no worse on either axis, better on one". Requiring spend to be EQUAL was too
+    // narrow and hid the more interesting case: carrying GK's spend RULE rather than its recorded
+    // numbers, the schedule delivers MORE spending and MORE wealth at once.
+    const spendNoWorse = dSpend > -100;
+    const bothOk = !!(a.totals?.success && b.totals?.success);
+    const dominates = !exact && scheduled > 0 && spendNoWorse && bothOk && dNW > 1;
     const verdict = exact ? 'EXACT'
         : scheduled === 0 ? 'carries nothing'
-        : 'partial (' + scheduled + '/' + a.log.length + ' yrs)';
-    rows.push({ name, decides, scheduled, years: a.log.length, dNW, maxYr, exact });
+        : dominates ? 'DOMINATES (no worse on spend, more wealth)'
+        : 'differs (' + scheduled + '/' + a.log.length + ' yrs)';
+    rows.push({ name, decides, scheduled, years: a.log.length, dNW, dSpend, maxYr, exact, dominates });
     console.log(name.padEnd(21) + decides.padEnd(11) + String(scheduled).padStart(4) + '   ' +
         money(a.finalNW ?? 0).padStart(16) + money(dNW).padStart(12) +
-        money(maxYr).padStart(18) + '  ' + verdict);
+        money(dSpend).padStart(13) + '  ' + verdict);
 }
 
 console.log('\n' + '='.repeat(100));
@@ -123,12 +139,25 @@ console.log('partial cases (the prediction says there are none): ' + partials.le
 console.log('R-P1 -> ' + ((ceilExact === ceilings.length && otherEmpty === others.length && partials.length === 0)
     ? 'RIGHT' : 'WRONG'));
 
+const dom = rows.filter(r => r.dominates);
+if (dom.length) {
+    console.log('\nDOMINATED FAMILIES - no worse on spend, and more wealth left over:');
+    for (const r of dom) {
+        console.log('  ' + r.name.padEnd(20) + money(r.dNW) + ' more wealth, ' + money(r.dSpend) + ' more lifetime spend');
+    }
+    console.log('  A FOLLOWABLE combination, not a hindsight artifact: the schedule carries the');
+    console.log('  family\'s spend RULE, re-evaluated each year against its own portfolio, and takes');
+    console.log('  only the DRAW from the source. Replaying recorded spend numbers under a different');
+    console.log('  draw would not be a policy anyone could adopt; a rule is.');
+    console.log('  What it says: the family\'s own account split is costing it this much at its own');
+    console.log('  spending rule, so the draw rule is the thing worth replacing. That is P103d.');
+}
+
 console.log('\nWHAT REMAINS, after P103b3 added iraDraw, gapFill, scheduleFallback and convert:');
 console.log('  - the account SPLIT. Proportional draws proportionally across IRA/Brokerage/Cash and');
 console.log('    Ordered runs a sequence; neither is an IRA draw, so ordTarget and iraDraw are both');
 console.log('    silent. oracleWithdrawalPlan already expresses it, but it PREEMPTS the strategy');
 console.log('    branch rather than composing with it - carrying Ordered means using that hook.');
-console.log('  - the SPEND. Guyton-Klinger decides what to SPEND, and spend is a decision like any');
-console.log('    other - a better draw strategy can improve it. The schedule takes spendGoal as');
-console.log('    given only because THIS STUDY pins spend, which is also why GK rows are excluded');
-console.log('    from the oracle gap tables rather than compared in them. P103b5 adds the field.');
+console.log('  - the SPEND is now carried (P103b5), and Guyton-Klinger is the case it was added for.');
+console.log('    Its spend and IRA draw round-trip to the dollar; what it still cannot state is the');
+console.log('    account split, which is why it shows as DOMINATES rather than EXACT.');

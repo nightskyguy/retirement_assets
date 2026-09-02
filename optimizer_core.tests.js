@@ -7157,15 +7157,58 @@ test('schedule: convert caps the surplus routed to Roth, and the rest still bank
 });
 
 test('schedule: the coverage limit that REMAINS is the account split', () => {
-    // Proportional, Ordered and Guyton-Klinger still carry nothing. The first two decide how to
-    // SPLIT a spending draw across accounts - which is oracleWithdrawalPlan's job, not ordTarget's -
-    // and GK decides the SPEND, which a schedule takes as given. Pinned so widening it is deliberate.
+    // Proportional and Ordered decide how to SPLIT a spending draw across accounts, which is
+    // oracleWithdrawalPlan's job and not something ordTarget or iraDraw can state. Pinned so that
+    // widening it stays a deliberate act - which is exactly how P103b5 removed GK from this list.
     for (const ov of [{ strategy: 'propwd', propWithdraw: 0.10 },
-                      { strategy: 'ordered', orderedSeq: 'CBIR' },
-                      { strategy: 'gk' }]) {
+                      { strategy: 'ordered', orderedSeq: 'CBIR' }]) {
         const d = schedReplayDelta(ov);
         assert(d.scheduled === 0, `${ov.strategy} should compile to nothing, got ${d.scheduled}`);
     }
+});
+
+test('schedule: carries GK by its spend RULE, and beats it', () => {
+    // The point of the spend field is not to replay GK's recorded numbers - that would be a
+    // hindsight artifact, since GK's own dynamics would have reacted to a different draw. The
+    // schedule takes GK's spend RULE, re-evaluated each year against its own portfolio, and only the
+    // DRAW from the source. That combination is followable, and it wins on both axes.
+    const src = { ...SCHED_BASE, strategy: 'gk' };
+    const opts = scheduleOptionsForRun(src);
+    assert(opts.spendRule === 'gk', 'a GK source must hand over its spend rule, not its numbers');
+    const a = simulate(src);
+    const plan = compileScheduleFromRun(a, src);
+    assert(plan.filter(Boolean).length === a.log.length, 'every GK year should compile a draw');
+    assert(plan[0].spend === undefined, 'the draw is carried; the spend comes from the rule');
+    const b = simulate({ ...src, strategy: 'schedule', schedulePlan: plan, ...opts });
+    assert(b.totals.success, 'the combination must still fund the plan');
+    const dSpend = (b.totals.spendCurrentDollars ?? 0) - (a.totals.spendCurrentDollars ?? 0);
+    const dNW = (b.finalNW ?? 0) - (a.finalNW ?? 0);
+    assert(dSpend > -100, `spend must be no worse, got ${dSpend}`);
+    assert(dNW > 1, `wealth must be higher, got ${dNW}`);
+});
+
+test('schedule: GK spend rule is separable from the GK strategy', () => {
+    // spendRule: 'gk' runs the adjustment for any strategy. Without the separation a schedule could
+    // only ever replay GK's numbers, never follow its rule.
+    const withRule = simulate({ ...SCHED_BASE, strategy: 'bracket', stratRate: 0.22, spendRule: 'gk' });
+    const without = simulate({ ...SCHED_BASE, strategy: 'bracket', stratRate: 0.22 });
+    const sameSpend = Math.abs((withRule.totals.spendCurrentDollars ?? 0)
+                             - (without.totals.spendCurrentDollars ?? 0)) < 1;
+    assert(!sameSpend, 'borrowing the GK spend rule must change the spend path');
+});
+
+test('schedule: a per-year spend applies for that year only', () => {
+    // sim.spendGoal carries forward compounded by spendDelta and inflation, so an override left in
+    // place would silently compound into every later year and the search axes would stop being
+    // independent. Year 0 is halved here; year 1 must land on the untouched trajectory.
+    const base = simulate({ ...SCHED_BASE, strategy: 'bracket', stratRate: 0.22 });
+    const half = Math.round((base.log[0].spendGoal ?? 0) / 2);
+    const plan = compileScheduleFromRun(base, { ...SCHED_BASE, strategy: 'bracket', stratRate: 0.22 });
+    plan[0] = { ...plan[0], spend: half };
+    const res = simulate({ ...SCHED_BASE, strategy: 'schedule', schedulePlan: plan });
+    assertNear(res.log[0].spendGoal ?? 0, half, 'year 0 should take the override', 0.01);
+    assertNear(res.log[1].spendGoal ?? 0, base.log[1].spendGoal ?? 0,
+        'year 1 must be back on the untouched trajectory', 0.01);
 });
 
 test('schedule: an unscheduled year draws nothing voluntarily and still funds spending', () => {
@@ -7186,6 +7229,8 @@ test('schedule: malformed entries throw rather than reading as a quiet year', ()
         ['negative iraDraw', [{ iraDraw: -1 }]],
         ['negative convert', [{ ordTarget: 100000, convert: -1 }]],
         ['unknown gapFill', [{ ordTarget: 100000, gapFill: 'sideways' }]],
+        ['negative spend', [{ ordTarget: 100000, spend: -1 }]],
+        ['NaN spend', [{ ordTarget: 100000, spend: NaN }]],
     ];
     for (const [label, plan] of bad) {
         let threw = false;

@@ -480,6 +480,68 @@ under the threshold in a narrow band and recover above it. **A spend search may 
 everything below a feasible spend is also feasible**, which rules out a simple bisection for the
 maximum sustainable spend.
 
+## P103b5 - spend becomes a schedule decision, and the schedule beats Guyton-Klinger
+
+**Run:** 2026-09-01, `node .test_harnesses/schedule_replay_harness.js`. Suites **397**/61/22.
+
+**Two fields, and the second one is the point.** `spend` sets a year's goal in nominal dollars.
+`spendRule: 'gk'` runs the Guyton-Klinger adjustment for ANY strategy, so a schedule can own the
+DRAW while GK keeps owning the SPEND.
+
+**Why the rule and not the numbers, which is the whole difference between evidence and an artifact.**
+Compiling GK's *recorded* spend path and replaying it under a different draw produces a lovely number
+and means nothing: GK's own dynamics would have reacted to that draw, so the path is a hindsight
+artifact nobody could follow. Carrying the RULE - re-evaluated each year against whatever portfolio
+the plan actually has - is followable. The first pass here did the former and the framing had to be
+corrected (user, 2026-09-01: *"the only rule it should follow is to use the GK spend goal adjustment
+strategy faithfully"*).
+
+**The result: GK is dominated.** Same rule, its own draw handed to the schedule, and the schedule
+delivers **more lifetime spending AND more terminal wealth**:
+
+| spendChange | @4% spend | @6% spend |
+|---|---|---|
+| 0.0% | +$14,320 spend, +$17,373 wealth | +$43,934 spend, +$198,581 wealth |
+| −0.5% | +$8,756, +$57,038 | +$53,564, +$177,720 |
+| **−1.0%** | +$26,285, +$2,611 | +$91,655, +$95,758 |
+| −1.5% | +$11,748, +$42,114 | +$65,329, +$125,078 |
+| −2.0% | +$23,270, +$5,144 | +$48,266, +$150,473 |
+| +1.0% | **NOT dominated** (+$56,207 spend, −$56,859 wealth) | −$0, +$312,710 |
+
+**Ten of twelve cells dominate, and the two that do not are informative rather than noise.** At a
+RISING spend goal the schedule buys more spending at the cost of wealth - a genuine trade, not a
+free win - which is what a dominance test should show when there is no dominance to find.
+
+**What it means, stated so it is not oversold.** GK's account split is costing it this much at its
+own spending rule. It does not mean a user can have $198k: it means the draw rule under GK is worth
+replacing, which is `P103d`'s bake-off, and now with a measured prize rather than a hunch. This is
+the second thing in `P103` to move a number, and unlike `P103b4` it does not need perfect foresight -
+the combination is one a plan could actually adopt.
+
+**Replay coverage after the field.** Eight arms still reproduce EXACTLY. Proportional and Ordered
+still carry nothing. GK moved from "carries nothing" to DOMINATES.
+
+**The one field left is the account split.** Proportional draws proportionally across
+IRA/Brokerage/Cash and Ordered runs a sequence; neither is an IRA draw, so `ordTarget` and `iraDraw`
+are both silent. `oracleWithdrawalPlan` already expresses a split but PREEMPTS the strategy branch
+rather than composing with it, so absorbing it is a design decision, not wiring.
+
+### A correction to language used throughout this report: spend is PINNED, not FLAT
+
+"Spend is fixed" appears in several places above and it conflates two different things (user,
+2026-09-01: *"usually it is declined by -1% per year of plan"*).
+
+- **Pinned** is the COMPARISON rule: candidates that deliver a different spend are discarded, so a
+  spend-cutting arm cannot win by cutting. That is a methodology choice and it is real.
+- **Flat** is a FIXTURE choice, and an unrepresentative one. Every harness in this study sets
+  `spendChange: 0`, while a typical plan declines around **1% a year**. Nothing in the oracle grid
+  exercises a declining spend path.
+
+The `P103b5` sweep above is the first thing here to vary it, which is why it spans −2.0% to +1.0%.
+**Every gap number elsewhere in this report is measured on a flat spend path and should be read that
+way.** Re-running the grid at a realistic decline is open work.
+
+
 ## P51f - trajectory post-mortem (observation only, ships nothing)
 
 - **No harvest-like alternation** (prediction `S3-P3` WRONG again: 1/6 thirds/brokheavy cells with

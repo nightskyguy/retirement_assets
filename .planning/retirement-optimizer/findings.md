@@ -3976,3 +3976,54 @@ exposed to this.
 **The generalizable half.** A scalarized objective is only usable for SEARCH when its optimum is
 interior. Before adding a decision variable to any search, sweep it once and look at where the argmax
 lands: a boundary answer means the search will return the weight rather than the plan.
+
+
+## The schedule beats Guyton-Klinger, and the rule is why  *(2026-09-01, `P103b5`)*
+
+**Codes:** *spend field* = a schedule entry's `spend`, the year's goal in nominal dollars.
+*`spendRule: 'gk'`* = an input that runs the Guyton-Klinger spend adjustment under ANY strategy.
+*dominates* = no worse on delivered lifetime spend, and more terminal wealth, both plans funded.
+
+**GK is dominated in 10 of 12 cells: more lifetime spending AND more terminal wealth.** At the
+typical -1%/yr spend decline, +$26,285 spend and +$2,611 wealth at 4%, +$91,655 and +$95,758 at 6%;
+best case +$43,934 and +$198,581. The two exceptions are a RISING spend goal, where the schedule buys
+spending at the cost of wealth - a genuine trade, correctly not called dominance.
+
+**The rule versus the numbers is the whole methodological point, and I got it wrong first.** My first
+pass compiled GK's RECORDED spend path and replayed it under a different draw. That produces a large
+number and means nothing: GK's spend responds to the portfolio, so under a different draw it would
+have chosen differently. The path is a hindsight artifact nobody could follow. Carrying the RULE -
+`spendRule: 'gk'`, re-evaluated each year against whatever portfolio the plan actually has - is a
+combination someone could adopt. **Same measurement, and only one of the two versions is evidence.**
+
+**Generalizable: when a harness "carries" an adaptive strategy, ask whether it carries the DECISIONS
+or the DECISION RULE.** Decisions are a recording of one history and reproduce nothing when the
+environment changes; a rule is portable. The tell is that replaying decisions almost always looks
+better than the source, because the recording was made under conditions the replay no longer faces.
+
+**What it licenses and what it does not.** It does NOT mean a user can have $198k. It means **GK's
+account split is costing it that much at its own spending rule**, so the draw rule is the thing worth
+replacing - which is `P103d`, now with a measured prize instead of a hunch. Unlike `P103b4` it needs
+no perfect foresight: the spend rule is GK's own and the draw is a schedule, so the whole combination
+is implementable.
+
+**A near-miss worth recording.** I first reported this as a partial replay - "GK does not fully
+reproduce, residual $292k" - and filed a strict improvement as a coverage defect. The user caught it:
+*"if a draw strategy improves GK it should be used. Indeed, that's the point."* **A replay harness
+whose verdicts are only EXACT or BROKEN cannot see an improvement.** The harness now reports the
+delivered-spend delta beside the wealth delta and labels the case DOMINATES.
+
+## Spend is PINNED, not FLAT - a correction to language used throughout  *(2026-09-01, user)*
+
+*"You've repeatedly said spend is fixed - it is not. Usually it is declined by -1% per year of plan."*
+Correct, and two different things were being run together:
+
+- **Pinned** is the COMPARISON rule: a candidate delivering a different spend is discarded, so a
+  spend-cutting arm cannot win by cutting. Real, and a deliberate methodology choice.
+- **Flat** is a FIXTURE choice and an unrepresentative one. Every harness in this study sets
+  `spendChange: 0`, while a typical plan declines around 1% a year. **Nothing in the oracle grid
+  exercises a declining spend path.**
+
+`P103b5`'s sweep is the first thing here to vary it, spanning -2.0% to +1.0%. Every other gap number
+in `PERFECT_FORESIGHT_ORACLE.md` is measured on a flat path and has to be read that way; re-running
+the grid at a realistic decline is `P103b5c`.

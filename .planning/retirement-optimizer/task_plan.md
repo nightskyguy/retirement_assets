@@ -11,7 +11,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P103 | `a`-`b4` DONE. **`b4` MOVED A NUMBER**: the schedule beats the conversions-only oracle in 6/6 cells, +0.25-1.82%, on ~1/8 the compute | `P103b5` |
+| **O0** | P103 | `a`-`b5` DONE. **`b5`: the schedule BEATS GK in 10/12 cells** (more spend AND more wealth), no foresight needed. One gap left: the account split | `P103b5c` |
 | **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
@@ -259,15 +259,34 @@ a research instrument and a ship-time check.
       **What it does NOT license:** these are perfect-foresight artifacts on one path, and the base
       rows differ from `P103a`'s champions because a carryable row is required. Whether a FIXED rule
       captures most of it - the `P35n` template - is `P103d`.
-- [ ] **P103b5** - **`spendGoal` as a schedule field** (NEW 2026-09-01, user-raised). The one field
-      that would let Guyton-Klinger be carried, and the one that widens what "the ideal" means: every
-      gap number in `PERFECT_FORESIGHT_ORACLE.md` is currently conditional on the base row's delivered
-      spend. A strategy that delivers MORE lifetime spending for the same wealth, or the same spending
-      with a higher floor under a bad sequence, is invisible in those tables. **The spend pin exists
-      for a real reason and must not just be removed:** without it a spend-adaptive arm "wins" by
-      cutting spending, which is how a GK base once showed a fake +81%. So this needs a two-dimensional
-      objective (wealth AND delivered spend, or wealth at matched spend) before the axis can be
-      searched at all - that design decision is the first item, not the field.
+- [x] **P103b5 DONE 2026-09-01** - **spend is a schedule decision, and the schedule BEATS
+      Guyton-Klinger.** Suites **397**/61/22. Report: `PERFECT_FORESIGHT_ORACLE.md` `P103b5`.
+      **Two fields.** `spend` sets a year's goal in nominal dollars, applied where GK already adjusts
+      spend and restored before the year-end carry-forward so it cannot compound. **`spendRule: 'gk'`
+      runs the GK adjustment for ANY strategy**, which is the one that matters: a schedule owns the
+      DRAW while GK keeps owning the SPEND.
+      **The rule, never the recorded numbers** (user: *"the only rule it should follow is to use the
+      GK spend goal adjustment strategy faithfully"*). Replaying GK's realized spend path under a
+      different draw is a hindsight artifact - GK's own dynamics would have reacted to that draw.
+      The rule, re-evaluated each year against the plan's own portfolio, is followable. My first pass
+      did the former and the framing was corrected.
+      **GK is DOMINATED in 10 of 12 cells: more lifetime spending AND more terminal wealth.** At the
+      user's typical -1%/yr spend decline: +$26,285 spend / +$2,611 wealth at 4%, and +$91,655 /
+      +$95,758 at 6%. Best case +$43,934 / +$198,581. **The two non-dominating cells are a RISING
+      spend goal**, where it buys spending at the cost of wealth - a real trade, correctly not
+      labelled dominance.
+      **What it does NOT mean:** not $198k a user can have. It means **GK's account split is costing
+      it this much at its own spending rule**, so the draw rule is what is worth replacing - `P103d`,
+      now with a measured prize. Second thing in `P103` to move a number, and unlike `P103b4` it
+      needs no perfect foresight.
+      **One field left: the account SPLIT.** Proportional and Ordered still carry nothing.
+- [ ] **P103b5c** - **re-run the grid on a DECLINING spend path.** User correction, 2026-09-01:
+      *"you've repeatedly said spend is fixed - it is not, usually it is declined by -1% per year."*
+      Two different things were being conflated. **Pinned** is the comparison rule (candidates
+      delivering a different spend are discarded) and is real. **Flat** is a FIXTURE choice: every
+      harness in this study sets `spendChange: 0` while a typical plan declines ~1%/yr, so nothing in
+      the oracle grid exercises a declining path. `P103b5`'s sweep is the first to vary it. Every
+      other gap number in the report is measured on a flat path and has to be read that way.
 - [ ] **P103c** - **the unified search** (was `P75a`-`P75c`; absorbs parked `P5`). `P75`'s control
       variable - two per-year income targets, ordinary income realized and LTCG realized, searched
       over the ~12-edge MAGI menu - on the oracle's plumbing and in the oracle's role as ceiling.
@@ -309,9 +328,10 @@ a research instrument and a ship-time check.
 | `P102` | Stages C/D (worker, search budget) DEFERRED behind `P103d` - until there are arms worth buying time for. Stage E's `e1`/`e2` (gap-fill and stop-year as swept arms) are `P103d` candidates |
 | `P34` | unchanged at O1; NOT a `P103` prerequisite - `a`-`d` are node harnesses |
 
-- **Status:** **`P103a` and `P103b1`-`b4` COMPLETE 2026-09-01.** `P103b5` (spend as a schedule field,
-  user-raised) is next, and it needs an objective decision before a field. `P103c`-`e` behind it.
-  `P103b1x` is a separate product question.
+- **Status:** **`P103a` and `P103b1`-`b5` COMPLETE 2026-09-01.** The schedule now carries every
+  shipped family's spend and IRA draw; the one remaining field is the ACCOUNT SPLIT, which is what
+  stops Proportional, Ordered and Guyton-Klinger reproducing. `P103c`-`e` behind it. `P103b1x` is a
+  separate product question.
 - **Depends on:** nothing. `P103e` needs `P103d`; `P103d` needs `P103a` and `P103b`.
 
 ---

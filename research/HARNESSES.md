@@ -375,11 +375,13 @@ express. Compiles each shipped family's realized decisions into a `schedulePlan`
 `compileScheduleFromRun`, re-runs it as a schedule, and requires agreement to the dollar. A family
 that cannot reproduce itself proves the representation cannot state what that family decides.
 
-Headline after `P103b3` (2026-09-01): **8 of 11 arms replay EXACTLY, $0 on every column** - Fill
+Headline after `P103b5` (2026-09-01): **8 of 11 arms replay EXACTLY, $0 on every column** - Fill
 Bracket at three rates, IRMAA at two tiers, ACA across its mid-plan lapse, and IRA Draw and Reduce
-through the quantity lever. Proportional, Ordered and Guyton-Klinger still carry nothing, and the
-boundary is coherent: the schedule says how much to take from the IRA, not how to split a spending
-draw across accounts (that is `oracleWithdrawalPlan`) and not what to spend.
+through the quantity lever. **Guyton-Klinger's spend and IRA draw now round-trip to the dollar**
+since `P103b5` added the spend field, but its run does not reproduce because it also splits its
+draw across Brokerage and Cash. So the remaining boundary is a single thing: the schedule cannot
+state how to SPLIT a draw across accounts, and that one gap is the whole of what stops
+Proportional, Ordered and Guyton-Klinger.
 
 At `P103b2` only 5 arms were exact. Prediction `R-P1` - a family is either fully expressible or not
 at all - was WRONG, and the ACA counterexample is what named the missing fallback.

@@ -1825,8 +1825,16 @@ function resolveSpendTarget(sim, yr) {
         yr._ceilDedAddBack = _dedAt(_top + _dedAt(_top));
     }
 
-    // Phase 22: Guyton-Klinger dynamic spend adjustment (runs before targetSpend resolution)
-    if (inputs.strategy === 'gk') {
+    // Phase 22: Guyton-Klinger dynamic spend adjustment (runs before targetSpend resolution).
+    //
+    // P103b5b. The RULE is separable from the strategy. `spendRule: 'gk'` runs this adjustment for
+    // any strategy, so a schedule can decide the DRAW while Guyton-Klinger keeps deciding the spend
+    // (user, 2026-09-01: "the only rule it should follow is to use the GK spend goal adjustment
+    // strategy faithfully"). That distinction is what makes the combination implementable rather
+    // than a hindsight artifact: replaying GK's RECORDED spend numbers under a different draw is not
+    // a policy anyone could follow, because GK's own dynamics would have reacted to that draw. The
+    // rule, re-evaluated each year against the portfolio the plan actually has, is followable.
+    if (_usesGKSpendRule(inputs)) {
         if (y === 0) {
             sim.gkIWR = sim.spendGoal / sim.prevPortfolio;
             sim.gkAdjLabel = '';
@@ -1853,9 +1861,25 @@ function resolveSpendTarget(sim, yr) {
         }
     }
 
+    // P103b5. A schedule may set the year's spend outright, applied HERE for the same reason GK's
+    // adjustment lives here: everything downstream - targetSpend, the gap fill, the surplus, the
+    // per-year success test and the lifetime spend total - reads sim.spendGoal or what it resolves
+    // to, so setting it at one point keeps them all consistent. Restored at the end of the year
+    // (see the carry-forward) so a year's spend does not compound into the next.
+    yr._spendOverride = null;
+    if (inputs.strategy === 'schedule') {
+        const _sp = _schedulePlanFor(inputs, y);
+        if (_sp && _sp.spend !== undefined) {
+            yr._spendOverride = sim.spendGoal;
+            sim.spendGoal = _sp.spend;
+        }
+    }
+
     // GK bypasses goalLimit (bracket ceiling) - spend is dynamically set by GK rules
-    const isGKStrategy = inputs.strategy === 'gk';
-    yr.targetSpend = (yr.isBracketStrategy || yr.isOrderedStrategy || isGKStrategy) ? sim.spendGoal : Math.min(sim.spendGoal, yr.goalLimit);
+    const isGKStrategy = _usesGKSpendRule(inputs);
+    const _schedSetSpend = yr._spendOverride != null;
+    yr.targetSpend = (yr.isBracketStrategy || yr.isOrderedStrategy || isGKStrategy || _schedSetSpend)
+        ? sim.spendGoal : Math.min(sim.spendGoal, yr.goalLimit);
 
     // P38: size the primary draw against income the household can actually SPEND. yr.possibleIncome
     // (:1226) is GROSS - Social Security, pension and the taxable RMD before any tax is paid - so
@@ -1937,6 +1961,19 @@ function resolveSpendTarget(sim, yr) {
 //              is a face-value voluntary draw handed to the tax passes exactly as the fixedpct and
 //              fixed branches hand theirs over, not a spending target whose size depends on the tax
 //              it is trying to cover.
+//   spend      P103b5. The year's spend goal, in NOMINAL dollars, replacing what the plan would
+//              otherwise have targeted. This is the axis the oracle has never searched: every gap
+//              number in PERFECT_FORESIGHT_ORACLE.md is measured with spend PINNED, so a strategy
+//              that buys more spending is invisible in those tables, and Guyton-Klinger - whose
+//              per-year decision IS the spend - could not be carried at all.
+//              Absolute dollars are right here, where they are wrong for a withdrawal split, and
+//              the reason is the direction of the dependency: a spending draw's size depends on the
+//              tax it is trying to cover, so a dollar figure desyncs, while the spend GOAL is
+//              exogenous - it is the thing the tax is solved against, not solved from.
+//              It applies for the year only. sim.spendGoal carries forward compounded by spendDelta
+//              and inflation, so an in-place override would silently compound into every later year
+//              and the search axes would stop being independent; it is restored before the
+//              carry-forward at the end of the year.
 //   convert    P103b3. A cap, in after-tax dollars, on how much of the year's surplus is routed to
 //              Roth by convertExcessToRoth. Uncapped when absent, which is today's behavior.
 //              READ THE DECOMPOSITION BEFORE USING IT, because "total conversion control" turned
@@ -1963,6 +2000,13 @@ function resolveSpendTarget(sim, yr) {
 // through to the gap-fill cascade. That is the Ordered convention, and it is the only reading that
 // does not invent a decision the schedule did not make. A PRESENT but malformed entry throws -- a
 // typo in a research input must not be silently read as a quiet year.
+// P103b5b. True when the Guyton-Klinger spend adjustment governs this run's spend, whether because
+// GK is the strategy or because another strategy borrowed the rule via `spendRule: 'gk'`. Separating
+// the two is what lets a schedule own the DRAW while GK owns the SPEND.
+function _usesGKSpendRule(inputs) {
+    return inputs.strategy === 'gk' || inputs.spendRule === 'gk';
+}
+
 function _schedulePlanFor(inputs, y) {
     if (!Array.isArray(inputs.schedulePlan)) return null;
     const e = inputs.schedulePlan[y];
@@ -1985,6 +2029,10 @@ function _schedulePlanFor(inputs, y) {
     if (conv !== undefined && (!Number.isFinite(conv) || conv < 0)) {
         throw new Error('schedulePlan[' + y + '].convert must be a finite non-negative number, got ' + conv);
     }
+    const spend = e.spend;
+    if (spend !== undefined && (!Number.isFinite(spend) || spend < 0)) {
+        throw new Error('schedulePlan[' + y + '].spend must be a finite non-negative number, got ' + spend);
+    }
     // gapFill has to be PER YEAR, not per plan, and ACA is the proof: its cap is live for the first
     // few years and lapses at Medicare eligibility, and the two halves take different cascades. A
     // plan-level switch cannot state that, which is why b2 could only replay 3 of 33 ACA years.
@@ -2000,12 +2048,12 @@ function _schedulePlanFor(inputs, y) {
     // They are the same number for an IRMAA or ACA ceiling and DIFFERENT for a federal bracket one,
     // whose rates are read at the statutory top while its ceiling is lifted by the deduction
     // add-back. A searcher never has to supply it; a compiler that wants exact replay does.
-    if (hasD) return { iraDraw: d, kind, convert: conv, gapFill: gf };
+    if (hasD) return { iraDraw: d, kind, convert: conv, gapFill: gf, spend };
     const rb = e.rateBasis ?? t;
     if (!Number.isFinite(rb) || rb <= 0) {
         throw new Error('schedulePlan[' + y + '].rateBasis must be a finite positive number, got ' + rb);
     }
-    return { ordTarget: t, kind, rateBasis: rb, convert: conv, gapFill: gf };
+    return { ordTarget: t, kind, rateBasis: rb, convert: conv, gapFill: gf, spend };
 }
 
 // P103b2. Compile a finished run into the schedulePlan that reproduces it. One shared compiler,
@@ -2028,14 +2076,29 @@ function compileScheduleFromRun(res, srcInputs) {
     // which is the quantity lever. `-iraVolSpend` plus the converted gross is what actually left the
     // IRA by choice that year; RMDs are forced and are never part of a schedule.
     const quantity = (srcInputs.strategy === 'fixedpct' || srcInputs.strategy === 'fixed');
+    // P103b5. A spend-adaptive family decides the SPEND, so that is what has to be carried. GK is the
+    // whole reason this exists: its per-year decision is the spend goal, which is why it compiled to
+    // nothing before this field and why it is excluded from the oracle's gap tables rather than
+    // compared in them. `spendGoal` in the log is the year's realized target.
+    // P103b5b: a spend-adaptive family hands over its DRAW here and its spend RULE via
+    // scheduleOptionsForRun - never its realized spend numbers. Recorded numbers replay the past;
+    // the rule can be followed forward, which is the difference between a hindsight artifact and a
+    // policy someone could adopt.
+    const spendAdaptive = _usesGKSpendRule(srcInputs);
     // Which cascade the source family took. `fixed` (Reduce) is the one quantity family that is NOT
     // in the bracket set, so it fills its gap from the [40,60] default branch instead.
-    const gapFill = (srcInputs.strategy === 'fixed') ? 'baseline' : 'cascade';
+    const gapFill = (srcInputs.strategy === 'fixed' || srcInputs.strategy === 'gk') ? 'baseline' : 'cascade';
     return (res.log || []).map(e => {
         const t = e['BracketTarget'] ?? 0;
         if (t > 0) {
             const rb = e['RateBasis'];
             return (rb > 0 && rb !== t) ? { ordTarget: t, kind, rateBasis: rb, gapFill } : { ordTarget: t, kind, gapFill };
+        }
+        if (spendAdaptive) {
+            // The draw only. Spend comes from the rule, re-evaluated each year against whatever
+            // portfolio this plan actually has. Emitted for every year, including zero-draw ones,
+            // for the reason recorded under the quantity branch below.
+            return { iraDraw: e['-volIRAwd'] ?? 0, kind, gapFill };
         }
         if (quantity) {
             // Emitted even when the draw is ZERO, and the zero years are the reason. A quantity
@@ -2058,6 +2121,15 @@ function compileScheduleFromRun(res, srcInputs) {
 // falls through to baseline Proportional, which "draw nothing voluntarily" is not.
 function scheduleOptionsForRun(srcInputs) {
     const lapses = (srcInputs.stratACAMultiple ?? 0) > 0 && srcInputs.strategy === 'aca';
+    // A spend-adaptive source hands over its spend RULE, so the schedule re-evaluates it each year
+    // against its own portfolio rather than replaying numbers the source produced under its own draw.
+    if (_usesGKSpendRule(srcInputs)) {
+        return { scheduleFallback: 'none', spendRule: 'gk',
+                 gkGuard: srcInputs.gkGuard, gkAdjPct: srcInputs.gkAdjPct };
+    }
+    // GK fills its gap from the baseline branch, not the bracket cascade, so a schedule carrying it
+    // has to say so; `gapFill` on each entry does that, and the fallback matters only for years the
+    // compiler emitted nothing for.
     return { scheduleFallback: lapses ? 'baseline' : 'none' };
 }
 
@@ -3695,11 +3767,15 @@ function endYear(sim, yr) {
     // Raw balance sum (no tax discount). Feeds both the withdrawal rate and the GK guardrail
     // checks, so the two stay apples-to-apples and every year uses the same basis.
     sim.prevPortfolio = yr.portfolioBalance;
+    // P103b5: undo a schedule's one-year spend override before the goal advances, so the next year
+    // starts from the trajectory the plan would have had. Without this the override compounds.
+    if (yr._spendOverride != null) sim.spendGoal = yr._spendOverride;
+
     // Advance spend goal: apply user's spend-change preference and inflation.
     // spendDelta is constant (1 + inputs.spendChange); moving this to end of loop
     // keeps year-0 spendGoal equal to the user's input in today's dollars.
     // Phase 22: GK handles inflation at start of next year via its own rules; only apply spendDelta here.
-    if (inputs.strategy === 'gk') {
+    if (_usesGKSpendRule(inputs)) {
         sim.gkPriorReturn = yr.baseReturn;
         sim.spendGoal = sim.spendGoal * sim.spendDelta;
     } else {

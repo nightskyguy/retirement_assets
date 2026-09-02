@@ -7562,3 +7562,41 @@ documenting the happy case.
 **What I could not reproduce, and said so:** the original report was "Balances does not include
 Cash". On the default scenario Cash was present and populated. The user then supplied the real
 scenario, which was the conversion-tax case above. Asking for the scenario beat guessing at a fix.
+
+
+## 2026-09-01 (cont.) - P103b5: the schedule beats GK, after two user corrections
+
+**`spend` and `spendRule: 'gk'` added.** Suites **397**/61/22. The second field is the one that
+matters: it runs the Guyton-Klinger adjustment under ANY strategy, so a schedule owns the DRAW while
+GK owns the SPEND.
+
+**Correction 1, and it changed the design.** *"The only rule it should follow is to use the GK spend
+goal adjustment strategy faithfully."* My first pass compiled GK's RECORDED spend numbers and
+replayed them under a different draw - a hindsight artifact, since GK's spend responds to the
+portfolio and would have chosen differently under that draw. Carrying the RULE instead makes the
+combination followable. Recorded in findings as a general tell: a replay that carries an adaptive
+strategy's decisions rather than its decision rule will almost always look better than the source,
+and the flattery is an artifact.
+
+**Correction 2, and I had filed a win as a defect.** I reported GK as a "partial replay, residual
+$292k" - a strict improvement described as a coverage gap. *"If a draw strategy improves GK it should
+be used. Indeed, that's the point."* Right. The harness now reports the delivered-spend delta beside
+the wealth delta and labels the case DOMINATES; a verdict set of only EXACT-or-BROKEN could not see
+an improvement at all.
+
+**Result: GK dominated in 10 of 12 cells** - more lifetime spending AND more terminal wealth. At the
+user's typical -1%/yr decline: +$26,285 spend / +$2,611 wealth at 4%, +$91,655 / +$95,758 at 6%. The
+two non-dominating cells are a RISING spend goal, where it trades wealth for spending, which is what
+a dominance test should say when there is no dominance.
+
+**Correction 3, to language I had used throughout.** *"You've repeatedly said spend is fixed - it is
+not, usually it is declined by -1% per year."* Two things conflated: spend is PINNED as a comparison
+rule (real), and FLAT as a fixture choice (unrepresentative - every harness here sets
+`spendChange: 0`). Opened `P103b5c` to re-run the grid on a declining path, and flagged in the report
+that every existing gap number is a flat-path number.
+
+**What it licenses:** not $198k for a user. GK's account split costs it that much at its own spending
+rule, so the draw rule is what to replace - `P103d`, now with a measured prize. Unlike `P103b4` this
+needs no perfect foresight.
+
+**One field left:** the account SPLIT. Proportional and Ordered still carry nothing.

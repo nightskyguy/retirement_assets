@@ -351,12 +351,77 @@ $39,117 adrift because a year-0 schedule entry was treated as implying a convers
 withdrawal month from Late to Early for the entire plan. A ceiling implies a conversion; a quantity
 draw does not. The fix is one condition and the test that pins it compares `timingReason`.
 
-**What remains, and it is a coherent boundary rather than a list of leftovers.** The schedule now
-says how much to take from the IRA - as a ceiling or as a quantity - but not **how to split a
-spending draw across accounts** (Proportional, Ordered) and not **what to spend** (Guyton-Klinger).
-The split is `oracleWithdrawalPlan`'s job and it already exists; note that it PREEMPTS the strategy
-branch rather than composing with it, so carrying Ordered means using that hook, not this one.
-Guyton-Klinger is outside the vocabulary by construction: a schedule takes `spendGoal` as given.
+**What remains.** The schedule now says how much to take from the IRA - as a ceiling or as a
+quantity - but not **how to split a spending draw across accounts** (Proportional, Ordered) and not
+**what to spend** (Guyton-Klinger). The split is `oracleWithdrawalPlan`'s job and it already exists;
+note that it PREEMPTS the strategy branch rather than composing with it, so carrying Ordered means
+using that hook, not this one.
+
+**On Guyton-Klinger, a correction (user, 2026-09-01).** An earlier draft of this section called GK
+"outside the vocabulary by construction", which is wrong and hides something bigger. GK's per-year
+decision is the SPEND, and spend is a decision like any other - one that a better draw strategy can
+improve, not a constant the plan is handed. What is true is narrower: **this study pins spend by
+choice**, so every ceiling in it is a ceiling AT FIXED SPEND, and that is why GK rows are excluded
+from the gap tables rather than compared in them. The oracle has never searched the spend axis at
+all. Adding `spendGoal` to the schedule is `P103b5`; it is the field that would let GK be carried,
+and it would also widen what "the ideal" means in this report.
+
+**So read every gap number here as conditional.** "How much a plan leaves on the table" means at the
+delivered spend the base row already achieves. A strategy that would deliver MORE lifetime spending
+for the same wealth, or the same spending with a higher floor under a bad sequence, is not visible
+anywhere in these tables. That is a scope limit of the measurement, not a property of the engine.
+
+## P103b4 - the representation is worth money, and this is the number
+
+**Run:** 2026-09-01, `node .test_harnesses/schedule_oracle_harness.js`. 45,475 sims, 34.2 s. No
+engine change; suites stay 394/61/22.
+
+**The question P103 was opened to answer.** The oracle's conversion axis is
+`extraConversionAmount[]`, which is EXTRA on top of whatever the base arm's own rule decided: it can
+convert more than the rule and never less, because the rule's ceiling was not a variable.
+`strategy: 'schedule'` makes that ceiling a per-year number. **Is the missing direction worth
+anything?**
+
+Both arms get the same base row, the same objective, the same spend pin and the same measured sim
+budget, so the only difference is the representation.
+
+| cell | base row | Arm A (conversions) | Arm S (schedule) | S − A | |
+|---|---|---|---|---|---|
+| defaults @4% | Reduce 17 yrs | +$11,781 | +$41,834 | **+$30,053** | 0.509% |
+| defaults @6% | IRA Draw 7% | +$108,753 | +$120,012 | **+$11,259** | 0.339% |
+| defaults3x @4% | IRA Draw 5% | +$488,702 | +$578,951 | **+$90,248** | 1.209% |
+| round1 @4% | IRA Draw 5% | +$147,994 | +$170,190 | **+$22,195** | 0.254% |
+| thirds @4% | IRA Draw 5% | $0 | +$198,508 | **+$198,508** | 1.708% |
+| brokheavy @4% | IRA Draw 5% | $0 | +$197,877 | **+$197,877** | 1.819% |
+
+**`S-P1` RIGHT, 6 of 6 cells, +0.25% to +1.82%.** In the two cells where the conversion oracle finds
+NOTHING at all, the schedule finds ~$198k. That is the direction the old axis could not express:
+those cells do not want more conversion, they want the base rule's draw moved year by year.
+
+**And it wins on less compute.** Arm S converged inside its budget in every cell - 1,021 sims against
+Arm A's 9,575 in `defaults @4%`, 1,201 against 9,260 in `defaults3x @4%`. Roughly an eighth of the
+work for more result. The multiplicative candidate set (10 values per year) is simply a better-shaped
+search than a $25k grid over a $0-400k range, because a ceiling and a draw live on different scales
+and a ratio is scale-free.
+
+**The first version of this harness was wrong, and the way it was wrong is worth keeping.** It took
+the best non-cyclic row as the base regardless of family, so five of seven cells handed Arm S an
+EMPTY schedule - Ordered and Guyton-Klinger compile to nothing (`P103b3`) - which funds no spending,
+fails the pin and scores null after one simulation. It printed Arm S losing by the entire conversion
+gain in five cells and `S-P1` WRONG. That was the b3 coverage boundary being re-measured, not an
+answer. The base is now the best-scoring row whose compiled schedule **replays it exactly**, verified
+per cell before either arm runs, and `defaults3x @8% b20` is skipped honestly because no row there
+qualifies. **A null result that arrives after one simulation is a harness bug, not a finding.**
+
+**What this does and does not license.** It says the wider representation reaches higher on the same
+budget, which is the first thing in this phase to move a computed number rather than describe one. It
+does NOT say these schedules are shippable: they are perfect-foresight artifacts on one deterministic
+path, and the base rows here differ from `P103a`'s champions because this harness must choose a
+carryable row. The rule-shaped question - can a FIXED rule capture most of this, the `P35n` template -
+is `P103d`.
+
+**Spend is still pinned.** Every number above is more wealth at the same delivered spend. See
+`P103b5`.
 
 ## P51f - trajectory post-mortem (observation only, ships nothing)
 

@@ -38,6 +38,7 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `oracle_harness.js` | **node** | P51: how far below the perfect-foresight ceiling does each family sit, and is it conversions or the split? |
 | `oracle_crosscheck.js` | **node** | P51d: is the oracle's ceiling really a ceiling? Runs a search of a different shape at the same sim cost and reports how much more it finds. |
 | `schedule_replay_harness.js` | **node** | P103b2: what can `strategy: 'schedule'` carry? Compiles each shipped family into a per-year schedule, replays it, and prints where the representation runs out. |
+| `schedule_oracle_harness.js` | **node** | P103b4: does the wider representation reach higher? Searches per-year ceilings against the same base row and budget as the conversions-only oracle. |
 | `endgame_harness.js` | **node** | P35n: once the IRA sits at its target, what should the tail draw from? |
 | `irmaa_margin_harness.js` | **node** | Does an explicit IRMAA safety margin buy anything, now that the tier ceiling is projected forward? |
 | `irmaa_cpi_risk_harness.js` | **node** | Same question with the CPI allowed to come out different from the one the plan assumed. Reverses the answer. |
@@ -92,6 +93,7 @@ evidence of currency.
 | `unifiedconv_harness.js` | **DRIFTED** | drifted again past its own 2026-08-24 re-baseline: negative in 26/60 -> 29/60, worst -$633,605 -> -$635,692 |
 | `oracle_harness.js` | **RE-BASELINED 2026-09-01** (`P103a`) | was DRIFTED. Both halves re-run on engine `1b7b366`: median best-family gap **4.35% -> 1.58%**, the +$1.08M conversion headline is now +$122k, and the dominant lever flipped from conversion timing to the withdrawal split. `S3-P2` WRONG -> RIGHT, `B-P4` RIGHT -> WRONG. Report is the second run throughout |
 | `oracle_harness.js --reserve0` | **CURRENT** | new 2026-09-01 (`P103b1`). Holds surplus routing constant across arms. Negative gaps 1 -> **0**, median gap 1.58% -> 2.03%, and the winning strategy changes in 4 of 6 headline cells |
+| `schedule_oracle_harness.js` | **CURRENT** | new 2026-09-01 (`P103b4`). Arm S (schedule) beats Arm A (conversions-only) in **6 of 6** cells, +0.25% to +1.82%, on an eighth of the compute in some. `S-P1` RIGHT |
 | `schedule_replay_harness.js` | **CURRENT** | new 2026-09-01 (`P103b2`, widened by `P103b3`). **8 of 11 arms replay EXACTLY**: every ceiling family including ACA across its lapse, plus IRA Draw and Reduce via the quantity lever. Proportional, Ordered and Guyton-Klinger carry nothing - they decide a split or the spend, not an IRA draw. `R-P1` WRONG |
 | `oracle_crosscheck.js` | **CURRENT** | new 2026-09-01. `X-P1` RIGHT 5/5: an equally-costed search of a different shape beats the oracle's descent by at most **0.013%**, so "lower bound" is near-tight on the conversion axis. `X-P2` and `X-P3` WRONG |
 | `rmdbasis_harness.js` | **CURRENT** | 0 of 30 timing-dependent, R2 violated in 0 of 30 - the post-fix column exactly |
@@ -382,6 +384,28 @@ at all - was WRONG, and the ACA counterexample is what named the missing fallbac
 
 The two exact cases and the two failure modes are pinned as node tests in `optimizer_core.tests.js`;
 this harness is the wider table.
+
+## schedule_oracle_harness.js  (node)
+
+```bash
+node .test_harnesses/schedule_oracle_harness.js              # 6 named cells
+node .test_harnesses/schedule_oracle_harness.js --cells all  # all 45, slow
+```
+
+**Results live in [`PERFECT_FORESIGHT_ORACLE.md`](PERFECT_FORESIGHT_ORACLE.md), section `P103b4`.** The question
+P103 was opened to answer: `extraConversionAmount[]` is EXTRA on top of the base rule, so the oracle
+can convert more than the rule and never less. `strategy: 'schedule'` makes the rule's own ceiling a
+per-year number. Both arms take the same base row, objective, spend pin and MEASURED sim budget.
+
+Headline (2026-09-01): **Arm S beats Arm A in 6 of 6 cells, +$11,259 to +$198,508 (+0.25% to
++1.82%)** - and in the two cells where the conversion oracle finds nothing at all, the schedule finds
+~$198k. It also converges on roughly an eighth of the compute, because a multiplicative candidate set
+is scale-free where a $25k grid is not.
+
+The base is the best row whose compiled schedule REPLAYS IT EXACTLY, verified per cell. That matters:
+an earlier version took the best non-cyclic row regardless, handed Arm S an empty plan in five of
+seven cells (Ordered and GK compile to nothing) and printed a confident wrong answer after one
+simulation per cell.
 
 ## endgame_harness.js  (node)
 

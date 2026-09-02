@@ -3901,3 +3901,41 @@ accounts** (Proportional, Ordered) and not **what to spend** (Guyton-Klinger). T
 `oracleWithdrawalPlan`'s job and already exists, but it PREEMPTS the strategy branch instead of
 composing with it, so carrying Ordered means using that hook rather than extending this one.
 Guyton-Klinger is outside the vocabulary by construction: a schedule takes `spendGoal` as given.
+
+
+## The schedule reaches higher than the conversion axis, on less compute  *(2026-09-01, `P103b4`)*
+
+**Codes:** *Arm A* = the oracle's existing search, per-year `extraConversionAmount`, which is EXTRA on
+top of the base rule and therefore one-directional. *Arm S* = per-year `ordTarget`/`iraDraw` on the
+same base row. Both take the same objective, the same spend pin and the same measured sim budget.
+
+**Arm S wins 6 of 6 cells**, +$11,259 to +$198,508, or **+0.25% to +1.82%** of real after-tax net
+worth. Harness `.test_harnesses/schedule_oracle_harness.js`; 45,475 sims, 34.2 s.
+
+**The two cells that carry the argument** are `thirds @4%` and `brokheavy @4%`, where the conversion
+oracle finds **$0** and the schedule finds **~$198k**. Those plans do not want more conversion. They
+want the base rule's own draw moved year to year, which is a sentence `extraConversionAmount` cannot
+say in any amount. **The one-directional axis was not a small limitation; in some cells it was the
+whole gap.**
+
+**It also converged on roughly an eighth of the compute** - 1,021 sims against 9,575 in
+`defaults @4%`, 1,201 against 9,260 in `defaults3x @4%`. The reason is candidate SHAPE, not luck: a
+multiplicative set (×0.4 … ×2.0) is scale-free, so it works identically on a $400k ceiling and a $40k
+draw, while a $25k absolute grid over $0-400k spends most of its evaluations far from any plausible
+value. **A search axis measured in ratios beat one measured in dollars at the same budget**, which is
+a transferable result for `P34`'s slow-machine target and for the `P103c` search-cost question.
+
+**The harness was confidently wrong first, and the failure has a recognizable shape.** Version 1 chose
+the best non-cyclic row as the base regardless of family. Ordered and Guyton-Klinger compile to an
+EMPTY schedule (`P103b3`), which funds no spending, fails the spend pin and scores null - after ONE
+simulation. Five of seven cells printed Arm S losing by the entire conversion gain, and `S-P1` scored
+WRONG. It was re-measuring the b3 coverage boundary and reporting it as a ceiling comparison.
+**Generalizable: a null or catastrophic result that arrives after one evaluation is a setup bug, not
+a finding - check the evaluation COUNT before believing a verdict.** The fix was to require the base
+row's compiled schedule to replay it exactly, verified per cell before either arm runs.
+
+**Scope, because this is the phase's first number that moves.** Perfect foresight on one path; the
+base rows differ from `P103a`'s champions because a carryable row is required; and **spend is still
+pinned**, so all of it is "more wealth at the same delivered spend". Whether a FIXED rule captures
+most of the gain - the `P35n` template that produced the only shipped result in this whole line of
+work - is `P103d`, and that is the question that decides whether any of this reaches a user.

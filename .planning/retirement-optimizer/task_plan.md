@@ -11,7 +11,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P103 | `a`,`b1`,`b2`,`b3` DONE: gap re-baselined; routing was a confound; `strategy:'schedule'` replays **8 of 11 shipped arms to the dollar** | `P103b4` |
+| **O0** | P103 | `a`-`b4` DONE. **`b4` MOVED A NUMBER**: the schedule beats the conversions-only oracle in 6/6 cells, +0.25-1.82%, on ~1/8 the compute | `P103b5` |
 | **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
@@ -212,7 +212,54 @@ a research instrument and a ship-time check.
       the IRA, but not how to SPLIT a spending draw across accounts (Proportional, Ordered) and not
       what to SPEND (Guyton-Klinger). The split is `oracleWithdrawalPlan`'s, which already exists but
       PREEMPTS the strategy branch rather than composing - carrying Ordered means using that hook.
-      Guyton-Klinger is outside the vocabulary by construction: a schedule takes `spendGoal` as given.
+      **GK correction (user, 2026-09-01):** I wrote "outside the vocabulary by construction", and that
+      is wrong. GK's per-year decision is the SPEND, and spend is a decision like any other - one a
+      better draw strategy can improve, not a constant handed to the plan. The true statement is
+      narrower and bigger: **this study PINS spend by choice**, so every ceiling in `P103a` is a
+      ceiling at fixed spend, and that is why GK rows are excluded from the gap tables rather than
+      compared in them. The oracle has never searched the spend axis. Opened as `P103b5`.
+- [ ] **P103b5** - **`spendGoal` as a schedule field** (NEW 2026-09-01, user-raised). The one field
+      that would let Guyton-Klinger be carried, and the one that widens what "the ideal" means: every
+      gap number in `PERFECT_FORESIGHT_ORACLE.md` is currently conditional on the base row's delivered
+      spend. A strategy that delivers MORE lifetime spending for the same wealth, or the same spending
+      with a higher floor under a bad sequence, is invisible in those tables. **The spend pin exists
+      for a real reason and must not just be removed:** without it a spend-adaptive arm "wins" by
+      cutting spending, which is how a GK base once showed a fake +81%. So this needs a two-dimensional
+      objective (wealth AND delivered spend, or wealth at matched spend) before the axis can be
+      searched at all - that design decision is the first item, not the field.
+- [x] **P103b4 DONE 2026-09-01** - **the representation is worth money, and this is the first item in
+      `P103` to MOVE a computed number rather than describe one.** Harness:
+      `.test_harnesses/schedule_oracle_harness.js`. Report: `PERFECT_FORESIGHT_ORACLE.md`, `P103b4`.
+      No engine change; suites stay 394/61/22.
+      **Arm A** = today's oracle (per-year `extraConversionAmount`, EXTRA on top of the base rule, so
+      it can convert more and never less). **Arm S** = per-year `ordTarget`/`iraDraw` on the same base
+      row, same objective, same spend pin, same MEASURED sim budget.
+      **Arm S wins 6 of 6 cells: +$30,053 / +$11,259 / +$90,248 / +$22,195 / +$198,508 / +$197,877,
+      i.e. +0.25% to +1.82%.** `S-P1` RIGHT. In the two cells where the conversion oracle finds
+      NOTHING, the schedule finds ~$198k - those cells do not want more conversion, they want the base
+      rule's draw moved year by year, which is exactly what the old axis could not say.
+      **It also wins on an eighth of the compute** (1,021 sims vs 9,575 in `defaults @4%`), because a
+      multiplicative candidate set is scale-free where a $25k grid over $0-400k is not. That is a
+      direct input to `P34`'s slow-machine target and to the `P103c` search-cost question.
+      **The first version of this harness was confidently wrong** and the shape is worth remembering:
+      it chose the best non-cyclic base regardless of family, so five of seven cells handed Arm S an
+      EMPTY plan (Ordered and GK compile to nothing per `b3`), which funds no spending, fails the pin
+      and scores null after ONE simulation. It printed Arm S losing by the whole conversion gain and
+      `S-P1` WRONG. **A null result that arrives after one simulation is a harness bug, not a
+      finding.** The base is now the best row whose compiled schedule replays it exactly, verified per
+      cell; `defaults3x @8% b20` is skipped honestly because no row there qualifies.
+      **What it does NOT license:** these are perfect-foresight artifacts on one path, and the base
+      rows differ from `P103a`'s champions because a carryable row is required. Whether a FIXED rule
+      captures most of it - the `P35n` template - is `P103d`.
+- [ ] **P103b5** - **`spendGoal` as a schedule field** (NEW 2026-09-01, user-raised). The one field
+      that would let Guyton-Klinger be carried, and the one that widens what "the ideal" means: every
+      gap number in `PERFECT_FORESIGHT_ORACLE.md` is currently conditional on the base row's delivered
+      spend. A strategy that delivers MORE lifetime spending for the same wealth, or the same spending
+      with a higher floor under a bad sequence, is invisible in those tables. **The spend pin exists
+      for a real reason and must not just be removed:** without it a spend-adaptive arm "wins" by
+      cutting spending, which is how a GK base once showed a fake +81%. So this needs a two-dimensional
+      objective (wealth AND delivered spend, or wealth at matched spend) before the axis can be
+      searched at all - that design decision is the first item, not the field.
 - [ ] **P103b4** - re-run `P103a`'s table on the schedule representation and report whether anything
       still beats the ceiling.
       **The cost that decides how far this goes, stated up front:** ~33 years x 4 knobs is ~130 search
@@ -253,9 +300,9 @@ a research instrument and a ship-time check.
 | `P102` | Stages C/D (worker, search budget) DEFERRED behind `P103d` - until there are arms worth buying time for. Stage E's `e1`/`e2` (gap-fill and stop-year as swept arms) are `P103d` candidates |
 | `P34` | unchanged at O1; NOT a `P103` prerequisite - `a`-`d` are node harnesses |
 
-- **Status:** **`P103a`, `P103b1`, `P103b2` and `P103b3` COMPLETE 2026-09-01.** `P103b4` is next: the
-  re-run against the schedule representation, and the search-cost decision that goes with it.
-  `P103c`-`e` behind it. `P103b1x` is a separate product question.
+- **Status:** **`P103a` and `P103b1`-`b4` COMPLETE 2026-09-01.** `P103b5` (spend as a schedule field,
+  user-raised) is next, and it needs an objective decision before a field. `P103c`-`e` behind it.
+  `P103b1x` is a separate product question.
 - **Depends on:** nothing. `P103e` needs `P103d`; `P103d` needs `P103a` and `P103b`.
 
 ---

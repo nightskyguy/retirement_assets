@@ -7487,3 +7487,38 @@ the IRA, not how to split a spending draw across accounts (Proportional, Ordered
 `oracleWithdrawalPlan`, which preempts rather than composes) and not what to spend (Guyton-Klinger,
 outside the vocabulary by construction). `P103b4` is next: re-run the oracle table on the schedule
 representation, and decide the search question, which is still ~130 axes against today's ~33.
+
+
+## 2026-09-01 (cont.) - user corrects the GK claim; P103b4 moves a number
+
+**User:** *"Guyton Klinger affects the goal, and it, too, can likely be improved by changing the
+draw/spend strategy."* Right, and I had written "outside the vocabulary by construction" in the
+report, the plan, findings, a commit message and the PR body. Corrected in all of them.
+
+**The correction is bigger than the sentence.** GK's per-year decision is the SPEND, and spend is a
+decision a better draw strategy can improve - not a constant handed to the plan. What is actually
+true is narrower and more damaging to the study: **the oracle PINS spend**, so every ceiling in
+`P103a` is a ceiling at fixed spend, which is exactly why GK rows are excluded from the gap tables
+rather than compared in them. The spend axis has never been searched. Opened as **`P103b5`**, with
+the design constraint recorded up front: the pin exists because a spend-adaptive arm otherwise "wins"
+by cutting spending (a GK base once showed a fake +81%), so the first item is a two-dimensional
+objective, not a field.
+
+**`P103b4`: Arm S (schedule) beats Arm A (conversions-only) in 6 of 6 cells**, +$11,259 to +$198,508,
++0.25% to +1.82%, same base row and same measured budget. `S-P1` RIGHT. This is the first thing in
+`P103` to move a computed number instead of describing one.
+
+- **The two cells that make the case:** `thirds @4%` and `brokheavy @4%`, where the conversion oracle
+  finds **$0** and the schedule finds **~$198k**. Those plans want the base rule's draw moved, which
+  `extraConversionAmount` cannot express in any amount.
+- **It wins on ~1/8 the compute** (1,021 sims vs 9,575). Multiplicative candidates are scale-free; a
+  $25k grid over $0-400k is not. Transferable to `P34` and `P103c`.
+
+**I shipped a confidently wrong harness first and caught it by reading the sim counts.** Version 1
+took the best non-cyclic base regardless of family, so five of seven cells handed Arm S an empty plan
+(Ordered and GK compile to nothing) - null score after ONE simulation - and it printed Arm S losing
+by the whole conversion gain with `S-P1` WRONG. The tell was the `sims A/S` column reading `8248/1`.
+Recorded as a rule: **a null or catastrophic result that arrives after one evaluation is a setup bug,
+not a finding.** Base selection now requires exact replay, verified per cell.
+
+Next is `P103b5`, and its first question is the objective, not the field.

@@ -128,5 +128,7 @@ console.log('  - the account SPLIT. Proportional draws proportionally across IRA
 console.log('    Ordered runs a sequence; neither is an IRA draw, so ordTarget and iraDraw are both');
 console.log('    silent. oracleWithdrawalPlan already expresses it, but it PREEMPTS the strategy');
 console.log('    branch rather than composing with it - carrying Ordered means using that hook.');
-console.log('  - the SPEND. Guyton-Klinger decides what to spend; a schedule takes spendGoal as');
-console.log('    given, so it is outside the vocabulary by construction rather than by omission.');
+console.log('  - the SPEND. Guyton-Klinger decides what to SPEND, and spend is a decision like any');
+console.log('    other - a better draw strategy can improve it. The schedule takes spendGoal as');
+console.log('    given only because THIS STUDY pins spend, which is also why GK rows are excluded');
+console.log('    from the oracle gap tables rather than compared in them. P103b5 adds the field.');

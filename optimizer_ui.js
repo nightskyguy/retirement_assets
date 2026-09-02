@@ -2596,6 +2596,8 @@ const columnCategories = {
     'pension': ['Summary', 'Income'],
     'totalIncome': ['Summary', 'Income'],
     'cashD+I': ['Cash Δ', 'Income'],
+    'ConvTaxCash': ['Cash Δ', 'Opp. Cost'],
+    'ttlCashWD': ['Cash Δ', 'Spending'],
 
     // Balances - end-of-year balances
     'IRA1': ['Balances', 'IRA Δ'],
@@ -2708,6 +2710,8 @@ const columnGroupDefs = {
     'Cash': 'Balances', 'Roth': 'Balances', 'Brokerage': 'Balances',
     'Basis': 'Balances', 'totalWealth': 'Balances', 'SumSpendable': 'Balances',
     'brokerageG': 'Balances', 'cashG': 'Balances', 'rothG': 'Balances', 'RMD%': 'Balances',
+    'ConvTaxCash': 'Withdrawals',
+    'ttlCashWD': 'Withdrawals',
     'convOC': 'Opp. Cost', 'excessOC': 'Opp. Cost', 'convTax': 'Opp. Cost', 'excessTax': 'Opp. Cost',
     'BETR%': 'Opp. Cost', 'betrFlag': 'Opp. Cost', 'extraConv': 'Opp. Cost',
     'subCycle': 'Withdrawals',
@@ -2820,6 +2824,19 @@ function isTableColumnKey(key) {
     return !key.startsWith('-') && key !== 'inflationFactor';
 }
 
+// Account BALANCE columns are never treated as empty (user, 2026-09-01). A balance of zero is a
+// fact about the plan - "this account is empty all the way through" - and hiding the column turns
+// that fact into a missing column, which reads as "the tool does not track Cash" rather than "you
+// have no Cash". Every other column is a FLOW or a rate, where all-zero really does mean the row has
+// nothing to say and the column is noise.
+//
+// Deliberately the aggregate accounts only. IRA1/IRA2/Roth1/Roth2 are per-PERSON splits, and an
+// all-zero Roth2 for a single filer is not an empty account, it is an absent person - suppressing
+// that one is right.
+const ALWAYS_SHOW_BALANCE_COLS = new Set([
+    'Cash', 'Brokerage', 'Basis', 'TotalIRA', 'Roth', 'totalWealth', 'SumSpendable',
+]);
+
 // Analyze which columns have content (non-zero, non-empty values)
 function analyzeColumnContent(log) {
     if (!log || log.length === 0) return {};
@@ -2828,6 +2845,7 @@ function analyzeColumnContent(log) {
     const columnStatus = {};
 
     keys.forEach(key => {
+        if (ALWAYS_SHOW_BALANCE_COLS.has(key)) { columnStatus[key] = true; return; }
         let hasNonZeroValue = false;
 
         for (const row of log) {
@@ -3160,7 +3178,9 @@ function updateTable(log) {
         'Roth2': "Person 2's Roth balance at year end.",
         'rothG': 'Growth in the Roth (added to Roth account)',
         'rothConv': 'Amount that actually landed in Roth this year (IRA→Roth). A conversion owes tax on the amount converted: unless "Use Cash" (under Maximize Conversions) is on, that tax is taken out of the conversion itself, so this reads LOWER than the gross amount withdrawn (e.g. a $20,000 Extra Annual Roth Conversion lands ~$13,700 at a 31% marginal rate). With cash-funding on, the tax is paid from Cash instead and the full amount lands here. See the extraConv column (Opp. Cost category) for the gross figure.',
-        'CashWD': 'Tax free withdrawals from Cash',
+        'CashWD': 'Cash drawn to fund SPENDING, tax free. This is not every dollar that can leave Cash: when "Use Cash" (under Maximize Conversions) is on, the conversion tax is paid from Cash too and appears in ConvTaxCash instead. The two together are the whole Cash outflow for the year.',
+        'ttlCashWD': 'Every dollar that left Cash this year: the spending draw (Cash WD) plus the conversion tax when "Use Cash" funds it (ConvTaxCash). Shown beside Cash WD in the Withdrawals band. Last year’s Cash balance minus this, plus interest and growth, is this year’s Cash balance.',
+        'ConvTaxCash': 'Roth conversion tax paid out of Cash rather than netted out of the conversion, which happens only when "Use Cash" (under Maximize Conversions) is on. Kept separate from Cash WD because this money funded a conversion, not spending - the income and asset-flow charts would double-count it as spending money otherwise. Start-of-year Cash minus Cash WD minus ConvTaxCash, plus interest and growth, is the year-end Cash balance.',
         'surplusCash': 'Cash left over after spending and taxes were covered - routed back into the Cash account (or on to Roth conversion if Max Conversion is enabled).',
         'cashD+I': 'Dividends (from brokerage) and interest from Cash (deposits)',
         'MAGI': 'Modified Adjusted Gross Income - determines future IRMAA',

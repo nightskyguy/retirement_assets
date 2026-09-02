@@ -28,6 +28,26 @@ const SUGGEST_SCAN_STEPS   = 12;  // Coarse scan before the bisection refine. Ne
 // Baseline ranking weight: a dollar the household actually spends outranks a dollar bequeathed
 // by 10%. Single source of truth shared by the optimizer table's _baselineScore (optimizer_ui.js)
 // and the conversion sweep's 'baselineScore' metric (baselineScoreOf below) so the two cannot drift.
+// Tie-break weight for the baseline score, which is real terminal after-tax net worth PLUS
+// SPENDABLE_WEIGHT x lifetime spend in current dollars (see baselineScoreOf below). Its PURPOSE is
+// to prefer the plan that delivers MORE SPENDING when two plans are otherwise equal. Without it a
+// wealth-only score silently rewards an arm for spending less, which is how a Guyton-Klinger base
+// once posted a fake +81% that was pure spend-shifting.
+//
+// Two things worth knowing before changing it, both measured 2026-09-01 (P103b5a; harness
+// .test_harnesses/spend_objective_harness.js, results in research/PERFECT_FORESIGHT_ORACLE.md):
+//
+//   1. totals.spendCurrentDollars ACCUMULATES over the horizon, so this multiplies LIFETIME spend
+//      and not one year of it. On the default scenario that is ~$2.1M against ~$5.9M of terminal
+//      wealth - about a third of the score, not a rounding nudge.
+//
+//   2. It settles TIES, not trade-offs, and 1.10 is why. Sweeping the spend goal on a fixed arm,
+//      the model gives up 1.4 to 3.3 dollars of real terminal wealth for each extra dollar of
+//      lifetime spending. Since 1.10 is below that everywhere measured, a genuinely
+//      higher-spending plan does not win on score; the comparison this weight actually changes is
+//      the equal-wealth one, which is exactly the "otherwise equal" case it exists for. Biasing
+//      REAL trade-offs toward spending would need a number above ~3.3, and that is a preference
+//      decision rather than a modeling one.
 const SPENDABLE_WEIGHT = 1.10;
 
 /** TAX CONSTANTS **/
@@ -1229,6 +1249,19 @@ function buildSimYearLogRecord(p) {
         '-grossUpIRA': p.grossUpIRA || 0,
         '-grossUpTax': p.grossUpTax || 0,
         '-extraConvCashTax': p.extraConvCashTax || 0,
+        // ...and the VISIBLE total of the two, because between them they are the only way Cash can
+        // fall without CashWD moving, and a reader trying to reconcile the Cash balance had no
+        // column to find them in (user, 2026-09-01: "I don't see the cash being removed in the first
+        // year"). On the plan that raised it, Cash went $72,000 -> $16,099 in year one with CashWD
+        // reading 0, because $56,512 of it paid the conversion tax. Kept separate from `convTax`,
+        // which is the whole conversion tax whether or not Cash funded any of it.
+        'ConvTaxCash': (p.grossUpTax || 0) + (p.extraConvCashTax || 0),
+        // ...and the TOTAL: every dollar that leaves Cash in a year, the spending draw plus the
+        // conversion tax when cash funds it. Prior-year Cash minus ttlCashWD, plus interest and
+        // growth, is this year's Cash balance. It lives in the Withdrawals band beside CashWD
+        // rather than in Balances (user, 2026-09-01): Balances carries BALANCES, and a flow
+        // column sitting among them is what made the missing outflow hard to find to begin with.
+        'ttlCashWD': (p.netWithdrawals.Cash || 0) + (p.grossUpTax || 0) + (p.extraConvCashTax || 0),
         // Phase 27: inflows/outflows + withdrawal rate
         grossOut: p.grossOutflows,
         netOut: p.netOutflows,

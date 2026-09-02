@@ -120,7 +120,12 @@ a research instrument and a ship-time check.
       budget, and it is WORSE in one cell. `X-P1` RIGHT 5/5, `X-P2` and `X-P3` WRONG. One-directional:
       it shows an equally-costed different search cannot beat the descent, not that the descent is
       optimal, and it says nothing about the split axis.
-- [ ] **P103b** - **RESTRUCTURED 2026-09-01 (user).** Was "close the two plumbing holes". Two user
+- [x] **P103b COMPLETE 2026-09-01** - all of `b1`-`b5c` done; `strategy: 'schedule'` exists and
+      carries every shipped family's spend and IRA draw. **One field never built: the account SPLIT**,
+      which is what still stops Proportional and Ordered from being carried. `P103e` made that less
+      urgent - the shippable result uses existing families and needs no schedule at all - so the split
+      is now only needed if `P103c` proceeds. `P103b1x` below is a separate PRODUCT question.
+      ORIGINAL SCOPE, kept for the record: **RESTRUCTURED 2026-09-01 (user).** Was "close the two plumbing holes". Two user
       corrections reshaped it, both right, both measured before being written down:
       **(i) surplus ROUTING to Brokerage is already shipped three ways** - `cyclicEnabled`,
       `CashReserve != null` (a buffer of 0 sends all of it), and an Ordered brokerage-first sequence

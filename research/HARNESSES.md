@@ -416,6 +416,28 @@ win different cells** - Ordered CIBR 8, Fill Bracket 22% 6, IRA Draw 5% 5 - so t
 regime-gated, not a new default. `G-P3` WRONG in an interesting direction: IRA-first rules win more
 often than cash/brokerage-first ones here, the opposite of the `P35n` endgame result.
 
+## magi_edge_gate_harness.js  (node)
+
+```bash
+node .test_harnesses/magi_edge_gate_harness.js
+```
+
+**Results live in [`PERFECT_FORESIGHT_ORACLE.md`](PERFECT_FORESIGHT_ORACLE.md) and in `task_plan.md` under
+`P103c1`.** The GATE on `P103c`: that phase proposes searching two per-year income targets over the
+MAGI edge menu, which is only sensible if good plans land on that menu. `P75a` has always said
+"mostly interior" means stop and redesign. Best rows by `baselineScore`, every plan-year's realized
+MAGI against that year's edges, residency reported as a CURVE over tolerance so the verdict cannot be
+manufactured by choosing a generous band.
+
+Headline (2026-09-01), **PROVISIONAL**: 4.2% of 990 best-row plan-years sit within $1,000 of an edge
+(1.3% at $250, 29.2% at $10,000), which reads as the gate failing. It is NOT acted on, because the
+first version of this measurement was wrong - it rebuilt the statutory tables by hand and scaled them
+by the SPENDING inflation factor rather than the CPI indexation one, and reported 1.1% for Fill
+Bracket, a family that fills a ceiling by construction. Edges now come off the log (`FedCap`,
+`StateCap`, `BracketTarget`, `-cpiFactor`), and a direct check confirms Fill Bracket 22% sits at
+exactly $0 from its own `BracketTarget` in the years the ceiling binds - 6 of 33 in the cell tested.
+Confirm the binding-year counts per family before treating the gate as failed.
+
 ## gk_drawrule_mc_harness.js  (node)
 
 ```bash

@@ -11,7 +11,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P103 | `a`-`b5c` DONE. **`b5c`: the flat-spend fixture understated every gap ~2x** (median 1.58% -> 3.44%); `P103d` must re-derive its map there | `P103d` |
+| **O0** | P103 | `a`-`b5c` DONE + **`P103d` map derived**: fat regimes are **8%-spend, GK-best** (13 of 17 cells >=5%). `b5c`'s doubling claim WITHDRAWN - a routing interaction | `P103d` bake-off |
 | **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
@@ -280,24 +280,28 @@ a research instrument and a ship-time check.
       now with a measured prize. Second thing in `P103` to move a number, and unlike `P103b4` it
       needs no perfect foresight.
       **One field left: the account SPLIT.** Proportional and Ordered still carry nothing.
-- [x] **P103b5c DONE 2026-09-01** - **the flat spend path was understating the gap by about half.**
-      `oracle_harness.js --full --spendchange -1`, 424,399 sims, 407.9 s; flag opt-in so a bare run
-      still reproduces the published tables.
-      **`D-P1` RIGHT, by six times the predicted margin.** Predicted the median gap would widen by
-      >0.3pp; it roughly DOUBLES. Default basis **1.58% -> 3.44%**, b20 1.13% -> 3.30%, b80 0.90% ->
-      3.23%. Max conversions-only gain at default basis 0.57% -> **9.55%**.
-      **`D-P2` RIGHT but narrowing.** The split stays dominant (27 of 45 cells on both paths), yet
-      conversions nearly double while the split falls: totals +conv $2,042,009 -> **$3,800,777**,
-      +split $5,468,972 -> **$4,848,706**.
-      **A published headline BREAKS.** "The best flat scalar finds $0 in 45 of 45 cells" is a
-      flat-path artifact: on the declining path it finds money in **3 of 45**, up to **$86,640**
-      (`defaults @4% b80`). So "per-year conversion shapes are inexpressible to the flat sweep" holds
-      on a flat path and only mostly holds on a realistic one.
-      **`S3-P4` flips WRONG** - backstops were silent 45/45 on the flat path; now `brokheavy @6% b20`
-      runs 2 forced-IRA years of 33 (6%, over the 5% threshold) and `defaults3x @8% b20` runs 1.
-      **Consequence for the rest of `P103`: every other gap number in the report is a flat-path
-      number and understates the realistic gap by roughly 2x.** Which lever matters survives; the
-      sizes do not.
+- [x] **P103b5c DONE 2026-09-01, FIRST RESULT CORRECTED SAME DAY** - the spend path matters less
+      than it first looked, and the correction is the finding. Report: `PERFECT_FORESIGHT_ORACLE.md`
+      `P103b5c`.
+      **What I published first, and withdrew hours later.** Running `--spendchange -1` ALONE, with
+      routing left uncontrolled, the median gap went 1.58% -> 3.44% and I scored `D-P1` RIGHT "by six
+      times the predicted margin". Crossing it with `--reserve0` for `P103d`'s map showed that was an
+      INTERACTION with the routing confound, not a spend-path effect:
+      | median gap, default basis | routing uncontrolled | routing CONTROLLED |
+      | flat spend | 1.58% | **2.03%** |
+      | -1%/yr | 3.44% | **1.94%** |
+      **`D-P1` is WRONG.** Controlled, the gap does not widen at all. Negative gaps: 1 in each
+      uncontrolled run, **0 in both controlled runs**.
+      **Two claims withdrawn.** "The flat scalar's $0 in 45/45 is a flat-path artifact" - NO, under
+      routing control it is **$0 in 44 of 44 on BOTH paths**; the 3 cells that appeared to break it
+      were routing artifacts and **the original headline stands**. And "the gap roughly doubles" - no.
+      **What survives, measured under control:** max conversions-only gain 0.57% -> **9.55%**;
+      `S3-P4` flips WRONG (45/45 clean -> 44/45); and the basis arms CONVERGE on the declining path
+      (all three medians 1.94%), so basis stops mattering to the median.
+      **The lesson, and it is why the 2x2 was worth the extra run: these two fixtures INTERACT.**
+      Correcting one fixture at a time moved the confound instead of removing it, and produced two
+      false positives that survived a full write-up and a commit. A fixture nobody chose deliberately
+      has to be crossed with the others, not fixed in isolation.
 - [ ] **P103c** - **the unified search** (was `P75a`-`P75c`; absorbs parked `P5`). `P75`'s control
       variable - two per-year income targets, ordinary income realized and LTCG realized, searched
       over the ~12-edge MAGI menu - on the oracle's plumbing and in the oracle's role as ceiling.
@@ -313,13 +317,21 @@ a research instrument and a ship-time check.
       where a $25k absolute grid is not. So the cost has to be re-derived per axis rather than
       assumed from the axis COUNT, and whether an LP is needed at all is now an open measurement
       instead of a foregone conclusion.
-- [ ] **P103d** - **regime bake-offs, the `P35n` template, across regimes.** `P103a` has now NAMED the
-      fat regimes and they are not the ones this bullet guessed: **the GK-strain cells at 6-8% spend
-      (0.35-20.9%) and the 20%-basis arm**, not `defaults3x @4%`, which was fat under the old numbers
-      and is now 1.58%. **`P103b5c` then showed that map is a FLAT-PATH map:** on a realistic -1%/yr
-      spend the median gap doubles, so the regime ordering has to be RE-DERIVED on the declining path
-      before this phase aims at anything. That is the first item here.
-      For each such regime: oracle as ceiling, a handful of STATIC rules as candidates, a crossed grid,
+- [ ] **P103d** - **regime bake-offs, the `P35n` template.** **MAP DERIVED 2026-09-01** from the
+      only fully-controlled run (`--reserve0 --spendchange -1`, 409,277 sims, 0 negative gaps).
+      Report: `PERFECT_FORESIGHT_ORACLE.md` `P103d`.
+      **The target, derived rather than guessed: high-spend plans where Guyton-Klinger is the best
+      available family.** Of the 17 cells with a gap >= 5%, **13 are at 8% spend** (4 at 6%, ZERO at
+      4%) and **13 have GK as the best family** (4 IRA Draw). Fattest: `round1 @8% b20` **22.78%**,
+      `defaults3x @6% b20` 17.95%, `thirds @8% b80` 15.03%, `thirds @8% b20` 14.96%.
+      **The map RELOCATED, it did not just grow.** Flat-path fat cells collapse (`thirds @6%` 14.95%
+      -> 0.58%, `round1 @6% b20` 15.48% -> -0.05%) while near-closed cells become the widest
+      (`thirds @8% b20` 0.00% -> 14.96%). `P103a`'s "GK-strain at 6-8% and the b20 arm" is half
+      right: the spend RATE is the axis and it is 8%; the basis arm is not - all three basis medians
+      are identical at 1.94%.
+      **So the bake-off is draw rules under a GK spend rule**, which is exactly what `spendRule: 'gk'`
+      was built for in `P103b5`, and GK is the family the schedule already dominates on both axes.
+      REMAINING: for each such regime: oracle as ceiling, a handful of STATIC rules as candidates, a crossed grid,
       predictions registered before the run. Winners ship as marked sweep arms, regime-gated, never
       as silent defaults. `P35`'s Phased engine becomes the CARRIER for whichever rules win, so its
       phases are chosen by this evidence rather than designed by hand.

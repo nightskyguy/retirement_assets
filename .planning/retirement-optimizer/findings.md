@@ -4068,3 +4068,39 @@ first harness and never revisited. Everything downstream inherited them too.
 **Consequence: every other gap number in `PERFECT_FORESIGHT_ORACLE.md` is a flat-path number** and
 understates the realistic gap by roughly 2x. Which lever matters survives; the sizes do not. `P103d`
 has to re-derive its regime map on the declining path before aiming at anything.
+
+
+## Correcting P103b5c: the two fixtures INTERACT  *(2026-09-01, same day as the claim)*
+
+**Codes:** *controlled* = `--reserve0`, surplus routing held constant across arms. *declining* =
+`--spendchange -1`. The 2x2 crosses them; each cell is a full 45-cell grid run.
+
+| median best-family gap, default basis | routing uncontrolled | routing CONTROLLED |
+|---|---|---|
+| flat spend | 1.58% | **2.03%** |
+| declining -1%/yr | 3.44% | **1.94%** |
+
+**`D-P1` is WRONG and I scored it RIGHT hours earlier.** Running the declining path alone, the median
+gap went 1.58% -> 3.44% and I wrote it up as "right by six times the predicted margin". Crossed with
+routing control it does not widen at all: 2.03% -> 1.94%. What I measured was the routing confound
+behaving differently under a different spend path.
+
+**Two published claims withdrawn.**
+- "The flat scalar finding $0 in 45 of 45 cells is a flat-path artifact" - **NO**. Under routing
+  control it is $0 in **44 of 44 on both paths**. The 3 cells that appeared to break it were routing
+  artifacts. The original headline stands.
+- "The gap roughly doubles on a realistic path" - **NO**, as above.
+
+**What survives under control:** max conversions-only gain 0.57% -> **9.55%**; `S3-P4` flips WRONG
+(45/45 clean -> 44/45); and the three basis medians CONVERGE on the declining path (all 1.94%), so
+the basis fraction stops mattering to the median.
+
+**The rule this establishes, which is stronger than the one it replaces.** Earlier today I wrote
+"a fixture value nobody chose deliberately is a finding waiting to happen" after the third such
+case. That is true but incomplete. **Fixtures INTERACT, so they cannot be corrected one at a time** -
+fixing routing while spend stayed flat, then fixing spend while routing stayed loose, produced a
+confident false positive at each step. The correction has to be crossed: vary the new fixture WITH
+the previously-controlled one, or the confound simply relocates.
+
+**Cost of learning this: one extra 345-second run.** Cost of not learning it: two withdrawn claims
+that had already survived a careful write-up, a prediction scoring, and a commit.

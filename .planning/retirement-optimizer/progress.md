@@ -7629,3 +7629,33 @@ were defaults inherited from the first harness and never revisited. Recorded in 
 **Consequence:** every other gap number in the report is a flat-path number, understating the
 realistic gap ~2x. `P103d` now has to re-derive its regime map on the declining path FIRST - written
 into its plan item.
+
+
+## 2026-09-01 (cont.) - correcting P103b5c, then deriving P103d's map
+
+**I withdrew two claims I committed an hour earlier.** `P103b5c` ran the declining spend path with
+routing left uncontrolled and reported the median gap doubling (1.58% -> 3.44%), scoring `D-P1`
+RIGHT. Running the 2x2 for `P103d`'s map showed that was an interaction with the routing confound:
+controlled, the gap goes 2.03% -> 1.94%, i.e. does not widen. `D-P1` is **WRONG**.
+
+Also withdrawn: "the flat scalar's $0 in 45/45 is a flat-path artifact". Under routing control it is
+**$0 in 44 of 44 on both paths**; the 3 cells were routing artifacts and the original headline holds.
+
+**What survives:** max conversions-only gain 0.57% -> 9.55%, `S3-P4` flipping WRONG, and the basis
+arms converging (all three medians 1.94%) on a declining path.
+
+**The sharper rule:** fixtures INTERACT, so correcting them one at a time moves the confound instead
+of removing it. Fixing routing with spend flat, then spend with routing loose, produced a confident
+false positive at each step. Cost of finding out: one extra 345 s run. Cost of not: two claims that
+had already survived a write-up, a prediction score and a commit.
+
+**`P103d`'s map is now derived** from the only fully-controlled run (409,277 sims, 0 negative gaps).
+Of the 17 cells with a gap >= 5%, **13 are at 8% spend** (4 at 6%, none at 4%) and **13 have
+Guyton-Klinger as the best family**. Fattest `round1 @8% b20` at **22.78%**. The map RELOCATED rather
+than growing: flat-path fat cells collapse (`thirds @6%` 14.95% -> 0.58%) while near-closed cells
+open up (`thirds @8% b20` 0.00% -> 14.96%). `P103a`'s "6-8% and the b20 arm" was half right - the
+spend rate is the axis and it is 8%; basis is not, all three basis medians are 1.94%.
+
+**So the bake-off target is derived rather than guessed:** draw rules under a GK spend rule, in
+high-spend plans - the composition `spendRule: 'gk'` was built for, on the family the schedule
+already dominates.

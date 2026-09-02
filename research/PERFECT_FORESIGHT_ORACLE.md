@@ -542,54 +542,103 @@ The `P103b5` sweep above is the first thing here to vary it, which is why it spa
 way.** Re-running the grid at a realistic decline is open work.
 
 
-## P103b5c - the flat spend path was understating the gap by about half
+## P103b5c - the spend path matters less than it first looked, and here is why
 
-**Run:** 2026-09-01, `node .test_harnesses/oracle_harness.js --full --spendchange -1`. 424,399 sims,
-407.9 s. The flag is opt-in, so a bare run still reproduces the published tables.
+**Runs:** 2026-09-01, `oracle_harness.js --full` with `--spendchange -1` and `--reserve0` crossed.
+Four runs, ~350-410 s and ~390-425k sims each. Both flags are opt-in; a bare run still reproduces the
+published tables.
 
-**Why.** Every cell in this study was run at `spendChange: 0`, a flat real spend path, and a typical
-plan declines around 1% a year (user, 2026-09-01). "Spend is pinned" is a comparison rule and real;
-"spend is flat" was a fixture nobody chose deliberately. This re-runs the whole grid on the realistic
-trajectory.
+**Why the whole 2x2 exists.** `P103b5c` first ran the declining path ALONE, with routing left
+uncontrolled, and reported that the gap doubles. `P103d` then needed a routing-controlled map, and
+crossing the two flags showed the first result was an interaction with the confound rather than a
+spend-path effect. **The corrected table:**
 
-**`D-P1` RIGHT, and by six times the predicted margin.** I predicted the median best-family gap would
-widen by more than 0.3 percentage points. It roughly doubles:
-
-| | flat path | −1%/yr real | change |
-|---|---|---|---|
-| median best-family gap, default basis | 1.58% | **3.44%** | +1.86 pp |
-| median gap, basis 20% | 1.13% | **3.30%** | +2.17 pp |
-| median gap, basis 80% | 0.90% | **3.23%** | +2.33 pp |
-| max conversions-only gain, default basis | 0.57% | **9.55%** | 17x |
-
-A declining spend leaves more wealth in the plan every year, so there is more balance to manage, more
-RMD pressure and more conversion room late - and the shipped rules, none of which know the spend is
-falling, fall further behind.
-
-**`D-P2` RIGHT, but the margin narrows sharply.** The withdrawal split stays the dominant lever - 27
-of 45 cells on both paths - but conversions nearly double in value while the split falls:
-
-| | flat path | −1%/yr real |
+| median best-family gap, default basis | routing uncontrolled | routing CONTROLLED |
 |---|---|---|
-| total +conv across the grid | $2,042,009 | **$3,800,777** |
-| total +split across the grid | $5,468,972 | **$4,848,706** |
-| conv-dominant / split-dominant cells | 16 / 27 | 15 / 27 |
+| flat spend (`spendChange: 0`) | 1.58% | **2.03%** |
+| declining (`-1%/yr real`) | 3.44% | **1.94%** |
 
-**One published headline breaks outright.** "The best flat scalar conversion finds **$0 in 45 of 45
-cells**" is one of this report's most-repeated results, and it is a flat-path artifact. On the
-declining path the flat sweep finds money in **3 of 45** cells - up to **$86,640** in
-`defaults @4% b80`, $80,036 in `defaults @4%`, $54,897 in `defaults @4% b20`. So "per-year conversion
-shapes are genuinely inexpressible to the flat sweep" is weaker than stated: it holds on a flat path
-and only mostly holds on a realistic one.
+**`D-P1` is WRONG.** It predicted the median gap would widen by more than 0.3 pp on a realistic spend
+path. Once surplus routing is held constant it does not widen at all - 2.03% to 1.94%, a hair
+narrower. The 1.58% -> 3.44% that looked like confirmation is what a routing confound does when the
+spend path changes underneath it. Negative gaps tell the same story: 1 in each uncontrolled run,
+**0 in both controlled runs.**
 
-**And `S3-P4` flips to WRONG.** Backstops were silent in 45/45 cells on the flat path. On the
-declining path `brokheavy @6% b20` runs 2 forced-IRA years of 33 - 6%, over the prediction's 5%
-threshold - and `defaults3x @8% b20` runs 1. `S3-P3` is 0/6 (was 1/6) and `B-P4` stays WRONG.
+**Two claims from the first pass are withdrawn.**
 
-**What this means for everything above.** **Every gap number elsewhere in this report is a flat-path
-number and understates the realistic gap by roughly a factor of two.** The conclusions about WHICH
-lever matters survive; the sizes do not. `P103d`'s bake-offs should run on the declining path, and
-the fat-regime map from `P103a` needs re-deriving there before it is trusted.
+- **"The flat scalar finds $0 in 45 of 45 cells is a flat-path artifact"** - NO. Under routing
+  control the flat sweep finds **$0 in 44 of 44 cells on BOTH paths**. The 3 cells that appeared to
+  break it (up to $86,640) were routing artifacts. **The original headline stands.**
+- **"The gap roughly doubles on a realistic path"** - NO, as above.
+
+**What genuinely does change with a declining spend, measured under routing control:**
+
+| | flat, controlled | −1%/yr, controlled |
+|---|---|---|
+| max conversions-only gain, default basis | 0.57% | **9.55%** |
+| `S3-P4` backstops quiet (<5% forced-IRA years) | RIGHT, 45/45 clean | **WRONG**, 44/45 |
+| median gap by basis arm | 2.03 / 2.03 / 0.90 | **1.94 / 1.94 / 1.94** |
+
+So the spend path does not move the TYPICAL gap, but it moves the tail: the best case for per-year
+conversion timing rises seventeenfold, backstops stop being silent, and the basis arms converge - at
+a declining spend the basis fraction stops mattering to the median at all.
+
+**The methodological point, and it is the one worth keeping.** These two fixtures INTERACT. Varying
+the spend path alone produced two false positives that survived a careful write-up and a commit.
+**A fixture nobody chose deliberately cannot be corrected one at a time** - the second correction has
+to be crossed with the first, or the confound simply moves. `P103b1` found the routing default,
+`P103b5c` found the spend default; only the 2x2 shows which of the two was doing the work.
+
+**Every gap number elsewhere in this report is from the routing-UNcontrolled flat run.** The nearest
+controlled equivalent is 2.03%, against the 1.58% quoted. Sizes should be read with that in mind;
+which lever matters is unaffected.
+
+## P103d - the regime map, routing-controlled and on a realistic spend path
+
+**Source:** the `--reserve0 --spendchange -1` run above, which is the only configuration with both
+known fixtures controlled. 409,277 sims, 345.0 s, zero negative gaps.
+
+**Where the money is, and it is not where `P103a` said.** Of the 17 cells with a gap at or above 5%:
+
+| grouping | count |
+|---|---|
+| at **8% spend** | **13** |
+| at 6% spend | 4 |
+| at 4% spend | **0** |
+| best family is **Guyton-Klinger** | **13** |
+| best family is IRA Draw | 4 |
+
+The twelve fattest cells, with the two earlier maps beside them:
+
+| cell | controlled | uncontrolled | flat | best family |
+|---|---|---|---|---|
+| round1 @8% b20 | **22.78%** | 22.75% | 0.56% | Guyton-Klinger |
+| defaults3x @6% b20 | **17.95%** | 12.97% | 13.90% | Guyton-Klinger |
+| thirds @8% b80 | **15.03%** | 14.63% | 0.02% | Guyton-Klinger |
+| thirds @8% b20 | **14.96%** | 13.67% | 0.00% | Guyton-Klinger |
+| brokheavy @8% b20 | **12.67%** | 12.39% | 0.41% | Guyton-Klinger |
+| brokheavy @6% | **10.01%** | 10.01% | 9.50% | IRA Draw |
+| defaults3x @8% b20 | **9.66%** | 9.66% | 12.07% | Guyton-Klinger |
+| defaults3x @8% | **9.10%** | 9.10% | 4.57% | Guyton-Klinger |
+| brokheavy @6% b20 | **8.88%** | 8.88% | 20.86% | IRA Draw |
+| round1 @8% b80 | **8.67%** | 9.30% | 2.49% | Guyton-Klinger |
+| brokheavy @8% b80 | **8.49%** | 8.49% | 0.35% | Guyton-Klinger |
+| defaults3x @8% b80 | **7.40%** | 7.40% | 3.56% | Guyton-Klinger |
+
+**The map RELOCATES rather than just growing.** On the flat path the fat cells were 6%-spend
+GK-strain cells; three of them collapse on the realistic path (`thirds @6%` 14.95% -> 0.58%,
+`round1 @6% b20` 15.48% -> -0.05%, `brokheavy @6% b20` 20.86% -> 8.88%) while cells that were
+essentially closed become the widest (`thirds @8% b20` 0.00% -> 14.96%, `round1 @8% b20` 0.56% ->
+22.78%). **`P103a`'s guidance to aim at "GK-strain cells at 6-8% spend and the 20%-basis arm" is
+half right:** the spend rate is the axis that matters and it is **8%**, while the basis arm is not -
+the three basis medians are identical at 1.94%.
+
+**What `P103d`'s bake-off should target**, now derived rather than guessed: **high-spend plans where
+Guyton-Klinger is the best available family.** That is 13 of the 17 fat cells, and it is the same
+family `P103b5` already showed the schedule dominating on both axes. The candidate rules to bake off
+are draw rules under a GK spend rule, which is exactly the composition `spendRule: 'gk'` was built
+for.
+
 
 ## P51f - trajectory post-mortem (observation only, ships nothing)
 

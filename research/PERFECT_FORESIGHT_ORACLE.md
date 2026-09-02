@@ -841,6 +841,92 @@ fails most futures; one MODE overstated how broadly the replacement wins. **Ever
 evidence flattered the answer**, which is the shape to expect and the reason the caveats stay
 attached to the number rather than in a footnote.
 
+## P104 - how much per-year freedom does the draw split actually need?  *(user-raised 2026-09-02)*
+
+**The question.** *"the real question is whether Proportional itself should be improved (or
+replaced). I suspect a winning draw strategy will require strategic choice of assets to draw from on
+a per-annum basis - not an 'IRA then fill' or ordered strategy."*
+
+Half of it was already answered: `P51c/e` attributes the oracle's gain to the **withdrawal split**
+over conversion timing in most cells, `+split` reaching +$856,425, and refutes "Proportional is
+default-optimal" outright. The split is where the money is and Proportional is not the right
+constant. The unmeasured half is the one that decides what gets BUILT: **a different answer every
+year, or a small number of long phases?** A per-year split needs the account SPLIT field `P103b2`
+named and never built, plus a search over it. A phased split is `P35`, which already exists.
+
+**Harness:** `.test_harnesses/split_expressiveness_harness.js`, 38,721 sims. An expressiveness
+ladder over the oracle's own archetype menu, so the rungs are comparable with the `+split` column
+above. Base is Proportional +0% - which is also Guyton-Klinger's draw - so spend is held to the
+plan's own trajectory and the comparison is pure wealth. Conversions are never searched. Both
+fixtures controlled (`CashReserve 0`, spend -1%/yr real).
+
+| cell | base NW | k=1 gain | k=2 gain | k=free gain | k=1 % | k=2 % |
+|---|---|---|---|---|---|---|
+| defaults @4% | $6,487,831 | $205,582 | $205,582 | $205,582 | **100%** | **100%** |
+| defaults @6% | $4,198,507 | $177,440 | $200,980 | $235,394 | 75% | 85% |
+| defaults3x @4% | $9,969,337 | $803,589 | $824,263 | $855,714 | 94% | 96% |
+| defaults3x @6% | $1,290,043 | $787,736 | $1,633,152 | $1,753,949 | 45% | 93% |
+| round1 @4% | $10,152,538 | $636,085 | $667,684 | $698,507 | 91% | 96% |
+| round1 @6% | $3,398,057 | $1,155,056 | $1,304,149 | $1,421,885 | 81% | 92% |
+| thirds @4% | $13,003,276 | $282,401 | $641,233 | $649,800 | 43% | 99% |
+| thirds @6% | $5,210,674 | $480,479 | $1,093,659 | $1,552,553 | 31% | **70%** |
+| brokheavy @4% | $12,493,032 | $139,928 | $746,338 | $1,032,204 | 14% | **72%** |
+| brokheavy @6% | $4,462,459 | $275,777 | $938,307 | $1,603,960 | 17% | **58%** |
+
+`k=1` is ONE archetype held every year, exhaustive over the menu. `k=2` is one switch, exhaustive
+over archetype pairs and switch year. `k=free` is the oracle's own per-year coordinate descent. The
+percentages are the share of the `k=free` gain each rung captures.
+
+**`X-P3` RIGHT, 10 of 10, and it is the cheapest actionable result here.** A single better CONSTANT
+beats Proportional in every cell, by **$139,928 to $1,155,056**. No per-year machinery, no schedule,
+no search over 33 years - one different weight vector. Whatever else is true, the shipped default is
+leaving six and seven figures on the table by being the wrong constant rather than by being constant.
+
+**`X-P1` RIGHT, 7 of 10 - so the answer is "mostly phases, not per-annum".** One switch captures
+85-100% of the entire per-year optimum in seven cells. The oracle's own answers are long blocks,
+matching `P51f`'s post-mortem: `thirds @6%` is literally `I5C5` for one year, `Brok` for eight, then
+`Roth` for twenty-four.
+
+**But the three exceptions are all brokerage-heavy, and they are large.** `brokheavy @6%` gets
+$938,307 from two phases against $1,603,960 from per-year freedom - **the per-year increment is
+$665,653**, 42% of the gain. `brokheavy @4%` 72%, `thirds @6%` 70%. Where Brokerage dominates the
+mix, when to realize gains is a per-year decision and phases cannot express it.
+
+**The catch, and it decides how much to trust the exceptions.** Every rung here has perfect foresight
+over the cell's own realized returns, and `k=free` has the most of it - it fits 33 free parameters to
+one path. **The k=2-to-k=free increment is by construction the most hindsight-fitted number in the
+table**, and `P103e` is the standing demonstration that fitted complexity is exactly what dies out of
+sample: the ordered sequences won more single-path cells than anything else and then reached **0%
+survival** under bootstrap. So the phase structure is the trustworthy part of this result and the
+per-year increment is the suspect part. That is not evidence per-year freedom is worthless - it is a
+reason not to build it first.
+
+**What no shipped family can express, and this is the surprise.** The winning CONSTANT is a *blend*
+in 4 of 10 cells - `B4C6` in three, `prop` in one - and blends are expressible by no current family.
+Cash-dominant archetypes win 8 of 10 (`Cash` five times, `B4C6`, the [40,60] gap-fill shape, three).
+That agrees independently with `GAPFILL_SPLIT.md`, where `w=0` (all Cash) won 65 of 82 clean cells
+and 40 won none. **So the account SPLIT field is needed even to express the best CONSTANT** - a far
+smaller build than a per-year search, and the thing to build first.
+
+**Caveat on the archetype semantics.** A weight of `{Cash: 1}` is not a literal all-cash draw: once
+Cash is exhausted, `calculateWithdrawals`'s phase-2 spill (IRA -> Brokerage -> Cash -> Roth) funds
+the rest. So `Cash` reads as "prioritize cash, then the default cascade". Whether that coincides with
+an Ordered C-first sequence is NOT tested here and must not be assumed - the ordered branch routes
+all spending through the gap fill, a different mechanism.
+
+**`X-P2` WRONG** - median 5 distinct archetypes and 7 switches, against a predicted 4 and 6. **`X-P4`
+is reported but its operator is bad and nothing here leans on it.** Collapsing every 1-year run into
+its neighbour keeps a median 51% of the gain, but it went NEGATIVE in two cells (-17%, -12%), i.e.
+worse than not optimizing at all. That says the collapse destroys load-bearing single years by
+replacing them badly, not that per-year freedom is worth 51%. `k=2`, which is *optimized* rather than
+*degraded*, measures the same thing soundly and is the one quoted above.
+
+**What it licenses.** Build the split as a **constant, then phased** parameter - not a per-year
+search. In order: (1) let a family state a fixed account-weight vector, worth $140k-$1.16M and the
+smallest change; (2) let it state one switch, which reaches 85-100% of the ceiling in most regimes;
+(3) revisit per-year freedom only for brokerage-heavy mixes, and only after a Monte Carlo pass,
+because that increment is the part most likely to be hindsight.
+
 ## P51f - trajectory post-mortem (observation only, ships nothing)
 
 - **No harvest-like alternation** (prediction `S3-P3` WRONG again: 1/6 thirds/brokheavy cells with

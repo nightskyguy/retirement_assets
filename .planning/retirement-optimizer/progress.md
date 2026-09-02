@@ -7731,6 +7731,35 @@ controlled. Every narrowing of the evidence flattered the answer, in the same di
 Recorded in findings as a working rule.
 
 
+## 2026-09-02 (cont.) - P104: the split needs phases, not per-annum freedom
+
+User: *"the real question is whether Proportional itself should be improved (or replaced). I suspect
+a winning draw strategy will require strategic choice of assets to draw from on a per-annum basis."*
+
+New harness `.test_harnesses/split_expressiveness_harness.js`, 38,721 sims - an expressiveness ladder
+(`k=1` one archetype / `k=2` one switch / `k=free` per-year) over the oracle's own archetype menu.
+
+**Answer: mostly phases.** One switch captures 85-100% of the full per-year optimum in 7 of 10 cells.
+The three exceptions are all brokerage-heavy and large (`brokheavy @6%`: $938,307 of $1,603,960, a
+$665,653 per-year increment).
+
+**The cheapest result is the flattest:** one better CONSTANT beats Proportional in **10 of 10** cells,
+$139,928 to $1,155,056. The default is the wrong constant, not wrong for being constant. And the best
+constant is a BLEND in 4 of 10 - which no shipped family can express - so the `P103b2` SPLIT field is
+needed even for a constant, a far smaller build than a per-year search.
+
+**Caught before reporting:** the first run declared 8 of 10 cells invalid on a spend-drift check.
+The actual drift was **$1 against $7.4M** - the base over-funds by $2 and the tolerance was absolute
+on a 33-year cumulative total. Fixed to relative, prints its magnitude. Also recorded that `X-P4`'s
+blip-collapse operator is bad (negative in two cells) and nothing rests on it.
+
+**Trust boundary written into the report:** the k=2-to-k=free increment is the most hindsight-fitted
+number in the table, and `P103e` is the standing proof that fitted complexity dies out of sample.
+Phase structure is the trustworthy part; the per-year increment is the suspect part.
+
+`P35` raised to **O0** - it is the carrier for exactly this. New `P104b`-`P104e` sequence: constant
+split, then one switch, then a Monte Carlo pass BEFORE anything ships.
+
 ## 2026-09-02 - "GK's draw" is the DEFAULT draw, and the user spotted it
 
 User: *"the default draw rule for gk is 'proportional' and I believe the same rule that the

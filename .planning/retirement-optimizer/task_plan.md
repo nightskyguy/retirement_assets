@@ -15,7 +15,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
-| **O1** | P35 | Phased is the CARRIER for whatever rules `P103d` picks; `P35i` waits on that evidence | `P35i` |
+| **O0** | P35 | **`P104` says build it: constant split first ($140k-$1.16M, 10/10), then ONE switch (85-100% in 7/10)** | `P35i` |
 | **O1** | P36 | round 2 measures against the `P103a` ceiling, not rank-among-arms | `P36b` |
 | **O1** | P34 | NOT a P103 prerequisite (a-d are node harnesses); still the whole slow-machine story | `P34a` |
 | **O1** | P28j | `P28jf` is the one RESULT item here: the timing rule moves every converting row | `P28jb` |
@@ -30,6 +30,53 @@ User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 20
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
+
+## P104: how much per-year freedom does the draw split need?  *(NEW 2026-09-02, user-raised)*
+
+**The user's question:** *"the real question is whether Proportional itself should be improved (or
+replaced). I suspect a winning draw strategy will require strategic choice of assets to draw from on
+a per-annum basis - not an 'IRA then fill' or ordered strategy."*
+
+Opened because the first half was already answered and the second half was not. `P51c/e` had shown
+the **withdrawal split** is the oracle's dominant lever and that Proportional is not default-optimal.
+What nobody had measured is the thing that decides what to BUILD: per-year freedom, or a few phases?
+
+- [x] **P104a DONE 2026-09-02** - harness `.test_harnesses/split_expressiveness_harness.js`, 38,721
+      sims, 10 cells. Expressiveness ladder over the oracle's own archetype menu: `k=1` (one
+      archetype, exhaustive), `k=2` (one switch, exhaustive over pairs and switch year), `k=free`
+      (the oracle's per-year descent). Base is Proportional +0%, which fixes spend by construction
+      and is also GK's draw. Full table in `research/PERFECT_FORESIGHT_ORACLE.md` under `P104`.
+      **`X-P3` RIGHT 10/10 and it is the cheapest result: one better CONSTANT beats Proportional in
+      every cell, $139,928 to $1,155,056.** The shipped default is the wrong constant, not wrong for
+      being constant.
+      **`X-P1` RIGHT 7/10: one switch captures 85-100% of the entire per-year optimum.** So the
+      answer to the question is "mostly phases, not per-annum".
+      **The three exceptions are all brokerage-heavy and they are large** - `brokheavy @6%` gets
+      $938,307 from two phases against $1,603,960 per-year, a $665,653 increment (42%).
+      **The blend surprise:** the best CONSTANT is a blend in 4 of 10 cells (`B4C6` x3, `prop` x1),
+      and no shipped family can express a blend. Cash-dominant wins 8 of 10, agreeing independently
+      with `GAPFILL_SPLIT.md`'s `w=0` winning 65 of 82. **The account SPLIT field is needed even for
+      a constant.**
+      `X-P2` WRONG (median 5 distinct / 7 switches vs 4 / 6). `X-P4`'s blip-collapse operator is bad
+      - negative in two cells - and nothing rests on it; `k=2` measures the same thing soundly.
+      **Trust boundary:** every rung has perfect foresight, and the k=2-to-k=free increment is by
+      construction the MOST hindsight-fitted number in the table. `P103e` is the standing proof that
+      fitted complexity dies out of sample (ordered sequences: 0% survival under bootstrap).
+
+- [ ] **P104b** - let a family state a fixed account-weight vector (the constant split). Smallest
+      possible version of the `P103b2` SPLIT field: one vector, not 33. Worth $140k-$1.16M on this
+      grid. Needs a sweep-grid decision (which vectors) and a UI label.
+
+- [ ] **P104c** - extend it to ONE switch (archetype A until year t, B after). This is `P35`'s
+      phased carrier, and `P104a` says it reaches 85-100% of the ceiling in most regimes.
+
+- [ ] **P104d** - Monte Carlo pass on whatever `P104b`/`P104c` pick, BEFORE anything ships. Not
+      optional: this is the exact shape `P103e` caught, where the single-path winner reached 0%
+      survival. Reuse `gk_drawrule_mc_harness.js`'s structure.
+
+- [ ] **P104e** - only after the above, and only for brokerage-heavy mixes: is the per-year increment
+      real out of sample, or is it hindsight? If hindsight, the per-year SPLIT field is not worth
+      building and `P103b2`'s hole can be closed as "constant + one switch is enough".
 
 ## P103: the ceiling, then the rules  *(NEW 2026-09-01, user-raised, O0, MEASURE FIRST)*
 

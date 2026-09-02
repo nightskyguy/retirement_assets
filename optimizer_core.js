@@ -28,6 +28,26 @@ const SUGGEST_SCAN_STEPS   = 12;  // Coarse scan before the bisection refine. Ne
 // Baseline ranking weight: a dollar the household actually spends outranks a dollar bequeathed
 // by 10%. Single source of truth shared by the optimizer table's _baselineScore (optimizer_ui.js)
 // and the conversion sweep's 'baselineScore' metric (baselineScoreOf below) so the two cannot drift.
+// Tie-break weight for the baseline score, which is real terminal after-tax net worth PLUS
+// SPENDABLE_WEIGHT x lifetime spend in current dollars (see baselineScoreOf below). Its PURPOSE is
+// to prefer the plan that delivers MORE SPENDING when two plans are otherwise equal. Without it a
+// wealth-only score silently rewards an arm for spending less, which is how a Guyton-Klinger base
+// once posted a fake +81% that was pure spend-shifting.
+//
+// Two things worth knowing before changing it, both measured 2026-09-01 (P103b5a; harness
+// .test_harnesses/spend_objective_harness.js, results in research/PERFECT_FORESIGHT_ORACLE.md):
+//
+//   1. totals.spendCurrentDollars ACCUMULATES over the horizon, so this multiplies LIFETIME spend
+//      and not one year of it. On the default scenario that is ~$2.1M against ~$5.9M of terminal
+//      wealth - about a third of the score, not a rounding nudge.
+//
+//   2. It settles TIES, not trade-offs, and 1.10 is why. Sweeping the spend goal on a fixed arm,
+//      the model gives up 1.4 to 3.3 dollars of real terminal wealth for each extra dollar of
+//      lifetime spending. Since 1.10 is below that everywhere measured, a genuinely
+//      higher-spending plan does not win on score; the comparison this weight actually changes is
+//      the equal-wealth one, which is exactly the "otherwise equal" case it exists for. Biasing
+//      REAL trade-offs toward spending would need a number above ~3.3, and that is a preference
+//      decision rather than a modeling one.
 const SPENDABLE_WEIGHT = 1.10;
 
 /** TAX CONSTANTS **/
@@ -908,6 +928,14 @@ function nominalRateAtLimit(entity, status, limit, inflation, rateCreep = 1) {
 // every year, so its average rate cannot drift. It drifts only when two clocks disagree.
 function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, alive1, alive2, fedRateCreep = 1, stateRateCreep = 1, medicareRate = 1, dedAddBack = 0) {
     let limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit;
+    // P103b2. The income level the RATE lookups were done at, which is not always the ceiling
+    // this function returns. IRMAA and ACA derive their rates at the final limit; the federal
+    // branch derives at the STATUTORY bracket top, before the P92a deduction add-back lifts the
+    // limit and before the state min can pull it down. Two different numbers, on purpose - the
+    // ceiling is a MAGI target, the rate lookup wants the bracket the plan is actually in. Nothing
+    // read it until a schedule had to reproduce a family's decisions exactly; without it a Fill
+    // Bracket 22% replay picked the 24% marginal rate and drifted $121 over 33 years.
+    let rateBasis;
     // P87c. WHICH of the three ceilings this is, decided here and returned, because callers need it
     // and the test they would otherwise write is not the same test. Reading `inputs.stratACAMultiple`
     // at a call site would miss that the IRMAA branch wins when both are set, and would also answer
@@ -942,6 +970,7 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
         marginalStateTaxRate = stAtLimit.rate * stateRateCreep;
         nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, cpiRate, stateRateCreep);
+        rateBasis = limit;
     } else if ((inputs.stratACAMultiple ?? 0) > 0) {
         kind = 'aca';
         // ACA FPL cliff mode: fill MAGI up to a multiple of the Federal Poverty Level.
@@ -960,6 +989,7 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
         marginalStateTaxRate = stAtLimit.rate * stateRateCreep;
         nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, cpiRate, stateRateCreep);
+        rateBasis = limit;
     } else {
         kind = 'federal';
         // Federal bracket ceiling mode (original logic)
@@ -974,6 +1004,7 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         marginalStateTaxRate = stLimit.rate * stateRateCreep;
         stateLimit = stLimit.limit;
         nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, cpiRate, stateRateCreep);
+        rateBasis = limit;   // the statutory top, captured BEFORE dedAddBack and the state min below
 
         // P92a. A federal bracket top is a TAXABLE-income threshold; every caller of this function
         // spends the result as a MAGI ceiling. Raising it by the year's deduction puts the two on
@@ -993,7 +1024,7 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         limit = Math.min(stateLimit, limit);
     }
 
-    return { limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit, kind };
+    return { limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit, kind, rateBasis };
 }
 
 let simulationCount = 0;
@@ -1159,6 +1190,9 @@ function buildSimYearLogRecord(p) {
         'FedCap': p.tax.fedLimit,
         'StateCap': p.tax.stLimit,
         'BracketTarget': p.bracketTarget,
+        'RateBasis': p.rateBasis,          // P103b2: what the marginal-rate lookups were keyed on
+        '-volIRAwd': p.volIRAwd ?? 0,      // P103b3: the voluntary IRA draw the strategy branch chose
+
         'BracketOverage': p.bracketOverage,
         // P88c. The share of BracketOverage caused by a voluntary conversion rather than by
         // spending that could not be funded inside the ceiling. Hidden ('-' prefix) because the
@@ -1215,6 +1249,19 @@ function buildSimYearLogRecord(p) {
         '-grossUpIRA': p.grossUpIRA || 0,
         '-grossUpTax': p.grossUpTax || 0,
         '-extraConvCashTax': p.extraConvCashTax || 0,
+        // ...and the VISIBLE total of the two, because between them they are the only way Cash can
+        // fall without CashWD moving, and a reader trying to reconcile the Cash balance had no
+        // column to find them in (user, 2026-09-01: "I don't see the cash being removed in the first
+        // year"). On the plan that raised it, Cash went $72,000 -> $16,099 in year one with CashWD
+        // reading 0, because $56,512 of it paid the conversion tax. Kept separate from `convTax`,
+        // which is the whole conversion tax whether or not Cash funded any of it.
+        'ConvTaxCash': (p.grossUpTax || 0) + (p.extraConvCashTax || 0),
+        // ...and the TOTAL: every dollar that leaves Cash in a year, the spending draw plus the
+        // conversion tax when cash funds it. Prior-year Cash minus ttlCashWD, plus interest and
+        // growth, is this year's Cash balance. It lives in the Withdrawals band beside CashWD
+        // rather than in Balances (user, 2026-09-01): Balances carries BALANCES, and a flow
+        // column sitting among them is what made the missing outflow hard to find to begin with.
+        'ttlCashWD': (p.netWithdrawals.Cash || 0) + (p.grossUpTax || 0) + (p.extraConvCashTax || 0),
         // Phase 27: inflows/outflows + withdrawal rate
         grossOut: p.grossOutflows,
         netOut: p.netOutflows,
@@ -1357,8 +1404,16 @@ function beginYear(sim, yr) {
     const _a1 = sim.currentYear - sim.birthyear1, _a2 = sim.currentYear - sim.birthyear2;
     const _acaLive = inputs.strategy === 'aca'
         && !acaCapLapsed(_a1, _a2, _a1 <= inputs.die1, _a2 <= inputs.die2);
+    // A scheduled year-0 CEILING implies a conversion for the same reason a bracket ceiling does:
+    // it creates room above spending. Without this a schedule replaying a bracket family would pick
+    // the opposite year-0 withdrawal MONTH and diverge on timing alone.
+    // It must test for a ceiling and not merely for an entry: a year-0 `iraDraw` implies no
+    // conversion, exactly as fixedpct and fixed imply none, and treating it as one flipped the
+    // year-0 month and left IRA Draw $39,117 and Reduce $72,656 adrift with every year scheduled.
+    const _sched0e = inputs.strategy === 'schedule' ? _schedulePlanFor(inputs, 0) : null;
+    const _sched0 = !!_sched0e && _sched0e.ordTarget !== undefined;
     const _stratImpliesConversion =
-          ((inputs.strategy === 'bracket' || _acaLive) && !_convSuppressedThisYear(inputs, 0))
+          ((inputs.strategy === 'bracket' || _acaLive || _sched0) && !_convSuppressedThisYear(inputs, 0))
        || _extraConvAmountFor(inputs, 0) > 0;
     const _prevConv    = y > 0 ? (log[y - 1].rothConv ?? 0) : 0;
     yr._useEarly    = y === 0 ? _stratImpliesConversion : (_prevConv > 1000);
@@ -1700,7 +1755,20 @@ function resolveSpendTarget(sim, yr) {
     // `IRAwd = Math.min(yr.curIRA, room)` to `yr.curIRA`, draining the whole above-goal IRA in the
     // crossing year. That is a cliff created by the fix, not a policy.
     yr.isACAStrategy = inputs.strategy === 'aca' && !yr.acaLapsed;
-    yr.isBracketStrategy = inputs.strategy === 'bracket' || inputs.strategy === 'fixedpct' || yr.isACAStrategy;
+    // 'schedule' joins this set because it fills a ceiling exactly as the bracket families do:
+    // it must take the same gap-fill cascade (Cash -> Brokerage -> Roth) and the same
+    // targetSpend treatment, or a schedule could not reproduce the family it was compiled from.
+    // P103b3: which cascade is now a per-YEAR choice, because it is the other thing a family
+    // decides and the b2 replay could not vary it. A scheduled year says so on its entry (default
+    // 'cascade'); an unscheduled year inherits it from the fallback, since falling through to
+    // baseline Proportional and then taking the bracket cascade would be half of each family.
+    yr.isBracketStrategy = inputs.strategy === 'bracket' || inputs.strategy === 'fixedpct'
+        || yr.isACAStrategy;
+    if (inputs.strategy === 'schedule') {
+        const _se = _schedulePlanFor(inputs, yr.y);
+        yr.isBracketStrategy = _se ? _se.gapFill === 'cascade'
+                                   : (inputs.scheduleFallback ?? 'none') !== 'baseline';
+    }
     yr.isOrderedStrategy = inputs.strategy === 'ordered';
 
     // P92a. The deduction computeBracketCeiling adds back, so that "fill the 22% bracket" reaches the
@@ -1757,8 +1825,16 @@ function resolveSpendTarget(sim, yr) {
         yr._ceilDedAddBack = _dedAt(_top + _dedAt(_top));
     }
 
-    // Phase 22: Guyton-Klinger dynamic spend adjustment (runs before targetSpend resolution)
-    if (inputs.strategy === 'gk') {
+    // Phase 22: Guyton-Klinger dynamic spend adjustment (runs before targetSpend resolution).
+    //
+    // P103b5b. The RULE is separable from the strategy. `spendRule: 'gk'` runs this adjustment for
+    // any strategy, so a schedule can decide the DRAW while Guyton-Klinger keeps deciding the spend
+    // (user, 2026-09-01: "the only rule it should follow is to use the GK spend goal adjustment
+    // strategy faithfully"). That distinction is what makes the combination implementable rather
+    // than a hindsight artifact: replaying GK's RECORDED spend numbers under a different draw is not
+    // a policy anyone could follow, because GK's own dynamics would have reacted to that draw. The
+    // rule, re-evaluated each year against the portfolio the plan actually has, is followable.
+    if (_usesGKSpendRule(inputs)) {
         if (y === 0) {
             sim.gkIWR = sim.spendGoal / sim.prevPortfolio;
             sim.gkAdjLabel = '';
@@ -1785,9 +1861,25 @@ function resolveSpendTarget(sim, yr) {
         }
     }
 
+    // P103b5. A schedule may set the year's spend outright, applied HERE for the same reason GK's
+    // adjustment lives here: everything downstream - targetSpend, the gap fill, the surplus, the
+    // per-year success test and the lifetime spend total - reads sim.spendGoal or what it resolves
+    // to, so setting it at one point keeps them all consistent. Restored at the end of the year
+    // (see the carry-forward) so a year's spend does not compound into the next.
+    yr._spendOverride = null;
+    if (inputs.strategy === 'schedule') {
+        const _sp = _schedulePlanFor(inputs, y);
+        if (_sp && _sp.spend !== undefined) {
+            yr._spendOverride = sim.spendGoal;
+            sim.spendGoal = _sp.spend;
+        }
+    }
+
     // GK bypasses goalLimit (bracket ceiling) - spend is dynamically set by GK rules
-    const isGKStrategy = inputs.strategy === 'gk';
-    yr.targetSpend = (yr.isBracketStrategy || yr.isOrderedStrategy || isGKStrategy) ? sim.spendGoal : Math.min(sim.spendGoal, yr.goalLimit);
+    const isGKStrategy = _usesGKSpendRule(inputs);
+    const _schedSetSpend = yr._spendOverride != null;
+    yr.targetSpend = (yr.isBracketStrategy || yr.isOrderedStrategy || isGKStrategy || _schedSetSpend)
+        ? sim.spendGoal : Math.min(sim.spendGoal, yr.goalLimit);
 
     // P38: size the primary draw against income the household can actually SPEND. yr.possibleIncome
     // (:1226) is GROSS - Social Security, pension and the taxable RMD before any tax is paid - so
@@ -1857,6 +1949,190 @@ function resolveSpendTarget(sim, yr) {
 //                                   cascades through the given order (weight [1,0,...]), so
 //                                   'IRA' placed last is a true emergency backstop
 // Returns a { order, weight } withdrawal-strategy fragment, or null for "no override".
+// P103b2: `strategy: 'schedule'` -- the flexible carrier. Research input, default-off, node-only,
+// on the same discipline as oracleWithdrawalPlan. inputs.schedulePlan is an array indexed by plan
+// year; each entry is { ordTarget, kind } or null/undefined.
+//
+//   iraDraw    P103b3. An explicit voluntary IRA withdrawal for the year, in NOMINAL dollars, as
+//              an ALTERNATIVE to ordTarget. Exactly one of the two is required. This is the
+//              QUANTITY lever the b2 replay measured as missing: IRA Draw takes a share of the IRA,
+//              Reduce amortizes a balance, and neither is an income target, so ordTarget could not
+//              state them. Dollars are safe HERE in a way they are not for a withdrawal split: this
+//              is a face-value voluntary draw handed to the tax passes exactly as the fixedpct and
+//              fixed branches hand theirs over, not a spending target whose size depends on the tax
+//              it is trying to cover.
+//   spend      P103b5. The year's spend goal, in NOMINAL dollars, replacing what the plan would
+//              otherwise have targeted. This is the axis the oracle has never searched: every gap
+//              number in PERFECT_FORESIGHT_ORACLE.md is measured with spend PINNED, so a strategy
+//              that buys more spending is invisible in those tables, and Guyton-Klinger - whose
+//              per-year decision IS the spend - could not be carried at all.
+//              Absolute dollars are right here, where they are wrong for a withdrawal split, and
+//              the reason is the direction of the dependency: a spending draw's size depends on the
+//              tax it is trying to cover, so a dollar figure desyncs, while the spend GOAL is
+//              exogenous - it is the thing the tax is solved against, not solved from.
+//              It applies for the year only. sim.spendGoal carries forward compounded by spendDelta
+//              and inflation, so an in-place override would silently compound into every later year
+//              and the search axes would stop being independent; it is restored before the
+//              carry-forward at the end of the year.
+//   convert    P103b3. A cap, in after-tax dollars, on how much of the year's surplus is routed to
+//              Roth by convertExcessToRoth. Uncapped when absent, which is today's behavior.
+//              READ THE DECOMPOSITION BEFORE USING IT, because "total conversion control" turned
+//              out to be two levers and only one of them is new. The family conversion is a pure
+//              REALLOCATION of an already-taxed surplus - the IRA dollars were withdrawn and taxed
+//              whatever their destination - so converting "less" here does not withdraw less. Gross
+//              conversion is lowered by lowering ordTarget or iraDraw, which b2 already made
+//              possible; this field only chooses Roth-versus-Cash for the leftover. Both directions
+//              therefore exist: less gross via the draw, more gross via extraConversionAmount, and
+//              the destination split via convert.
+//   ordTarget  the year's ceiling on realized ordinary income, in NOMINAL dollars. This is the same
+//              quantity computeBracketCeiling returns as `limit`, which is why a schedule can carry
+//              what a bracket family decided. It is a TARGET, not a dollar withdrawal: the engine
+//              solves the draw against the year's own realized taxes, which is the reason the
+//              oracleWithdrawalPlan comment below gives for refusing dollar plans. A per-year dollar
+//              amount is chosen against the PREVIOUS iteration's tax outcome and taxes are
+//              endogenous, so it stops being feasible; a target is solved inside the year.
+//   kind       which income definition the target is spent against: 'federal' | 'irmaa' | 'aca'.
+//              Not cosmetic - ACA MAGI counts the WHOLE Social Security benefit while federal and
+//              IRMAA MAGI count at most 85% of it, so the same ordTarget means two different draws.
+//              Defaults to 'federal'. Same three values, same meaning, as computeBracketCeiling's.
+//
+// An ABSENT entry means "nothing scheduled this year": no voluntary IRA draw, and spending falls
+// through to the gap-fill cascade. That is the Ordered convention, and it is the only reading that
+// does not invent a decision the schedule did not make. A PRESENT but malformed entry throws -- a
+// typo in a research input must not be silently read as a quiet year.
+// P103b5b. True when the Guyton-Klinger spend adjustment governs this run's spend, whether because
+// GK is the strategy or because another strategy borrowed the rule via `spendRule: 'gk'`. Separating
+// the two is what lets a schedule own the DRAW while GK owns the SPEND.
+function _usesGKSpendRule(inputs) {
+    return inputs.strategy === 'gk' || inputs.spendRule === 'gk';
+}
+
+function _schedulePlanFor(inputs, y) {
+    if (!Array.isArray(inputs.schedulePlan)) return null;
+    const e = inputs.schedulePlan[y];
+    if (e == null) return null;
+    if (typeof e !== 'object') {
+        throw new Error('schedulePlan[' + y + '] must be an object or null, got ' + typeof e);
+    }
+    const t = e.ordTarget, d = e.iraDraw;
+    const hasT = t !== undefined, hasD = d !== undefined;
+    if (hasT === hasD) {
+        throw new Error('schedulePlan[' + y + '] needs exactly one of ordTarget or iraDraw');
+    }
+    if (hasT && (!Number.isFinite(t) || t <= 0)) {
+        throw new Error('schedulePlan[' + y + '].ordTarget must be a finite positive number, got ' + t);
+    }
+    if (hasD && (!Number.isFinite(d) || d < 0)) {
+        throw new Error('schedulePlan[' + y + '].iraDraw must be a finite non-negative number, got ' + d);
+    }
+    const conv = e.convert;
+    if (conv !== undefined && (!Number.isFinite(conv) || conv < 0)) {
+        throw new Error('schedulePlan[' + y + '].convert must be a finite non-negative number, got ' + conv);
+    }
+    const spend = e.spend;
+    if (spend !== undefined && (!Number.isFinite(spend) || spend < 0)) {
+        throw new Error('schedulePlan[' + y + '].spend must be a finite non-negative number, got ' + spend);
+    }
+    // gapFill has to be PER YEAR, not per plan, and ACA is the proof: its cap is live for the first
+    // few years and lapses at Medicare eligibility, and the two halves take different cascades. A
+    // plan-level switch cannot state that, which is why b2 could only replay 3 of 33 ACA years.
+    const gf = e.gapFill ?? inputs.scheduleGapFill ?? 'cascade';
+    if (gf !== 'cascade' && gf !== 'baseline') {
+        throw new Error('schedulePlan[' + y + '].gapFill must be cascade|baseline, got ' + gf);
+    }
+    const kind = e.kind ?? 'federal';
+    if (kind !== 'federal' && kind !== 'irmaa' && kind !== 'aca') {
+        throw new Error('schedulePlan[' + y + '].kind must be federal|irmaa|aca, got ' + kind);
+    }
+    // rateBasis: the income level the marginal-rate lookups are keyed on, defaulting to the target.
+    // They are the same number for an IRMAA or ACA ceiling and DIFFERENT for a federal bracket one,
+    // whose rates are read at the statutory top while its ceiling is lifted by the deduction
+    // add-back. A searcher never has to supply it; a compiler that wants exact replay does.
+    if (hasD) return { iraDraw: d, kind, convert: conv, gapFill: gf, spend };
+    const rb = e.rateBasis ?? t;
+    if (!Number.isFinite(rb) || rb <= 0) {
+        throw new Error('schedulePlan[' + y + '].rateBasis must be a finite positive number, got ' + rb);
+    }
+    return { ordTarget: t, kind, rateBasis: rb, convert: conv, gapFill: gf, spend };
+}
+
+// P103b2. Compile a finished run into the schedulePlan that reproduces it. One shared compiler,
+// because a harness that rolled its own would drift from the accessor above and the drift would look
+// like a modeling result. Give it the run and the inputs that produced it.
+//
+// WHAT IT CAN AND CANNOT CARRY, measured rather than assumed (research/PERFECT_FORESIGHT_ORACLE.md,
+// P103b2). Exact, to the dollar, for the CEILING families - Fill Bracket at any rate, IRMAA at any
+// tier - because their whole per-year decision IS the ceiling. It carries only the un-lapsed years
+// of an ACA plan, since a lapsed year has no ceiling and falls through to baseline Proportional.
+// And it carries NOTHING of IRA Draw, Proportional, Ordered, Guyton-Klinger or Reduce: their
+// decision is a QUANTITY (a share of the IRA, a spending boost, an account sequence, an
+// amortization), not an income target, so every year compiles to null and the replay draws nothing.
+// That is the honest coverage of `ordTarget`, and it is what the next field has to fix.
+function compileScheduleFromRun(res, srcInputs) {
+    // Kind precedence mirrors computeBracketCeiling's own: IRMAA wins when both are set.
+    const kind = (srcInputs.stratIRMAATier ?? -1) >= 0 ? 'irmaa'
+        : (srcInputs.stratACAMultiple ?? 0) > 0 ? 'aca' : 'federal';
+    // P103b3. A family that fills no ceiling is carried by its realized voluntary IRA draw instead,
+    // which is the quantity lever. `-iraVolSpend` plus the converted gross is what actually left the
+    // IRA by choice that year; RMDs are forced and are never part of a schedule.
+    const quantity = (srcInputs.strategy === 'fixedpct' || srcInputs.strategy === 'fixed');
+    // P103b5. A spend-adaptive family decides the SPEND, so that is what has to be carried. GK is the
+    // whole reason this exists: its per-year decision is the spend goal, which is why it compiled to
+    // nothing before this field and why it is excluded from the oracle's gap tables rather than
+    // compared in them. `spendGoal` in the log is the year's realized target.
+    // P103b5b: a spend-adaptive family hands over its DRAW here and its spend RULE via
+    // scheduleOptionsForRun - never its realized spend numbers. Recorded numbers replay the past;
+    // the rule can be followed forward, which is the difference between a hindsight artifact and a
+    // policy someone could adopt.
+    const spendAdaptive = _usesGKSpendRule(srcInputs);
+    // Which cascade the source family took. `fixed` (Reduce) is the one quantity family that is NOT
+    // in the bracket set, so it fills its gap from the [40,60] default branch instead.
+    const gapFill = (srcInputs.strategy === 'fixed' || srcInputs.strategy === 'gk') ? 'baseline' : 'cascade';
+    return (res.log || []).map(e => {
+        const t = e['BracketTarget'] ?? 0;
+        if (t > 0) {
+            const rb = e['RateBasis'];
+            return (rb > 0 && rb !== t) ? { ordTarget: t, kind, rateBasis: rb, gapFill } : { ordTarget: t, kind, gapFill };
+        }
+        if (spendAdaptive) {
+            // The draw only. Spend comes from the rule, re-evaluated each year against whatever
+            // portfolio this plan actually has. Emitted for every year, including zero-draw ones,
+            // for the reason recorded under the quantity branch below.
+            return { iraDraw: e['-volIRAwd'] ?? 0, kind, gapFill };
+        }
+        if (quantity) {
+            // Emitted even when the draw is ZERO, and the zero years are the reason. A quantity
+            // family whose amortization has ended still hands the tax passes { IRA: 0, netAmount: 0 };
+            // an unscheduled year hands them {}. The two are not the same object downstream, and
+            // treating "drew nothing" as "scheduled nothing" left IRA Draw 13 years and $39,117 short.
+            // `-volIRAwd` is the branch's own decision, logged for exactly this purpose. Two
+            // reconstructions from downstream fields were tried first and both were wrong in
+            // different directions ($39,117 short, then $191,737 short), which is the argument for
+            // logging the decision instead of inferring it.
+            return { iraDraw: e['-volIRAwd'] ?? 0, kind, gapFill };
+        }
+        return null;                            // nothing this schedule can state
+    });
+}
+
+// P103b3. The plan-level knobs that go WITH a compiled schedule. Separate from the per-year plan
+// because they are not per-year decisions: they say what an unscheduled year means. An ACA plan is
+// the case that forced them to exist - its cap lapses at Medicare eligibility and every later year
+// falls through to baseline Proportional, which "draw nothing voluntarily" is not.
+function scheduleOptionsForRun(srcInputs) {
+    const lapses = (srcInputs.stratACAMultiple ?? 0) > 0 && srcInputs.strategy === 'aca';
+    // A spend-adaptive source hands over its spend RULE, so the schedule re-evaluates it each year
+    // against its own portfolio rather than replaying numbers the source produced under its own draw.
+    if (_usesGKSpendRule(srcInputs)) {
+        return { scheduleFallback: 'none', spendRule: 'gk',
+                 gkGuard: srcInputs.gkGuard, gkAdjPct: srcInputs.gkAdjPct };
+    }
+    // GK fills its gap from the baseline branch, not the bracket cascade, so a schedule carrying it
+    // has to say so; `gapFill` on each entry does that, and the fallback matters only for years the
+    // compiler emitted nothing for.
+    return { scheduleFallback: lapses ? 'baseline' : 'none' };
+}
+
 function _oracleWithdrawalPlanFor(inputs, y) {
     if (!Array.isArray(inputs.oracleWithdrawalPlan)) return null;
     const e = inputs.oracleWithdrawalPlan[y];
@@ -1907,6 +2183,11 @@ function planPrimaryWithdrawals(sim, yr) {
     const _oracleW = _oracleWithdrawalPlanFor(inputs, y);
     if (_oracleW && inputs.cyclicEnabled) {
         throw new Error('oracleWithdrawalPlan cannot compose with cyclicEnabled (research inputs, pick one)');
+    }
+    // Same rule for the schedule: cyclic owns the withdrawal decision on its harvest years, so a
+    // schedule composed with it would be silently ignored in exactly the years it mattered most.
+    if (inputs.strategy === 'schedule' && inputs.cyclicEnabled) {
+        throw new Error('strategy schedule cannot compose with cyclicEnabled (research inputs, pick one)');
     }
     if (_oracleW) {
         yr.withdrawStrategy.order = _oracleW.order;
@@ -2044,8 +2325,58 @@ function planPrimaryWithdrawals(sim, yr) {
     // yr.isACAStrategy rather than inputs.strategy === 'aca': once the cap has lapsed this chain
     // must NOT match, so the year falls through fixedpct/propwd/ordered (none of which name 'aca')
     // to the baseline `else` below - Proportional 0%, which is the intended successor.
+    } else if (inputs.strategy === 'schedule') {
+        // P103b2. The ceiling comes from the schedule instead of computeBracketCeiling; everything
+        // downstream of the ceiling is the bracket branch's arithmetic, unchanged, so the P87c
+        // Social Security basis fix applies here too.
+        const _e = _schedulePlanFor(inputs, y);
+        if (!_e) {
+            // P103b3. What an UNSCHEDULED year does is now a choice, because b2 measured it as the
+            // real coverage limit: an ACA plan replayed only the 3 years its cap was live, since a
+            // lapsed cap falls through to baseline Proportional while an absent entry meant "draw
+            // nothing voluntarily". Those are different statements and the schedule could only make
+            // one of them. Default stays 'none' - the b2 behavior.
+            if ((inputs.scheduleFallback ?? 'none') === 'baseline') {
+                yr.withdrawStrategy.order = ['IRA', 'Brokerage', 'Cash'];
+                yr.withdrawStrategy.taxrate = [sim.nominalTaxRate, yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit), 0, 0];
+                yr.withdrawals = calculateWithdrawals(yr.curBalances, yr.additionalSpendNeeded, yr.withdrawStrategy);
+            } else {
+                yr.withdrawals = {};              // nothing scheduled: gap-fill handles spending
+            }
+        } else if (_e.iraDraw !== undefined) {
+            // The quantity lever. Face-value voluntary draw, the same shape and the same convention
+            // as the fixedpct and fixed branches below, so those families can be carried exactly.
+            const IRAwd = Math.max(0, Math.min(yr.curIRA, _e.iraDraw));
+            yr.withdrawals = { IRA: IRAwd, netAmount: IRAwd };
+        } else {
+            yr.limit = _e.ordTarget;
+            yr.ceilingKind = _e.kind;
+            // Rates are derived at rateBasis, which DEFAULTS to the target and is the same number
+            // for an IRMAA or ACA ceiling. A federal-bracket ceiling is the odd one out: its rates
+            // are read at the statutory bracket top while its limit is lifted by the P92a deduction
+            // add-back, so deriving at the target picks the NEXT bracket up. Measured before it was
+            // fixed: Fill Bracket 22% replayed at 24% and drifted $121 over 33 years, first visible
+            // in year 8 at $0.34 and compounding.
+            yr.rateBasis = _e.rateBasis;
+            const _rb = yr.rateBasis;
+            const _fedAt = findUpperLimitByAmount('FEDERAL', yr.status, _rb, sim.cpiRate);
+            yr.marginalFedTaxRate = _fedAt.rate * yr.fedRateCreep;
+            yr.nominalFedTaxRateAtLimit = nominalRateAtLimit('FEDERAL', yr.status, _rb, sim.cpiRate, yr.fedRateCreep);
+            const _stAt = findUpperLimitByAmount(STATEname, yr.status, _rb, sim.cpiRate);
+            yr.marginalStateTaxRate = _stAt.rate * yr.stateRateCreep;
+            yr.nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, yr.status, _rb, sim.cpiRate, yr.stateRateCreep);
+            yr.stateLimit = _stAt.limit;
+            yr.bracketTarget = yr.limit;
+            const _ssCeilRoom = (yr.ceilingKind === 'aca')
+                ? yr.limit - yr.fixedInc
+                : nonSSIncomeForMAGI(yr.status, yr.limit, yr.fixedInc);
+            const iRAbracketRoom = Math.max(0, _ssCeilRoom - yr.taxableInc - yr.taxableInterest - yr.taxableDividends);
+            const IRAwd = Math.min(yr.curIRA, iRAbracketRoom);
+            yr.withdrawals = { IRA: IRAwd, netAmount: IRAwd };
+        }
+
     } else if (inputs.strategy === 'bracket' || yr.isACAStrategy) {
-        ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit, kind: yr.ceilingKind } =
+        ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit, kind: yr.ceilingKind, rateBasis: yr.rateBasis } =
             computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack));
 
         yr.bracketTarget = yr.limit;
@@ -2117,11 +2448,25 @@ function planPrimaryWithdrawals(sim, yr) {
         /* BASELINE Strategy */
         /*********************/
         // Withdraw enough proportionately to get to spendGoal - including taxes.
+        //
+        // GUYTON-KLINGER LANDS HERE. There is no 'gk' case above, so this is GK's draw, and it is
+        // bit-identical to the propwd branch at propWithdraw 0 (same order, same rates, same call;
+        // and neither family is in yr.isBracketStrategy, so they share the gap fill too). Verified
+        // over 15 cells on every log field. Anything said about "GK's draw" is a statement about
+        // this default, not about Guyton-Klinger - which is why P103d's result generalizes past GK.
         yr.withdrawStrategy.order = ['IRA', 'Brokerage', 'Cash']
         yr.withdrawStrategy.taxrate = [sim.nominalTaxRate, yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit), 0, 0]
         yr.withdrawals = calculateWithdrawals(yr.curBalances, yr.additionalSpendNeeded, yr.withdrawStrategy)
 
     }
+
+    // P103b3. The VOLUNTARY IRA draw this year's branch just decided, captured here and nowhere
+    // else, because here is the only point at which it is still the decision rather than an outcome.
+    // Downstream it is merged with the forced withdrawal, split across IRA1/IRA2, netted against
+    // conversions and adjusted by the shortfall cascade, and reconstructing it from those fields is
+    // what a schedule compiler kept getting wrong - three different wrong answers before this field
+    // existed. A carrier compiles from recorded DECISIONS, not from reconstructed outcomes.
+    yr.volIRAwd = yr.withdrawals?.IRA ?? 0;
 }
 
 // Apply the primary withdrawals, first tax pass, MAGI-history seeding and the year-0 IRMAA retro-correction.
@@ -2709,8 +3054,16 @@ function routeSurplusAndConvert(sim, yr) {
     yr.surplus.Roth2 = 0;
 
     if (inputs.convertExcessToRoth && !_convSuppressedThisYear(inputs, yr.y)) {
-        const conv1 = Math.min(yr.surplus.Total * yr.ira1_ratio,       yr.netWithdrawals.IRA1 || 0);
-        const conv2 = Math.min(yr.surplus.Total * (1 - yr.ira1_ratio), yr.netWithdrawals.IRA2 || 0);
+        // P103b3. A schedule may cap how much of the surplus is reallocated to Roth. Whatever the
+        // cap leaves behind stays in yr.surplus.Total and banks as Cash or Brokerage below, which is
+        // the whole content of the lever: the IRA dollars are already withdrawn and already taxed.
+        let _pool = yr.surplus.Total;
+        if (inputs.strategy === 'schedule') {
+            const _sc = _schedulePlanFor(inputs, yr.y);
+            if (_sc && _sc.convert !== undefined) _pool = Math.min(_pool, _sc.convert);
+        }
+        const conv1 = Math.min(_pool * yr.ira1_ratio,       yr.netWithdrawals.IRA1 || 0);
+        const conv2 = Math.min(_pool * (1 - yr.ira1_ratio), yr.netWithdrawals.IRA2 || 0);
         yr.surplus.Roth1 = conv1;
         yr.surplus.Roth2 = conv2;
         yr.surplus.Total -= (conv1 + conv2);
@@ -3394,7 +3747,7 @@ function logYear(sim, yr) {
         surplus: yr.surplus, totalRMD: yr.totalRMD, qcd1: yr.qcd1, qcd2: yr.qcd2, taxableDividends: yr.taxableDividends, taxableInterest: yr.taxableInterest,
         netWithdrawals: yr.netWithdrawals, rmd1: yr.rmd1, rmd2: yr.rmd2, totalConverted: yr.totalConverted, tax: yr.tax, IRMAA: yr.IRMAA, IRMAATier: yr.IRMAATier, medicareBase: yr.medicareBase, cpiRate: sim.cpiRate,
         iraVolSpend1: yr.iraVolSpend1, iraVolSpend2: yr.iraVolSpend2, iraConvGross1: yr.iraConvGross1, iraConvGross2: yr.iraConvGross2,
-        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
+        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, rateBasis: yr.rateBasis, volIRAwd: yr.volIRAwd, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
         balance: balance, nominalTaxRate: sim.nominalTaxRate, totalWealth: yr.totalWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
         gains: yr.gains, rmd1Pct: yr.rmd1Pct, subCycleLabel: yr.subCycleLabel, convNetValue: null, excessNetValue: null,
         incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,
@@ -3420,11 +3773,15 @@ function endYear(sim, yr) {
     // Raw balance sum (no tax discount). Feeds both the withdrawal rate and the GK guardrail
     // checks, so the two stay apples-to-apples and every year uses the same basis.
     sim.prevPortfolio = yr.portfolioBalance;
+    // P103b5: undo a schedule's one-year spend override before the goal advances, so the next year
+    // starts from the trajectory the plan would have had. Without this the override compounds.
+    if (yr._spendOverride != null) sim.spendGoal = yr._spendOverride;
+
     // Advance spend goal: apply user's spend-change preference and inflation.
     // spendDelta is constant (1 + inputs.spendChange); moving this to end of loop
     // keeps year-0 spendGoal equal to the user's input in today's dollars.
     // Phase 22: GK handles inflation at start of next year via its own rules; only apply spendDelta here.
-    if (inputs.strategy === 'gk') {
+    if (_usesGKSpendRule(inputs)) {
         sim.gkPriorReturn = yr.baseReturn;
         sim.spendGoal = sim.spendGoal * sim.spendDelta;
     } else {
@@ -3615,9 +3972,21 @@ function simulate(inputs) {
      *       Spending shortfall fills from Cash → Brokerage → Roth.
      *       WithdrawalOrder = [IRA first, then gap-fill]
      *
+     *   strategy='gk' - "Guyton-Klinger"
+     *       A SPEND rule and nothing else. There is deliberately NO 'gk' case in
+     *       the withdrawal dispatch, so it falls through to the (else) branch
+     *       below and its draw is bit-identical to propwd at 0% - verified across
+     *       15 cells, every log field, in P103d's follow-up. All of Guyton-Klinger
+     *       is the guardrail spend adjustment in resolveSpendTarget; it inherits
+     *       the legacy default draw. In the sweep table the Guyton-Klinger row and
+     *       the Proportional 0% row therefore differ ONLY in the spend rule.
+     *       WithdrawalOrder = [IRA, Brokerage, Cash] proportionally
+     *
      *   (else / fallback) - legacy proportional baseline
      *       Same proportional logic as propwd at 0%, retained for backwards
-     *       compatibility. No UI option currently routes here.
+     *       compatibility. No UI option SELECTS it directly, but strategy='gk'
+     *       reaches it by falling through, which is not a fallback at all - it is
+     *       Guyton-Klinger's actual draw. See the 'gk' entry above.
      *       WithdrawalOrder = [IRA, Brokerage, Cash] proportionally
      *
      *   NOTE - future strategy='baseline' (not yet implemented):
@@ -5348,7 +5717,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -5356,7 +5725,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

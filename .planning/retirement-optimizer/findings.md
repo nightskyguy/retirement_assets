@@ -3703,3 +3703,540 @@ OF has become unusable. **State the reference machine, then state the absolute o
 on every tier - 13 ms even at 10x. The conversion search is **75.4%** of the sweep at every tier.
 So the slow-machine problem is entirely `P34`, and this gives `P34` the target it has been missing:
 not "make it faster" but **a sweep that stays usable at 3.5x to 6x slower single-core speed**.
+
+
+## The oracle gap closed by itself, and the dominant lever flipped  *(2026-09-01, `P103a`)*
+
+**Codes used here, defined first.** *oracle* = a search handed the whole future return path before
+it chooses, so its result is a ceiling no honest strategy can beat on that path. *gap* = how far a
+shipped strategy's best row sits below that ceiling, as a percent of real after-tax net worth.
+*cell* = one whole plan (one household, one account mix, one spend rate, 33 years). *b20 / b80* =
+cost basis at 20% / 80% of the Brokerage balance. *GK-strain cell* = a 6-8%-spend cell where
+Guyton-Klinger is the only family that survives at the base row's delivered spend.
+
+`oracle_harness.js --full` re-run on engine `1b7b366`: 45 cells, **418,289 sims, 373.4 s**, ~8.3 s
+per plan on the reference box (Ryzen AI 9 HX 370), so ~29-50 s per plan at the 3.5x-6x slower
+single-core target. Full report: `research/PERFECT_FORESIGHT_ORACLE.md`.
+
+**Three results, in the order they change decisions.**
+
+**1. The gap closed on its own.** Median best-family gap **4.35% -> 1.58%** at default basis
+(4.47% -> 1.13% at b20, 1.83% -> 0.90% at b80). The `+$1.078M` headline that opened `P103` is gone:
+that cell (`defaults3x @4%`) now measures **+$122k**. Three shipped fixes landed between engine
+`5e1075e` and `1b7b366` that all push the same way, by making the SHIPPED arms better rather than
+the oracle worse - `P84` (RMDs and the advisor fee off the prior Dec 31 balance), `P88`
+(conversions reach MAGI so IRMAA prices them), `P87c` (a ceiling-filling year lands ON the limit).
+**Which one did it is NOT measured** and would need a bisect over those three commits. What is
+measured is that the gap closed.
+
+**2. The dominant lever flipped.** The withdrawal split now carries most of the gain in most cells;
+conversion timing dominates only in the IRA-heavy `defaults`/`defaults3x` family (96% of the gain
+at `defaults3x @4%`, the one place the old 97% claim survives). The four largest single gains in
+the run are all split: **+$856k** (`brokheavy @6% b20`), +$656k (`thirds @6%`), +$519k
+(`round1 @6% b20`), +$395k (`brokheavy @4% b20`).
+
+**3. `P51d` is answered: the ceiling is near-tight on the conversion axis.** New harness
+`.test_harnesses/oracle_crosscheck.js`. Arm A re-runs the oracle's own coordinate descent in the
+same process; Arm B is a random-restart search - block add over a run of years, shift between
+years, whole-vector scale, swap - at $1k grain, handed the **measured** sim count Arm A spent on
+that cell. Across five cells Arm B beats Arm A by at most **+0.013%** of after-tax NW at 3x budget
+(+0.001% at equal budget), and is **worse** in one cell.
+
+**The limit of that evidence, stated because it is easy to overclaim.** A negative B-A means Arm B
+is the weaker searcher there, so in that cell the cross-check bounds nothing - it only fails to
+find more. And `X-P3` was WRONG in 3 of 5: tripling the budget still moved Arm B, so Arm B is not
+converged. **What P51d establishes is one-directional: an equally-costed search of a different
+shape cannot beat the descent by a meaningful margin.** It is not a proof of optimality, and the
+withdrawal-split axis - now the dominant lever - has no cross-check at all.
+
+**Where this points `P103d`.** The fat regimes are now named by measurement rather than guessed:
+**the GK-strain cells at 6-8% spend (0.35-20.9%) and the 20%-basis arm**. `defaults3x @4%`, fat
+under the old numbers, is 1.58% and is no longer a bake-off candidate.
+
+**Two prediction flips worth carrying.** `S3-P2` (median gap < 4%) went WRONG -> **RIGHT**.
+`B-P4` (the gap GROWS at 20% basis) went RIGHT -> **WRONG**: b20's median 1.13% is now BELOW
+default basis 1.58%. The half of `B-P4` about Proportional survives - its gap stays above 1% at
+both extremes (1.2% each).
+
+**One artifact to know before reading any b20/b80 row.** In `defaults @4%` and `round1 @4%` all
+three basis arms return byte-identical scores, because those champions never sell brokerage, so
+the basis they would sell at never enters the arithmetic. Those rows are not evidence about basis
+in either direction.
+
+
+## Surplus routing was confounding the whole oracle grid  *(2026-09-01, `P103b1`)*
+
+**Codes:** *reserve0* = `CashReserve: 0`, which routes every arm's surplus to Brokerage instead of
+Cash. *base row* = the non-cyclic row the full oracle optimizes from. Other terms are defined in the
+`P103a` section above.
+
+Run: `oracle_harness.js --full --reserve0`, 45 cells, 391,160 sims, 359.6 s, engine `1b7b366`. The
+flag is opt-in, so a bare run still reproduces `research/PERFECT_FORESIGHT_ORACLE.md` exactly.
+
+**The question it settles.** The published grid leaves `CashReserve` unset, which is the shipped
+default and the legacy all-surplus-to-Cash behavior. Cyclic rows bank surplus in Brokerage; an
+Ordered brokerage-first sequence does too. So the grid was comparing arms that differ in **where
+surplus lands** as well as in how it is drawn - and that, not a missing engine capability, is why a
+cyclic row beat the "ceiling".
+
+**Negative gaps 1 -> 0.** With routing held constant no shipped row beats the oracle. The engine
+reaches Brokerage three ways (`cyclicEnabled`, `CashReserve != null`, Ordered brokerage-first) and
+the harness armed none of them.
+
+**The routing setting is worth more than the gaps this study measures.** Base row, unset -> reserve0:
+`defaults @4%` **+$100,653** (and the winner changes, Reduce 17 yrs -> IRA Draw 11%), `defaults @6%`
+**+$84,322**, `defaults3x @4%` **+$120,124**, `thirds @4%` **+$86,332** (winner IRA Draw 5% ->
+Ordered CBRI). Four of six headline cells change which strategy wins.
+
+**The gap gets WIDER: median 1.58% -> 2.03%** at default basis. The oracle exploits Brokerage
+banking better than the rules do. Per cell it moves both ways - `defaults @4%` 0.64% -> 2.03%, but
+`defaults3x @4%` 1.58% -> 0.28% and `thirds @4%` 0.49% -> 0.00%.
+
+**It retires `P103a`'s own attribution claim.** `defaults3x @4%` was the single cell where conversion
+timing carried 96% of the gain. Routing-controlled, its conversions-only gain falls from +$14,297
+(0.19%) to **$825 (0.01%)** and its decomposition flips to split-dominant. **With surplus free to
+compound in Brokerage the withdrawal split dominates in all six headline cells.** The b20 conversion
+prizes are unaffected (`defaults3x @8% b20` still 13.49%), so the "conversion timing matters more off
+mid-basis" finding survives.
+
+**Both runs are kept, because they answer different questions.** The bare run is what a user gets,
+since the reserve is unset by default. `--reserve0` is the only control that holds routing constant,
+so it is the right yardstick for comparing draw STRATEGIES and `P103d` uses it.
+
+**The generalizable lesson.** Two arms that differ in more than one respect cannot attribute their
+difference to either. The oracle's whole product is an attribution, and it had been reading a
+routing difference as a draw-order difference for three weeks. **Before a bake-off, enumerate what
+the arms differ in and equalize everything that is not the variable under test.**
+
+**A product question this opens, not decided here:** leaving Cash Reserve blank costs $84k-$120k in
+four of six cells and changes the recommended strategy. Whether the shipped default should change is
+user-visible and needs its own measurement across the wider Stage-1 grid (`P103b1x`).
+
+
+## `strategy: 'schedule'` and the shape of what the engine cannot say  *(2026-09-01, `P103b2`)*
+
+**Codes:** *schedule* = `strategy: 'schedule'`, a per-year decision vector replacing a named rule.
+*ordTarget* = that year's ceiling on realized ordinary income, in nominal dollars. *rateBasis* = the
+income level the marginal-rate lookups are keyed on. *replay identity* = compile a family's realized
+decisions into a schedule, re-run, require agreement to the dollar. *R-P1* = the prediction that a
+family is either fully expressible as a schedule or not at all.
+
+Built, tested (suites **389**/61/22, every pre-existing test bit-identical), and measured by
+`.test_harnesses/schedule_replay_harness.js`.
+
+**Targets, not dollars, and the engine had already written down why.** From the
+`oracleWithdrawalPlan` comment: *"Fractions, not dollars: dollar plans desync from endogenous
+taxes/growth."* A per-year dollar withdrawal is chosen against the previous iteration's tax outcome
+and taxes are endogenous, so it stops being feasible; an income target is solved inside the year.
+**This makes `ordTarget` identical to the control variable `P75`/`P103c` proposed for the unified
+search.** The flexible carrier and the search were two plans for one object.
+
+**Replay identity: the ceiling families reproduce themselves exactly.** Fill Bracket 12/22/24% and
+IRMAA tier 0/2 all land at **$0** on final net worth and on every year's wealth. IRA Draw,
+Proportional, Ordered, Guyton-Klinger and Reduce compile to **zero scheduled years** - their per-year
+decision is a quantity, a sequence, or the spend itself.
+
+**`rateBasis` is a real asymmetry the replay surfaced, not a workaround.** IRMAA and ACA ceilings
+derive marginal rates at their final limit; a federal bracket ceiling derives them at the STATUTORY
+bracket top, before the `P92a` deduction add-back lifts the limit and before the state min pulls it
+down. Both correct, and nothing had needed the distinction named until a schedule had to reproduce a
+decision exactly. Deriving at the target instead picked the next bracket up: **$0.34 adrift in year
+8, compounding to $121 over 33 years.**
+
+**`R-P1` WRONG, and the counterexample is worth more than the prediction.** ACA is partial - 3 of 33
+years - because its cap lapses at Medicare eligibility and a lapsed year falls through to baseline
+Proportional. An absent schedule entry means "draw nothing voluntarily", which is a different
+statement. **The coverage boundary is not ceiling-versus-quantity. It is that the schedule can say
+"fill to X" and can say nothing, but cannot say what to do when there is no ceiling.**
+
+**The generalizable lesson, and it is the reason to build a carrier at all.** "The engine is imbued
+with specific withdrawal strategies" was an impression until something tried to restate every
+strategy in one vocabulary. Replay identity converted it into a list: an income target, a quantity,
+a fallback, a sequence. **A representation that must reproduce the thing it replaces is a
+measurement instrument, not just plumbing** - it fails loudly and names the missing concept, where a
+gap table would have shown a number and no reason.
+
+
+## The schedule carrier, widened: what four fields bought  *(2026-09-01, `P103b3`)*
+
+**Codes:** as in the `P103b2` section above, plus *iraDraw* = an explicit voluntary IRA withdrawal in
+nominal dollars; *gapFill* = which cascade fills a spending shortfall (`cascade` = Cash -> Brokerage
+-> Roth, `baseline` = the [40,60] default branch); *scheduleFallback* = what an unscheduled year
+means; *convert* = a cap on the surplus reallocated to Roth.
+
+**8 of 11 shipped arms now replay to the dollar**, up from 5. Newly exact: ACA across its mid-plan
+lapse, IRA Draw 5%, Reduce 17 yrs. Suites **394**/61/22.
+
+**"Total conversion control" decomposed, and only half of it was missing.** The family conversion is
+a pure REALLOCATION of an already-taxed surplus - the IRA dollars were withdrawn and taxed whatever
+their destination - so converting less does not withdraw less. **Converting less GROSS was already
+solved by `P103b2`**: lower `ordTarget` or `iraDraw`. The genuinely absent lever was the destination,
+which `convert` caps. Worth recording because the phase had carried "the engine cannot convert less
+than the family rule" as a single hole for weeks, and it was two things with different answers.
+
+**Dollars are safe for a DRAW and not for a SPLIT, which is what the old warning was really about.**
+`oracleWithdrawalPlan` refuses dollar plans because a spending draw's size depends on the tax it is
+trying to cover - a feedback loop. A voluntary IRA draw ABOVE spending has no such loop and is handed
+to the tax passes at face value, exactly as `fixedpct` and `fixed` hand theirs over.
+
+**Three wrong compilers, and the rule that ends them.** Reconstructing the voluntary IRA draw from
+logged outcomes failed three times - gross draw ($39,117 short), gross minus RMDs ($191,737 short),
+gross again - because downstream the decision is merged with the forced withdrawal, split across
+IRA1/IRA2, netted against conversions and adjusted by the shortfall cascade. The fix was to LOG the
+decision (`-volIRAwd`, captured at the one point where it is still a decision) rather than infer it -
+the same move that produced `rateBasis` one stage earlier. **A carrier compiles from recorded
+decisions, not from reconstructed outcomes.** Two independent instances in two stages is enough to
+call it a rule.
+
+**One boolean was worth a whole plan.** With every year correctly scheduled, IRA Draw was STILL
+$39,117 adrift, because a year-0 schedule entry was read as implying a conversion - and that flips
+the withdrawal month from Late to Early for the entire horizon. A ceiling implies a conversion; a
+quantity draw does not. Generalizable: **when a replay is right everywhere and wrong by a constant
+proportion, look for a whole-plan MODE the fixture sets differently, not for a per-year arithmetic
+error.**
+
+**What remains is a coherent boundary rather than a list of leftovers.** The schedule states how much
+to take from the IRA - as a ceiling or as a quantity - but not **how to split a spending draw across
+accounts** (Proportional, Ordered) and not **what to spend** (Guyton-Klinger). The split is
+`oracleWithdrawalPlan`'s job and already exists, but it PREEMPTS the strategy branch instead of
+composing with it, so carrying Ordered means using that hook rather than extending this one.
+Guyton-Klinger is outside the vocabulary by construction: a schedule takes `spendGoal` as given.
+
+
+## The schedule reaches higher than the conversion axis, on less compute  *(2026-09-01, `P103b4`)*
+
+**Codes:** *Arm A* = the oracle's existing search, per-year `extraConversionAmount`, which is EXTRA on
+top of the base rule and therefore one-directional. *Arm S* = per-year `ordTarget`/`iraDraw` on the
+same base row. Both take the same objective, the same spend pin and the same measured sim budget.
+
+**Arm S wins 6 of 6 cells**, +$11,259 to +$198,508, or **+0.25% to +1.82%** of real after-tax net
+worth. Harness `.test_harnesses/schedule_oracle_harness.js`; 45,475 sims, 34.2 s.
+
+**The two cells that carry the argument** are `thirds @4%` and `brokheavy @4%`, where the conversion
+oracle finds **$0** and the schedule finds **~$198k**. Those plans do not want more conversion. They
+want the base rule's own draw moved year to year, which is a sentence `extraConversionAmount` cannot
+say in any amount. **The one-directional axis was not a small limitation; in some cells it was the
+whole gap.**
+
+**It also converged on roughly an eighth of the compute** - 1,021 sims against 9,575 in
+`defaults @4%`, 1,201 against 9,260 in `defaults3x @4%`. The reason is candidate SHAPE, not luck: a
+multiplicative set (×0.4 … ×2.0) is scale-free, so it works identically on a $400k ceiling and a $40k
+draw, while a $25k absolute grid over $0-400k spends most of its evaluations far from any plausible
+value. **A search axis measured in ratios beat one measured in dollars at the same budget**, which is
+a transferable result for `P34`'s slow-machine target and for the `P103c` search-cost question.
+
+**The harness was confidently wrong first, and the failure has a recognizable shape.** Version 1 chose
+the best non-cyclic row as the base regardless of family. Ordered and Guyton-Klinger compile to an
+EMPTY schedule (`P103b3`), which funds no spending, fails the spend pin and scores null - after ONE
+simulation. Five of seven cells printed Arm S losing by the entire conversion gain, and `S-P1` scored
+WRONG. It was re-measuring the b3 coverage boundary and reporting it as a ceiling comparison.
+**Generalizable: a null or catastrophic result that arrives after one evaluation is a setup bug, not
+a finding - check the evaluation COUNT before believing a verdict.** The fix was to require the base
+row's compiled schedule to replay it exactly, verified per cell before either arm runs.
+
+**Scope, because this is the phase's first number that moves.** Perfect foresight on one path; the
+base rows differ from `P103a`'s champions because a carryable row is required; and **spend is still
+pinned**, so all of it is "more wealth at the same delivered spend". Whether a FIXED rule captures
+most of the gain - the `P35n` template that produced the only shipped result in this whole line of
+work - is `P103d`, and that is the question that decides whether any of this reaches a user.
+
+
+## The spend axis needs a frontier, not a weight  *(2026-09-01, `P103b5a`)*
+
+**Codes:** *frontier* = the achievable (lifetime spend, terminal wealth) pairs traced by sweeping the
+spend goal on a fixed base row. *technical rate* = how much real terminal wealth the MODEL gives up
+per extra dollar of lifetime spending, measured along that frontier. *SPENDABLE_WEIGHT* = the repo's
+own 1.10, the coefficient in `baselineScoreOf`.
+
+**The technical rate is 1.38 to 3.31; the weight is 1.10.** Below it everywhere measured, so the
+scalarized optimum sits at the **minimum** spend tested in 3 of 3 cells. Prediction `O-P1` was WRONG
+and in the opposite direction from what I expected: I reasoned that a dollar spent in the final year
+costs about a dollar of wealth and is credited 1.10, so the objective would prefer spending. It
+prefers hoarding, because most of the horizon is not the final year and a dollar not spent compounds.
+
+**`O-P3` is the one that decides the design.** The rate is not constant - 1.38 to 3.31 within
+`round1 @4%` alone. No single weight agrees with the model at both ends of one frontier, let alone
+across cells. **So `P103b5` needs a frontier, not a weight:** report the (spend, wealth) pairs and let
+a human pick the point, the same shape `P100` reached for row ranking.
+
+**This does not make `SPENDABLE_WEIGHT` wrong at its job**, and the distinction is worth keeping.
+Between two plans delivering the same spend the term cancels exactly; between two plans at the same
+wealth it correctly prefers the one that spends more. That is what "settle ties between otherwise
+equal plans" means and it does it. What it cannot do is price a REAL trade-off, where one plan
+genuinely buys spending with wealth. Documented in `optimizer_core.js` with both facts.
+
+**A constraint on any future spend search: feasibility is NOT monotone in the spend goal.**
+`round1 @4%` is feasible at 0.70, infeasible at 0.80, feasible again at 0.90-1.10, infeasible from
+1.20. `totals.success` is a PER-YEAR test (`netIncome < targetSpend * 0.99`), so a plan can dip under
+the threshold in a narrow band and recover above it. **Bisecting for the maximum sustainable spend is
+therefore unsound** - it can land in a hole and report a much lower ceiling than exists. Worth
+checking whether `optimizeSpend`, which converges to the highest spend where `success` holds, is
+exposed to this.
+
+**The generalizable half.** A scalarized objective is only usable for SEARCH when its optimum is
+interior. Before adding a decision variable to any search, sweep it once and look at where the argmax
+lands: a boundary answer means the search will return the weight rather than the plan.
+
+
+## The schedule beats Guyton-Klinger, and the rule is why  *(2026-09-01, `P103b5`)*
+
+**Codes:** *spend field* = a schedule entry's `spend`, the year's goal in nominal dollars.
+*`spendRule: 'gk'`* = an input that runs the Guyton-Klinger spend adjustment under ANY strategy.
+*dominates* = no worse on delivered lifetime spend, and more terminal wealth, both plans funded.
+
+**GK is dominated in 10 of 12 cells: more lifetime spending AND more terminal wealth.** At the
+typical -1%/yr spend decline, +$26,285 spend and +$2,611 wealth at 4%, +$91,655 and +$95,758 at 6%;
+best case +$43,934 and +$198,581. The two exceptions are a RISING spend goal, where the schedule buys
+spending at the cost of wealth - a genuine trade, correctly not called dominance.
+
+**The rule versus the numbers is the whole methodological point, and I got it wrong first.** My first
+pass compiled GK's RECORDED spend path and replayed it under a different draw. That produces a large
+number and means nothing: GK's spend responds to the portfolio, so under a different draw it would
+have chosen differently. The path is a hindsight artifact nobody could follow. Carrying the RULE -
+`spendRule: 'gk'`, re-evaluated each year against whatever portfolio the plan actually has - is a
+combination someone could adopt. **Same measurement, and only one of the two versions is evidence.**
+
+**Generalizable: when a harness "carries" an adaptive strategy, ask whether it carries the DECISIONS
+or the DECISION RULE.** Decisions are a recording of one history and reproduce nothing when the
+environment changes; a rule is portable. The tell is that replaying decisions almost always looks
+better than the source, because the recording was made under conditions the replay no longer faces.
+
+**What it licenses and what it does not.** It does NOT mean a user can have $198k. It means **GK's
+account split is costing it that much at its own spending rule**, so the draw rule is the thing worth
+replacing - which is `P103d`, now with a measured prize instead of a hunch. Unlike `P103b4` it needs
+no perfect foresight: the spend rule is GK's own and the draw is a schedule, so the whole combination
+is implementable.
+
+**A near-miss worth recording.** I first reported this as a partial replay - "GK does not fully
+reproduce, residual $292k" - and filed a strict improvement as a coverage defect. The user caught it:
+*"if a draw strategy improves GK it should be used. Indeed, that's the point."* **A replay harness
+whose verdicts are only EXACT or BROKEN cannot see an improvement.** The harness now reports the
+delivered-spend delta beside the wealth delta and labels the case DOMINATES.
+
+## Spend is PINNED, not FLAT - a correction to language used throughout  *(2026-09-01, user)*
+
+*"You've repeatedly said spend is fixed - it is not. Usually it is declined by -1% per year of plan."*
+Correct, and two different things were being run together:
+
+- **Pinned** is the COMPARISON rule: a candidate delivering a different spend is discarded, so a
+  spend-cutting arm cannot win by cutting. Real, and a deliberate methodology choice.
+- **Flat** is a FIXTURE choice and an unrepresentative one. Every harness in this study sets
+  `spendChange: 0`, while a typical plan declines around 1% a year. **Nothing in the oracle grid
+  exercises a declining spend path.**
+
+`P103b5`'s sweep is the first thing here to vary it, spanning -2.0% to +1.0%. Every other gap number
+in `PERFECT_FORESIGHT_ORACLE.md` is measured on a flat path and has to be read that way; re-running
+the grid at a realistic decline is `P103b5c`.
+
+
+## The flat spend fixture was understating every gap by about half  *(2026-09-01, `P103b5c`)*
+
+**Codes:** *flat path* = `spendChange: 0`, the fixture every harness in this study used. *declining
+path* = `spendChange: -1%`, roughly what a typical plan does. *gap* = how far the best shipped row
+sits below the oracle, in percent of real after-tax net worth.
+
+`oracle_harness.js --full --spendchange -1`, 424,399 sims, 407.9 s, opt-in flag.
+
+**The gap roughly DOUBLES on the realistic path.** Median best-family gap, default basis
+**1.58% -> 3.44%**; b20 1.13% -> 3.30%; b80 0.90% -> 3.23%. Max conversions-only gain at default
+basis 0.57% -> **9.55%**. Prediction `D-P1` said "widens by more than 0.3pp" and was right by six
+times that margin.
+
+**Why, and it is not subtle in hindsight.** A declining spend leaves more wealth in the plan every
+year: more balance to manage, more RMD pressure, more conversion room late. None of the shipped rules
+knows the spend is falling, so they fall further behind a searcher that does.
+
+**The attribution survives but narrows.** The withdrawal split stays the dominant lever - 27 of 45
+cells on both paths - yet conversions nearly double in total value ($2,042,009 -> $3,800,777) while
+the split falls ($5,468,972 -> $4,848,706). `D-P2` RIGHT.
+
+**One published headline breaks outright.** "The best flat scalar conversion finds $0 in 45 of 45
+cells" was among this study's most-repeated results. On the declining path the flat sweep finds money
+in **3 of 45** cells, up to **$86,640**. So "per-year conversion shapes are genuinely inexpressible
+to the flat sweep" holds on a flat path and only mostly holds on a realistic one.
+
+**`S3-P4` flips to WRONG.** Backstops were silent in 45/45 cells on the flat path; on the declining
+path `brokheavy @6% b20` runs 2 forced-IRA years of 33, over the prediction's 5% threshold.
+
+**The lesson, and it is the third time this session a fixture turned out to be the finding.**
+`P103b1` found surplus routing confounding the grid; `P103b5` found spend pinning conflated with
+spend flatness; this found the flat path itself worth a factor of two. **A fixture value nobody chose
+deliberately is a finding waiting to happen.** The three defaults that did the damage here -
+`CashReserve` unset, `spendChange: 0`, one deterministic return path - were all inherited from the
+first harness and never revisited. Everything downstream inherited them too.
+
+**Consequence: every other gap number in `PERFECT_FORESIGHT_ORACLE.md` is a flat-path number** and
+understates the realistic gap by roughly 2x. Which lever matters survives; the sizes do not. `P103d`
+has to re-derive its regime map on the declining path before aiming at anything.
+
+
+## Correcting P103b5c: the two fixtures INTERACT  *(2026-09-01, same day as the claim)*
+
+**Codes:** *controlled* = `--reserve0`, surplus routing held constant across arms. *declining* =
+`--spendchange -1`. The 2x2 crosses them; each cell is a full 45-cell grid run.
+
+| median best-family gap, default basis | routing uncontrolled | routing CONTROLLED |
+|---|---|---|
+| flat spend | 1.58% | **2.03%** |
+| declining -1%/yr | 3.44% | **1.94%** |
+
+**`D-P1` is WRONG and I scored it RIGHT hours earlier.** Running the declining path alone, the median
+gap went 1.58% -> 3.44% and I wrote it up as "right by six times the predicted margin". Crossed with
+routing control it does not widen at all: 2.03% -> 1.94%. What I measured was the routing confound
+behaving differently under a different spend path.
+
+**Two published claims withdrawn.**
+- "The flat scalar finding $0 in 45 of 45 cells is a flat-path artifact" - **NO**. Under routing
+  control it is $0 in **44 of 44 on both paths**. The 3 cells that appeared to break it were routing
+  artifacts. The original headline stands.
+- "The gap roughly doubles on a realistic path" - **NO**, as above.
+
+**What survives under control:** max conversions-only gain 0.57% -> **9.55%**; `S3-P4` flips WRONG
+(45/45 clean -> 44/45); and the three basis medians CONVERGE on the declining path (all 1.94%), so
+the basis fraction stops mattering to the median.
+
+**The rule this establishes, which is stronger than the one it replaces.** Earlier today I wrote
+"a fixture value nobody chose deliberately is a finding waiting to happen" after the third such
+case. That is true but incomplete. **Fixtures INTERACT, so they cannot be corrected one at a time** -
+fixing routing while spend stayed flat, then fixing spend while routing stayed loose, produced a
+confident false positive at each step. The correction has to be crossed: vary the new fixture WITH
+the previously-controlled one, or the confound simply relocates.
+
+**Cost of learning this: one extra 345-second run.** Cost of not learning it: two withdrawn claims
+that had already survived a careful write-up, a prediction scoring, and a commit.
+
+
+## GK decides the spend well and the draw badly  *(2026-09-01, `P103d`)*
+
+**Codes:** *incumbent* = `strategy: 'gk'`, GK deciding spend and draw. *candidate* =
+`strategy: X, spendRule: 'gk'` - GK decides the spend, a shipped family decides the draw. *wins a
+cell* = delivers no less lifetime spend AND more real terminal wealth, both plans funded.
+
+Both fixtures controlled (`CashReserve: 0`, spend -1%/yr), because `P103b5c` showed correcting them
+one at a time relocates the confound.
+
+**GK's draw is beaten in 24 of 30 cells - 80% - including 15 of 15 at 6% spend.** Total wealth left
+on the table **$6,564,797**; median gain in a beaten cell **$231,345**; largest **$713,401**
+(`brokheavy @6% b20`, IRA Draw 5%). The six unbeaten cells are all at 8% spend.
+
+**`G-P1` WRONG, and the shape of the failure is the finding.** It asked whether ONE rule beats GK in
+a majority of cells; the best single rule (Ordered CIBR) manages 14 of 30. But some rule beats GK in
+80% of cells. **"No single winner" is not "no winner" - it is a regime-gated winner**, which is the
+standing result of this whole line of work and the reason `P35n`'s arm shipped marked and gated.
+
+**`G-P2` RIGHT: six distinct per-cell winners** - Ordered CIBR 8, Fill Bracket 22% 6, IRA Draw 5% 5,
+Ordered CBIR 2, IRA Draw 9% 2, Fill Bracket 24% 1.
+
+**`G-P3` WRONG, in a direction worth chasing.** I predicted rules reaching Brokerage or Cash before
+the IRA would win more often - GK's guardrails already cut spending when the portfolio falls, and
+§1014 makes held brokerage cheap to heirs. IRA-first rules win 14 of the per-cell bests against 10.
+**Under a GK spend rule the IRA is the account worth draining early, the opposite of `P35n`'s endgame
+result.** Two rules from the same repo pointing opposite ways is either a regime boundary worth
+naming or a mistake in one of them, and it should be settled before either ships.
+
+**The honest limit.** This measures the best rule PER CELL with hindsight over that cell's outcome; a
+user picks one up front. The shippable form is a sweep that searches - which is what the Optimizer
+table already is. The finding is not "use Ordered CIBR"; it is that **GK's own draw should not be
+assumed the right partner for GK's spend rule**, and the sweep should offer the combination.
+
+
+## A one-path bake-off picked the rule that fails 80% of futures  *(2026-09-01, `P103e`)*
+
+**Codes:** *median-best* = highest median real terminal wealth across paths. *survival* = share of
+paths the plan funds to the end. *single-path pick* = the winner `P103d` chose on one deterministic
+6%/2.5% path.
+
+100 GBM paths x 33 years x 5 rules x 6 cells, every rule on the SAME banks, seed and path index.
+
+**`E-P3` RIGHT in 6 of 6 cells, and it is the result: the single-path pick is NEVER the median-best
+rule.** Not a substantial minority - every cell.
+
+**The rule the single-path bake-off crowned is the worst under uncertainty.** Ordered CIBR won 8 of
+30 single-path cells, more than any other rule, and survives **3%, 17%, 21% and 21%** of paths in
+four MC cells against GK's 100%. A draw order that is optimal when every year returns exactly 6% is
+fatal when returns vary, and a point estimate cannot show that.
+
+**`E-P2` WRONG, and it did its job.** In `defaults3x @6%` the median-best rule survives 57% of paths
+against GK's 100% - extra median wealth bought with survival, which disqualifies it for someone
+living on the plan. Without a survival column that cell would have read as a win.
+
+**The robust winner was the runner-up.** Fill Bracket 22% is median-best in 5 of 6 cells at **100%
+survival**, worth +$56,674 to +$600,128 against GK. The single-path bake-off ranked it second.
+
+**The generalizable rule, and it is the strongest one from this whole phase.** A deterministic path
+does not just add noise to a ranking - **it systematically favors rules that are brittle**, because
+brittleness has no cost when there is only one future. Any selection among strategies must be made
+under uncertainty; a single-path search is for finding CANDIDATES, never for choosing between them.
+That is now measured rather than asserted: 6 of 6 cells changed their answer.
+
+**And the NaN that nearly ate the run.** The first execution printed a full table of `$NaN` at 100%
+success, because `buildBanks` destructures `cfg.mu` and `cfg.sigma` for the synthetic modes and I
+supplied neither - `logDrift` went NaN and every balance followed it silently, all the way to a
+terminal of nulls. It was caught by the same reflex as `P103b4`'s one-simulation null: **a clean-
+looking table with an impossible uniformity (every rule at exactly 100%) is a setup bug.**
+
+
+## Every narrowing of the evidence flattered the answer  *(2026-09-01, `P103e` mode sweep)*
+
+Ran the `P103e` comparison under all three Monte Carlo modes rather than GBM alone. GBM draws each
+year independently; **bootstrap replays real historical blocks, so it carries real crashes in real
+order**.
+
+**Survival, min and median across six cells:**
+
+| rule | GBM | bootstrap | AAM |
+|---|---|---|---|
+| Ordered CIBR | min 3%, med 21% | **min 0%**, med 20% | min 3%, med 24% |
+| Ordered CBIR | min 19%, med 65% | min 15%, med 56% | min 19%, med 69% |
+| Fill Bracket 22% | min 100% | min 95% | min 98% |
+| IRA Draw 5% | min 100% | min 100% | min 100% |
+
+**Ordered CIBR reaches 0% survival under bootstrap** - it funds not a single historical path in that
+cell, having been the single-path bake-off's most frequent winner (8 of 30 cells). Both ordered
+sequences are disqualified in every mode.
+
+**Fill Bracket 22% wins 12 of 18 mode-cells**, and the losses are informative rather than noise:
+`defaults3x @6%` is negative in ALL three modes, so GK's own draw is right there; and `thirds @6%`
+flips from +$107,493 under GBM to **−$380,983 under bootstrap**, which is exactly the sequence risk
+GBM cannot represent.
+
+**The pattern across this whole phase, stated once.** One deterministic path picked a rule that fails
+most futures. One synthetic mode overstated how broadly the replacement wins. Earlier, one
+uncontrolled fixture doubled a gap that does not move when controlled. **Every narrowing of the
+evidence flattered the answer, in the same direction, every time.** That is not coincidence: a
+narrower evidence base removes the conditions under which a candidate fails, and a search will
+happily find whatever the narrowing permits. The working rule is to assume a result is optimistic in
+proportion to how little was varied to get it, and to widen the axis you did NOT vary before
+believing a margin.
+
+
+## The MAGI-edge gate: provisionally failing, and one bug already found  *(2026-09-01, `P103c1` / `P75a`)*
+
+**Codes:** *edge* = a MAGI threshold the tax code cares about - a federal bracket top, a state cap, an
+IRMAA tier boundary, an LTCG bracket top, an ACA FPL multiple, or the ceiling a family is actively
+filling. *residency* = share of plan-years whose realized MAGI is within a tolerance of the nearest
+edge. *gate* = `P75a`, which says a search over the MAGI menu is only sensible if good plans land on
+it, and "mostly interior" means redesign.
+
+**Measured: 4.2% of 990 best-row plan-years within $1,000 of an edge**; 1.3% at $250, 29.2% at
+$10,000. ACA Cliff 9.1%, Guyton-Klinger 4.9%, Fill Bracket 3.4%, Ordered 1.5%. Fat regimes 4.2%.
+
+**Provisional, because the first version of this measurement was wrong.** It rebuilt the statutory
+tables by hand and scaled them by `inflationFactor` - the SPENDING inflation - when bracket
+indexation uses a different factor with a one-year lag (`P70`), and it ignored the `P92a` deduction
+add-back that lifts a federal ceiling above the statutory top. It reported **1.1% residency for Fill
+Bracket**, a family that fills a ceiling by construction. **That impossibility is what caught it**, and
+it is the third time this session the tell has been an implausibly clean number rather than an error.
+
+**After the fix, a direct check anchors it:** Fill Bracket 22%'s realized MAGI sits at **exactly $0**
+from its own logged `BracketTarget` in the years the ceiling binds - **6 of 33** in the cell tested.
+So plans DO land on their ceilings; ceilings just do not bind most years.
+
+**Which is the interesting part, if it holds.** A ceiling family is only ON its ceiling when the
+ceiling is the binding constraint - the rest of the time spending needs less, or the IRA is spent
+down, and MAGI floats free. Add that the best rows in the fat regimes are Guyton-Klinger, which has
+no ceiling at all, and the MAGI menu describes a minority of the decisions that matter.
+
+**Not acted on.** This verdict would send `P103c` back to the drawing board, and a measurement whose
+first version was wrong has not earned that. The confirming step is small: count binding years per
+family directly and check whether 6 of 33 generalizes.

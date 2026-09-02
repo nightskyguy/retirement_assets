@@ -62,6 +62,8 @@ const core = IS_NODE ? require('./optimizer_core.js') : window.OptimizerCore;
 if (IS_NODE) require('./displayhelpers.js');
 
 const simulate = core.simulate;
+const compileScheduleFromRun = core.compileScheduleFromRun;
+const scheduleOptionsForRun = core.scheduleOptionsForRun;
 const ADVISOR_FEE_PCT_MAX = core.ADVISOR_FEE_PCT_MAX;
 const inferAdvisorFeeMode = core.inferAdvisorFeeMode;
 const optimizeSpend = core.optimizeSpend;
@@ -7025,6 +7027,226 @@ test('P71: a cancelled job reports nothing at all', async () => {
     });
     assert(msg === null, 'a cancelled job returned a results message');
     assert(calls > 1, 'shouldCancel was never consulted');
+});
+
+// ── P103b2: strategy 'schedule', the flexible carrier ─────────────────────────
+// The acceptance bar for the representation is REPLAY IDENTITY, not a gap number: compile a shipped
+// family's realized decisions into a schedulePlan, re-run as a schedule, and require the two runs to
+// agree to the dollar. A family that cannot reproduce itself proves the representation is wrong, and
+// it fails here rather than silently in a gap table.
+
+// A household with real Social Security and a ceiling worth filling, so the P87c MAGI basis and the
+// gap-fill cascade are both exercised. Declared inside the test file's IIFE like every other fixture.
+const SCHED_BASE = {
+    STATEname: 'CA', nYears: 20,
+    birthyear1: 1962, birthmonth1: 6, die1: 92,
+    birthyear2: 1964, birthmonth2: 3, die2: 94, hasSpouse: true,
+    ss1: 45000, ss1Age: 70, ss2: 24000, ss2Age: 67,
+    pensionAnnual: 0, pensionStartAge: 0, survivorPct: 0, pensionCola: false,
+    spendChange: 0, iraBaseGoal: 0,
+    inflation: 0.025, cpi: 0.025, growth: 0.06,
+    cashYield: 0.03, dividendRate: 0.02,
+    ssFailYear: 2099, ssFailPct: 1.0,
+    convertExcessToRoth: true, propWithdraw: 0.10, iraWithdrawPct: 0.06,
+    extraConversionAmount: 0, fundConversionWithCash: false,
+    startAge: 64, startInYear: 2026, dividendReinvest: true,
+    gkGuard: 0.20, gkAdjPct: 0.10, cycleLTCGTarget: 0.15,
+    qcdHHMax: 0, qcdMode: 'asneeded', computeOC: false,
+    IRA1: 1000000, IRA2: 400000, Roth: 50000, Roth2: 20000,
+    Brokerage: 100000, BrokerageBasis: 50000, Cash: 50000,
+    spendGoal: 97200,
+};
+
+// Replay a family as a schedule and return the worst per-year wealth disagreement plus the final one.
+function schedReplayDelta(overrides, mutate) {
+    const src = { ...SCHED_BASE, ...overrides };
+    const a = simulate(src);
+    let plan = compileScheduleFromRun(a, src);
+    if (mutate) plan = mutate(plan);
+    const b = simulate({ ...src, strategy: 'schedule', schedulePlan: plan,
+                         ...scheduleOptionsForRun(src),
+                         stratRate: undefined, stratIRMAATier: undefined, stratACAMultiple: undefined });
+    let maxYr = 0;
+    if (a.log.length !== b.log.length) return { maxYr: Infinity, dNW: Infinity, scheduled: plan.filter(Boolean).length };
+    for (let i = 0; i < a.log.length; i++) {
+        maxYr = Math.max(maxYr, Math.abs((b.log[i].totalWealth ?? 0) - (a.log[i].totalWealth ?? 0)));
+    }
+    return { maxYr, dNW: (b.finalNW ?? 0) - (a.finalNW ?? 0), scheduled: plan.filter(Boolean).length };
+}
+
+test('schedule: replays Fill Bracket 22% to the dollar', () => {
+    const d = schedReplayDelta({ strategy: 'bracket', stratRate: 0.22 });
+    assert(d.scheduled === 33, `expected 33 scheduled years, got ${d.scheduled}`);
+    assert(d.maxYr < 0.01, `per-year wealth diverged by ${d.maxYr}`);
+    assert(Math.abs(d.dNW) < 0.01, `final net worth diverged by ${d.dNW}`);
+});
+
+test('schedule: replays an IRMAA tier ceiling to the dollar', () => {
+    const d = schedReplayDelta({ strategy: 'bracket', stratRate: 0, stratIRMAATier: 2 });
+    assert(d.scheduled === 33, `expected 33 scheduled years, got ${d.scheduled}`);
+    assert(d.maxYr < 0.01, `per-year wealth diverged by ${d.maxYr}`);
+    assert(Math.abs(d.dNW) < 0.01, `final net worth diverged by ${d.dNW}`);
+});
+
+test('schedule: rateBasis is load-bearing, not decoration', () => {
+    // Dropping it makes the federal replay derive its marginal rate at the deduction-lifted ceiling
+    // instead of the statutory bracket top, which is one bracket higher. Measured at $121 over 33
+    // years before rateBasis existed. If this test ever passes with rateBasis stripped, the two
+    // numbers have converged and the field can go.
+    const kept = schedReplayDelta({ strategy: 'bracket', stratRate: 0.22 });
+    const stripped = schedReplayDelta({ strategy: 'bracket', stratRate: 0.22 },
+        plan => plan.map(e => e && { ordTarget: e.ordTarget, kind: e.kind }));
+    assert(kept.maxYr < 0.01, 'the kept-rateBasis replay should be exact');
+    assert(Math.abs(stripped.dNW) > 1, `stripping rateBasis should diverge, got ${stripped.dNW}`);
+});
+
+test('schedule: replays IRA Draw 5% to the dollar via the quantity lever', () => {
+    // P103b3 widened the representation past the b2 limit this fixture used to pin: a family whose
+    // per-year decision is a SHARE OF THE IRA is now carried by iraDraw.
+    const d = schedReplayDelta({ strategy: 'fixedpct', iraWithdrawPct: 0.05 });
+    assert(d.scheduled === 33, `expected 33 scheduled years, got ${d.scheduled}`);
+    assert(d.maxYr < 0.01, `per-year wealth diverged by ${d.maxYr}`);
+    assert(Math.abs(d.dNW) < 0.01, `final net worth diverged by ${d.dNW}`);
+});
+
+test('schedule: replays Reduce 17 yrs, which takes the OTHER gap-fill', () => {
+    // Reduce is the one quantity family outside the bracket set, so it fills its gap from the
+    // [40,60] default branch. Getting this exact is what per-year gapFill is for.
+    const d = schedReplayDelta({ strategy: 'fixed', nYears: 17 });
+    assert(d.maxYr < 0.01, `per-year wealth diverged by ${d.maxYr}`);
+    assert(Math.abs(d.dNW) < 0.01, `final net worth diverged by ${d.dNW}`);
+});
+
+test('schedule: replays an ACA plan ACROSS its lapse', () => {
+    // The case that broke prediction R-P1 in b2. The cap is live for 3 of 33 years and lapses at
+    // Medicare eligibility; every later year falls through to baseline Proportional, which is a
+    // different statement from "draw nothing voluntarily". scheduleFallback is what says so.
+    const d = schedReplayDelta({ strategy: 'aca', stratRate: 0, stratACAMultiple: 400 });
+    assert(d.scheduled === 3, `expected 3 live-cap years, got ${d.scheduled}`);
+    assert(d.maxYr < 0.01, `per-year wealth diverged by ${d.maxYr}`);
+    assert(Math.abs(d.dNW) < 0.01, `final net worth diverged by ${d.dNW}`);
+});
+
+test('schedule: an iraDraw year implies no year-0 conversion', () => {
+    // Withdrawal timing is Early in a conversion year and Late otherwise, and year 0 decides it from
+    // the strategy. A ceiling implies a conversion; a quantity draw does not, exactly as fixedpct
+    // and fixed do not. Treating any year-0 entry as a ceiling flipped the month and left IRA Draw
+    // $39,117 adrift with every year already scheduled - a whole-plan error from one boolean.
+    const src = { ...SCHED_BASE, strategy: 'fixedpct', iraWithdrawPct: 0.05 };
+    const a = simulate(src);
+    const plan = compileScheduleFromRun(a, src);
+    assert(plan[0] && plan[0].iraDraw !== undefined, 'year 0 should compile to a quantity entry');
+    const b = simulate({ ...src, strategy: 'schedule', schedulePlan: plan, ...scheduleOptionsForRun(src) });
+    assert(a.log[0].timingReason === b.log[0].timingReason,
+        `year-0 timing differs: ${a.log[0].timingReason} vs ${b.log[0].timingReason}`);
+});
+
+test('schedule: convert caps the surplus routed to Roth, and the rest still banks', () => {
+    // The conversion lever is a REALLOCATION of an already-taxed surplus, not a gross draw: capping
+    // it moves dollars from Roth to Cash/Brokerage and must not change what left the IRA.
+    const src = { ...SCHED_BASE, strategy: 'bracket', stratRate: 0.22 };
+    const a = simulate(src);
+    const plan = compileScheduleFromRun(a, src);
+    const capped = plan.map(e => e && { ...e, convert: 1000 });
+    const b = simulate({ ...src, strategy: 'schedule', schedulePlan: capped, stratRate: undefined });
+    const convA = a.log.reduce((t, e) => t + (e.rothConv ?? 0), 0);
+    const convB = b.log.reduce((t, e) => t + (e.rothConv ?? 0), 0);
+    assert(convB < convA, `capping convert should reduce conversions: ${convB} vs ${convA}`);
+    assert((b.log[0]['-volIRAwd'] ?? 0) === (a.log[0]['-volIRAwd'] ?? 0),
+        'capping the Roth destination must not change the IRA draw');
+});
+
+test('schedule: the coverage limit that REMAINS is the account split', () => {
+    // Proportional and Ordered decide how to SPLIT a spending draw across accounts, which is
+    // oracleWithdrawalPlan's job and not something ordTarget or iraDraw can state. Pinned so that
+    // widening it stays a deliberate act - which is exactly how P103b5 removed GK from this list.
+    for (const ov of [{ strategy: 'propwd', propWithdraw: 0.10 },
+                      { strategy: 'ordered', orderedSeq: 'CBIR' }]) {
+        const d = schedReplayDelta(ov);
+        assert(d.scheduled === 0, `${ov.strategy} should compile to nothing, got ${d.scheduled}`);
+    }
+});
+
+test('schedule: carries GK by its spend RULE, and beats it', () => {
+    // The point of the spend field is not to replay GK's recorded numbers - that would be a
+    // hindsight artifact, since GK's own dynamics would have reacted to a different draw. The
+    // schedule takes GK's spend RULE, re-evaluated each year against its own portfolio, and only the
+    // DRAW from the source. That combination is followable, and it wins on both axes.
+    const src = { ...SCHED_BASE, strategy: 'gk' };
+    const opts = scheduleOptionsForRun(src);
+    assert(opts.spendRule === 'gk', 'a GK source must hand over its spend rule, not its numbers');
+    const a = simulate(src);
+    const plan = compileScheduleFromRun(a, src);
+    assert(plan.filter(Boolean).length === a.log.length, 'every GK year should compile a draw');
+    assert(plan[0].spend === undefined, 'the draw is carried; the spend comes from the rule');
+    const b = simulate({ ...src, strategy: 'schedule', schedulePlan: plan, ...opts });
+    assert(b.totals.success, 'the combination must still fund the plan');
+    const dSpend = (b.totals.spendCurrentDollars ?? 0) - (a.totals.spendCurrentDollars ?? 0);
+    const dNW = (b.finalNW ?? 0) - (a.finalNW ?? 0);
+    assert(dSpend > -100, `spend must be no worse, got ${dSpend}`);
+    assert(dNW > 1, `wealth must be higher, got ${dNW}`);
+});
+
+test('schedule: GK spend rule is separable from the GK strategy', () => {
+    // spendRule: 'gk' runs the adjustment for any strategy. Without the separation a schedule could
+    // only ever replay GK's numbers, never follow its rule.
+    const withRule = simulate({ ...SCHED_BASE, strategy: 'bracket', stratRate: 0.22, spendRule: 'gk' });
+    const without = simulate({ ...SCHED_BASE, strategy: 'bracket', stratRate: 0.22 });
+    const sameSpend = Math.abs((withRule.totals.spendCurrentDollars ?? 0)
+                             - (without.totals.spendCurrentDollars ?? 0)) < 1;
+    assert(!sameSpend, 'borrowing the GK spend rule must change the spend path');
+});
+
+test('schedule: a per-year spend applies for that year only', () => {
+    // sim.spendGoal carries forward compounded by spendDelta and inflation, so an override left in
+    // place would silently compound into every later year and the search axes would stop being
+    // independent. Year 0 is halved here; year 1 must land on the untouched trajectory.
+    const base = simulate({ ...SCHED_BASE, strategy: 'bracket', stratRate: 0.22 });
+    const half = Math.round((base.log[0].spendGoal ?? 0) / 2);
+    const plan = compileScheduleFromRun(base, { ...SCHED_BASE, strategy: 'bracket', stratRate: 0.22 });
+    plan[0] = { ...plan[0], spend: half };
+    const res = simulate({ ...SCHED_BASE, strategy: 'schedule', schedulePlan: plan });
+    assertNear(res.log[0].spendGoal ?? 0, half, 'year 0 should take the override', 0.01);
+    assertNear(res.log[1].spendGoal ?? 0, base.log[1].spendGoal ?? 0,
+        'year 1 must be back on the untouched trajectory', 0.01);
+});
+
+test('schedule: an unscheduled year draws nothing voluntarily and still funds spending', () => {
+    const res = simulate({ ...SCHED_BASE, strategy: 'schedule' });   // no schedulePlan at all
+    assert(res.totals.success, 'an empty schedule should still fund spending from the gap-fill cascade');
+    assert((res.log[0]['BracketTarget'] ?? 0) === 0, 'an unscheduled year should target no ceiling');
+});
+
+test('schedule: malformed entries throw rather than reading as a quiet year', () => {
+    const bad = [
+        ['not an object', ['nope']],
+        ['zero ordTarget', [{ ordTarget: 0 }]],
+        ['NaN ordTarget', [{ ordTarget: NaN }]],
+        ['unknown kind', [{ ordTarget: 100000, kind: 'state' }]],
+        ['negative rateBasis', [{ ordTarget: 100000, rateBasis: -5 }]],
+        ['neither ordTarget nor iraDraw', [{ kind: 'federal' }]],
+        ['both ordTarget and iraDraw', [{ ordTarget: 100000, iraDraw: 5000 }]],
+        ['negative iraDraw', [{ iraDraw: -1 }]],
+        ['negative convert', [{ ordTarget: 100000, convert: -1 }]],
+        ['unknown gapFill', [{ ordTarget: 100000, gapFill: 'sideways' }]],
+        ['negative spend', [{ ordTarget: 100000, spend: -1 }]],
+        ['NaN spend', [{ ordTarget: 100000, spend: NaN }]],
+    ];
+    for (const [label, plan] of bad) {
+        let threw = false;
+        try { simulate({ ...SCHED_BASE, strategy: 'schedule', schedulePlan: plan }); }
+        catch (e) { threw = true; }
+        assert(threw, `${label} should have thrown`);
+    }
+});
+
+test('schedule: refuses to compose with cyclicEnabled', () => {
+    let threw = false;
+    try {
+        simulate({ ...SCHED_BASE, strategy: 'schedule', cyclicEnabled: true,
+                   schedulePlan: [{ ordTarget: 150000 }] });
+    } catch (e) { threw = true; }
+    assert(threw, 'schedule + cyclicEnabled should be an explicit error, not a precedence rule');
 });
 
 // able to stop a test from running in the place that gates commits.

@@ -36,6 +36,15 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `brokerage_harness.js` | **node** | Why is Brokerage barely drawn, and is the third-pass exclusion to blame? |
 | `phased_harness.js` | **node** | P36 round 1: which families rank where under every objective, and do any arms never win? |
 | `oracle_harness.js` | **node** | P51: how far below the perfect-foresight ceiling does each family sit, and is it conversions or the split? |
+| `oracle_crosscheck.js` | **node** | P51d: is the oracle's ceiling really a ceiling? Runs a search of a different shape at the same sim cost and reports how much more it finds. |
+| `schedule_replay_harness.js` | **node** | P103b2: what can `strategy: 'schedule'` carry? Compiles each shipped family into a per-year schedule, replays it, and prints where the representation runs out. |
+| `schedule_oracle_harness.js` | **node** | P103b4: does the wider representation reach higher? Searches per-year ceilings against the same base row and budget as the conversions-only oracle. |
+| `gk_drawrule_harness.js` | **node** | P103d: which DRAW rule belongs under a Guyton-Klinger SPEND rule? Runs every shipped family with `spendRule: 'gk'` against GK deciding both. |
+| `split_expressiveness_harness.js` | **node** | P104: does a good draw split need a per-YEAR choice, or a few long phases? Ladder of k=1 / k=2 / k=free over the oracle's archetype menu. |
+| `family_equivalence_harness.js` | **node** | Are two families the SAME MODEL, or only similar? Compares every log field of every year. Proves Guyton-Klinger's draw IS Proportional +0%. |
+| `magi_edge_gate_harness.js` | **node** | P103c/P75a GATE: do the best rows' realized MAGI land on the MAGI edge menu, or in the interior? Verdict PROVISIONAL. |
+| `gk_drawrule_mc_harness.js` | **node** | P103e: does that survive uncertainty? Re-runs the P103d candidates over Monte Carlo paths and reports medians, p10 and SURVIVAL rather than an argmax. |
+| `spend_objective_harness.js` | **node** | P103b5a: can the spend axis be searched, and under what objective? Traces the (spend, wealth) frontier and asks where each candidate objective's optimum lands. |
 | `endgame_harness.js` | **node** | P35n: once the IRA sits at its target, what should the tail draw from? |
 | `irmaa_margin_harness.js` | **node** | Does an explicit IRMAA safety margin buy anything, now that the tier ceiling is projected forward? |
 | `irmaa_cpi_risk_harness.js` | **node** | Same question with the CPI allowed to come out different from the one the plan assumed. Reverses the answer. |
@@ -88,7 +97,17 @@ evidence of currency.
 | `gapfill_harness.js` | **DRIFTED** (`F2`,`F4`) | 227/360 -> **242/360** cells move. w=0 still best; the conclusion survives |
 | `endgame_harness.js` | **DRIFTED** (`F2`) | seq-CRB 88/108 -> 84/108; Roth-early 100/108 -> 94/101. All five verdicts unchanged |
 | `unifiedconv_harness.js` | **DRIFTED** | drifted again past its own 2026-08-24 re-baseline: negative in 26/60 -> 29/60, worst -$633,605 -> -$635,692 |
-| `oracle_harness.js` | **DRIFTED** (arm enumeration) | `P51a` reproduces (`S3-P1` RIGHT 15/15), but champion rows changed (`Reduce 20` -> `Reduce 17`). The `--full` half behind the +$1.08M headline was not re-run |
+| `oracle_harness.js` | **RE-BASELINED 2026-09-01** (`P103a`) | was DRIFTED. Both halves re-run on engine `1b7b366`: median best-family gap **4.35% -> 1.58%**, the +$1.08M conversion headline is now +$122k, and the dominant lever flipped from conversion timing to the withdrawal split. `S3-P2` WRONG -> RIGHT, `B-P4` RIGHT -> WRONG. Report is the second run throughout |
+| `oracle_harness.js --spendchange` | **CURRENT, first result CORRECTED** | new 2026-09-01 (`P103b5c`). Alone it looked like the median gap DOUBLES on a declining path; crossed with `--reserve0` it does not move at all (2.03% -> 1.94%), and the flat-scalar headline holds ($0 in 44/44 on both paths). **The two fixtures interact - vary them together or the confound just moves.** What survives: max conversions-only gain 0.57% -> 9.55%, `S3-P4` flips WRONG, and the regime map relocates to 8%-spend cells |
+| `oracle_harness.js --reserve0` | **CURRENT** | new 2026-09-01 (`P103b1`). Holds surplus routing constant across arms. Negative gaps 1 -> **0**, median gap 1.58% -> 2.03%, and the winning strategy changes in 4 of 6 headline cells |
+| `split_expressiveness_harness.js` | **CURRENT** | new 2026-09-02 (`P104`). **One better CONSTANT beats Proportional in 10/10 cells, $139,928-$1,155,056** - the shipped default is the wrong constant, not wrong for being constant. One switch captures 85-100% of the full per-year optimum in 7/10; the 3 exceptions are all brokerage-heavy (`brokheavy @6%` 58%, per-year increment $665,653). Best constant is a BLEND in 4/10, expressible by no shipped family. `X-P1`/`X-P3` RIGHT, `X-P2` WRONG |
+| `family_equivalence_harness.js` | **CURRENT** | new 2026-09-02 (user observation). **Guyton-Klinger's draw is bit-identical to Proportional +0%, 15/15 cells, every field of every year.** GK is a SPEND rule that inherits the legacy default draw, so `P103d`'s "GK's draw is beaten in 24/30 cells" is a statement about the DEFAULT draw and generalizes past GK |
+| `gk_drawrule_mc_harness.js` | **CURRENT** | new 2026-09-01 (`P103e`). **Overturns `P103d`'s ranking in all three MC modes.** The single-path winner (Ordered CIBR) reaches **0% survival** under bootstrap; both ordered sequences are disqualified outright. Fill Bracket 22% wins 12 of 18 mode-cells at 95-100% survival and loses consistently in two. `E-P1`/`E-P3` RIGHT, `E-P2` WRONG |
+| `gk_drawrule_harness.js` | **CURRENT** | new 2026-09-01 (`P103d`). **GK's draw is beaten in 24 of 30 cells (80%)** - 15/15 at 6% spend - worth a median $231,345 and $6.56M in total. Six distinct winners, so the replacement is regime-gated. `G-P1` and `G-P3` WRONG, `G-P2` RIGHT |
+| `spend_objective_harness.js` | **CURRENT** | new 2026-09-01 (`P103b5a`). The model trades **1.38-3.31** dollars of terminal wealth per dollar of lifetime spending, against a `SPENDABLE_WEIGHT` of 1.10, so the scalarized optimum sits at MINIMUM spend in 3/3 cells. `O-P1` WRONG (opposite direction), `O-P2` and `O-P3` RIGHT. Also finds feasibility NON-monotone in the spend goal |
+| `schedule_oracle_harness.js` | **CURRENT** | new 2026-09-01 (`P103b4`). Arm S (schedule) beats Arm A (conversions-only) in **6 of 6** cells, +0.25% to +1.82%, on an eighth of the compute in some. `S-P1` RIGHT |
+| `schedule_replay_harness.js` | **CURRENT** | new 2026-09-01 (`P103b2`, widened by `P103b3`). **8 of 11 arms replay EXACTLY**: every ceiling family including ACA across its lapse, plus IRA Draw and Reduce via the quantity lever. Proportional, Ordered and Guyton-Klinger carry nothing - they decide a split or the spend, not an IRA draw. `R-P1` WRONG |
+| `oracle_crosscheck.js` | **CURRENT** | new 2026-09-01. `X-P1` RIGHT 5/5: an equally-costed search of a different shape beats the oracle's descent by at most **0.013%**, so "lower bound" is near-tight on the conversion axis. `X-P2` and `X-P3` WRONG |
 | `rmdbasis_harness.js` | **CURRENT** | 0 of 30 timing-dependent, R2 violated in 0 of 30 - the post-fix column exactly |
 | `extraconv_magi_harness.js` | **CURRENT** | self-reports `FIXED BUILD`. Two recorded constants moved under `F4` (M3 $39,920,984 -> $39,693,824; M5 year-0 tax $39,238 -> $49,317) |
 | `underfill_harness.js` | **SUPERSEDED by its own fix** | measured the defect P87c then shipped (v11.16d4). It now reads 0.000000 and $0 on the same fixture, which is the check it has become; section 9's numbers are the pre-fix record |
@@ -318,15 +337,230 @@ Headline findings (2026-08-10):
 ```bash
 node .test_harnesses/oracle_harness.js          # P51a conversions-only
 node .test_harnesses/oracle_harness.js --full   # + P51c-g (needs the oracleWithdrawalPlan hook)
+node .test_harnesses/oracle_harness.js --full --reserve0   # P103b1: CashReserve = 0, routing held constant
+node .test_harnesses/oracle_harness.js --full --spendchange -1   # P103b5c: spend declines 1%/yr real
 ```
 
 **Full results live in [`PERFECT_FORESIGHT_ORACLE.md`](PERFECT_FORESIGHT_ORACLE.md).** P51: perfect-foresight
 trajectory oracle — per-year `extraConversionAmount[]` + per-year `oracleWithdrawalPlan`
 splits, coordinate descent, spend pinned, backstops instrumented. An upper-bound DIAGNOSTIC
-for one deterministic path, never a policy. Headlines (2026-08-10): flat scalar conversions
-find $0 in 15/15 cells while per-year timing finds up to +$1.08M; "Proportional is
-default-optimal" refuted on the absolute half (gap-to-oracle 2.3-11.6%); cyclic rows BEAT the
-oracle in one cell because surplus ROUTING is outside the menu — cyclic's real residual edge.
+for one deterministic path, never a policy. 45 cells, 418k sims, 373s.
+
+Headlines (**2026-09-01, engine `1b7b366`**): flat scalar conversions still find $0 in 45/45
+cells, but per-year timing is now worth at most +$19.5k at default basis (+$201k at 20% basis)
+where the first run measured +$241k; the **withdrawal split is now the larger lever in most
+cells**; median best-family gap **1.58%**; "Proportional is default-optimal" still refuted
+(gap 1.2-7.1%); one cyclic row still BEATS the oracle because surplus ROUTING is outside the
+menu — cyclic's real residual edge. The 2026-08-10 numbers are superseded; the report's
+before/after table says what moved.
+
+## oracle_crosscheck.js  (node)
+
+```bash
+node .test_harnesses/oracle_crosscheck.js              # equal sim budget
+node .test_harnesses/oracle_crosscheck.js --budget 3   # 3x budget arm
+node .test_harnesses/oracle_crosscheck.js --cells all  # all 45 cells, slow
+```
+
+**Results live in [`PERFECT_FORESIGHT_ORACLE.md`](PERFECT_FORESIGHT_ORACLE.md), section `P51d`.** Answers the
+question the oracle report has carried as open since 2026-08-10: the oracle calls its result a
+ceiling, but its search is coordinate descent over a fixed menu, so every published gap is a lower
+bound of unknown size. Arm A re-runs that descent IN THIS PROCESS; Arm B is a random-restart search
+with block/shift/scale/swap moves at $1k grain, handed the same MEASURED sim count. Equal cost,
+different shape.
+
+Headline (2026-09-01): **Arm B never finds materially more — max +0.013% of after-tax NW at 3x
+budget, and it does WORSE in one cell.** So the descent is close to its menu's own optimum on the
+conversion axis. One-directional evidence only: it shows a different equally-costed search cannot
+beat the descent, not that the descent is optimal, and the withdrawal-split axis is uncovered.
+
+## schedule_replay_harness.js  (node)
+
+```bash
+node .test_harnesses/schedule_replay_harness.js
+```
+
+**Results live in [`PERFECT_FORESIGHT_ORACLE.md`](PERFECT_FORESIGHT_ORACLE.md), section `P103b2`.** Asks what
+`strategy: 'schedule'` - the per-year decision vector, research-only and default-off - can actually
+express. Compiles each shipped family's realized decisions into a `schedulePlan` via
+`compileScheduleFromRun`, re-runs it as a schedule, and requires agreement to the dollar. A family
+that cannot reproduce itself proves the representation cannot state what that family decides.
+
+Headline after `P103b5` (2026-09-01): **8 of 11 arms replay EXACTLY, $0 on every column** - Fill
+Bracket at three rates, IRMAA at two tiers, ACA across its mid-plan lapse, and IRA Draw and Reduce
+through the quantity lever. **Guyton-Klinger's spend and IRA draw now round-trip to the dollar**
+since `P103b5` added the spend field, but its run does not reproduce because it also splits its
+draw across Brokerage and Cash. So the remaining boundary is a single thing: the schedule cannot
+state how to SPLIT a draw across accounts, and that one gap is the whole of what stops
+Proportional, Ordered and Guyton-Klinger.
+
+At `P103b2` only 5 arms were exact. Prediction `R-P1` - a family is either fully expressible or not
+at all - was WRONG, and the ACA counterexample is what named the missing fallback.
+
+The two exact cases and the two failure modes are pinned as node tests in `optimizer_core.tests.js`;
+this harness is the wider table.
+
+## gk_drawrule_harness.js  (node)
+
+```bash
+node .test_harnesses/gk_drawrule_harness.js          # the 6% and 8% spend cells
+node .test_harnesses/gk_drawrule_harness.js --all    # adds 4%
+```
+
+**Results live in [`PERFECT_FORESIGHT_ORACLE.md`](PERFECT_FORESIGHT_ORACLE.md), section `P103d`.** The regime map
+put the money in high-spend plans where Guyton-Klinger is the best available family, so the
+actionable question is not "what beats GK" but "GK decides the SPEND well - does it also decide the
+DRAW well?" Incumbent is `strategy: 'gk'`; each candidate is a shipped family run with
+`spendRule: 'gk'`, so GK keeps the spend and something else takes the draw. A candidate wins a cell
+only by delivering no less lifetime spend AND more real terminal wealth.
+
+Headline (2026-09-01): **GK's draw is beaten in 24 of 30 cells, including 15 of 15 at 6% spend**,
+leaving $6,564,797 on the table in total and a median $231,345 per beaten cell. **Six different rules
+win different cells** - Ordered CIBR 8, Fill Bracket 22% 6, IRA Draw 5% 5 - so the replacement is
+regime-gated, not a new default. `G-P3` WRONG in an interesting direction: IRA-first rules win more
+often than cash/brokerage-first ones here, the opposite of the `P35n` endgame result.
+
+## magi_edge_gate_harness.js  (node)
+
+```bash
+node .test_harnesses/magi_edge_gate_harness.js
+```
+
+**Results live in [`PERFECT_FORESIGHT_ORACLE.md`](PERFECT_FORESIGHT_ORACLE.md) and in `task_plan.md` under
+`P103c1`.** The GATE on `P103c`: that phase proposes searching two per-year income targets over the
+MAGI edge menu, which is only sensible if good plans land on that menu. `P75a` has always said
+"mostly interior" means stop and redesign. Best rows by `baselineScore`, every plan-year's realized
+MAGI against that year's edges, residency reported as a CURVE over tolerance so the verdict cannot be
+manufactured by choosing a generous band.
+
+Headline (2026-09-01), **PROVISIONAL**: 4.2% of 990 best-row plan-years sit within $1,000 of an edge
+(1.3% at $250, 29.2% at $10,000), which reads as the gate failing. It is NOT acted on, because the
+first version of this measurement was wrong - it rebuilt the statutory tables by hand and scaled them
+by the SPENDING inflation factor rather than the CPI indexation one, and reported 1.1% for Fill
+Bracket, a family that fills a ceiling by construction. Edges now come off the log (`FedCap`,
+`StateCap`, `BracketTarget`, `-cpiFactor`), and a direct check confirms Fill Bracket 22% sits at
+exactly $0 from its own `BracketTarget` in the years the ceiling binds - 6 of 33 in the cell tested.
+Confirm the binding-year counts per family before treating the gate as failed.
+
+## split_expressiveness_harness.js  (node)
+
+```bash
+node .test_harnesses/split_expressiveness_harness.js
+node .test_harnesses/split_expressiveness_harness.js --rates 4,6,8
+```
+
+**Results in [`PERFECT_FORESIGHT_ORACLE.md`](PERFECT_FORESIGHT_ORACLE.md), section `P104`.** Prices
+how much REPRESENTATION a good withdrawal split needs, by running an expressiveness ladder over the
+same archetype menu the oracle uses: one archetype for all years (`k=1`, exhaustive), one switch
+(`k=2`, exhaustive over pairs and switch year), and the oracle's own per-year coordinate descent
+(`k=free`). The reported number is the share of the `k=free` gain each rung captures.
+
+Base is Proportional +0% rather than GK, so spend is fixed by construction and the comparison is
+pure wealth; since GK's draw IS Proportional +0%, the result covers GK too. Conversions are never
+searched.
+
+Headline (2026-09-02): **a single better constant beats Proportional in 10 of 10 cells**, and one
+switch reaches 85-100% of the full per-year optimum in 7 of 10. The exceptions are brokerage-heavy
+mixes where per-year freedom adds up to $665,653. The best constant is a BLEND in 4 of 10 cells, so
+the account split field is needed even to express a CONSTANT.
+
+NOTE for anyone extending it: do not compare lifetime spend with an absolute tolerance. A 33-year
+cumulative spend total is a multi-million-dollar figure, and the first run of this harness declared
+8 of 10 cells invalid on deltas of ONE DOLLAR against $7.4M because the base plan over-funds by $2.
+The check is relative now, and prints its magnitude.
+
+## family_equivalence_harness.js  (node)
+
+```bash
+node .test_harnesses/family_equivalence_harness.js
+```
+
+Answers one question and exits non-zero if the answer is no: **are two strategy families the same
+model, or only similar?** It compares every field of every log row plus final net worth, to half a
+cent - not terminal wealth, because a summary can match while the years underneath differ. Pairs are
+declared in a table at the top; add one rather than editing an existing one.
+
+Written 2026-09-02 for the user's observation that Guyton-Klinger's draw looked like the
+Proportional family's. **It is: 15 of 15 cells bit-identical.** There is no `'gk'` case in
+`planPrimaryWithdrawals`, so GK falls through to the baseline `else`, whose three lines are the same
+three lines that open the `propwd` branch - and neither family is in `yr.isBracketStrategy`, so they
+share the gap fill too.
+
+Both arms run `spendRule: 'gk'`, which is the whole trick: a DRAW comparison is only meaningful when
+the spend is identical by construction. Comparing `strategy: 'gk'` against a plain `propwd` shows
+differences that belong entirely to the spend rule. `gkSpend` and `gkAdj` are excluded as UI labels;
+they are the only exclusions.
+
+## gk_drawrule_mc_harness.js  (node)
+
+```bash
+node .test_harnesses/gk_drawrule_mc_harness.js               # 100 paths
+node .test_harnesses/gk_drawrule_mc_harness.js --paths 200
+```
+
+**Results live in [`PERFECT_FORESIGHT_ORACLE.md`](PERFECT_FORESIGHT_ORACLE.md), section `P103e`.** Takes
+`P103d`'s candidates and scores them over Monte Carlo paths instead of one deterministic path,
+reporting median and p10 real terminal wealth, median lifetime spend and SURVIVAL - because a rule
+that lifts the median while lowering the floor is not an improvement for someone living on it. Every
+rule sees the same banks, seed and path index. Uses `buildBanks`/`buildPathInputs` from
+`montecarlo/mc_engine.js` rather than a fourth copy of the model.
+
+Headline (2026-09-01): **it overturns the single-path ranking in all six cells.** Ordered CIBR, which
+won more single-path cells than any other rule, survives **3% to 21%** of paths in four of them. The
+robust winner is **Fill Bracket 22%**, median-best in 5 of 6 cells at **100% survival**, worth
++$56,674 to +$600,128 of median terminal wealth against GK. `E-P2` WRONG: one candidate's extra
+median wealth was bought with survival (57% against GK's 100%), which is exactly the disqualifier it
+was written to catch.
+
+NOTE for anyone extending it: the synthetic modes need `cfg.mu` and `cfg.sigma`. `buildBanks`
+destructures them straight off `cfg`, so omitting one makes `logDrift` NaN and every balance follows
+it silently - the first run of this harness printed a full table of `$NaN` at 100% success.
+
+## spend_objective_harness.js  (node)
+
+```bash
+node .test_harnesses/spend_objective_harness.js
+```
+
+**Results live in [`PERFECT_FORESIGHT_ORACLE.md`](PERFECT_FORESIGHT_ORACLE.md), section `P103b5a`.** Asks the
+question that has to be settled before `spendGoal` can become a schedule field: can the spend axis be
+searched at all, and under what objective? Sweeps a constant spend multiplier on a fixed base row,
+traces the achievable (spend, wealth) frontier, and reports where the scalarized optimum lands.
+
+Headline (2026-09-01): the model gives up **1.38 to 3.31** dollars of real terminal wealth per extra
+dollar of lifetime spending, while `SPENDABLE_WEIGHT` is **1.10**. Below the technical rate
+everywhere measured, so the scalarized optimum sits at the MINIMUM spend tested in 3 of 3 cells -
+**a weight cannot search this axis, and `P103b5` needs a frontier.** The rate also varies along one
+frontier (1.38 to 3.31 in a single cell), so no single weight would fix it.
+
+Two things it found on the way. `SPENDABLE_WEIGHT` is not wrong at its actual job - settling ties
+between plans that deliver the same spend, where the term cancels, or the same wealth, where it
+correctly prefers more spending; it simply cannot price a real trade-off. And **feasibility is not
+monotone in the spend goal**: `totals.success` is a per-year `netIncome < targetSpend * 0.99` test, so
+a plan can be feasible at 0.70, infeasible at 0.80 and feasible again at 0.90, which rules out
+bisecting for the maximum sustainable spend.
+
+## schedule_oracle_harness.js  (node)
+
+```bash
+node .test_harnesses/schedule_oracle_harness.js              # 6 named cells
+node .test_harnesses/schedule_oracle_harness.js --cells all  # all 45, slow
+```
+
+**Results live in [`PERFECT_FORESIGHT_ORACLE.md`](PERFECT_FORESIGHT_ORACLE.md), section `P103b4`.** The question
+P103 was opened to answer: `extraConversionAmount[]` is EXTRA on top of the base rule, so the oracle
+can convert more than the rule and never less. `strategy: 'schedule'` makes the rule's own ceiling a
+per-year number. Both arms take the same base row, objective, spend pin and MEASURED sim budget.
+
+Headline (2026-09-01): **Arm S beats Arm A in 6 of 6 cells, +$11,259 to +$198,508 (+0.25% to
++1.82%)** - and in the two cells where the conversion oracle finds nothing at all, the schedule finds
+~$198k. It also converges on roughly an eighth of the compute, because a multiplicative candidate set
+is scale-free where a $25k grid is not.
+
+The base is the best row whose compiled schedule REPLAYS IT EXACTLY, verified per cell. That matters:
+an earlier version took the best non-cyclic row regardless, handed Arm S an empty plan in five of
+seven cells (Ordered and GK compile to nothing) and printed a confident wrong answer after one
+simulation per cell.
 
 ## endgame_harness.js  (node)
 

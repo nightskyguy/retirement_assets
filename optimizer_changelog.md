@@ -17,6 +17,41 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.16fb"></a>
+
+## 11.16fb
+
+### Annual Details now accounts for every dollar that leaves Cash
+
+When a Roth conversion's tax is paid from Cash, that money left the account with no column to find
+it in, so the Cash balance could fall with nothing on screen to account for it. **Cash WD** does not
+show it, because that column is the draw that funded spending.
+
+Two new columns fix it. **ttlCashWD**, beside **Cash WD** in the Withdrawals band and in **Cash Δ**,
+is every dollar that left Cash in the year: last year's Cash minus ttlCashWD, plus interest and
+growth, is this year's Cash. **ConvTaxCash**, in **Cash Δ** and **Opp. Cost**, breaks out the
+conversion-tax part. Both stay at zero unless *Fund conversion taxes from cash* is on.
+
+### An account with a zero balance keeps its column
+
+In Annual Details a balance column disappeared when that account sat at zero for the whole plan, so
+a plan holding no Cash showed no Cash column under **Balances**. A zero balance is a fact about the
+plan, and a missing column reads as though the tool does not track the account at all.
+
+**Cash, Brokerage, Cost Basis, Total IRA, Roth, Total Wealth and Spendable now keep their columns
+whatever the balance.** Columns carrying a flow or a rate, such as a tax that is never paid, still
+hide themselves when every year is zero, so the table does not fill up with empty numbers.
+
+The per-person splits stay as they were. An all-zero **Roth 2** means there is no second person
+rather than an empty account, so it still hides.
+
+### Internal structure changes
+
+This release also carries internal changes that do not affect any number your plan produces. They
+support work in progress, and the commit history has the detail.
+
+---
+
 <a id="11.16d7"></a>
 
 ## 11.16d7

@@ -2155,6 +2155,43 @@ function _oracleTaxratesFor(order, sim, yr) {
         : 0);
 }
 
+// P104b1: `strategy: 'split'` -- the constant account split. The oracle's per-year weight path
+// (_oracleWithdrawalPlanFor above) given a name and ONE vector for every year, which is what P104a
+// measured as `k=1`: a better constant beats Proportional in 10 of 10 cells, $139,928 to
+// $1,155,056 (research/PERFECT_FORESIGHT_ORACLE.md, P104). It binds exactly where the oracle
+// binds - the primary draw in planPrimaryWithdrawals and the gap fill in fillSpendingGap - and
+// nowhere else, so the acceptance test is replay identity: `strategy: 'split'` with vector V must
+// reproduce `propwd 0 + oracleWithdrawalPlan.fill(V)` to the dollar. Anything it did differently
+// would mean P104a's numbers were measured on some other family.
+//
+//   inputs.splitWeights   [IRA, Brokerage, Cash, Roth] RELATIVE weights, any non-negative scale,
+//                         positive sum; calculateWithdrawals normalizes. Never dollars: a dollar
+//                         draw is chosen against last iteration's tax outcome and desyncs (the
+//                         oracleWithdrawalPlan comment). `[0, 0, 1, 0]` is NOT an all-cash plan:
+//                         phase 2 of calculateWithdrawals walks the order for whatever the weighted
+//                         phase left unfunded, so it is Cash, then IRA, then Brokerage, then Roth.
+//
+// Everything a split does not decide is the baseline's: yr.isBracketStrategy is false, so the
+// forced-IRA fallback stays on and the [40, 60] gap branch is never reached; IRA Goal is ignored,
+// as propwd, gk and the baseline ignore it; there is no `+%` boost. Cyclic composes the way it
+// composes with propwd - a harvest year preempts the split in both passes - where the oracle input
+// refuses to compose at all, because a family the sweep clones its modifiers onto has to accept
+// them.
+//
+// A MALFORMED vector falls back to balance weights (the baseline draw) and sets
+// `splitWeightsInvalid` on the result; it never throws. The schedule and oracle inputs throw
+// because a typo in a research input must not be read as a quiet year; a share link or a saved
+// scenario can carry anything, and a page that dies on load helps nobody. The flag is what the
+// page shows. Validated to a SHAPE - four finite non-negative numbers with a positive sum - since
+// a [0, 0, 0, 0] would put NaN through every balance via the normalizer.
+function _splitWeightsFor(inputs) {
+    const w = inputs.splitWeights;
+    if (!Array.isArray(w) || w.length !== 4) return null;
+    if (!w.every(x => typeof x === 'number' && Number.isFinite(x) && x >= 0)) return null;
+    if (!(w[0] + w[1] + w[2] + w[3] > 0)) return null;
+    return { order: ['IRA', 'Brokerage', 'Cash', 'Roth'], weight: w.slice() };
+}
+
 // Cyclic harvest-year decision plus the per-strategy primary withdrawal plan.
 function planPrimaryWithdrawals(sim, yr) {
     const { inputs, balance } = sim;
@@ -2424,6 +2461,22 @@ function planPrimaryWithdrawals(sim, yr) {
         const IRAwd = Math.max(0, Math.min(yr.curIRA, targetTotal - yr.totalIRAForcedWithdrawals));
         yr.withdrawals = { IRA: IRAwd, netAmount: IRAwd };
 
+    } else if (inputs.strategy === 'split') {
+        // P104b1. The constant split: the oracle branch above with one vector for every year.
+        // Same order, same rates, same call, so replay identity against the oracle input holds.
+        const _sw = _splitWeightsFor(inputs);
+        if (_sw) {
+            yr.withdrawStrategy.order = _sw.order;
+            yr.withdrawStrategy.weight = _sw.weight;
+            yr.withdrawStrategy.taxrate = _oracleTaxratesFor(_sw.order, sim, yr);
+        } else {
+            // Malformed vector: the baseline draw, byte-for-byte, and the result is flagged.
+            sim.splitWeightsInvalid = true;
+            yr.withdrawStrategy.order = ['IRA', 'Brokerage', 'Cash'];
+            yr.withdrawStrategy.taxrate = [sim.nominalTaxRate, yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit), 0, 0];
+        }
+        yr.withdrawals = calculateWithdrawals(yr.curBalances, yr.additionalSpendNeeded, yr.withdrawStrategy);
+
     } else if (inputs.strategy === 'propwd') {
         // Proportional +%: first withdraw proportionally for spending (same as baseline),
         // then add an IRA-only boost of propWithdraw × spendGoal strictly from IRA.
@@ -2584,7 +2637,11 @@ function fillSpendingGap(sim, yr) {
     // P51b mirror: the oracle's year weights govern the SECOND pass too, so the plan's split is
     // in force for the whole spending need, not just the primary draw. Phase-2 spill inside
     // calculateWithdrawals (IRA -> Brokerage -> Cash -> Roth) is the shortfall cascade.
-    const _oracleWGap = _oracleWithdrawalPlanFor(inputs, yr.y);
+    // P104b1: the split's one vector binds here too, in every year it governed the primary draw -
+    // so not on a cyclic harvest year, where the default branch applies as it does for propwd. A
+    // malformed vector took the baseline draw above and takes the baseline gap branch here.
+    const _oracleWGap = _oracleWithdrawalPlanFor(inputs, yr.y)
+        ?? (inputs.strategy === 'split' && !yr.isBrokerageYear ? _splitWeightsFor(inputs) : null);
     if (gap > 1.00) {
         if (_oracleWGap) {
             const wd = calculateWithdrawals(yr.curBalances, gap, {
@@ -4205,6 +4262,9 @@ function simulate(inputs) {
         brokerage: _lastLog.Brokerage,
         basis:     _lastLog.Basis
     };
+    // P104b1. True when `strategy: 'split'` ran on a malformed splitWeights and took the baseline
+    // draw instead. The page shows it; nothing in the engine reads it. See _splitWeightsFor.
+    totals.splitWeightsInvalid = !!sim.splitWeightsInvalid;
 
     return { log, totals, finalNW: log[log.length - 1].totalWealth };
 }
@@ -4879,7 +4939,7 @@ const OPT_OBJECTIVE_METRIC_COLUMN = Object.freeze({
 const STRATEGY_SELECTION_FIELDS = Object.freeze([
     'strategy', 'cyclicEnabled', 'cyclicOrder', 'fundConversionWithCash', 'rothGapFill',
     'propWithdraw', 'nYears', 'stratRate', 'stratIRMAATier', 'stratACAMultiple',
-    'iraWithdrawPct', 'orderedSeq', 'gkGuard', 'gkAdjPct',
+    'iraWithdrawPct', 'orderedSeq', 'gkGuard', 'gkAdjPct', 'splitWeights',
 ]);
 function selectionOf(p) {
     const o = {};
@@ -4915,6 +4975,17 @@ function sameStrategySelection(a, b) {
         case 'fixedpct': return near(a.iraWithdrawPct, b.iraWithdrawPct);
         case 'ordered':  return (a.orderedSeq ?? 'CBIR') === (b.orderedSeq ?? 'CBIR');
         case 'gk':       return near(a.gkGuard, b.gkGuard) && near(a.gkAdjPct, b.gkAdjPct);
+        // P104b1. A split's identity is its NORMALIZED vector: [1, 1, 0, 0] and [50, 50, 0, 0]
+        // are one plan. Element-wise, because a scalar compare reads two arrays as never equal and
+        // every split row would then fail to match the user's own plan - the bug the field-list
+        // comment records for orderedSeq. A malformed vector is an identity of its own (it runs as
+        // the baseline draw): two malformed ones match, a malformed one never matches a valid one.
+        case 'split': {
+            const na = _splitWeightsFor(a), nb = _splitWeightsFor(b);
+            if (!na || !nb) return !na && !nb;
+            const sa = na.weight.reduce((s, x) => s + x, 0), sb = nb.weight.reduce((s, x) => s + x, 0);
+            return na.weight.every((x, i) => Math.abs(x / sa - nb.weight[i] / sb) < 0.001);
+        }
         default:         return false;
     }
 }
@@ -5413,8 +5484,10 @@ const MODIFIER_PREFIX = {
     'rothgap':         '\u{1F161} ',
 };
 
-// Strategies the 🅡 clone pass skips. Exactly one, and it is the one `fillSpendingGap` itself
-// excludes: Ordered runs the account sequence the user chose, so a clone would be a twin.
+// Strategies the 🅡 clone pass skips. Two, and both are ones `fillSpendingGap` itself excludes:
+// Ordered runs the account sequence the user chose, so a clone would be a twin; and a split
+// (P104b1) carries Roth inside its own vector, which governs the gap fill as well as the primary
+// draw, so there is no Roth position left for the clone to move.
 //
 // This started life as an allow-list of four families, on the strength of P28g's note that the
 // effect is per-family and that Proportional and Guyton-Klinger are not comparable. That note is
@@ -5427,7 +5500,7 @@ const MODIFIER_PREFIX = {
 // portfolio into a higher spend - and baselineScoreOf counts that on purpose. Proportional is a
 // weaker case, since planPrimaryWithdrawals usually funds spending directly, but "usually" is not
 // "never": it reached +$11,959 in the larger default mix.
-const ROTH_GAP_EXCLUDED = new Set(['ordered']);
+const ROTH_GAP_EXCLUDED = new Set(['ordered', 'split']);
 
 /**
  * Enumerate the strategy arms of a sweep. Pure: no DOM, no simulate(), no TAXData beyond the
@@ -5717,7 +5790,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -5725,7 +5798,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

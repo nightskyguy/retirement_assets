@@ -15,7 +15,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
-| **O0** | P35 | **`P104` says build it: constant split first ($140k-$1.16M, 10/10), then ONE switch (85-100% in 7/10)** | `P35i` |
+| **O0** | P35 | **`P104b1` DONE 09-02 (405 tests). Its acceptance test found a shipped defect: pass 2 refunds Cash/Roth draws, worth +$242k mean to Proportional. `P104b1x` is YOUR call before `b2`** | `P104b1x` |
 | **O1** | P36 | round 2 measures against the `P103a` ceiling, not rank-among-arms | `P36b` |
 | **O1** | P34 | NOT a P103 prerequisite (a-d are node harnesses); still the whole slow-machine story | `P34a` |
 | **O1** | P28j | `P28jf` is the one RESULT item here: the timing rule moves every converting row | `P28jb` |
@@ -66,6 +66,101 @@ What nobody had measured is the thing that decides what to BUILD: per-year freed
 - [ ] **P104b** - let a family state a fixed account-weight vector (the constant split). Smallest
       possible version of the `P103b2` SPLIT field: one vector, not 33. Worth $140k-$1.16M on this
       grid. Needs a sweep-grid decision (which vectors) and a UI label.
+      **PLANNED 2026-09-02** in three PRs with a review point after `b2`, on the `P35` convention.
+      Evidence and file:line for everything below: findings.md, "The constant split is a plug, not a
+      solver" (2026-09-02). Codes: *vector* = `[IRA, Brokerage, Cash, Roth]` relative weights;
+      *replay identity* = two runs agree to the dollar on every column (the `P103b2` bar).
+
+      **Design, settled from the code, not open:**
+      - The field is `inputs.splitWeights`, a 4-vector of non-negative finite numbers with a
+        positive sum, normalized by `calculateWithdrawals` (`optimizer_core.js:464`). Relative
+        weights, never dollars, for the reason the `oracleWithdrawalPlan` comment gives: a dollar
+        draw is chosen against last iteration's tax and desyncs.
+      - The family is `strategy: 'split'`: a branch in `planPrimaryWithdrawals` beside `propwd`
+        that sets `order/weight/taxrate` exactly as the oracle hook does (`:2192-2196`), and the
+        same weights at the oracle's mirror in `fillSpendingGap` (`:2587`). It binds where the
+        oracle bound and nowhere else, because `P104a` was measured on that path and its numbers
+        transfer only if the family reproduces it.
+      - Everything else is the baseline's: `isBracketStrategy` false (so the forced-IRA fallback
+        stays on and the `[40,60]` branch is never reached), IRA Goal ignored, no `+%` boost.
+        Cyclic composes as with `propwd` (harvest years preempt). `'split'` joins
+        `ROTH_GAP_EXCLUDED`: Roth is in the vector, so a Roth-gap clone would be a twin.
+      - A malformed vector (share link, hand edit) falls back to balance weights AND raises a
+        warning the page shows - the `gapFillWeights` convention plus a visible flag. A research
+        input may throw; a family reachable from a URL may not.
+      - `STRATEGY_SELECTION_FIELDS` gains `splitWeights` with an element-wise compare, not the
+        scalar compare that silently matched every Ordered row once already (`:4875-4878`).
+
+      **Acceptance, before any row exists:** `strategy: 'split'` with vector `V` replays
+      `propwd 0 + oracleWithdrawalPlan.fill(V)` to the dollar, pinned over at least three vectors
+      (one single-account, two blends) and two mixes, with cyclic off; a test that strips the field
+      re-breaks the replay (the `rateBasis` pattern); the malformed-vector fallback is pinned.
+
+      - [x] **P104b1 DONE 2026-09-02** *(PR 1, engine only, nothing user-visible - no version, no
+            changelog; committed 2026-09-02 on `worktrees/planning-with-files-a83df3`)* - `inputs.splitWeights`, `_splitWeightsFor`, the `'split'`
+            branch, the gap mirror (harvest years excepted), `totals.splitWeightsInvalid`,
+            `ROTH_GAP_EXCLUDED` (exported), `STRATEGY_SELECTION_FIELDS` with an element-wise compare.
+            Eight tests; suites **405**/61/22; counts reconciled. **Replay identity holds to the
+            dollar** over four vectors and two mixes: the family IS the oracle path.
+      - [ ] **P104b1x - USER DECISION, O0, gates `b2`.** The acceptance test found a shipped defect
+            (findings.md 2026-09-02, "The gap fill funds a Cash- or Roth-funded year twice"): pass 2
+            sizes its gap from an income sum that omits pass 1's Cash and Roth draws, so those
+            draws are made twice and the surplus is refunded, and with Max Conversion on it is
+            CONVERTED - Proportional +0% converts $7.8k, $7.2k, $6.2k, $3.5k a year in
+            `defaults3x @6%` and should convert nothing. Sized on a one-line scratch copy, ten
+            cells, real after-tax wealth, spend identical: **Proportional +$241,868 mean (up 8 of
+            10), Guyton-Klinger +$103,349**; Fill Bracket, IRA Draw, IRA-only split and Ordered
+            exactly $0. `P104a`'s `Cash` winner LOSES in 7 of 10 on the corrected engine, and the
+            `P51`/`P103a` gap tables were measured on the distorted path in both arms.
+            **Recommended path, three steps:** (1) the correction as a research input defaulting to
+            today's behavior + a harness in `.test_harnesses/` + a report row; (2) re-run `P104a`
+            and the `P103a` headline cells on it; (3) flip the default in its own PR - behavior
+            change, changelog ("the tool was converting money you never asked to convert"), golden
+            fixtures regenerated, the `P104b1` pinned-defect test updated. **Not done on this
+            branch:** it moves every Proportional and Guyton-Klinger plan and is a product call.
+      - [ ] **P104b2** *(PR 2, research, GATES b3; runs on the `P104b1x` engine or its winners
+            inherit the confound)* - four measurements, predictions first.
+            (i) Recover `P104a`'s per-cell `k=1`/`k=2` winners: the harness prints them and the
+            report kept only aggregates (re-run 2026-09-02, results in progress.md).
+            (ii) Fine `k=1`: the 3-simplex at 10% steps is 286 vectors; 286 x 10 cells is ~3.5 s.
+            Add basis arms (b20/b80): `P104a` had none, and the split's whole cost is basis.
+            (iii) Monte Carlo selection, new `.test_harnesses/split_mc_harness.js` on
+            `gk_drawrule_mc_harness.js`'s structure: the archetype menu + the top fine-`k=1`
+            candidates + Proportional `+0%` as incumbent, GBM / bootstrap / AAM, 100 paths, same
+            seed and paths per arm, `CashReserve: 0` controlled. Median, 10th percentile, lifetime
+            spend and survival - not an argmax. This DISCHARGES `P104d` for the constant split.
+            (iv) Report `research/CONSTANT_SPLIT.md` + its `research/README.md` row, named for the
+            subject; codes defined up top. Output: a recommended grid of 3-4 vectors with the
+            survival that justifies each, and the row/run cost it adds.
+            **Predictions, recorded before any of it runs:**
+            `V-P1` `{Cash:1}` - single-path winner in 5 of 10 - fails survival under bootstrap in
+            at least one cell where Ordered CIBR did, and is not median-best there. Its phase-2
+            spill is Cash then IRA, Brokerage, Roth: CIBR's shape (`:593-600`).
+            `V-P2` the fine simplex beats the 10-archetype menu in most cells, by under 10% of the
+            `k=1` gain - the menu was close enough.
+            `V-P3` the MC median-best vector is a blend (two or more non-zero accounts) in most
+            cells, never a single account.
+            `V-P4` at least one vector beats Proportional `+0%` at the median with no worse survival
+            in every mode in 4 or more of 6 cells. **If `V-P4` is WRONG, `b3` does not proceed and
+            `P104b` closes as "no robust constant".**
+      - [ ] **REVIEW POINT (user)** - two decisions, both with the `b2` numbers in hand: the grid
+            (which vectors ship as rows) and the family label. Label candidates: **"Fixed Split"**
+            (recommended: plain words, no acronym), "Set Split", "Custom Mix". The panel is four
+            fields, IRA / Brokerage / Cash / Roth, relative, any scale.
+      - [ ] **P104b3** *(PR 3, product)* - rows in `OPTIMIZER_GRIDS` and `MC_GRIDS` (`:5378`,
+            `:5384`), labels and `paramSortVal`, `offGridParamFor` for the user's own vector, the
+            `#ui-split` panel + `toggleStrategyUI`, `getInputs`, share key (`sw`), `applyScenario`,
+            the row-click adopt path (`optimizer_ui.js:2509`), MC `_label`, golden regen (MC via
+            `sweep_golden.gen.js`; Optimizer via the four-state browser capture in
+            `sweep_golden.import.js`), README strategy paragraph, `ARCHITECTURE.md` section 3a, one
+            changelog entry (~150 words), the four version sites, the three count sites.
+            **Budget:** the Optimizer is at 1,711 runs against its 1,500 cap already; `G` vectors
+            cost ~`4G` rows over the clone passes (3 vectors = ~12 rows, +7% on 179). Rule `C1`: if
+            anything is trimmed to pay for it, the page says so; no arm is dropped on a predicted
+            winner. Rule `C2`: deterministic truncation order.
+      - **Out of scope here, named so it is not re-derived:** the `+%` boost on a split; a per-year
+        vector (that is `P103b2`'s field, gated by `P104e`); the switch, which `P104c` adds as
+        `splitAfter: { year, weights }` on top of this field, additive.
 
 - [ ] **P104c** - extend it to ONE switch (archetype A until year t, B after). This is `P35`'s
       phased carrier, and `P104a` says it reaches 85-100% of the ceiling in most regimes.

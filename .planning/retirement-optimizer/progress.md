@@ -7731,6 +7731,53 @@ controlled. Every narrowing of the evidence flattered the answer, in the same di
 Recorded in findings as a working rule.
 
 
+## 2026-09-01 (cont.) - P103c's gate run, and stopping short of the verdict
+
+`P75a` is the gate on `P103c`: a search over the MAGI edge menu only makes sense if good plans land
+on that menu. New harness `.test_harnesses/magi_edge_gate_harness.js`.
+
+**Measured 4.2% of 990 best-row plan-years within $1,000 of an edge** (1.3% at $250, 29.2% at
+$10,000). `U-P1`/`U-P2` WRONG, `U-P3` RIGHT - which reads as the gate FAILING.
+
+**I am not acting on it.** The first version of this measurement was wrong - hand-rebuilt statutory
+tables scaled by the spending inflation factor rather than the CPI indexation one, ignoring the P92a
+add-back - and it reported 1.1% for Fill Bracket, a family that fills a ceiling by construction. The
+impossibility caught it. After the fix a direct check confirms Fill Bracket 22% sits at exactly $0
+from its own BracketTarget in the years the ceiling binds, 6 of 33 in the cell tested.
+
+So the low residency now looks real, and for an interesting reason: ceilings bind in a minority of
+years even for families built to fill them, and the best rows in the fat regimes are GK, which has no
+ceiling. But a verdict that discards planned work should not rest on a measurement whose first
+version was wrong. **Recorded as PROVISIONAL in the plan with the confirming step named** - count
+binding years per family and check 6/33 generalizes. That is the user's call to make, not mine.
+
+## 2026-09-02 - "GK's draw" is the DEFAULT draw, and the user spotted it
+
+User: *"the default draw rule for gk is 'proportional' and I believe the same rule that the
+'proportional' (propwd) rule uses."* Right, and it is the same code rather than the same idea. No
+`'gk'` case in `planPrimaryWithdrawals`; GK falls through to the baseline `else`, whose three lines
+open the `propwd` branch too, and neither family is in `yr.isBracketStrategy` so the gap fill matches
+as well.
+
+New harness `.test_harnesses/family_equivalence_harness.js` compares two families on every field of
+every log row plus final net worth, with `spendRule: 'gk'` on both arms so only the draw can differ.
+**15 of 15 cells bit-identical.**
+
+Three consequences, all recorded in `PERFECT_FORESIGHT_ORACLE.md` under `P103d`:
+
+1. `P103d`'s headline is about the **legacy default draw**, not about Guyton-Klinger, and generalizes
+   past GK anywhere that default is in play.
+2. `Proportional` was a **null arm** in the `P103d` bake-off - it is the incumbent and can only tie.
+   The results agree (it wins no cell), so nothing is wrong, but a guaranteed tie should not have
+   been listed as a candidate. `P103e` is unaffected: its five rules contain no Proportional entry.
+3. It re-derives the account-split hole from the other direction: every surviving candidate varies
+   how much IRA comes out, never how the non-IRA remainder splits, because the only family that could
+   express that IS the incumbent.
+
+Also fixed a doc block in `optimizer_core.js` that described the fallback branch as unreachable
+("No UI option currently routes here") when Guyton-Klinger reaches it on every run, and never
+documented `'gk'` at all. `ARCHITECTURE.md` §3a and the published diagram carry the equivalence now.
+
 ## 2026-09-02 (cont.) - P104: the split needs phases, not per-annum freedom
 
 User: *"the real question is whether Proportional itself should be improved (or replaced). I suspect
@@ -7760,49 +7807,101 @@ Phase structure is the trustworthy part; the per-year increment is the suspect p
 `P35` raised to **O0** - it is the carrier for exactly this. New `P104b`-`P104e` sequence: constant
 split, then one switch, then a Monte Carlo pass BEFORE anything ships.
 
-## 2026-09-02 - "GK's draw" is the DEFAULT draw, and the user spotted it
+## 2026-09-02 - planning session opened on a fresh branch; two record fixes, no product code
 
-User: *"the default draw rule for gk is 'proportional' and I believe the same rule that the
-'proportional' (propwd) rule uses."* Right, and it is the same code rather than the same idea. No
-`'gk'` case in `planPrimaryWithdrawals`; GK falls through to the baseline `else`, whose three lines
-open the `propwd` branch too, and neither family is in `yr.isBracketStrategy` so the gap fill matches
-as well.
+Opened with `/plan` in the reused `readme-review-updates-c9df11` directory, branch
+`worktrees/planning-with-files-a83df3` at `c67744f` = `main`. Nothing unsynced; the catchup script
+was empty. No task named yet.
 
-New harness `.test_harnesses/family_equivalence_harness.js` compares two families on every field of
-every log row plus final net worth, with `spendRule: 'gk'` on both arms so only the draw can differ.
-**15 of 15 cells bit-identical.**
+**This file's tail was out of order.** PR #208's merge left the 09-01 `P103c` gate entry AFTER both
+09-02 entries, and the `(cont.)` P104 entry before the base 09-02 one - so the planning hook was
+injecting the gate run as "recent progress" when P104 is the newest work. Reordered to commit
+order (gate run, GK's-draw, P104); content unchanged, checked as a line multiset against `HEAD`.
+First attempt left a lone carriage return at EOF, which git reads as binary and diffs as the whole file -
+caught by the 7,810-line diff stat, fixed to a 39-line move.
 
-Three consequences, all recorded in `PERFECT_FORESIGHT_ORACLE.md` under `P103d`:
+**`readme_caveats_findings.md` is recoverable.** The 08-20 memory note said the P48 audit file never
+existed and its file:line citations were gone. Git says otherwise: 215 lines committed in `838a870`
+(PR #140), deleted by the user in `3f7cda2` ("Not needed. Local copy is being kept."). Memory
+corrected; `git show 838a870:.planning/retirement-optimizer/readme_caveats_findings.md` restores it.
 
-1. `P103d`'s headline is about the **legacy default draw**, not about Guyton-Klinger, and generalizes
-   past GK anywhere that default is in play.
-2. `Proportional` was a **null arm** in the `P103d` bake-off - it is the incumbent and can only tie.
-   The results agree (it wins no cell), so nothing is wrong, but a guaranteed tie should not have
-   been listed as a candidate. `P103e` is unaffected: its five rules contain no Proportional entry.
-3. It re-derives the account-split hole from the other direction: every surviving candidate varies
-   how much IRA comes out, never how the non-IRA remainder splits, because the only family that could
-   express that IS the incumbent.
+## 2026-09-02 (cont.) - P104b planned: three PRs, a review point, and a winner that looks like CIBR
 
-Also fixed a doc block in `optimizer_core.js` that described the fallback branch as unreachable
-("No UI option currently routes here") when Guyton-Klinger reaches it on every run, and never
-documented `'gk'` at all. `ARCHITECTURE.md` §3a and the published diagram carry the equivalence now.
+User: *"P35/P104b are the next target."* Planning only; no product code.
 
-## 2026-09-01 (cont.) - P103c's gate run, and stopping short of the verdict
+**The build is small because the arithmetic exists.** `calculateWithdrawals` already takes a
+`weight` array, and `oracleWithdrawalPlan` already binds `{IRA, Brokerage, Cash, Roth}` weights to
+both the primary draw and the gap fill - which is the exact path `P104a` measured. So a shipped
+family is that path with a name, and its acceptance test is replay identity against
+`propwd 0 + oracleWithdrawalPlan.fill(V)`. Design settled from the code and written into the plan:
+`inputs.splitWeights`, `strategy: 'split'`, baseline behavior everywhere else, `ROTH_GAP_EXCLUDED`,
+element-wise selection compare, malformed-vector fallback with a visible warning.
 
-`P75a` is the gate on `P103c`: a search over the MAGI edge menu only makes sense if good plans land
-on that menu. New harness `.test_harnesses/magi_edge_gate_harness.js`.
+**The thing that reorders the work:** `{Cash: 1}` is not an all-cash draw. Phase 2 of
+`calculateWithdrawals` walks IRA, Brokerage, Roth for the remainder, so the single-path `k=1`
+winner in 5 of 10 cells has Ordered CIBR's shape - the rule `P103e` found at 0% survival under
+bootstrap. Not the same code path, so it is prediction `V-P1`, not a finding. But it means the grid
+cannot be read off `P104a`'s winners, and the plan now puts the Monte Carlo selection (`b2`) BEFORE
+the product PR (`b3`), with the user's grid and label decisions at the review point between them.
+`V-P4` is the kill switch: no vector robustly beats Proportional, no `b3`.
 
-**Measured 4.2% of 990 best-row plan-years within $1,000 of an edge** (1.3% at $250, 29.2% at
-$10,000). `U-P1`/`U-P2` WRONG, `U-P3` RIGHT - which reads as the gate FAILING.
+**The per-cell `k=1` winners were never recorded** - the harness prints them, the report kept
+aggregates. Re-run launched to recover them. First launch died with the wrapper shell (an inner `&`
+under the tool); relaunched under the tool's own backgrounding.
 
-**I am not acting on it.** The first version of this measurement was wrong - hand-rebuilt statutory
-tables scaled by the spending inflation factor rather than the CPI indexation one, ignoring the P92a
-add-back - and it reported 1.1% for Fill Bracket, a family that fills a ceiling by construction. The
-impossibility caught it. After the fix a direct check confirms Fill Bracket 22% sits at exactly $0
-from its own BracketTarget in the years the ceiling binds, 6 of 33 in the cell tested.
+Budget stated up front: Optimizer already 1,711 runs against a 1,500 cap; ~4 rows per vector over
+the clone passes; eight golden pins, the Optimizer half a browser capture. Rules `C1`/`C2` bind.
 
-So the low residency now looks real, and for an interesting reason: ceilings bind in a minority of
-years even for families built to fill them, and the best rows in the fat regimes are GK, which has no
-ceiling. But a verdict that discards planned work should not rest on a measurement whose first
-version was wrong. **Recorded as PROVISIONAL in the plan with the confirming step named** - count
-binding years per family and check 6/33 generalizes. That is the user's call to make, not mine.
+**Per-cell winners recovered** (re-run finished, exit 0, aggregates bit-identical to the report):
+
+| cell | k=1 winner | k=2 winner (A -> B at year t) |
+|---|---|---|
+| defaults @4% | `Cash` | same as k=1 |
+| defaults @6% | `Cash` | `I5C5` -> `Roth` at year 1 |
+| defaults3x @4% | `prop` | `Cash` -> `prop` at year 1 |
+| defaults3x @6% | `B4C6` | `B4C6` -> `Roth` at year 11 |
+| round1 @4% | `Cash` | `Cash` -> `Brok` at year 13 |
+| round1 @6% | `B4C6` | `I5C5` -> `Brok` at year 1 |
+| thirds @4% | `B4C6` | `Cash` -> `Brok` at year 1 |
+| thirds @6% | `Cash` | `B4C6` -> `Roth` at year 5 |
+| brokheavy @4% | `Brok` | `Cash` -> `Roth` at year 10 |
+| brokheavy @6% | `Cash` | `Brok` -> `Roth` at year 12 |
+
+Full output kept in the session scratchpad; the table is in findings.md under the 2026-09-02 entry.
+
+
+## 2026-09-02 (cont.) - P104b1 built and green, and the acceptance test found a shipped defect
+
+User: *"go ahead with P104b1."*
+
+**Built.** `inputs.splitWeights` + `strategy: 'split'` in `optimizer_core.js`: `_splitWeightsFor`
+(shape-validated), a branch beside `propwd` that sets order/weight/taxrate exactly as the oracle
+hook does, the same vector at the oracle's mirror in `fillSpendingGap` (harvest years excepted),
+`totals.splitWeightsInvalid` for the malformed fallback, `'split'` in `ROTH_GAP_EXCLUDED` (now
+exported), `splitWeights` in `STRATEGY_SELECTION_FIELDS` with a normalized element-wise compare.
+Eight tests: replay identity over four vectors and two mixes, nine malformed shapes plus the strip
+test, cyclic composition, gap-fill binding, selection identity, two `FUNDING_ARMS` rows, and one
+pinned defect. Suites **405**/61/22, `TestTiers.EXPECTED` and `.githooks/README.md` reconciled.
+Nothing user-visible; no version, no changelog. Uncommitted.
+
+**Replay identity passed on the first run.** The family IS the oracle path, to the dollar, on
+every column, for `[1,0,0,0]`, `B4C6`, `I4B3C3` and a Brokerage/Roth blend on two mixes.
+
+**The one failure was the CIBR-shape pin, and it was right to fail.** `{Cash:1}` on BASE drew
+$11,767 of Cash against a $50,000 balance and $29,292 of IRA. Instrumented trace: pass 1 drew the
+whole $36,717 need from Cash; pass 2 then saw the same gap again because `possibleIncome` counts
+IRA and Brokerage draws and not Cash or Roth; it drained the rest of Cash, spilled into the IRA,
+and the surplus routine refunded $38,233 to Cash at year end. The oracle's own `{seq}` form does
+exactly the same. Ordered's branch comment names the defect and Ordered avoids it by design.
+
+**Sized with a one-line scratch copy, never on the branch.** Ten cells, real after-tax wealth,
+spend identical: Proportional +0% **+$241,868 mean** (up 8 of 10), Guyton-Klinger +$103,349;
+Fill Bracket, IRA Draw, IRA-only split and Ordered exactly $0 (the controls). With Max Conversion
+on the phantom gap is CONVERTED - a Proportional +0% plan converts $7.8k, $7.2k, $6.2k, $3.5k in
+its first years and should convert nothing. Full table in findings.md.
+
+**What it does to the plan.** `P104a`'s `Cash` winner loses in 7 of 10 on the corrected engine, so
+the grid cannot come from it, and the oracle gap tables were measured on the distorted path in both
+arms. `P104b1x` opened at O0 as the user's decision: correct pass 2 behind a research input, measure,
+then flip the default in its own PR. `P104b2` is gated on it. The pin in the test suite will announce
+the fix when it lands.

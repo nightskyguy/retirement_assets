@@ -120,6 +120,7 @@ const ORDERED_SEQS = core.ORDERED_SEQS;
 const strategySortKey = core.strategySortKey;
 const selectionOf = core.selectionOf;
 const STRATEGY_SELECTION_FIELDS = core.STRATEGY_SELECTION_FIELDS;
+const ROTH_GAP_EXCLUDED = core.ROTH_GAP_EXCLUDED;
 const offGridParamFor = core.offGridParamFor;
 const parseShorthand = globalThis.window.DisplayHelpers.parseShorthand;
 // P35 PR 1 characterization goldens — a RECORDING of what the two strategy enumerations emit,
@@ -607,6 +608,112 @@ test('P51b: fidelity — replaying a run\'s own realized draw fractions lands ne
     const rel = Math.abs(replay.finalNW - base.finalNW) / Math.max(1, Math.abs(base.finalNW));
     assert(rel < 0.02,
         `replayed fractions should land within 2% of the source run, got ${(100 * rel).toFixed(2)}%`);
+});
+
+// ── P104b1: strategy 'split' - the constant account split (engine only, no rows, no UI) ────────
+// The acceptance bar is REPLAY IDENTITY against the research input it is built from: the split
+// family with vector V and `propwd 0 + oracleWithdrawalPlan.fill(V)` must agree to the dollar on
+// every log column. P104a's numbers were measured on the oracle path; they transfer to the family
+// only if the family IS that path. Two log fields are excluded from the compare on purpose: the
+// row's `strategy` label, which is the one thing that must differ, and `loopMs`, which is timing.
+const _splitCompareLog = log => log.map(e => { const { strategy, loopMs, ...rest } = e; return rest; });
+const _SPLIT_MIX_B = { ...BASE, IRA1: 800000, Roth: 300000, Brokerage: 600000, BrokerageBasis: 200000,
+                       Cash: 120000, growth: 0.05, inflation: 0.025, cpi: 0.025, spendGoal: 90000,
+                       ss1: 30000, ss1Age: 67 };
+const _SPLIT_VECTORS = [
+    ['IRA only',  [1, 0, 0, 0]],
+    ['B4C6',      [0, 0.4, 0.6, 0]],
+    ['I4B3C3',    [0.4, 0.3, 0.3, 0]],
+    ['Brok/Roth', [0, 0.5, 0, 0.5]],
+];
+
+test('P104b1: replay identity - split with V equals propwd 0 + oracleWithdrawalPlan.fill(V), to the dollar', () => {
+    for (const [mixName, mix] of [['BASE', BASE], ['mix B', _SPLIT_MIX_B]]) {
+        for (const [vName, v] of _SPLIT_VECTORS) {
+            const fam = simulate({ ...mix, strategy: 'split', splitWeights: v });
+            const ora = simulate({ ...mix, strategy: 'propwd', propWithdraw: 0,
+                                   oracleWithdrawalPlan: new Array(60).fill({ IRA: v[0], Brokerage: v[1], Cash: v[2], Roth: v[3] }) });
+            assert(fam.totals.splitWeightsInvalid === false, `${mixName}/${vName}: a valid vector must not be flagged`);
+            assert(JSON.stringify(_splitCompareLog(fam.log)) === JSON.stringify(_splitCompareLog(ora.log)),
+                `${mixName}/${vName}: the split family and the oracle replay must produce identical logs`);
+            assert(fam.finalNW === ora.finalNW, `${mixName}/${vName}: finalNW ${fam.finalNW} vs ${ora.finalNW}`);
+            // The vector has to have done something, or the identity is vacuous: a split must
+            // differ from plain Proportional somewhere in the log.
+            const prop = simulate({ ...mix, strategy: 'propwd', propWithdraw: 0 });
+            assert(JSON.stringify(_splitCompareLog(fam.log)) !== JSON.stringify(_splitCompareLog(prop.log)),
+                `${mixName}/${vName}: the split must not coincide with balance-proportional (vacuous identity)`);
+        }
+    }
+});
+
+test('P104b1: a malformed or absent vector runs as the baseline draw, byte-identical, and is flagged', () => {
+    const prop = _splitCompareLog(simulate({ ...BASE, strategy: 'propwd', propWithdraw: 0 }).log);
+    const bad = [
+        ['absent',        undefined],
+        ['null',          null],
+        ['empty',         []],
+        ['three entries', [1, 2, 3]],
+        ['all zero',      [0, 0, 0, 0]],
+        ['negative',      [-1, 1, 1, 1]],
+        ['infinite',      [Infinity, 1, 1, 1]],
+        ['a string',      ['1', 1, 1, 1]],
+        ['an object',     { IRA: 1 }],
+    ];
+    for (const [name, w] of bad) {
+        const inputs = { ...BASE, strategy: 'split' };
+        if (w !== undefined) inputs.splitWeights = w;
+        const r = simulate(inputs);
+        assert(r.totals.splitWeightsInvalid === true, `${name}: must be flagged as invalid`);
+        assert(JSON.stringify(_splitCompareLog(r.log)) === JSON.stringify(prop),
+            `${name}: the fallback must be the baseline draw exactly, not something else silently`);
+    }
+    // And the strip test the plan asks for: removing the field from a run that was NOT
+    // proportional re-breaks the replay - the field is load-bearing, not decorative.
+    const withV = simulate({ ...BASE, strategy: 'split', splitWeights: [0, 0, 1, 0] });
+    const stripped = simulate({ ...BASE, strategy: 'split' });
+    assert(withV.finalNW !== stripped.finalNW, 'stripping splitWeights must change the result');
+});
+
+test('P104b1x PINNED DEFECT: a Cash-weighted primary draw is drawn twice by the gap fill and the spill lands in the IRA', () => {
+    // BASE year 0: the need is $36,717 and Cash holds $50,000, so a {Cash:1} vector should fund
+    // the year from Cash alone and touch nothing else. Traced 2026-09-02: the primary pass DOES
+    // draw $36,717 of Cash; fillSpendingGap then sizes its gap from yr.possibleIncome, which
+    // counts IRA and Brokerage draws and not Cash or Roth ones, so it sees the same $36,717 gap
+    // again, drains the remaining $13,283 of Cash and spills $29,292 into the IRA; the year-end
+    // surplus routes $38,233 back to Cash. Net effect: an IRA draw nobody asked for, taxed, parked
+    // in Cash. The Ordered branch's own comment names this ("overdraw + refund loops") and Ordered
+    // sidesteps it by drawing only in the gap fill; the oracle weight path (P51b) and therefore
+    // every Cash- or Roth-weighted archetype in P51/P103a/P104a ran through it. The third pass
+    // (resolveResidualAndForcedIRA) counts all four accounts and is not affected.
+    //
+    // Pinned the way FUNDING_ARMS pins its known residuals: these numbers are the DEFECT, not the
+    // spec. When the gap fill credits the primary pass's Cash and Roth draws, IRAwd here reads 0
+    // and the Cash balance reads $13,283 - update the pin, and say so in the changelog, because
+    // that fix moves every Proportional and Guyton-Klinger plan by its Cash share.
+    const y0 = simulate({ ...BASE, strategy: 'split', splitWeights: [0, 0, 1, 0] }).log[0];
+    assertNear(y0.IRAwd ?? 0, 29291.54, 'IRA drawn by choice while Cash remained (the defect)', 1);
+    assertNear(y0.Cash ?? 0, 38232.62, 'Cash left at year end after the surplus refund', 1);
+    assert((y0['Brokerage-'] ?? 0) < 1, `Brokerage is after IRA in the spill and must be untouched, got ${y0['Brokerage-']}`);
+});
+
+test('P104b1: split composes with cyclic the way propwd does - no throw, harvest years draw Brokerage', () => {
+    // The oracle input throws on cyclicEnabled; a family cannot, because the sweep clones the
+    // cyclic modifier onto every family. BASE is built for cyclic (N = 3): the split's [0,0,1,0]
+    // never draws Brokerage on its own, so any Brokerage draw is the harvest year preempting it.
+    let r;
+    try { r = simulate({ ...BASE, strategy: 'split', splitWeights: [0, 0, 1, 0], cyclicEnabled: true }); }
+    catch (e) { assert(false, `must not throw: ${e.message}`); }
+    assert(r.log.some(e => (e['Brokerage-'] ?? 0) > 1), 'a harvest year must have drawn Brokerage');
+    assert(r.totals.splitWeightsInvalid === false, 'the vector is valid and must not be flagged');
+});
+
+test('P104b1: the split binds the gap fill too, not only the primary draw', () => {
+    // A Roth-only vector on mix B (Roth $300k): if the second pass took the default [40,60]
+    // Brokerage/Cash branch instead of the vector, Cash or Brokerage would be drawn in year 0.
+    const y0 = simulate({ ..._SPLIT_MIX_B, strategy: 'split', splitWeights: [0, 0, 0, 1] }).log[0];
+    assert((y0.RothWD ?? 0) > 1000, `Roth must fund year 0, got RothWD ${y0.RothWD}`);
+    assert((y0.CashWD ?? 0) < 1 && (y0['Brokerage-'] ?? 0) < 1,
+        `neither pass may draw Cash or Brokerage while Roth lasts, got Cash ${y0.CashWD} Brok ${y0['Brokerage-']}`);
 });
 
 // ── Phase 12: Withdrawal Timing ───────────────────────────────────────────────
@@ -2148,6 +2255,11 @@ const FUNDING_ARMS = [
     { name: 'propwd 0%',      over: { strategy: 'propwd',   propWithdraw: 0,    stratRate: 0 },             iraStranded:  0, worst:      0 },
     { name: 'propwd 10%',     over: { strategy: 'propwd',   propWithdraw: 0.10, stratRate: 0 },             iraStranded:  0, worst:      0 },
     { name: 'propwd 50%',     over: { strategy: 'propwd',   propWithdraw: 0.50, stratRate: 0 },             iraStranded:  0, worst:      0 },
+    // P104b1. Two split vectors: the cash-first one whose spill is CIBR-shaped, and a blend. Both
+    // are baseline-class (isBracketStrategy false), so the forced-IRA backstop applies and the
+    // target is 0 like propwd's.
+    { name: 'split C100',     over: { strategy: 'split',    splitWeights: [0, 0, 1, 0],       stratRate: 0 }, iraStranded:  0, worst:      0 },
+    { name: 'split I4B3C3',   over: { strategy: 'split',    splitWeights: [0.4, 0.3, 0.3, 0], stratRate: 0 }, iraStranded:  0, worst:      0 },
     { name: 'fixed',          over: { strategy: 'fixed' },                                                  iraStranded:  0, worst:      0 },
     // These moved twice. Fixing the dividend/interest double-credit took RIBC from 2 stranded years
     // to 1; switching OBBBA on moved both again, CBIR to 3 and RIBC back to 2. The direction is not
@@ -5415,11 +5527,29 @@ test('sameStrategySelection: matches each family on its own parameter', () => {
         [{ strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 }, { strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 }, true],
         [{ strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 }, { strategy: 'gk', gkGuard: 0.25, gkAdjPct: 0.10 }, false],
         [{ strategy: 'propwd', propWithdraw: 0 },        { strategy: 'fixed', nYears: 10 },              false],
+        // P104b1. Identity is the NORMALIZED vector; a malformed one is its own identity.
+        [{ strategy: 'split', splitWeights: [1, 1, 0, 0] }, { strategy: 'split', splitWeights: [50, 50, 0, 0] }, true],
+        [{ strategy: 'split', splitWeights: [1, 1, 0, 0] }, { strategy: 'split', splitWeights: [1, 0, 0, 0] },   false],
+        [{ strategy: 'split', splitWeights: [0, 0, 0, 0] }, { strategy: 'split' },                               true],
+        [{ strategy: 'split', splitWeights: [0, 0, 0, 0] }, { strategy: 'split', splitWeights: [0, 0, 1, 0] },   false],
+        [{ strategy: 'split', splitWeights: [0, 0, 1, 0] }, { strategy: 'propwd', propWithdraw: 0 },             false],
     ];
     for (const [a, b, want] of cases) {
         assert(sameStrategySelection(a, b) === want,
             `${a.strategy} vs ${b.strategy}: expected ${want}, got ${sameStrategySelection(a, b)}`);
     }
+});
+
+test('P104b1: splitWeights is a selection field, survives selectionOf, and split is 🅡-excluded', () => {
+    // The field list is what crosses the Monte Carlo worker boundary; a field missing from it
+    // compares as unset on one side and every split row would match the user's plan.
+    assert(STRATEGY_SELECTION_FIELDS.includes('splitWeights'), 'splitWeights must be a selection field');
+    const sel = selectionOf({ strategy: 'split', splitWeights: [1, 2, 3, 4], spendGoal: 1 });
+    assert(JSON.stringify(sel.splitWeights) === '[1,2,3,4]', 'selectionOf must carry the whole vector');
+    assert(sel.spendGoal === undefined, 'and nothing that is not a selection field');
+    // Roth sits inside the vector, so a Roth-position clone would be a twin of its base row.
+    assert(ROTH_GAP_EXCLUDED.has('split') && ROTH_GAP_EXCLUDED.has('ordered') && ROTH_GAP_EXCLUDED.size === 2,
+        'the 🅡 exclusion set must be exactly {ordered, split}');
 });
 
 test('sameStrategySelection: bracket identity includes the IRMAA tier and the ACA multiple', () => {

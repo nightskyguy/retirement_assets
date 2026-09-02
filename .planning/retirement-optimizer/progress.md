@@ -7522,3 +7522,43 @@ Recorded as a rule: **a null or catastrophic result that arrives after one evalu
 not a finding.** Base selection now requires exact replay, verified per cell.
 
 Next is `P103b5`, and its first question is the objective, not the field.
+
+
+## 2026-09-01 (cont.) - P103b5a, and two Annual Details fixes the user found
+
+**`P103b5a`: the spend axis cannot be searched with a weight.** The model gives up **1.38 to 3.31**
+dollars of real terminal wealth per extra dollar of lifetime spending; `SPENDABLE_WEIGHT` is 1.10.
+Below the technical rate everywhere, so the scalarized optimum sits at MINIMUM spend in 3/3 cells.
+`O-P1` WRONG **in the opposite direction** from my prediction - I expected "spend everything", it
+hoards. `O-P2`/`O-P3` RIGHT, and the rate varies 1.38-3.31 inside a single cell, so no weight can
+agree with the model at both ends. **`P103b5` needs a frontier.**
+
+Side finding with teeth: **feasibility is not monotone in the spend goal** (`round1 @4%` feasible at
+0.70, infeasible at 0.80, feasible at 0.90). `totals.success` is a per-year 99%-of-target test.
+Bisecting for maximum sustainable spend is unsound; whether `optimizeSpend` is exposed is now an open
+question in findings.
+
+**User asked for a comment on `SPENDABLE_WEIGHT`, with "unless you notice it's not working".** It IS
+working at its stated job - ties at equal spend cancel, ties at equal wealth prefer more spending -
+but it cannot price a real trade-off, and I said so in the comment and to the user rather than only
+documenting the happy case.
+
+**Two user-visible fixes, shipped as v11.16f9.**
+
+1. **Cash could fall with nothing on screen explaining it.** On the user's plan Cash went
+   $72,000 -> $16,099 in year one with `CashWD` reading 0, because $56,512 paid conversion tax under
+   "Use Cash". The figure existed only as `-extraConvCashTax`, whose leading `-` means no column.
+   Added `ttlCashWD` (every dollar that left Cash, in the Withdrawals band beside CashWD) and
+   `ConvTaxCash` (the of-which). **I did NOT redefine `CashWD` as the total**, which the user
+   proposed: it feeds two charts as money that funded SPENDING and a sum that reconciles against net
+   income, so folding conversion tax in would double-count it in three places. Explained rather than
+   silently declined. **And I put ttlCashWD in Balances first, which was wrong** - the user moved it
+   to Withdrawals, and they are right: Balances carries balances, and a flow column among them is the
+   same confusion that hid the outflow to begin with.
+2. **"Suppress zero" no longer hides account balance columns.** A zero balance is a fact; a missing
+   column reads as "the tool does not track this account". Flow and rate columns still hide, and so
+   do the per-person splits, because an all-zero Roth2 means no second person.
+
+**What I could not reproduce, and said so:** the original report was "Balances does not include
+Cash". On the default scenario Cash was present and populated. The user then supplied the real
+scenario, which was the conversion-tax case above. Asking for the scenario beat guessing at a fix.

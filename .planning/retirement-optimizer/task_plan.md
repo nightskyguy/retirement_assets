@@ -218,6 +218,23 @@ a research instrument and a ship-time check.
       narrower and bigger: **this study PINS spend by choice**, so every ceiling in `P103a` is a
       ceiling at fixed spend, and that is why GK rows are excluded from the gap tables rather than
       compared in them. The oracle has never searched the spend axis. Opened as `P103b5`.
+- [x] **P103b5a DONE 2026-09-01** - **the spend axis cannot be searched with a weight.** Harness
+      `.test_harnesses/spend_objective_harness.js`; report `PERFECT_FORESIGHT_ORACLE.md` `P103b5a`.
+      Sweeping the spend goal on a fixed base row, the model gives up **1.38 to 3.31** dollars of real
+      terminal wealth per extra dollar of lifetime spending, against `SPENDABLE_WEIGHT = 1.10`. Below
+      the technical rate everywhere measured, so the scalarized optimum sits at **minimum** spend in
+      3/3 cells. `O-P1` WRONG and in the OPPOSITE direction from the prediction (I expected "spend
+      everything"; it hoards). `O-P2`/`O-P3` RIGHT - and the rate varies 1.38-3.31 within one cell, so
+      no single weight agrees with the model at both ends. **`P103b5` therefore needs a FRONTIER, not
+      a weight**: report the (spend, wealth) pairs and let a human pick, the shape `P100` reached for
+      row ranking.
+      **`SPENDABLE_WEIGHT` is not wrong at its actual job** - ties between plans at equal spend (the
+      term cancels) or equal wealth (it correctly prefers more spending). It just cannot price a real
+      trade-off. Now documented in `optimizer_core.js` with both facts, at the user's request.
+      **Side finding that constrains any spend search: feasibility is NOT monotone in the spend goal.**
+      `round1 @4%` is feasible at 0.70, infeasible at 0.80, feasible again at 0.90-1.10.
+      `totals.success` is a per-year `netIncome < targetSpend * 0.99` test, so a plan can dip under
+      and recover. **No bisection for the maximum sustainable spend.**
 - [ ] **P103b5** - **`spendGoal` as a schedule field** (NEW 2026-09-01, user-raised). The one field
       that would let Guyton-Klinger be carried, and the one that widens what "the ideal" means: every
       gap number in `PERFECT_FORESIGHT_ORACLE.md` is currently conditional on the base row's delivered

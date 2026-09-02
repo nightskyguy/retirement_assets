@@ -423,6 +423,63 @@ is `P103d`.
 **Spend is still pinned.** Every number above is more wealth at the same delivered spend. See
 `P103b5`.
 
+## P103b5a - the spend axis cannot be searched with a weight
+
+**Run:** 2026-09-01, `node .test_harnesses/spend_objective_harness.js`. 258 sims. No engine change.
+
+**Why this came before any field.** `P103b5` wants `spendGoal` to become a schedule decision, because
+Guyton-Klinger's per-year decision IS the spend. But the spend pin is not an oversight: without it a
+spend-adaptive arm wins by cutting spending. So the question is the OBJECTIVE, and it had to be
+measured.
+
+**What the engine already has.** `baselineScoreOf` = real terminal after-tax net worth +
+`SPENDABLE_WEIGHT` x lifetime spend in current dollars, with `SPENDABLE_WEIGHT = 1.10`. It decides
+champion selection in every harness here and the Optimizer's own ranking. `spendCurrentDollars`
+ACCUMULATES, so this multiplies LIFETIME spend - about $2.1M against $5.9M of terminal wealth on the
+defaults cell, a third of the score rather than a nudge.
+
+**The measurement.** Sweep a constant spend multiplier on a fixed base row and trace the achievable
+(spend, wealth) frontier. `defaults @4%`, base Reduce 17 yrs:
+
+| mult | lifetime spend | real terminal NW | d(NW)/d(spend) |
+|---|---|---|---|
+| 0.60 | $1,283,040 | $7,628,564 | - |
+| 1.00 | $2,138,400 | $5,892,838 | −2.208 |
+| 1.50 | $3,207,600 | $3,045,197 | −2.695 |
+| 2.00 | $4,276,800 | $425,495 | −2.240 |
+
+**`O-P1` WRONG, and in the opposite direction from the prediction.** I predicted the argmax under
+1.10 would sit at the MAXIMUM feasible spend, reasoning that a dollar spent late costs about a dollar
+of terminal wealth and is credited 1.10. It sits at the **minimum spend tested, in all three cells**.
+The objective prefers hoarding, not spending.
+
+**`O-P2` RIGHT.** The model gives up **1.38 to 3.31** dollars of real terminal wealth per extra dollar
+of lifetime spending - above 1.10 everywhere measured. A dollar not spent compounds for the rest of
+the horizon, so the technical rate is far above the weight.
+
+**`O-P3` RIGHT.** The rate is not constant: it ranges 1.80-2.70 in `defaults @4%`, 1.38-3.31 in
+`round1 @4%`, 1.95-2.66 in `thirds @4%`. **No single weight agrees with the model at both ends of one
+frontier**, let alone across cells.
+
+**What this decides for `P103b5`.** A scalarized objective cannot SEARCH the spend axis. Its optimum
+sits at a boundary - the minimum one, at 1.10 - so the search would answer "spend as little as the
+grid allows" in every cell, and the answer would be the weight rather than the plan. **`P103b5` needs
+a frontier, not a weight**: report the (spend, wealth) pairs and let a human choose the point, the
+same shape `P100` reached for row ranking.
+
+**This does NOT make `SPENDABLE_WEIGHT` wrong at its actual job.** For two plans delivering the same
+spend the term is identical and cancels; for two plans at the same wealth it correctly prefers the
+one that spends more. Its stated purpose is settling ties between otherwise-equal plans and it does
+that. What it cannot do is price a real trade-off, because 1.10 is below the technical rate
+everywhere measured. The constant is now documented in `optimizer_core.js` with both facts.
+
+**A side finding that constrains any spend search: feasibility is NOT monotone in the spend goal.**
+`round1 @4%` is feasible at 0.70, infeasible at 0.80, feasible again at 0.90-1.10, then infeasible
+from 1.20. `totals.success` is a PER-YEAR test (`netIncome < targetSpend * 0.99`), so a plan can dip
+under the threshold in a narrow band and recover above it. **A spend search may not assume that
+everything below a feasible spend is also feasible**, which rules out a simple bisection for the
+maximum sustainable spend.
+
 ## P51f - trajectory post-mortem (observation only, ships nothing)
 
 - **No harvest-like alternation** (prediction `S3-P3` WRONG again: 1/6 thirds/brokheavy cells with

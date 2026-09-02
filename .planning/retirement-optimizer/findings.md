@@ -3939,3 +3939,40 @@ base rows differ from `P103a`'s champions because a carryable row is required; a
 pinned**, so all of it is "more wealth at the same delivered spend". Whether a FIXED rule captures
 most of the gain - the `P35n` template that produced the only shipped result in this whole line of
 work - is `P103d`, and that is the question that decides whether any of this reaches a user.
+
+
+## The spend axis needs a frontier, not a weight  *(2026-09-01, `P103b5a`)*
+
+**Codes:** *frontier* = the achievable (lifetime spend, terminal wealth) pairs traced by sweeping the
+spend goal on a fixed base row. *technical rate* = how much real terminal wealth the MODEL gives up
+per extra dollar of lifetime spending, measured along that frontier. *SPENDABLE_WEIGHT* = the repo's
+own 1.10, the coefficient in `baselineScoreOf`.
+
+**The technical rate is 1.38 to 3.31; the weight is 1.10.** Below it everywhere measured, so the
+scalarized optimum sits at the **minimum** spend tested in 3 of 3 cells. Prediction `O-P1` was WRONG
+and in the opposite direction from what I expected: I reasoned that a dollar spent in the final year
+costs about a dollar of wealth and is credited 1.10, so the objective would prefer spending. It
+prefers hoarding, because most of the horizon is not the final year and a dollar not spent compounds.
+
+**`O-P3` is the one that decides the design.** The rate is not constant - 1.38 to 3.31 within
+`round1 @4%` alone. No single weight agrees with the model at both ends of one frontier, let alone
+across cells. **So `P103b5` needs a frontier, not a weight:** report the (spend, wealth) pairs and let
+a human pick the point, the same shape `P100` reached for row ranking.
+
+**This does not make `SPENDABLE_WEIGHT` wrong at its job**, and the distinction is worth keeping.
+Between two plans delivering the same spend the term cancels exactly; between two plans at the same
+wealth it correctly prefers the one that spends more. That is what "settle ties between otherwise
+equal plans" means and it does it. What it cannot do is price a REAL trade-off, where one plan
+genuinely buys spending with wealth. Documented in `optimizer_core.js` with both facts.
+
+**A constraint on any future spend search: feasibility is NOT monotone in the spend goal.**
+`round1 @4%` is feasible at 0.70, infeasible at 0.80, feasible again at 0.90-1.10, infeasible from
+1.20. `totals.success` is a PER-YEAR test (`netIncome < targetSpend * 0.99`), so a plan can dip under
+the threshold in a narrow band and recover above it. **Bisecting for the maximum sustainable spend is
+therefore unsound** - it can land in a hole and report a much lower ceiling than exists. Worth
+checking whether `optimizeSpend`, which converges to the highest spend where `success` holds, is
+exposed to this.
+
+**The generalizable half.** A scalarized objective is only usable for SEARCH when its optimum is
+interior. Before adding a decision variable to any search, sweep it once and look at where the argmax
+lands: a boundary answer means the search will return the weight rather than the plan.

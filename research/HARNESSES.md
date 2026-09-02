@@ -39,6 +39,7 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `oracle_crosscheck.js` | **node** | P51d: is the oracle's ceiling really a ceiling? Runs a search of a different shape at the same sim cost and reports how much more it finds. |
 | `schedule_replay_harness.js` | **node** | P103b2: what can `strategy: 'schedule'` carry? Compiles each shipped family into a per-year schedule, replays it, and prints where the representation runs out. |
 | `schedule_oracle_harness.js` | **node** | P103b4: does the wider representation reach higher? Searches per-year ceilings against the same base row and budget as the conversions-only oracle. |
+| `spend_objective_harness.js` | **node** | P103b5a: can the spend axis be searched, and under what objective? Traces the (spend, wealth) frontier and asks where each candidate objective's optimum lands. |
 | `endgame_harness.js` | **node** | P35n: once the IRA sits at its target, what should the tail draw from? |
 | `irmaa_margin_harness.js` | **node** | Does an explicit IRMAA safety margin buy anything, now that the tier ceiling is projected forward? |
 | `irmaa_cpi_risk_harness.js` | **node** | Same question with the CPI allowed to come out different from the one the plan assumed. Reverses the answer. |
@@ -93,6 +94,7 @@ evidence of currency.
 | `unifiedconv_harness.js` | **DRIFTED** | drifted again past its own 2026-08-24 re-baseline: negative in 26/60 -> 29/60, worst -$633,605 -> -$635,692 |
 | `oracle_harness.js` | **RE-BASELINED 2026-09-01** (`P103a`) | was DRIFTED. Both halves re-run on engine `1b7b366`: median best-family gap **4.35% -> 1.58%**, the +$1.08M conversion headline is now +$122k, and the dominant lever flipped from conversion timing to the withdrawal split. `S3-P2` WRONG -> RIGHT, `B-P4` RIGHT -> WRONG. Report is the second run throughout |
 | `oracle_harness.js --reserve0` | **CURRENT** | new 2026-09-01 (`P103b1`). Holds surplus routing constant across arms. Negative gaps 1 -> **0**, median gap 1.58% -> 2.03%, and the winning strategy changes in 4 of 6 headline cells |
+| `spend_objective_harness.js` | **CURRENT** | new 2026-09-01 (`P103b5a`). The model trades **1.38-3.31** dollars of terminal wealth per dollar of lifetime spending, against a `SPENDABLE_WEIGHT` of 1.10, so the scalarized optimum sits at MINIMUM spend in 3/3 cells. `O-P1` WRONG (opposite direction), `O-P2` and `O-P3` RIGHT. Also finds feasibility NON-monotone in the spend goal |
 | `schedule_oracle_harness.js` | **CURRENT** | new 2026-09-01 (`P103b4`). Arm S (schedule) beats Arm A (conversions-only) in **6 of 6** cells, +0.25% to +1.82%, on an eighth of the compute in some. `S-P1` RIGHT |
 | `schedule_replay_harness.js` | **CURRENT** | new 2026-09-01 (`P103b2`, widened by `P103b3`). **8 of 11 arms replay EXACTLY**: every ceiling family including ACA across its lapse, plus IRA Draw and Reduce via the quantity lever. Proportional, Ordered and Guyton-Klinger carry nothing - they decide a split or the spend, not an IRA draw. `R-P1` WRONG |
 | `oracle_crosscheck.js` | **CURRENT** | new 2026-09-01. `X-P1` RIGHT 5/5: an equally-costed search of a different shape beats the oracle's descent by at most **0.013%**, so "lower bound" is near-tight on the conversion axis. `X-P2` and `X-P3` WRONG |
@@ -384,6 +386,30 @@ at all - was WRONG, and the ACA counterexample is what named the missing fallbac
 
 The two exact cases and the two failure modes are pinned as node tests in `optimizer_core.tests.js`;
 this harness is the wider table.
+
+## spend_objective_harness.js  (node)
+
+```bash
+node .test_harnesses/spend_objective_harness.js
+```
+
+**Results live in [`PERFECT_FORESIGHT_ORACLE.md`](PERFECT_FORESIGHT_ORACLE.md), section `P103b5a`.** Asks the
+question that has to be settled before `spendGoal` can become a schedule field: can the spend axis be
+searched at all, and under what objective? Sweeps a constant spend multiplier on a fixed base row,
+traces the achievable (spend, wealth) frontier, and reports where the scalarized optimum lands.
+
+Headline (2026-09-01): the model gives up **1.38 to 3.31** dollars of real terminal wealth per extra
+dollar of lifetime spending, while `SPENDABLE_WEIGHT` is **1.10**. Below the technical rate
+everywhere measured, so the scalarized optimum sits at the MINIMUM spend tested in 3 of 3 cells -
+**a weight cannot search this axis, and `P103b5` needs a frontier.** The rate also varies along one
+frontier (1.38 to 3.31 in a single cell), so no single weight would fix it.
+
+Two things it found on the way. `SPENDABLE_WEIGHT` is not wrong at its actual job - settling ties
+between plans that deliver the same spend, where the term cancels, or the same wealth, where it
+correctly prefers more spending; it simply cannot price a real trade-off. And **feasibility is not
+monotone in the spend goal**: `totals.success` is a per-year `netIncome < targetSpend * 0.99` test, so
+a plan can be feasible at 0.70, infeasible at 0.80 and feasible again at 0.90, which rules out
+bisecting for the maximum sustainable spend.
 
 ## schedule_oracle_harness.js  (node)
 

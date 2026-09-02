@@ -92,7 +92,7 @@ evidence of currency.
 | `unifiedconv_harness.js` | **DRIFTED** | drifted again past its own 2026-08-24 re-baseline: negative in 26/60 -> 29/60, worst -$633,605 -> -$635,692 |
 | `oracle_harness.js` | **RE-BASELINED 2026-09-01** (`P103a`) | was DRIFTED. Both halves re-run on engine `1b7b366`: median best-family gap **4.35% -> 1.58%**, the +$1.08M conversion headline is now +$122k, and the dominant lever flipped from conversion timing to the withdrawal split. `S3-P2` WRONG -> RIGHT, `B-P4` RIGHT -> WRONG. Report is the second run throughout |
 | `oracle_harness.js --reserve0` | **CURRENT** | new 2026-09-01 (`P103b1`). Holds surplus routing constant across arms. Negative gaps 1 -> **0**, median gap 1.58% -> 2.03%, and the winning strategy changes in 4 of 6 headline cells |
-| `schedule_replay_harness.js` | **CURRENT** | new 2026-09-01 (`P103b2`). Ceiling families replay EXACTLY (5/5); quantity, sequence and spend families carry nothing (5/5); ACA is partial at 3/33 years. `R-P1` WRONG - the ACA counterexample is the finding |
+| `schedule_replay_harness.js` | **CURRENT** | new 2026-09-01 (`P103b2`, widened by `P103b3`). **8 of 11 arms replay EXACTLY**: every ceiling family including ACA across its lapse, plus IRA Draw and Reduce via the quantity lever. Proportional, Ordered and Guyton-Klinger carry nothing - they decide a split or the spend, not an IRA draw. `R-P1` WRONG |
 | `oracle_crosscheck.js` | **CURRENT** | new 2026-09-01. `X-P1` RIGHT 5/5: an equally-costed search of a different shape beats the oracle's descent by at most **0.013%**, so "lower bound" is near-tight on the conversion axis. `X-P2` and `X-P3` WRONG |
 | `rmdbasis_harness.js` | **CURRENT** | 0 of 30 timing-dependent, R2 violated in 0 of 30 - the post-fix column exactly |
 | `extraconv_magi_harness.js` | **CURRENT** | self-reports `FIXED BUILD`. Two recorded constants moved under `F4` (M3 $39,920,984 -> $39,693,824; M5 year-0 tax $39,238 -> $49,317) |
@@ -371,11 +371,14 @@ express. Compiles each shipped family's realized decisions into a `schedulePlan`
 `compileScheduleFromRun`, re-runs it as a schedule, and requires agreement to the dollar. A family
 that cannot reproduce itself proves the representation cannot state what that family decides.
 
-Headline (2026-09-01): **Fill Bracket at three rates and IRMAA at two tiers replay EXACTLY, $0 on
-every column.** IRA Draw, Proportional, Ordered, Guyton-Klinger and Reduce compile to nothing - their
-per-year decision is a quantity, a sequence or the spend itself, not an income target. ACA is the
-partial case that broke prediction `R-P1`: its cap lapses at Medicare eligibility and the schedule
-has no way to say what an unscheduled year should do.
+Headline after `P103b3` (2026-09-01): **8 of 11 arms replay EXACTLY, $0 on every column** - Fill
+Bracket at three rates, IRMAA at two tiers, ACA across its mid-plan lapse, and IRA Draw and Reduce
+through the quantity lever. Proportional, Ordered and Guyton-Klinger still carry nothing, and the
+boundary is coherent: the schedule says how much to take from the IRA, not how to split a spending
+draw across accounts (that is `oracleWithdrawalPlan`) and not what to spend.
+
+At `P103b2` only 5 arms were exact. Prediction `R-P1` - a family is either fully expressible or not
+at all - was WRONG, and the ACA counterexample is what named the missing fallback.
 
 The two exact cases and the two failure modes are pinned as node tests in `optimizer_core.tests.js`;
 this harness is the wider table.

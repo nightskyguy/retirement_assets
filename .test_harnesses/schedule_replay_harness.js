@@ -1,6 +1,6 @@
 'use strict';
 /**
- * schedule_replay_harness.js -- P103b2. What can `strategy: 'schedule'` actually carry?
+ * schedule_replay_harness.js -- P103b2, widened by P103b3. What can `strategy: 'schedule'` carry?
  *
  * Run:  node .test_harnesses/schedule_replay_harness.js
  *
@@ -25,7 +25,9 @@
  *   R-P1. Every family whose per-year decision IS an income ceiling replays to the dollar; every
  *         family whose decision is a QUANTITY compiles to nothing at all. There is no partial case
  *         among the fixed-spend families - a family is either fully expressible or not at all.
- * Scored at the end of the run.
+ * Scored at the end of the run. It was WRONG at P103b2 (ACA was partial), and the counterexample
+ * is what named the missing fallback. It is kept scored against the WIDENED representation, where
+ * it now fails for the opposite reason: the quantity families are no longer empty.
  */
 
 globalThis.performance = { now: () => 0 };
@@ -33,7 +35,7 @@ globalThis.window = {};
 globalThis.document = { getElementById: () => null, addEventListener: () => {} };
 Object.assign(globalThis, require('../taxengine.js'));
 const core = require('../optimizer_core.js');
-const { simulate, compileScheduleFromRun } = core;
+const { simulate, compileScheduleFromRun, scheduleOptionsForRun } = core;
 
 const money = n => (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString();
 
@@ -72,7 +74,7 @@ const ARMS = [
     ['Reduce 17 yrs',      'quantity', { strategy: 'fixed', nYears: 17 }],
 ];
 
-console.log('P103b2  schedule replay identity: compile each shipped family to a schedulePlan,');
+console.log('P103b2/b3  schedule replay identity: compile each shipped family to a schedulePlan,');
 console.log('re-run as strategy:\'schedule\', and measure the disagreement. Exact = the schedule');
 console.log('can carry that family. Anything else names a decision ordTarget cannot express.\n');
 console.log('arm                  decides    yrs sched   final NW (orig)    delta NW   max |yr wealth|  verdict');
@@ -87,6 +89,7 @@ for (const [name, decides, ov] of ARMS) {
     let b;
     try {
         b = simulate({ ...src, strategy: 'schedule', schedulePlan: plan,
+                       ...scheduleOptionsForRun(src),
                        stratRate: undefined, stratIRMAATier: undefined, stratACAMultiple: undefined });
     } catch (e) { console.log(name.padEnd(21) + ' replay threw: ' + e.message); continue; }
     const dNW = (b.finalNW ?? 0) - (a.finalNW ?? 0);
@@ -120,11 +123,10 @@ console.log('partial cases (the prediction says there are none): ' + partials.le
 console.log('R-P1 -> ' + ((ceilExact === ceilings.length && otherEmpty === others.length && partials.length === 0)
     ? 'RIGHT' : 'WRONG'));
 
-console.log('\nWHAT THE GAPS NAME, which is the point of running this:');
-console.log('  - a QUANTITY lever. IRA Draw draws a share of the IRA, Reduce amortizes, Proportional');
-console.log('    adds a boost. None of those is an income target, so ordTarget cannot state them.');
-console.log('  - a FALLBACK for unscheduled years. Today an absent entry means "draw nothing');
-console.log('    voluntarily". A lapsed ACA year needs "baseline proportional" instead, which is why');
-console.log('    an ACA plan replays only the years its cap was live.');
-console.log('  - an account SEQUENCE, which oracleWithdrawalPlan already expresses and the schedule');
-console.log('    has not yet absorbed.');
+console.log('\nWHAT REMAINS, after P103b3 added iraDraw, gapFill, scheduleFallback and convert:');
+console.log('  - the account SPLIT. Proportional draws proportionally across IRA/Brokerage/Cash and');
+console.log('    Ordered runs a sequence; neither is an IRA draw, so ordTarget and iraDraw are both');
+console.log('    silent. oracleWithdrawalPlan already expresses it, but it PREEMPTS the strategy');
+console.log('    branch rather than composing with it - carrying Ordered means using that hook.');
+console.log('  - the SPEND. Guyton-Klinger decides what to spend; a schedule takes spendGoal as');
+console.log('    given, so it is outside the vocabulary by construction rather than by omission.');

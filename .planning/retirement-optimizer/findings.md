@@ -3855,3 +3855,49 @@ strategy in one vocabulary. Replay identity converted it into a list: an income 
 a fallback, a sequence. **A representation that must reproduce the thing it replaces is a
 measurement instrument, not just plumbing** - it fails loudly and names the missing concept, where a
 gap table would have shown a number and no reason.
+
+
+## The schedule carrier, widened: what four fields bought  *(2026-09-01, `P103b3`)*
+
+**Codes:** as in the `P103b2` section above, plus *iraDraw* = an explicit voluntary IRA withdrawal in
+nominal dollars; *gapFill* = which cascade fills a spending shortfall (`cascade` = Cash -> Brokerage
+-> Roth, `baseline` = the [40,60] default branch); *scheduleFallback* = what an unscheduled year
+means; *convert* = a cap on the surplus reallocated to Roth.
+
+**8 of 11 shipped arms now replay to the dollar**, up from 5. Newly exact: ACA across its mid-plan
+lapse, IRA Draw 5%, Reduce 17 yrs. Suites **394**/61/22.
+
+**"Total conversion control" decomposed, and only half of it was missing.** The family conversion is
+a pure REALLOCATION of an already-taxed surplus - the IRA dollars were withdrawn and taxed whatever
+their destination - so converting less does not withdraw less. **Converting less GROSS was already
+solved by `P103b2`**: lower `ordTarget` or `iraDraw`. The genuinely absent lever was the destination,
+which `convert` caps. Worth recording because the phase had carried "the engine cannot convert less
+than the family rule" as a single hole for weeks, and it was two things with different answers.
+
+**Dollars are safe for a DRAW and not for a SPLIT, which is what the old warning was really about.**
+`oracleWithdrawalPlan` refuses dollar plans because a spending draw's size depends on the tax it is
+trying to cover - a feedback loop. A voluntary IRA draw ABOVE spending has no such loop and is handed
+to the tax passes at face value, exactly as `fixedpct` and `fixed` hand theirs over.
+
+**Three wrong compilers, and the rule that ends them.** Reconstructing the voluntary IRA draw from
+logged outcomes failed three times - gross draw ($39,117 short), gross minus RMDs ($191,737 short),
+gross again - because downstream the decision is merged with the forced withdrawal, split across
+IRA1/IRA2, netted against conversions and adjusted by the shortfall cascade. The fix was to LOG the
+decision (`-volIRAwd`, captured at the one point where it is still a decision) rather than infer it -
+the same move that produced `rateBasis` one stage earlier. **A carrier compiles from recorded
+decisions, not from reconstructed outcomes.** Two independent instances in two stages is enough to
+call it a rule.
+
+**One boolean was worth a whole plan.** With every year correctly scheduled, IRA Draw was STILL
+$39,117 adrift, because a year-0 schedule entry was read as implying a conversion - and that flips
+the withdrawal month from Late to Early for the entire horizon. A ceiling implies a conversion; a
+quantity draw does not. Generalizable: **when a replay is right everywhere and wrong by a constant
+proportion, look for a whole-plan MODE the fixture sets differently, not for a per-year arithmetic
+error.**
+
+**What remains is a coherent boundary rather than a list of leftovers.** The schedule states how much
+to take from the IRA - as a ceiling or as a quantity - but not **how to split a spending draw across
+accounts** (Proportional, Ordered) and not **what to spend** (Guyton-Klinger). The split is
+`oracleWithdrawalPlan`'s job and already exists, but it PREEMPTS the strategy branch instead of
+composing with it, so carrying Ordered means using that hook rather than extending this one.
+Guyton-Klinger is outside the vocabulary by construction: a schedule takes `spendGoal` as given.

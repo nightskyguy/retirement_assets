@@ -7451,3 +7451,39 @@ and `.githooks/**` is edited in binary because `.gitattributes` pins it to LF. A
 rule from earlier today, the two `?v=` tokens naming `optimizer_core.js` and the test loader moved to
 `1116f4`, plus the stale one in `standalone/IncomeTaxPlanner.html`. No changelog entry and no
 `<title>` bump: the schedule is invisible to an ungated user.
+
+
+## 2026-09-01 (cont.) - P103b3: four fields, 8 of 11 arms exact
+
+Suites **394**/61/22. Report: `PERFECT_FORESIGHT_ORACLE.md` `P103b3`; harness re-run in place.
+
+**Added:** `iraDraw` (the quantity lever), per-year `gapFill`, `scheduleFallback`, `convert`.
+**Newly exact:** ACA across its lapse (was −$841,327), IRA Draw 5% (was −$1,182,054), Reduce 17 yrs
+(was −$1,469,870).
+
+**The item's own field turned out to be half-solved already.** "Total conversion control" is two
+levers: gross (lower `ordTarget`/`iraDraw` - `b2` already did this) and destination (`convert`). The
+plan had carried it as one hole for weeks.
+
+**Three wrong compilers before the right one**, and I should have gone here first. Reconstructing the
+voluntary IRA draw from logged outcomes failed three times - $39,117 short, $191,737 short, $39,117
+again - because downstream it is merged with the RMD, split per IRA, netted against conversions and
+adjusted by the shortfall cascade. Fixed by logging the decision itself (`-volIRAwd`). That is the
+second time in two stages the answer was "log the decision, do not infer it" (`rateBasis` was the
+first), so it went to findings as a rule rather than an anecdote.
+
+**Then one boolean cost a whole plan.** With all 33 years correctly scheduled, IRA Draw was still
+$39,117 adrift: a year-0 entry was read as implying a conversion, which flips the withdrawal month
+Late -> Early for the entire horizon. A ceiling implies one; a quantity draw does not. Also
+generalizable, and recorded: **a replay that is wrong by a roughly constant proportion is a whole-plan
+MODE difference, not a per-year arithmetic error.**
+
+**A `b2` test failed on purpose and was replaced, not deleted.** `'a quantity family compiles to
+nothing, and says so'` pinned the old coverage limit precisely so widening it had to be deliberate.
+It now asserts the widened behavior, and a new test pins the limit that remains.
+
+**What remains is a boundary I can state in one sentence:** the schedule says how much to take from
+the IRA, not how to split a spending draw across accounts (Proportional, Ordered - that is
+`oracleWithdrawalPlan`, which preempts rather than composes) and not what to spend (Guyton-Klinger,
+outside the vocabulary by construction). `P103b4` is next: re-run the oracle table on the schedule
+representation, and decide the search question, which is still ~130 axes against today's ~33.

@@ -1171,6 +1171,7 @@ function buildSimYearLogRecord(p) {
         'StateCap': p.tax.stLimit,
         'BracketTarget': p.bracketTarget,
         'RateBasis': p.rateBasis,          // P103b2: what the marginal-rate lookups were keyed on
+        '-volIRAwd': p.volIRAwd ?? 0,      // P103b3: the voluntary IRA draw the strategy branch chose
 
         'BracketOverage': p.bracketOverage,
         // P88c. The share of BracketOverage caused by a voluntary conversion rather than by
@@ -1370,10 +1371,14 @@ function beginYear(sim, yr) {
     const _a1 = sim.currentYear - sim.birthyear1, _a2 = sim.currentYear - sim.birthyear2;
     const _acaLive = inputs.strategy === 'aca'
         && !acaCapLapsed(_a1, _a2, _a1 <= inputs.die1, _a2 <= inputs.die2);
-    // A scheduled year-0 ceiling implies a conversion for the same reason a bracket ceiling does:
+    // A scheduled year-0 CEILING implies a conversion for the same reason a bracket ceiling does:
     // it creates room above spending. Without this a schedule replaying a bracket family would pick
     // the opposite year-0 withdrawal MONTH and diverge on timing alone.
-    const _sched0 = inputs.strategy === 'schedule' && _schedulePlanFor(inputs, 0) != null;
+    // It must test for a ceiling and not merely for an entry: a year-0 `iraDraw` implies no
+    // conversion, exactly as fixedpct and fixed imply none, and treating it as one flipped the
+    // year-0 month and left IRA Draw $39,117 and Reduce $72,656 adrift with every year scheduled.
+    const _sched0e = inputs.strategy === 'schedule' ? _schedulePlanFor(inputs, 0) : null;
+    const _sched0 = !!_sched0e && _sched0e.ordTarget !== undefined;
     const _stratImpliesConversion =
           ((inputs.strategy === 'bracket' || _acaLive || _sched0) && !_convSuppressedThisYear(inputs, 0))
        || _extraConvAmountFor(inputs, 0) > 0;
@@ -1720,8 +1725,17 @@ function resolveSpendTarget(sim, yr) {
     // 'schedule' joins this set because it fills a ceiling exactly as the bracket families do:
     // it must take the same gap-fill cascade (Cash -> Brokerage -> Roth) and the same
     // targetSpend treatment, or a schedule could not reproduce the family it was compiled from.
+    // P103b3: which cascade is now a per-YEAR choice, because it is the other thing a family
+    // decides and the b2 replay could not vary it. A scheduled year says so on its entry (default
+    // 'cascade'); an unscheduled year inherits it from the fallback, since falling through to
+    // baseline Proportional and then taking the bracket cascade would be half of each family.
     yr.isBracketStrategy = inputs.strategy === 'bracket' || inputs.strategy === 'fixedpct'
-        || inputs.strategy === 'schedule' || yr.isACAStrategy;
+        || yr.isACAStrategy;
+    if (inputs.strategy === 'schedule') {
+        const _se = _schedulePlanFor(inputs, yr.y);
+        yr.isBracketStrategy = _se ? _se.gapFill === 'cascade'
+                                   : (inputs.scheduleFallback ?? 'none') !== 'baseline';
+    }
     yr.isOrderedStrategy = inputs.strategy === 'ordered';
 
     // P92a. The deduction computeBracketCeiling adds back, so that "fill the 22% bracket" reaches the
@@ -1882,6 +1896,24 @@ function resolveSpendTarget(sim, yr) {
 // on the same discipline as oracleWithdrawalPlan. inputs.schedulePlan is an array indexed by plan
 // year; each entry is { ordTarget, kind } or null/undefined.
 //
+//   iraDraw    P103b3. An explicit voluntary IRA withdrawal for the year, in NOMINAL dollars, as
+//              an ALTERNATIVE to ordTarget. Exactly one of the two is required. This is the
+//              QUANTITY lever the b2 replay measured as missing: IRA Draw takes a share of the IRA,
+//              Reduce amortizes a balance, and neither is an income target, so ordTarget could not
+//              state them. Dollars are safe HERE in a way they are not for a withdrawal split: this
+//              is a face-value voluntary draw handed to the tax passes exactly as the fixedpct and
+//              fixed branches hand theirs over, not a spending target whose size depends on the tax
+//              it is trying to cover.
+//   convert    P103b3. A cap, in after-tax dollars, on how much of the year's surplus is routed to
+//              Roth by convertExcessToRoth. Uncapped when absent, which is today's behavior.
+//              READ THE DECOMPOSITION BEFORE USING IT, because "total conversion control" turned
+//              out to be two levers and only one of them is new. The family conversion is a pure
+//              REALLOCATION of an already-taxed surplus - the IRA dollars were withdrawn and taxed
+//              whatever their destination - so converting "less" here does not withdraw less. Gross
+//              conversion is lowered by lowering ordTarget or iraDraw, which b2 already made
+//              possible; this field only chooses Roth-versus-Cash for the leftover. Both directions
+//              therefore exist: less gross via the draw, more gross via extraConversionAmount, and
+//              the destination split via convert.
 //   ordTarget  the year's ceiling on realized ordinary income, in NOMINAL dollars. This is the same
 //              quantity computeBracketCeiling returns as `limit`, which is why a schedule can carry
 //              what a bracket family decided. It is a TARGET, not a dollar withdrawal: the engine
@@ -1905,9 +1937,27 @@ function _schedulePlanFor(inputs, y) {
     if (typeof e !== 'object') {
         throw new Error('schedulePlan[' + y + '] must be an object or null, got ' + typeof e);
     }
-    const t = e.ordTarget;
-    if (!Number.isFinite(t) || t <= 0) {
+    const t = e.ordTarget, d = e.iraDraw;
+    const hasT = t !== undefined, hasD = d !== undefined;
+    if (hasT === hasD) {
+        throw new Error('schedulePlan[' + y + '] needs exactly one of ordTarget or iraDraw');
+    }
+    if (hasT && (!Number.isFinite(t) || t <= 0)) {
         throw new Error('schedulePlan[' + y + '].ordTarget must be a finite positive number, got ' + t);
+    }
+    if (hasD && (!Number.isFinite(d) || d < 0)) {
+        throw new Error('schedulePlan[' + y + '].iraDraw must be a finite non-negative number, got ' + d);
+    }
+    const conv = e.convert;
+    if (conv !== undefined && (!Number.isFinite(conv) || conv < 0)) {
+        throw new Error('schedulePlan[' + y + '].convert must be a finite non-negative number, got ' + conv);
+    }
+    // gapFill has to be PER YEAR, not per plan, and ACA is the proof: its cap is live for the first
+    // few years and lapses at Medicare eligibility, and the two halves take different cascades. A
+    // plan-level switch cannot state that, which is why b2 could only replay 3 of 33 ACA years.
+    const gf = e.gapFill ?? inputs.scheduleGapFill ?? 'cascade';
+    if (gf !== 'cascade' && gf !== 'baseline') {
+        throw new Error('schedulePlan[' + y + '].gapFill must be cascade|baseline, got ' + gf);
     }
     const kind = e.kind ?? 'federal';
     if (kind !== 'federal' && kind !== 'irmaa' && kind !== 'aca') {
@@ -1917,11 +1967,12 @@ function _schedulePlanFor(inputs, y) {
     // They are the same number for an IRMAA or ACA ceiling and DIFFERENT for a federal bracket one,
     // whose rates are read at the statutory top while its ceiling is lifted by the deduction
     // add-back. A searcher never has to supply it; a compiler that wants exact replay does.
+    if (hasD) return { iraDraw: d, kind, convert: conv, gapFill: gf };
     const rb = e.rateBasis ?? t;
     if (!Number.isFinite(rb) || rb <= 0) {
         throw new Error('schedulePlan[' + y + '].rateBasis must be a finite positive number, got ' + rb);
     }
-    return { ordTarget: t, kind, rateBasis: rb };
+    return { ordTarget: t, kind, rateBasis: rb, convert: conv, gapFill: gf };
 }
 
 // P103b2. Compile a finished run into the schedulePlan that reproduces it. One shared compiler,
@@ -1940,12 +1991,41 @@ function compileScheduleFromRun(res, srcInputs) {
     // Kind precedence mirrors computeBracketCeiling's own: IRMAA wins when both are set.
     const kind = (srcInputs.stratIRMAATier ?? -1) >= 0 ? 'irmaa'
         : (srcInputs.stratACAMultiple ?? 0) > 0 ? 'aca' : 'federal';
+    // P103b3. A family that fills no ceiling is carried by its realized voluntary IRA draw instead,
+    // which is the quantity lever. `-iraVolSpend` plus the converted gross is what actually left the
+    // IRA by choice that year; RMDs are forced and are never part of a schedule.
+    const quantity = (srcInputs.strategy === 'fixedpct' || srcInputs.strategy === 'fixed');
+    // Which cascade the source family took. `fixed` (Reduce) is the one quantity family that is NOT
+    // in the bracket set, so it fills its gap from the [40,60] default branch instead.
+    const gapFill = (srcInputs.strategy === 'fixed') ? 'baseline' : 'cascade';
     return (res.log || []).map(e => {
         const t = e['BracketTarget'] ?? 0;
-        if (!(t > 0)) return null;              // no ceiling that year = nothing scheduled
-        const rb = e['RateBasis'];
-        return (rb > 0 && rb !== t) ? { ordTarget: t, kind, rateBasis: rb } : { ordTarget: t, kind };
+        if (t > 0) {
+            const rb = e['RateBasis'];
+            return (rb > 0 && rb !== t) ? { ordTarget: t, kind, rateBasis: rb, gapFill } : { ordTarget: t, kind, gapFill };
+        }
+        if (quantity) {
+            // Emitted even when the draw is ZERO, and the zero years are the reason. A quantity
+            // family whose amortization has ended still hands the tax passes { IRA: 0, netAmount: 0 };
+            // an unscheduled year hands them {}. The two are not the same object downstream, and
+            // treating "drew nothing" as "scheduled nothing" left IRA Draw 13 years and $39,117 short.
+            // `-volIRAwd` is the branch's own decision, logged for exactly this purpose. Two
+            // reconstructions from downstream fields were tried first and both were wrong in
+            // different directions ($39,117 short, then $191,737 short), which is the argument for
+            // logging the decision instead of inferring it.
+            return { iraDraw: e['-volIRAwd'] ?? 0, kind, gapFill };
+        }
+        return null;                            // nothing this schedule can state
     });
+}
+
+// P103b3. The plan-level knobs that go WITH a compiled schedule. Separate from the per-year plan
+// because they are not per-year decisions: they say what an unscheduled year means. An ACA plan is
+// the case that forced them to exist - its cap lapses at Medicare eligibility and every later year
+// falls through to baseline Proportional, which "draw nothing voluntarily" is not.
+function scheduleOptionsForRun(srcInputs) {
+    const lapses = (srcInputs.stratACAMultiple ?? 0) > 0 && srcInputs.strategy === 'aca';
+    return { scheduleFallback: lapses ? 'baseline' : 'none' };
 }
 
 function _oracleWithdrawalPlanFor(inputs, y) {
@@ -2146,7 +2226,23 @@ function planPrimaryWithdrawals(sim, yr) {
         // Social Security basis fix applies here too.
         const _e = _schedulePlanFor(inputs, y);
         if (!_e) {
-            yr.withdrawals = {};                  // unscheduled year: gap-fill handles spending
+            // P103b3. What an UNSCHEDULED year does is now a choice, because b2 measured it as the
+            // real coverage limit: an ACA plan replayed only the 3 years its cap was live, since a
+            // lapsed cap falls through to baseline Proportional while an absent entry meant "draw
+            // nothing voluntarily". Those are different statements and the schedule could only make
+            // one of them. Default stays 'none' - the b2 behavior.
+            if ((inputs.scheduleFallback ?? 'none') === 'baseline') {
+                yr.withdrawStrategy.order = ['IRA', 'Brokerage', 'Cash'];
+                yr.withdrawStrategy.taxrate = [sim.nominalTaxRate, yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit), 0, 0];
+                yr.withdrawals = calculateWithdrawals(yr.curBalances, yr.additionalSpendNeeded, yr.withdrawStrategy);
+            } else {
+                yr.withdrawals = {};              // nothing scheduled: gap-fill handles spending
+            }
+        } else if (_e.iraDraw !== undefined) {
+            // The quantity lever. Face-value voluntary draw, the same shape and the same convention
+            // as the fixedpct and fixed branches below, so those families can be carried exactly.
+            const IRAwd = Math.max(0, Math.min(yr.curIRA, _e.iraDraw));
+            yr.withdrawals = { IRA: IRAwd, netAmount: IRAwd };
         } else {
             yr.limit = _e.ordTarget;
             yr.ceilingKind = _e.kind;
@@ -2252,6 +2348,14 @@ function planPrimaryWithdrawals(sim, yr) {
         yr.withdrawals = calculateWithdrawals(yr.curBalances, yr.additionalSpendNeeded, yr.withdrawStrategy)
 
     }
+
+    // P103b3. The VOLUNTARY IRA draw this year's branch just decided, captured here and nowhere
+    // else, because here is the only point at which it is still the decision rather than an outcome.
+    // Downstream it is merged with the forced withdrawal, split across IRA1/IRA2, netted against
+    // conversions and adjusted by the shortfall cascade, and reconstructing it from those fields is
+    // what a schedule compiler kept getting wrong - three different wrong answers before this field
+    // existed. A carrier compiles from recorded DECISIONS, not from reconstructed outcomes.
+    yr.volIRAwd = yr.withdrawals?.IRA ?? 0;
 }
 
 // Apply the primary withdrawals, first tax pass, MAGI-history seeding and the year-0 IRMAA retro-correction.
@@ -2839,8 +2943,16 @@ function routeSurplusAndConvert(sim, yr) {
     yr.surplus.Roth2 = 0;
 
     if (inputs.convertExcessToRoth && !_convSuppressedThisYear(inputs, yr.y)) {
-        const conv1 = Math.min(yr.surplus.Total * yr.ira1_ratio,       yr.netWithdrawals.IRA1 || 0);
-        const conv2 = Math.min(yr.surplus.Total * (1 - yr.ira1_ratio), yr.netWithdrawals.IRA2 || 0);
+        // P103b3. A schedule may cap how much of the surplus is reallocated to Roth. Whatever the
+        // cap leaves behind stays in yr.surplus.Total and banks as Cash or Brokerage below, which is
+        // the whole content of the lever: the IRA dollars are already withdrawn and already taxed.
+        let _pool = yr.surplus.Total;
+        if (inputs.strategy === 'schedule') {
+            const _sc = _schedulePlanFor(inputs, yr.y);
+            if (_sc && _sc.convert !== undefined) _pool = Math.min(_pool, _sc.convert);
+        }
+        const conv1 = Math.min(_pool * yr.ira1_ratio,       yr.netWithdrawals.IRA1 || 0);
+        const conv2 = Math.min(_pool * (1 - yr.ira1_ratio), yr.netWithdrawals.IRA2 || 0);
         yr.surplus.Roth1 = conv1;
         yr.surplus.Roth2 = conv2;
         yr.surplus.Total -= (conv1 + conv2);
@@ -3524,7 +3636,7 @@ function logYear(sim, yr) {
         surplus: yr.surplus, totalRMD: yr.totalRMD, qcd1: yr.qcd1, qcd2: yr.qcd2, taxableDividends: yr.taxableDividends, taxableInterest: yr.taxableInterest,
         netWithdrawals: yr.netWithdrawals, rmd1: yr.rmd1, rmd2: yr.rmd2, totalConverted: yr.totalConverted, tax: yr.tax, IRMAA: yr.IRMAA, IRMAATier: yr.IRMAATier, medicareBase: yr.medicareBase, cpiRate: sim.cpiRate,
         iraVolSpend1: yr.iraVolSpend1, iraVolSpend2: yr.iraVolSpend2, iraConvGross1: yr.iraConvGross1, iraConvGross2: yr.iraConvGross2,
-        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, rateBasis: yr.rateBasis, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
+        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, rateBasis: yr.rateBasis, volIRAwd: yr.volIRAwd, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
         balance: balance, nominalTaxRate: sim.nominalTaxRate, totalWealth: yr.totalWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
         gains: yr.gains, rmd1Pct: yr.rmd1Pct, subCycleLabel: yr.subCycleLabel, convNetValue: null, excessNetValue: null,
         incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,
@@ -5478,7 +5590,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, compileScheduleFromRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -5486,7 +5598,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, compileScheduleFromRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

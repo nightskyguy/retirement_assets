@@ -11,7 +11,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P103 | `a`,`b1`,`b2` DONE: gap re-baselined; routing was a confound; `strategy:'schedule'` replays the ceiling families **to the dollar** | `P103b3` |
+| **O0** | P103 | `a`,`b1`,`b2`,`b3` DONE: gap re-baselined; routing was a confound; `strategy:'schedule'` replays **8 of 11 shipped arms to the dollar** | `P103b4` |
 | **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
@@ -186,23 +186,33 @@ a research instrument and a ship-time check.
       IRA / amortization / boost); a **fallback** for unscheduled years; an account **sequence**,
       which `oracleWithdrawalPlan` already expresses and the schedule has not absorbed.
       **Scope, stated plainly:** a representation, not a search. Nothing here optimizes anything.
-- [ ] **P103b3** - **four fields, not one.** `P103b2` measured three more before this item's own:
-      a **quantity** lever (a share of the IRA, an amortization, a spending boost - none of them
-      income targets, and between them they are why five shipped families compile to nothing), a
-      **fallback** naming what an unscheduled year does (today "draw nothing voluntarily"; a lapsed
-      ACA year needs "baseline proportional"), and the account **sequence** `oracleWithdrawalPlan`
-      already expresses. Same acceptance bar: every shipped family replays to the dollar.
-      **total-conversion control** as the schedule's `convert` field. Today
-      `extraConversionAmount[y]` is EXTRA on top of the arm's own fill (`optimizer_core.js:2849`), and
-      the only suppressions are whole-plan cutoffs - `convEndYear`/`convEndMode` and the
-      `_cfSuppressConversions*` internals (`optimizer_core.js:2647`). So a schedule can convert MORE
-      than the rule, never LESS, and "convert $40k in 2031, nothing in 2032, $90k in 2033" on a Fill
-      Bracket arm is inexpressible. This matters directly to `P103a`'s finding that conversion timing
-      is the whole game in the IRA-heavy mixes: **the oracle is searching a one-sided axis there**,
-      so its ceiling is understated by whatever WITHHOLDING a conversion would have been worth.
-      **`surplusTo` is OUT of scope**: `P103b1` measured routing as a harness confound, and the
-      engine already reaches all three destinations. The schedule's `surplusTo` field is dropped;
-      a schedule inherits routing from `CashReserve` like every other arm.
+- [x] **P103b3 DONE 2026-09-01** - four fields added, and **8 of 11 shipped arms now replay to the
+      dollar** (was 5). Suites **394**/61/22. Report: `PERFECT_FORESIGHT_ORACLE.md`, `P103b3`.
+      **The fields:** `iraDraw` (an explicit voluntary IRA draw in nominal dollars - the quantity
+      lever, mutually exclusive with `ordTarget`); `gapFill` per year (`cascade`/`baseline`, because
+      WHICH cascade fills the gap is the other thing a family decides); `scheduleFallback` (what an
+      unscheduled year means); `convert` (a cap on the surplus routed to Roth).
+      **Now exact:** ACA across its mid-plan lapse (was −$841,327), IRA Draw 5% (was −$1,182,054),
+      Reduce 17 yrs (was −$1,469,870), plus the five ceiling arms already exact at `b2`.
+      **"Total conversion control" was two levers and only one was missing.** The family conversion
+      is a REALLOCATION of an already-taxed surplus, so converting less does not withdraw less.
+      Converting less GROSS was already solved at `b2` by lowering `ordTarget`; what was absent is
+      the destination, which `convert` caps. Both directions now exist.
+      **Three wrong compilers before the right one.** Reconstructing the voluntary IRA draw from
+      logged outcomes failed three times ($39,117 short, then $191,737 short, then $39,117 again),
+      because downstream the decision is merged with the RMD, split across IRA1/IRA2, netted against
+      conversions and adjusted by the shortfall cascade. Fixed by LOGGING the decision (`-volIRAwd`,
+      captured at the one point where it is still a decision) - the same move that produced
+      `rateBasis`. **A carrier compiles from recorded decisions, not reconstructed outcomes.**
+      **And one boolean was worth a whole plan:** with every year correctly scheduled, IRA Draw was
+      still $39,117 adrift because a year-0 entry was read as implying a conversion, which flips the
+      withdrawal month Late -> Early for the entire plan. A ceiling implies one; a quantity draw does
+      not. Pinned by a test comparing `timingReason`.
+      **What remains is a coherent boundary, not leftovers:** the schedule says how much to take from
+      the IRA, but not how to SPLIT a spending draw across accounts (Proportional, Ordered) and not
+      what to SPEND (Guyton-Klinger). The split is `oracleWithdrawalPlan`'s, which already exists but
+      PREEMPTS the strategy branch rather than composing - carrying Ordered means using that hook.
+      Guyton-Klinger is outside the vocabulary by construction: a schedule takes `spendGoal` as given.
 - [ ] **P103b4** - re-run `P103a`'s table on the schedule representation and report whether anything
       still beats the ceiling.
       **The cost that decides how far this goes, stated up front:** ~33 years x 4 knobs is ~130 search
@@ -243,10 +253,9 @@ a research instrument and a ship-time check.
 | `P102` | Stages C/D (worker, search budget) DEFERRED behind `P103d` - until there are arms worth buying time for. Stage E's `e1`/`e2` (gap-fill and stop-year as swept arms) are `P103d` candidates |
 | `P34` | unchanged at O1; NOT a `P103` prerequisite - `a`-`d` are node harnesses |
 
-- **Status:** **`P103a`, `P103b1` and `P103b2` COMPLETE 2026-09-01.** `P103b3` is next - and it now
-  has FOUR fields to add, not one: total-conversion control plus the quantity lever, the
-  unscheduled-year fallback and the account sequence that `P103b2` measured as missing.
-  `P103b4`, `P103c`-`e` behind it. `P103b1x` is a separate product question.
+- **Status:** **`P103a`, `P103b1`, `P103b2` and `P103b3` COMPLETE 2026-09-01.** `P103b4` is next: the
+  re-run against the schedule representation, and the search-cost decision that goes with it.
+  `P103c`-`e` behind it. `P103b1x` is a separate product question.
 - **Depends on:** nothing. `P103e` needs `P103d`; `P103d` needs `P103a` and `P103b`.
 
 ---

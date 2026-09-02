@@ -63,6 +63,7 @@ if (IS_NODE) require('./displayhelpers.js');
 
 const simulate = core.simulate;
 const compileScheduleFromRun = core.compileScheduleFromRun;
+const scheduleOptionsForRun = core.scheduleOptionsForRun;
 const ADVISOR_FEE_PCT_MAX = core.ADVISOR_FEE_PCT_MAX;
 const inferAdvisorFeeMode = core.inferAdvisorFeeMode;
 const optimizeSpend = core.optimizeSpend;
@@ -7063,6 +7064,7 @@ function schedReplayDelta(overrides, mutate) {
     let plan = compileScheduleFromRun(a, src);
     if (mutate) plan = mutate(plan);
     const b = simulate({ ...src, strategy: 'schedule', schedulePlan: plan,
+                         ...scheduleOptionsForRun(src),
                          stratRate: undefined, stratIRMAATier: undefined, stratACAMultiple: undefined });
     let maxYr = 0;
     if (a.log.length !== b.log.length) return { maxYr: Infinity, dNW: Infinity, scheduled: plan.filter(Boolean).length };
@@ -7098,13 +7100,72 @@ test('schedule: rateBasis is load-bearing, not decoration', () => {
     assert(Math.abs(stripped.dNW) > 1, `stripping rateBasis should diverge, got ${stripped.dNW}`);
 });
 
-test('schedule: a quantity family compiles to nothing, and says so', () => {
-    // IRA Draw fills no income ceiling - its decision is a share of the IRA - so ordTarget cannot
-    // express it and every year compiles to null. This is the measured coverage limit of the
-    // representation, pinned so that widening it is a deliberate act.
+test('schedule: replays IRA Draw 5% to the dollar via the quantity lever', () => {
+    // P103b3 widened the representation past the b2 limit this fixture used to pin: a family whose
+    // per-year decision is a SHARE OF THE IRA is now carried by iraDraw.
     const d = schedReplayDelta({ strategy: 'fixedpct', iraWithdrawPct: 0.05 });
-    assert(d.scheduled === 0, `expected 0 scheduled years for a quantity family, got ${d.scheduled}`);
-    assert(Math.abs(d.dNW) > 1000, 'a schedule that carries nothing should not reproduce the run');
+    assert(d.scheduled === 33, `expected 33 scheduled years, got ${d.scheduled}`);
+    assert(d.maxYr < 0.01, `per-year wealth diverged by ${d.maxYr}`);
+    assert(Math.abs(d.dNW) < 0.01, `final net worth diverged by ${d.dNW}`);
+});
+
+test('schedule: replays Reduce 17 yrs, which takes the OTHER gap-fill', () => {
+    // Reduce is the one quantity family outside the bracket set, so it fills its gap from the
+    // [40,60] default branch. Getting this exact is what per-year gapFill is for.
+    const d = schedReplayDelta({ strategy: 'fixed', nYears: 17 });
+    assert(d.maxYr < 0.01, `per-year wealth diverged by ${d.maxYr}`);
+    assert(Math.abs(d.dNW) < 0.01, `final net worth diverged by ${d.dNW}`);
+});
+
+test('schedule: replays an ACA plan ACROSS its lapse', () => {
+    // The case that broke prediction R-P1 in b2. The cap is live for 3 of 33 years and lapses at
+    // Medicare eligibility; every later year falls through to baseline Proportional, which is a
+    // different statement from "draw nothing voluntarily". scheduleFallback is what says so.
+    const d = schedReplayDelta({ strategy: 'aca', stratRate: 0, stratACAMultiple: 400 });
+    assert(d.scheduled === 3, `expected 3 live-cap years, got ${d.scheduled}`);
+    assert(d.maxYr < 0.01, `per-year wealth diverged by ${d.maxYr}`);
+    assert(Math.abs(d.dNW) < 0.01, `final net worth diverged by ${d.dNW}`);
+});
+
+test('schedule: an iraDraw year implies no year-0 conversion', () => {
+    // Withdrawal timing is Early in a conversion year and Late otherwise, and year 0 decides it from
+    // the strategy. A ceiling implies a conversion; a quantity draw does not, exactly as fixedpct
+    // and fixed do not. Treating any year-0 entry as a ceiling flipped the month and left IRA Draw
+    // $39,117 adrift with every year already scheduled - a whole-plan error from one boolean.
+    const src = { ...SCHED_BASE, strategy: 'fixedpct', iraWithdrawPct: 0.05 };
+    const a = simulate(src);
+    const plan = compileScheduleFromRun(a, src);
+    assert(plan[0] && plan[0].iraDraw !== undefined, 'year 0 should compile to a quantity entry');
+    const b = simulate({ ...src, strategy: 'schedule', schedulePlan: plan, ...scheduleOptionsForRun(src) });
+    assert(a.log[0].timingReason === b.log[0].timingReason,
+        `year-0 timing differs: ${a.log[0].timingReason} vs ${b.log[0].timingReason}`);
+});
+
+test('schedule: convert caps the surplus routed to Roth, and the rest still banks', () => {
+    // The conversion lever is a REALLOCATION of an already-taxed surplus, not a gross draw: capping
+    // it moves dollars from Roth to Cash/Brokerage and must not change what left the IRA.
+    const src = { ...SCHED_BASE, strategy: 'bracket', stratRate: 0.22 };
+    const a = simulate(src);
+    const plan = compileScheduleFromRun(a, src);
+    const capped = plan.map(e => e && { ...e, convert: 1000 });
+    const b = simulate({ ...src, strategy: 'schedule', schedulePlan: capped, stratRate: undefined });
+    const convA = a.log.reduce((t, e) => t + (e.rothConv ?? 0), 0);
+    const convB = b.log.reduce((t, e) => t + (e.rothConv ?? 0), 0);
+    assert(convB < convA, `capping convert should reduce conversions: ${convB} vs ${convA}`);
+    assert((b.log[0]['-volIRAwd'] ?? 0) === (a.log[0]['-volIRAwd'] ?? 0),
+        'capping the Roth destination must not change the IRA draw');
+});
+
+test('schedule: the coverage limit that REMAINS is the account split', () => {
+    // Proportional, Ordered and Guyton-Klinger still carry nothing. The first two decide how to
+    // SPLIT a spending draw across accounts - which is oracleWithdrawalPlan's job, not ordTarget's -
+    // and GK decides the SPEND, which a schedule takes as given. Pinned so widening it is deliberate.
+    for (const ov of [{ strategy: 'propwd', propWithdraw: 0.10 },
+                      { strategy: 'ordered', orderedSeq: 'CBIR' },
+                      { strategy: 'gk' }]) {
+        const d = schedReplayDelta(ov);
+        assert(d.scheduled === 0, `${ov.strategy} should compile to nothing, got ${d.scheduled}`);
+    }
 });
 
 test('schedule: an unscheduled year draws nothing voluntarily and still funds spending', () => {
@@ -7120,6 +7181,11 @@ test('schedule: malformed entries throw rather than reading as a quiet year', ()
         ['NaN ordTarget', [{ ordTarget: NaN }]],
         ['unknown kind', [{ ordTarget: 100000, kind: 'state' }]],
         ['negative rateBasis', [{ ordTarget: 100000, rateBasis: -5 }]],
+        ['neither ordTarget nor iraDraw', [{ kind: 'federal' }]],
+        ['both ordTarget and iraDraw', [{ ordTarget: 100000, iraDraw: 5000 }]],
+        ['negative iraDraw', [{ iraDraw: -1 }]],
+        ['negative convert', [{ ordTarget: 100000, convert: -1 }]],
+        ['unknown gapFill', [{ ordTarget: 100000, gapFill: 'sideways' }]],
     ];
     for (const [label, plan] of bad) {
         let threw = false;

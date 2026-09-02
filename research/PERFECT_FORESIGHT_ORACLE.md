@@ -303,6 +303,61 @@ total-conversion control on top of these.
 **Scope, stated plainly:** this is a representation, not a search. Nothing here optimizes anything,
 and the search-cost problem in `P103b4` is untouched - ~130 axes against today's ~33.
 
+**Superseded by `P103b3` below**, which added four fields and took the exact count from 5 arms to 8.
+
+## P103b3 - four more fields, and 8 of 11 families now replay exactly
+
+**Run:** 2026-09-01, same harness. Suites **394**/61/22 (5 more tests). `P103b2`'s table above is the
+record of that stage; this is the current state.
+
+| arm | decides per year | scheduled | delta NW | b2 | b3 |
+|---|---|---|---|---|---|
+| Fill Bracket 12/22/24%, IRMAA tier 0/2 | ceiling | 33/33 | $0 | EXACT | **EXACT** |
+| ACA 400% FPL | ceiling until it lapses | 3/33 | $0 | −$841,327 | **EXACT** |
+| IRA Draw 5% | a share of the IRA | 33/33 | $0 | −$1,182,054 | **EXACT** |
+| Reduce 17 yrs | an amortization | 33/33 | $0 | −$1,469,870 | **EXACT** |
+| Proportional +10% | a split, then a boost | 0 | −$823,742 | nothing | nothing |
+| Ordered CBIR | an account sequence | 0 | −$477,380 | nothing | nothing |
+| Guyton-Klinger | the SPEND itself | 0 | +$216,996 | nothing | nothing |
+
+**The four fields.** `iraDraw` - an explicit voluntary IRA draw in nominal dollars, the quantity
+lever, mutually exclusive with `ordTarget`. `gapFill` - per year, `cascade` or `baseline`, because
+which cascade fills the gap is the *other* thing a family decides. `scheduleFallback` - what an
+unscheduled year means, `none` or `baseline`. `convert` - a cap on the surplus routed to Roth.
+
+**Dollars are safe for `iraDraw` and not for a split, which is the distinction the earlier warning
+was really drawing.** `oracleWithdrawalPlan` refuses dollar plans because a *spending* draw's size
+depends on the tax it is trying to cover, so a dollar figure desyncs. A voluntary IRA draw above
+spending has no such loop: it is handed to the tax passes at face value, exactly as the `fixedpct`
+and `fixed` branches hand theirs over.
+
+**"Total conversion control" decomposed into two levers, and only one was missing.** The family
+conversion is a pure REALLOCATION of an already-taxed surplus - the IRA dollars were withdrawn and
+taxed whatever their destination - so converting less does not withdraw less. **Converting less
+GROSS was already solved by `P103b2`**: lower `ordTarget` or `iraDraw`. What was genuinely absent is
+the destination choice, which is what `convert` caps. Both directions now exist: less gross via the
+draw, more gross via `extraConversionAmount`, destination via `convert`.
+
+**Three wrong compilers before the right one, and the lesson generalizes.** Reconstructing the
+voluntary IRA draw from logged outcomes failed three times - gross draw ($39,117 short), gross minus
+RMDs ($191,737 short), and gross again. Downstream the decision is merged with the forced
+withdrawal, split across IRA1/IRA2, netted against conversions and adjusted by the shortfall cascade.
+The fix was to **log the decision** (`-volIRAwd`, captured at the one point where it is still a
+decision) rather than infer it, which is the same move that produced `rateBasis`. **A carrier
+compiles from recorded decisions, not from reconstructed outcomes.**
+
+**And one boolean was worth a whole plan.** With every year correctly scheduled, IRA Draw was still
+$39,117 adrift because a year-0 schedule entry was treated as implying a conversion, which flips the
+withdrawal month from Late to Early for the entire plan. A ceiling implies a conversion; a quantity
+draw does not. The fix is one condition and the test that pins it compares `timingReason`.
+
+**What remains, and it is a coherent boundary rather than a list of leftovers.** The schedule now
+says how much to take from the IRA - as a ceiling or as a quantity - but not **how to split a
+spending draw across accounts** (Proportional, Ordered) and not **what to spend** (Guyton-Klinger).
+The split is `oracleWithdrawalPlan`'s job and it already exists; note that it PREEMPTS the strategy
+branch rather than composing with it, so carrying Ordered means using that hook, not this one.
+Guyton-Klinger is outside the vocabulary by construction: a schedule takes `spendGoal` as given.
+
 ## P51f - trajectory post-mortem (observation only, ships nothing)
 
 - **No harvest-like alternation** (prediction `S3-P3` WRONG again: 1/6 thirds/brokheavy cells with

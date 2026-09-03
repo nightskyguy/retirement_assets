@@ -7984,3 +7984,66 @@ bumped. Findings: "What BrokerageG contains".
 the split family (P104b1), the gap-fill correction (P104b1x), the oracle re-baseline, Cash Reserve default 0
 with its column, the Brokerage columns and the chart scale, and the changelog wording per the user (the
 page entry restored to four bullets after a regex took the middle four with it).
+
+
+## 2026-09-02 (cont.) - planning-file cleanup: findings and the task plan cut roughly in half
+
+User: the two files carry old and obsolete references, including completed tasks. Remove the
+obsolete findings, move completed task descriptions to the completed file but keep the headlines
+marked complete. Goal: less detritus for `plan-with-files` to read on every session.
+
+| file | before | after |
+|---|---|---|
+| `findings.md` | 4,564 | 2,594 |
+| `findings_archive.md` | - | 2,130 (new) |
+| `task_plan.md` | 6,983 | 2,790 |
+| `task_completed.md` | 1,430 | 5,579 |
+
+**`findings.md`.** 34 sections moved verbatim to a new `findings_archive.md`: fixed-defect
+narratives whose defect the code no longer has (the dividend double-credit among them - the user
+named it, and `optimizer_core.js:1744` confirms `possibleIncome` no longer carries dividends or
+interest), claims a later entry in the same file already superseded or withdrew, and the undated
+pre-`Pnn` legacy block. Guyton-Klinger and the pre-TCJA bracket table were lifted back out of that
+legacy block and kept - they are primary-source records for a shipped strategy and for parked `P4`.
+
+What the archived narratives earned is now a **"Rules earned the hard way"** section at the top of
+`findings.md`: eleven rules, each naming the thing that enforces it (`optimizer_core.tests.js:4117`,
+`:4144`, `:4166` for the three `no free money` invariants, `:2880` for the use-site flag guard).
+Three kept subsections whose parent was archived were promoted to `##`: "Two traps this work fell
+into", "Rate-axis monotonicity", "Perf gate baseline" - the last one gained an explicit line naming
+the reference machine, which it had been inheriting from its parent.
+
+**`task_plan.md`.** 39 fully-complete phase sections moved to `task_completed.md` under a new
+`# Archived 2026-09-02 from task_plan.md` banner, bodies verbatim. **Departure from the 2026-08-07
+and 2026-08-31 passes, at the user request: the headings did NOT go with the bodies.** Each phase
+keeps a one-line stub marked `**COMPLETE.**` with its version/PR/date and a pointer, so the plan
+still reads as a record of what shipped and a grep for a phase ID hits in both files.
+
+- **Rescued:** `P91d` (the Monte Carlo controls are in neither the saved scenario nor the share URL)
+  sat inside a phase whose status reads DONE. It stays live under the `P91` stub.
+- **Kept live:** `P19` and `P28j` are PARTIAL, not complete. `P75` keeps its 5 boxes even though it
+  merged into `P103`, and the TPP-1/TPP-2 items under `P46` are still pending.
+- **Deleted outright, not archived:** the `Open Task Index` (stale - still called `P32` and `P56` the
+  O0s, both long complete), the second `Recent state and trail` (superseded by the NOW block, and
+  its own maintenance note said so), the `Dependency Graph` (written in the retired `P1`-`P28`
+  numbering, where "Phase 23" means a different phase than `P23` does today), `Known TODOs` and the
+  empty `Errors Encountered`. Also the duplicate `P35 PR 3 replan` block, which contradicted the
+  settled-decisions table in `P35` about `deathBasisStepUp` and whose real write-ups were already
+  archived; a pointer stub replaces it.
+
+**Citations.** `task_plan.md` cited `findings.md` by line number in 22 places and **about half were
+already dead** before this session - `:170`, `:377` and `:1057` landed on blank lines, `:53`, `:123`,
+`:515`, `:535`, `:559`, `:962` on unrelated text. All 22 are now heading citations, which survive any
+renumbering; two point into `findings_archive.md`. `:53` had no surviving target in either file and
+was dropped, the claim it decorated kept. **`progress.md`, `task_completed.md` and `task_parked.md`
+were deliberately NOT re-cited** - they are frozen historical logs, same rule as 2026-08-29.
+
+**Checks.** Open boxes in `task_plan.md` unchanged at **86** - an open item archived by accident is
+the one failure mode here that costs real work. Line-30 boundary marker still on line 30. Every
+NOW-table ID still resolves to a live section. Zero `findings.md:NNN` citations left in the plan.
+Suites unchanged - no code was touched.
+
+**Bookkeeping.** `FILE_DIRECTORY.md` gained rows for `findings_archive.md`, `task_parked.md`,
+`CLEANUP.md` and `MERGE_PR182_IRMAA.md`. The `p71_probe/` row was checked and is correct - the
+directory still exists. The `task_parked.md` index row for `P5` now says it was un-parked into
+`P103c`. No changelog entry: nothing here is visible to a user.

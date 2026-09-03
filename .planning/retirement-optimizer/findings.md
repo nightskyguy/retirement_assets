@@ -25,6 +25,19 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
   against nothing. ("P88f DONE - the ceiling rows are worth keeping")
 - *A `new Date()` default in a test fixture rots.* Pin the year. ("P89 - the plan's first year had
   two definitions")
+- *The SCORER is where the bugs live, not the measurement.* Nine scoring-predicate defects over two
+  days (2026-08-27/28), every one caught by a number disagreeing with the one printed beside it and
+  not one by review, because a wrong scorer still prints a confident verdict. The species: a
+  predicate reading a field that does not exist (`r.useEarly`, false on every row, so the pin the
+  whole phase rested on could never fail); ties awarded to the first entry in the list; a $1 epsilon
+  applied to a metric measured in fractions, so it tied in every cell mechanically; comparing two
+  different samples; assuming the sign of your own metric. Two of them flipped a recommendation, and
+  one would have shipped a default behavior change on a tie-breaking artifact.
+- *A prediction with no data is UNTESTED, not BROKEN.* Scoring it broken lets an empty table read as
+  a refutation of the thing it failed to measure. Keep a floor below which no direction is claimed.
+- *A fixture inherited without being read is its own failure mode*, distinct from a scorer bug: the
+  scorer was right about the data it was given. `iraBaseGoal: 0` copied wholesale from another
+  harness against a shipped default of $750,000 broke a 186-of-186 claim into 124 counterexamples.
 
 **On engine code**
 
@@ -38,6 +51,26 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
 - *A guard that drops work needs a place to put the work, not just a reliable way to clear itself.*
   Three bugs came from the same in-flight guard; the first two fixes both repaired the stuck flag
   and left the dropped request gone for good. ("P91 DONE - it was a DROPPED REQUEST")
+- *Anything computed off `balance` between `beginYear`'s growth call and `growAndSettle` inherits the
+  `preMonths` 1-vs-11 dependency* - which is set by whether LAST year converted more than $1,000. Two
+  known casualties: the RMD basis (fixed in `P84l`), and an advisor fee that would have moved with
+  whether last year converted had it been struck at its own call site. Use the prior-Dec-31 snapshot.
+- *A regulation constrains the BASIS, not the trajectory.* An invariant demanding identical lifetime
+  RMDs across two timing arms is simply false - timing legitimately changes the balance path - and the
+  first version of it would have condemned a correct fix.
+
+**On the browser, the build and the worker**
+
+- *The page is not the file, and a fresh tab is not a reload.* Browser findings have twice been
+  reported from a tab whose page predated the file on disk.
+- *Never cache-bust this page with a short query param.* The share scheme owns the short names - `g`
+  is Growth and `s` is State, so `?g=1` silently sets growth to 1% and the plan then "fails".
+- *Any new top-level `const`/`function` in `optimizer_core.js`, `taxengine.js` or the montecarlo files
+  must be unique across all five*, because the worker shares one scope. **Node will never tell you.**
+  Guarded by a scan of the five worker-imported files; written against the broken state it found
+  exactly one collision, which is the only way to know a guard works.
+- *A cache token must move with any engine file the test tier depends on*, and stale HTML is the
+  harder half - a warm tab keeps requesting the old token regardless.
 
 **On measurement**
 
@@ -47,6 +80,13 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
 - *Do not report a claim before its alternative has been run.* Several claims in this file were
   scored RIGHT and later withdrawn when a second fixture moved - see "Correcting P103b5c: the two
   fixtures INTERACT" and "Every narrowing of the evidence flattered the answer".
+- *An unbiased forecast is the wrong objective when the loss function is one-sided.* Every adaptive
+  IRMAA-threshold rule beat the shipped constant on average and was WORSE on the downside tail in all
+  four path sources. The constant wins because it is biased in the safe direction: an overshoot costs
+  nothing, an undershoot hits a surcharge cliff.
+- *A prose deferral is invisible to every check the repo has.* A checkbox is greppable and a status
+  line is read; "give it its own item when someone picks it up" inside a sub-bullet is neither, and
+  sat unnoticed until a sweep went looking for that exact shape.
 
 ## P35n endgame: the Phased tail should be a SEQUENCE, Cash -> Roth -> Brokerage - the PR-5 proportional spec is refuted (2026-08-10)
 

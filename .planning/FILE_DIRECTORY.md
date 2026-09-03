@@ -98,6 +98,7 @@ same stub pattern, just within `standalone/` rather than at root.)
 |---|---|
 | `.planning/retirement-optimizer/task_plan.md` | Current/open work — priority list, phase write-ups, status. Linked from the README's "Features in the Works" section. |
 | `.planning/retirement-optimizer/progress.md` | Chronological session log — what was done, when, and why. |
+| `.planning/retirement-optimizer/progress_archived.md` | Session log through 2026-08-19, verbatim. Split out 2026-09-02 so `progress.md` carries only the current work; every phase in here is complete and merged. |
 | `.planning/retirement-optimizer/findings.md` | Investigation write-ups / evidence that informed decisions in `task_plan.md`. |
 | `.planning/task_completed.md` | Archive of fully-completed phases (moved out of `task_plan.md` to keep it scannable). |
 | `.planning/retirement-optimizer/findings_archive.md` | Archive of findings that are no longer live - defects the code no longer has, claims a later finding superseded, and the undated pre-`Pnn` planning block. The rules they earned stay in `findings.md` under "Rules earned the hard way". |

@@ -3653,3 +3653,219 @@ The user-facing copy was trimmed twice before the commit, on the user's instruct
 scenario dollar figures, and the frame is correctness restored rather than behavior changed. The
 release that broke it is named instead (11.168c). The measured numbers live here and in findings.md,
 and in the commit message, which is where the audit trail belongs.
+
+## 2026-09-03 (cont.) - P104b2 (ii): the ten-archetype menu was NOT close enough
+
+Resumed `P104b2` on the user's word. Harness `.test_harnesses/split_fine_harness.js`, 8,640 sims,
+6.4 s, 30 cells (5 mixes x 4%/6% x b20/b50/b80). Exhaustive constant search: 286 vectors on the
+3-simplex at 10% steps, run through the SHIPPED `strategy: 'split'` family, against the same ten
+archetypes `P104a` used - eight of which land on 10% gridpoints and are read out of the same
+simulate() results, so menu-vs-fine is one run and not two.
+
+**First, the engine moved again and it had to be measured, not assumed.** `P105` shipped today and
+every `P104` fixture has a death inside the plan. Scratch A/B (`old_core.js` = this tree minus the
+`P105` lines only): **20 of 30 arm-cells move, all downward, up to $110,611, and ARM-DEPENDENTLY** -
+`defaults3x @4%` moves prop -$91,635, Cash -$78,779, B4C6 -$110,611, so within-cell GAPS shift by
+up to ~$32k. Spend drift $0 everywhere. So the `k=1` numbers below supersede `P104a`'s `k=1`
+column, and they must not be compared against `P104a`'s `k=2` / `k=free`, which are pre-`P105`.
+
+**`F-P1` WRONG, decisively, and this is the result that matters.** The fine grid beats the menu in
+**26 of 27** cells with a gain, headroom under 10% in only **5 of 27**, and the **median headroom is
+76.4%**. Worst case `brokheavy @4% b20`: menu $112,467, fine **$791,291** (604%). In **three** cells
+the menu found nothing at all (`family` won, $0) while the fine grid found $354,823-$636,049. The
+menu is not a grid, it is the oracle's hand-written list, and `b3` cannot read its rows off
+`P104a`'s winners.
+
+**`F-P2` RIGHT, 30 of 30**: every fine winner is a blend of two or more accounts. No shipped family
+can express any of them.
+
+**`F-P3` RIGHT**: basis moves SIZE, not identity - Brokerage share non-decreasing from b20 to b80 in
+8 of 10 mix-rate pairs, dominant account unchanged in 9 of 10. **The grid does not need per-basis
+rows**, which is the cheap half of the budget question.
+
+**`F-P4` RIGHT**: 18 distinct winners over 30 cells, the most frequent only 5 of 30. Regime-dependent,
+the same shape as `G-P1`'s failure in `P103d`.
+
+**The grid, measured rather than argued** (greedy cover on capture, where capture is
+`(score(v) - base) / (fineBest - base)`; 1.0 is perfect per-cell hindsight, 0 is the shipped
+default, negative is WORSE than the default):
+
+| grid | mean capture | worst cell |
+|---|---|---|
+| `B7C2R1` | 64.9% | 20.2% |
+| `+ I5C4R1` | 83.6% | 37.8% |
+| `+ B6C2R2` | 89.0% | 49.0% |
+| `+ B9C1` | 93.3% | 59.7% |
+
+Three vectors reach 89% of the achievable constant-split gain and never fall below half of it. All
+286 vectors are feasible in every cell, so feasibility is not a constraint here; but two of the
+top-eight singles have NEGATIVE worst-cell capture (`I2B5C2R1` -27.7%, `I1B5C3R1` -37.5%), i.e. worse
+than today's default somewhere, which is exactly what a shipped row must not be.
+
+**Trust boundary, unchanged:** every number above has perfect foresight on one path per cell. The
+greedy grid is a CANDIDATE GENERATOR for (iii), not a recommendation. `P103e` is the standing proof
+that a single-path winner can reach 0% survival out of sample.
+
+## 2026-09-03 (cont.) - P104b2 (iii) and (iv): the kill switch did not fire, and the report is written
+
+**(iii) Monte Carlo selection.** New harness `.test_harnesses/split_mc_harness.js` on
+`gk_drawrule_mc_harness.js`'s structure: 21,600 sims, 6 cells x GBM/bootstrap/AAM x 100 paths x 12
+arms (Proportional +0% as incumbent, the greedy-cover vectors, the per-cell single-path argmaxes,
+four menu archetypes). Same banks, seed and path index for every arm. Median and p10 wealth, median
+spend, survival - never an argmax. This **discharges `P104d`** for the constant split.
+
+**`V-P4` RIGHT 6 of 6. The kill switch did not fire and `b3` may proceed.** Between 4 and 10 of the
+eleven vectors clear the incumbent's median in all three modes with survival held, in every cell.
+
+| vector | cells won | median gain | worst p10 | worst survival |
+|---|---|---|---|---|
+| `B9C1` | **6/6** | $747,009 | -$144,762 | 0pp |
+| `B7C1R2` | 5/6 | $784,269 | -$123,599 | 0pp |
+| `B6C2R2` | 5/6 | $677,832 | -$341,155 | 0pp |
+| `I5C4R1` | 4/6 | $261,694 | -$211,284 | -1pp |
+| `B7C2R1` (cover's #1) | **1/6** | $55,047 | -$456,465 | -1pp |
+| `Cash` | 3/6 | $248,133 | -$516,573 | -1pp |
+
+`V-P3` RIGHT 18/18 - median-best is a blend in every mode-cell, never a single account. `V-P1` RIGHT
+- Cash loses survival in 1 of 6 bootstrap cells and is median-best in 0 of 6. `V-P2` was scored by
+(ii) as `F-P1`: WRONG.
+
+**The finding worth carrying forward** is in findings.md as rule 4 of "The menu was never a grid":
+the single-path greedy cover ranks candidates in nearly the REVERSE of their out-of-sample order.
+`B7C2R1` had the best mean capture over 30 hindsight cells and wins 1 of 6 under uncertainty;
+`B9C1`, added last by the cover, wins 6 of 6. Passing the MC gate is not the same as being SELECTED
+under uncertainty.
+
+**(iv) Report.** `research/CONSTANT_SPLIT.md`, written for a reader with none of the context per the
+`research/` conventions: a reading guide up front defining vectors, cells, modes, capture and every
+prediction id before first use, named for its subject rather than the phase. Rows added to
+`research/README.md` and to `research/HARNESSES.md` (catalog row, status row and detail section for
+both new harnesses) in the same change.
+
+**The REVIEW POINT is now live** with numbers in hand. Recommended grid in evidence order: `B9C1`,
+`B7C1R2`, `B6C2R2`, and `I5C4R1` as the one IRA-leaning row. Do not ship `B7C2R1`, `Cash`, `Brok` or
+`I5C5`. Label candidates unchanged: **Fixed Split** (recommended), Set Split, Custom Mix.
+
+**One caveat is a product decision, not a footnote:** every vector tested lowers the 10th percentile
+in at least one mode-cell. A fixed split raises the median and holds survival but can cost in the
+bad case, and that belongs in the UI copy for a row a user can pick.
+
+Suites untouched at 411/61/22 - no product code in this session's `P104b2` work. Uncommitted, and
+NOT added to PR #211, which is the RMD/Break Even release; research and planning for `P104b2` want
+their own commit or branch.
+
+## 2026-09-03 (cont.) - P104b3: Fixed Split ships, nerdknob-gated (v11.1719)
+
+User: *"yes, build it"*, then mid-build: *"any new strategy/experimental feature should be guarded
+by nerdknob until it's been fully fleshed out."* Both applied.
+
+**The gate reshaped the change, for the better.** Monte Carlo has no nerdknob, so vectors in
+`MC_GRIDS` would have been rows every user sees. `MC_GRIDS` therefore carries **no** `split` at all,
+and `buildStrategyFamilies` emits the family only when a caller passes `splitFamily: true`, which
+the Optimizer does behind `NERD_KNOBS`. Two independent locks. The consequence that saved the most
+work: **with the family off by default, both sweep goldens still pass untouched**, so the browser
+capture the plan budgeted for is not needed until the gate comes off.
+
+**Shipped:** `SPLIT_VECTORS` (the four MC-selected vectors), `splitVectorLabel` / `splitVectorSortVal`,
+the `Fixed Split` family in `buildStrategyFamilies`, an `offGridParamFor` case so a user's own mix
+gets its own row, the `#ui-split` panel (four relative-weight fields), `getInputs`, four share keys
+(`swi`/`swb`/`swc`/`swr`), `applyScenario`, the row-click adopt path, the gated menu entry, and
+`updateSplitMixNote()` - which is also the first consumer of the engine's `splitWeightsInvalid`.
+
+**Share keys are four scalars, not the packed `sw` the plan named.** `buildShareURL` and
+`loadFromURL` are both DOM-driven, so four plain fields round-trip with no parse step; a
+hand-written parse for a packed value is the shape of the still-open `P95` ACA defect.
+
+**A live defect found while building** - findings.md, "The row's strategy selection is a hand-kept
+list": `_selection` omitted `splitWeights`, so clicking a Fixed Split row left the sidebar's old
+mix. Browser-reproduced, then fixed structurally with `...selectionOf(inputs)`.
+
+**Browser-verified at v11.1719, both gate states.** Knob OFF: menu entry hidden AND disabled, panel
+hidden, badge 🟢, 1,020 tests. Knob ON: 21 Fixed Split rows including the 📍 current-plan row and
+the 🗘/💵/(no conv) clones; share round-trip `str=split&swi=2&swb=3&swc=4&swr=1` restores strategy,
+all four fields, the panel and the note; the all-zero mix shows the fallback warning; adopting
+`Brok 60 / Cash 20 / Roth 20` moved the sidebar from 2/3/4/1 to 0/6/2/2.
+
+**Suites 415 / 61 / 22**, four tests added (grid shape and no single-account vector, relative-scale
+invariance, the gate in both states plus MC's isolation, and the off-grid leak guard). Counts
+reconciled. `ARCHITECTURE.md` gains a `split` section and the dispatch diagram gains its branch.
+
+**Deliberately NOT done:** no changelog entry, because a nerdknob-gated family is not something a
+user can see or feel - the 11.1718 entry was restamped 11.1719 and still describes only the RMD and
+Break Even work. The README strategy paragraph is deferred for the same reason; both are part of
+un-gating, along with adding the vectors to `MC_GRIDS` and regenerating the two goldens.
+
+## 2026-09-03 (cont.) - P104b3 follow-up: the mix is a PRESET PICKER, not four raw fields
+
+User, on seeing the build: *"I thought the 'Draw Mixes' were going to be the 4 preset ones
+proposed. And is Optimizer going to sweep all draw mixes, is that the plan?"* Two answers, then a
+change.
+
+**The sweep was already only the four**, and never the 286-vector simplex - that lived in the
+research harness alone. Each vector costs **4 rows** (main + 🗘/🔄 cyclic + 💵 cash; `split` is in
+`ROTH_GAP_EXCLUDED` so no 🅡), plus a (no conv) variant, measured at 179 -> 199 rows with the knob
+on. The full simplex would have been ~1,144 rows against a table of ~180, which is why the research
+existed.
+
+**What was wrong was the PANEL**, which was four free-form fields following the IRA-Draw-% /
+Fill-Bracket-% convention. Chosen by the user (option 3 of 3): a **dropdown of the four measured
+mixes plus "Custom mix..."**, which reveals the fields.
+
+**The design that keeps it cheap:** the four fields remain the SOURCE OF TRUTH. The picker writes
+them and derives its own selection back from them, so `getInputs`, the four share keys, the saved
+scenario and the row-click adopt path all keep working on the fields alone and none of them knows
+the menu exists. The menu is built by `generateSplitPresetOptions()` FROM `SPLIT_VECTORS`, so it
+cannot drift from the grid the Optimizer sweeps, and the select carries `data-no-share` because it
+is derived state, not an input.
+
+**Browser-verified at v11.1719:** menu reads the four labels plus Custom; a link carrying a preset
+mix selects that preset with the fields hidden; switching to Custom reveals them with values intact;
+editing a field falls back to Custom and the note updates live; picking a preset rewrites the fields.
+**Scale invariance holds through the picker** - a link with 0/90/10/0 selects `Brok 90 / Cash 10`
+and adds NO extra swept row (6 rows carry that label: 5 passes + the 📍 current-plan row, and no
+off-grid twin). Adopting `IRA 50 / Cash 40 / Roth 10` selects that preset and hides the fields.
+
+Suites 415/61/22 unchanged - the picker is UI only, and the four node tests pin the grid it is built
+from.
+
+## 2026-09-03 (cont.) - Fixed Split moved to ?nerdknob=split and put ON PROBATION (v11.171f)
+
+User's own framing, and it is the engine's real structure rather than an analogy: **spend plan**
+(the default After-Tax Spend + Spend Delta, or GK) versus **withdrawal plan** (how that spending is
+sourced). `spendRule` is separable from `strategy` (`optimizer_core.js:2031`, `P103b5b`), so
+"GK or a Fill strategy supplies the spend plan, something else supplies the draw" is a composition
+the engine already supports today.
+
+**The user's verdict on Fixed Split, from their own scenario:** top ten under only 2 of 9 goals
+(Maximum Net Wealth, Balanced); no mechanism to grow Roth beyond declining to spend it; GK ranks
+114th once Roth Conversion is added; and **Ordered CIBR beats every Fixed Split variation**.
+Decision: keep it for further testing behind a NAMED sub-knob, flag every piece of logic so it can
+be removed cleanly if it stays unfruitful.
+
+**Built:** `SPLIT_FEATURE = ...get('nerdknob') === 'split'`, mirroring `GOAL_FIRST`'s `?nerdknob=goal`
+(`P102b7`). The plain `?nerdknob` no longer reveals it. Three gates moved off `NERD_KNOBS`: the sweep
+opt, the panel, the menu entry. A **REMOVAL MANIFEST** sits in the `SPLIT_FEATURE` comment block
+listing every site in all five files, split into the `P104b1` ENGINE half (which could stay as a
+research input) and the `P104b3` SWEEP half (the part on probation).
+
+**The counter-argument is recorded beside the manifest rather than argued here.** The single-path
+comparison that ranks Ordered CIBR first is the one `P103e` exists to distrust: CIBR won that
+bake-off too and then reached **0% survival** under bootstrap, while the four split vectors were
+selected on median AND survival across three return models. Both sides are in the code comment so
+whoever decides later has them together.
+
+**Help text fixed, and it was wrong twice.** The spill order is hard-coded IRA -> Brokerage -> Cash
+-> Roth for every mix regardless of weights, so "the other accounts in order" was false for
+`IRA 50 / Cash 40 / Roth 10` (first fallback is IRA, already in the mix) and misleading for
+`Brok 90 / Cash 10` (first fallback is IRA, not the brokerage the label leads with). Now: *"If a
+year needs more, the rest comes from IRA, then Brokerage, then Cash, then Roth."* Same correction
+in the panel tooltip.
+
+**Browser-verified at v11.171f:** plain `?nerdknob` -> `SPLIT_FEATURE` false, menu entry hidden AND
+disabled; `?nerdknob=split` -> visible, panel open, 21 Fixed Split rows, note reads the real order.
+Suites 415/61/22.
+
+**Open question the user raised and nobody has measured:** whether Reduce and IRA Draw would do
+better switching draw strategy partway (e.g. once the IRA Goal is reached and held). That is the
+"Phased Strategy" idea and it is `P104c`'s one-switch measurement, still unbuilt - `P104a` found one
+switch reaching 85-100% of the full per-year optimum in 7 of 10 cells on the pre-v11.1701 engine.

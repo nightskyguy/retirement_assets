@@ -1056,9 +1056,18 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
     // (-$1,237), final NW 9,188,056.866412 -> 9,239,367.301350 (+$51,310). Adjustment count still 3.
     // More spending AND more wealth from the same inputs is the signature of a withdrawal that was
     // being made and unmade rather than a valuation change.
+    // Re-pinned at P105 (2026-09-03). This fixture has the first death in 2052 with $1.5M still
+    // in IRA1, and the survivor's RMD for 2053 was struck off their own $96k rather than the
+    // inherited total, so a year of required distribution went missing. Tax 1,924,412.061480 ->
+    // 1,973,741.021986 (+$49,329), final NW 9,239,367.301350 -> 9,207,491.698594 (-$31,876), spend
+    // unchanged to the cent and the guardrail count still 3. Higher tax and lower ending wealth is
+    // the only possible direction: the household now distributes, and pays ordinary rates on,
+    // $242,194 it previously kept deferred in 2053. Years 2054-2056 each fall $11k-$14k, which is
+    // the knock-on and not a second effect - the larger 2053 draw leaves a smaller balance for the
+    // next year's basis.
     assertNear(gk.totals.spend, 7447682.634423317, 'GK total spend', 0.01);
-    assertNear(gk.totals.tax, 1924412.0614801398, 'GK total tax', 0.01);
-    assertNear(gk.finalNW, 9239367.301350132, 'GK final net worth', 0.01);
+    assertNear(gk.totals.tax, 1973741.0219859004, 'GK total tax', 0.01);
+    assertNear(gk.finalNW, 9207491.698593603, 'GK final net worth', 0.01);
     assert(gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length === 3,
         `Expected 3 guardrail adjustments, got ${gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length}`);
 });
@@ -2763,6 +2772,52 @@ test('P84o: year 0 keys off the balance AS TYPED, and that limitation is pinned 
         `year 0's RMD must be the TYPED balance over a divisor, got factor ${factor}`, 1e-6);
 });
 
+// ── P105: the survivor's RMD basis includes what they just inherited ────
+// Reported from a share link, 2026-09-03: on a plan whose first spouse died holding $2.13M, the
+// household's entire RMD for the next year was 12.8% of the survivor's own $79k. computeIncome
+// moves the decedent's IRA into the survivor's account at the top of the year, but the basis was
+// read from the prior December 31 SPLIT, where that money was still the decedent's - and a dead
+// person's RMD is zeroed, so it was charged to nobody. Exactly one year went missing per death,
+// because by the following year the prior year-end split had the money in the right account.
+//
+// Both tests derive their expected value from the run's OWN prior row rather than a captured
+// dollar figure. A magic number here would pass just as well against a basis that happened to sum
+// to the same total, and the whole defect was a basis that looked plausible.
+test.critical("P105: the survivor's first RMD is struck off the inherited balance, not only their own", () => {
+    // CAP_BASE: person 1 born 1960 dies at 74, so they never reach their own RMD age of 75 and
+    // every RMD in this plan is person 2's. The first survivor year is therefore the cleanest
+    // possible read - one living owner, one divisor, two prior-year balances.
+    const r = simulate({ ...CAP_BASE, strategy: 'fixed' });
+    const i = r.log.findIndex(row => row.age1 === '—');
+    assert(i > 0, 'fixture must have a first death inside the plan, with a prior year to read');
+    const prev = r.log[i - 1], now = r.log[i];
+    const inherited = prev.IRA1 || 0, own = prev.IRA2 || 0;
+    assert(inherited > 20 * own,
+        `fixture must leave most of the money in the DECEDENT's account, got ${Math.round(inherited)} vs ${Math.round(own)}`);
+    const pct = now['RMD%'];
+    const charged = (now['RMD1-'] || 0) + (now['RMD2-'] || 0);
+    assertNear(charged, pct * (inherited + own),
+        `the survivor's first RMD must be struck off both balances (own-only would be ${Math.round(pct * own)})`, 1);
+    // And the old behavior must not be able to satisfy the assertion above: the two figures are
+    // not close, they differ by an order of magnitude on this fixture.
+    assert(charged > 10 * pct * own,
+        `own-only vs combined must be far apart or this test guards nothing: ${Math.round(charged)} vs ${Math.round(pct * own)}`);
+});
+
+test('P105: the inheritance term self-extinguishes, so the year after is not double-counted', () => {
+    // The added term reads the DECEDENT's prior year-end balance, which is zero once their account
+    // has been empty for a full year. If it did not extinguish, every later survivor year would
+    // charge the inherited money twice.
+    const r = simulate({ ...CAP_BASE, strategy: 'fixed' });
+    const i = r.log.findIndex(row => row.age1 === '—');
+    assert(i > 0 && r.log[i + 1], 'fixture must run at least two years past the first death');
+    const prev = r.log[i], now = r.log[i + 1];
+    assert((prev.IRA1 || 0) === 0, "the decedent's account must be empty at the end of the inheritance year");
+    const charged = (now['RMD1-'] || 0) + (now['RMD2-'] || 0);
+    assertNear(charged, now['RMD%'] * (prev.IRA2 || 0),
+        "the year after inheritance is the survivor's own balance and nothing more", 1);
+});
+
 // ── P38 PR 3: the primary draw is sized net of the tax on guaranteed income ───
 // PR 2 widened the forced-IRA backstop so the shortfall stopped stranding. That treated the
 // symptom: the backstop was making up, year after year, for a first-pass draw that was too small
@@ -2799,7 +2854,14 @@ test('P38: the primary draw funds the tax on guaranteed income, not the backstop
     // the residual pass into funding tax on money nobody needed. With the phantom gap gone the
     // residual is smaller and the backstop reaches less far. The measurement this test exists for
     // (the primary draw sizing the tax on guaranteed income) is unchanged.
-    assertNear(_sumForcedIRA(r.log), 30942.748, 'forced-IRA total once the draw is sized correctly', 1);
+    // 30,943 -> 20,309 at P105 (2026-09-03), DOWN, and it is the same finding this test's P84l
+    // paragraph describes, seen from the other side. CAP_BASE's person 1 dies at 74 holding $1.68M,
+    // and the survivor's RMD for the following year was struck off their own $75k instead of the
+    // inherited total. That year now distributes $78,203 more on its own, so the backstop - which
+    // is what ForcedIRA counts - reaches less far. More RMD income and a smaller backstop are one
+    // fact, not two. The measurement this test exists for (the primary draw sizing the tax on
+    // guaranteed income) is untouched.
+    assertNear(_sumForcedIRA(r.log), 20309.022, 'forced-IRA total once the draw is sized correctly', 1);
 });
 
 test('P38: sizing by a flat nominal rate would badly over-draw an SS-heavy household', () => {
@@ -6315,16 +6377,33 @@ test('OPT_GOLDEN: the Optimizer sweeps the two families MC does not, on its own 
         'a Fill Bracket row must disable the IRMAA ceiling explicitly');
 });
 
-test('earliestbe: earliest year wins; ties break on real-dollar after-tax net wealth', () => {
-    const row = (id, be, nw) => ({ _id: id, _convBEYear: be, afterTaxNWCurrentDollars: nw,
-                                   totals: { success: true } });
+test('earliestbe: earliest year wins; ties break on Final Roth, then net wealth', () => {
+    // The user's order, 2026-09-03, and Roth LEADS net wealth: `wealthLead` is five times richer
+    // than `rothLead` and still ranks below it. That is the whole content of the change - net
+    // wealth used to be the only tie key, and `wealthLead` came first.
+    const row = (id, be, nw, roth) => ({ _id: id, _convBEYear: be, afterTaxNWCurrentDollars: nw,
+                                         totals: { success: true, terminal: { roth } } });
     const ranked = rankRowsByObjective(
-        [row('late', 2040, 9e6), row('tieLow', 2032, 1e6), row('none', null, 9.9e6), row('tieHigh', 2032, 5e6)],
+        [row('late', 2040, 9e6, 9e6), row('rothLead', 2032, 1e6, 900000),
+         row('none', null, 9.9e6, 9.9e6), row('wealthLead', 2032, 5e6, 100000),
+         row('rothLeadRicher', 2032, 9e6, 900000)],
         'earliestbe');
-    assert(ranked[0]._id === 'tieHigh', `tie must go to the higher net wealth, got ${ranked[0]._id}`);
-    assert(ranked[1]._id === 'tieLow',  `then its poorer twin, got ${ranked[1]._id}`);
-    assert(ranked[2]._id === 'late',    `then the later break-even, got ${ranked[2]._id}`);
-    assert(ranked[3]._id === 'none',    'a row with no break-even can never outrank one that has it');
+    const order = ranked.map(r => r._id).join(',');
+    assert(order === 'rothLeadRicher,rothLead,wealthLead,late,none',
+        `earliest year, then Final Roth, then net wealth: got ${order}`);
+});
+
+test('earliestbe shows the balances its ties are decided on', () => {
+    // A reader looking at two rows that broke even in the same year has to be able to see what
+    // separated them, so both tie keys are on screen. Final IRA rides along because it is the
+    // balance the conversions were drawn from.
+    const list = OPT_OBJECTIVE_COLUMNS.earliestbe;
+    for (const k of ['finalRoth', 'finalIRA', 'afterTaxNW']) {
+        assert(list.includes(k), `earliestbe must show ${k}: ${list.join(',')}`);
+    }
+    const chain = OPTIMIZER_OBJECTIVES.earliestbe.tiebreak || [];
+    assert(chain[0] === 'finalRoth' && chain[1] === 'netWealth',
+        `ties must lead Final Roth then net wealth, got ${chain.slice(0, 2).join(',')}`);
 });
 
 test('earliestbe: a swept row simulated with computeOC actually reports a break-even year', () => {

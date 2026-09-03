@@ -1696,9 +1696,26 @@ function computeIncome(sim, yr) {
     let rmd2Pct = getRMDPercentage(sim.currentYear, birthyear2);
     // P84l: struck off the PRIOR DECEMBER 31 balance, not the current mid-year one. See the
     // snapshot in beginYear for the regulation and for what reading `balance` here used to cost.
-    yr.rmd1 = yr.alive1 ? (sim.priorYearEnd?.IRA1 ?? balance.IRA1) * yr.rmd1Pct || 0 : 0;
-    yr.rmd2 = yr.alive2 ? (sim.priorYearEnd?.IRA2 ?? balance.IRA2) * rmd2Pct || 0 : 0;
-    yr.rmd1Pct = Math.max(yr.rmd1Pct, rmd2Pct, 0);
+    //
+    // P105: and the INHERITED balance belongs to the survivor in the year it lands. Step 1 above
+    // moves the decedent's IRA into the survivor's account at the top of this year, but the basis
+    // read here is the prior December 31 SPLIT, in which that money was still the decedent's. A
+    // dead person's RMD is zeroed by the guard below, so charging the basis to them charged it to
+    // nobody: on a plan where the first spouse died holding $2.13M, the household's whole RMD for
+    // the following year was 12.8% of the survivor's own $79k, and $273k of required distribution
+    // simply did not happen. The year AFTER that recovered on its own, because by then the prior
+    // year-end split had the money in the right account - which is why exactly one year went
+    // missing per death and it took a share link to notice.
+    //
+    // The survivor's own divisor and their own age, which is the treat-as-own election: if they
+    // are under their RMD age their percentage is 0 and the inherited money is not distributed at
+    // all, correctly. The added term self-extinguishes - once the decedent's account has been
+    // zeroed for a full year, their prior year-end balance is 0 and the sum is unchanged - so
+    // this cannot double-count in later years.
+    const _pIRA1 = sim.priorYearEnd?.IRA1 ?? balance.IRA1;
+    const _pIRA2 = sim.priorYearEnd?.IRA2 ?? balance.IRA2;
+    yr.rmd1 = yr.alive1 ? (_pIRA1 + (yr.alive2 ? 0 : _pIRA2)) * yr.rmd1Pct || 0 : 0;
+    yr.rmd2 = yr.alive2 ? (_pIRA2 + (yr.alive1 ? 0 : _pIRA1)) * rmd2Pct || 0 : 0;
     yr.rmd1Pct = Math.max(yr.rmd1Pct, rmd2Pct, 0);
 
     // QCDs: leave IRA tax-free to charity (age 70.5+). Satisfy RMDs without adding to taxable income/MAGI.
@@ -4828,17 +4845,20 @@ const OPTIMIZER_OBJECTIVES = {
     conveffect:{ dir: 'desc', metric: r => r._convSavings ?? -Infinity,
                  tiebreak: ['finalRoth', 'breakEven', 'netWealth', 'remainIRA', 'spread', 'lifeTax', 'spend'] },
     // Earliest Break Even: the year a strategy's conversions permanently overtake the same strategy
-    // without them. Ties are common (the year is an integer and many strategies cross together), so
-    // they break on real-dollar after-tax net wealth -- the same measure `networth` and the ⚓
-    // baseline pick use, so "higher net wealth" means one thing everywhere in the table. Rows with
-    // no break-even (null: no conversions, or the lead never sustains) sort last via the 9999
-    // sentinel and can never outrank a row that actually has a year.
-    earliestbe:{
-        dir: 'asc',
-        rank: (rows) => [...rows].sort((a, b) =>
-            ((a._convBEYear ?? 9999) - (b._convBEYear ?? 9999))
-            || ((b.afterTaxNWCurrentDollars ?? -Infinity) - (a.afterTaxNWCurrentDollars ?? -Infinity))),
-    },
+    // without them. Ties are common - the year is an integer and many strategies cross together -
+    // and the user's order for them (2026-09-03) is the ROTH BALANCE left, then real-dollar
+    // after-tax net wealth. Same lead as `conveffect`, for the same reason: this goal asks a
+    // question about conversions, so the account the conversions built answers it better than the
+    // wealth total every other goal already leads on. Rows with no break-even (null: no
+    // conversions, or the lead never sustains) sort last via the 9999 sentinel and can never
+    // outrank a row that actually has a year.
+    //
+    // A metric plus a NAMED CHAIN, not a custom ranker. The hand-written two-key sort this replaced
+    // stopped at net wealth and left every row past that in results-array order, which is the
+    // defect P100b3 exists to remove; compareByTiebreakChain carries the remaining keys and the
+    // `_id` backstop, so the order is total.
+    earliestbe:{ dir: 'asc', metric: r => r._convBEYear ?? 9999,
+                 tiebreak: ['finalRoth', 'netWealth', 'remainIRA', 'spend', 'lifeTax', 'spread'] },
 };
 
 // ============================================================================
@@ -4898,7 +4918,10 @@ const OPT_OBJECTIVE_COLUMNS = Object.freeze({
     maxroth:    ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','finalRoth'],
     balanced:   ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','spend'],
     conveffect: ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','convBE','convSaved','finalRoth'],
-    earliestbe: ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','convBE','convSaved'],
+    // finalIRA and finalRoth are here because the tie keys are: a reader looking at two rows that
+    // broke even in the same year needs the number that separated them on screen, and the pre-tax
+    // balance beside it is what the conversions were drawn from.
+    earliestbe: ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','convBE','convSaved','finalIRA','finalRoth'],
 });
 
 // The two conversion goals rank on numbers that only a CONVERTING row has. The ⚓ baseline is drawn
@@ -4951,7 +4974,7 @@ const OPT_OBJECTIVE_BLURB = Object.freeze({
     maxroth:    'Rows are ranked by Final Roth, the balance nobody pays tax on again, yours or your heirs.',
     balanced:   'Rows are ranked by End Wealth and Spendable together, so neither is bought at the expense of the other.',
     conveffect: 'Rows are ranked by Conv Tax, the lifetime tax the extra conversions saved. Only the conversion-optimized rows carry it.',
-    earliestbe: 'Rows are ranked by Break Even, the year conversions permanently overtake not converting. Earlier is better.',
+    earliestbe: 'Rows are ranked by Break Even, the year conversions permanently overtake not converting. Earlier is better. Two plans that break even in the same year are ordered by Final Roth, then End Wealth.',
 });
 
 // True when a goal's column list contains the column its own ranking metric reads. Exported so the
@@ -5166,10 +5189,10 @@ function rankRowsByObjective(rows, objKey, rate = 0) {
     const fail = rows.filter(r => !(r.totals && r.totals.success));
     let orderedSucc;
     if (obj.rank) {
-        // Custom rankers carry their own tie handling - `earliestbe` already breaks on after-tax net
-        // wealth, `taxflex` runs a two-stage sort - so the chain is not imposed on them here. They
-        // are the two objectives whose ordering is not a single metric, and a blanket re-sort would
-        // undo the thing that makes them custom.
+        // A custom ranker carries its own tie handling, so the chain is not imposed on it here:
+        // `taxflex` runs a two-stage sort and a blanket re-sort would undo the thing that makes it
+        // custom. It is the only one left. `earliestbe` was the other until it moved to a metric
+        // plus a named chain, which is what makes its tie keys past the first one work at all.
         orderedSucc = obj.rank(succ, rate);
     } else {
         const sign = obj.dir === 'asc' ? 1 : -1;

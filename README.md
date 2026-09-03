@@ -814,7 +814,7 @@ The tool provides a built-in diagnostic called **Stop-Year** that identifies the
    - Click **"Stop after YYYY ▸"** to apply it one-click
    - It often differs from Break-Even by significant amounts ($662k+ in some scenarios)
 4. **"Optimize for" selector** re-orders the whole Optimizer table by the goal you pick, and moves the ⚓ baseline to match. There are nine choices, shown here in order you might use them for efficient Roth Conversions:
-   - **Earliest Break Even**: Soonest year conversions permanently pull ahead, ties broken on net wealth
+   - **Earliest Break Even**: Soonest year conversions permanently pull ahead, ties broken on the ending Roth balance, then net wealth. Both, and the ending IRA balance, are columns in the table
    - **Roth Conversion Effectiveness**: Ranks by how much the conversions themselves gained
    - **Maximum Roth**: Largest ending Roth balance
    - **Avoiding Widow & RMD Tax**: Least RMD tax paid during the plan *plus* the tax still owed on whatever pre-tax IRA is left at the end

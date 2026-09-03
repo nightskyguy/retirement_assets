@@ -17,6 +17,27 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1718"></a>
+
+## 11.1718
+
+### The required distribution on an inherited IRA is calculated again
+
+For the first year after a spouse's death, no RMD was taken on the IRA the survivor took over. This
+broke in 11.168c and is fixed, so a plan with a death inside it distributes and taxes that year
+correctly. Spending does not move.
+
+### Earliest Break Even breaks ties on the ending Roth balance
+
+Under *Optimize for* -> *Earliest Break Even*, two plans that break even in the same year are now
+ordered by the ending Roth balance, and by End Wealth only when that ties as well, so the row at the
+top of that goal can differ and the "Earliest Break Even" marker in the Best table moves with it.
+That goal's table also carries **Final Roth**, the balance that separated the two plans, and
+**Final IRA**, the pre-tax balance the conversions were drawn from. Every other goal's order is
+untouched.
+
+---
+
 <a id="11.1703"></a>
 
 ## 11.1703

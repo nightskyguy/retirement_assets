@@ -2080,16 +2080,14 @@ function renderOptimizerTable(results) {
         colWinners.afterTaxNW = w6._id;
         // Earliest Break Even - the year conversions permanently overtake the same strategy without
         // them. Only rows that HAVE a break-even can win: a plan that never converts has none, and
-        // the 9999 sort sentinel must not be allowed to look like the earliest year. Ties break on
-        // real-dollar after-tax net wealth, the same rule OPTIMIZER_OBJECTIVES.earliestbe uses.
+        // the 9999 sort sentinel must not be allowed to look like the earliest year.
+        //
+        // Ordered THROUGH rankRows, so the badge and Rank 1 cannot disagree. The hand-written copy
+        // of the tie rule that used to sit here broke ties on net wealth, and when the objective's
+        // ties moved to the Roth balance first it would have gone on awarding the badge to the
+        // other row - two rules for one question, drifting apart silently. One rule, in core.
         const beRows = feasibleSuccesses.filter(r => r._convBEYear != null);
-        if (beRows.length > 0) {
-            // Negative = the first argument is better (earlier year; equal years -> greater wealth).
-            const beBetter = (x, y) => (x._convBEYear - y._convBEYear)
-                || ((y.afterTaxNWCurrentDollars ?? -Infinity) - (x.afterTaxNWCurrentDollars ?? -Infinity));
-            const w7 = beRows.reduce((a, b) => (beBetter(b, a) < 0 ? b : a));
-            colWinners.convBE = w7._id;
-        }
+        if (beRows.length > 0) colWinners.convBE = rankRows(beRows, 'earliestbe')[0]._id;
     }
     // A row counts as "Best" only for a metric the reader can actually see. bestIds drives the
     // whole-row green and the bold, and the legend promises a highlighted cell explains it - a

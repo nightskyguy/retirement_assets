@@ -32,6 +32,54 @@ let NERD_KNOBS = new URLSearchParams(location.search).has('nerdknob');
 // the plain knob for everything else, because has('nerdknob') is true for it.
 const GOAL_FIRST = new URLSearchParams(location.search).get('nerdknob') === 'goal';
 
+// ============================================================================
+// SPLIT_FEATURE  --  the Fixed Split withdrawal family (P104b3), ON PROBATION
+// ============================================================================
+// Gated one notch deeper than the nerdknob, the same way GOAL_FIRST is: it shows only at the
+// literal ?nerdknob=split. The plain ?nerdknob does NOT reveal it.
+//
+// WHY IT IS ON PROBATION (user, 2026-09-03). On a real scenario Fixed Split reached the top ten
+// under only two of the nine goals (Maximum Net Wealth and Balanced), it has no mechanism to grow
+// a Roth balance other than declining to spend it, and Ordered CIBR beat every Fixed Split
+// variation on that single path. The user's decision: keep it available for further testing,
+// clearly flagged, and remove it outright if it keeps failing to earn its rows.
+//
+// The counter-argument, recorded so a later reader weighs both: the single-path comparison is the
+// one P103e was built to distrust. Ordered CIBR won that bake-off too and then reached 0% survival
+// under bootstrap resampling, while the four Fixed Split vectors were selected on median AND
+// survival across three return models. See research/CONSTANT_SPLIT.md.
+//
+// ── REMOVAL MANIFEST ────────────────────────────────────────────────────────────────────────
+// Everything the feature owns, so it can be taken out in one pass. Every site is tagged `P104b3`
+// or `P104b1` in a comment; `grep -n "split\|Split" optimizer_core.js optimizer_ui.js` finds them.
+//
+//   optimizer_core.js  ENGINE (P104b1, keep if the sweep family goes but the input stays):
+//     _splitWeightsFor()                    the vector validator + order/weight shape
+//     planPrimaryWithdrawals                the `strategy === 'split'` branch
+//     fillSpendingGap                       the gap-fill mirror of the same weights
+//     totals.splitWeightsInvalid            malformed-vector flag
+//     STRATEGY_SELECTION_FIELDS             'splitWeights'
+//     sameStrategySelection                 the element-wise 'split' compare
+//     ROTH_GAP_EXCLUDED                     'split'
+//   optimizer_core.js  SWEEP (P104b3, the part on probation):
+//     SPLIT_VECTORS / SPLIT_ACCOUNT_LABELS / splitVectorLabel / splitVectorSortVal
+//     OPTIMIZER_GRIDS.split                 (MC_GRIDS deliberately has none)
+//     buildStrategyFamilies                 the `splitFamily` opt + the family loop + the
+//                                           addOffGrid guard
+//     offGridParamFor                       case 'split'
+//     the three exports
+//   optimizer_ui.js:
+//     SPLIT_FEATURE (this block), splitFamily in the sweep opts, describeSelection case 'split',
+//     getInputs splitWeights, toggleStrategyUI's #ui-split line, applyNerdKnobVisibility's menu
+//     entry, the loadOptimizerResult adopt branch, the four OPT_LONG_TO_SHORT keys, the
+//     applyScenario array case, and generateSplitPresetOptions / onSplitPresetChange /
+//     syncSplitPresetFromFields / onSplitFieldInput / updateSplitMixNote / SPLIT_FIELD_IDS
+//   retirement_optimizer.html:
+//     the #strategy-opt-split option, the #ui-split panel, the DOMContentLoaded menu build
+//   optimizer_core.tests.js: the four `P104b3:` tests (and P104b1's engine tests, which stay)
+//   research/CONSTANT_SPLIT.md + .test_harnesses/split_fine_harness.js, split_mc_harness.js
+const SPLIT_FEATURE = new URLSearchParams(location.search).get('nerdknob') === 'split';
+
 // MONTE_DEMO: the ?montecarlo teaching demo. Lands the reader on the Monte Carlo tab in Synthetic
 // mode with Seed/Paths/Input Distributions exposed and auto-runs the Experiment (see
 // runMCExperiment in mc_tab.js). Deliberately NARROW: unlike NERD_KNOBS it does NOT unlock the
@@ -147,6 +195,12 @@ function applyNerdKnobVisibility() {
     // Cycle Brokerage LTCG bracket target (0%/15%)
     const cycleLTCGWrap = document.getElementById('cycleLTCGTarget-wrap');
     if (cycleLTCGWrap) cycleLTCGWrap.style.display = NERD_KNOBS ? '' : 'none';
+    // P104b3. The Fixed Split menu entry. `hidden` alone is not enough - a hidden <option> is still
+    // keyboard-selectable in some browsers - so it is disabled too. If the knob goes off while it
+    // is the live selection the strategy is NOT rewritten: silently switching someone's plan to a
+    // different one is worse than showing a strategy they can no longer pick from the menu.
+    const splitOpt = document.getElementById('strategy-opt-split');
+    if (splitOpt) { splitOpt.hidden = !SPLIT_FEATURE; splitOpt.disabled = !SPLIT_FEATURE; }
     // Maximize Conversions sub-flags (Convert Excess to Roth / Use Cash) - always visible: they are
     // two financially distinct decisions, not experimental knobs (kept here so a runtime nerd
     // toggle can't hide them).
@@ -557,6 +611,13 @@ function getInputs() {
         STATEname: val('STATEname'),
         strategy: _strategy,
         orderedSeq: val('orderedSeq') || 'CBIR',
+        // P104b3. RELATIVE weights, in account order, straight off the four fields. Always emitted,
+        // not only for strategy 'split': every other strategy ignores the key, and a field that
+        // travels conditionally is a field that goes missing from a share link exactly when it
+        // matters. An all-zero vector reaches the engine as-is and is handled there - it falls back
+        // to balance weights and raises splitWeightsInvalid, which updateSplitMixNote() shows.
+        splitWeights: [+val('splitIRA') || 0, +val('splitBrok') || 0,
+                       +val('splitCash') || 0, +val('splitRoth') || 0],
         // The switch is two-state, the engine input is a position, so the mapping lives here. ''
         // is the default and means "Roth last"; the engine validates against its known values
         // rather than for truthiness, so an empty string leaves today's order. 'fillRothThenCash'
@@ -1045,6 +1106,7 @@ function describeSelection(p) {
         case 'fixedpct': return { family: 'IRA Draw', paramLabel: pct(p.iraWithdrawPct), paramSortVal: Math.round((p.iraWithdrawPct ?? 0) * 100) };
         case 'ordered':  return { family: 'Ordered', paramLabel: p.orderedSeq ?? 'CBIR', paramSortVal: p.orderedSeq ?? 'CBIR' };
         case 'gk':       return { family: 'Guyton-Klinger', paramLabel: `Grd:${Math.round((p.gkGuard ?? 0.20) * 100)} Adj:${Math.round((p.gkAdjPct ?? 0.10) * 100)}`, paramSortVal: 0 };
+        case 'split':    return { family: 'Fixed Split', paramLabel: splitVectorLabel(p.splitWeights), paramSortVal: splitVectorSortVal(p.splitWeights) };
         case 'aca':      return { family: 'ACA Cliff', paramLabel: `${p.stratACAMultiple ?? 0}% FPL`, paramSortVal: 50 + (p.stratACAMultiple ?? 0) / 100 };
         case 'bracket':
             if ((p.stratACAMultiple ?? 0) > 0)
@@ -1275,6 +1337,15 @@ function _runOptimizerNow() {
             // that matches the user's current plan, and loadOptimizerResult() restores the fields
             // the older _-prefixed set never carried (orderedSeq, the GK guardrails).
             _selection: {
+                // P104b3. selectionOf() FIRST, then the explicit fields below. This list is
+                // hand-kept and STRATEGY_SELECTION_FIELDS is the real one, and they had already
+                // drifted: `splitWeights` was in the shared list and missing here, so a Fixed Split
+                // row recorded no mix and clicking it left whatever the sidebar had - the table
+                // showing one plan and the click running another, the PF8 class the comment above
+                // says this object exists to prevent. Spreading the shared list first means a field
+                // added there is carried automatically; the explicit entries after it keep their
+                // coercions (`!!`, `?? -1`, `?? ''`), which sameStrategySelection relies on.
+                ...selectionOf(inputs),
                 strategy: inputs.strategy,
                 propWithdraw: inputs.propWithdraw, nYears: inputs.nYears,
                 stratRate: inputs.stratRate, stratIRMAATier: inputs.stratIRMAATier ?? -1,
@@ -1324,6 +1395,10 @@ function _runOptimizerNow() {
         // because with no Roth to draw the clone is a bit-identical twin, and restricted inside
         // the builder to every strategy but Ordered, which runs the sequence the user picked.
         rothClones: (base.Roth > 0 || base.Roth2 > 0),
+        // P104b3. Fixed Split is on probation behind ?nerdknob=split, NOT the plain nerdknob -
+        // see the SPLIT_FEATURE block for why and for the removal manifest. Monte Carlo's sweep
+        // does not get it at all (MC_GRIDS carries no `split`), because MC has no knob to gate it.
+        splitFamily: SPLIT_FEATURE,
         // The user's own off-grid parameter goes last here, after Guyton-Klinger. MC puts it
         // straight after IRA Draw. Both orders are pinned by sweep_golden.js.
         offGridLast: true,
@@ -2527,6 +2602,17 @@ function loadOptimizerResult(id) {
             const gEl = document.getElementById('gkGuard'), aEl = document.getElementById('gkAdjPct');
             if (gEl && result._selection.gkGuard != null) gEl.value = Math.round(result._selection.gkGuard * 100);
             if (aEl && result._selection.gkAdjPct != null) aEl.value = Math.round(result._selection.gkAdjPct * 100);
+        } else if (result._strategy === 'split' && Array.isArray(result._selection.splitWeights)) {
+            // Same PF8 class again: without this, clicking "Fixed Split Brok 90 / Cash 10" would set
+            // the strategy and leave whatever mix the sidebar already had, so the table would show
+            // one plan and the click would run another.
+            const ids = ['splitIRA', 'splitBrok', 'splitCash', 'splitRoth'];
+            result._selection.splitWeights.forEach((w, i) => {
+                const el = document.getElementById(ids[i]);
+                if (el) el.value = w;
+            });
+            syncSplitPresetFromFields();
+            updateSplitMixNote();
         }
     }
 
@@ -5544,6 +5630,87 @@ function resetUnknownStrategy() {
     });
 }
 
+// P104b3. What the four weights actually mean, in words, under the fields. VISIBLE text and not
+// a tooltip: a phone cannot hover, and the normalized percentages are the thing the reader
+// needs - the numbers they typed are relative and say nothing on their own.
+//
+// This is also the only consumer of the engine's splitWeightsInvalid flag: an all-zero mix
+// cannot be normalized, so the engine falls back to a balance-weighted draw and raises it.
+// Reading the FIELDS rather than the last run means the warning appears as the mix is typed,
+// and covers a share link or a saved scenario too, since both land in these fields first.
+// P104b3. The preset menu, built FROM SPLIT_VECTORS so it cannot drift from the grid the Optimizer
+// sweeps. Each option's value is the vector itself, comma-joined; 'custom' is the escape hatch.
+function generateSplitPresetOptions() {
+    const opts = SPLIT_VECTORS.map(v =>
+        `<option value="${v.join(',')}">${splitVectorLabel(v)}</option>`);
+    // Last, and named for what it does rather than what it is: a reader picking from a list of four
+    // measured mixes needs to know the fifth entry is theirs to fill in.
+    opts.push('<option value="custom">Custom mix...</option>');
+    return opts.join('');
+}
+
+// The four weight fields, in account order. One place, because three functions read them.
+const SPLIT_FIELD_IDS = ['splitIRA', 'splitBrok', 'splitCash', 'splitRoth'];
+const splitFieldValues = () => SPLIT_FIELD_IDS.map(id => +val(id) || 0);
+
+// Picking a preset WRITES the fields and hides them; picking Custom reveals them and changes
+// nothing. The fields remain the only thing getInputs() reads, so nothing downstream has to know
+// this menu exists.
+function onSplitPresetChange() {
+    const sel = document.getElementById('splitPreset');
+    const custom = document.getElementById('split-custom-fields');
+    if (!sel || !custom) return;
+    const isCustom = sel.value === 'custom';
+    custom.classList.toggle('hidden', !isCustom);
+    if (!isCustom) {
+        const v = sel.value.split(',').map(Number);
+        SPLIT_FIELD_IDS.forEach((id, i) => {
+            const el = document.getElementById(id);
+            if (el) el.value = v[i] ?? 0;
+        });
+    }
+    updateSplitMixNote();
+}
+
+// The reverse direction, and the reason the fields are the source of truth: a share link, a saved
+// scenario and a row-click all set the FIELDS, and the menu has to follow them. A mix that matches
+// a preset selects it (compared normalized, so 0/90/10/0 finds `Brok 90 / Cash 10`); anything else
+// selects Custom and shows the fields.
+function syncSplitPresetFromFields() {
+    const sel = document.getElementById('splitPreset');
+    const custom = document.getElementById('split-custom-fields');
+    if (!sel || !custom || !sel.options.length) return;
+    const mine = splitVectorSortVal(splitFieldValues());
+    const hit = SPLIT_VECTORS.find(v => Math.abs(splitVectorSortVal(v) - mine) < 1e-9);
+    sel.value = hit ? hit.join(',') : 'custom';
+    custom.classList.toggle('hidden', !!hit);
+}
+
+// Typing in a field can only happen while Custom is showing, but a field can also be set
+// programmatically; re-deriving costs nothing and keeps the menu honest either way.
+function onSplitFieldInput() {
+    syncSplitPresetFromFields();
+    updateSplitMixNote();
+}
+
+function updateSplitMixNote() {
+    const el = document.getElementById('split-mix-note');
+    if (!el) return;
+    const w = [+val('splitIRA') || 0, +val('splitBrok') || 0, +val('splitCash') || 0, +val('splitRoth') || 0];
+    if (!(w.reduce((a, b) => a + b, 0) > 0)) {
+        el.innerHTML = '<span style="color:#b45309;">\u26a0\ufe0f Every weight is zero, so there is no mix to draw on. '
+            + 'This plan falls back to drawing in proportion to your account balances.</span>';
+        return;
+    }
+    // The spill order is FIXED at IRA -> Brokerage -> Cash -> Roth for every mix, whatever the
+    // weights say (the `order` array in _splitWeightsFor). The old wording said "the other
+    // accounts", which is wrong twice: for `IRA 50 / Cash 40 / Roth 10` the first fallback is IRA,
+    // an account already in the mix, and for `Brok 90 / Cash 10` it is IRA rather than the
+    // brokerage the label leads with. Name the order instead of gesturing at it.
+    el.textContent = 'Draws ' + splitVectorLabel(w)
+        + '. If a year needs more, the rest comes from IRA, then Brokerage, then Cash, then Roth.';
+}
+
 function toggleStrategyUI() {
     let m = val('strategy');
     document.getElementById('ui-fixed').classList.toggle('hidden', m !== 'fixed');
@@ -5552,6 +5719,11 @@ function toggleStrategyUI() {
     document.getElementById('ui-fixedpct').classList.toggle('hidden', m !== 'fixedpct');
     document.getElementById('ui-ordered').classList.toggle('hidden', m !== 'ordered');
     document.getElementById('ui-gk').classList.toggle('hidden', m !== 'gk' || !NERD_KNOBS);
+    // Gated on the knob as well as the selection: a share link can carry str=split to someone who
+    // has no menu entry for it, and a panel with no way to have been chosen is worse than hidden.
+    document.getElementById('ui-split').classList.toggle('hidden', m !== 'split' || !SPLIT_FEATURE);
+    syncSplitPresetFromFields();
+    updateSplitMixNote();
     // "Roth before Brokerage" reaches every strategy except Ordered, which runs the sequence the
     // user chose - the same line fillSpendingGap draws, and the one ROTH_GAP_EXCLUDED draws for the
     // 🅡 rows. Greyed rather than hidden, and the switch is NOT cleared: switching to Ordered and
@@ -5595,6 +5767,11 @@ const OPT_LONG_TO_SHORT = {
     cyclicEnabled:'cyc',
     qcdHHMax:'qm', qcdAlways:'qa',
     gkGuard:'gkg', gkAdjPct:'gka',
+    // P104b3. FOUR keys rather than one packed `sw=0,9,1,0`. buildShareURL and loadFromURL are both
+    // driven off the DOM fields themselves, so four plain fields round-trip with no parse step -
+    // and a hand-written parse step for a packed value is exactly the shape of the ACA share-link
+    // defect (P95), which loads as the wrong strategy entirely.
+    splitIRA:'swi', splitBrok:'swb', splitCash:'swc', splitRoth:'swr',
 };
 
 const OPT_SHORT_TO_LONG = Object.fromEntries(
@@ -6007,6 +6184,17 @@ function applyScenario(data) {
     if (data.strategy === 'aca') {
         const el = document.getElementById('strategy');
         if (el) el.value = 'bracket';
+    }
+
+    // P104b3. splitWeights is an ARRAY with no DOM element of its own, so the generic
+    // getElementById loop below cannot restore it and would drop it silently on every scenario
+    // load. Same shape as the propTax and qcdMode cases either side of this one.
+    if (Array.isArray(data.splitWeights) && data.splitWeights.length === 4) {
+        ['splitIRA', 'splitBrok', 'splitCash', 'splitRoth'].forEach((id, i) => {
+            const el = document.getElementById(id);
+            if (el) el.value = data.splitWeights[i];
+        });
+        if (typeof syncSplitPresetFromFields === 'function') syncSplitPresetFromFields();
     }
 
     // qcdMode is stored as 'always'/'asneeded' string but the UI element is qcdAlways checkbox

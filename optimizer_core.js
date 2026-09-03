@@ -5089,6 +5089,17 @@ function offGridParamFor(base, grids = {}) {
             return { family: 'IRA Draw', paramLabel: `${pct}%`, paramSortVal: pct,
                      overrides: { strategy: 'fixedpct', iraWithdrawPct: base.iraWithdrawPct } };
         }
+        case 'split': {
+            // Compared on the NORMALIZED vector, because the weights are relative: a user who typed
+            // 90/10 and the grid's [0,9,1,0] are the same plan and must not produce two rows.
+            const w = base.splitWeights;
+            if (!Array.isArray(w) || w.length !== 4) return null;
+            if (!(w.reduce((a, b) => a + (b || 0), 0) > 0)) return null;
+            const mine = splitVectorSortVal(w);
+            if ((grids.split || []).some(g => Math.abs(splitVectorSortVal(g) - mine) < 1e-9)) return null;
+            return { family: 'Fixed Split', paramLabel: splitVectorLabel(w), paramSortVal: mine,
+                     overrides: { strategy: 'split', splitWeights: w.slice() } };
+        }
         default: return null;
     }
 }
@@ -5507,11 +5518,66 @@ const ORDERED_SEQS = ['CBRI', 'CBIR', 'CIBR', 'BCIR', 'RIBC', 'BIRC'];
 // Monte Carlo is the narrower of the two: no IRMAA-ceiling family, no ACA family, and IRA Draw
 // stops at 10% where the Optimizer runs to 20%. MC multiplies its row count by numPaths, so an
 // arm costs it far more than it costs a single-pass table.
+// P104b3: the shipped Fixed Split grid.
+// Four fixed account-weight vectors, [IRA, Brokerage, Cash, Roth] in tenths. NOT chosen by taste:
+// each one beat the shipped Proportional default at the MEDIAN in all three Monte Carlo return
+// models with survival held, over 6 cells x 100 paths. Evidence and the full table are in
+// research/CONSTANT_SPLIT.md; the short version:
+//
+//   [0,9,1,0]  6 of 6 cells, median +$747,009 - the only vector that clears the default everywhere
+//   [0,7,1,2]  5 of 6, median +$784,269, and the smallest floor damage of any vector tested
+//   [0,6,2,2]  5 of 6, median +$677,832
+//   [5,0,4,1]  4 of 6, median +$261,694 - the one IRA-leaning vector that clears four cells
+//
+// WHAT IS DELIBERATELY ABSENT. [0,0,1,0] (all-Cash) and [0,1,0,0] (all-Brokerage) won 3 and 1
+// cells with two of the four worst 10th-percentile floors in the study, and [7,2,1,0] - which
+// topped the single-path greedy cover - won 1 of 6 out of sample. A single-path argmax is not a
+// shipping criterion here; that is the whole lesson of P103e and it repeated in P104b2.
+//
+// The grid needs no per-basis rows: F-P3 measured the winner's Brokerage share as monotone in
+// brokerage basis in 8 of 10 mix-rate pairs with the dominant account unchanged in 9 of 10, so
+// basis moves the SIZE of the gain and not which vector wins.
+const SPLIT_VECTORS = Object.freeze([
+    Object.freeze([0, 9, 1, 0]),
+    Object.freeze([0, 7, 1, 2]),
+    Object.freeze([0, 6, 2, 2]),
+    Object.freeze([5, 0, 4, 1]),
+]);
+const SPLIT_ACCOUNT_LABELS = ['IRA', 'Brok', 'Cash', 'Roth'];
+
+// "Brok 90 / Cash 10". Percentages of the normalized vector, non-zero accounts only, in account
+// order. Plain words rather than a code like B9C1: the research report can afford an abbreviation
+// it defines up front, a table cell a user meets once cannot, and the Ordered family's CBIR
+// already spends the reader's patience for cryptic parameters once.
+function splitVectorLabel(v) {
+    const sum = (v || []).reduce((a, b) => a + (b || 0), 0);
+    if (!(sum > 0)) return 'balances';
+    return v.map((x, i) => [SPLIT_ACCOUNT_LABELS[i], Math.round((x / sum) * 100)])
+            .filter(([, pct]) => pct > 0)
+            .map(([name, pct]) => name + ' ' + pct)
+            .join(' / ');
+}
+// Sort value for the Param column: the normalized percentages packed most-significant-account
+// first, then scaled DOWN so the number stays in the same magnitude as every other family's sort
+// value. strategySortKey pads a numeric param to 9 characters, so a value that needed 12 would
+// sort after every shorter one and scatter the family - the reason this is /1e6 and not a plain
+// integer pack.
+function splitVectorSortVal(v) {
+    const sum = (v || []).reduce((a, b) => a + (b || 0), 0);
+    if (!(sum > 0)) return 0;
+    const p = v.map(x => Math.round((x / sum) * 100));
+    return (p[0] * 1e6 + p[1] * 1e4 + p[2] * 1e2 + p[3]) / 1e6;
+}
+
 const MC_GRIDS = {
     propwd:   [0, 5, 10, 20, 50],
     fixed:    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25],
     fixedpct: [5, 6, 7, 8, 10],
     ordered:  ORDERED_SEQS,
+    // NO `split` here, and the omission is the gate. Fixed Split is nerdknob-only while it is new,
+    // and Monte Carlo has no nerdknob (see buildVariations), so a vector in this grid would be a
+    // row every user sees. When the gate comes off, this grid gains SPLIT_VECTORS and the two
+    // sweeps agree again - until then an Optimizer Fixed Split row has no MC twin on purpose.
 };
 const OPTIMIZER_GRIDS = {
     propwd:   [0, 5, 10, 20, 50],
@@ -5528,6 +5594,10 @@ const OPTIMIZER_GRIDS = {
     // offGridParamFor adds their own percentage as its own row.
     fixedpct: [5, 7, 9, 11, 13],
     ordered:  ORDERED_SEQS,
+    // Present here and absent from MC_GRIDS, which is deliberate: this sweep can be gated behind
+    // the nerdknob and that one cannot. Reaching a row still needs `splitFamily: true` from the
+    // caller as well - the grid holds the data, the opt decides whether anyone sees it.
+    split:    SPLIT_VECTORS,
     irmaaTiers:   [0, 1, 2, 3, 4],
     acaMultiples: [200, 250, 300, 400],
 };
@@ -5608,6 +5678,11 @@ function buildStrategyFamilies(base, opts = {}) {
         cashClones = false,
         rothClones = false,
         offGridLast = false,
+        // P104b3. Fixed Split is new, so it is opt-IN per caller and nerdknob-gated in the one
+        // caller that can gate anything. Default false means no sweep grows a family by accident,
+        // and the node suites and harnesses that call this directly keep their existing row counts
+        // unless they ask.
+        splitFamily = false,
     } = opts;
 
     const bracketRates = TAXData.FEDERAL.MFJ.brackets.slice(0, -1).map(b => b.r);
@@ -5668,6 +5743,10 @@ function buildStrategyFamilies(base, opts = {}) {
     const addOffGrid = () => {
         const offGrid = offGridParamFor(base, { ...grids, bracket: bracketRates });
         if (!offGrid) return;
+        // A gated-off family must not reappear through this door. `strategy: 'split'` is reachable
+        // from a share link even while no menu offers it, and without this a non-nerdknob user
+        // holding such a link would get a Fixed Split row in a table that has no Fixed Split family.
+        if (offGrid.overrides.strategy === 'split' && !splitFamily) return;
         const ov = { ...offGrid.overrides, convertExcessToRoth: convOn };
         if (bracketResetsIRMAATier && offGrid.overrides.strategy === 'bracket') ov.stratIRMAATier = -1;
         push(offGrid.family, offGrid.paramLabel, offGrid.paramSortVal, ov);
@@ -5676,6 +5755,16 @@ function buildStrategyFamilies(base, opts = {}) {
 
     for (const seq of grids.ordered)
         push('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, convertExcessToRoth: convOn });
+
+    // Fixed Split. Placed after Ordered because it answers the same question - which account funds
+    // the year - and before Guyton-Klinger, which answers a different one. 'split' is in
+    // ROTH_GAP_EXCLUDED, so the Roth-gap clone pass skips it: Roth is already a weight in the
+    // vector, and a Roth-gap clone of a vector that names Roth would be a twin of it.
+    if (splitFamily) {
+        for (const v of grids.split || [])
+            push('Fixed Split', splitVectorLabel(v), splitVectorSortVal(v),
+                { strategy: 'split', splitWeights: v.slice(), convertExcessToRoth: convOn });
+    }
 
     // Guyton-Klinger - a single row, labelled with the user's own guardrails, e.g. "Grd:20 Adj:10".
     push('Guyton-Klinger',
@@ -5851,7 +5940,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -5859,7 +5948,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

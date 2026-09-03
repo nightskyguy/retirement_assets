@@ -238,6 +238,7 @@ flowchart LR
     D -->|fixedpct| S3["% of original IRA"]
     D -->|propwd| S4["proportional + IRA boost<br/>at 0% boost: the SAME three lines"]
     D -->|ordered| S5["empty - all in gap fill"]
+    D -->|split| S7["fixed account weights<br/>nerdknob-gated grid"]
     D -->|fixed| S6["amortized reduce-to-goal"]
     D -->|"gk (no case!)"| BASE["BASELINE else<br/>order IRA / Brokerage / Cash<br/>NO weights given"]
     BASE --> CW["calculateWithdrawals<br/>weights derived FROM BALANCES<br/>= strictly pro-rata draw,<br/>sized only to the spending gap"]
@@ -255,6 +256,29 @@ Proportional 0% row differ **only** in the spend rule.
 Two consequences worth carrying: `P103d`'s "GK's draw is beaten in 24 of 30 cells" is really a
 statement about the **legacy default draw**, which GK inherits, so it generalizes past GK; and
 `Proportional` was a null arm in that bake-off, since it is the incumbent and can only ever tie.
+
+### `split`: the same plumbing with the weights named
+
+`strategy: 'split'` binds `inputs.splitWeights` - `[IRA, Brokerage, Cash, Roth]` RELATIVE weights -
+where the oracle binds, the primary draw and the gap-fill mirror, and takes the baseline's behavior
+everywhere else. It is therefore the baseline draw with the weights stated instead of derived from
+balances, which is why `P104b1`'s acceptance test is replay identity against
+`propwd 0 + oracleWithdrawalPlan.fill(V)` rather than a numeric pin.
+
+A weight of 0 is **not** a promise never to touch that account: phase 2 of `calculateWithdrawals`
+walks the account order for whatever the weighted phase left unfunded, so `[0,0,1,0]` is "Cash
+first, then IRA, Brokerage, Roth" - an ordered sequence wearing a weight. That is why no
+single-account vector ships (`P103e` measured that shape at 0% survival under bootstrap).
+
+A malformed vector never throws: it falls back to balance weights and raises
+`totals.splitWeightsInvalid`, which the sidebar's mix note reads. Research inputs throw, a share
+link must not.
+
+**Gating.** `SPLIT_VECTORS` (four vectors, selected in `research/CONSTANT_SPLIT.md`) sits in
+`OPTIMIZER_GRIDS` only, and `buildStrategyFamilies` emits the family solely when the caller passes
+`splitFamily: true` - which the Optimizer does behind `NERD_KNOBS`. `MC_GRIDS` carries no `split`
+at all, because Monte Carlo has no knob to gate it with. Removing the gate means adding the vectors
+to `MC_GRIDS`, dropping the `NERD_KNOBS` condition, and regenerating both sweep goldens.
 
 **GK is a spend rule wearing a strategy's clothes.** All of its intelligence is in the adjustment
 above; its draw is the least considered one in the engine. `research/PERFECT_FORESIGHT_ORACLE.md`

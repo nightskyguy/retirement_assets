@@ -2692,3 +2692,78 @@ treat-as-own election, and it falls out of the fix rather than needing a branch.
 **The guard was verified to fail pre-fix**, not just to pass post-fix: on `CAP_BASE` the old engine
 charges $3,151 where the combined basis requires $73,834, so both assertions in the new
 `test.critical` fail against it. A test that cannot fail guards nothing.
+
+## The menu was never a grid, and the single-path cover's best pick is the worst one out of sample  *(2026-09-03, `P104b2`, v11.1718)*
+
+Report: `research/CONSTANT_SPLIT.md`. Harnesses `split_fine_harness.js` (8,640 sims, 6.4 s) and
+`split_mc_harness.js` (21,600 sims). Codes are defined in that report's reading guide; a vector is
+`[IRA, Brokerage, Cash, Roth]` relative weights, named in tenths, so `B9C1` is 90% Brokerage / 10%
+Cash.
+
+**1. The ten-archetype menu leaves a median 76.4% of the achievable gain unclaimed.** `F-P1`
+predicted under 10% and was WRONG by an order of magnitude. Worst cell `brokheavy @4% b20`: menu
+$112,467, exhaustive $791,291. In THREE of thirty cells the menu's best move was to leave the default
+alone ($0) while the 286-vector grid found $354,823-$636,049. **The menu is the oracle's
+hand-written list of shapes, not a grid anybody optimized**, and every earlier `P104` number that
+reads "the best constant is X" means "the best of ten hand-picked constants". Nothing was wrong with
+those runs; the scope of their conclusion was narrower than the wording suggested.
+
+**2. Every one of the 30 fine winners is a BLEND**, and no shipped strategy family can express a
+blend. That is now measured twice (`P104a` 7 of 10 on the menu, this 30 of 30 exhaustively).
+
+**3. Basis moves the SIZE of the gain, not the identity of the winner.** Brokerage share is
+non-decreasing from b20 to b80 in 8 of 10 mix-rate pairs and the dominant account is unchanged in 9
+of 10. Cheaper brokerage draws make the winner lean further into Brokerage without changing what
+kind of vector it is. **Consequence for the row budget: a shipping grid needs no per-basis rows.**
+
+**4. THE RULE THIS EARNED. A greedy cover fitted to single paths ranks candidates in nearly the
+reverse of their out-of-sample order.** The cover's first pick `B7C2R1` had the best mean capture
+across 30 hindsight cells (64.9%) and wins **1 of 6** Monte Carlo cells for a median $55,047. `B9C1`,
+which the cover added LAST of four, wins **6 of 6** for $747,009. Both facts come from the same
+engine and the same fixtures; only the foresight differs. `P103e` had already shown a single-path
+winner can reach 0% survival - what is new is that the inversion happens even when every candidate
+survives, so "it passed the MC gate" is not a substitute for "it was SELECTED under uncertainty".
+Select on the MC table; use the single-path cover only to decide what to put in it.
+
+**5. `V-P4` RIGHT 6 of 6, so the kill switch did not fire.** In every cell, between 4 and 10 of the
+eleven vectors beat Proportional +0% at the median in all three MC modes with survival held. A fixed
+account split is a real lever and not a hindsight artifact.
+
+**6. No vector holds the 10th-percentile floor everywhere.** All eleven, including all four
+recommended, lower p10 in at least one mode-cell, by $123,599 to $516,573. A fixed split raises the
+median and holds survival; it does not improve the bad case and can cost there. This is a property of
+a row a USER may pick, so it belongs in UI copy - the same argument as `feedback_ui_labels_tooltips`
+about essential information never being tooltip-only.
+
+**7. `V-P1` RIGHT, and worth keeping for the reason rather than the verdict.** `Cash` gives up
+survival in 1 of 6 bootstrap cells and is median-best in 0 of 6, with the second-worst floor in the
+table. A single-account vector is not an exclusive draw - phase 2 of `calculateWithdrawals` spills
+into the account order - so `{Cash: 1}` has Ordered CIBR's shape, and CIBR is what `P103e` measured
+at 0% survival. **Predictions were scored as written even though the re-baselines had already
+displaced `Cash` as the single-path winner twice.** A prediction that is re-aimed after the fact
+measures nothing.
+
+## The row's strategy selection is a hand-kept list, and it had already drifted  *(2026-09-03, `P104b3`)*
+
+Building the Fixed Split family surfaced a live defect in code that predates it. `_selection` on an
+Optimizer row - the object `loadOptimizerResult()` restores the sidebar from - is a **hand-written
+object literal** in `optimizer_ui.js`, while `STRATEGY_SELECTION_FIELDS` in core is the canonical
+list that `sameStrategySelection()` compares on. `P104b1` added `splitWeights` to the canonical list
+and nothing added it to the literal.
+
+**The symptom, reproduced in the browser before the fix:** clicking a row labelled
+`Fixed Split / Brok 60 / Cash 20 / Roth 20` set the strategy and left the sidebar's previous mix
+(2/3/4/1) in place. The table showed one plan and the click ran another - the PF8 defect class that
+this very object's own comment says it exists to prevent, and which that comment records having
+already happened once for `orderedSeq`, the IRMAA tier, the ACA multiple and the GK guardrails.
+
+**The fix is structural, not another entry in the list:** `...selectionOf(inputs)` is spread first
+and the explicit fields follow, so a field added to `STRATEGY_SELECTION_FIELDS` is carried
+automatically while the existing coercions (`!!`, `?? -1`, `?? ''`) that `sameStrategySelection`
+relies on are preserved. No test pins this because the spread is what guarantees it - a test would
+only re-check the guarantee - but the hazard is worth remembering: **a duplicated field list beside
+a canonical one drifts, and here it drifted silently for a full phase.**
+
+Worth checking next time something is added to `STRATEGY_SELECTION_FIELDS`: the MC worker posts a
+summary of each variation back to the page and had the same class of hand-kept list, which the core
+comment says already dropped four fields once.

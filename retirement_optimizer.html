@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1718</title>
+    <title>Retirement Optimizer 11.171f</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,14 +59,14 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1116d7"></script>
-	<script src="optimizer_core.js?v=111718"></script>
+	<script src="optimizer_core.js?v=11171f"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=111718"></script>
-	<script src="optimizer_tests.js?v=111718"></script>
+	<script src="optimizer_ui.js?v=11171f"></script>
+	<script src="optimizer_tests.js?v=11171f"></script>
 </head>
 <body>
 
@@ -131,6 +131,7 @@
 					<option value="bracket">🪣Fill Fed/IRMAA Bracket</option>
 					<option value="fixedpct">📉IRA Draw</option>
 					<option value="ordered">➡️Ordered</option>
+					<option value="split" id="strategy-opt-split">🧮Fixed Split</option>
 					<option value="gk">🔒Guyton-Klinger Guardrails</option>
 				</select></label>
 			</div>
@@ -184,6 +185,38 @@
 					<option value="RIBC">Roth→IRA→Brok→Cash</option>
 					<option value="BIRC">Brok→IRA→Roth→Cash</option>
 				</select></label>
+			</div>
+
+			<!-- P104b3. Fixed Split: a fixed share of each year's draw per account. Nerdknob-gated while
+			     it is new - applyNerdKnobVisibility() hides the menu entry, and toggleStrategyUI keeps
+			     this panel hidden without the knob even if a share link selected the strategy.
+			     RELATIVE weights, never dollars: 0/9/1/0 and 0/90/10/0 are the same plan, and a dollar
+			     draw would be chosen against last iteration's tax and desync. The note underneath is
+			     VISIBLE TEXT rather than a tooltip - a phone cannot hover, and it is what tells the
+			     reader what their four numbers actually mean once normalized. -->
+			<div id="ui-split" class="input-group hidden">
+				<label style="display:block;" title="Which accounts each year's withdrawal comes from, as a fixed mix. The four listed mixes are the ones measured to beat the default; Custom lets you set your own. Whatever a weighted draw cannot fund is taken from IRA, then Brokerage, then Cash, then Roth - that order is fixed and does not follow the weights, so leaving an account at 0 is not a promise never to touch it."><select id="splitPreset" data-no-share onchange="onSplitPresetChange()" style="width:100%;max-width:none;">
+					<!-- Populated by generateSplitPresetOptions() from SPLIT_VECTORS, so the menu cannot
+					     drift from the grid the Optimizer actually sweeps. -->
+				</select></label>
+				<!-- Shown only for Custom. The four fields stay the SOURCE OF TRUTH in every case - the
+				     picker writes them and derives its own selection back from them - so share links,
+				     saved scenarios and the row-click adopt path all keep working on the fields alone. -->
+				<div id="split-custom-fields" class="hidden">
+					<div class="compact-row">
+						<label>IRA
+						<input type="number" id="splitIRA" value="0" min="0" step="1" oninput="onSplitFieldInput()"></label>
+						<label>Brok
+						<input type="number" id="splitBrok" value="9" min="0" step="1" oninput="onSplitFieldInput()"></label>
+					</div>
+					<div class="compact-row">
+						<label>Cash
+						<input type="number" id="splitCash" value="1" min="0" step="1" oninput="onSplitFieldInput()"></label>
+						<label>Roth
+						<input type="number" id="splitRoth" value="0" min="0" step="1" oninput="onSplitFieldInput()"></label>
+					</div>
+				</div>
+				<div id="split-mix-note" style="font-size:0.85em;color:#555;margin-top:4px;"></div>
 			</div>
 
 			<div id="ui-gk" class="input-group hidden">
@@ -944,7 +977,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.1718</b>
+				<li data-flag="behavior"><b>11.171f</b>
 					<strong>The required distribution on an inherited IRA is calculated again.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li>For the first year after a spouse's death, no RMD was taken on the IRA the survivor took over. <strong>This broke in 11.168c and is fixed</strong>, so a plan with a death inside it distributes and taxes that year correctly. Spending does not move.</li>
@@ -954,7 +987,7 @@
 					<li>Under <i>Optimize for</i> &rarr; <i>Earliest Break Even</i>, two plans that break even in the same year are now ordered by the ending Roth balance, and by End Wealth only when that ties as well. Break-even years are whole years and several strategies often cross in the same one, so the row at the top of that goal can differ, and the ⏱ Earliest Break Even marker in the Best table moves with it. No plan's own numbers change.</li>
 					<li>The table under that goal now shows <strong>Final Roth</strong>, the balance that separates two plans tied on the year, and <strong>Final IRA</strong>, the pre-tax balance the conversions were drawn from. Both follow the Current $ / Future $ switch.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.1718" target="_blank" rel="noopener">Details</a>
+					<a href="optimizer_changelog.md#11.171f" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="behavior"><b>11.1703</b>
 					<strong>Proportional and Guyton-Klinger plans were withdrawing, and converting, money they did not need.</strong>
@@ -1513,6 +1546,9 @@ function updateStateNote() {
 
 window.addEventListener('DOMContentLoaded', function () {
     document.getElementById('stratRate').innerHTML = generateStratRateOptions();
+    // P104b3. Built from SPLIT_VECTORS, before captureDefaults and loadFromURL, so a shared
+    // link's mix can select its option and the in-page suite never reads an empty menu (P98).
+    document.getElementById('splitPreset').innerHTML = generateSplitPresetOptions();
     document.getElementById('STATEname').innerHTML = generateStateOptions();
     updateStateNote();
     // Default Start Age to the user's current real-world age (birth-month aware).
@@ -1631,7 +1667,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111718';
+    const V = '?v=11171f';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

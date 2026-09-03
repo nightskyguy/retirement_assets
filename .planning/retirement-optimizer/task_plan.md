@@ -15,7 +15,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
 | **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
-| **O0** | P35 | **`P104b1` + `P104b1x` DONE 09-02, v11.1701: the phantom-gap fix. `P104a`/`P103a` re-baselined (gap 1.94% -> 1.29%; constants win 8/10, blends x7). `b2` unblocked** | `P104b2` |
+| **O0** | P35 | **`P104b3` SHIPPED 09-03 v11.1719: Fixed Split, 4 vectors, NERDKNOB-GATED. Goldens untouched (gate off by default). MC grid deliberately empty** | `P104c` / un-gate |
 | **O1** | P36 | round 2 measures against the `P103a` ceiling, not rank-among-arms | `P36b` |
 | **O1** | P34 | NOT a P103 prerequisite (a-d are node harnesses); still the whole slow-machine story | `P34a` |
 | **O1** | P28j | `P28jf` is the one RESULT item here: the timing rule moves every converting row | `P28jb` |
@@ -165,7 +165,28 @@ What nobody had measured is the thing that decides what to BUILD: per-year freed
             `.test_harnesses/` (the proof lived in the session scratchpad), and `P103d`/`P103e`
             re-runs on v11.1701 before their arm ships - GK's draw is the draw the defect distorted
             most.
-      - [ ] **P104b2** *(PR 2, research, GATES b3; runs on the `P104b1x` engine or its winners
+      - [x] **P104b2 DONE 2026-09-03.** Report `research/CONSTANT_SPLIT.md`, harnesses
+            `split_fine_harness.js` (8,640 sims) and `split_mc_harness.js` (21,600 sims), rows in
+            `research/README.md` and `research/HARNESSES.md`. Ran on v11.1718, and the `P105`
+            delta was MEASURED first, not assumed: 20 of 30 arm-cells move, all down, up to
+            $110,611 and ARM-DEPENDENTLY, so within-cell gaps shift ~$32k. `k=1` numbers here
+            supersede `P104a`'s; they must NOT be read against its `k=2`/`k=free`.
+            **(i) DONE earlier.** **(ii) `F-P1` WRONG and that is the finding:** the menu leaves a
+            median **76.4%** of the achievable constant-split gain unclaimed (up to 604%), and
+            finds NOTHING in 3 of 30 cells where the fine grid finds $354,823-$636,049. So the grid
+            could not have been read off `P104a`'s winners, which is exactly why (ii) existed.
+            `F-P2` RIGHT 30/30 (every winner a blend), `F-P3` RIGHT (basis moves size not identity,
+            so **no per-basis rows needed**), `F-P4` RIGHT (18 winners over 30 cells).
+            **(iii) `V-P4` RIGHT 6 of 6 - the kill switch did NOT fire, `b3` may proceed.** `B9C1`
+            (90% Brokerage, 10% Cash) beats Proportional +0% at the median in all three MC modes
+            with survival held in every cell, median **$747,009**. `V-P3` RIGHT 18/18, `V-P1` RIGHT
+            (Cash loses survival in 1 of 6 bootstrap cells, median-best in 0 of 6).
+            **The one thing to carry into `b3`:** the single-path greedy cover's FIRST pick
+            `B7C2R1` wins **1 of 6** out of sample for $55,047 against `B9C1`'s 6 of 6 - the
+            in-sample ranking inverts, `P103e` repeating. And **no vector holds the p10 floor
+            everywhere** (-$123,599 to -$516,573): a fixed split lifts the median and holds
+            survival but can cost in the bad case, which belongs in the UI copy, not a footnote.
+      - [ ] **P104b2 (superseded item text below, kept for the original scope)** *(PR 2, research, GATES b3; runs on the `P104b1x` engine or its winners
             inherit the confound)* - four measurements, predictions first.
             (i) Recover `P104a`'s per-cell `k=1`/`k=2` winners: the harness prints them and the
             report kept only aggregates (re-run 2026-09-02, results in progress.md).
@@ -190,11 +211,30 @@ What nobody had measured is the thing that decides what to BUILD: per-year freed
             `V-P4` at least one vector beats Proportional `+0%` at the median with no worse survival
             in every mode in 4 or more of 6 cells. **If `V-P4` is WRONG, `b3` does not proceed and
             `P104b` closes as "no robust constant".**
-      - [ ] **REVIEW POINT (user)** - two decisions, both with the `b2` numbers in hand: the grid
+      - [ ] **REVIEW POINT (user) - LIVE 2026-09-03, the numbers are in hand.** Two decisions: the
+            grid and the label. **Recommended grid, in evidence order:** `B9C1` (6/6 cells, median
+            $747,009, survival never worse), `B7C1R2` (5/6, $784,269, smallest floor damage
+            -$123,599), `B6C2R2` (5/6, $677,832), and `I5C4R1` (4/6, $261,694) as the one
+            IRA-leaning row. **Do NOT ship** `B7C2R1`, `Cash`, `Brok` or `I5C5`. Full evidence:
+            `research/CONSTANT_SPLIT.md`, "What this recommends".
+            (original text) - two decisions, both with the `b2` numbers in hand: the grid
             (which vectors ship as rows) and the family label. Label candidates: **"Fixed Split"**
             (recommended: plain words, no acronym), "Set Split", "Custom Mix". The panel is four
             fields, IRA / Brokerage / Cash / Roth, relative, any scale.
-      - [ ] **P104b3** *(PR 3, product)* - rows in `OPTIMIZER_GRIDS` and `MC_GRIDS` (`:5378`,
+      - [x] **P104b3 SHIPPED 2026-09-03, v11.1719, NERDKNOB-GATED** (user: *"any new
+            strategy/experimental feature should be guarded by nerdknob until it's been fully
+            fleshed out"*). Four vectors in `SPLIT_VECTORS`; family emitted only on
+            `splitFamily: true`, which the Optimizer passes behind `NERD_KNOBS`; **`MC_GRIDS` carries
+            no `split` at all** because MC has no knob. Gate-off is the default, so **both sweep
+            goldens pass untouched** and the browser capture this item budgeted for is not needed
+            yet. Share keys are four scalars (`swi`/`swb`/`swc`/`swr`), not the packed `sw` below:
+            the share pipeline is DOM-driven and a hand-written parse is `P95`'s defect shape.
+            Suites 415/61/22, four tests added. Found and fixed a live defect while building -
+            findings.md, "The row's strategy selection is a hand-kept list".
+            **Un-gating is its own task:** add the vectors to `MC_GRIDS`, drop the `NERD_KNOBS`
+            condition, regenerate both goldens, write the changelog entry and the README strategy
+            paragraph (both deliberately skipped while gated).
+      - [ ] **P104b3 (original scope, kept for the un-gating checklist)** *(PR 3, product)* - rows in `OPTIMIZER_GRIDS` and `MC_GRIDS` (`:5378`,
             `:5384`), labels and `paramSortVal`, `offGridParamFor` for the user's own vector, the
             `#ui-split` panel + `toggleStrategyUI`, `getInputs`, share key (`sw`), `applyScenario`,
             the row-click adopt path (`optimizer_ui.js:2509`), MC `_label`, golden regen (MC via

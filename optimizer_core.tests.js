@@ -117,6 +117,9 @@ const OPTIMIZER_GRIDS = core.OPTIMIZER_GRIDS;
 const sameStrategySelection = core.sameStrategySelection;
 const resolveOrderedSeq = core.resolveOrderedSeq;
 const ORDERED_SEQS = core.ORDERED_SEQS;
+const SPLIT_VECTORS = core.SPLIT_VECTORS;
+const splitVectorLabel = core.splitVectorLabel;
+const splitVectorSortVal = core.splitVectorSortVal;
 const strategySortKey = core.strategySortKey;
 const selectionOf = core.selectionOf;
 const STRATEGY_SELECTION_FIELDS = core.STRATEGY_SELECTION_FIELDS;
@@ -5899,6 +5902,78 @@ test('strategySortKey: families stay contiguous, whatever the label starts with'
     assert(strategySortKey({ _family: 'Reduce', _paramSortVal: 3, _strategyLabel: '<span>x</span> Reduce' })
         === strategySortKey({ _family: 'Reduce', _paramSortVal: 3, _strategyLabel: '\u{1F4CD} Reduce' }),
         'the rendered label must not reach the sort key at all');
+});
+
+// -- P104b3: the Fixed Split family ---------------------------------------------------------------
+// The grid is a RESEARCH RESULT, not a preference: research/CONSTANT_SPLIT.md part 2. Each vector
+// beat the Proportional default at the median in all three Monte Carlo return models with survival
+// held. These tests pin the properties that made it shippable, so a later edit to the grid has to
+// argue with them.
+
+test('P104b3: the shipped split grid is four blends, and no single-account vector', () => {
+    assert(SPLIT_VECTORS.length === 4, `expected 4 vectors, got ${SPLIT_VECTORS.length}`);
+    for (const v of SPLIT_VECTORS) {
+        assert(Array.isArray(v) && v.length === 4, `each vector is 4 long: ${JSON.stringify(v)}`);
+        assert(v.every(x => Number.isFinite(x) && x >= 0), `non-negative finite: ${JSON.stringify(v)}`);
+        assert(v.reduce((a, b) => a + b, 0) > 0, `positive sum: ${JSON.stringify(v)}`);
+        // A single-account vector is an Ordered sequence wearing a weight - phase 2 spills into the
+        // account order - and P103e measured that shape at 0% survival under bootstrap. Cash-only
+        // and Brokerage-only were both tested in P104b2 and both lost on the p10 floor.
+        assert(v.filter(x => x > 0).length >= 2, `no single-account vector may ship: ${JSON.stringify(v)}`);
+    }
+    assert(new Set(SPLIT_VECTORS.map(splitVectorSortVal)).size === 4, 'no two vectors are the same mix');
+});
+
+test('P104b3: split weights are RELATIVE - scale does not change the label or the sort value', () => {
+    // The engine normalizes, so 0/9/1/0 and 0/90/10/0 are one plan. If this ever stopped holding,
+    // offGridParamFor would emit a duplicate row for a user who typed the grid's own mix at a
+    // different scale.
+    assert(splitVectorLabel([0, 9, 1, 0]) === splitVectorLabel([0, 90, 10, 0]),
+        `same mix, same label: ${splitVectorLabel([0, 9, 1, 0])} vs ${splitVectorLabel([0, 90, 10, 0])}`);
+    assert(splitVectorSortVal([0, 9, 1, 0]) === splitVectorSortVal([0, 90, 10, 0]), 'same mix, same sort value');
+    assert(splitVectorLabel([0, 9, 1, 0]) === 'Brok 90 / Cash 10', 'label names accounts in words');
+    assert(splitVectorLabel([5, 0, 4, 1]) === 'IRA 50 / Cash 40 / Roth 10', 'zero accounts are omitted');
+    assert(splitVectorLabel([0, 0, 0, 0]) === 'balances', 'an empty mix says what it falls back to');
+    // Sort values must stay small enough that strategySortKey's 9-character numeric padding still
+    // aligns; a packed integer would need 12 and scatter the family through the table.
+    for (const v of SPLIT_VECTORS)
+        assert(splitVectorSortVal(v) < 1000, `sort value must stay small: ${splitVectorSortVal(v)}`);
+});
+
+test('P104b3: the family is OFF by default and absent from the Monte Carlo grid', () => {
+    // Two independent locks, because this is a new strategy behind the nerdknob. MC has no knob, so
+    // its grid must not carry the vectors at all; every other caller has to opt in.
+    assert(MC_GRIDS.split === undefined, 'MC_GRIDS must not carry `split` while the family is gated');
+    assert(OPTIMIZER_GRIDS.split === SPLIT_VECTORS, 'the Optimizer grid holds the shipped vectors');
+    const base = { ...SWEEP_BASES.onGridCash, strategy: 'propwd', propWithdraw: 0 };
+    const off = buildStrategyFamilies(base, { grids: OPTIMIZER_GRIDS });
+    assert(off.filter(r => r.family === 'Fixed Split').length === 0,
+        'no caller gets Fixed Split rows without asking');
+    const on = buildStrategyFamilies(base, { grids: OPTIMIZER_GRIDS, splitFamily: true });
+    assert(on.filter(r => r.family === 'Fixed Split' && !r.modifier).length === SPLIT_VECTORS.length,
+        'one unmodified row per shipped vector when the family is asked for');
+    // And Monte Carlo's own entry point must be unable to produce one whatever it is handed.
+    assert(buildVariations(base).every(v => !String(v._strategyFamily || '').includes('Fixed Split')),
+        'buildVariations must not emit a Fixed Split row');
+});
+
+test('P104b3: a gated-off family cannot leak back in through the user\'s own off-grid mix', () => {
+    // strategy='split' is reachable from a share link even while no menu offers it. Without the
+    // guard in addOffGrid, a user without the nerdknob holding such a link would get a Fixed Split
+    // row in a table that has no Fixed Split family - one row of a strategy nothing else explains.
+    const mine = { ...SWEEP_BASES.onGridCash, strategy: 'split', splitWeights: [2, 3, 4, 1] };
+    const off = buildStrategyFamilies(mine, { grids: OPTIMIZER_GRIDS });
+    assert(off.filter(r => r.family === 'Fixed Split').length === 0,
+        'the off-grid door stays shut while the family is off');
+    const on = buildStrategyFamilies(mine, { grids: OPTIMIZER_GRIDS, splitFamily: true });
+    const own = on.filter(r => r.family === 'Fixed Split' && !r.modifier
+                               && r.paramLabel === 'IRA 20 / Brok 30 / Cash 40 / Roth 10');
+    assert(own.length === 1, 'the user\'s own mix earns exactly one row when the family is on');
+    // ...and a user whose mix IS one of the four gets no duplicate, even typed at another scale.
+    const onGrid = { ...SWEEP_BASES.onGridCash, strategy: 'split', splitWeights: [0, 90, 10, 0] };
+    const rows = buildStrategyFamilies(onGrid, { grids: OPTIMIZER_GRIDS, splitFamily: true })
+        .filter(r => r.family === 'Fixed Split' && !r.modifier);
+    assert(rows.length === SPLIT_VECTORS.length, 'the grid mix at another scale adds no extra row');
 });
 
 test('ORDERED_SEQS: every offered sequence is a real permutation and both sweeps use the list', () => {

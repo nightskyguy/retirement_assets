@@ -41,6 +41,8 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `schedule_oracle_harness.js` | **node** | P103b4: does the wider representation reach higher? Searches per-year ceilings against the same base row and budget as the conversions-only oracle. |
 | `gk_drawrule_harness.js` | **node** | P103d: which DRAW rule belongs under a Guyton-Klinger SPEND rule? Runs every shipped family with `spendRule: 'gk'` against GK deciding both. |
 | `split_expressiveness_harness.js` | **node** | P104: does a good draw split need a per-YEAR choice, or a few long phases? Ladder of k=1 / k=2 / k=free over the oracle's archetype menu. |
+| `split_fine_harness.js` | **node** | P104b2 (ii): was the ten-archetype menu close enough? Exhaustive 286-vector constant search on the 3-simplex at 10% steps, with b20/b50/b80 basis arms, plus a greedy cover for the grid decision. Report: [CONSTANT_SPLIT.md](CONSTANT_SPLIT.md). |
+| `split_mc_harness.js` | **node** | P104b2 (iii): does a constant split survive uncertainty? The grid candidates and the menu against Proportional +0% over GBM / bootstrap / AAM, 100 paths, same banks per arm. Carries `V-P4`, the kill switch for the product PR. Report: [CONSTANT_SPLIT.md](CONSTANT_SPLIT.md). |
 | `family_equivalence_harness.js` | **node** | Are two families the SAME MODEL, or only similar? Compares every log field of every year. Proves Guyton-Klinger's draw IS Proportional +0%. |
 | `magi_edge_gate_harness.js` | **node** | P103c/P75a GATE: do the best rows' realized MAGI land on the MAGI edge menu, or in the interior? Verdict PROVISIONAL. |
 | `gk_drawrule_mc_harness.js` | **node** | P103e: does that survive uncertainty? Re-runs the P103d candidates over Monte Carlo paths and reports medians, p10 and SURVIVAL rather than an argmax. |
@@ -100,6 +102,8 @@ evidence of currency.
 | `oracle_harness.js` | **RE-BASELINED 2026-09-01** (`P103a`) | was DRIFTED. Both halves re-run on engine `1b7b366`: median best-family gap **4.35% -> 1.58%**, the +$1.08M conversion headline is now +$122k, and the dominant lever flipped from conversion timing to the withdrawal split. `S3-P2` WRONG -> RIGHT, `B-P4` RIGHT -> WRONG. Report is the second run throughout |
 | `oracle_harness.js --spendchange` | **CURRENT, first result CORRECTED** | new 2026-09-01 (`P103b5c`). Alone it looked like the median gap DOUBLES on a declining path; crossed with `--reserve0` it does not move at all (2.03% -> 1.94%), and the flat-scalar headline holds ($0 in 44/44 on both paths). **The two fixtures interact - vary them together or the confound just moves.** What survives: max conversions-only gain 0.57% -> 9.55%, `S3-P4` flips WRONG, and the regime map relocates to 8%-spend cells |
 | `oracle_harness.js --reserve0` | **CURRENT** | new 2026-09-01 (`P103b1`). Holds surplus routing constant across arms. Negative gaps 1 -> **0**, median gap 1.58% -> 2.03%, and the winning strategy changes in 4 of 6 headline cells |
+| `split_fine_harness.js` | **CURRENT** | new 2026-09-03 (`P104b2` ii). **The menu leaves a median 76.4% of the achievable constant-split gain unclaimed**, and finds nothing at all in 3 of 30 cells where the fine grid finds $354,823-$636,049. All 30 fine winners are BLENDS. Basis moves size not identity (Brokerage share monotone in 8/10, dominant account same in 9/10), so a grid needs no per-basis rows. `F-P2`/`F-P3`/`F-P4` RIGHT, `F-P1` WRONG |
+| `split_mc_harness.js` | **CURRENT** | new 2026-09-03 (`P104b2` iii). **`V-P4` RIGHT 6/6 - the kill switch did not fire.** `B9C1` beats Proportional +0% at the median in all three modes with survival held in 6 of 6 cells, median $747,009. The single-path cover's first pick `B7C2R1` wins only **1 of 6** out of sample for $55,047 - `P103e`'s lesson repeating. Median-best is a blend in 18/18 mode-cells. **No vector holds the p10 floor everywhere** (-$123,599 to -$516,573). `V-P1`/`V-P3`/`V-P4` RIGHT |
 | `split_expressiveness_harness.js` | **CURRENT** | new 2026-09-02 (`P104`). **One better CONSTANT beats Proportional in 10/10 cells, $139,928-$1,155,056** - the shipped default is the wrong constant, not wrong for being constant. One switch captures 85-100% of the full per-year optimum in 7/10; the 3 exceptions are all brokerage-heavy (`brokheavy @6%` 58%, per-year increment $665,653). Best constant is a BLEND in 4/10, expressible by no shipped family. `X-P1`/`X-P3` RIGHT, `X-P2` WRONG |
 | `family_equivalence_harness.js` | **CURRENT** | new 2026-09-02 (user observation). **Guyton-Klinger's draw is bit-identical to Proportional +0%, 15/15 cells, every field of every year.** GK is a SPEND rule that inherits the legacy default draw, so `P103d`'s "GK's draw is beaten in 24/30 cells" is a statement about the DEFAULT draw and generalizes past GK |
 | `gk_drawrule_mc_harness.js` | **CURRENT** | new 2026-09-01 (`P103e`). **Overturns `P103d`'s ranking in all three MC modes.** The single-path winner (Ordered CIBR) reaches **0% survival** under bootstrap; both ordered sequences are disqualified outright. Fill Bracket 22% wins 12 of 18 mode-cells at 95-100% survival and loses consistently in two. `E-P1`/`E-P3` RIGHT, `E-P2` WRONG |
@@ -468,6 +472,62 @@ NOTE for anyone extending it: do not compare lifetime spend with an absolute tol
 cumulative spend total is a multi-million-dollar figure, and the first run of this harness declared
 8 of 10 cells invalid on deltas of ONE DOLLAR against $7.4M because the base plan over-funds by $2.
 The check is relative now, and prints its magnitude.
+
+## split_fine_harness.js  (node)
+
+```bash
+node .test_harnesses/split_fine_harness.js
+node .test_harnesses/split_fine_harness.js --rates 4,6,8
+node .test_harnesses/split_fine_harness.js --basis 20,50,80
+node .test_harnesses/split_fine_harness.js --step 20        # coarser simplex, for a smoke run
+```
+
+**Results in [`CONSTANT_SPLIT.md`](CONSTANT_SPLIT.md), part 1.** `P104b2` (ii). Asks whether the
+oracle's ten-archetype menu - a hand-written list, never chosen as a grid - is good enough to pick
+shipping rows from. Searches all 286 vectors on the 3-simplex at 10% steps against that menu and
+against Proportional +0%, over 30 cells (5 mixes x 4%/6% x b20/b50/b80). 8,640 sims, 6.4 s.
+
+Runs the SHIPPED `strategy: 'split'` family rather than the oracle input, which `P104b1` proved
+replays it to the dollar, so what is measured is what would ship. Eight of the ten menu entries land
+on 10% gridpoints and are read out of the same `simulate()` results, making menu-vs-fine one run
+rather than a comparison of two.
+
+Headline (2026-09-03): **the menu leaves a median 76.4% of the achievable gain unclaimed**, up to
+604%, and in 3 of 30 cells it finds nothing where the fine grid finds $354,823-$636,049. All 30 fine
+winners are blends. Basis moves the size and not the identity of the winner, so a grid needs no
+per-basis rows.
+
+Also prints the **greedy cover** - which 1, 2, 3 or 4 vectors between them capture the most across
+cells - which is the input to the `P104b3` grid decision. Treat it as a candidate generator only:
+`split_mc_harness.js` found its first pick winning just 1 of 6 cells out of sample.
+
+NOTE, inherited from `split_expressiveness_harness.js` and then hit again here: the spend-drift check
+needs BOTH a relative and an absolute floor. A pure ratio test flagged $8 against a $7.3M lifetime
+spend as real drift on the first smoke run.
+
+## split_mc_harness.js  (node)
+
+```bash
+node .test_harnesses/split_mc_harness.js
+node .test_harnesses/split_mc_harness.js --paths 200
+node .test_harnesses/split_mc_harness.js --mode bootstrap   # one mode instead of three
+```
+
+**Results in [`CONSTANT_SPLIT.md`](CONSTANT_SPLIT.md), part 2.** `P104b2` (iii), and the stage that
+actually decides: it carries `V-P4`, the kill switch that would have closed `P104b` as "no robust
+constant". Runs the greedy-cover vectors, the per-cell single-path winners and four menu archetypes
+against Proportional +0% over GBM / bootstrap / AAM, 100 paths, 6 cells, 21,600 sims.
+
+Reuses `buildBanks()` / `buildPathInputs()` from `montecarlo/mc_engine.js` - the same per-path model
+the page and the worker run - and holds banks, seed and path index identical across arms, so a
+difference is the vector. Reports median and p10 wealth, median spend and survival, never an argmax.
+
+Headline (2026-09-03): **`V-P4` RIGHT 6 of 6, so the kill switch did not fire.** `B9C1` beats the
+default at the median in all three modes with survival held in every cell, median $747,009. The
+single-path cover's first pick, `B7C2R1`, wins **1 of 6** for $55,047 - the out-of-sample ranking
+inverts the in-sample one, which is `P103e`'s lesson repeating. Median-best is a blend in 18 of 18
+mode-cells. **No vector holds the 10th-percentile floor everywhere**, -$123,599 to -$516,573, which
+is a caveat that belongs in UI copy rather than a footnote.
 
 ## family_equivalence_harness.js  (node)
 

@@ -98,8 +98,13 @@ same stub pattern, just within `standalone/` rather than at root.)
 |---|---|
 | `.planning/retirement-optimizer/task_plan.md` | Current/open work — priority list, phase write-ups, status. Linked from the README's "Features in the Works" section. |
 | `.planning/retirement-optimizer/progress.md` | Chronological session log — what was done, when, and why. |
+| `.planning/retirement-optimizer/progress_archived.md` | Session log through 2026-08-19, verbatim. Split out 2026-09-02 so `progress.md` carries only the current work; every phase in here is complete and merged. |
 | `.planning/retirement-optimizer/findings.md` | Investigation write-ups / evidence that informed decisions in `task_plan.md`. |
 | `.planning/task_completed.md` | Archive of fully-completed phases (moved out of `task_plan.md` to keep it scannable). |
+| `.planning/retirement-optimizer/findings_archive.md` | Archive of findings that are no longer live - defects the code no longer has, claims a later finding superseded, and the undated pre-`Pnn` planning block. The rules they earned stay in `findings.md` under "Rules earned the hard way". |
+| `.planning/retirement-optimizer/task_parked.md` | Phases nobody is working on - `pending`, `not started`, `deferred` or `unprioritized`, and not named as a blocker by a live O0/O1. Moved out 2026-08-31. Revive one by moving its section back and giving it a NOW-table row. |
+| `.planning/CLEANUP.md` | Browser `localStorage` security posture for `retirement_optimizer.html`, written 2026-08-24. Analysis only - despite the name, nothing to do with cleaning up these planning files. |
+| `.planning/MERGE_PR182_IRMAA.md` | Record of rebasing the IRMAA work onto PR #182. |
 | `.planning/NOTES.md` | Older, more granular dev-session notes (pre-dates the `retirement-optimizer/` split). |
 | `.planning/IRAprojection.spec.txt` | Original spec/requirements notes for the IRA projection logic. |
 | `.planning/retirement-optimizer/p71_probe/` | Two node harnesses that load the real `worker.js` and the real `mc_controller.js` into a `vm` context and hash a fixed-seed Monte Carlo run in all three modes. The A/B evidence that a Monte Carlo refactor changed no number — no test suite executes either file. README in the directory. |

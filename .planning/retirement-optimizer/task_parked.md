@@ -12,7 +12,7 @@ table. The IDs are unchanged, so every cross-reference elsewhere still resolves 
 |---|---|
 | `P85` | P85: when conversions happen — earlier wins, but not for the reason it looks like  *(DONE 2026-08-28, user-raised)* |
 | `P4` | P4: Creeping Tax Rate Model (was Phase 29) |
-| `P5` | P5: Per-Year Conversion Schedule - Greedy Forward Search (was Phase 23b, "greedy DP") |
+| `P5` | P5: Per-Year Conversion Schedule - Greedy Forward Search (was Phase 23b, "greedy DP") - **UN-PARKED 2026-09-01 into `P103c`**; the section below is the design record |
 | `P6` | P6: Simulation Sanity-Check Tests (was Phase 25) |
 | `P8` | P8: Annual-Table View Presets (was 38#6) |
 | `P9` | P9: ACA Refinement Remainder (partial, was Phase 9) |

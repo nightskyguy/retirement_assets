@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-09-03**, v11.1718 UNCOMMITTED on `worktrees/planning-with-files-7ee466` (PRs #209/#210 merged). Suites **411 / 61 / 22**, `TestTiers.EXPECTED` pinned to match.
+**As of 2026-09-03**, v11.1718 in **PR #211** (open, base `main`; #209/#210 merged). Suites **411 / 61 / 22**, `TestTiers.EXPECTED` pinned to match.
 **Planning files pruned 2026-09-02.** Every completed phase keeps a one-line stub below; the bodies are in `.planning/task_completed.md`. Phases nobody is working on are in `task_parked.md`. Findings that are no longer live - fixed defects, superseded claims, the pre-`Pnn` legacy block - are in `findings_archive.md`, and the rules they earned sit at the top of `findings.md` under "Rules earned the hard way".
 The ID migration table is still below. The Open Task Index and the second recency trail were deleted as stale: **the NOW table here is the only priority list.**
 Citations into `findings.md` are by HEADING, never by line number - about half the old line cites were already dead. Keep it that way.

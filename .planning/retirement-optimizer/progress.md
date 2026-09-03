@@ -3640,3 +3640,16 @@ Suites **411 / 61 / 22**, counts reconciled in `TestTiers.EXPECTED` and `.githoo
 The branch's single changelog entry is now **11.1718**, reordered so the RMD fix leads and flagged
 `behavior`; the Earliest Break Even work from earlier today is the second section of the same entry.
 Still uncommitted.
+
+## 2026-09-03 (cont.) - PR #211 opened
+
+Two commits pushed on `worktrees/planning-with-files-7ee466`: `8617e1a` (the RMD basis fix plus the
+Earliest Break Even ranking, both shipping as v11.1718) and `1e112e9` (the planning records).
+Pre-commit hook ran all three suites green on both, and the md-html scan passed 37 tracked files.
+**PR #211**, base `main`, ready for review not draft:
+https://github.com/nightskyguy/retirement_assets/pull/211
+
+The user-facing copy was trimmed twice before the commit, on the user's instruction: no fixture or
+scenario dollar figures, and the frame is correctness restored rather than behavior changed. The
+release that broke it is named instead (11.168c). The measured numbers live here and in findings.md,
+and in the commit message, which is where the audit trail belongs.

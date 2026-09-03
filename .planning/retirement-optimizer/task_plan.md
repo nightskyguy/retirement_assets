@@ -31,6 +31,96 @@ User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 20
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
 
+## P106: evaluating conversion-based plans  *(NEW 2026-09-03, user-raised. PRIORITY UNASSIGNED)*
+
+Groundrules settled with the user before any work; nothing was run. Not in the NOW table yet - a row
+there would push the LINE-30 marker down, and the user has not set a priority.
+
+**Canonical scenario: the user's own plan**, not a fixture. Every headline claim is about it.
+`?sg=220k&sc=-1.000&str=fixed&ny=11&pw=20&iwp=5&gkg=20&gka=10&mc=1&fcc=1&cey=2032&cyc=1`
+`&cyclicOrder=brokerage-first&ibg=1m&i1=3.2m&i2=240k&ro=240k&ro2=34k&bk=6e5&bb=2e5&dr=1`
+`&c1r=65&c2r=65&cbr=100&ca=1e5&ss1=60k&ss2=29k&sfp=77.3&g=6&div=2.02&inf=3&cpi=2.8&cy=3&obj=earliestbe`
+The user's standing objection to the fixture set: the 5-6 households were chosen as knife-edge
+defaults and may not reflect real balances, ages or spend.
+
+### Groundrules
+
+1. **Primary is the user's scenario.** Generalization is checked on 3-4 deliberately varied
+   households (filing status, state, horizon, IRA-to-taxable ratio), reported SEPARATELY and never
+   averaged into the headline.
+2. **Heirs rate fixed** for ranking, with a sensitivity band reported. If the ordering flips between
+   plausible rates, that flip IS the finding.
+3. **Spending is FIXED** - a successful plan delivers the required spend or it is a failure. Assert
+   equality on every non-GK arm. **GK exception:** guardrails move the spend goal by design, so GK
+   arms carry delivered spend as a reported column rather than being excluded or silently compared.
+4. **No single-scalar ranking.** Report the frontier, drop dominated arms, express every trade in
+   absolute dollars, as a percentage of NW, and against a funding floor (the assets needed to
+   deliver the spending plan with margin). Selection stays with the user; the tool's job is to
+   eliminate arms nobody would pick and make the surviving trade legible.
+5. **Predictions registered before running** and scored as written, never re-aimed.
+6. **Equalize, and state what each pair differs in.** The user's own comparison moved the withdrawal
+   strategy AND the conversion behavior at once; both equalized pairs are needed to attribute a gain.
+7. **Deliverable:** one `research/` report named for its subject, a `README.md` row, a findings
+   entry. No product change proposed in the same pass as the measurement.
+
+### The metric, replacing `_convSavings` for this study
+
+`_convSavings` is a lifetime-tax difference that exists only on the sweep's own conversion-optimized
+rows, so it is both the wrong quantity and a search artifact. The user's definition instead: **more
+Roth from the smallest reduction in net worth, with no reduction in spending.** Against the SAME
+strategy with conversions off:
+
+| column | note |
+|---|---|
+| ΔRoth at END and at FIRST DEATH | terminal-only hides the "Roth earlier" half of the goal |
+| ΔNW, real after-tax | |
+| exchange rate | `ΔRoth / -ΔNW`, reported only when ΔNW < 0 |
+| DOMINANT | ΔNW >= 0 and ΔRoth > 0. Listed first, no trade to weigh |
+| spend | asserted equal, or reported for GK |
+| widow exposure | **OPEN - the one decision not yet made: survivor-year tax, survivor marginal rate, or both** |
+
+**Worked example, from the user's own numbers (2026-09-03).** Ordered CIBR (no conv) -> Reduce 11yrs
+with conversions: ΔNW **-$1,732,907**, ΔRoth **+$5,655,337**, ΔTax **-$660,246**, ΔIRA -$3,068,882.
+That is **3.26 Roth dollars per dollar of NW given up**, and the give-up is **15.9%** of NW. The user
+would take that trade. Limiting conversions to after 2033 costs BOTH (-$25,445 NW, -$49,324 Roth):
+**dominated**, and the kind of arm the frontier must drop automatically.
+Two things to explain rather than assume: the pair moves two variables, and *less* lifetime tax
+alongside *less* net worth is not the usual conversion signature.
+
+**Why the study exists at all.** After-tax NW already prices Roth above IRA via the heirs rate, so an
+arm that gains Roth while losing NW is destroying value UNDER THE MODEL'S OWN VALUATION. The user's
+willingness to trade is rational only if NW omits something they value. Name and measure the
+omissions: **widow penalty** (survivor filing single), **Roth timing** (optionality, sequence
+protection), **bucket diversification** (partly priced by `taxflex`). Measuring what NW omits is the
+work; trading NW away on faith is not.
+Scale matters and the user said so: *"if my assets were smaller, I would be less aggressive."*
+Willingness to trade tracks SURPLUS OVER NEED, not wealth, which is why the funding floor is in
+rule 4.
+
+### Items
+
+- [ ] **P106a - the stop-year suggestion is UNSTABLE** *(user, 2026-09-03: "the Stop Conversion year
+      suggested changes the answer. And it seems unstable")*. Establish whether that is a defect or a
+      genuinely flat optimum **before any conversion study rests on it**. Related: `P24` already found
+      the Break Even boundary year is NOT the optimal stop year, $662k apart in one scenario.
+- [ ] **P106b** - the metric and its harness, on the canonical scenario.
+- [ ] **P106c** - the generalization set, reported separately.
+- [ ] **P106d - record correction.** `P87g` below asserts "nothing in the engine converts INTO the
+      ceiling on purpose". **That is false and the user has said so before.** Picking the limit IS the
+      ceiling: Fill sizes the withdrawal to it and, with Convert Excess to Roth on, the room above
+      spending becomes the conversion by construction. Extra Annual Roth Conversion is a second,
+      blunter ceiling available to any plan. Correct or delete that wording.
+- [ ] **P106e (deferred, engine work)** - the hybrid the user floated: route surplus across Cash /
+      Brokerage / Roth instead of all-Roth. Does not exist today; out of the first measurement.
+
+**Landmines that constrain interpretation** - any of these can invalidate a conversion result:
+`P28j` (the intra-year timing rule is on the wrong side about nine times in ten), `P85` (converting
+earlier still wins 353/499 but the RMD reasoning behind it broke, 124 counterexamples), `P106a`/`P24`
+(the stop year), `P100` (the ranking/selection defect).
+
+**Out of scope for the first pass:** a flat $100k/yr conversion is a candidate ARM, not a strategy;
+shaped policies belong in the grid. No product changes.
+
 ## P105: a survivor's RMD basis - DONE, v11.1718  *(NEW 2026-09-03, user-reported)*
 
 User, from a share link: *"In 2049 it looks like it does not calculate the correct IRA RMD. It

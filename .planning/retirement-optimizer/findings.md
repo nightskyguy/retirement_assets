@@ -2635,3 +2635,60 @@ exact, cheap half: what was put in. Left as an open item.
 logarithmic scale subclassed with a tick generator at powers of two: pixel geometry is inherited,
 since log2 and log10 differ by a constant. A zero balance is a gap on a log axis by design, not a
 point pinned to a floor that would read as a real balance.
+
+## One year of RMD went missing at every first death, and the README was the spec all along  *(2026-09-03, `P105`, v11.1718)*
+
+**Reported by the user from a share link**, not by any test: *"In 2049 it looks like it does not
+calculate the correct IRA RMD. It appears it's only calculating the RMD for 'Spouse' not 'You'
+because it's the year 'You' dies."* Right about the defect, one year off about the mechanism, which
+matters for the fix.
+
+**What the code did.** `computeIncome` moves the decedent's IRA into the survivor's account at the
+top of the year (`optimizer_core.js`, step 1 of that function). `P84l` had correctly moved the RMD
+basis to the **prior December 31** balance. Those two facts collide exactly once per death: in the
+first survivor year the basis is read from the prior year-end SPLIT, where the money was still the
+decedent's, and `yr.rmd1` is zeroed by its own `alive1 ?` guard. The balance was charged to nobody.
+The year after recovered on its own, because by then the prior year-end split had the money in the
+right account - which is why one year went missing per death and nothing ever looked broken.
+
+**The death year itself was always right.** `alive1 = age1 <= die1` is inclusive, so the year
+labelled by the user is the FIRST SURVIVOR year, not the year of death. On their plan person 1 dies
+at 88 in 2048 and the 2048 RMD of $154,412 was taken. 2049 is the year that was wrong.
+
+**Size, on the user's own plan** (browser, v11.1718): 2049 RMD $10,148 -> **$283,315**, which is
+12.821% x ($2,130,705 inherited + $79,151 own). 2050 unchanged in form at $288,077 = 13.699% x
+$2,102,964, prior IRA1 zero, so the added term self-extinguishes and cannot double-count.
+
+**Size, across fixtures** (node A/B against a pre-fix copy, `.test_harnesses` not needed - the
+scratch A/B is reproducible from the two-line diff):
+
+| fixture | first death | inheritance-year RMD | later years | spend | tax | final NW |
+|---|---|---|---|---|---|---|
+| single filer | none | 0 differing years | - | same | same | same |
+| GK couple | 2052 | +$242,194 | -$11k..-$14k/yr | **identical** | +$49,329 | -$31,876 |
+| `CAP_BASE` | 2034 | +$78,203 | -$0.5k..-$1.4k/yr | **identical** | -$459 | -$4,579 |
+| user link | 2048 | +$328,848 | -$45,349 | **identical** | +$106,717 | -$41,896 |
+
+**Spend is identical to the dollar in every arm.** The fix moves ordinary income and therefore tax
+and ending wealth, never the plan's spending. The small NEGATIVE drift in the years after the
+inheritance year is a knock-on, not a second effect: a larger distribution leaves a smaller balance
+for the next year's basis.
+
+**The direction of the two re-pinned tests looks wrong and is not.** `P38`'s forced-IRA total falls
+30,943 -> 20,309, because `ForcedIRA` counts the backstop and a bigger RMD means the backstop
+reaches less far. That is the same identity the `P84l` re-pin recorded in the other direction:
+smaller RMDs and a larger backstop are one fact seen twice.
+
+**README:665 already described the correct model** - *"the most effective way to manage this is for
+the survivor to take over the deceased's IRA/401K balance. The now larger balance will be subject to
+the survivors RMD requirements"* - so this was never a design choice being revisited. The document
+was the spec and the engine did not implement it. Worth remembering when a "is this intended?"
+question comes up: the prose in the README is evidence, and here it was decisive.
+
+**A survivor under their own RMD age still takes nothing**, because `getRMDPercentage` returns 0
+below the start age and the inherited balance is charged at the SURVIVOR's percentage. That is the
+treat-as-own election, and it falls out of the fix rather than needing a branch.
+
+**The guard was verified to fail pre-fix**, not just to pass post-fix: on `CAP_BASE` the old engine
+charges $3,151 where the combined basis requires $73,834, so both assertions in the new
+`test.critical` fail against it. A test that cannot fail guards nothing.

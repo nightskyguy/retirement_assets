@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-09-02**, v11.1703, PR #209 open. Suites **408 / 61 / 22**, `TestTiers.EXPECTED` pinned to match.
+**As of 2026-09-03**, v11.1718 UNCOMMITTED on `worktrees/planning-with-files-7ee466` (PRs #209/#210 merged). Suites **411 / 61 / 22**, `TestTiers.EXPECTED` pinned to match.
 **Planning files pruned 2026-09-02.** Every completed phase keeps a one-line stub below; the bodies are in `.planning/task_completed.md`. Phases nobody is working on are in `task_parked.md`. Findings that are no longer live - fixed defects, superseded claims, the pre-`Pnn` legacy block - are in `findings_archive.md`, and the rules they earned sit at the top of `findings.md` under "Rules earned the hard way".
 The ID migration table is still below. The Open Task Index and the second recency trail were deleted as stale: **the NOW table here is the only priority list.**
 Citations into `findings.md` are by HEADING, never by line number - about half the old line cites were already dead. Keep it that way.
@@ -30,6 +30,29 @@ User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 20
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
+
+## P105: a survivor's RMD basis - DONE, v11.1718  *(NEW 2026-09-03, user-reported)*
+
+User, from a share link: *"In 2049 it looks like it does not calculate the correct IRA RMD. It
+appears it's only calculating the RMD for 'Spouse' not 'You' because it's the year 'You' dies."*
+
+- [x] **P105 DONE 2026-09-03, v11.1718.** `computeIncome` moves the decedent's IRA to the survivor
+      at the top of the year while `P84l`'s basis reads the prior December 31 SPLIT, so for exactly
+      one year per death the inherited balance was in nobody's basis - `yr.rmd1` is zeroed by its
+      own `alive1` guard. Fixed by adding the decedent's prior year-end balance to the SURVIVOR's
+      basis at the survivor's own percentage (the treat-as-own election, so a survivor under their
+      RMD age still takes nothing). The term self-extinguishes once the decedent's account has been
+      empty a full year, so no double count. Evidence, arms and the A/B table: findings.md, "One
+      year of RMD went missing at every first death" (2026-09-03).
+      **Measured:** user's plan 2049 RMD $10,148 -> $283,315; spend IDENTICAL in every arm, tax and
+      ending wealth move. Single filers show zero differing years. Two pins re-derived with their
+      direction argued (`GK` tax +$49,329; `P38` forced-IRA 30,943 -> 20,309 - DOWN is right, the
+      backstop reaches less far), two tests added, one `test.critical` **verified to fail against a
+      pre-fix copy** ($3,151 charged where $73,834 is required). Suites 411/61/22, 17 critical
+      guards. The user's framing was one year off: `alive1 = age1 <= die1` is inclusive, so the
+      DEATH year's RMD was always taken and the first SURVIVOR year was the broken one.
+      **Open:** nothing. `P72` (start month) still owns the year-0 basis limitation `P84o` pins,
+      which is a different approximation in the same neighborhood.
 
 ## P104: how much per-year freedom does the draw split need?  *(NEW 2026-09-02, user-raised)*
 

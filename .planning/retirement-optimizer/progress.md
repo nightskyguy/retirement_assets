@@ -3529,3 +3529,114 @@ covers the whole phase. No session is in neither file. Suites 408/61/22 - no cod
 **Not done:** the P67 (227 lines) and P71 (286 lines) session series in the kept range are still
 uncompressed. Both phases are complete and archived, so both are fair game for a later pass; they
 were left because compressing a session I have not read risks dropping a number.
+
+## 2026-09-03 - session opened, state restored, one stale record fixed
+
+Planning files restored from disk; nothing was lost. Working tree **clean**, branch
+`worktrees/planning-with-files-7ee466` level with `main` at `37fb835` - **PRs #209 and #210 both
+merged**, so the plan header's "PR #209 open" was stale and now reads as of today. Page at
+**v11.1703**, suites **408 / 61 / 22** unchanged (no code touched since the merge).
+
+**Where the work stands.** `P104b2` is the next item and it is unblocked: `P104b1` and `P104b1x`
+shipped (the phantom-gap fix, v11.1701), and `b2`'s part (i) is already done - the per-cell `k=1` /
+`k=2` winner table was recovered and is in the 2026-09-02 session above. Remaining inside `b2`:
+(ii) the fine `k=1` 3-simplex at 10% steps plus b20/b80 basis arms, (iii) the Monte Carlo selection
+harness `.test_harnesses/split_mc_harness.js` (does not exist yet; `gk_drawrule_mc_harness.js` is
+the structural template), (iv) the report `research/CONSTANT_SPLIT.md` and its `research/README.md`
+row. `V-P4` is still the kill switch for `b3`.
+
+**Caveat carried forward, not yet discharged:** `P104a`'s and `P103a`'s re-baselines are recorded,
+but the `P104b1x` A/B harness still lives only in a session scratchpad, and `P103d`/`P103e` have not
+been re-run on v11.1701 - GK's draw is the one the phantom-gap defect distorted most.
+
+## 2026-09-03 (cont.) - Earliest Break Even: ties on the Roth balance, and the balances on screen (v11.1717)
+
+User, mid-session, interrupting `P104b2`: *"retirement_optimizer should show the Ending IRA and Roth
+balances for 'Break Even', and Break Even should tie break 'earliest break even' with Roth balance
+then netwealth."* Both halves are the same surface, the Optimizer's **Earliest Break Even** goal, so
+they shipped together. `P104b2` is paused with nothing half-written.
+
+**What changed.** `OPTIMIZER_OBJECTIVES.earliestbe` stops being a custom ranker: it is now
+`metric: r => r._convBEYear ?? 9999` plus `tiebreak: ['finalRoth','netWealth','remainIRA','spend',
+'lifeTax','spread']`. The hand-written two-key sort it replaced stopped at net wealth and left
+everything past that in results-array order, which is the `P100b3` defect; the named chain carries
+the rest of the keys and the `_id` backstop, so the order is total. `taxflex` is now the only
+objective with a custom `rank`. `OPT_OBJECTIVE_COLUMNS.earliestbe` gains `finalIRA` and `finalRoth`.
+
+**The second copy of the tie rule was the real hazard.** `optimizer_ui.js` had its own `beBetter`
+for the Best table's ⏱ badge, breaking ties on net wealth. Left alone it would have gone on awarding
+the badge to a row the goal no longer ranks first. It now reads `rankRows(beRows,'earliestbe')[0]`,
+so badge and Rank 1 cannot disagree.
+
+**Browser-verified on the default plan**, v11.1717, badge 🟢, 1,014 tests (525 in-page + 489 node).
+Under Earliest Break Even the header reads `... End Wealth | All Taxes | Final IRA | Final Roth |
+Break Even | Conv Tax`, and the 2034 tie group ranks Roth 356,982 / 356,958 / 356,824 - **rank 3
+holds the highest End Wealth in the table, $1,603,660, and still sorts last**, which is the flip.
+The ⏱ badge names the rank-1 row; the 💎 Most End Wealth badge names the rank-3 one, as it should.
+In the 11-row 2049 group the displayed Roth is equal across ranks 10-13 while net wealth ascends:
+those Roth values differ below the dollar the column rounds to, which is the only mechanism left
+once break-even and Roth agree, since exactly-equal Roth would have ordered them by net wealth
+descending (pinned in node).
+
+**Suites 409 / 61 / 22**, `TestTiers.EXPECTED` and `.githooks/README.md` reconciled. One test
+updated (the old one asserted the net-wealth tie) and one added, pinning that both tie keys are
+columns. README's goal list restated. Changelog entry 11.1717, flagged `display`: no plan's own
+numbers move, only the row order under one goal.
+
+**Not committed** - the user has not asked for a commit.
+
+## 2026-09-03 (cont.) - P105: one year of RMD went missing at every first death (v11.1718)
+
+User, from a share link, mid-session: *"In 2049 it looks like it does not calculate the correct IRA
+RMD. It appears it's only calculating the RMD for 'Spouse' not 'You' because it's the year 'You'
+dies. However, the RMD for 'You' would be required."* Confirmed, fixed, and it is a real engine
+defect rather than a display one. Full evidence in findings.md, "One year of RMD went missing at
+every first death" (2026-09-03).
+
+**The collision.** `computeIncome` inherits the decedent's IRA into the survivor's account at the
+top of the year; `P84l` reads the RMD basis from the prior December 31 balance. In the first
+survivor year those two disagree - the basis still has the money as the decedent's, and `yr.rmd1`
+is zeroed by its own `alive1` guard - so the inherited balance is charged to nobody. One year per
+death, self-healing the next year, which is why nothing ever looked broken and no test caught it.
+
+**The user's year was off by one, and that mattered.** `alive1 = age1 <= die1` is inclusive, so
+2048 (person 1 at 88) is the death year and its $154,412 RMD WAS taken. 2049 is the first survivor
+year and the broken one. Getting this right is what made the fix a basis change rather than an
+alive-flag change.
+
+**Fix:** the survivor's basis gains the decedent's prior year-end balance, at the SURVIVOR's own
+percentage. That is the treat-as-own election, so a survivor below their RMD age still distributes
+nothing (`getRMDPercentage` returns 0), with no branch needed. The added term self-extinguishes once
+the decedent's account has been empty for a full year, so later years cannot double count. The
+duplicated `yr.rmd1Pct = Math.max(...)` line beside it went too.
+
+**Measured, old vs new, on a scratch pre-fix copy of the engine:**
+
+| fixture | inheritance-year RMD | spend | tax | final NW |
+|---|---|---|---|---|
+| single filer | 0 differing years | same | same | same |
+| GK couple (death 2052) | +$242,194 | identical | +$49,329 | -$31,876 |
+| `CAP_BASE` (death 2034) | +$78,203 | identical | -$459 | -$4,579 |
+| the user's link (death 2048) | +$328,848 | identical | +$106,717 | -$41,896 |
+
+**Browser-verified on the user's own URL at v11.1718:** 2049 RMD $10,148 -> **$283,315**
+= 12.821% x ($2,130,705 + $79,151); 2050 = 13.699% x $2,102,964 with prior IRA1 at zero, so no
+double count. Badge 🟢, 1,016 tests (525 in-page + 491 node).
+
+**Two pins re-derived, both with the direction argued in the test's own comment.** `GK` tax
+1,924,412 -> 1,973,741 and final NW -$31,876, spend unchanged to the cent, guardrail count still 3.
+`P38` forced-IRA 30,943 -> **20,309, DOWN**, which is the `P84l` identity in reverse: `ForcedIRA`
+counts the backstop, and a bigger RMD means the backstop reaches less far.
+
+**Two tests added**, one `test.critical`, and the critical one was **verified to fail against the
+pre-fix copy** - $3,151 charged where the combined basis requires $73,834. Both derive their
+expected value from the run's own prior row rather than a captured dollar figure, because a magic
+number would pass against any basis that happened to total the same.
+
+**README:665 was already the spec** - it says the survivor takes over the balance and the larger
+balance is subject to the survivor's RMD - so this was never a design choice being revisited.
+
+Suites **411 / 61 / 22**, counts reconciled in `TestTiers.EXPECTED` and `.githooks/README.md`.
+The branch's single changelog entry is now **11.1718**, reordered so the RMD fix leads and flagged
+`behavior`; the Earliest Break Even work from earlier today is the second section of the same entry.
+Still uncommitted.

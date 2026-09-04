@@ -88,6 +88,43 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
   line is read; "give it its own item when someone picks it up" inside a sub-bullet is neither, and
   sat unnoticed until a sweep went looking for that exact shape.
 
+## The suggested Stop Conversion year is a MOVING PEAK, and `totalWealth` is not a shared basis (2026-09-03, P106a)
+
+Full report `research/CONVERSION_STOP_YEAR.md`; harness
+`.test_harnesses/stopyear_stability_harness.js`. On the user's own plan, the canonical `P106`
+scenario. Four things worth carrying forward.
+
+1. **"Unstable" was right, and neither of the two obvious explanations is what it is.** The search is
+   sound - idempotent from any starting stop year, deterministic, genuinely multi-modal so the linear
+   scan is required. The optimum is not flat either: under a shared heirs rate exactly one cutoff
+   sits within 0.1% of best. It is a **sharp peak that relocates**, moving across 2027-2030 under
+   input changes of 1% or less. Sharp and mobile is the bad combination: the tool is entitled to
+   report one confident year and that year is not reproducible.
+   **When an answer wanders, measure the neighbors' scores, not just the answer.** Watching the
+   argmax move cannot tell a flat optimum from a moving peak, and the two call for opposite
+   responses.
+2. **A stop year quoted without the inputs it was derived from means very little.** The years a 1%
+   nudge reaches differ by 4.5x in lifetime conversions and $3.7M in ending Roth, at 1.3-4.6% of net
+   worth. Any comparison of arms "each at its own optimal stop year" is a comparison of two argmaxes
+   that a rounding-scale input change would move. Hold it fixed, or report the band and its cost.
+3. **`totalWealth` is already after-tax, and NOT on a shared basis.** `evaluateYearOutcome`
+   (`optimizer_core.js:3801`) discounts the IRA at `sim.nominalTaxRate`, **that run's own final-year
+   ordinary marginal rate**. So anything that ranks several runs by `totalWealth` - which is what
+   `afterTaxWealthOfLogRow` returns whenever no Marginal Heirs Tax Rate is set, the default - is
+   comparing plans valued at different discount rates. Measured at 34.21% against 26.89% between two
+   candidates, $277,192 of pure valuation against a $6,949 margin. **Anywhere a metric ranks runs,
+   check whether its valuation rate is shared across them.** This is separable from (1) and is a
+   defect on its own.
+4. **The refutation is the part to imitate.** (3) was found while explaining (1) and looked exactly
+   like its cause; the report nearly shipped saying so. The test is direct - if the per-run rate
+   causes the wandering, a shared rate should calm it - and it says the opposite: 7 of 11
+   perturbations move a shared-rate answer against the default's 3 of 11. **A mechanism that explains
+   the observation is not thereby its cause.** The sensitivity is still unexplained.
+
+Also: `A6` predicted being wrong is cheap and HELD at 0.075%, because it asked about the 0.1% band.
+The same question over the years perturbation actually reaches gives 17x to 68x more. A prediction
+can hold and still mislead if its scope is narrower than the decision it is quoted for.
+
 ## P35n endgame: the Phased tail should be a SEQUENCE, Cash -> Roth -> Brokerage - the PR-5 proportional spec is refuted (2026-08-10)
 
 The endgame bake-off (`research/ENDGAME_DRAW_ORDER.md`, 144 cells starting AT the

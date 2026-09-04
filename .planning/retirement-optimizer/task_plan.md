@@ -99,10 +99,29 @@ rule 4.
 
 ### Items
 
-- [ ] **P106a - the stop-year suggestion is UNSTABLE** *(user, 2026-09-03: "the Stop Conversion year
-      suggested changes the answer. And it seems unstable")*. Establish whether that is a defect or a
-      genuinely flat optimum **before any conversion study rests on it**. Related: `P24` already found
-      the Break Even boundary year is NOT the optimal stop year, $662k apart in one scenario.
+- [x] **P106a - DONE 2026-09-03. NEITHER a defect nor a flat optimum: a MOVING PEAK.**
+      *(user, 2026-09-03: "the Stop Conversion year suggested changes the answer. And it seems
+      unstable")*. `research/CONVERSION_STOP_YEAR.md`, harness
+      `.test_harnesses/stopyear_stability_harness.js`, on the canonical scenario.
+      The search is sound - idempotent from any starting stop year (`A3`), deterministic, and the
+      curve really is multi-modal so the linear scan is necessary. The optimum is not flat either:
+      under any shared heirs rate exactly ONE cutoff sits within 0.1% of best. But the peak
+      RELOCATES across 2027-2030 under input changes of 1% or less, and those years differ by **4.5x
+      in lifetime conversions and $3.7M in ending Roth**, worth **1.3-4.6% of net worth**.
+      **Consequence for the rest of P106: the stop year is a CONTROLLED VARIABLE.** Hold it fixed
+      across arms and say what it was fixed at, or report a band and the cost of the band. An arm at
+      its own optimal stop year against another arm at its own is two argmaxes a 1% input change
+      would move.
+      **Second, separable defect found on the way:** `totalWealth` discounts the IRA at
+      `sim.nominalTaxRate`, that RUN'S OWN final-year marginal rate, so candidates are scored at
+      different rates - 34.21% against 26.89% between two peaks, $277,192 of pure valuation against a
+      $6,949 margin. The no-heirs-rate default is the only basis that picks 2032; every shared rate
+      12-37% picks 2029 head to head. Not yet an item; see the finding.
+      **A mechanism was proposed and refuted by its own test** - a shared rate is MORE perturbation-
+      sensitive (7 of 11) than the default (3 of 11), so the discount-rate defect is real but is not
+      the cause. The sensitivity remains unexplained and is the follow-up candidate.
+      Related: `P24` found the Break Even boundary year is NOT the optimal stop year, $662k apart in
+      one scenario. Different failure, both live.
 - [ ] **P106b** - the metric and its harness, on the canonical scenario.
 - [ ] **P106c** - the generalization set, reported separately.
 - [x] **P106d - record correction. DONE 2026-09-03.** `P87g` asserted "nothing in the engine converts

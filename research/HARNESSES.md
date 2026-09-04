@@ -203,6 +203,45 @@ EV2.reportStopYear();        // per-cutoff table for the current sidebar scenari
 EV2.reportPolicies();        // best amount vs best stop-year vs joint
 ```
 
+**One claim in this file's header is wrong.** It says `futureIRATaxRate` "never changes plan
+mechanics, so it cannot move the optimal stop year". The first half is right and the second does not
+follow: the argmax is over a score, and the heirs rate is in the score. Measured, it moves the answer
+across `convert nothing` (at 0%), 2027 (10-12%) and 2029 (22-40%) on one scenario. See
+`stopyear_stability_harness.js` and prediction `A7`.
+
+## stopyear_stability_harness.js  (node)
+
+```bash
+node .test_harnesses/stopyear_stability_harness.js          # add --json for the raw curve
+```
+
+**Full results and the scored predictions live in [`CONVERSION_STOP_YEAR.md`](CONVERSION_STOP_YEAR.md).**
+Asks whether the Stop Conversion year the tool suggests is trustworthy, after the user reported it
+"seems unstable" (P106a). Dumps the whole cutoff curve, then separates the two explanations that
+would look identical from the outside: a flat optimum where the jumping is cosmetic, and a moving
+peak where it is not.
+
+The node half of the answer to a problem this repo used to solve in a console. Scenario inputs come
+from `fixtures/*.json`, captured as the verbatim output of the page's own `getInputs()`, so no
+share-URL decoder is re-implemented in node and none can drift. See `.test_harnesses/fixtures/README.md`.
+
+1. **A moving peak, not a flat optimum.** Sharp for any one input set (exactly one cutoff within 0.1%
+   under any shared heirs rate) and relocated across 2027-2030 by input changes of 1% or less. Those
+   years differ by 4.5x in lifetime conversions and $3.7M in ending Roth, and 1.3-4.6% of net worth.
+2. **The search itself is sound.** Idempotent from any starting stop year, deterministic, and the
+   curve really is multi-modal so the linear scan is necessary rather than merely cautious.
+3. **The default valuation basis is not neutral.** `totalWealth` discounts the IRA at that run's OWN
+   final-year marginal rate, so candidates are scored at different rates - 34.21% against 26.89%
+   between two peaks here, $277,192 of pure valuation against a $6,949 margin. It is the only basis
+   that picks 2032; every shared rate from 12% to 37% picks 2029 head to head.
+4. **A mechanism proposed and refuted in the same run.** Finding (3) looked like the cause of (1), and
+   the direct test says no: re-running the perturbations under a shared rate moves the answer in 7 of
+   11 cases against the default's 3 of 11. More sensitive, not less. The sensitivity is still
+   unexplained.
+5. **A prediction that held on the wrong question.** `A6` asked what being wrong costs inside the 0.1%
+   band and got 0.075%; asked over the years perturbation actually reaches, the same question gives
+   17x to 68x more. Both are in the report, `A6` scored as written.
+
 ## gapfill_harness.js  (node)
 
 ```bash

@@ -16,10 +16,16 @@
  * getInputs() so no share-URL decoder is re-implemented here. See fixtures/README.md.
  *
  * ONE THING KNOWN BEFORE RUNNING, from reading the fixture rather than from a result:
- * `futureIRATaxRate` is UNDEFINED on the canonical scenario. `afterTaxWealthOfLogRow()` returns raw
- * `r.totalWealth` when it is null, so the search is maximizing GROSS wealth, which prices a dollar
- * inside the IRA the same as a dollar inside the Roth. Every conversion is then a pure cost to the
- * scored quantity. Predictions A7 and A8 exist because of that reading.
+ * `futureIRATaxRate` is UNDEFINED on the canonical scenario, so `afterTaxWealthOfLogRow()` returns
+ * `r.totalWealth`. Predictions A7 and A8 exist because of that reading.
+ *
+ * *** CORRECTION, made after the first run and before any report. The sentence that stood here
+ * said totalWealth is GROSS wealth, "which prices a dollar inside the IRA the same as a dollar
+ * inside the Roth". That is wrong. `evaluateYearOutcome` (optimizer_core.js:3801) builds
+ * totalWealth as an AFTER-TAX figure - the IRA is already discounted, at `sim.nominalTaxRate`,
+ * which is THAT RUN'S OWN final-year ordinary marginal rate. The predictions are left exactly as
+ * registered and scored as written; only this reading of the mechanism changes, and section 8
+ * below is where the corrected version is measured. It turns out to be the whole answer. ***
  *
  * -------------------------------------------------------------------------------------------
  * PREDICTIONS, REGISTERED BEFORE THE FIRST RUN (P106 groundrule 5: scored as written, never
@@ -52,6 +58,11 @@
 
 const fs = require('fs');
 const path = require('path');
+// Browser shims, same set the other node harnesses install: displayhelpers.js assigns to `window`
+// at load and optimizer_core.js reads `performance.now`.
+globalThis.performance = { now: () => 0 };
+globalThis.window = {};
+globalThis.document = { getElementById: () => null, addEventListener: () => {} };
 const R = path.join(__dirname, '..') + path.sep;
 Object.assign(globalThis, require(R + 'taxengine.js'));
 require(R + 'displayhelpers.js');
@@ -96,6 +107,16 @@ function cutoffCurve(inputs, mode, heirsRate) {
             res = simulate({ ...base, convEndYear: start + cut - 1, convEndMode: 'extra', computeOC: false });
         }
         const last = res.log[res.log.length - 1];
+        const ira = (last.IRA1 ?? 0) + (last.IRA2 ?? 0);
+        const brok = last.Brokerage ?? 0, cash = last.Cash ?? 0, basis = last.Basis ?? 0;
+        const cg = last['-capGainsRate'] ?? 0.15;
+        // The rate totalWealth ACTUALLY discounted this run's IRA at, recovered from the row by
+        // inverting the formula in evaluateYearOutcome. This is `sim.nominalTaxRate`, the run's own
+        // final-year ordinary marginal - and it is not the same number from one cutoff to the next.
+        const impliedIRARate = ira > 0
+            ? 1 - ((last.totalWealth - ((last.Roth ?? 0) + cash + basis)
+                - Math.max(0, brok - basis) * (1 - cg)) / ira)
+            : null;
         rows.push({
             cut,
             lastConvYear: cut === 0 ? null : start + cut - 1,
@@ -105,7 +126,8 @@ function cutoffCurve(inputs, mode, heirsRate) {
             spend: res.totals.spend,
             tax: res.totals.tax,
             roth: (last.Roth ?? 0),
-            ira: (last.IRA1 ?? 0) + (last.IRA2 ?? 0),
+            ira, brok, cash, basis, impliedIRARate,
+            gross: ira + (last.Roth ?? 0) + brok + cash,
             success: res.totals.success,
         });
     }
@@ -266,6 +288,162 @@ console.log('   mode extra : ' + (sExtra.stopYearCalendar ?? 'none/never')
     + '   gainVsFull ' + money(sExtra.gainVsFull) + '   gainVsNone ' + money(sExtra.gainVsNone));
 console.log('   note: extraConversionAmount is ' + CANON.extraConversionAmount
     + ' on this scenario, so mode extra has nothing of its own to truncate.');
+
+// ---- 8. POST-HOC. Added after A1-A8 were scored; changes none of them. ----------------------
+// The registered predictions ask whether the answer moves and what the move costs IN THE SCORED
+// QUANTITY. They cannot ask what the tied plans are worth in P106's own metric, because that
+// metric is the thing P106b is being built to define. This section asks it anyway, because the
+// answer decides whether the instability matters.
+console.log('\n8. WHY THE ANSWER MOVES  (post-hoc; scored no prediction)');
+const peaks = localMaxima(curve.rows);
+if (peaks.length >= 2) {
+    const lo = peaks[0], hi = peaks[peaks.length - 1];
+    console.log('   ' + 'metric'.padEnd(30) + peaks.map(p => String(p.lastConvYear ?? 'none').padStart(16)).join('')
+        + '     difference');
+    const line = (label, f, fmt = money) => console.log('   ' + label.padEnd(30)
+        + peaks.map(p => String(fmt(f(p))).padStart(16)).join('')
+        + '     ' + fmt(f(hi) - f(lo)));
+    line('ending IRA', p => p.ira);
+    line('ending Roth', p => p.roth);
+    line('ending Brokerage', p => p.brok);
+    line('ending Cash', p => p.cash);
+    line('GROSS wealth (sum of those)', p => p.gross);
+    line('total conversions', p => p.conv);
+    line('lifetime tax', p => p.tax);
+    line('lifetime spend', p => p.spend);
+    console.log('   ' + '-'.repeat(90));
+    console.log('   ' + 'IRA discount rate APPLIED'.padEnd(30)
+        + peaks.map(p => String(pct(p.impliedIRARate, 2)).padStart(16)).join('')
+        + '     ' + ((hi.impliedIRARate - lo.impliedIRARate) * 100).toFixed(2) + 'pp');
+    line('score the search sees', p => p.score);
+
+    console.log('\n   THE TWO PEAKS ARE NOT SCORED ON THE SAME BASIS. `totalWealth` discounts the IRA at');
+    console.log('   `sim.nominalTaxRate` - each run\'s OWN final-year ordinary marginal rate - so a cutoff');
+    console.log('   that happens to end in a lower bracket has its IRA valued more generously than one');
+    console.log('   that does not, independently of whether it is the better plan.');
+    const rateGap = (hi.impliedIRARate - lo.impliedIRARate);
+    console.log('   Here that is ' + (Math.abs(rateGap) * 100).toFixed(2) + 'pp on ' + money(lo.ira)
+        + ' of IRA = ' + money(Math.abs(rateGap * lo.ira)) + ' of pure valuation difference,');
+    console.log('   against a margin between the two answers of only ' + money(Math.abs(hi.score - lo.score)) + '.');
+    console.log('   ' + (hi.gross > lo.gross ? hi.lastConvYear : lo.lastConvYear)
+        + ' holds more GROSS wealth; ' + (hi.roth > lo.roth ? hi.lastConvYear : lo.lastConvYear)
+        + ' holds more Roth. Neither dominates, so this is a real trade -');
+    console.log('   and the search resolves it with a rate that is an artifact of the plan being scored.');
+
+    console.log('\n   The same pair re-scored at a SHARED heirs rate (identical mechanics, valuation only):');
+    console.log('     heirs rate   ' + peaks.map(p => String(p.lastConvYear).padStart(14)).join('')
+        + '        margin   winner');
+    for (const rate of [undefined, 0.12, 0.22, 0.24, 0.32, 0.37]) {
+        const c = cutoffCurve(CANON, 'all', rate);
+        const vals = peaks.map(p => c.rows[p.cut].score);
+        const iw = vals.indexOf(Math.max(...vals));
+        const margin = Math.max(...vals) - Math.min(...vals);
+        console.log('     ' + String(rate === undefined ? 'NOT SET' : pct(rate, 0)).padStart(10)
+            + '   ' + vals.map(v => money(v).padStart(14)).join('')
+            + '  ' + money(margin).padStart(12) + '   ' + peaks[iw].lastConvYear
+            + (rate === undefined ? '   <- the only row that picks it' : ''));
+    }
+    const margins = [0.12, 0.22, 0.24, 0.32, 0.37].map(rate => {
+        const c = cutoffCurve(CANON, 'all', rate);
+        return Math.abs(c.rows[hi.cut].score - c.rows[lo.cut].score);
+    });
+    const defMargin = Math.abs(hi.score - lo.score);
+    console.log('\n   Every shared rate from 12% to 37% picks ' + lo.lastConvYear + ' over ' + hi.lastConvYear
+        + ', by a margin ' + Math.round(Math.min(...margins) / defMargin) + 'x to '
+        + Math.round(Math.max(...margins) / defMargin) + 'x');
+    console.log('   the one the default scoring decides on. (The GLOBAL best at 12% is 2027, not '
+        + lo.lastConvYear + ' -');
+    console.log('   this row is the head-to-head between the two peaks only.)');
+}
+
+// ---- 9. THE DECISIVE TEST. Does a shared rate actually remove the sensitivity? ---------------
+// Section 8 argues the instability is caused by the per-run discount rate. That is a claim about
+// cause, and re-running the same perturbations under a SHARED rate is what tests it: if the cause
+// is right the answer should stop moving.
+console.log('\n9. THE SAME PERTURBATIONS, UNDER A SHARED HEIRS RATE  (tests section 8\'s claim)');
+console.log('   perturbation          default (no rate)      at 24%      at 32%');
+const sharedBest = {};
+for (const rate of [0.24, 0.32]) {
+    sharedBest[rate] = argmaxOf(cutoffCurve(CANON, 'all', rate).rows).lastConvYear;
+}
+let movesDefault = 0, movesShared = 0;
+for (const [label, over] of perturbs) {
+    const d = bestConversionStopYear({ ...CANON, ...over }, { mode: 'all' }).stopYearCalendar;
+    const cells = [0.24, 0.32].map(rate => {
+        const c = cutoffCurve({ ...CANON, ...over }, 'all', rate);
+        return argmaxOf(c.rows).lastConvYear;
+    });
+    if (d !== best.lastConvYear) movesDefault++;
+    if (cells[0] !== sharedBest[0.24] || cells[1] !== sharedBest[0.32]) movesShared++;
+    console.log('   ' + label.padEnd(20) + '  ' + String(d ?? 'none').padStart(16)
+        + '  ' + String(cells[0] ?? 'none').padStart(10) + '  ' + String(cells[1] ?? 'none').padStart(10)
+        + (d !== best.lastConvYear ? '   <- default moved' : ''));
+}
+console.log('\n   baseline answers: default ' + best.lastConvYear + ', at 24% ' + sharedBest[0.24]
+    + ', at 32% ' + sharedBest[0.32]);
+console.log('   perturbations that moved the DEFAULT answer : ' + movesDefault + ' of ' + perturbs.length);
+console.log('   perturbations that moved a SHARED-rate answer: ' + movesShared + ' of ' + perturbs.length);
+console.log('   -> ' + (movesShared < movesDefault
+    ? 'CONFIRMS section 8: the sensitivity is a property of the default scoring.'
+    : 'DOES NOT confirm section 8: a shared rate is just as sensitive, so the cause is elsewhere.'));
+
+// ---- 10. Where the sensitivity actually comes from -------------------------------------------
+// Section 9 refuted the mechanism section 8 proposed. Section 2 measured flatness only in the
+// DEFAULT basis, so the obvious untested candidate is that the objective is near-flat over a wide
+// band of stop years in EVERY basis, and the argmax is decided by noise-scale differences whatever
+// rate is used. This measures that.
+console.log('\n10. FLATNESS IN EVERY BASIS  (the candidate section 9 leaves standing)');
+console.log('    basis        peaks   cutoffs within 0.1%   year span   worst-in-band cost   best');
+for (const rate of [undefined, 0.12, 0.22, 0.24, 0.32, 0.37]) {
+    const c = cutoffCurve(CANON, 'all', rate);
+    const b = argmaxOf(c.rows);
+    const inBand = c.rows.filter(r => (b.score - r.score) <= 0.001 * Math.abs(b.score));
+    const yrs = inBand.map(r => r.lastConvYear).filter(y => y != null);
+    const span = yrs.length ? Math.max(...yrs) - Math.min(...yrs) : 0;
+    const worst = inBand.reduce((w, r) => (r.score < w.score ? r : w), inBand[0]);
+    const cost = b.score - worst.score;
+    console.log('    ' + String(rate === undefined ? 'NOT SET' : pct(rate, 0)).padStart(8)
+        + '  ' + String(localMaxima(c.rows).length).padStart(9)
+        + '  ' + String(inBand.length).padStart(20)
+        + '  ' + String(span + 'y').padStart(10)
+        + '  ' + money(cost).padStart(19) + ' (' + pct(cost / Math.abs(b.score), 3) + ')'
+        + '   ' + String(b.lastConvYear ?? 'none').padStart(6));
+}
+console.log('\n    Sections 9 and 10 together: under a shared rate the peak is SHARP for any one input');
+console.log('    set, yet it RELOCATES by up to 3 years under a 0.5% input change. Not a plateau -');
+console.log('    a moving peak. So the cost of landing on the wrong year is the number that decides');
+console.log('    whether any of this matters, and it is not the worst-in-band figure above.');
+
+// ---- 11. What does being on the wrong year actually cost? ------------------------------------
+// The perturbations in section 9 reach {2027, 2029, 2030, 2032}. Those are the answers a user can
+// actually be handed by nudging an input they would not think material. Scoring all of them in one
+// basis at a time gives the real cost of the instability.
+console.log('\n11. THE COST OF LANDING ON THE WRONG YEAR');
+const reachable = [2027, 2029, 2030, 2032];
+console.log('    Years the perturbations in section 9 actually produced: ' + reachable.join(', '));
+console.log('\n    basis      ' + reachable.map(y => String(y).padStart(14)).join('') + '     spread   worst as % NW');
+for (const rate of [undefined, 0.12, 0.22, 0.24, 0.32, 0.37]) {
+    const c = cutoffCurve(CANON, 'all', rate);
+    const vals = reachable.map(y => {
+        const row = c.rows.find(r => r.lastConvYear === y);
+        return row ? row.score : null;
+    });
+    const bb = argmaxOf(c.rows).score;
+    const spread = Math.max(...vals) - Math.min(...vals);
+    console.log('    ' + String(rate === undefined ? 'NOT SET' : pct(rate, 0)).padStart(8)
+        + '   ' + vals.map(v => money(v).padStart(14)).join('')
+        + '  ' + money(spread).padStart(11)
+        + '   ' + pct((bb - Math.min(...vals)) / Math.abs(bb)));
+}
+console.log('\n    And what those same years mean in P106\'s own terms (mechanics, not valuation):');
+console.log('    year        conversions      ending Roth       ending IRA    ending Brokerage');
+for (const y of reachable) {
+    const row = curve.rows.find(r => r.lastConvYear === y);
+    if (!row) continue;
+    console.log('    ' + String(y).padStart(6) + '  ' + money(row.conv).padStart(15)
+        + '  ' + money(row.roth).padStart(15) + '  ' + money(row.ira).padStart(15)
+        + '  ' + money(row.brok).padStart(18));
+}
 
 // ---- scoring the registered predictions ------------------------------------------------------
 rule('═');

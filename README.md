@@ -186,6 +186,11 @@ My primary motivations for this tool are:
 
 I use AI to keep track of and categorize possible future enhancements. You can read the [CURRENT PLANS](https://github.com/nightskyguy/retirement_assets/blob/main/.planning/retirement-optimizer/task_plan.md) to see the nitty-gritty, up-to-date details. Do note that the ordering in PLANS does not reflect my view of priority. You can also peruse the [findings](https://github.com/nightskyguy/retirement_assets/blob/main/.planning/retirement-optimizer/findings.md) and [progress](https://github.com/nightskyguy/retirement_assets/blob/main/.planning/retirement-optimizer/progress.md) files to get insights into what has been done. Or you can check below which may not be up-to-date. I make weekly and sometimes daily changes.
 
+There are also a handful of controls the ordinary page does not show: an advanced surface behind a
+URL parameter, two experimental features gated a notch deeper, and a few real inputs - property and
+local tax for the SALT test among them - that can only be set through a link. They are all listed in
+[ExperimentalFeatures.md](https://github.com/nightskyguy/retirement_assets/blob/main/ExperimentalFeatures.md).
+
 + Better organize the Annual Details tables. There are just too many columns to easily navigate.
 + Allow exporting of the Annual Details table(s). 
 + **State standard deduction accuracy:** States that use the Federal standard deduction (AZ, CO, IA, ME, MN, MS, ND, SC) now reference it directly so the deduction updates automatically when the Federal value changes. States with *fixed* standard deductions that are **not** indexed to inflation (AL, MT, OH) are incorrectly inflated by the engine each year - this overstates the deduction and slightly understates future taxes for those state residents. A future fix will properly handle those (and any future similar) states.

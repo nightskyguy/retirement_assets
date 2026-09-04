@@ -48,7 +48,7 @@ weeks.
   [`CONVERSION_STOP_YEAR.md`](CONVERSION_STOP_YEAR.md), that optimum is a sharp peak that relocates by
   up to 3 years under a 1% input change, so "each arm at its own best stop year" compares two
   argmaxes rather than two plans.
-- **Shared heirs rate**, headline 24%, band 12%-37%. Never the default `totalWealth`, which discounts
+- **Shared heirs rate**, headline 24%, band 12%-37%. Never the default `totalNetWealth`, which discounts
   each run's IRA at that run's own final-year marginal rate and so scores different arms on different
   bases.
 - **Spend asserted equal**: largest gap across every arm and baseline is **$4** on $7.0M of lifetime

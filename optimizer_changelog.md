@@ -17,6 +17,23 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.172f"></a>
+
+## 11.172f
+
+**The wealth total is now named for what it is.**
+
+The total on the balances chart and in the Annual Details table was labeled `TotalWealth`, which
+sounds like a plain sum of your accounts. It is not one. That figure already subtracts the tax that
+would be owed on the IRA if it were drawn, and the capital-gains tax on brokerage growth above its
+basis; Roth, cash and returned basis are counted at face value. It now reads **`TotalNetWealth`** in
+both places.
+
+No number changes, and no plan produces a different answer. If you export the Annual Details or read
+the column by name, the name is what moved.
+
+---
+
 <a id="11.171f"></a>
 
 ## 11.171f

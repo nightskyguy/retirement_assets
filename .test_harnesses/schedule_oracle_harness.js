@@ -99,7 +99,7 @@ function scoreOf(res, sharedRate, baseSpend = null) {
     const last = res.log[res.log.length - 1];
     const atnw = afterTaxNetWorth(res.totals.terminal, sharedRate, res.totals.capGainsRate);
     const defl = (res.finalNW && res.finalNW !== 0)
-        ? ((last.totalWealth / (last.inflationFactor || 1)) / res.finalNW) : 1;
+        ? ((last.totalNetWealth / (last.inflationFactor || 1)) / res.finalNW) : 1;
     return atnw * defl;
 }
 function evalArms(cellBase) {

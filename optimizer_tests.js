@@ -1725,7 +1725,7 @@ assertEqual(
 		assertEqual(result.log.length > 0, true, 'Fixed strategy: runs when IRA is small');
 		// Brokerage or Cash must have been used (total wealth less than starting brokerage+cash+ira)
 		const startingTotal = 30000 + 200000 + 100000 + 50000;
-		assertEqual(lastYear.totalWealth < startingTotal, true, 'Fixed strategy: assets drawn down when IRA small');
+		assertEqual(lastYear.totalNetWealth < startingTotal, true, 'Fixed strategy: assets drawn down when IRA small');
 	}
 
 	// (a-4) Adequate portfolio should succeed

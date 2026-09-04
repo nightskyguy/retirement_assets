@@ -230,7 +230,7 @@ share-URL decoder is re-implemented in node and none can drift. See `.test_harne
    years differ by 4.5x in lifetime conversions and $3.7M in ending Roth, and 1.3-4.6% of net worth.
 2. **The search itself is sound.** Idempotent from any starting stop year, deterministic, and the
    curve really is multi-modal so the linear scan is necessary rather than merely cautious.
-3. **The default valuation basis is not neutral.** `totalWealth` discounts the IRA at that run's OWN
+3. **The default valuation basis is not neutral.** `totalNetWealth` discounts the IRA at that run's OWN
    final-year marginal rate, so candidates are scored at different rates - 34.21% against 26.89%
    between two peaks here, $277,192 of pure valuation against a $6,949 margin. It is the only basis
    that picks 2032; every shared rate from 12% to 37% picks 2029 head to head.

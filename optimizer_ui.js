@@ -1007,7 +1007,7 @@ function runSimulation() {
     lastTotals = res.totals;
     lastFinalNW = res.finalNW;
     const lastEntry = res.log[res.log.length - 1];
-    lastFinalNWCurrentDollars = lastEntry.totalWealth / (lastEntry.inflationFactor || 1);
+    lastFinalNWCurrentDollars = lastEntry.totalNetWealth / (lastEntry.inflationFactor || 1);
     updateTable(res.log);
     updateStats(res.totals, res.finalNW, lastFinalNWCurrentDollars);
     updateCharts(res.log);
@@ -1363,7 +1363,7 @@ function _runOptimizerNow() {
             _acaBreachYears: acaBreachYears,
             totals: res.totals,
             finalNW: res.finalNW,
-            finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
+            finalNWCurrentDollars: lastEntry.totalNetWealth / (lastEntry.inflationFactor || 1)
         };
         results.push(row);
         strategyOverridesList.push({ strategyLabel, paramLabel, paramSortVal, overrides, family: _fk, modifier });
@@ -1458,7 +1458,7 @@ function _runOptimizerNow() {
                     _hitCeiling: opt.hitCeiling,
                     totals: opt.result.totals,
                     finalNW: opt.result.finalNW,
-                    finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
+                    finalNWCurrentDollars: lastEntry.totalNetWealth / (lastEntry.inflationFactor || 1)
                 });
             }
         } else {
@@ -1484,7 +1484,7 @@ function _runOptimizerNow() {
                     _hitCeiling: false,
                     totals: opt.result.totals,
                     finalNW: opt.result.finalNW,
-                    finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
+                    finalNWCurrentDollars: lastEntry.totalNetWealth / (lastEntry.inflationFactor || 1)
                 });
             } else {
                 // Reverse search also failed - report the lowest spend level that was tried
@@ -1685,7 +1685,7 @@ function _runOptimizerNow() {
                 _convOCFinal: lastEntry?.convOC ?? null,
                 totals: beResult.totals,
                 finalNW: beResult.finalNW,
-                finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
+                finalNWCurrentDollars: lastEntry.totalNetWealth / (lastEntry.inflationFactor || 1)
             });
             convRowsAdded++;
         }
@@ -2669,7 +2669,7 @@ const columnCategories = {
     'status': ['Summary', 'Taxation'],
     'spendGoal': ['Summary', 'Income'],
     'netIncome': ['Summary', 'Income'],
-    'totalWealth': ['Summary', 'Balances'],
+    'totalNetWealth': ['Summary', 'Balances'],
     'totalTax': ['Summary', 'Taxation', 'Income'],
     'NominalRate%': ['Summary', 'Taxation'],
     'surplus': ['Summary', 'Income'],
@@ -2796,7 +2796,7 @@ const columnGroupDefs = {
     'IRA1': 'Balances', 'IRA2': 'Balances', 'TotalIRA': 'Balances',
     'Roth1': 'Balances', 'Roth2': 'Balances',
     'Cash': 'Balances', 'CashReserve': 'Balances', 'Roth': 'Balances', 'Brokerage': 'Balances',
-    'Basis': 'Balances', 'totalWealth': 'Balances', 'SumSpendable': 'Balances',
+    'Basis': 'Balances', 'totalNetWealth': 'Balances', 'SumSpendable': 'Balances',
     'brokerageG': 'Balances', 'DRIP': 'Balances', 'SurplusBrok': 'Balances', 'SumBrokIn': 'Balances',
     'cashG': 'Balances', 'rothG': 'Balances', 'RMD%': 'Balances',
     'ConvTaxCash': 'Withdrawals',
@@ -2927,7 +2927,7 @@ function isTableColumnKey(key) {
 // all-zero Roth2 for a single filer is not an empty account, it is an absent person - suppressing
 // that one is right.
 const ALWAYS_SHOW_BALANCE_COLS = new Set([
-    'Cash', 'Brokerage', 'Basis', 'TotalIRA', 'Roth', 'totalWealth', 'SumSpendable',
+    'Cash', 'Brokerage', 'Basis', 'TotalIRA', 'Roth', 'totalNetWealth', 'SumSpendable',
 ]);
 
 // Analyze which columns have content (non-zero, non-empty values)
@@ -3354,13 +3354,13 @@ function updateTable(log) {
         // Check conditions for highlighting
         const spendGoal = row['SpendGoal'] ?? row['spendGoal'];
         const netIncome = row['NetIncome'] ?? row['netIncome'];
-        const totalWealth = row['TotalWealth'] ?? row['totalWealth'];
+        const totalNetWealth = row['TotalNetWealth'] ?? row['totalNetWealth'];
         const age1 = row['Age1'] ?? row['age1'];
         const age2 = row['Age2'] ?? row['age2'];
 
         // Underfunded when income falls short, or portfolio can't cover its required draw.
         const rowGuaranteed = row['guaranteedIncome'] ?? 0;
-        const rowPortfolio  = row['portfolioBalance'] ?? (totalWealth ?? 0);
+        const rowPortfolio  = row['portfolioBalance'] ?? (totalNetWealth ?? 0);
         const rowRequired   = Math.max(0, spendGoal - rowGuaranteed);
         const incomeShortfall = (netIncome < spendGoal * 0.99) || (rowPortfolio < rowRequired);
         const deathOccurred = maritalStatus != row['status'];
@@ -4761,17 +4761,17 @@ function updateCharts(log) {
                 mkLine(rothLabel,     '#8e44ad', rothData),
                 mkLine('Brokerage',   '#4F4FDC', r => r.Brokerage   * adj(r)),
                 mkLine('Cash',        '#27ae60', r => r.Cash        * adj(r)),
-                mkLine('TotalWealth', '#555555', r => r.totalWealth * adj(r)),
+                mkLine('TotalNetWealth', '#555555', r => r.totalNetWealth * adj(r)),
                 // P69 replay overlay: the same plan run on steady assumptions, one dashed total.
                 // Deflated by ITS OWN inflationFactor (fixed-inflation compounding) - deflating by
                 // the path's factors would smuggle the path back into the "expected" line. It
                 // cannot use mkLine/adj, which both close over the replayed log. Appended last so
                 // it draws behind the five solid lines; person views keep it as-is because the
-                // solid TotalWealth line is person-agnostic too.
+                // solid TotalNetWealth line is person-agnostic too.
                 ...(_replayState?.baselineLog ? [{
                     label: 'Plan (steady assumptions)',
                     data: _replayState.baselineLog.map(r =>
-                        pt(r.totalWealth * (inCurrentDollars ? 1 / (r.inflationFactor || 1) : 1))),
+                        pt(r.totalNetWealth * (inCurrentDollars ? 1 / (r.inflationFactor || 1) : 1))),
                     borderColor: '#888888', backgroundColor: '#888888',
                     pointBackgroundColor: '#888888',
                     fill: false, borderDash: [6, 4], pointRadius: 0, borderWidth: 2, spanGaps: true,

@@ -42,7 +42,7 @@ Every cutoff is scored by `afterTaxWealthOfLogRow`, and it has two branches:
 
 | basis | what it does |
 |---|---|
-| **NOT SET** | No Marginal Heirs Tax Rate entered. Returns the row's own `totalWealth`, which discounts the IRA at **`sim.nominalTaxRate`, that run's OWN final-year ordinary marginal rate**. |
+| **NOT SET** | No Marginal Heirs Tax Rate entered. Returns the row's own `totalNetWealth`, which discounts the IRA at **`sim.nominalTaxRate`, that run's OWN final-year ordinary marginal rate**. |
 | **a shared rate** (12%, 24%, ...) | Discounts every cutoff's IRA at the same rate, supplied as an input. |
 
 The distinction carries a finding of its own; see [The default basis compares plans at different
@@ -183,7 +183,7 @@ having established that the instability is cheap.
 
 Found while explaining the 2029/2032 pair, and it stands on its own as a correctness issue.
 
-`totalWealth` (`evaluateYearOutcome`, `optimizer_core.js:3801`) is already an after-tax figure: the
+`totalNetWealth` (`evaluateYearOutcome`, `optimizer_core.js:3801`) is already an after-tax figure: the
 IRA is discounted at `sim.nominalTaxRate`, **the run's own final-year ordinary marginal rate**. Every
 cutoff ends in a different tax situation, so every cutoff is scored with a different discount rate.
 

@@ -872,14 +872,14 @@ test('wdRate%: equals netOut ÷ prior-year portfolio balance', () => {
     }
 });
 
-test('wdRate%: denominator is the raw portfolio, not tax-discounted totalWealth', () => {
-    // BASE holds a $600k IRA, so totalWealth is materially below portfolioBalance. If the old
+test('wdRate%: denominator is the raw portfolio, not tax-discounted totalNetWealth', () => {
+    // BASE holds a $600k IRA, so totalNetWealth is materially below portfolioBalance. If the old
     // after-tax denominator leaked back in, the rate would read high by roughly that discount.
     const result = simulate({ ...BASE });
     const r0 = result.log[0], r1 = result.log[1];
-    assert(r0.portfolioBalance > r0.totalWealth + 1000,
+    assert(r0.portfolioBalance > r0.totalNetWealth + 1000,
         'Fixture no longer distinguishes the two denominators; pick balances with a bigger IRA');
-    const wrongWay = r1.netOut / r0.totalWealth;
+    const wrongWay = r1.netOut / r0.totalNetWealth;
     assert(Math.abs(r1['wdRate%'] - wrongWay) > 1e-6,
         'wdRate% still matches the after-tax denominator');
 });
@@ -998,7 +998,7 @@ test('avgNetDepletion: negative when the portfolio outgrows withdrawals, positiv
 });
 
 test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses', () => {
-    // prevPortfolio replaced the old gkPrevPortfolio/prevTotalWealth pair. GK always used the raw
+    // prevPortfolio replaced the old gkPrevPortfolio/prevTotalNetWealth pair. GK always used the raw
     // balance sum, so merging the two fields must not move its output by a cent. The expected
     // values below were captured from a run made BEFORE that merge.
     //
@@ -1075,7 +1075,7 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
         `Expected 3 guardrail adjustments, got ${gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length}`);
 });
 
-// ── Baseline accounting (after-tax NW + totalWealth fix) ───────────────────────
+// ── Baseline accounting (after-tax NW + totalNetWealth fix) ───────────────────────
 const afterTaxNetWorth = core.afterTaxNetWorth;
 
 test('afterTaxNetWorth: Roth/Cash/basis at face; brokerage gains × (1−capG); IRA × (1−futureRate)', () => {
@@ -1109,7 +1109,7 @@ test('simulate: exposes totals.terminal breakdown + totals.capGainsRate', () => 
     assertNear(res.totals.terminal.basis, last.Basis, 'terminal.basis vs log', 1);
 });
 
-test('totalWealth: IRA discounted by ordinary rate, terminal brokerage at face after the 1014 step-up', () => {
+test('totalNetWealth: IRA discounted by ordinary rate, terminal brokerage at face after the 1014 step-up', () => {
     // Single filer (BASE has no spouse), so the ONLY step-up in play is the terminal one.
     const inp = { ...BASE, IRA1: 100000, Brokerage: 500000, BrokerageBasis: 100000,
                   Cash: 200000, spendGoal: 30000, die1: 78 };
@@ -1136,7 +1136,7 @@ test('totalWealth: IRA discounted by ordinary rate, terminal brokerage at face a
             + last.Roth1 + last.Roth2 + last.Cash + last['-basisPreStepUp'];
         assertNear(res.finalNW - oldLiquidation, brokGainPreStepUp * capG,
             'the step-up is worth exactly the cap-gains tax it removes', 1);
-        assertNear(last['-totalWealthPreStepUp'], oldLiquidation,
+        assertNear(last['-totalNetWealthPreStepUp'], oldLiquidation,
             'the preserved liquidation value must match the pre-step-up formula', 1);
     }
 });
@@ -1271,8 +1271,8 @@ test('P35g: terminal valuation is stepped up and both pre-step-up bases are pres
     assertNear(res.totals.terminal.basis, res.totals.terminal.brokerage,
         'totals.terminal must carry the stepped-up basis', 1);
     assert(last['-basisPreStepUp'] !== undefined, 'the pre-step-up basis must be preserved');
-    assert(last['-totalWealthPreStepUp'] !== undefined, 'the liquidation value must be preserved');
-    assert(res.finalNW > last['-totalWealthPreStepUp'], 'the step-up can only raise terminal wealth');
+    assert(last['-totalNetWealthPreStepUp'] !== undefined, 'the liquidation value must be preserved');
+    assert(res.finalNW > last['-totalNetWealthPreStepUp'], 'the step-up can only raise terminal wealth');
     // The step-up is a terminal event, not a per-year one: no other row may carry these keys.
     const others = res.log.slice(0, -1).filter(r => r['-basisPreStepUp'] !== undefined);
     assert(others.length === 0, `only the terminal row may be stepped up, got ${others.length} others`);
@@ -1288,7 +1288,7 @@ test('P35g: the correction favors NOT converting - the one-sided bias it removes
     // the arm that KEEPS its brokerage; a converting plan spends brokerage on conversion tax and
     // so has less unrealized gain left for 1014 to reach.
     const base = { ...STEPUP_BASE, convertExcessToRoth: false };
-    const stepUpValue = res => res.finalNW - res.log[res.log.length - 1]['-totalWealthPreStepUp'];
+    const stepUpValue = res => res.finalNW - res.log[res.log.length - 1]['-totalNetWealthPreStepUp'];
     const noConv   = simulate({ ...base, extraConversionAmount: 0 });
     const withConv = simulate({ ...base, extraConversionAmount: 40000 });
     assert(stepUpValue(noConv) > 0, 'the no-conversion arm must hold gains worth stepping up');
@@ -1325,7 +1325,7 @@ test('baseline metric: higher after-tax NW ranks a richer terminal portfolio hig
 });
 
 // ── Phase 22: Guyton-Klinger tests ───────────────────────────────────────────
-// GK uses raw portfolio balance (not tax-discounted totalWealth) for IWR and WR
+// GK uses raw portfolio balance (not tax-discounted totalNetWealth) for IWR and WR
 // checks, so both sides of the comparison are on equal footing.
 
 const GK_BASE = {
@@ -3509,13 +3509,13 @@ test('OC: counterfactual pays the RMD counter-effect (bigger IRA → bigger RMDs
     // and only the actual run needs its pre-step-up value.
     const lastRow = actual.log[actual.log.length - 1];
     const lastOC = lastRow.convOC;
-    const actualLiquidation = lastRow['-totalWealthPreStepUp'] ?? actual.finalNW;
+    const actualLiquidation = lastRow['-totalNetWealthPreStepUp'] ?? actual.finalNW;
     assertNear(lastOC, actualLiquidation - cf.finalNW, 'convOC identity vs counterfactual finalNW', 1);
     // And pin the relationship between the bases, so a change that quietly puts Break Even onto
     // the step-up basis fails here instead of silently moving every reported break-even year.
     assert(actual.finalNW > actualLiquidation,
         'the terminal step-up must lift finalNW above the liquidation value Break Even scores on');
-    assert(cf.log[cf.log.length - 1]['-totalWealthPreStepUp'] === undefined,
+    assert(cf.log[cf.log.length - 1]['-totalNetWealthPreStepUp'] === undefined,
         'a _cfRun must NOT be stepped up, or convOC differences two different valuations');
     // Refund really shrank the counterfactual's year-0 IRA draw (over-withdrawal not taken).
     assert(cf.log[0].IRAwd < actual.log[0].IRAwd - 1000,
@@ -3778,9 +3778,9 @@ test('representation: a suppressed year 0 is not a conversion year (timing must 
 
 test('P24: afterTaxWealthOfLogRow matches the Break Even block valuation (guards the shared-helper extraction)', () => {
     const r = simulate({ ...STOP_BASE }).log[10];
-    // Unset heirs rate -> row totalWealth verbatim.
-    assert(afterTaxWealthOfLogRow(r, null) === r.totalWealth, 'null rate must return row totalWealth');
-    assert(afterTaxWealthOfLogRow(r, undefined) === r.totalWealth, 'undefined rate must return row totalWealth');
+    // Unset heirs rate -> row totalNetWealth verbatim.
+    assert(afterTaxWealthOfLogRow(r, null) === r.totalNetWealth, 'null rate must return row totalNetWealth');
+    assert(afterTaxWealthOfLogRow(r, undefined) === r.totalNetWealth, 'undefined rate must return row totalNetWealth');
     // With a heirs rate -> IRA discounted, brokerage gains at the row cap-gains rate, rest at face.
     const rate = 0.30;
     const expected = (r.IRA1 + r.IRA2) * (1 - rate)
@@ -7438,7 +7438,7 @@ function schedReplayDelta(overrides, mutate) {
     let maxYr = 0;
     if (a.log.length !== b.log.length) return { maxYr: Infinity, dNW: Infinity, scheduled: plan.filter(Boolean).length };
     for (let i = 0; i < a.log.length; i++) {
-        maxYr = Math.max(maxYr, Math.abs((b.log[i].totalWealth ?? 0) - (a.log[i].totalWealth ?? 0)));
+        maxYr = Math.max(maxYr, Math.abs((b.log[i].totalNetWealth ?? 0) - (a.log[i].totalNetWealth ?? 0)));
     }
     return { maxYr, dNW: (b.finalNW ?? 0) - (a.finalNW ?? 0), scheduled: plan.filter(Boolean).length };
 }

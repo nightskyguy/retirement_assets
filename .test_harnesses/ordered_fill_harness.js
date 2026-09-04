@@ -119,7 +119,7 @@ function surplusLanding() {
     console.log('     expect: a Cash-before-Brokerage code banks to Cash (unchanged from legacy);');
     console.log('             a code reaching Brokerage first banks there instead.');
     console.log('='.repeat(100));
-    console.log('\n  seq   fund-first   surplus->Cash   surplus->Brok     endCash    endBrok   totalWealth');
+    console.log('\n  seq   fund-first   surplus->Cash   surplus->Brok     endCash    endBrok   totalNetWealth');
     for (const seq of SEQS) {
         const log = run(seq).log;
         const toCash = log.reduce((s, e) => s + (e.surplusCash || 0), 0);
@@ -128,7 +128,7 @@ function surplusLanding() {
         console.log('  ' + seq.padEnd(6) + FUNDABLE_FIRST(seq).padEnd(11) +
             money(toCash).padStart(15) + money(toBrok).padStart(15) +
             money(last.Cash || 0).padStart(12) + money(last.Brokerage || 0).padStart(11) +
-            money(last.totalWealth || 0).padStart(14));
+            money(last.totalNetWealth || 0).padStart(14));
     }
 }
 

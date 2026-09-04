@@ -1224,7 +1224,7 @@ function buildSimYearLogRecord(p) {
         Roth2: p.balance.Roth2,
         Brokerage: p.balance.Brokerage,
         Basis: p.balance.BrokerageBasis,
-        totalWealth: p.totalWealth,
+        totalNetWealth: p.totalNetWealth,
         portfolioBalance: p.portfolioBalance,
         guaranteedIncome: p.guaranteedIncome,
         brokerageG: p.gains.Brokerage,
@@ -3723,7 +3723,7 @@ function growAndSettle(sim, yr) {
     // Brokerage tax treatment is correct: dividends are taxed as qualifiedDiv in calculateTaxes()
     // (line ~864), liquidations are taxed as capGains above BrokerageBasis, and the growth
     // applied here is unrealized appreciation - not taxable until sold. The one valuation nuance:
-    // unrealized gains are carried at face value during the simulation; totalWealth (line ~1091)
+    // unrealized gains are carried at face value during the simulation; totalNetWealth (line ~1091)
     // discounts them by nominalTaxRate, but year-by-year spendable wealth does not reserve for
     // deferred tax on gains that are never liquidated.
 
@@ -3798,7 +3798,7 @@ function evaluateYearOutcome(sim, yr) {
     // After-tax terminal valuation: IRA taxed at ordinary marginal (nominalTaxRate),
     // brokerage gains above basis taxed at the capital-gains rate (not ordinary),
     // Roth + Cash + returned basis at face.
-    yr.totalWealth = (balance.IRA1 + balance.IRA2) * (1 - sim.nominalTaxRate)
+    yr.totalNetWealth = (balance.IRA1 + balance.IRA2) * (1 - sim.nominalTaxRate)
         + Math.max(0, balance.Brokerage - balance.BrokerageBasis) * (1 - sim.capitalGainsRate)
         + balance.Roth1 + balance.Roth2 + balance.Cash + balance.BrokerageBasis
 
@@ -3814,7 +3814,7 @@ function evaluateYearOutcome(sim, yr) {
         totals.yearsfunded += 1
     }
 
-    inspectForErrors({ totalWealth: yr.totalWealth })  // See if any numbers look fishy.
+    inspectForErrors({ totalNetWealth: yr.totalNetWealth })  // See if any numbers look fishy.
 
     // Withdrawal rate = portfolio withdrawals / start-of-year portfolio balance.
     // SS and pension are NOT netted out of the numerator: the classic 4% rule measures what
@@ -3851,7 +3851,7 @@ function logYear(sim, yr) {
         netWithdrawals: yr.netWithdrawals, rmd1: yr.rmd1, rmd2: yr.rmd2, totalConverted: yr.totalConverted, tax: yr.tax, IRMAA: yr.IRMAA, IRMAATier: yr.IRMAATier, medicareBase: yr.medicareBase, cpiRate: sim.cpiRate,
         iraVolSpend1: yr.iraVolSpend1, iraVolSpend2: yr.iraVolSpend2, iraConvGross1: yr.iraConvGross1, iraConvGross2: yr.iraConvGross2,
         totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, rateBasis: yr.rateBasis, volIRAwd: yr.volIRAwd, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
-        balance: balance, nominalTaxRate: sim.nominalTaxRate, totalWealth: yr.totalWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
+        balance: balance, nominalTaxRate: sim.nominalTaxRate, totalNetWealth: yr.totalNetWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
         gains: yr.gains, rmd1Pct: yr.rmd1Pct, subCycleLabel: yr.subCycleLabel, convNetValue: null, excessNetValue: null,
         incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,
         extraConvGross: yr.extraConvGross,
@@ -4183,7 +4183,7 @@ function simulate(inputs) {
     // happens to touch non-negative, since a plan can blip positive for a year on its way to a
     // permanently worse outcome. Reported only once the costed action has actually occurred by
     // that year; null if the plan never sustains a non-negative gap through its final year.
-    // Valuation: row totalWealth (IRA at the run's own nominal rate, brokerage gains at the
+    // Valuation: row totalNetWealth (IRA at the run's own nominal rate, brokerage gains at the
     // cap-gains rate, Roth/Cash/basis at face) unless the user supplied futureIRATaxRate
     // (Marginal Heirs Tax Rate) - then both runs' IRAs are discounted at that shared rate.
     totals.convBEYear = null;
@@ -4284,18 +4284,18 @@ function simulate(inputs) {
     if (!inputs._cfRun) {
         const _last = log[log.length - 1];
         const _gainAtDeath = Math.max(0, _last.Brokerage - _last.Basis);
-        // Exactly inverts the cap-gains haircut in the totalWealth formula (evaluateYearOutcome):
+        // Exactly inverts the cap-gains haircut in the totalNetWealth formula (evaluateYearOutcome):
         // old contribution was gain*(1-capG) + basis, new is basis + gain, so the difference is
         // gain*capG. Adding the delta rather than restating the whole formula keeps the IRA half
         // in one place, where it cannot drift from this.
-        // Both pre-step-up values are kept. '-totalWealthPreStepUp' is the terminal row's
+        // Both pre-step-up values are kept. '-totalNetWealthPreStepUp' is the terminal row's
         // LIQUIDATION value - what the estate would net by selling instead of inheriting - and it
         // is the basis the Break Even series above is computed on. Keeping it makes the two bases
         // recoverable from a finished run rather than implicit, which is what lets the convOC
         // identity still be asserted and what a legacy-basis Break Even would build on.
         _last['-basisPreStepUp'] = _last.Basis;              // leading '-' -> no table column
-        _last['-totalWealthPreStepUp'] = _last.totalWealth;
-        _last.totalWealth += _gainAtDeath * sim.capitalGainsRate;
+        _last['-totalNetWealthPreStepUp'] = _last.totalNetWealth;
+        _last.totalNetWealth += _gainAtDeath * sim.capitalGainsRate;
         _last.Basis = _last.Brokerage;
     }
 
@@ -4321,7 +4321,7 @@ function simulate(inputs) {
     // draw instead. The page shows it; nothing in the engine reads it. See _splitWeightsFor.
     totals.splitWeightsInvalid = !!sim.splitWeightsInvalid;
 
-    return { log, totals, finalNW: log[log.length - 1].totalWealth };
+    return { log, totals, finalNW: log[log.length - 1].totalNetWealth };
 }
 
 ///////////////////////////
@@ -4369,12 +4369,12 @@ function diagnoseConvBreakEvenFailure(inputs, actualLog) {
 }
 
 // After-tax value of a single simulate() LOG ROW, in the Break Even valuation basis: the row's
-// own totalWealth (IRA at that run's nominal rate) unless a Marginal Heirs Tax Rate is supplied,
+// own totalNetWealth (IRA at that run's nominal rate) unless a Marginal Heirs Tax Rate is supplied,
 // in which case the IRA is discounted at that shared rate and brokerage gains at the row's own
 // cap-gains rate. Factored out of simulate()'s Break Even block so bestConversionStopYear scores
 // on the identical basis -- the two can never drift.
 function afterTaxWealthOfLogRow(r, futureIRATaxRate) {
-    if (futureIRATaxRate == null) return r.totalWealth;
+    if (futureIRATaxRate == null) return r.totalNetWealth;
     return (r.IRA1 + r.IRA2) * (1 - futureIRATaxRate)
         + Math.max(0, r.Brokerage - r.Basis) * (1 - (r['-capGainsRate'] ?? 0.15))
         + r.Roth + r.Cash + r.Basis;
@@ -4399,7 +4399,7 @@ function afterTaxWealthOfLogRow(r, futureIRATaxRate) {
 //                 differently-timed plan than the one the user could load.)
 //
 // Scores each cutoff on afterTaxWealthOfLogRow of the final row, the same basis as Break Even
-// (honors the user's Marginal Heirs Tax Rate when set, else row totalWealth). Any stop-year the
+// (honors the user's Marginal Heirs Tax Rate when set, else row totalNetWealth). Any stop-year the
 // user has already set is stripped first, so the search always explores from a full-conversion
 // baseline. Caller should gate on conversions actually occurring (log.some(rothConv > 1)), same
 // precondition as the Break Even diagnostic. Cost: n+1 cheap (no-OC) simulate() calls plus one
@@ -4726,8 +4726,8 @@ function optimizeSpend(baseInputs, overrides) {
 // Real-dollar, spendable-weighted score for one simulate() result. Same value as the optimizer
 // table's per-row `_baselineScore` (optimizer_ui.js), but computed from a result object so the
 // conversion sweep can rank on it too. Note: the UI derives real-dollar after-tax NW as
-// afterTaxNW * (finalNWCurrentDollars / finalNW); since finalNWCurrentDollars = totalWealth /
-// inflationFactor and finalNW = totalWealth, that ratio IS 1/inflationFactor, so dividing here is
+// afterTaxNW * (finalNWCurrentDollars / finalNW); since finalNWCurrentDollars = totalNetWealth /
+// inflationFactor and finalNW = totalNetWealth, that ratio IS 1/inflationFactor, so dividing here is
 // algebraically identical and drops the finalNW===0 guard. futureIRARate MUST be the caller's
 // SHARED rate across strategies -- passing a per-run rate reintroduces exactly the self-referential
 // comparison this metric exists to remove (raw finalNW discounts each run's IRA at its own rate).
@@ -5871,7 +5871,7 @@ function buildVariations(base) {
  *   Roth + Cash + returned basis → at face (already after-tax)
  *   Brokerage gains above basis  → discounted by the capital-gains rate
  *   Traditional IRA              → discounted by the expected future liquidation rate
- * Unlike the per-year `totalWealth` (which uses the current-year ordinary marginal for the
+ * Unlike the per-year `totalNetWealth` (which uses the current-year ordinary marginal for the
  * IRA), this uses a single shared `futureIRARate` so deltas between strategies are fair.
  * @param {{ira:number,roth:number,cash:number,brokerage:number,basis:number}} t terminal balances (totals.terminal)
  * @param {number} futureIRARate expected future tax rate on IRA distributions (decimal)

@@ -3548,7 +3548,7 @@ under input changes of 1% or less, over years that differ by 4.5x in conversions
 Roth, at 1.3-4.6% of net worth. **Consequence that shaped everything after it: the stop year is a
 CONTROLLED VARIABLE, held fixed across arms.**
 
-**The thing worth remembering from P106a is the refutation.** `totalWealth` discounts the IRA at that
+**The thing worth remembering from P106a is the refutation.** `totalNetWealth` discounts the IRA at that
 run's own final-year marginal rate (34.21% against 26.89% between the two peaks, $277,192 of pure
 valuation against a $6,949 margin), so the default basis scores candidates on different bases. That
 looked exactly like the cause of the wandering and this nearly shipped saying so. The direct test

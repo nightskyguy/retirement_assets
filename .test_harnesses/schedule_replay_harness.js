@@ -104,7 +104,7 @@ for (const [name, decides, ov] of ARMS) {
     let maxYr = 0;
     if (a.log.length !== b.log.length) maxYr = Infinity;
     else for (let i = 0; i < a.log.length; i++) {
-        maxYr = Math.max(maxYr, Math.abs((b.log[i].totalWealth ?? 0) - (a.log[i].totalWealth ?? 0)));
+        maxYr = Math.max(maxYr, Math.abs((b.log[i].totalNetWealth ?? 0) - (a.log[i].totalNetWealth ?? 0)));
     }
     const dSpend = (b.totals?.spendCurrentDollars ?? 0) - (a.totals?.spendCurrentDollars ?? 0);
     const exact = maxYr < 0.01 && Math.abs(dNW) < 0.01;

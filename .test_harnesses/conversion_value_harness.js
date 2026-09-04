@@ -36,7 +36,7 @@
  * comparison of two argmaxes rather than of two plans.
  *
  * VALUATION, per P106 groundrule 2 and P106a finding 3: a SHARED heirs rate, never the default
- * `totalWealth`, which discounts each run's IRA at that run's own final-year marginal rate and so
+ * `totalNetWealth`, which discounts each run's IRA at that run's own final-year marginal rate and so
  * scores different arms on different bases. Headline 24%, sensitivity band 12%-37%.
  *
  * --------------------------------------------------------------------------------------------

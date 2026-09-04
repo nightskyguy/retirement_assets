@@ -17,12 +17,12 @@
  *
  * ONE THING KNOWN BEFORE RUNNING, from reading the fixture rather than from a result:
  * `futureIRATaxRate` is UNDEFINED on the canonical scenario, so `afterTaxWealthOfLogRow()` returns
- * `r.totalWealth`. Predictions A7 and A8 exist because of that reading.
+ * `r.totalNetWealth`. Predictions A7 and A8 exist because of that reading.
  *
  * *** CORRECTION, made after the first run and before any report. The sentence that stood here
- * said totalWealth is GROSS wealth, "which prices a dollar inside the IRA the same as a dollar
+ * said totalNetWealth is GROSS wealth, "which prices a dollar inside the IRA the same as a dollar
  * inside the Roth". That is wrong. `evaluateYearOutcome` (optimizer_core.js:3801) builds
- * totalWealth as an AFTER-TAX figure - the IRA is already discounted, at `sim.nominalTaxRate`,
+ * totalNetWealth as an AFTER-TAX figure - the IRA is already discounted, at `sim.nominalTaxRate`,
  * which is THAT RUN'S OWN final-year ordinary marginal rate. The predictions are left exactly as
  * registered and scored as written; only this reading of the mechanism changes, and section 8
  * below is where the corrected version is measured. It turns out to be the whole answer. ***
@@ -110,18 +110,18 @@ function cutoffCurve(inputs, mode, heirsRate) {
         const ira = (last.IRA1 ?? 0) + (last.IRA2 ?? 0);
         const brok = last.Brokerage ?? 0, cash = last.Cash ?? 0, basis = last.Basis ?? 0;
         const cg = last['-capGainsRate'] ?? 0.15;
-        // The rate totalWealth ACTUALLY discounted this run's IRA at, recovered from the row by
+        // The rate totalNetWealth ACTUALLY discounted this run's IRA at, recovered from the row by
         // inverting the formula in evaluateYearOutcome. This is `sim.nominalTaxRate`, the run's own
         // final-year ordinary marginal - and it is not the same number from one cutoff to the next.
         const impliedIRARate = ira > 0
-            ? 1 - ((last.totalWealth - ((last.Roth ?? 0) + cash + basis)
+            ? 1 - ((last.totalNetWealth - ((last.Roth ?? 0) + cash + basis)
                 - Math.max(0, brok - basis) * (1 - cg)) / ira)
             : null;
         rows.push({
             cut,
             lastConvYear: cut === 0 ? null : start + cut - 1,
             score: afterTaxWealthOfLogRow(last, heirsRate),
-            totalWealth: last.totalWealth,
+            totalNetWealth: last.totalNetWealth,
             conv: res.log.reduce((s, r) => s + (r.rothConv ?? 0), 0),
             spend: res.totals.spend,
             tax: res.totals.tax,
@@ -156,7 +156,7 @@ rule('═');
 console.log('scenario   : ' + META.capturedFrom.replace(/^[^?]*/, '(canonical) '));
 console.log('captured   : ' + META.title + '  ' + META.capturedUTC);
 console.log('heirs rate : ' + (CANON.futureIRATaxRate === undefined
-    ? 'UNDEFINED -> the search scores RAW totalWealth, not after-tax wealth'
+    ? 'UNDEFINED -> the search scores RAW totalNetWealth, not after-tax wealth'
     : CANON.futureIRATaxRate));
 console.log('stop year set in the scenario: ' + CANON.convEndYear + ' (mode ' + CANON.convEndMode + ')');
 rule();
@@ -317,7 +317,7 @@ if (peaks.length >= 2) {
         + '     ' + ((hi.impliedIRARate - lo.impliedIRARate) * 100).toFixed(2) + 'pp');
     line('score the search sees', p => p.score);
 
-    console.log('\n   THE TWO PEAKS ARE NOT SCORED ON THE SAME BASIS. `totalWealth` discounts the IRA at');
+    console.log('\n   THE TWO PEAKS ARE NOT SCORED ON THE SAME BASIS. `totalNetWealth` discounts the IRA at');
     console.log('   `sim.nominalTaxRate` - each run\'s OWN final-year ordinary marginal rate - so a cutoff');
     console.log('   that happens to end in a lower bracket has its IRA valued more generously than one');
     console.log('   that does not, independently of whether it is the better plan.');

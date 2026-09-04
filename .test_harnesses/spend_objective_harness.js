@@ -91,7 +91,7 @@ function wealthOf(res, rate) {
     const last = res.log[res.log.length - 1];
     const atnw = afterTaxNetWorth(res.totals.terminal, rate, res.totals.capGainsRate);
     const defl = (res.finalNW && res.finalNW !== 0)
-        ? ((last.totalWealth / (last.inflationFactor || 1)) / res.finalNW) : 1;
+        ? ((last.totalNetWealth / (last.inflationFactor || 1)) / res.finalNW) : 1;
     return atnw * defl;
 }
 

@@ -120,7 +120,7 @@ rule 4.
       across arms and say what it was fixed at, or report a band and the cost of the band. An arm at
       its own optimal stop year against another arm at its own is two argmaxes a 1% input change
       would move.
-      **Second, separable defect found on the way:** `totalWealth` discounts the IRA at
+      **Second, separable defect found on the way:** `totalNetWealth` discounts the IRA at
       `sim.nominalTaxRate`, that RUN'S OWN final-year marginal rate, so candidates are scored at
       different rates - 34.21% against 26.89% between two peaks, $277,192 of pure valuation against a
       $6,949 margin. The no-heirs-rate default is the only basis that picks 2032; every shared rate

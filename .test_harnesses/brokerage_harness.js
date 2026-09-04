@@ -547,7 +547,7 @@ function s1MkRow(f, res) {
         family: f.family, modifier: f.modifier, param: f.paramLabel,
         cyclic: !!(f.overrides.cyclicEnabled), overrides: f.overrides,
         totals: res.totals, finalNW: res.finalNW,
-        finalNWCurrentDollars: last.totalWealth / (last.inflationFactor || 1),
+        finalNWCurrentDollars: last.totalNetWealth / (last.inflationFactor || 1),
     };
     if (row.cyclic) {
         const hv = res.log.filter(e => e.subCycle && String(e.subCycle).includes('Brok'));

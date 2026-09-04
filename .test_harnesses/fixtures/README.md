@@ -13,7 +13,7 @@ the study into a console.
 timestamp, and `undefinedKeys` - the keys that were `undefined` in the live object and became `null`
 in JSON. A loader must restore those to `undefined`, because the engine distinguishes the two
 (`futureIRATaxRate` undefined means "no heirs rate", and `afterTaxWealthOfLogRow` then scores raw
-`totalWealth`).
+`totalNetWealth`).
 
 **Re-capture when the page's input set changes.** The captured version is in `__meta.title`; a
 fixture from an older version is not wrong, but it is a record of that version.

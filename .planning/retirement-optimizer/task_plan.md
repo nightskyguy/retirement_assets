@@ -31,10 +31,18 @@ User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 20
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
 
-## P106: evaluating conversion-based plans  *(NEW 2026-09-03, user-raised. PRIORITY UNASSIGNED)*
+## P106: evaluating conversion-based plans  *(2026-09-03, user-raised. PRIORITY UNASSIGNED, by the user's choice)*
 
-Groundrules settled with the user before any work; nothing was run. Not in the NOW table yet - a row
-there would push the LINE-30 marker down, and the user has not set a priority.
+**a, b, c and d ALL DONE 2026-09-03. `P106e` remains deferred engine work.** Measurement only - no
+product change, per groundrule 7. Three reports: `research/CONVERSION_STOP_YEAR.md`,
+`research/CONVERSION_VALUE.md`, `research/CONVERSION_VALUE_HOUSEHOLDS.md`.
+**The headline: converting pays on the user's own plan and on every household tested that converts
+at all, and it is far cheaper than their own arithmetic suggested** - $49,121, not $1,732,907,
+because 92% of what they were weighing was the withdrawal-strategy change rather than the
+conversions. The largest single source of the benefit is the widow penalty, and the canonical
+scenario is nearly the worst case for seeing it.
+Still deliberately NOT in the NOW table: a row there would push the LINE-30 marker down, and the
+user chose to leave the priority unassigned on 2026-09-03.
 
 **Canonical scenario: the user's own plan**, not a fixture. Every headline claim is about it.
 `?sg=220k&sc=-1.000&str=fixed&ny=11&pw=20&iwp=5&gkg=20&gka=10&mc=1&fcc=1&cey=2032&cyc=1`

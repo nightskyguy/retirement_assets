@@ -3557,28 +3557,45 @@ test('OC: optimizer/MC path (computeOC unset) skips counterfactual, convOC null'
     assert(r.log.every(x => x.convOC == null), 'without computeOC, convOC must stay null');
 });
 
-test('OC: brief positive blip then sustained negative through plan end → convBEYear null', () => {
-    // fixedpct converts a fixed % of the CURRENT (not original) IRA balance every year with no
-    // bracket ceiling, so conversions keep firing long after they stop paying off. Combined with
-    // a flat futureIRATaxRate valuation and a horizon (die1:80) that ends before the plan's later
-    // years would have recovered, this reproduces the reported bug shape: convOC touches
-    // non-negative for exactly the first year, then stays negative for every remaining year
-    // (never recovers). The old first-touch .find() reported the year-0 blip as Break Even; the
-    // correct answer is null (no sustained crossing exists).
-    // Retuned when OBBBA was switched on: the senior deduction lowers tax in 2026-2028, which
-    // shifted the year-0 blip from +$0.4k to -$77 and destroyed the shape the test needs. The
-    // PROPERTY is what matters (one non-negative year, then negative forever, so no sustained
-    // crossing exists), not the particular knobs. futureIRATaxRate 0.34 -> 0.35, die1 80 -> 78,
-    // iraWithdrawPct 0.10 -> 0.12 restores it with room to spare (year-0 convOC ~ +$365).
-    const inputs = { ...OC_BASE, strategy: 'fixedpct', iraWithdrawPct: 0.12,
-                     convertExcessToRoth: true, futureIRATaxRate: 0.35, die1: 78 };
-    const r = simulate(inputs);
-    const totalConv = r.log.reduce((s, x) => s + (x.rothConv ?? 0), 0);
-    assert(totalConv > 100000, `expected substantial conversions, got ${totalConv}`);
-    assert(r.log[0].convOC > 0, `year-0 convOC should be the reported blip (positive), got ${r.log[0].convOC}`);
-    assert(r.log.slice(1).every(x => x.convOC < 0), 'every year after the blip must be negative (never recovers)');
-    assert(r.totals.convBEYear === null,
-        `a blip that never sustains must report convBEYear null, got ${r.totals.convBEYear}`);
+test('P28jg: sustainedBreakEvenYear — a blip that never recovers reports null, not the blip', () => {
+    // WAS a household fixture. `fixedpct` was tuned until its convOC went non-negative for exactly
+    // one year and then stayed negative forever, so that convBEYear had to come back null. That
+    // shape did not survive P28jg: once converted dollars compound in the year they convert, this
+    // family recovers by plan end, and 225 combinations of futureIRATaxRate / die1 / iraWithdrawPct
+    // failed to reproduce it. The shape was partly an artifact of the defect.
+    //
+    // The property under test was never about a household. It is that `sustainedBreakEvenYear`
+    // reports the start of the FINAL non-negative run and returns null when the series ends
+    // negative - the old first-touch `.find()` reported an early blip as Break Even. Driven as a
+    // series it cannot rot when the engine changes, which is the third time that has cost this repo
+    // a research table.
+    const be = core.sustainedBreakEvenYear;
+    const series = (ocs, convs) => ocs.map((oc, i) => ({ year: 2026 + i, convOC: oc, rothConv: convs[i] }));
+    const conv = (n) => new Array(n).fill(0).map((_, i) => (i === 0 ? 50000 : 0));
+
+    // The original shape: one non-negative year, negative for every year after. No sustained
+    // crossing exists, so null - even though year 0 touches positive.
+    assert((be(series([365, -80, -900, -1200, -1500], conv(5)), 'convOC', r => r.rothConv ?? 0)) === null,
+        'P28jg: a blip followed by permanent negatives must report null');
+
+    // Ends non-negative: the answer is the START of the final run, not the first touch.
+    assert((be(series([40, -80, -900, 120, 300], conv(5)), 'convOC', r => r.rothConv ?? 0)) === 2029,
+        'P28jg: the answer is the start of the final non-negative run');
+
+    // Never earlier than the action. The series is non-negative from year 0, but nothing converts
+    // until 2028, and a plan cannot break even on a conversion it has not made.
+    const late = [{ year: 2026, convOC: 10, rothConv: 0 }, { year: 2027, convOC: 10, rothConv: 0 },
+                  { year: 2028, convOC: 10, rothConv: 50000 }, { year: 2029, convOC: 10, rothConv: 0 }];
+    assert((be(late, 'convOC', r => r.rothConv ?? 0)) === 2028,
+        'P28jg: the crossing cannot precede the year the action first happens');
+
+    // The action never happens at all.
+    assert((be(series([10, 20, 30], [0, 0, 0]), 'convOC', r => r.rothConv ?? 0)) === null,
+        'P28jg: no action means no break-even year');
+
+    // A null in the series is treated as negative - it breaks the trailing run.
+    assert((be(series([10, 20, null, 40, 50], conv(5)), 'convOC', r => r.rothConv ?? 0)) === 2029,
+        'P28jg: a null OC year breaks the run rather than extending it');
 });
 
 test('OC: excess-withdrawal double-dip → excessBEYear is the sustained crossing, not the first touch', () => {
@@ -3608,9 +3625,14 @@ test('OC: excess-withdrawal double-dip → excessBEYear is the sustained crossin
 test('diagnoseConvBreakEvenFailure: boundary — pinpoints the specific conversion year that breaks a sustained lead', () => {
     // 5 modest conversions (2026-2030) each individually sustain a Break Even on their own;
     // a large 6th lump conversion (2031) is the one that permanently erases the lead.
+    // P28jg RETUNE, lump 600,000 -> 800,000. Converted dollars now compound in the year they
+    // convert, so the old lump no longer erased the lead (convBEYear came back 2056 instead of
+    // null) and the test's own setup assertion fired. The PROPERTY is what matters - a 6th
+    // conversion large enough to break a lead the first five sustain - not the size. 800,000
+    // restores it at every futureIRATaxRate from 0.10 to 0.30, so it is not knife-edge.
     const arr = new Array(30).fill(0);
     for (let y = 0; y < 5; y++) arr[y] = 40000;
-    arr[5] = 600000;
+    arr[5] = 800000;
     const inputs = { ...OC_BASE, birthyear1: 1966, die1: 90, IRA1: 1200000,
                      inflation: 0.025, cpi: 0.025, nYears: 30,
                      extraConversionAmount: arr, futureIRATaxRate: 0.30 };
@@ -3623,9 +3645,14 @@ test('diagnoseConvBreakEvenFailure: boundary — pinpoints the specific conversi
     // 355,562 not the pre-fix 355,478: this fixture drives conversions through a per-year ARRAY,
     // whose year 0 used to be mis-timed Late(Spend) because `extraConversionAmount > 0` coerced a
     // multi-element array to NaN. Re-derived from the engine after _extraConvAmountFor.
-    assertNear(d.breakingAmount, 355562, 'breaking conversion amount', 5);
+    // P28jg: 355,562 -> 460,204. The lump this fixture needs grew 600k -> 800k (see the setup note),
+    // and the realized breaking conversion grew with it.
+    assertNear(d.breakingAmount, 460204, 'breaking conversion amount', 5);
     assert(d.lastSustainableYear === 2030, `expected 2030 as the last sustainable conversion year, got ${d.lastSustainableYear}`);
-    assert(d.lastSustainableBEYear === 2042, `expected the truncated plan to break even in 2042, got ${d.lastSustainableBEYear}`);
+    // P28jg: 2042 -> 2039. The lump grew 600k -> 800k (setup note above) and conversions now
+    // compound in-year, so the truncated plan - the one WITHOUT the breaking lump - breaks even
+    // three years sooner.
+    assert(d.lastSustainableBEYear === 2039, `expected the truncated plan to break even in 2039, got ${d.lastSustainableBEYear}`);
 
     // Invariant: re-running truncated exactly at the reported boundaries must reproduce them.
     const convIdxs = [];
@@ -3909,11 +3936,16 @@ test('optimizeConversionAmount: GK sweep rejects a higher-scoring but spend-unst
     // P88b an extra conversion never reached MAGI, so the IRMAA lookback never charged it and the
     // sweep's finalNW curve was missing a real cost that grows with the conversion. This fixture is
     // 65 at the start and on Medicare throughout: lifetime IRMAA was $0 at every candidate and is
-    // now $29k-$39k across them, which moves the argmax down one $25k step. $150,000 now scores
-    // $1,056,138 against $100,000's $1,066,185. The two assertions above are the test's actual
-    // subject and both still hold unchanged - $425,000 still out-scores everything on raw finalNW
-    // and the stability gate still refuses it.
-    assertNear(gated.optConv, 100000, 'gated sweep should land on the largest still-stable candidate', 1);
+    // now $29k-$39k across them, which moves the argmax down one $25k step. $150,000 then scored
+    // $1,056,138 against $100,000's $1,066,185.
+    // P28jg RE-BASELINE, 100000 -> 150000, back up the same step and for the mirror-image reason:
+    // that correction added a cost conversions always owed, this one restores a gain they were
+    // always due, so a larger conversion is affordable again. Checked, not accepted: $150,000 now
+    // scores $1,139,590 against $100,000's $1,115,521, and $175,000 falls back to $1,130,757 - so
+    // 150k is a genuine interior peak rather than the top of the swept range.
+    // The two assertions above are the test's actual subject and both still hold unchanged -
+    // $425,000 still out-scores everything on raw finalNW and the stability gate still refuses it.
+    assertNear(gated.optConv, 150000, 'gated sweep should land on the largest still-stable candidate', 1);
 });
 
 test('optimizeConversionAmount: non-GK strategies are unaffected by the stability gate', () => {
@@ -4422,17 +4454,26 @@ const PF11_BASE = {
 // rate, tips to $0; baselineScore, which discounts at the user's stated heirs rate, still finds
 // $50k.
 //
-// baselineScore is the honest measure of the two here: the question is what the heirs net, so the
-// heirs' rate is the right discount. finalNW reporting "no benefit" where a real conversion exists
-// is exactly the defect T6 documented, so these are a divergence guard again, not an agreement one.
-test("optimizeConversionAmount: 'finalNW' and 'baselineScore' diverge (the T6 defect, restored)", () => {
+// AND P28jg CLOSES IT AGAIN, which is the third time this gap has turned out to be a modeling
+// defect rather than a metric disagreement. Converted dollars used to earn no growth in the year
+// they converted, so the converting arm was denied a real gain while the non-conversion arm kept
+// the stepped-up brokerage gains described above. Crediting the conversion before the
+// post-withdrawal growth hands that gain back, and it is enough to close the gap: both metrics now
+// pick $75,000 on this fixture, and both are larger than either picked before.
+//
+// So this is an AGREEMENT guard again. That is not a weaker test than the divergence one it
+// replaces - the useful signal in either direction is a CHANGE. If a future engine change reopens
+// this gap, the two metrics are measuring the same plan through different discounts and one of them
+// is wrong about it; that is worth a phase, not a re-derive. The history above is kept because the
+// direction has now reversed three times and each reversal was informative.
+test("optimizeConversionAmount: 'finalNW' and 'baselineScore' agree (the T6 gap, closed by P28jg)", () => {
     const ov = { strategy: 'propwd', propWithdraw: 0 };
     assert(simulate({ ...PF11_BASE }).totals.success, 'test setup: base scenario must succeed');
     const fn = optimizeConversionAmount(PF11_BASE, ov, 'finalNW').optConv;
     const bl = optimizeConversionAmount(PF11_BASE, ov, 'baselineScore', { futureIRARate: 0.37 }).optConv;
-    assertNear(fn, 0, 'finalNW reports no worthwhile conversion', 1);
-    assertNear(bl, 50000, 'baselineScore still finds $50k/yr at the heirs rate', 1);
-    assert(bl > fn, 'the honest measure must find a conversion that the finalNW metric misses');
+    assertNear(fn, 75000, 'finalNW now finds the conversion it used to miss', 1);
+    assertNear(bl, 75000, 'baselineScore finds the same amount at the heirs rate', 1);
+    assert(bl === fn, 'the two discounts must agree on this fixture; a reopened gap is a finding');
 });
 
 test('optimizeConversionAmount: legacy metric modes and the 3-arg signature agree', () => {
@@ -4441,8 +4482,9 @@ test('optimizeConversionAmount: legacy metric modes and the 3-arg signature agre
     // 3-arg must all route to the same metric and return the same answer. The shared value has now
     // moved twice - $0 to $50k with the double-credit fix, $50k back to $0 with the IRC 1014
     // step-up (see the note above) - which is exactly why the agreement is the point, not the number.
+    // Moved a third time by P28jg, $0 -> $75k, for the reason recorded above the T6 test.
     const fourArg = optimizeConversionAmount(PF11_BASE, ov, 'finalNW').optConv;
-    assertNear(fourArg, 0, "4-arg 'finalNW'", 1);
+    assertNear(fourArg, 75000, "4-arg 'finalNW'", 1);
     assert(optimizeConversionAmount(PF11_BASE, ov, 'finalNW', {}).optConv === fourArg, 'explicit empty opts must match');
     assert(optimizeConversionAmount(PF11_BASE, ov).optConv === fourArg, 'default metric (no 3rd/4th arg) must match');
 });
@@ -5583,7 +5625,11 @@ test.slow('breakEvenHeirsRate: the rate/amount pair it reports is self-consisten
     // a HIGHER heirs rate to justify - the direction a correction must move this. Checked on the
     // fixture rather than accepted: age 74 in year 0 and on Medicare throughout, lifetime IRMAA
     // $6,001 with no extra conversion and $35,704 at $100,000 of it.
-    assertNear(r.rate, 0.65, 'break-even heirs rate for the fixedpct fixture', 0.011);
+    // P28jg RE-BASELINE, 0.65 -> 0.55. Converted dollars now compound in the year they convert, so
+    // a conversion is worth more and needs a LOWER heirs rate to justify itself. Opposite direction
+    // to P88b and for the opposite reason: that correction added a cost conversions always owed,
+    // this one restores a gain they were always due.
+    assertNear(r.rate, 0.55, 'break-even heirs rate for the fixedpct fixture', 0.011);
     assert(r.optConv === 75000, `expected a $75,000 conversion at the threshold, got ${r.optConv}`);
     // The rounding nudge exists so a reported rate never comes back with a $0 conversion.
     assert(r.optConv > 0, 'a reported rate must always carry a real conversion amount');
@@ -5614,8 +5660,9 @@ test.slow('lowestBreakEvenHeirsRate: finds a threshold the best-scoring candidat
         { overrides: FIXEDPCT_OV, terminalIRA: 500000, label: 'fixedpct' }
     ], {});
     assert(best !== null, 'the pool search must find the candidate that does have a threshold');
-    // P88b RE-BASELINE, 0.57 -> 0.65: same fixture, same cause as the test above.
-    assertNear(best.rate, 0.65, 'pool-wide lowest break-even heirs rate', 0.011);
+    // P88b RE-BASELINE, 0.57 -> 0.65, then P28jg 0.65 -> 0.55: same fixture, same causes as the
+    // test above.
+    assertNear(best.rate, 0.55, 'pool-wide lowest break-even heirs rate', 0.011);
     assert(best.label === 'fixedpct', `expected the fixedpct candidate to win, got ${best.label}`);
 });
 

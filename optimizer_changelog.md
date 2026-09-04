@@ -17,9 +17,27 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1733"></a>
+<a id="11.1734"></a>
 
-## 11.1733
+## 11.1734
+
+**Money you convert now grows for the rest of the year it was converted.**  
+*Behavior change: ending Roth rises in every converting plan.*
+
+A Roth conversion was credited to the account only after the year's growth had already been applied, so the converted amount
+earned nothing in the year you converted it. Surplus banked to Cash or Brokerage instead was credited before growth and did
+earn it, so the same dollar grew or did not purely according to where it landed.
+
+It now grows from the point of conversion for the remainder of the year, which is the same treatment every other destination
+already had. The amount is not given a full year of growth either - it already grew inside the IRA up to the moment it was
+withdrawn, and it grows in the Roth for what remains.
+
+Conversions were being undervalued, so everything that weighs one moves: **Break Even arrives sooner**, the **Marginal Heirs
+Tax Rate** needed to justify a conversion **falls**, and **Optimize Conversions** suggests **larger** amounts. On one test plan
+the break-even heirs rate fell from 65% to 55% and the suggested conversion rose from $100,000 to $150,000 a year.
+
+Spending, taxes and withdrawals are unchanged. A saved plan or shared link will report a different ending Roth and End Wealth
+than it did before this release.
 
 **End Wealth now prices the leftover IRA at your late-life tax rate, not at one year's.**  
 *Behavior change: End Wealth moves for every plan.*

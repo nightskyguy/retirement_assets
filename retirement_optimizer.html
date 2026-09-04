@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1733</title>
+    <title>Retirement Optimizer 11.1734</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,14 +59,14 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1116d7"></script>
-	<script src="optimizer_core.js?v=111733"></script>
+	<script src="optimizer_core.js?v=111734"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=111733"></script>
-	<script src="optimizer_tests.js?v=111733"></script>
+	<script src="optimizer_ui.js?v=111734"></script>
+	<script src="optimizer_tests.js?v=111734"></script>
 </head>
 <body>
 
@@ -978,7 +978,12 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.1733</b>
+				<li data-flag="behavior"><b>11.1734</b>
+					<strong>Money you convert now grows for the rest of the year it was converted.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li><strong>Every plan that converts will show a higher ending Roth, and most will show higher End Wealth.</strong> A converted amount used to be added to the Roth only after the year's growth had already been applied, so it earned nothing at all in the year you converted it. Surplus you banked to Cash or Brokerage instead did earn that growth, so the same dollar grew or did not purely because of where it landed. It now grows from the point it is converted, for the remainder of the year.</li>
+					<li>Conversions were being undervalued, so anything that weighs them shifts: Break Even arrives sooner, the <i>Marginal Heirs Tax Rate</i> needed to justify a conversion falls, and <i>Optimize Conversions</i> will suggest larger amounts than it used to.</li>
+					</ul>
 					<strong>End Wealth now prices the leftover IRA at your late-life tax rate, not at one year's.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li><strong>Your End Wealth will change, and no other number will.</strong> The figure always subtracted the tax owed on whatever is left in the IRA, but it used the marginal rate of the plan's very last year. A single year is a poor guide: a year with a large brokerage harvest and a year with a large conversion land in very different brackets, and on one test plan two otherwise-similar plans were priced 7.3 points apart for that reason alone. It now uses the average rate across the plan's final years <i>with the same filing status</i>, so a plan ending in widowhood is priced at the widow's rate rather than at a blend that includes married years. Spending, taxes and withdrawals are untouched.</li>
@@ -992,7 +997,7 @@
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li>The total on the balances chart and in the Annual Details table read <i>TotalWealth</i>, which sounds like a plain sum of your accounts. It is not one: that figure already subtracts the tax that would be owed on the IRA, and the capital-gains tax on brokerage growth above its basis. It now reads <strong>TotalNetWealth</strong> in both places. No number changes.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.1733" target="_blank" rel="noopener">Details</a>
+					<a href="optimizer_changelog.md#11.1734" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="behavior"><b>11.171f</b>
 					<strong>The required distribution on an inherited IRA is calculated again.</strong>
@@ -1684,7 +1689,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111733';
+    const V = '?v=111734';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

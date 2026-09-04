@@ -2217,6 +2217,38 @@ That is now the third time in this repo a research table stopped reproducing aft
       on the PRE-withdrawal balance (`optimizer_core.js:1152`) is the suspect and is unproven.
 - [ ] **P28jb** - `timingConvThreshold` research input replacing the bare `1000`, default `1000` so
       unset is bit-identical; shape-validated (finite, `>= 0`) the way `gapFillWeights` is
+- [x] **P28jg - A CONVERTED DOLLAR EARNED NO GROWTH IN ITS CONVERSION YEAR. SHIPPED v11.1734.**
+      *(user, 2026-09-04: "I fail to see where early conversions vs late can harm any plan... It
+      might be worse HERE because of the mechanics of how its being done, not because the
+      mathematics says so." They were right, and this is what it was.)*
+      `balance.Roth1 += yr.surplus.Roth1` ran at the END of `growAndSettle`, AFTER its `applyGrowth`.
+      Surplus routed to Cash/Brokerage is credited well before that and DID earn `postMonths` of
+      growth, so **the same surplus grew or did not purely by destination** - an inconsistency, not
+      an approximation, and one that biased every conversion-versus-banking comparison against the
+      Roth. Fixed by crediting the conversion immediately above the growth call, so it compounds for
+      `postMonths` exactly as every other destination does. NOT a full year: the money already grew
+      inside the IRA for `preMonths`, and preMonths + postMonths = 12.
+      **Consequence, and it is the phase's answer:** IRA and Roth carry the same rate, so within a
+      year the conversion month is now **growth-neutral** - which is the correct answer and was not
+      obtainable before. Verified to the cent on a conversion-only fixture: early and late both total
+      $1,696,440 of IRA+Roth where they used to differ.
+      **`P28ja`'s headline partly REVERSES on the canonical household.** late-minus-early was
+      +$506,752 NW / +$125,065 Roth; it is now +$345,427 NW / **-$36,260 Roth**. Early conversion now
+      produces MORE Roth, as the user's arithmetic said it must, while late still produces more net
+      worth because the SPENDING leg genuinely wants to stay invested. Late no longer dominates; it
+      is a real trade between the two legs, which is exactly what splitting them was meant to expose.
+      **`P28ja`'s numbers are now stale and so are `P106`'s** - every conversion result in
+      `research/CONVERSION_*.md` was measured on an engine that undervalued conversions, so those
+      findings are CONSERVATIVE, not overstated. Re-running them is follow-on work.
+      Test fallout, 7 failures, **every one in the pro-conversion direction**, which is the coherence
+      check: break-even heirs rate 0.65 -> 0.55 (twice), GK sweep argmax 100k -> 150k (a genuine
+      interior peak - 175k falls back), the boundary fixture's lump 600k -> 800k, and **the T6
+      divergence CLOSED** - `finalNW` and `baselineScore` now agree at $75,000 where finalNW used to
+      report $0. That test is now an agreement guard with its history kept; a reopened gap is a
+      finding, not a re-derive. One fixture-shaped test was replaced by a logic test: the
+      "blip then never recovers" shape could not be reproduced by 225 knob combinations because it
+      was partly an artifact, so `sustainedBreakEvenYear` was lifted out of `simulate()` and is now
+      driven as a series. Suites 418/61/22, badge 832.
 - [ ] **P28jc** - harness arms: pinned-early / pinned-late / auto, crossed with `convertExcessToRoth`
       on/off, on the re-baselined 5-mix x 3-rate ladder
 - [ ] **P28jd** - answer Q1 as a PAIRED split. Timing moves delivered spend, so wealth alone is

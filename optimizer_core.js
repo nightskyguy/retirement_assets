@@ -3754,6 +3754,29 @@ function growAndSettle(sim, yr) {
     // discounts them by nominalTaxRate, but year-by-year spendable wealth does not reserve for
     // deferred tax on gains that are never liquidated.
 
+    // P28jg. The conversion is credited HERE, before the post-withdrawal growth, so the converted
+    // dollars compound for `postMonths` exactly as every other surplus destination already did.
+    //
+    // It used to be credited at the very END of this function, after applyGrowth, which gave a
+    // converted dollar ZERO growth in the year it converted. That was not a rounding choice, it was
+    // an inconsistency: surplus routed to Cash or Brokerage is credited well before this point
+    // (balance.Cash/Brokerage += at the surplus-routing block) and therefore DID earn postMonths of
+    // growth. The same surplus earned growth or not depending only on which account it landed in,
+    // which biased every conversion-versus-banking comparison against the Roth.
+    //
+    // The fraction matters and a full year would be just as wrong. The converted money already grew
+    // inside the IRA for `preMonths` as part of the pre-withdrawal balance; it grows in the Roth for
+    // the remaining `postMonths`. preMonths + postMonths = 12, and IRA and Roth carry the same rate
+    // (computeYearGrowthRates), so WITHIN a year the conversion month is growth-neutral - which is
+    // the correct answer and was not obtainable before this fix. Across YEARS converting earlier
+    // still compounds tax-free sooner; that is a different question and CONVERSION_TIMING.md's.
+    //
+    // Placed immediately above applyGrowth rather than arithmetically, so the growth and the gains
+    // bookkeeping (yr.gains.Roth1/Roth2, which feed the rothG column) stay in one place and cannot
+    // drift from it.
+    balance.Roth1 += yr.surplus.Roth1;
+    balance.Roth2 += yr.surplus.Roth2;
+
     // Post-withdrawal growth (Phase 12): remaining postMonths after withdrawal exits portfolio.
     yr.gains = applyGrowth(balance, yr.growthRates, yr.postMonths);
     inspectForErrors(yr.growthRates, balance, yr.gains);
@@ -3787,8 +3810,6 @@ function growAndSettle(sim, yr) {
     totals.qcdCurrentDollars = (totals.qcdCurrentDollars || 0) + yr.totalQCD / sim.inflation;
     totals.advisorFees = (totals.advisorFees || 0) + (yr.advisorFee || 0);
     totals.advisorFeesCurrentDollars = (totals.advisorFeesCurrentDollars || 0) + (yr.advisorFee || 0) / sim.inflation;
-    balance.Roth1 += yr.surplus.Roth1;
-    balance.Roth2 += yr.surplus.Roth2;
     totals.shortfall += yr.surplus.Shortfall;
 }
 
@@ -4229,21 +4250,7 @@ function simulate(inputs) {
         // two cutoffs, including the edge case where OC is trivially non-negative before the
         // action even starts. Returns null when the plan ends negative (no sustained crossing
         // exists) or the action never occurred.
-        const _sustainedBEYear = (key, actionAmount) => {
-            let ocCutoff = log.length;
-            for (let i = log.length - 1; i >= 0; i--) {
-                const oc = log[i][key];
-                if (oc == null || oc < 0) break;
-                ocCutoff = i;
-            }
-            if (ocCutoff >= log.length) return null;
-            let cum = 0, actionCutoff = -1;
-            for (let i = 0; i < log.length; i++) {
-                cum += actionAmount(log[i]);
-                if (cum > 1) { actionCutoff = i; break; }
-            }
-            return actionCutoff < 0 ? null : log[Math.max(ocCutoff, actionCutoff)].year;
-        };
+        const _sustainedBEYear = (key, actionAmount) => sustainedBreakEvenYear(log, key, actionAmount);
         if (log.some(r => (r.rothConv ?? 0) > 1)) {
             // extraConversionAmount: 0 (not just the suppress flag) so conversion-driven
             // early-withdrawal timing (line ~1038) doesn't leak into the no-conversion plan.
@@ -4421,6 +4428,35 @@ function diagnoseConvBreakEvenFailure(inputs, actualLog) {
         prevBEYear = beYear;
     }
     return null; // unreachable given the precondition (j=k is numerically the real plan, already null)
+}
+
+// The SUSTAINED break-even year: the first year after which the opportunity-cost series never goes
+// negative again, and never before the action being priced has actually happened.
+//
+// Lifted out of simulate() (P28jg) so it can be tested on a series directly. It was previously a
+// closure, and the only test of it drove a whole household to manufacture the shape it cares about -
+// "one non-negative year, then negative forever". That fixture stopped producing the shape the
+// moment conversions started compounding correctly, and 225 knob combinations could not restore it,
+// because the shape was partly an artifact of the defect. The logic is a pure function of a series;
+// testing it as one cannot rot when the engine changes.
+//
+// Two guards, both load-bearing: a series that ends negative has NO sustained crossing and returns
+// null (the old first-touch `.find()` reported an early blip instead), and the answer is never
+// earlier than the year the action first occurs, so a plan cannot break even before it converts.
+function sustainedBreakEvenYear(log, key, actionAmount) {
+    let ocCutoff = log.length;
+    for (let i = log.length - 1; i >= 0; i--) {
+        const oc = log[i][key];
+        if (oc == null || oc < 0) break;
+        ocCutoff = i;
+    }
+    if (ocCutoff >= log.length) return null;
+    let cum = 0, actionCutoff = -1;
+    for (let i = 0; i < log.length; i++) {
+        cum += actionAmount(log[i]);
+        if (cum > 1) { actionCutoff = i; break; }
+    }
+    return actionCutoff < 0 ? null : log[Math.max(ocCutoff, actionCutoff)].year;
 }
 
 // The rate the TERMINAL IRA is discounted at, estimated from the plan's own late-life experience
@@ -6070,7 +6106,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -6078,7 +6114,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

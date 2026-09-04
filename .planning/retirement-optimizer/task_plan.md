@@ -250,6 +250,69 @@ earlier still wins 353/499 but the RMD reasoning behind it broke, 124 counterexa
 **Out of scope for the first pass:** a flat $100k/yr conversion is a candidate ARM, not a strategy;
 shaped policies belong in the grid. No product changes.
 
+## P108: WHEN the tax is paid  *(NEW 2026-09-04, user-raised, plan reviewed and approved same day)*
+
+*(user: "pay taxes at the end of the year always - easy to do when drawing from IRA because end of
+year spending withdrawals can also be when tax withholding occurs. Indeed, I will bet that doing
+this will INCREASE net worth when lesser earning cash is used to displace higher earning IRA/Roth
+accounts.")*
+
+**Today the Optimizer has no concept of a tax DATE.** `calculateWithdrawals` grosses the draw up for
+tax (`netAmount = totalWithdrawals - result.totalTax`), so the tax leaves the portfolio at the same
+instant as the spending money - month 1 or month 11, whichever the timing flag picked. Total tax is
+accounted correctly; when it is paid is not modelled at all.
+
+**The mechanism is legitimate, not a modelling cheat: withholding is deemed paid RATABLY across the
+year no matter when it is actually withheld.** That is exactly why a December IRA withholding
+satisfies the whole year's obligation, and it is why option (b) below needs no safe-harbor machinery.
+
+**`taxPaymentPlanner.js` already prices this** - a shared module with its own 61-test suite, not
+locked inside `RetirementTaxPlanner.html`. Its model, worth reusing rather than reinventing:
+`carry = m => max(0, 16 - m) / 12` runs to **April 15 of the FOLLOWING year**, not December 31;
+`withholdOC = w * r * carry(...)` is growth given up when tax leaves early; `estimateOC` charges only
+the `r - hysaNet` SPREAD, because cash held for an estimate earns something meanwhile; and
+`rmdDeferral` prices pushing an RMD toward December.
+
+### Items
+
+- [x] **P108a - STAGE 1 DONE 2026-09-04.** `.test_harnesses/tax_timing_harness.js`. Price the prize with the Tax Planner's carry
+      model rather than an invented one, across the `P106` household set. Two settlement points, both
+      reported: **(b)** move the tax to December, worth `T * r * (12-m)/12` per year, and **(c)** move
+      it to April 15 next year, worth `T * r * (16-m)/12`. Compound forward, report real dollars and
+      share of terminal net worth. This decides whether Stage 2 earns its way.
+      *(An earlier naive floor of ~$104k on the reference household used 10 months and December as
+      the reference. The correct reference for (c) is up to ~15 months, so the prize is LARGER than
+      that figure - which is why the model is borrowed rather than guessed.)*
+      **RESULT, on the shipped automatic rule:**
+      | household | (b) December | % NW | (c) April 15 | % NW |
+      |---|---|---|---|---|
+      | CANON | $61,090 | **1.32%** | $111,752 | 2.41% |
+      | H1-single | $41,061 | **1.77%** | $69,686 | 3.01% |
+      | H2-longwidow | $64,419 | 0.88% | $108,087 | 1.48% |
+      | H3-IRAlight | $6,736 | 0.10% | $33,681 | 0.52% |
+      | H4-tight | $8,512 | 0.56% | $18,384 | 1.21% |
+      **This is 15-25x `P28ji`'s 0.057% median**, which settles the prioritization: the restructure
+      was declined and this was not, and the numbers say that was right.
+      **The nuance that decides how P108b should be pitched: MOST OF (b) IS ALREADY REACHABLE with
+      the withdrawal-month control shipped in v11.1735.** On CANON, (b) over `auto` is $61,090 but (b)
+      over `late` is only $12,938 - so simply setting Late captures about 79% of it with no new
+      feature. **P108b is therefore worth building mainly for users who leave the automatic rule on**,
+      and its marginal value on top of Late is 0.15%-0.31% of net worth across the five households.
+      (c) adds roughly another 1% of NW on top of (b), consistently.
+- [ ] **P108b - STAGE 2 option (b), December withholding.** Gated, default off. One extra settlement
+      point inside the year: spending leaves on the withdrawal month, the tax portion settles in
+      December. The cheap 80% of the idea and the one the ratable rule makes real.
+- [ ] **P108c - option (c), April 15 of the FOLLOWING year. DEFERRED, decide after `P108a`.**
+      The accurate one and the invasive one: it creates a **cross-year liability the engine has never
+      had**, so every log row would carry tax owed from last year, and it touches the death year, the
+      widow transition and every terminal balance. Do not start it before `P108a` says what it is
+      worth over (b).
+- [ ] **P108d - precedence against `fundConversionWithCash`.** That is already a tax-FUNDING choice;
+      this is a tax-TIMING one. Two overlapping controls need a stated precedence before either can
+      be trusted, and the interaction is not obvious.
+- **Expect goldens to move a third time.** P106g and P28jg both moved them; a tax-date change will
+  too, and for the same reason - the money is in the portfolio for a different length of time.
+
 ## P107: the IRA Goal is not the lever it is documented to be  *(NEW 2026-09-04, user-raised)*
 
 *("Some strategies are sensitive to the IRA Goal... some appear to drive to the IRA Goal and then

@@ -2276,14 +2276,23 @@ That is now the third time in this repo a research table stopped reproducing aft
       | bootstrap | median **+$5,364** (0.057% of terminal NW), p10 **-$157,608**, p90 **+$399,582**, helps in **53.5%** of paths |
       **A coin flip with a near-zero median and a six-figure spread either way.** It adds variance,
       not value, and a restructure of the year pipeline cannot be justified by 0.057% at the median.
-      **The mechanism is the finding.** `buildPathInputs` blends each account from the SAME
-      equity/intl/bond draws, weighted by that account's own composition, so two accounts diverge
-      ONLY as their allocations do. This household is IRA 65% equity against Roth 90%, and the Roth
-      minus IRA rate in converting years runs median +1.95%, p10 -7.49%, p90 +7.62% - which is just
-      the 25-point equity gap being sampled. So moving a conversion ten months earlier does not
-      change anything about conversion; **it changes the effective allocation of those dollars for
-      ten months.** Anyone who wants that exposure should change the allocation, where it is visible
-      and permanent, rather than buy it through a withdrawal-month control.
+      **TWO COMPARISONS, both run, both legitimate** - added after the user pointed out that the
+      first version measured one and interpreted it as if it were the other:
+      | arm | what it isolates | result |
+      |---|---|---|
+      | **EQUALIZED** (Roth forced to the IRA's 65/8) | conversion TIMING alone | rate gap 0.00% at every percentile, helps **0.0%** of paths, **exactly $0** |
+      | **ACTUAL** (the household's real 65 vs 90) | what the mode would really do here | median **+$5,364**, helps **53.5%** |
+      The equalized arm is the fair comparison and confirms the analytic claim by measurement. The
+      actual arm is the real one, and the allocation gap in it is **not a confound to equalize away -
+      it is a fact about the household.** Calling it "a costume" was wrong.
+      **The mechanism.** `buildPathInputs` blends each account from the SAME equity/intl/bond draws,
+      weighted by that account's own composition, so accounts diverge ONLY as allocations do. Roth
+      minus IRA in converting years: median +1.95%, p10 -7.49%, p90 +7.62% - the 25-point equity gap
+      being sampled. So the mode's entire effect is that converted dollars ride the Roth's mix for
+      ten extra months. **That is a real effect, just a small and two-sided one.** It is NOT
+      obtainable by changing the allocation instead: that would be a permanent tilt, where this is a
+      temporary one on the converted amount only. The two are not substitutes, and saying so was
+      sloppy.
       **First-order estimate, stated as such:** it prices the growth difference and compounds it
       forward, and does NOT model the feedback of a larger Roth on later withdrawals. That is the
       right shape for build/no-build - a negligible first-order effect cannot be rescued by feedback

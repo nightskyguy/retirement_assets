@@ -88,6 +88,21 @@ console.log('-'.repeat(100));
 const probe = simulate({ ...BASE, forceWithdrawTiming: 'late', computeOC: false });
 const YEARS = probe.log.length;
 
+// TWO COMPARISONS, both legitimate, answering different questions. An earlier version of this
+// harness ran only the second and then read it as though the first were the "real" one, which was
+// wrong: the allocation gap is not a confound to be equalized away, it is a fact about the
+// household.
+//   EQUALIZED  - Roth composition forced to the IRA's. Isolates conversion TIMING itself, with no
+//                allocation difference for the move to pick up. This is the fair comparison.
+//   ACTUAL     - the household's real 65%/90% split. What the mode would really do for THIS plan,
+//                timing and allocation together. This is the real comparison.
+const ALLOC_ARMS = [
+    { key: 'EQUALIZED', over: { comp_Roth1_ratio: BASE.comp_IRA1_ratio, comp_Roth1_intl: BASE.comp_IRA1_intl,
+                                comp_Roth2_ratio: BASE.comp_IRA1_ratio, comp_Roth2_intl: BASE.comp_IRA1_intl } },
+    { key: 'ACTUAL', over: {} },
+];
+
+for (const alloc of ALLOC_ARMS) {
 for (const mode of ['bootstrap', 'gbm']) {
     const cfg = { years: YEARS, numPaths: NUM_PATHS, bearFraction: 25 };
     const rng = prng.makeRNG ? prng.makeRNG(12345) : (prng.mulberry32 ? prng.mulberry32(12345) : Math.random);
@@ -97,8 +112,8 @@ for (const mode of ['bootstrap', 'gbm']) {
 
     const deltas = [], terminals = [], rateGaps = [];
     for (let p = 0; p < NUM_PATHS; p++) {
-        const pi = mc.buildPathInputs(banks, p, YEARS, BASE, mode);
-        const inp = { ...BASE, forceWithdrawTiming: 'late', computeOC: false,
+        const pi = mc.buildPathInputs(banks, p, YEARS, { ...BASE, ...alloc.over }, mode);
+        const inp = { ...BASE, ...alloc.over, forceWithdrawTiming: 'late', computeOC: false,
                       returnSequence: pi.returnSequence,
                       returnSequencePerAccount: pi.returnSequencePerAccount,
                       inflationSequence: pi.inflationSequence };
@@ -123,9 +138,8 @@ for (const mode of ['bootstrap', 'gbm']) {
         terminals.push(r.finalNW / (last.inflationFactor || 1));
     }
 
-    if (!deltas.length) { console.log('\n' + mode + ': no feasible paths'); continue; }
-    const med = quant(deltas, 0.5), medNW = quant(terminals, 0.5);
-    console.log('\n' + mode.toUpperCase() + '   (' + deltas.length + ' paths)');
+    if (!deltas.length) { console.log('\n' + alloc.key + '/' + mode + ': no feasible paths'); continue; }    const med = quant(deltas, 0.5), medNW = quant(terminals, 0.5);
+    console.log('\n' + alloc.key + ' allocation / ' + mode.toUpperCase() + '   (' + deltas.length + ' paths)');
     if (!rateGaps.length) {
         // No per-account bank means both accounts read the same rate, so every delta is identically
         // zero by construction. Printing a distribution of zeros (or of NaN, if the bank config for
@@ -147,3 +161,4 @@ for (const mode of ['bootstrap', 'gbm']) {
     console.log('     median as a share of median terminal net worth (' + money(medNW) + '): ' + pct(med / medNW, 3));
 }
 console.log('\n' + '='.repeat(100));
+}

@@ -1139,6 +1139,10 @@ function buildSimYearLogRecord(p) {
         'surplusCash': p.surplus.Cash,
         '-surplusToBrokerage': p.surplusToBrokerage ?? 0,   // Cash Reserve overflow reinvested (hidden)
         '-cashBreach': p.cashBreach ? 1 : 0,                // spending forced a draw into the reserve (hidden)
+        // P108b. Growth credited because the income tax settled in December instead of leaving
+        // with the withdrawal. 0 unless taxSettlement is 'december'. Hidden: a diagnostic for
+        // harnesses and for anyone checking the option did what it says.
+        '-taxCarryCredit': p.taxCarryCredit ?? 0,
         'cashDividends': p.taxableDividends,
         'cashInterest': p.taxableInterest,
         // Taxes
@@ -3777,6 +3781,49 @@ function growAndSettle(sim, yr) {
     balance.Roth1 += yr.surplus.Roth1;
     balance.Roth2 += yr.surplus.Roth2;
 
+    // P108b. TAX SETTLEMENT DATE. `taxSettlement: 'december'` keeps the tax portion of the year's
+    // draw invested until year end instead of letting it leave with the spending money.
+    //
+    // WHY THIS IS A REAL OPTION AND NOT AN ACCOUNTING TRICK: withholding is deemed paid RATABLY
+    // across the year no matter which month it is actually withheld, so withholding on a December
+    // IRA distribution satisfies the whole year's obligation. That is why this needs no safe-harbor
+    // machinery, and it is the technique the option models.
+    //
+    // IMPLEMENTED AS A GROWTH CREDIT, not as a second cash flow, and the two are equivalent here.
+    // Holding the tax dollars until December and then paying them leaves the SAME December 31
+    // balance as paying them at month m and crediting the growth they would have earned - and the
+    // December 31 balance is what every downstream reader uses, including next year's RMD basis.
+    // The credit form avoids re-sequencing the withdrawal cascade for a result identical to the cent.
+    //
+    // INCOME TAX ONLY. `yr.tax.totalTax` excludes IRMAA, which `yr.totalTax` adds. Medicare premiums
+    // are billed monthly and are not withheld from a distribution, so they cannot be deferred to
+    // December and are deliberately left out of the credit.
+    //
+    // Credited to the accounts the draw actually came from, in proportion, each at its own rate: the
+    // tax rode out with those dollars, so it is those balances that were short. A year with no
+    // voluntary withdrawal has nothing to credit and correctly gets nothing.
+    if (inputs.taxSettlement === 'december' && yr.postMonths > 0) {
+        const _incomeTax = Math.max(0, (yr.tax?.totalTax ?? 0));
+        const _nw = yr.netWithdrawals || {};
+        const _src = ['IRA1', 'IRA2', 'Brokerage', 'Cash', 'Roth1', 'Roth2'];
+        const _drawn = _src.reduce((t, k) => t + Math.max(0, _nw[k] ?? 0), 0);
+        if (_incomeTax > 0 && _drawn > 0) {
+            const _frac = yr.postMonths / 12;
+            let _credited = 0;
+            for (const k of _src) {
+                const share = Math.max(0, _nw[k] ?? 0) / _drawn;
+                if (share <= 0) continue;
+                const g = (yr.growthRates[k] ?? 0) * _frac;
+                const add = _incomeTax * share * g;
+                balance[k] = (balance[k] ?? 0) + add;
+                // Brokerage basis rises with it: this is money that was never withdrawn, not a gain.
+                if (k === 'Brokerage') balance.BrokerageBasis = (balance.BrokerageBasis ?? 0) + add;
+                _credited += add;
+            }
+            yr.taxCarryCredit = _credited;   // surfaced as the hidden '-taxCarryCredit' column
+        }
+    }
+
     // Post-withdrawal growth (Phase 12): remaining postMonths after withdrawal exits portfolio.
     yr.gains = applyGrowth(balance, yr.growthRates, yr.postMonths);
     inspectForErrors(yr.growthRates, balance, yr.gains);
@@ -3897,6 +3944,7 @@ function logYear(sim, yr) {
         fixedInc: yr.fixedInc, pension: yr.pension, targetSpend: yr.targetSpend, netIncome: yr.netIncome, totalIncome: yr.totalIncome,
         surplus: yr.surplus, totalRMD: yr.totalRMD, qcd1: yr.qcd1, qcd2: yr.qcd2, taxableDividends: yr.taxableDividends, taxableInterest: yr.taxableInterest,
         netWithdrawals: yr.netWithdrawals, rmd1: yr.rmd1, rmd2: yr.rmd2, totalConverted: yr.totalConverted, tax: yr.tax, IRMAA: yr.IRMAA, IRMAATier: yr.IRMAATier, medicareBase: yr.medicareBase, cpiRate: sim.cpiRate,
+        taxCarryCredit: yr.taxCarryCredit,
         iraVolSpend1: yr.iraVolSpend1, iraVolSpend2: yr.iraVolSpend2, iraConvGross1: yr.iraConvGross1, iraConvGross2: yr.iraConvGross2,
         totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, rateBasis: yr.rateBasis, volIRAwd: yr.volIRAwd, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
         balance: balance, nominalTaxRate: sim.nominalTaxRate, totalNetWealth: yr.totalNetWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,

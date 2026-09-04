@@ -299,9 +299,26 @@ the `r - hysaNet` SPREAD, because cash held for an estimate earns something mean
       feature. **P108b is therefore worth building mainly for users who leave the automatic rule on**,
       and its marginal value on top of Late is 0.15%-0.31% of net worth across the five households.
       (c) adds roughly another 1% of NW on top of (b), consistently.
-- [ ] **P108b - STAGE 2 option (b), December withholding.** Gated, default off. One extra settlement
-      point inside the year: spending leaves on the withdrawal month, the tax portion settles in
-      December. The cheap 80% of the idea and the one the ratable rule makes real.
+- [x] **P108b - SHIPPED v11.1739. December tax settlement, gated, default off.** `taxSettlement`
+      select beside the withdrawal-month control, share key `txs`.
+      **Implemented as a GROWTH CREDIT rather than a second cash flow, and the two are equivalent:**
+      holding the tax until December and then paying it leaves the SAME December 31 balance as
+      paying at month m and crediting the growth those dollars would have earned - and the Dec 31
+      balance is what every downstream reader uses, next year's RMD basis included. The credit form
+      avoids re-sequencing the withdrawal cascade for a result identical to the cent.
+      **INCOME TAX ONLY.** `yr.tax.totalTax` excludes IRMAA, which `yr.totalTax` adds. Medicare
+      premiums are billed monthly and are not withheld from a distribution, so they cannot be
+      deferred and are left out. The test pins that the credit is strictly less than a totalTax-based
+      one would be.
+      Credited to the accounts the draw came from, in proportion, each at its own rate; brokerage
+      basis rises with it, because this is money never withdrawn rather than a gain.
+      **Measured, and it cross-validates `P108a` to within ~6%:** on the canonical household
+      early $4,429,643 -> $4,572,690 (+$143,047, `P108a` estimated $135,242) and
+      late $4,775,070 -> $4,788,808 (+$13,738, estimated $12,938). The excess over the estimate is
+      exactly the feedback `P108a` said it omitted.
+      Suites 419/61/22, badge 833. Browser-verified: `txs=december` round-trips, gated with the
+      withdrawal-month control, `-taxCarryCredit` surfaces. No changelog entry - gated, default off,
+      goldens untouched, same scope test as `P28jh`.
 - [ ] **P108c - option (c), April 15 of the FOLLOWING year. DEFERRED, decide after `P108a`.**
       The accurate one and the invasive one: it creates a **cross-year liability the engine has never
       had**, so every log row would carry tax owed from last year, and it touches the death year, the

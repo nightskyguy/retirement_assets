@@ -7746,6 +7746,52 @@ async function runOptimizerCoreTests(opts) {
     };
 }
 
+// ── Tax settlement date (Phase P108b) ────────────────────────────────────────────────────────
+// `taxSettlement: 'december'` keeps the income-tax portion of the draw invested until year end
+// instead of letting it leave with the spending money. Withholding is deemed paid ratably across
+// the year whenever it is withheld, so a December distribution satisfies the year - that is what
+// makes this a real option rather than an accounting trick.
+test('P108b: december tax settlement is opt-in, raises wealth, and leaves spending untouched', () => {
+    const TAXY = {
+        ...BASE, strategy: 'bracket', stratRate: 0.22, convertExcessToRoth: true,
+        IRA1: 1400000, Brokerage: 300000, BrokerageBasis: 150000, Cash: 90000,
+        spendGoal: 80000, growth: 0.06, inflation: 0.02, cpi: 0.02, nYears: 15,
+    };
+    const run = (over) => simulate({ ...TAXY, ...over, computeOC: false });
+    const credit = (r) => r.log.reduce((s, x) => s + (x['-taxCarryCredit'] ?? 0), 0);
+
+    const base = run({});
+    // Unset is today's behavior exactly, and nothing is credited.
+    for (const junk of [undefined, '', 'withdrawal', 'nonsense', null]) {
+        const j = run({ taxSettlement: junk });
+        assertNear(j.finalNW, base.finalNW, `P108b: taxSettlement ${JSON.stringify(junk)} must not change the plan`, 0.01);
+        assertNear(credit(j), 0, `P108b: taxSettlement ${JSON.stringify(junk)} must credit nothing`, 0.01);
+    }
+
+    // The option pays, and it pays MORE when the draw leaves in January - there is more of the year
+    // left for the deferred tax dollars to earn.
+    const early = run({ forceWithdrawTiming: 'early' });
+    const earlyDec = run({ forceWithdrawTiming: 'early', taxSettlement: 'december' });
+    const late = run({ forceWithdrawTiming: 'late' });
+    const lateDec = run({ forceWithdrawTiming: 'late', taxSettlement: 'december' });
+    assert(earlyDec.finalNW > early.finalNW, 'P108b: december settlement must raise ending wealth');
+    assert(lateDec.finalNW > late.finalNW, 'P108b: it must help from a November draw too, by less');
+    assert((earlyDec.finalNW - early.finalNW) > (lateDec.finalNW - late.finalNW),
+        'P108b: a January draw has more of the year left, so it must gain more than a November one');
+    assert(credit(earlyDec) > credit(lateDec), 'P108b: the credit itself must follow the same order');
+
+    // Spending is untouched. This moves WHEN tax is paid, never how much is spent.
+    assertNear(earlyDec.totals.spend, early.totals.spend, 'P108b: spending must not move', 100);
+    assertNear(lateDec.totals.spend, late.totals.spend, 'P108b: spending must not move (late)', 100);
+
+    // IRMAA is excluded on purpose: Medicare premiums are billed monthly and cannot be deferred to
+    // December, so the credit must be strictly smaller than one built on totalTax would be.
+    const incomeTaxOnly = base.log.reduce((s, x) => s + ((x.totalTax ?? 0) - (x.IRMAA ?? 0)), 0);
+    const withIRMAA = base.log.reduce((s, x) => s + (x.totalTax ?? 0), 0);
+    assert(withIRMAA >= incomeTaxOnly, 'P108b: test setup - totalTax includes IRMAA');
+    assert(credit(earlyDec) < withIRMAA, 'P108b: the credit is growth on tax, never the tax itself');
+});
+
 // ── timingConvThreshold research input (Phase P28jb) ─────────────────────────────────────────
 // The withdrawal-timing rule flips a whole year to Early when the PRIOR year converted more than a
 // bare 1000. This pins the input that replaces that literal, before P28je sweeps it. Three things

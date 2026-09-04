@@ -724,6 +724,9 @@ function getInputs() {
         // empty select must arrive as undefined rather than as a falsy string it would ignore
         // by accident. Undefined is the documented off value for this flag.
         forceWithdrawTiming: val('forceWithdrawTiming') || undefined,
+        // P108b. '' is today's behavior (tax leaves with the withdrawal); the engine only
+        // acts on 'december', so an empty select must arrive as undefined.
+        taxSettlement: val('taxSettlement') || undefined,
         fixedTaxIndexing: !!valChecked('fixedTaxIndexing'),
         // Account Composition (equity/bond ratio selects + intl equity % inputs)
         comp_IRA1_ratio: +val('comp_IRA1_ratio'),
@@ -5777,7 +5780,7 @@ const OPT_LONG_TO_SHORT = {
     propWithdraw:'pw', stratRate:'sr', iraWithdrawPct:'iwp', orderedSeq:'os', rothGapFill:'rgf',
     convertExcessToRoth:'mc', fundConversionWithCash:'fcc', extraConversionAmount:'eca', iraBaseGoal:'ibg',
     convEndYear:'cey', convEndMode:'cem', irmaaMarginMode:'imm', fixedTaxIndexing:'fti',
-    forceWithdrawTiming:'fwt',
+    forceWithdrawTiming:'fwt', taxSettlement:'txs',
     advisorFeeAmount:'af', advisorFeeMode:'afm', advisorFeeScope:'afs',
     birthyear1:'by1', birthmonth1:'bm1', die1:'d1', startAge:'sa',
     birthyear2:'by2', birthmonth2:'bm2', die2:'d2', hasSpouse:'hs',

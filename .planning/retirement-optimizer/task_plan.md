@@ -2249,6 +2249,27 @@ That is now the third time in this repo a research table stopped reproducing aft
       "blip then never recovers" shape could not be reproduced by 225 knob combinations because it
       was partly an artifact, so `sustainedBreakEvenYear` was lifted out of `simulate()` and is now
       driven as a series. Suites 418/61/22, badge 832.
+- [x] **P28jh - withdrawal month exposed as a gated control. SHIPPED v11.1735.** *(user 2026-09-04,
+      option (a) of two: ship the cheap two modes first and let the measurement decide whether the
+      third is worth a restructure.)* `forceWithdrawTiming` had no UI, no URL key and was absent from
+      `getInputs()` - defect 3 of the three this phase opened with. Now a nerdknob-gated select
+      (Automatic / Always January / Always November), share key `fwt`, hidden-not-disabled so a link
+      carrying `fwt=late` still runs late for a reader without the knob. Round-trip verified in the
+      browser, which is where `P95` found the equivalent defect for the ceiling dropdown.
+      **No changelog entry, deliberately:** gated diagnostics are not something a user can see or
+      feel, which is the repo's own scope test.
+- [ ] **P28ji - the user's third mode, `early conversion / late spend + tax`. NOT BUILT, and the
+      case for it now turns on Monte Carlo.** It needs the year restructured into two withdrawal
+      events with growth staged between them, because the conversion is the RESIDUAL of one draw
+      after spending rather than a separate event.
+      **Deterministically it should be a no-op.** Post-`P28jg` the conversion month is growth-neutral
+      (`computeYearGrowthRates` gives IRA and Roth the same rate, and preMonths + postMonths = 12);
+      verified to the cent, 1,696,440 either way on a conversion-only fixture.
+      **But `montecarlo/mc_engine.js` builds `returnSequencePerAccount`, which overrides EVERY
+      account with its own per-year sequence.** Under Monte Carlo the IRA and the Roth can draw
+      different returns in the same year, so moving a conversion between them stops being neutral.
+      **Measure that before building:** if the mode only pays under MC, that is what motivates the
+      restructure, and if it does not pay there either the restructure can be declined with a reason.
 - [ ] **P28jc** - harness arms: pinned-early / pinned-late / auto, crossed with `convertExcessToRoth`
       on/off, on the re-baselined 5-mix x 3-rate ladder
 - [ ] **P28jd** - answer Q1 as a PAIRED split. Timing moves delivered spend, so wealth alone is

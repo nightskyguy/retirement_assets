@@ -218,6 +218,12 @@ function applyNerdKnobVisibility() {
     // inflation, as the IRS and SSA do), not a fallback.
     const fixedIdxWrap = document.getElementById('fixedTaxIndexing-wrap');
     if (fixedIdxWrap) fixedIdxWrap.style.display = NERD_KNOBS ? '' : 'none';
+    // P28jh. Withdrawal month, same treatment and for the same reason: hiding it leaves the
+    // shipped automatic rule in force, not "no rule". A share link carrying fwt=late still loads
+    // and still runs late for someone without the knob - the control is hidden, not disabled -
+    // because the alternative is silently running a different plan than the link describes.
+    const wdTimingWrap = document.getElementById('withdrawTiming-wrap');
+    if (wdTimingWrap) wdTimingWrap.style.display = NERD_KNOBS ? '' : 'none';
     // P102b1. Goal-first mode - gated while it is being lived with, and force-reverted on the way
     // out for the same reason relative view is below: a reader who enabled it once must not be
     // left holding a plan whose controls they can no longer see. goalFirstReset() hands the
@@ -714,6 +720,10 @@ function getInputs() {
         cyclicOrder:   val('cyclicOrder') ?? 'ira-first',
         cycleLTCGTarget: +(val('cycleLTCGTarget') ?? 0.15),
         irmaaMarginMode: val('irmaaMarginMode') || IRMAA_MARGIN_DEFAULT,
+        // P28jh. '' means the shipped auto rule; the engine only reads 'early'/'late', so an
+        // empty select must arrive as undefined rather than as a falsy string it would ignore
+        // by accident. Undefined is the documented off value for this flag.
+        forceWithdrawTiming: val('forceWithdrawTiming') || undefined,
         fixedTaxIndexing: !!valChecked('fixedTaxIndexing'),
         // Account Composition (equity/bond ratio selects + intl equity % inputs)
         comp_IRA1_ratio: +val('comp_IRA1_ratio'),
@@ -5767,6 +5777,7 @@ const OPT_LONG_TO_SHORT = {
     propWithdraw:'pw', stratRate:'sr', iraWithdrawPct:'iwp', orderedSeq:'os', rothGapFill:'rgf',
     convertExcessToRoth:'mc', fundConversionWithCash:'fcc', extraConversionAmount:'eca', iraBaseGoal:'ibg',
     convEndYear:'cey', convEndMode:'cem', irmaaMarginMode:'imm', fixedTaxIndexing:'fti',
+    forceWithdrawTiming:'fwt',
     advisorFeeAmount:'af', advisorFeeMode:'afm', advisorFeeScope:'afs',
     birthyear1:'by1', birthmonth1:'bm1', die1:'d1', startAge:'sa',
     birthyear2:'by2', birthmonth2:'bm2', die2:'d2', hasSpouse:'hs',

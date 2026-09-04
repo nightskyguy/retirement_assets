@@ -242,6 +242,36 @@ share-URL decoder is re-implemented in node and none can drift. See `.test_harne
    band and got 0.075%; asked over the years perturbation actually reaches, the same question gives
    17x to 68x more. Both are in the report, `A6` scored as written.
 
+## conversion_value_harness.js  (node)
+
+```bash
+node .test_harnesses/conversion_value_harness.js
+```
+
+**Full results and the scored predictions live in [`CONVERSION_VALUE.md`](CONVERSION_VALUE.md).**
+Measures whether converting pays in the user's own terms - more Roth for the smallest reduction in
+net worth, spending held fixed (P106b). Reads `fixtures/p106_canonical.json`. Replaces `_convSavings`
+for this study.
+
+1. **"Conversions off" is ambiguous, and the verdict flips with the choice.** `convertExcessToRoth:false`
+   draws the same money and banks it in the Brokerage (terminal IRA $1,589,225);
+   `_cfSuppressConversions` never withdraws it (terminal IRA $5,437,748). Same $0 converted and the
+   same lifetime spend, $3.85M apart in the IRA. Against the first the conversions are DOMINANT,
+   against the second they cost $49,121. **Any conversion result that names only one baseline is
+   under-specified.**
+2. **Decomposing a two-variable comparison changes its meaning.** The user's own pair moved strategy
+   and conversions together. Split: the conversion leg carries $5,000,390 of Roth and -$49,121 of net
+   worth; the strategy leg carries $0 of Roth and -$532,928. 92% of the cost was the strategy.
+3. **The widow column is the strongest result, on the scenario least able to show it.** Converting
+   more than halves survivor-year tax, $708,658 to $328,198, over a survivor window only two years
+   long. Prediction `B7` said it would move less than 5% and broke at 53.69%.
+4. **An ordered strategy is a degenerate arm for this metric.** Ordered CIBR converts $0 with
+   conversions switched on, because it draws only what the year needs and leaves no surplus to route.
+   All three of its columns are the same plan.
+5. **Two field-name traps, both hit here.** The per-year spending target on a log row is `spendGoal`,
+   not `targetSpend` - the latter is undefined and silently produced a funding floor of $0. And
+   `s1`/`s2` are not the Social Security columns; `SSincome` is.
+
 ## gapfill_harness.js  (node)
 
 ```bash

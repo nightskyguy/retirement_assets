@@ -149,14 +149,25 @@ function run(over, conv) {
 // reason for wanting it: "if my assets were smaller, I would be less aggressive."
 // Definition used here, stated because there is no canonical one: the present value at the plan's
 // own growth rate of every year's spending that guaranteed income does not cover.
+// The per-year target is `spendGoal` on the log row, NOT `targetSpend` - an earlier draft used the
+// latter, got undefined, and reported a floor of $0 for a plan that plainly needs funding.
 function fundingFloor(arm) {
     const g = CANON.growth ?? 0.06;
     let pv = 0;
     arm.log.forEach((r, i) => {
-        const need = Math.max(0, (r.targetSpend ?? 0) - (r.guaranteedIncome ?? 0));
+        const need = Math.max(0, (r.spendGoal ?? 0) - (r.guaranteedIncome ?? 0));
         pv += need / Math.pow(1 + g, i);
     });
     return pv;
+}
+
+// An exchange rate is dRoth per dollar of net worth given up. When dNW is a rounding-scale number
+// the ratio explodes and means nothing, so it is suppressed rather than printed as a big number.
+const XR_FLOOR = 10000;   // dollars of |dNW| below which the ratio is not reported
+function exchangeRate(dRoth, dNW) {
+    if (dNW >= 0) return null;
+    if (-dNW < XR_FLOOR) return 'n/m';     // not meaningful
+    return (dRoth / -dNW).toFixed(2) + ' : 1';
 }
 
 // ── arms ─────────────────────────────────────────────────────────────────────────────────────
@@ -197,11 +208,13 @@ for (const { arm, on, routingOff, drawOff } of results) {
         const dRothFD = (on.rothAtFirstDeath ?? 0) - (base.rothAtFirstDeath ?? 0);
         const dNW = on.nw - base.nw;
         const dominant = dNW >= 0 && dRoth > 0;
-        const xr = dNW < 0 ? (dRoth / -dNW) : null;
+        const xr = exchangeRate(dRoth, dNW);
+        const verdict = dRoth === 0 && dNW === 0 ? 'identical plan - this arm never converts'
+            : dominant ? 'DOMINANT (no trade to weigh)' : 'a trade';
         console.log('     ' + name.padEnd(14) + money(dRoth).padStart(15) + money(dRothFD).padStart(18)
             + money(dNW).padStart(14) + pct(dNW / base.nw).padStart(10)
-            + '   ' + (xr == null ? '   -   ' : xr.toFixed(2) + ' : 1')
-            + '   ' + (dominant ? 'DOMINANT (no trade to weigh)' : 'a trade'));
+            + '   ' + String(xr == null ? '-' : xr).padStart(11)
+            + '   ' + verdict);
     }
     console.log('     spend on/routing-off/draw-off: ' + money(on.spend) + ' / ' + money(routingOff.spend)
         + ' / ' + money(drawOff.spend)

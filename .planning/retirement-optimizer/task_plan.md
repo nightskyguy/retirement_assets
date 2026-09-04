@@ -122,7 +122,25 @@ rule 4.
       the cause. The sensitivity remains unexplained and is the follow-up candidate.
       Related: `P24` found the Break Even boundary year is NOT the optimal stop year, $662k apart in
       one scenario. Different failure, both live.
-- [ ] **P106b** - the metric and its harness, on the canonical scenario.
+- [x] **P106b - DONE 2026-09-03.** `research/CONVERSION_VALUE.md`, harness
+      `.test_harnesses/conversion_value_harness.js`. Widow exposure settled by the user the same day:
+      **both columns**, survivor-year tax in dollars AND survivor marginal rate.
+      **"Conversions off" is AMBIGUOUS and the verdict flips with the baseline.** ROUTING-OFF
+      (`convertExcessToRoth:false`, same draw banked in the Brokerage) vs DRAW-OFF
+      (`_cfSuppressConversions`, never withdrawn) convert $0 and spend the same, and end $3,848,523
+      apart in the IRA. Against the first the user's conversions are DOMINANT (+$484,409 NW AND
+      +$5,000,390 Roth); against the second they cost $49,121. **Any conversion claim naming one
+      baseline is under-specified.**
+      **The user's own comparison was 92% strategy, not conversions.** Decomposed: conversion leg
+      dRoth $5,000,390 / dNW -$49,121; strategy leg dRoth $0 / dNW -$532,928. So the conversion
+      decision alone is **101.80 : 1**, not the 3.26 the combined pair gave, and costs **2.36% of
+      surplus over need** ($2,080,465 against a $2,333,535 funding floor).
+      **Widow exposure is the strongest result and `B7` broke badly.** Converting more than halves
+      survivor-year tax, $708,658 -> $328,198, on a survivor window only 2 years long - 7.7x the NW
+      given up. It is INSIDE dNW, not additive to it.
+      Also: Ordered CIBR converts $0 with conversions on (draws only what the year needs, no surplus
+      to route), so it is a degenerate arm and that is why `B3` broke. `B8` held - the user's arm
+      flips DOMINANT between a 24% and a 32% heirs rate.
 - [ ] **P106c** - the generalization set, reported separately.
 - [x] **P106d - record correction. DONE 2026-09-03.** `P87g` asserted "nothing in the engine converts
       INTO the ceiling on purpose". False, and the user had said so on 2026-08-30; the correction

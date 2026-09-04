@@ -2,12 +2,12 @@
  * conversion_value_general_harness.js -- Phase P106c.
  *
  * Runs the P106b metric over deliberately varied households, to find out how much of
- * `research/CONVERSION_VALUE.md` is about conversions and how much is about the user's own plan.
+ * `research/CONVERSION_VALUE.md` is about conversions and how much is about one plan.
  *
  * P106 groundrule 1: these are reported SEPARATELY and are never averaged into the headline. The
  * canonical scenario stays the headline; this file is the generalization check.
  *
- * THE USER'S STANDING OBJECTION TO FIXTURE SETS, which shaped every household below: the 5-6
+ * A STANDING OBJECTION TO FIXTURE SETS, which shaped every household below: the 5-6
  * households used elsewhere in this repo "were chosen as knife-edge defaults and may not reflect
  * real balances, ages or spend". So each household here is an ordinary retiree household, each
  * varies on a named axis, and the reason for each is written down next to it.
@@ -17,12 +17,12 @@
  * drift `fixtures/README.md` warns about cannot occur - every field not named below keeps a value
  * the real decoder produced.
  *
- * AXES VARIED (groundrule 1 names the first four; the fifth is the user's own reasoning):
+ * AXES VARIED (groundrule 1 names the first four; the fifth follows from the stated rule):
  *   filing status .......... H1 is single and never has a survivor transition at all
  *   state .................. CA, TX (no income tax), NY
  *   horizon ................ 28 to 38 years
  *   IRA-to-taxable ratio ... H3 holds most of its wealth already taxable
- *   surplus over need ...... H4 has little of it, and the user's stated rule is that willingness
+ *   surplus over need ...... H4 has little of it, and the stated rule is that willingness
  *                            to trade tracks surplus rather than wealth
  *
  * WHY A LONG WIDOWHOOD IS IN THE SET: P106b's strongest result was that converting more than halves
@@ -84,7 +84,7 @@ const CANON = loadFixture('p106_canonical.json');
 // the output is unexplained.
 const HOUSEHOLDS = [
     {
-        key: 'CANON', label: 'the canonical scenario (the user\'s own plan)',
+        key: 'CANON', label: 'the canonical scenario (the reference household)',
         why: 'carried through as the reference row; it is the headline everywhere else',
         over: {},
     },
@@ -131,7 +131,7 @@ const HOUSEHOLDS = [
     },
     {
         key: 'H4-tight', label: 'H4  modest balances, little surplus over need',
-        why: 'the surplus-over-need axis. The user\'s own rule is that willingness to trade tracks '
+        why: 'the surplus-over-need axis. The stated rule is that willingness to trade tracks '
             + 'surplus rather than wealth ("if my assets were smaller, I would be less aggressive")',
         over: {
             hasSpouse: true, STATEname: 'CA',

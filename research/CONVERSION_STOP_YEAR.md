@@ -1,8 +1,8 @@
 # When to stop converting, and whether the tool's answer can be trusted  *(P106a)*
 
 The Optimizer suggests a **Stop Conversion year**: the last year it will run Roth conversions, chosen
-to maximize terminal wealth. The user's report on 2026-09-03 was that this suggestion "changes the
-answer. And it seems unstable."
+to maximize terminal wealth. This report starts from an observation that the suggestion "changes the
+answer" and "seems unstable".
 
 This report measures that. It matters beyond the suggestion itself, because `P106` is a study of
 whether converting pays, and a study that rests on "the optimal stop year" needs to know first
@@ -10,7 +10,7 @@ whether that year means anything.
 
 **Verdict: the search is not broken, the optimum is not flat, and the suggestion still should not be
 used as a single number.** The peak is sharp for any one set of inputs and it MOVES by up to three
-years when an input the user would call immaterial changes by 1% or less. Across the years those
+years when an input a planner would call immaterial changes by 1% or less. Across the years those
 moves actually reach, lifetime conversions range over 4.5x and ending Roth over $3.7M.
 
 ---
@@ -43,7 +43,7 @@ Every cutoff is scored by `afterTaxWealthOfLogRow`, and it has two branches:
 | basis | what it does |
 |---|---|
 | **NOT SET** | No Marginal Heirs Tax Rate entered. Returns the row's own `totalWealth`, which discounts the IRA at **`sim.nominalTaxRate`, that run's OWN final-year ordinary marginal rate**. |
-| **a shared rate** (12%, 24%, ...) | Discounts every cutoff's IRA at the same rate the user supplied. |
+| **a shared rate** (12%, 24%, ...) | Discounts every cutoff's IRA at the same rate, supplied as an input. |
 
 The distinction carries a finding of its own; see [The default basis compares plans at different
 discount rates](#the-default-basis-compares-plans-at-different-discount-rates). **NOT SET is the
@@ -59,8 +59,8 @@ text only where the result is theirs.
 
 ## The scenario
 
-The user's own plan, not a fixture. CA, married, both born before 1961, $3.44M across two IRAs,
-$274k Roth, $600k brokerage on $200k basis, $100k cash, $220k spending declining 1%/yr real, Fixed
+One hypothetical household, used as the reference scenario throughout. CA, married, both born
+before 1961, $3.44M across two IRAs, $274k Roth, $600k brokerage on $200k basis, $100k cash, $220k spending declining 1%/yr real, Fixed
 strategy, cyclic gain harvesting on, conversion taxes funded from cash, **no Marginal Heirs Tax Rate
 set**, and a Stop Conversion year of 2032 already applied.
 
@@ -149,7 +149,7 @@ moved a shared-rate answer, **7 of 11**.
 
 ## What being on the wrong year costs
 
-The perturbations reach four stop years. A user who nudges any of those inputs can be handed any of
+The perturbations reach four stop years. Anyone who nudges any of those inputs can be handed any of
 them. Scored within each basis:
 
 | basis | 2027 | 2029 | 2030 | 2032 | spread | worst as % of NW |

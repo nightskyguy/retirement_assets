@@ -1,18 +1,18 @@
 /**
  * stopyear_stability_harness.js -- Phase P106a.
  *
- * QUESTION (user, 2026-09-03): "the Stop Conversion year suggested changes the answer. And it
+ * QUESTION (reported 2026-09-03): "the Stop Conversion year suggested changes the answer. And it
  * seems unstable". Is that a DEFECT, or a genuinely flat optimum that the UI reports as a single
  * confident year? P106's whole conversion study is meant to rest on this suggestion, so it is
  * measured first.
  *
  * The production search is `bestConversionStopYear()` in optimizer_core.js. It is a LINEAR SCAN
- * over every cutoff, deterministic given its inputs, so any instability the user sees has to come
+ * over every cutoff, deterministic given its inputs, so any instability seen has to come
  * from one of: a near-flat top where the argmax is decided by rounding-scale differences; a
- * multi-modal curve; a coupling to some input that moves it much more than the user expects; or a
+ * multi-modal curve; a coupling to some input that moves it much more than expected; or a
  * genuine bug in how the applied year feeds back into the next search.
  *
- * SCENARIO: the user's own plan, `fixtures/p106_canonical.json`, captured from the page's own
+ * SCENARIO: one hypothetical household, `fixtures/p106_canonical.json`, captured from the page's own
  * getInputs() so no share-URL decoder is re-implemented here. See fixtures/README.md.
  *
  * ONE THING KNOWN BEFORE RUNNING, from reading the fixture rather than from a result:
@@ -415,7 +415,7 @@ console.log('    a moving peak. So the cost of landing on the wrong year is the 
 console.log('    whether any of this matters, and it is not the worst-in-band figure above.');
 
 // ---- 11. What does being on the wrong year actually cost? ------------------------------------
-// The perturbations in section 9 reach {2027, 2029, 2030, 2032}. Those are the answers a user can
+// The perturbations in section 9 reach {2027, 2029, 2030, 2032}. Those are the answers anyone can
 // actually be handed by nudging an input they would not think material. Scoring all of them in one
 // basis at a time gives the real cost of the instability.
 console.log('\n11. THE COST OF LANDING ON THE WRONG YEAR');

@@ -1,14 +1,14 @@
 /**
  * conversion_value_harness.js -- Phase P106b.
  *
- * QUESTION: does converting pay, on the user's own plan, measured the way the user defines the
+ * QUESTION: does converting pay, on one hypothetical plan, measured the way the study defines the
  * goal: "more Roth from the smallest reduction in net worth, with no reduction in spending."
  *
  * This REPLACES `_convSavings` for the study. That figure is a lifetime-tax difference that exists
  * only on the sweep's own conversion-optimized rows, so it is both the wrong quantity and an
  * artifact of the search that produced it.
  *
- * SCENARIO: the user's own plan, `fixtures/p106_canonical.json`, captured from the page's own
+ * SCENARIO: one hypothetical household, `fixtures/p106_canonical.json`, captured from the page's own
  * getInputs(). CA, MFJ, $3.44M across two IRAs, $220k spending declining 1%/yr real, strategy
  * `fixed` = "Reduce IRA in 11 Years", cyclic on, conversion taxes funded from cash.
  *
@@ -42,13 +42,13 @@
  * --------------------------------------------------------------------------------------------
  * PREDICTIONS, REGISTERED BEFORE THE FIRST RUN. Committed unrun; scored as written.
  *
- *   B1  On the user's own strategy, conversions are DOMINANT against ROUTING-OFF: dNW >= 0 and
+ *   B1  On the reference strategy, conversions are DOMINANT against ROUTING-OFF: dNW >= 0 and
  *       dRoth > 0, so there is no trade to weigh at all.
  *   B2  Against DRAW-OFF they are NOT dominant: dNW < 0.
  *   B3  The two baselines disagree on the SIGN of dNW for at least half the arms.
- *   B4  In the user's own worked example (Ordered CIBR without conversions against Reduce 11yrs
+ *   B4  In the original worked example (Ordered CIBR without conversions against Reduce 11yrs
  *       with them), the conversion leg accounts for more of the dRoth than the strategy leg.
- *   B5  The exchange rate dRoth / -dNW against DRAW-OFF exceeds 3.0 on the user's own strategy.
+ *   B5  The exchange rate dRoth / -dNW against DRAW-OFF exceeds 3.0 on the reference strategy.
  *       (Their two-variable pair produced 3.26.)
  *   B6  Lifetime spend is equal across every arm to within $100, as groundrule 3 requires.
  *   B7  Survivor-year tax differs by less than 5% between conversions on and off, because this
@@ -145,7 +145,7 @@ function run(over, conv) {
 }
 
 // The funding floor, per P106 groundrule 4: the assets the spending plan actually needs, so a
-// give-up can be expressed against SURPLUS OVER NEED rather than against wealth. The user's own
+// give-up can be expressed against SURPLUS OVER NEED rather than against wealth. The
 // reason for wanting it: "if my assets were smaller, I would be less aggressive."
 // Definition used here, stated because there is no canonical one: the present value at the plan's
 // own growth rate of every year's spending that guaranteed income does not cover.
@@ -172,14 +172,14 @@ function exchangeRate(dRoth, dNW) {
 
 // ── arms ─────────────────────────────────────────────────────────────────────────────────────
 const ARMS = [
-    { key: 'reduce11', label: 'Reduce IRA in 11 Years  (the user\'s own plan)', over: {} },
+    { key: 'reduce11', label: 'Reduce IRA in 11 Years  (the reference household)', over: {} },
     { key: 'orderedCIBR', label: 'Ordered CIBR', over: { strategy: 'ordered', orderedSeq: 'CIBR' } },
     { key: 'propwd', label: 'Proportional Withdraw +%', over: { strategy: 'propwd' } },
 ];
 
-console.log('\nP106b - does converting pay, in the user\'s own terms?');
+console.log('\nP106b - does converting pay, in the terms the study set?');
 rule('═');
-console.log('scenario   : the user\'s own plan  (' + META.title + ')');
+console.log('scenario   : one hypothetical household  (' + META.title + ')');
 console.log('metric     : more Roth for the smallest reduction in net worth, spending held fixed');
 console.log('valuation  : SHARED heirs rate ' + pct(HEIRS, 0) + ', real (year-0) dollars, band '
     + BAND.map(b => pct(b, 0)).join(' / '));
@@ -234,7 +234,7 @@ for (const { arm, on, routingOff, drawOff } of results) {
     }
 }
 
-// ── 3. the user's own worked example, decomposed ─────────────────────────────────────────────
+// ── 3. the original worked example, decomposed ─────────────────────────────────────────────
 console.log('\n3. THE USER\'S OWN COMPARISON, DECOMPOSED  (it moves TWO variables at once)');
 const cibr = results.find(r => r.arm.key === 'orderedCIBR');
 const red = results.find(r => r.arm.key === 'reduce11');
@@ -271,7 +271,7 @@ for (const { arm, on, routingOff, drawOff } of results) {
 }
 
 // ── 5. widow exposure ────────────────────────────────────────────────────────────────────────
-console.log('\n5. WIDOW EXPOSURE  (both columns, per the user\'s decision 2026-09-03)');
+console.log('\n5. WIDOW EXPOSURE  (both columns reported)');
 console.log('   survivor window on this scenario: ' + red.on.survivorYears + ' years from '
     + red.on.survivorFirstYear + '. Short, so this reads small here by construction;');
 console.log('   it is the generalization set (P106c) that has to carry this column.\n');
@@ -317,7 +317,7 @@ const maxSpendGap = Math.max(...results.flatMap(r =>
 const widowGap = Math.abs(red.on.survivorTax - red.drawOff.survivorTax)
     / Math.max(1, red.drawOff.survivorTax);
 const verdicts = [
-    ['B1', 'DOMINANT vs ROUTING-OFF on the user\'s arm', dNWRoutingOff >= 0 && dRothRoutingOff > 0,
+    ['B1', 'DOMINANT vs ROUTING-OFF on the reference arm', dNWRoutingOff >= 0 && dRothRoutingOff > 0,
         'dNW ' + money(dNWRoutingOff) + ', dRoth ' + money(dRothRoutingOff)],
     ['B2', 'NOT dominant vs DRAW-OFF (dNW < 0)', dNWDrawOff < 0, 'dNW ' + money(dNWDrawOff)],
     ['B3', 'baselines disagree on sign of dNW for >=half the arms',

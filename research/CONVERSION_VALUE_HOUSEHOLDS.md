@@ -1,8 +1,8 @@
 # Does the conversion result generalize? Four varied households  *(P106c)*
 
 [`CONVERSION_VALUE.md`](CONVERSION_VALUE.md) measured whether converting pays on one plan, the
-user's own. This report asks how much of that was about conversions and how much was about that
-plan.
+reference household. This report asks how much of that was about conversions and how much was about
+that one plan.
 
 **Answer: it generalizes, and it generalizes more strongly than the canonical scenario showed.**
 Converting pays in every household that converts at all, and the one prediction registered to catch
@@ -20,17 +20,17 @@ the canonical headline.
 
 ### The households, and the axis each one varies
 
-Chosen against the user's standing objection to this repo's other fixture sets, that they "were
-chosen as knife-edge defaults and may not reflect real balances, ages or spend". Each is an ordinary
-retiree household.
+Chosen against a standing objection to this repo's other fixture sets, that they "were chosen as
+knife-edge defaults and may not reflect real balances, ages or spend". Each is an ordinary retiree
+household.
 
 | id | household | axis it varies |
 |---|---|---|
-| **CANON** | the user's own plan. CA, married, $4.41M, 25 years, 2-year widowhood | the reference row, not a test |
+| **CANON** | the reference household. CA, married, $4.41M, 25 years, 2-year widowhood | the reference row, not a test |
 | **H1-single** | single filer, CA, $2.41M, 29 years, **no survivor transition at all** | filing status. Single brackets apply for the whole plan rather than only after a death, so this separates "compressed brackets" from "the widow penalty" |
 | **H2-longwidow** | 13-year age gap, TX, $3.62M, 38 years, **24-year widowhood** | the widow axis, and the one P106b could not test. TX has no state income tax, so the effect is federal only |
 | **H3-IRAlight** | NY, married, $3.68M, 27 years, **$700k IRA against $2.6M brokerage** | the IRA-to-taxable ratio, reversed from the canonical |
-| **H4-tight** | CA, married, **$1.62M**, 29 years, little surplus over need | the surplus-over-need axis. The user's own rule is that willingness to trade tracks surplus rather than wealth: *"if my assets were smaller, I would be less aggressive"* |
+| **H4-tight** | CA, married, **$1.62M**, 29 years, little surplus over need | the surplus-over-need axis. The stated rule is that willingness to trade tracks surplus rather than wealth: *"if my assets were smaller, I would be less aggressive"* |
 
 Built by overriding named fields on `.test_harnesses/fixtures/p106_canonical.json`, which is itself
 the verbatim output of the page's own `getInputs()`. Nothing re-decodes a share URL, so every field
@@ -116,9 +116,8 @@ predicted "under 25% of the canonical's dRoth" and held, but the mechanism is mo
 prediction imagined: **for an IRA-light household this strategy offers no conversion program to
 evaluate.** That is a fact about the strategy, not about conversions.
 
-**H4 is where the user's own rule bites.** The same decision that costs the canonical scenario 2.36%
-of its surplus over need costs H4 **13.16%** - 5.6x more of the thing the user said their appetite
-tracks. In absolute terms H4 gives up less ($36,411 against $49,121); as a share of what it has spare
+**H4 is where that rule bites.** The same decision that costs the canonical scenario 2.36% of its
+surplus over need costs H4 **13.16%** - 5.6x more of the thing that appetite is said to track. In absolute terms H4 gives up less ($36,411 against $49,121); as a share of what it has spare
 after funding its own spending, it gives up far more. `C4` held. This is the quantified form of *"if
 my assets were smaller, I would be less aggressive"*, and it is the number that rule should be
 applied to.
@@ -177,8 +176,8 @@ strategy and spending shape.
 
 ## What this changes about the P106b conclusion
 
-P106b concluded that on the user's own plan, nothing needs an unpriced motive to justify converting -
-the trade is cheap on its own terms. That survives, and two things sharpen it:
+P106b concluded that on the reference household, nothing needs an unpriced motive to justify
+converting - the trade is cheap on its own terms. That survives, and two things sharpen it:
 
 1. **The widow penalty is the largest single source of the benefit, and the canonical scenario is
    nearly the worst case for seeing it.** A 2-year window showed $380,460; a 24-year window shows

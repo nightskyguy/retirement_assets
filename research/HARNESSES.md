@@ -216,7 +216,7 @@ node .test_harnesses/stopyear_stability_harness.js          # add --json for the
 ```
 
 **Full results and the scored predictions live in [`CONVERSION_STOP_YEAR.md`](CONVERSION_STOP_YEAR.md).**
-Asks whether the Stop Conversion year the tool suggests is trustworthy, after the user reported it
+Asks whether the Stop Conversion year the tool suggests is trustworthy, after an observation that it
 "seems unstable" (P106a). Dumps the whole cutoff curve, then separates the two explanations that
 would look identical from the outside: a flat optimum where the jumping is cosmetic, and a moving
 peak where it is not.
@@ -276,7 +276,7 @@ node .test_harnesses/conversion_value_harness.js
 ```
 
 **Full results and the scored predictions live in [`CONVERSION_VALUE.md`](CONVERSION_VALUE.md).**
-Measures whether converting pays in the user's own terms - more Roth for the smallest reduction in
+Measures whether converting pays in the terms the study set - more Roth for the smallest reduction in
 net worth, spending held fixed (P106b). Reads `fixtures/p106_canonical.json`. Replaces `_convSavings`
 for this study.
 
@@ -286,7 +286,7 @@ for this study.
    same lifetime spend, $3.85M apart in the IRA. Against the first the conversions are DOMINANT,
    against the second they cost $49,121. **Any conversion result that names only one baseline is
    under-specified.**
-2. **Decomposing a two-variable comparison changes its meaning.** The user's own pair moved strategy
+2. **Decomposing a two-variable comparison changes its meaning.** The original pair moved strategy
    and conversions together. Split: the conversion leg carries $5,000,390 of Roth and -$49,121 of net
    worth; the strategy leg carries $0 of Roth and -$532,928. 92% of the cost was the strategy.
 3. **The widow column is the strongest result, on the scenario least able to show it.** Converting

@@ -20,4 +20,4 @@ fixture from an older version is not wrong, but it is a record of that version.
 
 | fixture | scenario |
 |---|---|
-| `p106_canonical.json` | The user's own plan, the canonical scenario for `P106`. CA, MFJ, $3.44M IRA, $220k spend declining 1%/yr, Fixed strategy, cyclic on, conversions ending 2032, **no heirs rate set**. |
+| `p106_canonical.json` | One hypothetical household, the canonical scenario for `P106`. CA, MFJ, $3.44M IRA, $220k spend declining 1%/yr, Fixed strategy, cyclic on, conversions ending 2032, **no heirs rate set**. |

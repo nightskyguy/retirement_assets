@@ -1,15 +1,16 @@
-# Does converting pay? Measured on the user's own plan  *(P106b)*
+# Does converting pay? Measured on one hypothetical plan  *(P106b)*
 
-The goal, in the user's words: **more Roth from the smallest reduction in net worth, with no
-reduction in spending.** This report measures that on their own plan, and replaces `_convSavings`,
+The goal, as stated: **more Roth from the smallest reduction in net worth, with no
+reduction in spending.** This report measures that on one hypothetical plan, and replaces
+`_convSavings`,
 which is a lifetime-tax difference that exists only on the sweep's own conversion-optimized rows and
 is therefore both the wrong quantity and an artifact of the search that produced it.
 
-**Headline: on this plan the conversion program is far cheaper than the user's own arithmetic
-suggested, and most of what it buys is a smaller tax bill for the survivor.** Holding the strategy
-fixed, converting costs **$49,121** of real after-tax net worth and buys **$5,000,390** of ending
-Roth. That is 2.4% of the plan's surplus over what its spending actually needs. The user had priced
-the same move at $1,732,907, because the comparison they ran moved the withdrawal strategy at the
+**Headline: on this plan the conversion program is far cheaper than a first reading of the same
+numbers suggested, and most of what it buys is a smaller tax bill for the survivor.** Holding the
+strategy fixed, converting costs **$49,121** of real after-tax net worth and buys **$5,000,390** of ending
+Roth. That is 2.4% of the plan's surplus over what its spending actually needs. The same move was
+first priced at $1,732,907, because the comparison behind that figure moved the withdrawal strategy at the
 same time; 92% of that cost belongs to the strategy change, not to the conversions.
 
 ---
@@ -53,8 +54,8 @@ weeks.
 - **Spend asserted equal**: largest gap across every arm and baseline is **$4** on $7.0M of lifetime
   spending.
 
-Scenario: the user's own plan. CA, married, $3.44M across two IRAs, $274k Roth, $600k brokerage on
-$200k basis, $100k cash, $220k spending declining 1%/yr real, strategy `fixed` = **"Reduce IRA in 11
+Scenario: one hypothetical household, the reference scenario throughout. CA, married, $3.44M across
+two IRAs, $274k Roth, $600k brokerage on $200k basis, $100k cash, $220k spending declining 1%/yr real, strategy `fixed` = **"Reduce IRA in 11
 Years"**, cyclic harvesting on, conversion taxes funded from cash. Inputs are
 `.test_harnesses/fixtures/p106_canonical.json`; harness `.test_harnesses/conversion_value_harness.js`.
 
@@ -62,7 +63,7 @@ Years"**, cyclic harvesting on, conversion taxes funded from cash. Inputs are
 
 ## 1. The answer, against both baselines
 
-**Reduce IRA in 11 Years, the user's own plan:**
+**Reduce IRA in 11 Years, the reference household:**
 
 | baseline | dRoth (end) | dRoth (1st death) | dNW real | dNW %NW | exchange | verdict |
 |---|---:|---:|---:|---:|---:|---|
@@ -100,17 +101,17 @@ Nominal balances at the end of the plan.
 | propwd routing-off | $0 | $1,906,744 | $5,043,347 | $3,798,878 | $2,966,317 |
 | propwd draw-off | $0 | $1,906,744 | $6,139,892 | $3,327,775 | $2,886,425 |
 
-Converting also cuts lifetime tax on the user's arm, by **$755,648** against DRAW-OFF. Less lifetime
+Converting also cuts lifetime tax on this arm, by **$755,648** against DRAW-OFF. Less lifetime
 tax alongside less net worth was flagged in the P106 groundrules as "not the usual conversion
 signature" and needing explanation. It is not mysterious here: the conversions are paid for out of
 cash and out of a brokerage that is drawn down from $3,315,914 to $348,948, so the plan trades
 brokerage and its embedded gains for Roth. The tax saving is real; the net-worth cost is the
 brokerage the plan no longer holds.
 
-## 3. The user's own comparison, decomposed
+## 3. The original comparison, decomposed
 
-The user's worked example was Ordered CIBR without conversions against Reduce 11 Years with them, and
-it moves **two variables at once**. Groundrule 6 requires both equalized pairs, so:
+The comparison that prompted this study was Ordered CIBR without conversions against Reduce 11 Years
+with them, and it moves **two variables at once**. Groundrule 6 requires both equalized pairs, so:
 
 | leg | what changes | dRoth | dNW real |
 |---|---|---:|---:|
@@ -120,19 +121,19 @@ it moves **two variables at once**. Groundrule 6 requires both equalized pairs, 
 
 **All of the Roth gain is the conversion leg. 92% of the net-worth cost is the strategy leg.**
 
-This corrects the reading the user took from their own numbers. They priced the move at
--$1,732,907 of net worth for +$5,655,337 of Roth and called it 3.26 Roth dollars per dollar given up.
+This corrects the first reading of those numbers, which priced the move at -$1,732,907 of net worth
+for +$5,655,337 of Roth and called it 3.26 Roth dollars per dollar given up.
 Decomposed and equalized, the conversions themselves cost **$49,121**, and the exchange rate on the
-conversion decision alone is **101.80 to 1**, not 3.26. The expensive half of their comparison was
+conversion decision alone is **101.80 to 1**, not 3.26. The expensive half of that comparison was
 switching the withdrawal strategy, which bought no Roth at all.
 
-The absolute figures here differ from the user's because this report holds the stop year fixed at
-2032, values at a shared 24% heirs rate, and reports real year-0 dollars. The decomposition is the
+The absolute figures here differ from that first reading because this report holds the stop year
+fixed at 2032, values at a shared 24% heirs rate, and reports real year-0 dollars. The decomposition is the
 point, not the level.
 
 ## 4. Against the funding floor
 
-Groundrule 4 asks for the give-up against **surplus over need**, because the user's own stated
+Groundrule 4 asks for the give-up against **surplus over need**, because the stated
 willingness to trade tracks that rather than wealth: *"if my assets were smaller, I would be less
 aggressive."*
 
@@ -152,13 +153,12 @@ plan's own 6.0% growth rate of every year's spending that guaranteed income does
 | propwd vs routing-off | -$811 | -0.02% | -0.04% |
 | propwd vs draw-off | -$159,564 | -3.22% | -7.67% |
 
-The conversion decision on the user's own plan costs **2.36% of the surplus over what their spending
-plan needs**. That is the number their stated rule should be applied to.
+The conversion decision on the reference household costs **2.36% of the surplus over what its
+spending plan needs**. That is the number the stated rule should be applied to.
 
 ## 5. Widow exposure
 
-Both columns, per the user's decision on 2026-09-03: survivor-year tax in dollars and the survivor's
-marginal rate.
+Both columns are reported: survivor-year tax in dollars and the survivor's marginal rate.
 
 **The survivor window on this scenario is 2 years, 2049-2050.** `B7` predicted that would make the
 column read small. It does not, and `B7` is BROKEN by a wide margin.
@@ -201,7 +201,7 @@ each rate:
 | propwd vs routing-off | +$24,574 | +$3,419 | -$811 | -$17,735 | -$28,312 |
 | propwd vs draw-off | -$198,910 | -$166,122 | -$159,564 | -$133,333 | -$116,939 |
 
-**The user's own arm flips DOMINANT between 24% and 32%.** Below about 30% the conversions cost net
+**The reference household's arm flips DOMINANT between 24% and 32%.** Below about 30% the conversions cost net
 worth; above it they gain net worth and there is no trade at all. So the answer to "does converting
 pay on this plan" is *yes outright* if the heirs face 32% or more, and *yes at 101 Roth dollars per
 dollar* if they face less. The flip does not reverse the decision, it only changes whether there is a
@@ -211,7 +211,7 @@ cost to weigh - which is a mild version of the risk groundrule 2 was written for
 
 | id | claim | verdict | evidence |
 |---|---|---|---|
-| `B1` | DOMINANT vs ROUTING-OFF on the user's arm | HELD | dNW +$484,409, dRoth +$5,000,390 |
+| `B1` | DOMINANT vs ROUTING-OFF on the reference arm | HELD | dNW +$484,409, dRoth +$5,000,390 |
 | `B2` | NOT dominant vs DRAW-OFF | HELD | dNW -$49,121 |
 | `B3` | baselines disagree on sign of dNW for >= half the arms | **BROKEN** | 1 of 3. Ordered CIBR never converts, so it cannot disagree about anything; the prediction assumed three live arms and there are two. |
 | `B4` | conversion leg carries more dRoth than strategy leg | HELD | $5,000,390 vs $0 |
@@ -224,14 +224,14 @@ cost to weigh - which is a mild version of the risk groundrule 2 was written for
 
 P106 was opened because after-tax net worth already prices Roth above IRA via the heirs rate, so an
 arm that gains Roth while losing net worth is destroying value **under the model's own valuation**,
-and the user's willingness to make that trade is rational only if net worth omits something they
-value. The named candidates were the widow penalty, Roth timing, and bucket diversification.
+and a willingness to make that trade is rational only if net worth omits something the plan owner
+values. The named candidates were the widow penalty, Roth timing, and bucket diversification.
 
 On this plan:
 
 1. **The premise is weaker than it looked.** Held at a fixed strategy, the conversions cost $49,121,
    which is 1.05% of net worth and 2.36% of surplus over need, and at a 32% heirs rate they cost
-   nothing at all. Most of the $1.73M the user was weighing was the strategy change.
+   nothing at all. Most of the $1.73M being weighed was the strategy change.
 2. **The widow penalty is measurable and large**, even on a scenario whose survivor window is two
    years. It is inside dNW already, so it is not an omission from net worth; it is an explanation of
    why the net-worth cost is as small as it is.

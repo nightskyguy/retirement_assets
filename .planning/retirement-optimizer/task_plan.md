@@ -141,7 +141,24 @@ rule 4.
       Also: Ordered CIBR converts $0 with conversions on (draws only what the year needs, no surplus
       to route), so it is a degenerate arm and that is why `B3` broke. `B8` held - the user's arm
       flips DOMINANT between a 24% and a 32% heirs rate.
-- [ ] **P106c** - the generalization set, reported separately.
+- [x] **P106c - DONE 2026-09-03. It GENERALIZES, and three predictions broke toward conversions
+      being better than expected.** `research/CONVERSION_VALUE_HOUSEHOLDS.md`, harness
+      `.test_harnesses/conversion_value_general_harness.js`. Four varied households plus the
+      canonical reference row, reported separately, never averaged.
+      **Converting pays in every household that converts at all** - 101.8:1, 40.1:1, DOMINANT,
+      31.0:1. `C8` was registered to catch a reversal and found none.
+      **The widow mechanism is confirmed and scales with the window, and the canonical scenario is
+      nearly its WORST case:** 2y saves $380,460; **24y saves $3,227,336** and drops the survivor's
+      average marginal 30.0% -> 19.3%, the one household where converting is DOMINANT against both
+      baselines. A single filer (no survivor transition at all) still gains 40.1:1, so compressed
+      brackets and the widow penalty are SEPARATE, ADDITIVE sources.
+      **Two households differ in kind.** IRA-light converts **$0** - "Reduce IRA in 11 Years" drains
+      a small IRA into spending and leaves no surplus to route, so there is no conversion program to
+      evaluate; a fact about the strategy, not conversions. And the modest household gives up
+      **13.16% of surplus over need** against the canonical's 2.36% while giving up FEWER absolute
+      dollars - so **quote the cost against surplus, not net worth; they rank households oppositely.**
+      `C5` broke (2 of 5, not >=half): the baseline ambiguity appears where the program is a genuine
+      trade, not where it is one-sided. The rule survives - naming one baseline is under-specified.
 - [x] **P106d - record correction. DONE 2026-09-03.** `P87g` asserted "nothing in the engine converts
       INTO the ceiling on purpose". False, and the user had said so on 2026-08-30; the correction
       reached the report, its index row and the `P92` status block that day but not the three places

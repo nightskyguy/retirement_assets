@@ -242,6 +242,33 @@ share-URL decoder is re-implemented in node and none can drift. See `.test_harne
    band and got 0.075%; asked over the years perturbation actually reaches, the same question gives
    17x to 68x more. Both are in the report, `A6` scored as written.
 
+## conversion_value_general_harness.js  (node)
+
+```bash
+node .test_harnesses/conversion_value_general_harness.js
+```
+
+**Full results and the scored predictions live in [`CONVERSION_VALUE_HOUSEHOLDS.md`](CONVERSION_VALUE_HOUSEHOLDS.md).**
+The generalization check for `conversion_value_harness.js` (P106c): four deliberately varied
+households plus the canonical one, reported separately and never averaged. Households are built by
+overriding named fields on `fixtures/p106_canonical.json`, so nothing re-decodes a share URL.
+
+1. **It generalizes, and three predictions broke toward conversions being better than expected.**
+   Converting pays in every household that converts at all - 101.8:1, 40.1:1, DOMINANT, 31.0:1 - and
+   `C8`, registered to catch a reversal, found none.
+2. **The widow mechanism scales with the window, and the canonical scenario is nearly its worst
+   case.** 2 years saves $380,460; 24 years saves $3,227,336 and drops the survivor's average
+   marginal rate from 30.0% to 19.3%, which is the one household where converting is DOMINANT against
+   both baselines.
+3. **A single filer isolates the other half.** No survivor transition exists, so none of its 40.1:1
+   can be the widow penalty. Compressed brackets and the widow penalty are separate, additive sources.
+4. **An IRA-light household converts $0.** With $700k of IRA against $2.6M of brokerage, "Reduce IRA
+   in 11 Years" drains the IRA into spending and leaves no surplus to route, so all three arms are the
+   same plan. A fact about the strategy, not about conversions.
+5. **Quote the cost against surplus over need, not net worth - they rank households oppositely.** The
+   same decision costs the canonical household 2.36% of surplus and the modest one 13.16%, while the
+   absolute dollars run the other way ($49,121 against $36,411).
+
 ## conversion_value_harness.js  (node)
 
 ```bash

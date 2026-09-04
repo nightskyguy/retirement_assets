@@ -1423,7 +1423,34 @@ function beginYear(sim, yr) {
           ((inputs.strategy === 'bracket' || _acaLive || _sched0) && !_convSuppressedThisYear(inputs, 0))
        || _extraConvAmountFor(inputs, 0) > 0;
     const _prevConv    = y > 0 ? (log[y - 1].rothConv ?? 0) : 0;
-    yr._useEarly    = y === 0 ? _stratImpliesConversion : (_prevConv > 1000);
+    // P28jb research input (no UI, no URL param): `inputs.timingConvThreshold` replaces the bare
+    // 1000. Nobody chose that 1000 - it has been a literal since Phase 12 - and one dollar either
+    // side of it moves a whole year's withdrawal by ten months, then keeps moving it for every year
+    // the flag stays flipped. Same species as P30's [40, 60], and it gets the same treatment: make
+    // it a swept input before asking whether it is load-bearing.
+    //
+    // Validated to a SHAPE rather than for truthiness, the discipline gapFillWeights records: a
+    // malformed value must mean "leave today's behavior alone", never "model something else
+    // silently". Finite and >= 0. `?? ` would not do here, because 0 is a legal value.
+    //
+    // BOTH ENDPOINTS ARE MEANINGFUL, which is what makes a sweep of this a sweep of the policy
+    // rather than of two different policies. At 0 ANY conversion flips the year to Early - and
+    // measured, that is not obviously the intended rule either, because plans do produce sub-dollar
+    // residual conversions and a $0.01 remainder would move a whole year's withdrawal by ten months.
+    // At a threshold above any conversion the plan makes, the flag never flips and years 1+ are
+    // pinned Late - the same plan `forceWithdrawTiming: 'late'` produces, reached through the
+    // trigger instead of around it.
+    //
+    // WHERE THE CONSTANT BITES IS A PROPERTY OF THE STRATEGY, not of the household (P28jb, measured
+    // 2026-09-04 on one 15-year fixture). Fill Bracket 22% converted in 11 years and the smallest
+    // was $27,365, so 1000 is inert for it at any value below that. Proportional +% converted in 11
+    // years and EVERY one was under $1,000, so the same constant means that plan never flips at all
+    // today and would flip every year at 0. Reduce straddles it. A threshold sweep will therefore
+    // look flat or decisive depending entirely on which strategies are in the grid, which is a trap
+    // P28je has to avoid rather than a result.
+    const _tct = inputs.timingConvThreshold;
+    const _tctOK = Number.isFinite(_tct) && _tct >= 0;
+    yr._useEarly    = y === 0 ? _stratImpliesConversion : (_prevConv > (_tctOK ? _tct : 1000));
     // Research override (no UI, default off): pin the timing to 'early' or 'late' for every year.
     // Exists because converting flips this rule, so any A/B of convertExcessToRoth silently compares
     // a month-1 withdrawal schedule against a month-11 one on top of the tax difference. Pinning it

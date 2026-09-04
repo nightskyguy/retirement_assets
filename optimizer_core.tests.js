@@ -7699,6 +7699,51 @@ async function runOptimizerCoreTests(opts) {
     };
 }
 
+// ── timingConvThreshold research input (Phase P28jb) ─────────────────────────────────────────
+// The withdrawal-timing rule flips a whole year to Early when the PRIOR year converted more than a
+// bare 1000. This pins the input that replaces that literal, before P28je sweeps it. Three things
+// have to hold or the sweep measures the wrong thing: unset must be bit-identical to today, the
+// endpoints must be reachable, and a malformed value must leave behavior alone rather than model
+// something else silently.
+test('P28jb: timingConvThreshold defaults bit-identically, both endpoints work, junk is ignored', () => {
+    const CONV = {
+        ...BASE, strategy: 'bracket', stratRate: 0.22, convertExcessToRoth: true,
+        IRA1: 1200000, Brokerage: 300000, BrokerageBasis: 150000, Cash: 80000,
+        spendGoal: 70000, growth: 0.05, inflation: 0.02, cpi: 0.02, nYears: 15,
+    };
+    const timings = (over) => simulate({ ...CONV, ...over, computeOC: false }).log.map(r => r.timing);
+    const base = timings({});
+
+    // Unset === the literal it replaced. This is the whole reason the default is 1000.
+    assertSameList(timings({ timingConvThreshold: 1000 }), base,
+        'P28jb: an explicit 1000 must reproduce the unset default exactly');
+
+    // Junk of every shape leaves today's behavior alone. 0 is legal, so a truthiness check here
+    // would silently swallow the low endpoint - that is the bug this shape check exists to avoid.
+    for (const junk of [undefined, null, NaN, Infinity, -1, '500', {}, []]) {
+        assertSameList(timings({ timingConvThreshold: junk }), base,
+            `P28jb: timingConvThreshold ${JSON.stringify(junk)} must be ignored, not honored`);
+    }
+
+    // Low endpoint: any conversion at all flips the next year Early. Reachability has to be tested
+    // on a plan that actually converts BELOW the threshold, and which plans those are is a property
+    // of the strategy: this fixture's Fill Bracket arm converts in 11 years and never less than
+    // $27,365, so 1000 is inert for it and it would pass this check vacuously. Proportional's
+    // conversions on the same fixture are all under $1,000, which is what makes it the arm that can
+    // tell the endpoints apart at all.
+    const propBase = timings({ strategy: 'propwd' });
+    const propZero = timings({ strategy: 'propwd', timingConvThreshold: 0 });
+    assert(propZero.some((t, i) => t !== propBase[i]),
+        'P28jb: threshold 0 should flip years that the 1000 default left Late on a small-conversion plan');
+
+    // High endpoint: above anything the plan converts, years 1+ never flip and match a pinned-late
+    // run. Year 0 is excluded on purpose - it keys off _stratImpliesConversion, not the threshold.
+    const atHuge = timings({ timingConvThreshold: 1e12 }).slice(1);
+    const pinnedLate = timings({ forceWithdrawTiming: 'late' }).slice(1);
+    assertSameList(atHuge, pinnedLate,
+        'P28jb: a threshold above every conversion should equal pinned-late from year 1 on');
+});
+
 // ── Widow-scoped terminal IRA rate (Phase P106g) ─────────────────────────────────────────────
 // The helper reads only `status` and `NominalRate%`, so synthetic rows pin the WINDOW RULE without
 // dragging a whole simulation in. The rule is the part that can silently rot; the arithmetic cannot.

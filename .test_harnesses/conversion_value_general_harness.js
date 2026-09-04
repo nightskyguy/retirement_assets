@@ -161,8 +161,11 @@ function run(over, conv) {
     const atFirstDeath = firstSingleIdx < 0 ? null : log[firstSingleIdx - 1];
     const taxOf = (r) => (r.totalTax ?? r.tax ?? 0);
 
-    const years = log.length - 1;
-    const deflator = Math.pow(1 + (inp.inflation ?? 0), years);
+    // Each row's own inflationFactor, and EVERY dollar below is deflated by it. See the note in
+    // conversion_value_harness.js: mixing a nominal Roth with a real net worth inflates the
+    // exchange rate by the deflator.
+    const deflator = last.inflationFactor || 1;
+    const deflatorAtDeath = atFirstDeath ? (atFirstDeath.inflationFactor || 1) : 1;
     const nwAt = (rate) => afterTaxWealthOfLogRow(last, rate) / deflator;
 
     let floor = 0;
@@ -175,10 +178,10 @@ function run(over, conv) {
         years: log.length, firstYear: log[0].year, lastYear: last.year,
         conversions: log.reduce((s, r) => s + (r.rothConv ?? 0), 0),
         tax: res.totals.tax,
-        rothEnd: last.Roth ?? 0,
-        rothAtFirstDeath: atFirstDeath ? (atFirstDeath.Roth ?? 0) : null,
-        iraEnd: (last.IRA1 ?? 0) + (last.IRA2 ?? 0),
-        brokEnd: last.Brokerage ?? 0,
+        rothEnd: (last.Roth ?? 0) / deflator,
+        rothAtFirstDeath: atFirstDeath ? (atFirstDeath.Roth ?? 0) / deflatorAtDeath : null,
+        iraEnd: ((last.IRA1 ?? 0) + (last.IRA2 ?? 0)) / deflator,
+        brokEnd: (last.Brokerage ?? 0) / deflator,
         nw: nwAt(HEIRS), nwAt, floor,
         startNW: (inp.IRA1 || 0) + (inp.IRA2 || 0) + (inp.Roth || 0) + (inp.Roth2 || 0)
             + (inp.Brokerage || 0) + (inp.Cash || 0),

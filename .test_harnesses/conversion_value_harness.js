@@ -118,9 +118,13 @@ function run(over, conv) {
         ? survivorRows.reduce((s, r) => s + (r['NominalRate%'] ?? 0), 0) / survivorRows.length
         : null;
 
-    // Real (year-0) dollars: the plan's own inflation compounding over its length.
-    const years = log.length - 1;
-    const deflator = Math.pow(1 + (CANON.inflation ?? 0), years);
+    // Real (year-0) dollars, using each ROW'S OWN inflationFactor - the same deflator the page
+    // applies for its Current $ view. A first draft used the terminal factor for the net worth and
+    // left the Roth balances NOMINAL, so `dRoth / -dNW` divided a nominal numerator by a real
+    // denominator and every exchange rate came out inflated by the deflator, about 2x on a 25-year
+    // plan. Deflate every dollar reported here, or none of them.
+    const deflator = last.inflationFactor || 1;
+    const deflatorAtDeath = atFirstDeath ? (atFirstDeath.inflationFactor || 1) : 1;
 
     const nwAt = (rate) => afterTaxWealthOfLogRow(last, rate) / deflator;
 
@@ -131,10 +135,10 @@ function run(over, conv) {
         success: res.totals.success,
         conversions: log.reduce((s, r) => s + (r.rothConv ?? 0), 0),
         tax: res.totals.tax,
-        rothEnd: last.Roth ?? 0,
-        rothAtFirstDeath: atFirstDeath ? (atFirstDeath.Roth ?? 0) : null,
-        iraEnd: (last.IRA1 ?? 0) + (last.IRA2 ?? 0),
-        brokEnd: last.Brokerage ?? 0,
+        rothEnd: (last.Roth ?? 0) / deflator,
+        rothAtFirstDeath: atFirstDeath ? (atFirstDeath.Roth ?? 0) / deflatorAtDeath : null,
+        iraEnd: ((last.IRA1 ?? 0) + (last.IRA2 ?? 0)) / deflator,
+        brokEnd: (last.Brokerage ?? 0) / deflator,
         nw: nwAt(HEIRS),
         nwAt,
         deflator,
@@ -223,8 +227,8 @@ for (const { arm, on, routingOff, drawOff } of results) {
 }
 
 // ── 2. what the arms hold ────────────────────────────────────────────────────────────────────
-console.log('2. WHAT EACH ARM ACTUALLY HOLDS AT THE END  (nominal balances)');
-console.log('   ' + 'arm'.padEnd(34) + 'conversions'.padStart(14) + 'Roth'.padStart(15)
+console.log('2. WHAT EACH ARM ACTUALLY HOLDS AT THE END  (real year-0 dollars)');
+console.log('   ' + 'arm'.padEnd(34) + 'conversions*'.padStart(14) + 'Roth'.padStart(15)
     + 'IRA'.padStart(15) + 'Brokerage'.padStart(15) + 'lifetime tax'.padStart(15));
 for (const { arm, on, routingOff, drawOff } of results) {
     for (const [n, a] of [['  + conversions', on], ['  routing-off', routingOff], ['  draw-off', drawOff]]) {
@@ -233,6 +237,8 @@ for (const { arm, on, routingOff, drawOff } of results) {
             + money(a.iraEnd).padStart(15) + money(a.brokEnd).padStart(15) + money(a.tax).padStart(15));
     }
 }
+console.log("   * conversions and lifetime tax are NOMINAL sums over the plan's years. Every BALANCE");
+console.log('     in this table is real year-0 dollars. No ratio in this report mixes the two.');
 
 // ── 3. the original worked example, decomposed ─────────────────────────────────────────────
 console.log('\n3. THE USER\'S OWN COMPARISON, DECOMPOSED  (it moves TWO variables at once)');

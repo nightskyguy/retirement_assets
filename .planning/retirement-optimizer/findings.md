@@ -1765,15 +1765,23 @@ The three sentences worth carrying without opening the report:
    `n% Fed` and `IRMAA Tier n` are targets (reaching them is success); `n% FPL` is a cap (staying
    under is success). The engine splits them on BREACH behavior already, not on FILL behavior.
 
-2b. **Nothing sizes a conversion against the ceiling, and this gap is larger than the deduction
-   one.** Over the same 74 cells, total voluntary draw rose in only 18, and just 32% of the extra
-   draw became conversion - the rest became IRA-sourced spending displacing Brokerage and Cash.
-   Conversions were unchanged in 29 of 74. Only `iRAbracketRoom` (sizes the WITHDRAWAL) and the
-   user-typed `extraConversionAmount` claim the headroom; `convertExcessToRoth` is a reallocation
-   of leftover surplus capped by the IRA draw, `applyConversionGrossUp` never reads `yr.limit`, and
-   "Maximize Conversions" is just those two flags. **User model: limit minus spending = conversion
-   headroom. Engine model: limit sizes a withdrawal, conversion falls out of surplus routing.**
-   Tracked as `P87g`.
+2b. ~~**Nothing sizes a conversion against the ceiling, and this gap is larger than the deduction
+   one.**~~ **HEADLINE RETRACTED 2026-08-30 (user), and the retraction finished 2026-09-03 in
+   `P106d`. The measurement below stands; the claim drawn from it did not.** Picking the limit IS
+   the ceiling: `iRAbracketRoom` sizes the withdrawal to it and `convertExcessToRoth` turns the room
+   above spending into the conversion, so the composition of the two sizes the CONVERSION against
+   the ceiling by construction. Measured at a binding year: ceiling $243,600, MAGI landing on
+   $243,600 to the dollar, $238,179 drawn, $145,721 to spending, **$92,458 converted**. The two
+   models in the struck sentence below do not diverge in the ordinary case.
+   **What the 74 cells actually measured is a statement about the MARGIN**, not the mechanism: when
+   the ceiling MOVED by one deduction, total voluntary draw rose in only 18 cells and just 32% of
+   the extra draw became conversion, the other 68% becoming IRA-sourced spending that displaced
+   Brokerage and Cash. Conversions were unchanged in 29 of 74 - which is what a minority of binding
+   years predicts, not a missing mechanism. Still true as mechanism description: `applyConversionGrossUp`
+   never reads `yr.limit` (that thread ended in `P88`, COMPLETE), and "Maximize Conversions" is just
+   those two flags. ~~User model: limit minus spending = conversion headroom. Engine model: limit
+   sizes a withdrawal, conversion falls out of surplus routing.~~
+   `P87g` is CLOSED, not open: `P88` and `P87c` settled everything it was waiting on.
 3. **`minlimit` is governed entirely by `yr.IRMAALimit`, which is built from the SPENDING GOAL, not
    from the federal rate the user picked.** 0 of 40 cells respond to a federal ceiling change. Any
    claim about what `Min Limit n%` targets should be measured before it is believed.

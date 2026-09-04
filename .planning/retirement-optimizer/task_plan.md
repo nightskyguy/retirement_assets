@@ -105,11 +105,14 @@ rule 4.
       the Break Even boundary year is NOT the optimal stop year, $662k apart in one scenario.
 - [ ] **P106b** - the metric and its harness, on the canonical scenario.
 - [ ] **P106c** - the generalization set, reported separately.
-- [ ] **P106d - record correction.** `P87g` below asserts "nothing in the engine converts INTO the
-      ceiling on purpose". **That is false and the user has said so before.** Picking the limit IS the
-      ceiling: Fill sizes the withdrawal to it and, with Convert Excess to Roth on, the room above
-      spending becomes the conversion by construction. Extra Annual Roth Conversion is a second,
-      blunter ceiling available to any plan. Correct or delete that wording.
+- [x] **P106d - record correction. DONE 2026-09-03.** `P87g` asserted "nothing in the engine converts
+      INTO the ceiling on purpose". False, and the user had said so on 2026-08-30; the correction
+      reached the report, its index row and the `P92` status block that day but not the three places
+      that still stated it as live. Corrected in all three and `P87g` CLOSED: the item itself
+      (`task_plan.md`), finding 2b (`findings.md`), and claim 6 under `bracketbasis_harness.js`
+      (`research/HARNESSES.md`). Both of its blockers had already landed - `P88` COMPLETE, `P87c`
+      SHIPPED v11.16d4 - so nothing was left to build either. Measurements left untouched; only the
+      claims drawn from them changed.
 - [ ] **P106e (deferred, engine work)** - the hybrid the user floated: route surplus across Cash /
       Brokerage / Roth instead of all-Roth. Does not exist today; out of the first measurement.
 
@@ -1534,20 +1537,27 @@ changelog entry saying saved plans will not reproduce.
       it, and say the same in the README's strategy section. **Valuable but not the whole answer** -
       naming the basis helps a reader understand the ceiling; it does not deliver the headroom they
       asked for. If `P87b` ships, this label changes with it.
-- [ ] **P87g** - **NEW 2026-08-29, user-raised, and larger than the deduction gap.** Nothing in the
-      engine converts INTO the ceiling on purpose. A user who picks a limit expects the room between
-      their spending and that limit to become a Roth conversion (or to be banked); the engine sizes
-      a WITHDRAWAL against the limit and lets conversion fall out of surplus routing, which delivers
-      32% of the extra draw as conversion. Design decision, not a bug fix, and the shape is not
-      obvious: it interacts with the Cash Reserve (P2), the gap-fill order (P30), and
-      `fundConversionWithCash`. That last one was flagged here as "grosses up a conversion without
-      checking `yr.limit`, worth confirming separately" - it was confirmed, and it is worse: see
-      **`P88`**, where neither additional-conversion path reaches `yr.tax.MAGI` at all, so nothing
-      downstream can see the breach.
-      Measure before building, same as `P87a`: how much conversion would a "fill the headroom" rule
-      actually add, and what does it cost. **BLOCKED ON `P88`** - sizing conversions against a
-      ceiling is meaningless while conversions are invisible to that ceiling's own income measure -
-      and `P87b` should land before it too, or the basis error gets baked into a second place.
+- [x] **P87g** - **CLOSED 2026-09-03 by `P106d`. Its premise was false, and this paragraph was the
+      last place still carrying it.** It read "nothing in the engine converts INTO the ceiling on
+      purpose", and on that basis called itself larger than the deduction gap. **Picking the limit IS
+      the ceiling.** Fill sizes the withdrawal to it, and with Convert Excess to Roth on, the room
+      above spending becomes the conversion by construction: measured at a binding year, ceiling
+      $243,600, MAGI landing on $243,600 to the dollar, $238,179 drawn, $145,721 to spending,
+      **$92,458 converted**. Extra Annual Roth Conversion is a second, blunter ceiling available to
+      any plan. The user said so on 2026-08-30 and was right; the correction reached
+      `research/BRACKET_CEILING_BASIS.md` section 7, its index row and the `P92` status block that
+      same day, but not this item, which is why `P106d` existed.
+      **What actually survives is narrow and is not a defect:** when the ceiling MOVES by one
+      deduction, 32% of the extra draw comes out as extra conversion and the other 68% funds spending
+      that would otherwise have come from Brokerage and Cash. The household still converts whatever
+      the ceiling leaves after spending, at a higher ceiling. P92a's "median conversion change $0"
+      is not counter-evidence either - AT years are the minority, so the ceiling was not binding in
+      the median cell.
+      **Both of its blockers are gone and so is its one open question.** `P88` is COMPLETE (v11.16a4)
+      - that was the real defect behind the `fundConversionWithCash` flag, where neither
+      additional-conversion path reached `yr.tax.MAGI`. The underfill that outlived the correction -
+      the plan not REACHING its ceiling in later years - was `P87c`, DONE and SHIPPED v11.16d4.
+      Nothing here is left to build.
 - **Status:** `P87a` DONE 2026-08-29; its first verdict was overturned by the user the same day; `P87b` reframed from
   `P87b` reclassified as a correctness fix with a disclosable cost, `P87f` kept but demoted from
   "the whole answer", `minlimit` dropped from scope, and `P87g` opened for the conversion-sizing

@@ -809,10 +809,16 @@ Headline findings (2026-08-29):
    `yr.IRMAALimit`, built from the bracket top containing the SPENDING GOAL, which sits below the
    federal ceiling the user picked. So the zero test covers four families, not the two it was
    written for, and the "24%" in that row's label is close to decorative.
-6. **Nothing sizes a conversion against the ceiling, and that gap is bigger than the deduction
-   one.** Total voluntary draw rose in only 18 of 74 cells and just 32% of the extra draw became
-   conversion. `iRAbracketRoom` sizes a WITHDRAWAL; `convertExcessToRoth` reallocates leftover
-   surplus capped by the IRA draw; `applyConversionGrossUp` never reads `yr.limit`. Tracked as P87g.
+6. **Only 32% of a MOVED ceiling becomes extra conversion** - a statement about the margin, not the
+   mechanism. Total voluntary draw rose in only 18 of 74 cells and just 32% of the extra draw became
+   conversion; the other 68% funded spending that would otherwise have come from Brokerage and Cash.
+   `iRAbracketRoom` sizes a WITHDRAWAL and `convertExcessToRoth` reallocates the surplus above
+   spending, so composed they DO size the conversion against the ceiling - measured at a binding
+   year, MAGI lands on the $243,600 ceiling to the dollar with $92,458 converted. This entry
+   previously read "nothing sizes a conversion against the ceiling, and that gap is bigger than the
+   deduction one"; **that was wrong, corrected 2026-08-30 after the user challenged it**, and see
+   section 7 of the report. `applyConversionGrossUp` never reading `yr.limit` was the real defect and
+   became `P88` (COMPLETE). `P87g` is CLOSED, not tracked.
 7. **A prediction scored on the wrong quantity.** B1's first form asked a per-year claim of a
    LIFETIME total and condemned a working arm in 70 of 120 cells. Same failure as `rmdbasis`'s R2.
 

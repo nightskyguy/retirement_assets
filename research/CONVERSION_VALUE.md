@@ -6,12 +6,16 @@ reduction in spending.** This report measures that on one hypothetical plan, and
 which is a lifetime-tax difference that exists only on the sweep's own conversion-optimized rows and
 is therefore both the wrong quantity and an artifact of the search that produced it.
 
-**Headline: on this plan the conversion program is far cheaper than a first reading of the same
-numbers suggested, and most of what it buys is a smaller tax bill for the survivor.** Holding the
-strategy fixed, converting costs **$49,121** of real after-tax net worth and buys **$5,000,390** of ending
-Roth. That is 2.4% of the plan's surplus over what its spending actually needs. The same move was
-first priced at $1,732,907, because the comparison behind that figure moved the withdrawal strategy at the
-same time; 92% of that cost belongs to the strategy change, not to the conversions.
+**Headline: holding the strategy fixed, converting costs $49,121 of real after-tax net worth and
+buys $2,459,861 of ending Roth** - 2.4% of the plan's surplus over what its spending actually needs,
+and most of what it buys is a smaller tax bill for the survivor.
+
+That is the ATTRIBUTION question: what does this one lever cost inside a fixed strategy. It is not
+the only question worth asking, and on its own it is misleading about what a chooser faces. The
+comparison that prompted this study set a converting plan against the highest-net-worth plan on the
+board, which costs **$582,049**, and that is the CHOICE question.
+[`CONVERSION_FRONTIER.md`](CONVERSION_FRONTIER.md) measures it. Both are real; they answer different
+things, and section 3 sets them side by side.
 
 ---
 
@@ -67,20 +71,20 @@ Years"**, cyclic harvesting on, conversion taxes funded from cash. Inputs are
 
 | baseline | dRoth (end) | dRoth (1st death) | dNW real | dNW %NW | exchange | verdict |
 |---|---:|---:|---:|---:|---:|---|
-| ROUTING-OFF | $5,000,390 | $4,281,545 | **+$484,409** | +11.70% | - | **DOMINANT** |
-| DRAW-OFF | $5,000,390 | $4,281,545 | **-$49,121** | -1.05% | 101.80 : 1 | a trade |
+| ROUTING-OFF | $2,459,861 | $2,234,506 | **+$484,409** | +11.70% | - | **DOMINANT** |
+| DRAW-OFF | $2,459,861 | $2,234,506 | **-$49,121** | -1.05% | 50.08 : 1 | a trade |
 
 Against ROUTING-OFF there is **no trade to weigh at all**: converting the surplus rather than banking
 it in the brokerage produces more Roth *and* more net worth. Against DRAW-OFF it costs $49,121 and
-returns $5,000,390 of Roth, an exchange rate of **101.80 to 1**.
+returns $2,459,861 of Roth, an exchange rate of **50.08 to 1**.
 
 The other two arms:
 
 | arm | baseline | dRoth (end) | dNW real | exchange | verdict |
 |---|---|---:|---:|---:|---|
 | Ordered CIBR | either | $0 | $0 | - | identical plan, this arm never converts |
-| Proportional Withdraw +% | ROUTING-OFF | $831,365 | -$811 | n/m | a trade, but a rounding-scale one |
-| Proportional Withdraw +% | DRAW-OFF | $831,365 | -$159,564 | 5.21 : 1 | a trade |
+| Proportional Withdraw +% | ROUTING-OFF | $408,977 | -$811 | n/m | a trade, but a rounding-scale one |
+| Proportional Withdraw +% | DRAW-OFF | $408,977 | -$159,564 | 2.56 : 1 | a trade |
 
 **Ordered CIBR converts $0 even with conversions switched on.** An ordered strategy draws only what
 the year needs, so there is no surplus for `convertExcessToRoth` to route and all three columns are
@@ -89,47 +93,60 @@ broke: only one of three arms can disagree about anything.
 
 ## 2. What each arm actually holds
 
-Nominal balances at the end of the plan.
+Balances at the end of the plan, in real year-0 dollars. Conversions and lifetime tax are marked
+`*` because they are NOMINAL sums across the plan's years rather than terminal balances; no ratio in
+this report mixes the two.
 
-| arm | conversions | Roth | IRA | Brokerage | lifetime tax |
+| arm | conversions\* | Roth | IRA | Brokerage | lifetime tax\* |
 |---|---:|---:|---:|---:|---:|
-| **Reduce 11yr + conversions** | $986,721 | $6,907,134 | $2,822,885 | $348,948 | $2,177,814 |
-| Reduce 11yr routing-off | $0 | $1,906,744 | $1,589,225 | $5,302,217 | $2,725,875 |
-| Reduce 11yr draw-off | $0 | $1,906,744 | $5,437,748 | $3,315,914 | $2,933,462 |
-| Ordered CIBR (all three) | $0 | $1,906,744 | $6,162,800 | $3,994,189 | $2,886,121 |
-| propwd + conversions | $174,140 | $2,738,109 | $5,473,366 | $2,723,630 | $2,706,106 |
-| propwd routing-off | $0 | $1,906,744 | $5,043,347 | $3,798,878 | $2,966,317 |
-| propwd draw-off | $0 | $1,906,744 | $6,139,892 | $3,327,775 | $2,886,425 |
+| **Reduce 11yr + conversions** | $986,721 | $3,397,852 | $1,388,672 | $171,659 | $2,177,814 |
+| Reduce 11yr routing-off | $0 | $937,992 | $781,793 | $2,608,339 | $2,725,875 |
+| Reduce 11yr draw-off | $0 | $937,992 | $2,675,012 | $1,631,210 | $2,933,462 |
+| Ordered CIBR (all three) | $0 | $937,992 | $3,031,689 | $1,964,876 | $2,886,121 |
+| propwd + conversions | $174,140 | $1,346,968 | $2,692,534 | $1,339,846 | $2,706,106 |
+| propwd routing-off | $0 | $937,992 | $2,480,993 | $1,868,796 | $2,966,317 |
+| propwd draw-off | $0 | $937,992 | $3,020,420 | $1,637,045 | $2,886,425 |
 
 Converting also cuts lifetime tax on this arm, by **$755,648** against DRAW-OFF. Less lifetime
 tax alongside less net worth was flagged in the P106 groundrules as "not the usual conversion
 signature" and needing explanation. It is not mysterious here: the conversions are paid for out of
-cash and out of a brokerage that is drawn down from $3,315,914 to $348,948, so the plan trades
+cash and out of a brokerage that is drawn down from $1,631,210 to $171,659, so the plan trades
 brokerage and its embedded gains for Roth. The tax saving is real; the net-worth cost is the
 brokerage the plan no longer holds.
 
-## 3. The original comparison, decomposed
+## 3. Two questions, not one answer and one error
 
-The comparison that prompted this study was Ordered CIBR without conversions against Reduce 11 Years
-with them, and it moves **two variables at once**. Groundrule 6 requires both equalized pairs, so:
+The comparison that prompted this study set Ordered CIBR without conversions against Reduce 11 Years
+with them. It moves **two variables at once**, and an earlier draft of this report treated that as a
+mistake to be decomposed away. **That framing was wrong**, and the correction matters because the two
+framings give answers an order of magnitude apart and both are right about their own question.
+
+| question | baseline | what it measures |
+|---|---|---|
+| **ATTRIBUTION** | the same strategy, conversions off | what this one lever costs, holding everything else still |
+| **CHOICE** | the highest-net-worth plan on the whole board | what picking a different plan costs, which is the decision actually in front of a chooser |
+
+Decomposing the original pair answers the first:
 
 | leg | what changes | dRoth | dNW real |
 |---|---|---:|---:|
 | **strategy leg** | Ordered CIBR to Reduce 11yr, conversions off in both | **$0** | **-$532,928** |
-| **conversion leg** | Reduce 11yr, conversions off to on | **$5,000,390** | **-$49,121** |
-| total | both at once | $5,000,390 | -$582,049 |
+| **conversion leg** | Reduce 11yr, conversions off to on | **$2,459,861** | **-$49,121** |
+| total | both at once | $2,459,861 | -$582,049 |
 
-**All of the Roth gain is the conversion leg. 92% of the net-worth cost is the strategy leg.**
+**All of the Roth gain is the conversion leg; 92% of the net-worth cost is the strategy leg.** That is
+a true and useful attribution: inside Reduce, conversions are nearly free.
 
-This corrects the first reading of those numbers, which priced the move at -$1,732,907 of net worth
-for +$5,655,337 of Roth and called it 3.26 Roth dollars per dollar given up.
-Decomposed and equalized, the conversions themselves cost **$49,121**, and the exchange rate on the
-conversion decision alone is **101.80 to 1**, not 3.26. The expensive half of that comparison was
-switching the withdrawal strategy, which bought no Roth at all.
+It is not a refutation of the original comparison. A person choosing a plan does not get to hold the
+strategy still - they pick one whole plan over another, and the honest question is what the best plan
+on the board costs them. On this household that total is **-$582,049 for +$2,459,861 of Roth, an
+exchange of 4.23 to 1**, which is close to the 3.26 the original pair produced and nowhere near the
+50.08 the attribution question gives. [`CONVERSION_FRONTIER.md`](CONVERSION_FRONTIER.md) measures the
+choice question across the whole board and all five households.
 
-The absolute figures here differ from that first reading because this report holds the stop year
-fixed at 2032, values at a shared 24% heirs rate, and reports real year-0 dollars. The decomposition is the
-point, not the level.
+Quote the attribution number when asking "is the conversion lever itself expensive". Quote the choice
+number when asking "what am I giving up to hold more Roth". They are not interchangeable, and the
+gap between them is a factor of twelve.
 
 ## 4. Against the funding floor
 
@@ -211,11 +228,11 @@ cost to weigh - which is a mild version of the risk groundrule 2 was written for
 
 | id | claim | verdict | evidence |
 |---|---|---|---|
-| `B1` | DOMINANT vs ROUTING-OFF on the reference arm | HELD | dNW +$484,409, dRoth +$5,000,390 |
+| `B1` | DOMINANT vs ROUTING-OFF on the reference arm | HELD | dNW +$484,409, dRoth +$2,459,861 |
 | `B2` | NOT dominant vs DRAW-OFF | HELD | dNW -$49,121 |
 | `B3` | baselines disagree on sign of dNW for >= half the arms | **BROKEN** | 1 of 3. Ordered CIBR never converts, so it cannot disagree about anything; the prediction assumed three live arms and there are two. |
-| `B4` | conversion leg carries more dRoth than strategy leg | HELD | $5,000,390 vs $0 |
-| `B5` | exchange rate vs DRAW-OFF > 3.0 | HELD | 101.80 : 1, far above the 3.26 the two-variable pair suggested |
+| `B4` | conversion leg carries more dRoth than strategy leg | HELD | $2,459,861 vs $0 |
+| `B5` | exchange rate vs DRAW-OFF > 3.0 | HELD | 50.08 : 1. Note this is the ATTRIBUTION rate; the choice rate against the best plan on the board is 4.23 : 1 (section 3) |
 | `B6` | spend equal to within $100 | HELD | largest gap $4 |
 | `B7` | survivor-year tax differs by < 5% | **BROKEN** | 53.69% on a 2-year window. The prediction was that a short widowhood would make this column uninformative; it is the strongest single result in the report. |
 | `B8` | heirs-rate band flips a DOMINANT flag | HELD | Reduce 11yr vs draw-off flips between 24% and 32% |
@@ -231,11 +248,11 @@ On this plan:
 
 1. **The premise is weaker than it looked.** Held at a fixed strategy, the conversions cost $49,121,
    which is 1.05% of net worth and 2.36% of surplus over need, and at a 32% heirs rate they cost
-   nothing at all. Most of the $1.73M being weighed was the strategy change.
+   nothing at all. 92% of the -$582,049 being weighed was the strategy change, not the conversions.
 2. **The widow penalty is measurable and large**, even on a scenario whose survivor window is two
    years. It is inside dNW already, so it is not an omission from net worth; it is an explanation of
    why the net-worth cost is as small as it is.
-3. **Roth timing shows up** in the first-death column: $4,281,545 of the $5,000,390 is already in
+3. **Roth timing shows up** in the first-death column: $2,234,506 of the $2,459,861 is already in
    place at the last married year, so this is not a terminal-value effect.
 4. **Nothing here needs an unpriced motive to justify the trade.** That is a finding about this plan,
    not about conversions generally, and `P106c` is where it gets tested against households chosen to

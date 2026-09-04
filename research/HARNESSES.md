@@ -242,6 +242,31 @@ share-URL decoder is re-implemented in node and none can drift. See `.test_harne
    band and got 0.075%; asked over the years perturbation actually reaches, the same question gives
    17x to 68x more. Both are in the report, `A6` scored as written.
 
+## conversion_frontier_harness.js  (node)
+
+```bash
+node .test_harnesses/conversion_frontier_harness.js
+```
+
+**Full results and the scored predictions live in [`CONVERSION_FRONTIER.md`](CONVERSION_FRONTIER.md).**
+Prices every plan against the highest-net-worth plan on the whole board - 10 strategies crossed with
+conversions on and off - rather than against the same strategy with conversions off (P106f).
+
+1. **Attribution and choice are different questions and differ by 12x.** The conversion LEVER costs
+   $49,121 at 50.08:1 inside a fixed strategy; the CHOICE of that plan over the board's best costs
+   $582,049 at 4.23:1. Quoting one for the other is wrong in both directions.
+2. **The best-net-worth plan is non-converting in all five households** (`D2` BROKEN). Conversions
+   can still raise net worth *within* a strategy - they do on H2 - but never enough to reach the top
+   of the board.
+3. **Only 3 of 10 strategies convert anything.** For the other seven the on/off rows are identical,
+   because they draw only what the year needs and leave no surplus to route. That is why converting
+   plans cluster at the bottom of a net-worth ranking: the ranking is picking up withdrawal
+   behavior, not conversion.
+4. **One household where the trade is bad, and it is the IRA-light one:** 0.50 Roth dollars per
+   dollar given up, the only exchange under 1:1 anywhere in P106.
+5. **Net worth is not measuring the stated objective.** Reduce-with-conversions holds the most
+   Roth+Brokerage+Cash on the board while ranking 14th of 18 by net worth (`D5`, 4 of 5 households).
+
 ## conversion_value_general_harness.js  (node)
 
 ```bash
@@ -254,13 +279,13 @@ households plus the canonical one, reported separately and never averaged. House
 overriding named fields on `fixtures/p106_canonical.json`, so nothing re-decodes a share URL.
 
 1. **It generalizes, and three predictions broke toward conversions being better than expected.**
-   Converting pays in every household that converts at all - 101.8:1, 40.1:1, DOMINANT, 31.0:1 - and
+   Converting pays in every household that converts at all - 50.1:1, 17.5:1, DOMINANT, 13.6:1 - and
    `C8`, registered to catch a reversal, found none.
 2. **The widow mechanism scales with the window, and the canonical scenario is nearly its worst
    case.** 2 years saves $380,460; 24 years saves $3,227,336 and drops the survivor's average
    marginal rate from 30.0% to 19.3%, which is the one household where converting is DOMINANT against
    both baselines.
-3. **A single filer isolates the other half.** No survivor transition exists, so none of its 40.1:1
+3. **A single filer isolates the other half.** No survivor transition exists, so none of its 17.5:1
    can be the widow penalty. Compressed brackets and the widow penalty are separate, additive sources.
 4. **An IRA-light household converts $0.** With $700k of IRA against $2.6M of brokerage, "Reduce IRA
    in 11 Years" drains the IRA into spending and leaves no surplus to route, so all three arms are the
@@ -287,7 +312,7 @@ for this study.
    against the second they cost $49,121. **Any conversion result that names only one baseline is
    under-specified.**
 2. **Decomposing a two-variable comparison changes its meaning.** The original pair moved strategy
-   and conversions together. Split: the conversion leg carries $5,000,390 of Roth and -$49,121 of net
+   and conversions together. Split: the conversion leg carries $2,459,861 of Roth and -$49,121 of net
    worth; the strategy leg carries $0 of Roth and -$532,928. 92% of the cost was the strategy.
 3. **The widow column is the strongest result, on the scenario least able to show it.** Converting
    more than halves survivor-year tax, $708,658 to $328,198, over a survivor window only two years

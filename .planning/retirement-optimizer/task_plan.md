@@ -33,7 +33,15 @@ User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 20
 
 ## P106: evaluating conversion-based plans  *(2026-09-03, user-raised. PRIORITY UNASSIGNED, by the user's choice)*
 
-**a, b, c and d ALL DONE 2026-09-03. `P106e` remains deferred engine work.** Measurement only - no
+**a, b, c, d and f ALL DONE. `P106e` remains deferred engine work.** `P106f` added 2026-09-04.
+**TWO CORRECTIONS to already-written reports, 2026-09-04, both found by the user pushing back.**
+(1) UNIT ERROR: `run()` deflated net worth but left the Roth balances nominal, so every
+`dRoth / -dNW` exchange rate was inflated by the deflator, about 2x. Fixed via each row's own
+`inflationFactor`; 101.80:1 -> 50.08:1. Directions and all 16 B/C verdicts unchanged.
+(2) FRAMING ERROR: `CONVERSION_VALUE.md` called the user's own two-variable comparison a misreading
+and decomposed it away. **It was not a misreading** - comparing your pick to the best plan on the
+board is the choice a chooser actually makes, and answers a different question from the attribution.
+Both now stand side by side, 12x apart. `P106f` measures the choice. Measurement only - no
 product change, per groundrule 7. Three reports: `research/CONVERSION_STOP_YEAR.md`,
 `research/CONVERSION_VALUE.md`, `research/CONVERSION_VALUE_HOUSEHOLDS.md`.
 **The headline: converting pays on the user's own plan and on every household tested that converts
@@ -175,6 +183,39 @@ rule 4.
       (`research/HARNESSES.md`). Both of its blockers had already landed - `P88` COMPLETE, `P87c`
       SHIPPED v11.16d4 - so nothing was left to build either. Measurements left untouched; only the
       claims drawn from them changed.
+- [x] **P106f - DONE 2026-09-04, user-raised.** *("A rational person SHOULD compare the best networth
+      plan with any other plan. That's the only way to understand what decreased networth is
+      purchasing.")* `research/CONVERSION_FRONTIER.md`, harness
+      `.test_harnesses/conversion_frontier_harness.js`. BEST-NW is an argmax over the WHOLE board,
+      10 strategies x {conv on, off}.
+      **The choice costs 12x what the attribution says**: $582,049 / 4.23:1 against $49,121 / 50.08:1
+      on the canonical household. Across five: give-up 2.07%-14.69% of NW at 2.36-32.74 Roth per
+      dollar. **Cheapest on the long widowhood** (2.07%, 32.74:1); **a BAD trade on IRA-light**
+      (0.50:1, the only sub-1:1 anywhere in P106).
+      **`D2` BROKEN: the best-NW plan is NON-converting in all five.** The finer claim survives -
+      conversions DO raise NW within a strategy (H2) - they just never reach the top of the board.
+      **Only 3 of 10 strategies convert anything**; for the other 7 the on/off rows are identical
+      (no surplus to route), which is why converting plans cluster low on a NW ranking: the ranking
+      reads WITHDRAWAL behavior, not conversion.
+      **`D5` HELD 4/5: net worth is not measuring the stated objective.** Reduce+conv holds the most
+      Roth+Brokerage+Cash on the board while ranking 14th of 18 by net worth.
+- [ ] **P106g - the widow-scoped terminal rate. SPEC AGREED with the user 2026-09-04, NOT BUILT.**
+      Replaces `sim.nominalTaxRate` (that run's own final-year ordinary marginal) in
+      `evaluateYearOutcome`. **The user rejected modeling the heirs' own rate and was right**: heirs
+      are plural, with different filing statuses, in different states, projected 5-30 years out, so
+      that target is at least as volatile and its noise is invisible. A trailing average keeps the
+      problem self-contained and uses only what the model knows.
+      Agreed spec: **effective rate averaged over the trailing years sharing the TERMINAL FILING
+      STATUS** (min 2; fall back to the trailing 3 calendar years if fewer exist).
+      Measured on the canonical household: last-1 34.21%/26.89% (gap 7.32pp) -> last-3 calendar
+      29.58%/26.29% (3.29pp) -> **single-filer-only 34.04%/30.94% (3.10pp)**. The flat last-3
+      straddles the death and blends a 17-20% MFJ year into an estate a single filer will hold.
+      **Also agreed: report the MAX over the same window as the upper edge of a band**, since that is
+      closer to what heirs may face. Measured, max nearly collapses the arm gap (34.21% vs 34.98%,
+      0.77pp), so it is a conservative BOUND, not a point estimate - it discards the plan-specific
+      signal the average keeps. Default = average, band = [average, max].
+      **Do NOT expect this to steady the stop year.** `P106a` measured a shared rate as MORE
+      perturbation-sensitive, 7 of 11 against 3 of 11.
 - [ ] **P106e (deferred, engine work)** - the hybrid the user floated: route surplus across Cash /
       Brokerage / Roth instead of all-Roth. Does not exist today; out of the first measurement.
 
@@ -185,6 +226,60 @@ earlier still wins 353/499 but the RMD reasoning behind it broke, 124 counterexa
 
 **Out of scope for the first pass:** a flat $100k/yr conversion is a candidate ARM, not a strategy;
 shaped policies belong in the grid. No product changes.
+
+## P107: the IRA Goal is not the lever it is documented to be  *(NEW 2026-09-04, user-raised)*
+
+*("Some strategies are sensitive to the IRA Goal... some appear to drive to the IRA Goal and then
+ignore it. And some appear to ignore the IRA Goal altogether. The IRA Goal is meant to be the
+dividing line between more ideal and less ideal asset mixes - and a lever the user can use to force
+more Roth/Brokerage outcome and less IRA.")*
+
+**The inventory is DONE and it confirms the observation more strongly than it was put.** Measured on
+the canonical household, sweeping `iraBaseGoal` over $0 / $0.5M / $1M / $2M / $4M and reading real
+after-tax net worth at a 24% heirs rate:
+
+| strategy | spread across the sweep | ending IRA, goal $0 -> $4M | verdict |
+|---|---:|---|---|
+| **Reduce IRA in 11 Years** (`fixed`) | **$1,516k** | $1,796k -> $6,270k | the ONLY materially sensitive one |
+| Fill Bracket 22% (`bracket`) | $69k | $6,340k -> $6,894k | moves only at a $4M goal |
+| Fixed % (`fixedpct`) | $23k | $6,042k -> $6,762k | moves only at a $4M goal |
+| Proportional +% (`propwd`) | **$0** | $5,473k -> $5,473k | ignores it |
+| Ordered CIBR (`ordered`) | **$0** | $6,163k -> $6,163k | ignores it |
+| Fixed Split (`split`) | **$0** | $7,373k -> $7,373k | ignores it |
+| IRMAA Tier 1 (`irmaaTiers`) | **$0** | $6,240k -> $6,240k | ignores it |
+
+**The mechanism, and why the intent does not survive it.** `yr.curIRA = max(0, IRA - iraGoalNominal)`
+(`optimizer_core.js:1752`) is a **floor on the balance**, used only as a CAP on the voluntary draw in
+the `bracket`, `fixedpct` and `schedule` branches. A floor far below the balance never binds, so on a
+$3.44M IRA growing past $6M a $1M goal is inert - the bracket room binds instead. It only starts to
+clip at a $4M goal. `propwd`, `ordered` and `split` never reference it at all.
+Only `fixed`/Reduce treats it as a TARGET: `calculateAmortizedWithdrawal(IRA, goalNominal, ...)`
+(`optimizer_core.js:1383`) sizes every year's draw from it, which is why it is the one sensitive arm.
+
+**And on Reduce the lever runs BACKWARD from the documented intent.** Raising the goal $0 -> $4M
+raises net worth $8,922k -> $10,438k AND raises the ending IRA $1,796k -> $6,270k. So "force more
+Roth/Brokerage and less IRA" means setting the goal LOW, and on this household that costs $1.5M of
+net worth. The goal is a drawdown target, not a dividing line between ideal and less ideal mixes.
+
+### Items
+
+- [x] **P107a - the inventory.** Done, above. Node probe, not yet a committed harness.
+- [ ] **P107b - promote the probe to a harness and a `research/` report**, with the sweep run across
+      the P106 household set rather than the canonical one alone, and with the goal swept RELATIVE to
+      the starting IRA (0.25x, 0.5x, 1x, 2x) rather than in absolute dollars - an absolute grid tests
+      "does the floor bind" far more than it tests "does the goal help".
+- [ ] **P107c - is a different goal better?** The optimization question. Needs a metric decision
+      FIRST: by net worth the answer is trivially "set it high"; by `P106f`'s Roth+Brokerage+Cash it
+      will not be. **Do not run this before that choice is made**, or it measures the metric rather
+      than the goal.
+- [ ] **P107d - decide what the IRA Goal should MEAN.** Three live options, not equivalent: keep it a
+      floor (status quo, mostly inert), make it a target every strategy amortizes toward (Reduce's
+      behavior generalized), or retire it in favor of the `P106f` bucket objective. A product
+      decision, not a measurement.
+- **Related:** `P85`'s broken RMD claim has 124 counterexamples, **all bracket strategies at a live
+  IRA Goal** - so the goal is already implicated in a finding that broke. `P104c`'s phased-strategy
+  question ("switch once the IRA Goal is reached and held") presumes a goal that binds; on six of
+  seven strategies it does not.
 
 ## P105: a survivor's RMD basis - DONE, v11.1718  *(NEW 2026-09-03, user-reported)*
 

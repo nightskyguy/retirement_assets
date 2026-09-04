@@ -59,16 +59,17 @@ Harness: `.test_harnesses/conversion_value_general_harness.js`.
 
 ## Side by side
 
-Each column is its own household. **Not averaged.**
+Each column is its own household. **Not averaged.** Balances are real year-0 dollars; `converted*`
+is a nominal lifetime sum.
 
 | metric | CANON | H1-single | H2-longwidow | H3-IRAlight | H4-tight |
 |---|---:|---:|---:|---:|---:|
-| converted | $986,721 | $443,232 | $1,609,197 | **$0** | $193,814 |
-| dRoth (end) | $5,000,390 | $2,054,804 | $14,360,414 | $0 | $1,129,853 |
+| converted\* | $986,721 | $443,232 | $1,609,197 | **$0** | $193,814 |
+| dRoth (end) | $2,459,861 | $898,107 | $4,810,494 | $0 | $493,833 |
 | dNW vs ROUTING-OFF | +$484,409 | +$178,388 | +$805,493 | $0 | -$12,516 |
 | **dNW vs DRAW-OFF** | -$49,121 | -$51,274 | **+$95,632** | $0 | -$36,411 |
 | as % of surplus over need | -2.36% | -6.69% | +8.86% | 0.00% | **-13.16%** |
-| **exchange vs DRAW-OFF** | 101.8 : 1 | 40.1 : 1 | **DOMINANT** | - | 31.0 : 1 |
+| **exchange vs DRAW-OFF** | 50.1 : 1 | 17.5 : 1 | **DOMINANT** | - | 13.6 : 1 |
 | survivor window | 2y | none | **24y** | 4y | 4y |
 | survivor tax saved | $380,460 | - | **$3,227,336** | $0 | $84,388 |
 | survivor marginal | 30.9% vs 32.9% | - | **19.3% vs 30.0%** | 22.4% vs 22.4% | 20.0% vs 21.0% |
@@ -76,8 +77,8 @@ Each column is its own household. **Not averaged.**
 ## 1. Converting pays in every household that converts at all
 
 `C8` was registered specifically to catch a reversal, predicting at least one household where
-converting does not pay. **There is none.** Exchange rates against DRAW-OFF are 101.8:1, 40.1:1,
-DOMINANT, and 31.0:1; against ROUTING-OFF, three of four are DOMINANT outright.
+converting does not pay. **There is none.** Exchange rates against DRAW-OFF are 50.1:1, 17.5:1,
+DOMINANT, and 13.6:1; against ROUTING-OFF, three of four are DOMINANT outright.
 
 That is a stronger generalization than the canonical scenario alone justified, and it is worth being
 precise about what it does and does not say. It says that **within this engine, on these five
@@ -99,11 +100,11 @@ This is the clearest result in the report. Ordering the households by survivor w
 
 On H2 the survivor's average marginal rate falls by **10.6 percentage points** for 24 years. That is
 the widow penalty being avoided rather than merely deferred, and it is why H2 is the one household
-where converting is DOMINANT against both baselines: it gains $95,632 of net worth *and* $14,360,414
+where converting is DOMINANT against both baselines: it gains $95,632 of net worth *and* $4,810,494
 of Roth.
 
 **H1 is the control that makes this readable.** A single filer has no survivor transition at all, so
-none of its benefit can be the widow penalty - and converting still pays there at 40.1:1. So the
+none of its benefit can be the widow penalty - and converting still pays there at 17.5:1. So the
 value of converting has at least two separate sources: compressed brackets, which H1 has for its
 whole plan, and the widow penalty, which H2 has for 24 years. They add.
 
@@ -112,7 +113,7 @@ whole plan, and the widow penalty, which H2 has for 24 years. They add.
 **H3 converts nothing at all.** Not less - zero. With $700k of IRA against $2.6M of brokerage, the
 "Reduce IRA in 11 Years" strategy drains the IRA into spending and never produces a surplus for
 `convertExcessToRoth` to route. Every column is $0 and all three arms are the same plan. `C3`
-predicted "under 25% of the canonical's dRoth" and held, but the mechanism is more absolute than the
+predicted "under 25% of the canonical's $2,459,861 of dRoth" and held, but the mechanism is more absolute than the
 prediction imagined: **for an IRA-light household this strategy offers no conversion program to
 evaluate.** That is a fact about the strategy, not about conversions.
 
@@ -160,7 +161,7 @@ written for.
 
 | id | claim | verdict | evidence |
 |---|---|---|---|
-| `C1` | single filer still shows conversions paying | HELD | 40.07 : 1 with no survivor transition at all |
+| `C1` | single filer still shows conversions paying | HELD | 17.52 : 1 with no survivor transition at all |
 | `C2` | long widowhood saves more survivor tax than canonical | HELD | $3,227,336 over 24y against $380,460 over 2y |
 | `C3` | IRA-light dRoth under 25% of canonical | HELD | $0. The strategy generates no surplus to convert |
 | `C4` | tight funding gives up more of its surplus | HELD | -13.16% against -2.36% |

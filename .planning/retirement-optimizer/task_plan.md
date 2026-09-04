@@ -2258,8 +2258,8 @@ That is now the third time in this repo a research table stopped reproducing aft
       browser, which is where `P95` found the equivalent defect for the ceiling dropdown.
       **No changelog entry, deliberately:** gated diagnostics are not something a user can see or
       feel, which is the repo's own scope test.
-- [ ] **P28ji - the user's third mode, `early conversion / late spend + tax`. NOT BUILT, and the
-      case for it now turns on Monte Carlo.** It needs the year restructured into two withdrawal
+- [x] **P28ji - MEASURED 2026-09-04. RECOMMEND NOT BUILDING. The mode is an ALLOCATION lever
+      wearing a timing costume.** It needs the year restructured into two withdrawal
       events with growth staged between them, because the conversion is the RESIDUAL of one draw
       after spending rather than a separate event.
       **Deterministically it should be a no-op.** Post-`P28jg` the conversion month is growth-neutral
@@ -2268,8 +2268,28 @@ That is now the third time in this repo a research table stopped reproducing aft
       **But `montecarlo/mc_engine.js` builds `returnSequencePerAccount`, which overrides EVERY
       account with its own per-year sequence.** Under Monte Carlo the IRA and the Roth can draw
       different returns in the same year, so moving a conversion between them stops being neutral.
-      **Measure that before building:** if the mode only pays under MC, that is what motivates the
-      restructure, and if it does not pay there either the restructure can be declined with a reason.
+      **MEASURED**, `.test_harnesses/convtiming_mc_harness.js`, 200 paths on the reference household.
+      | mode | estimated mode3 - mode2 |
+      |---|---|
+      | deterministic | **exactly $0**, by construction |
+      | GBM | **exactly $0** - no per-account bank, both accounts read one rate |
+      | bootstrap | median **+$5,364** (0.057% of terminal NW), p10 **-$157,608**, p90 **+$399,582**, helps in **53.5%** of paths |
+      **A coin flip with a near-zero median and a six-figure spread either way.** It adds variance,
+      not value, and a restructure of the year pipeline cannot be justified by 0.057% at the median.
+      **The mechanism is the finding.** `buildPathInputs` blends each account from the SAME
+      equity/intl/bond draws, weighted by that account's own composition, so two accounts diverge
+      ONLY as their allocations do. This household is IRA 65% equity against Roth 90%, and the Roth
+      minus IRA rate in converting years runs median +1.95%, p10 -7.49%, p90 +7.62% - which is just
+      the 25-point equity gap being sampled. So moving a conversion ten months earlier does not
+      change anything about conversion; **it changes the effective allocation of those dollars for
+      ten months.** Anyone who wants that exposure should change the allocation, where it is visible
+      and permanent, rather than buy it through a withdrawal-month control.
+      **First-order estimate, stated as such:** it prices the growth difference and compounds it
+      forward, and does NOT model the feedback of a larger Roth on later withdrawals. That is the
+      right shape for build/no-build - a negligible first-order effect cannot be rescued by feedback
+      on it - and the wrong shape for a headline number.
+      **If it is ever built anyway**, the honest label is not "early conversion" but "convert into
+      the Roth's asset mix sooner", and it should carry the p10.
 - [ ] **P28jc** - harness arms: pinned-early / pinned-late / auto, crossed with `convertExcessToRoth`
       on/off, on the re-baselined 5-mix x 3-rate ladder
 - [ ] **P28jd** - answer Q1 as a PAIRED split. Timing moves delivered spend, so wealth alone is

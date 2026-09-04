@@ -263,7 +263,29 @@ net worth. The goal is a drawdown target, not a dividing line between ideal and 
 
 ### Items
 
-- [x] **P107a - the inventory.** Done, above. Node probe, not yet a committed harness.
+- [x] **P107a - the inventory. CORRECTED 2026-09-04 after the user caught an error.** The first
+      sweep used `OPTIMIZER_GRIDS` keys as `inputs.strategy` values. `irmaaTiers` and `acaMultiples`
+      are NOT strategies - they are sub-modes of `bracket` carried on `stratIRMAATier` /
+      `stratACAMultiple` - so those runs fell through to the default branch and reported a false $0.
+      The grid was also ABSOLUTE dollars, which tests whether the floor happens to bind rather than
+      whether the strategy reads it, and it reported `bracket` as insensitive when it is not.
+      **Re-run with the real dropdown values and the goal at 0.1x-2x of the STARTING IRA:**
+      | tier | strategies | ending-IRA spread |
+      |---|---|---|
+      | reads it, reaches it | `fixed` | $3,057k |
+      | reads it, rarely reaches it | `bracket` (Fed/IRMAA/ACA), `fixedpct` | $990k-$1,314k, only above 1x |
+      | never reads it | `propwd`, `ordered`, `split`, `gk` | **$0 at every goal value** |
+      `gk` was missing from the first sweep entirely.
+- [x] **P107e - grey out the IRA Goal for the strategies that ignore it. SHIPPED v11.1732**
+      *(user, 2026-09-04)*. `IRA_GOAL_BLIND_STRATEGIES` lives in `optimizer_core.js` next to the
+      behavior and is exported, so the UI cannot drift from the engine. `toggleStrategyUI()` greys
+      the label (`knob-na`), disables the input, shows a visible note, and hides the ⓘ suggestion.
+      **The value is NOT cleared** - same reasoning as `rothGapFill`. Tooltip rewritten: it claimed
+      "for all other strategies: a floor the optimizer will not draw below", which was false for all
+      four. Pinned by one node test asserting BOTH directions, so deleting the goal logic from
+      `bracket` fails rather than silently leaving the field enabled on a dead control.
+      Browser-verified: all 7 strategies, the load path (`?str=ordered` arrives greyed with `ibg`
+      preserved), badge green at 830.
 - [ ] **P107b - promote the probe to a harness and a `research/` report**, with the sweep run across
       the P106 household set rather than the canonical one alone, and with the goal swept RELATIVE to
       the starting IRA (0.25x, 0.5x, 1x, 2x) rather than in absolute dollars - an absolute grid tests

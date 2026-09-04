@@ -17,9 +17,21 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.172f"></a>
+<a id="11.1732"></a>
 
-## 11.172f
+## 11.1732
+
+**The IRA Goal greys out for the strategies that ignore it.**
+
+Four strategies never read the *IRA Goal* at all: Proportional Withdraw, Ordered, Fixed Split and
+Guyton-Klinger. No value you type there changes their result. The field now greys out and says
+"Not used by this strategy" when one of those is selected, and the number you had is kept rather
+than cleared, so switching away and back does not lose it.
+
+The three that do use it use it differently, and the tooltip now says which is which. *Reduce IRA
+in N Years* treats it as a drawdown target and it moves that plan a great deal. *Fill Fed/IRMAA
+Bracket* and *IRA Draw* treat it as a floor the withdrawal will not cross, so it only takes effect
+once the balance is already near it, and a goal well below your balance will not change anything.
 
 **The wealth total is now named for what it is.**
 

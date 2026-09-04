@@ -816,6 +816,12 @@ function computeSuggestedIraGoal() {
 function updateIRAGoalHint() {
     const icon = document.getElementById('suggest-ira-icon');
     if (!icon) return;
+    // P107: offering to set a goal the selected strategy never reads would be a suggestion to do
+    // nothing. Hide it rather than let it sit next to a greyed field.
+    if (OptimizerCore.IRA_GOAL_BLIND_STRATEGIES.includes(val('strategy'))) {
+        icon.style.display = 'none';
+        return;
+    }
     const sug = computeSuggestedIraGoal();
     if (!sug) { icon.style.display = 'none'; return; }
     icon.style.display = '';
@@ -5733,6 +5739,19 @@ function toggleStrategyUI() {
         rgLabel.classList.toggle('knob-na', m === 'ordered');
         document.getElementById('rothGapFill').disabled = (m === 'ordered');
     }
+    // P107: four strategies never read the IRA Goal, so no value of it can change their result.
+    // Greyed and disabled rather than hidden, and the VALUE IS NOT CLEARED - switching away and back
+    // would otherwise throw the number away, the same reasoning as rothGapFill above. The visible
+    // note carries the reason, because a tooltip alone cannot be read on a phone.
+    const goalBlind = OptimizerCore.IRA_GOAL_BLIND_STRATEGIES.includes(m);
+    const goalLabel = document.getElementById('iraBaseGoal-label');
+    if (goalLabel) goalLabel.classList.toggle('knob-na', goalBlind);
+    const goalInput = document.getElementById('iraBaseGoal');
+    if (goalInput) goalInput.disabled = goalBlind;
+    const goalNote = document.getElementById('iraGoal-na-note');
+    if (goalNote) goalNote.style.display = goalBlind ? '' : 'none';
+    updateIRAGoalHint();   // the suggestion icon has nothing to suggest while the field is inert
+
     // document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
     updateExtraConvWarning();   // P88e: the ceiling it warns about is the one just switched to
     updateLimitFeasibilityWarning();   // P92c: and so is the limit this one reports on

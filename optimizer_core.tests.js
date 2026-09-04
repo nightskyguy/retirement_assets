@@ -7690,6 +7690,53 @@ async function runOptimizerCoreTests(opts) {
     };
 }
 
+// ── IRA Goal sensitivity partition (Phase P107) ──────────────────────────────────────────────
+// The UI greys the IRA Goal field for IRA_GOAL_BLIND_STRATEGIES. That is a claim about the ENGINE,
+// so it is pinned here in BOTH directions: a blind strategy must be unmoved by any goal, and a
+// goal-reading strategy must actually move. Without the second half, deleting the goal logic from
+// `bracket` would leave the field enabled on a control that no longer does anything.
+//
+// The goal is swept relative to the STARTING IRA, not in absolute dollars. An absolute grid tests
+// whether the floor happens to bind on one fixture and reported `bracket` as insensitive when it is
+// not - that mistake is what P107a corrected.
+test('P107: IRA_GOAL_BLIND_STRATEGIES are unmoved by the goal, and the others are not', () => {
+    const GOAL_BASE = {
+        ...BASE,
+        IRA1: 900000, Brokerage: 300000, BrokerageBasis: 150000, Cash: 60000,
+        spendGoal: 55000, growth: 0.05, inflation: 0.02, cpi: 0.02,
+        nYears: 12, convertExcessToRoth: true,
+    };
+    const IRA0 = GOAL_BASE.IRA1 + (GOAL_BASE.IRA2 || 0);
+    const finals = (over) => [0.1, 0.5, 1.0, 2.0].map(mult =>
+        simulate({ ...GOAL_BASE, ...over, iraBaseGoal: IRA0 * mult, computeOC: false }).finalNW);
+    const spread = (a) => Math.max(...a) - Math.min(...a);
+
+    const BLIND = {
+        propwd: { strategy: 'propwd' },
+        ordered: { strategy: 'ordered', orderedSeq: 'CIBR' },
+        split: { strategy: 'split', splitWeights: [0, 9, 1, 0] },
+        gk: { strategy: 'gk' },
+    };
+    for (const key of core.IRA_GOAL_BLIND_STRATEGIES) {
+        assert(Object.prototype.hasOwnProperty.call(BLIND, key),
+            `P107: no coverage for blind strategy '${key}' - add it to this test`);
+        assert(spread(finals(BLIND[key])) < 0.01,
+            `P107: '${key}' is listed as ignoring the IRA Goal but its result moved`);
+    }
+
+    // The other side. These read the goal, so the field must stay enabled for them.
+    for (const [label, over] of [
+        ['fixed', { strategy: 'fixed' }],
+        ['bracket', { strategy: 'bracket', stratRate: 0.22 }],
+        ['fixedpct', { strategy: 'fixedpct' }],
+    ]) {
+        assert(!core.IRA_GOAL_BLIND_STRATEGIES.includes(over.strategy),
+            `P107: '${label}' reads the IRA Goal and must not be greyed`);
+        assert(spread(finals(over)) > 1,
+            `P107: '${label}' should respond to the IRA Goal and did not`);
+    }
+});
+
 if (IS_NODE) {
     // Exported BEFORE the run, not after: the runner is async now, so `await` inside it yields to
     // the event loop and anything requiring this file mid-run would otherwise see an empty exports.

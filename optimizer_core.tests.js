@@ -1068,9 +1068,18 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
     // $242,194 it previously kept deferred in 2053. Years 2054-2056 each fall $11k-$14k, which is
     // the knock-on and not a second effect - the larger 2053 draw leaves a smaller balance for the
     // next year's basis.
+    // Re-pinned at P106g (2026-09-04). The terminal IRA is now discounted at a trailing average of
+    // the years sharing the terminal FILING STATUS rather than at the final year's own marginal.
+    // This fixture's survivor files single for its last 4 years, and averaging them moves the rate
+    // 27.983% -> 27.844%, worth $4,744 on $3,408,828 of terminal IRA. Final NW 9,207,491.698594 ->
+    // 9,212,235.314359. Spend and tax do not move by a cent and the guardrail count is still 3,
+    // which is the signature this test's own comments above describe for a valuation change: the
+    // withdrawal engine did not run differently, only the price put on what it left behind.
+    // The 4-year window is the interesting part here - a plan with a long widowhood averages more
+    // years and is estimated better, which is the whole reason for scoping to filing status.
     assertNear(gk.totals.spend, 7447682.634423317, 'GK total spend', 0.01);
     assertNear(gk.totals.tax, 1973741.0219859004, 'GK total tax', 0.01);
-    assertNear(gk.finalNW, 9207491.698593603, 'GK final net worth', 0.01);
+    assertNear(gk.finalNW, 9212235.314359205, 'GK final net worth', 0.01);
     assert(gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length === 3,
         `Expected 3 guardrail adjustments, got ${gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length}`);
 });
@@ -7689,6 +7698,42 @@ async function runOptimizerCoreTests(opts) {
         }
     };
 }
+
+// ── Widow-scoped terminal IRA rate (Phase P106g) ─────────────────────────────────────────────
+// The helper reads only `status` and `NominalRate%`, so synthetic rows pin the WINDOW RULE without
+// dragging a whole simulation in. The rule is the part that can silently rot; the arithmetic cannot.
+test('P106g: the terminal IRA rate averages the trailing same-filing-status years, else last 3', () => {
+    const row = (status, rate) => ({ status, 'NominalRate%': rate });
+    const f = core.terminalIRARateFromLog;
+
+    // Four married years then two widow years: only the widow years count, and a 17% married year
+    // must not be blended into an estate a single filer holds.
+    const widowed = f([row('MFJ', 0.17), row('MFJ', 0.17), row('MFJ', 0.20), row('MFJ', 0.21),
+                       row('SGL', 0.35), row('SGL', 0.27)]);
+    assertNear(widowed.rate, 0.31, 'P106g: averages the two SGL years, not the MFJ ones', 1e-9);
+    assertNear(widowed.max, 0.35, 'P106g: max is the worst year in the window', 1e-9);
+    assert(widowed.years === 2 && widowed.basis === 'status', 'P106g: window is the SGL run');
+
+    // A long widowhood averages more years, which is the point of scoping to status.
+    const longWidow = f([row('MFJ', 0.17), ...Array.from({ length: 6 }, () => row('SGL', 0.30))]);
+    assert(longWidow.years === 6 && longWidow.basis === 'status', 'P106g: 6 SGL years all count');
+
+    // Death in the FINAL year leaves one same-status row, which cannot be averaged. Fall back to
+    // the trailing three calendar years rather than report a one-year "average".
+    const diedLast = f([row('MFJ', 0.10), row('MFJ', 0.20), row('MFJ', 0.30), row('SGL', 0.40)]);
+    assertNear(diedLast.rate, 0.30, 'P106g: falls back to the trailing 3 calendar years', 1e-9);
+    assert(diedLast.years === 3 && diedLast.basis === 'trailing3', 'P106g: fallback is flagged');
+
+    // A plan that never changes status uses its whole trailing run, and a single filer's plan is
+    // just that case - there is no transition to scope to.
+    const single = f([row('SGL', 0.22), row('SGL', 0.24), row('SGL', 0.26)]);
+    assertNear(single.rate, 0.24, 'P106g: an all-single plan averages its own years', 1e-9);
+    assert(single.basis === 'status', 'P106g: no transition still counts as a status run');
+
+    // Shorter than the fallback window: take what exists rather than reading off the front.
+    const tiny = f([row('MFJ', 0.12), row('SGL', 0.33)]);
+    assert(tiny.years === 2 && tiny.basis === 'trailing3', 'P106g: a 2-row plan uses both rows');
+});
 
 // ── IRA Goal sensitivity partition (Phase P107) ──────────────────────────────────────────────
 // The UI greys the IRA Goal field for IRA_GOAL_BLIND_STRATEGIES. That is a claim about the ENGINE,

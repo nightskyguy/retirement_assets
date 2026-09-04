@@ -199,7 +199,7 @@ rule 4.
       reads WITHDRAWAL behavior, not conversion.
       **`D5` HELD 4/5: net worth is not measuring the stated objective.** Reduce+conv holds the most
       Roth+Brokerage+Cash on the board while ranking 14th of 18 by net worth.
-- [ ] **P106g - the widow-scoped terminal rate. SPEC AGREED with the user 2026-09-04, NOT BUILT.**
+- [x] **P106g - the widow-scoped terminal rate. SHIPPED v11.1733, 2026-09-04.**
       Replaces `sim.nominalTaxRate` (that run's own final-year ordinary marginal) in
       `evaluateYearOutcome`. **The user rejected modeling the heirs' own rate and was right**: heirs
       are plural, with different filing statuses, in different states, projected 5-30 years out, so
@@ -216,6 +216,29 @@ rule 4.
       signal the average keeps. Default = average, band = [average, max].
       **Do NOT expect this to steady the stop year.** `P106a` measured a shared rate as MORE
       perturbation-sensitive, 7 of 11 against 3 of 11.
+      **BUILT AS SPECIFIED, and the prediction above was right about the count and wrong about the
+      outcome.** `terminalIRARateFromLog()` + a delta applied to the TERMINAL row only, inside the
+      existing `!_cfRun` guard after the 1014 step-up - both of that block's documented placement
+      constraints apply here for the same reasons. Per-year rows keep their own marginal, because a
+      per-year series is a statement about that year, not about the estate.
+      **What it fixed on the canonical household:** the two-peak bistability is GONE (curve now
+      UNIMODAL, was 2 maxima), the default now picks 2029 and so agrees with every explicit heirs
+      rate 12-37% where it was previously the sole dissenter at 2032, and the largest spend-goal move
+      fell 3 years -> 1 year. `A4` and `A7` both broke in the good direction.
+      **What it did not fix, stated plainly:** the answer still moves, in 8 of 11 perturbations
+      against 3 of 11 before. The moves are ADJACENT (2029->2030) rather than three years wide, so a
+      bare count reads an improvement as a regression - `research/CONVERSION_STOP_YEAR.md` section
+      "What P106g changed" carries both numbers and section 9 of the harness no longer prints a
+      verdict, because the default is now itself a smoothed rate and the comparison is uncontrolled.
+      Band fields on the terminal row: `-termIRARate`, `-termIRARateMax`, `-termIRARateYears`,
+      `-termIRARateBasis`, `-totalNetWealthAtFinalYearRate`, `-totalNetWealthAtMaxRate`. Max is
+      reported, never applied.
+      **MARGINAL not effective**, deliberately: an IRA withdrawal is an ordinary dollar, and an
+      effective tax/income ratio would mix in cap-gains tax and the untaxed SS share. The two agree
+      within ~1pp on the reference household, so it is chosen for kind rather than for level.
+      Two tests added (417 total): a synthetic-log unit test pinning the WINDOW RULE, and the GK
+      golden re-derived (+$4,744 on finalNW; spend and tax unchanged to the cent, guardrail count
+      still 3 - the signature of a valuation change).
 - [ ] **P106e (deferred, engine work)** - the hybrid the user floated: route surplus across Cash /
       Brokerage / Roth instead of all-Roth. Does not exist today; out of the first measurement.
 

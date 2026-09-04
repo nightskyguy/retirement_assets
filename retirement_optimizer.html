@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1732</title>
+    <title>Retirement Optimizer 11.1733</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,14 +59,14 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1116d7"></script>
-	<script src="optimizer_core.js?v=111732"></script>
+	<script src="optimizer_core.js?v=111733"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=111732"></script>
-	<script src="optimizer_tests.js?v=111732"></script>
+	<script src="optimizer_ui.js?v=111733"></script>
+	<script src="optimizer_tests.js?v=111733"></script>
 </head>
 <body>
 
@@ -978,7 +978,12 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="display"><b>11.1732</b>
+				<li data-flag="behavior"><b>11.1733</b>
+					<strong>End Wealth now prices the leftover IRA at your late-life tax rate, not at one year's.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li><strong>Your End Wealth will change, and no other number will.</strong> The figure always subtracted the tax owed on whatever is left in the IRA, but it used the marginal rate of the plan's very last year. A single year is a poor guide: a year with a large brokerage harvest and a year with a large conversion land in very different brackets, and on one test plan two otherwise-similar plans were priced 7.3 points apart for that reason alone. It now uses the average rate across the plan's final years <i>with the same filing status</i>, so a plan ending in widowhood is priced at the widow's rate rather than at a blend that includes married years. Spending, taxes and withdrawals are untouched.</li>
+					<li>A saved plan or a shared link will report a different End Wealth than it did before this release. Where <i>Optimize for</i> ranks plans by wealth, the order can change with it.</li>
+					</ul>
 					<strong>The IRA Goal greys out for the strategies that ignore it.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li>Proportional Withdraw, Ordered, Fixed Split and Guyton-Klinger never read the <i>IRA Goal</i>, so no value you type there changes their result. The field now greys out and says so when one of those is selected, and your number is kept for when you switch back. <i>Reduce IRA in N Years</i> uses it as a drawdown target; <i>Fill Fed/IRMAA Bracket</i> and <i>IRA Draw</i> use it as a floor, which only bites once the balance is near it.</li>
@@ -987,7 +992,7 @@
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li>The total on the balances chart and in the Annual Details table read <i>TotalWealth</i>, which sounds like a plain sum of your accounts. It is not one: that figure already subtracts the tax that would be owed on the IRA, and the capital-gains tax on brokerage growth above its basis. It now reads <strong>TotalNetWealth</strong> in both places. No number changes.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.1732" target="_blank" rel="noopener">Details</a>
+					<a href="optimizer_changelog.md#11.1733" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="behavior"><b>11.171f</b>
 					<strong>The required distribution on an inherited IRA is calculated again.</strong>
@@ -1679,7 +1684,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111732';
+    const V = '?v=111733';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

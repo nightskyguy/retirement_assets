@@ -221,6 +221,53 @@ What remains is the plainest reading: the terminal-wealth objective genuinely ha
 whose position is highly sensitive to inputs, in every basis. Nothing measured here explains why the
 position is that sensitive, and that is the open question this report ends on.
 
+## What P106g changed, and what it did not  *(added 2026-09-04, v11.1733)*
+
+**Everything above is the pre-P106g engine and stands as the record.** The defect the section before
+this one identifies has since been fixed: the terminal IRA is no longer discounted at the final
+year's own marginal rate but at a trailing average over the years sharing the terminal filing status.
+Re-running the same harness on the new engine scores the same predictions against different code,
+which is a re-baseline rather than a re-aiming. Both sets are below.
+
+**The bistability that this whole report is about is gone.**
+
+| | pre-P106g | post-P106g |
+|---|---|---|
+| local maxima in the curve | **2** (2029 and 2032, $6,949 apart) | **1** (2029) |
+| cutoffs within 0.1% of best | 2, spanning 3 years | 1, spanning 0 |
+| default basis picks | 2032 | **2029** |
+| 24% and 32% shared rates pick | 2029 | 2029 |
+| largest move on a +/-1% spend-goal change | **3 years** | **1 year** |
+| cost spread across the reachable years | 1.296% of NW | 1.230% of NW |
+
+The default and the explicit heirs rates now **agree**. Before, `NOT SET` was the only basis that
+picked 2032; every shared rate from 12% to 37% picked 2029, and the disagreement came entirely from
+one year's marginal rate being an outlier. Averaging over the two widow years moves that plan's rate
+from 26.89% to 30.94% and the ranking follows.
+
+**What did not improve, stated plainly: the answer still moves.** Under perturbation the default now
+changes in 8 of 11 cases where it changed in 3 of 11 before. Counting moves alone reads that as a
+regression and it is not, because the moves became much smaller: pre-P106g the default swung between
+2029 and 2032, post-P106g almost every move is 2029 to 2030, an adjacent year. `A2` breaking is the
+cleanest single statement of it - the largest spend-goal-driven move fell from 3 years to 1.
+
+The count rose because the default now behaves like a shared rate, and `P106a` had already measured
+shared rates as the more perturbation-sensitive of the two (7 of 11 against 3 of 11). That was
+predicted in advance and it is the price of the correction: the old default's steadiness came from
+being anchored to a noisy number that happened to keep choosing the same year, which is not a
+property worth keeping.
+
+**Section 9's comparison is no longer controlled** and the harness now says so instead of printing a
+verdict. It contrasted a per-run rate against a shared one; since P106g the default is itself a
+smoothed rate, so the two columns are no longer a treatment and a control.
+
+Re-scored on the new engine, for the record and clearly separate from the original scoring below:
+`A1` BROKEN (1 cutoff within 0.1%, now because the peak is sharp rather than because there are two),
+`A2` BROKEN (1 year, was 3), `A3` HELD, `A4` **BROKEN and this is the win** (the curve is unimodal,
+so the multi-modality that forced a linear scan is not present on this scenario any more - the scan
+stays, because one scenario is not a proof), `A5` HELD, `A6` HELD, `A7` BROKEN (the two bases agree
+exactly now, 0 years apart, where the prediction expected 3), `A8` HELD.
+
 ## Predictions, scored as written
 
 | id | claim | verdict | evidence |

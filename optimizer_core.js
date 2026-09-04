@@ -4297,6 +4297,34 @@ function simulate(inputs) {
         _last['-totalNetWealthPreStepUp'] = _last.totalNetWealth;
         _last.totalNetWealth += _gainAtDeath * sim.capitalGainsRate;
         _last.Basis = _last.Brokerage;
+
+        // P106g. Re-discount the terminal IRA at a widow-scoped trailing average instead of the
+        // final year's own marginal. See terminalIRARateFromLog for why that window and why not the
+        // heirs' own rate.
+        //
+        // BOTH of the placement constraints above apply here for the same reasons, which is why this
+        // sits inside this guard rather than in evaluateYearOutcome: it must land after the Break
+        // Even block (which values every row, this one included, on the pre-step-up basis), and it
+        // must be skipped on counterfactual runs or convOC's final year would difference a
+        // re-valued row against one that is not.
+        //
+        // Applied as a DELTA against the rate the row was actually built with, the same idiom the
+        // step-up above uses, so the formula stays in one place: the old IRA contribution was
+        // IRA*(1-old) and the new is IRA*(1-new), a difference of IRA*(old-new).
+        // Only the TERMINAL row moves. Every other row keeps its own year's marginal, because a
+        // per-year net-worth series is a statement about that year, not about the estate.
+        const _termIRA = (_last.IRA1 ?? 0) + (_last.IRA2 ?? 0);
+        const _termRate = terminalIRARateFromLog(log);
+        const _rowRate = _last['NominalRate%'] ?? 0;
+        _last['-termIRARate'] = _termRate.rate;
+        _last['-termIRARateMax'] = _termRate.max;
+        _last['-termIRARateYears'] = _termRate.years;
+        _last['-termIRARateBasis'] = _termRate.basis;
+        _last['-totalNetWealthAtFinalYearRate'] = _last.totalNetWealth;
+        _last.totalNetWealth += _termIRA * (_rowRate - _termRate.rate);
+        // The conservative edge of the band, reported and never applied. A caller showing a range
+        // reads this; nothing in the engine ranks on it.
+        _last['-totalNetWealthAtMaxRate'] = _last.totalNetWealth - _termIRA * (_termRate.max - _termRate.rate);
     }
 
     // Baseline accounting: expose the terminal capital-gains rate + terminal balance
@@ -4366,6 +4394,64 @@ function diagnoseConvBreakEvenFailure(inputs, actualLog) {
         prevBEYear = beYear;
     }
     return null; // unreachable given the precondition (j=k is numerically the real plan, already null)
+}
+
+// The rate the TERMINAL IRA is discounted at, estimated from the plan's own late-life experience
+// instead of from its single final year (P106g).
+//
+// WHY NOT THE FINAL YEAR. `totalNetWealth` discounted the IRA at `sim.nominalTaxRate`, that row's own
+// ordinary marginal. One year is one draw of an idiosyncratic process: a brokerage harvest year and
+// a large-conversion year land in very different brackets. Measured on the P106 reference household,
+// two candidate stop years that the search could barely separate ($6,949 apart) were discounted at
+// 34.21% and 26.89% - 7.32pp, worth $277,192 of pure valuation - purely because of which bracket
+// each one's last year happened to fall in. Two consecutive widow years on the same plan differed by
+// 8pp.
+//
+// WHY NOT THE HEIRS' OWN RATE. That was the first proposal and it is worse. Heirs are plural, filing
+// differently, resident in different states, and the rate would be a projection 5-30 years out. It
+// replaces measurable noise with noise nobody can see. This estimator instead uses only what the
+// model already knows, which is the point.
+//
+// WHY SCOPED TO THE FILING STATUS. The terminal estate is held by whoever survives, and the jump at
+// the first death is the largest single move in the series: 17-21% while married, 27-35% after, on
+// the reference household. A flat trailing window straddles that transition and blends married-rate
+// years into an estate a single filer will hold, dragging the estimate ~5pp low. Scoping to the
+// terminal status is also what makes this a better read on a LONG widowhood, where there are many
+// same-status years to average and the widow regime is what the remaining assets will actually face.
+//
+// MARGINAL, not effective. `NominalRate%` is the rate a further ordinary dollar meets, and an IRA
+// withdrawal is an ordinary dollar. An effective tax/income ratio would mix in capital-gains tax and
+// the untaxed share of Social Security. On the reference household the two agree within about 1pp
+// (29.58% against 30.66%), so this choice is not load-bearing there; it is chosen for being the
+// right KIND of rate rather than for the number it produces.
+//
+// Returns { rate, max, years, basis }. `max` is the other edge of the band - the worst late-life
+// rate the plan actually saw - and is reported rather than applied, because on a short window it is
+// a max of two draws and it collapses the difference between plans that the average preserves
+// (34.21% against 34.98% on the two candidates above, a 0.77pp spread against the average's 3.10pp).
+function terminalIRARateFromLog(log) {
+    const rateOf = (r) => r['NominalRate%'] ?? 0;
+    const last = log[log.length - 1];
+    const termStatus = last.status;
+    // Trailing run of rows sharing the terminal filing status. Contiguous from the end on purpose:
+    // an earlier same-status stretch (a plan that somehow returned to MFJ) is not the widow regime.
+    let i = log.length - 1;
+    while (i > 0 && log[i - 1].status === termStatus) i--;
+    let window = log.slice(i);
+    let basis = 'status';
+    if (window.length < 2) {
+        // Death in the final year, or a single-row plan. Two points is the least that can average
+        // anything, so fall back to calendar years rather than report a one-year "average".
+        window = log.slice(Math.max(0, log.length - 3));
+        basis = 'trailing3';
+    }
+    const rates = window.map(rateOf);
+    return {
+        rate: rates.reduce((a, b) => a + b, 0) / rates.length,
+        max: Math.max(...rates),
+        years: window.length,
+        basis,
+    };
 }
 
 // After-tax value of a single simulate() LOG ROW, in the Break Even valuation basis: the row's
@@ -5957,7 +6043,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, IRA_GOAL_BLIND_STRATEGIES, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -5965,7 +6051,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, IRA_GOAL_BLIND_STRATEGIES, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

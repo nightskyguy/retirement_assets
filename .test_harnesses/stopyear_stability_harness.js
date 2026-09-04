@@ -51,6 +51,17 @@
  *       the first third of the plan.
  * -------------------------------------------------------------------------------------------
  *
+ * *** ENGINE CHANGED UNDER THIS HARNESS, v11.1733 (P106g). READ BEFORE TRUSTING A FRESH RUN. ***
+ * A1-A8 were registered and scored against the PRE-P106g engine, where the terminal IRA was
+ * discounted at the final year's own marginal rate. That rate is now a trailing average over the
+ * years sharing the terminal filing status, which is the defect section 8 identified, fixed.
+ * The scored verdicts in `research/CONVERSION_STOP_YEAR.md` are the ORIGINAL run and stand as the
+ * record. Re-running today scores the same predictions against a different engine and several flip;
+ * that is a re-baseline, not a re-aiming, and the report's "What P106g changed" section carries it.
+ * In short: the two-peak bistability is gone (the curve is unimodal), the default now agrees with
+ * every explicit heirs rate, and the remaining movement is between ADJACENT years rather than
+ * across three.
+ *
  * RUN:  node .test_harnesses/stopyear_stability_harness.js
  * Add `--json` to emit the raw curve for a report table.
  */
@@ -383,9 +394,16 @@ console.log('\n   baseline answers: default ' + best.lastConvYear + ', at 24% ' 
     + ', at 32% ' + sharedBest[0.32]);
 console.log('   perturbations that moved the DEFAULT answer : ' + movesDefault + ' of ' + perturbs.length);
 console.log('   perturbations that moved a SHARED-rate answer: ' + movesShared + ' of ' + perturbs.length);
-console.log('   -> ' + (movesShared < movesDefault
-    ? 'CONFIRMS section 8: the sensitivity is a property of the default scoring.'
-    : 'DOES NOT confirm section 8: a shared rate is just as sensitive, so the cause is elsewhere.'));
+// This comparison tested section 8's CAUSAL claim only while the default was the final year's own
+// marginal. Since P106g the default is itself a smoothed rate, so the two columns are no longer a
+// treatment and a control and the counts below cannot confirm or refute anything about causes.
+// Counting moves is also the wrong summary on its own: after P106g the default moves more OFTEN and
+// much LESS FAR (adjacent years rather than across three), which is an improvement that a bare
+// count reports as a regression. Print both, claim neither.
+console.log('   -> pre-P106g this compared a per-run rate against a shared one and the shared rate was');
+console.log('      MORE sensitive, which refuted section 8. Post-P106g the default IS a smoothed rate,');
+console.log('      so this is no longer a controlled comparison. Judge it on the SIZE of the moves in');
+console.log('      section 11, not on these counts.');
 
 // ---- 10. Where the sensitivity actually comes from -------------------------------------------
 // Section 9 refuted the mechanism section 8 proposed. Section 2 measured flatness only in the

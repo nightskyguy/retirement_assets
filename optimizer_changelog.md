@@ -17,9 +17,33 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1732"></a>
+<a id="11.1733"></a>
 
-## 11.1732
+## 11.1733
+
+**End Wealth now prices the leftover IRA at your late-life tax rate, not at one year's.**  
+*Behavior change: End Wealth moves for every plan.*
+
+End Wealth has always been an after-tax figure. It subtracts the tax that would be owed on whatever is left in
+the IRA, and the capital-gains tax on brokerage growth above its basis. What changed is the rate used for the
+IRA half.
+
+It used to be the marginal rate of the plan's very last year. One year is a poor guide to a lifetime: a year
+with a large brokerage harvest and a year with a large Roth conversion land in very different brackets. On one
+test plan, two otherwise similar plans were priced 7.3 percentage points apart for that reason alone, which was
+worth $277,192 on the IRA being valued, and it was enough to change which plan looked better.
+
+It is now the average rate across the plan's final years **that share the same filing status**. A plan that
+ends in widowhood is priced at the widow's rate rather than at a blend that includes the married years before
+the first death, and the jump between those two is large. A plan with a long widowhood averages more years and
+is estimated better, which is where the number matters most.
+
+If you have set a **Marginal Heirs Tax Rate**, nothing here applies to you: that rate is used as given, exactly
+as before.
+
+Spending, taxes and withdrawals do not move by a cent. A saved plan or a shared link will report a different
+End Wealth than it did before this release, and where *Optimize for* ranks plans by wealth, the order can
+change with it.
 
 **The IRA Goal greys out for the strategies that ignore it.**
 

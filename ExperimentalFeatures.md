@@ -29,6 +29,26 @@ URL, so a link you share does not carry your knob state.
 Two things have graduated *out* of the knob and must not be put back: the **optimizer objective
 selector** (PF13) and the **ACA Cliff options** (v11.1464).
 
+### Timing diagnostics behind the plain knob
+
+Two selects that answer "when does the money actually leave?", both defaulting to today's behavior
+and both carried in a shared link:
+
+| control | URL key | choices |
+|---|---|---|
+| **Withdrawal month** (`P28jh`) | `fwt` | *Automatic* (the shipped rule: January in any year following one that converted more than $1,000, November otherwise), *Always January*, *Always November* |
+| **Tax paid** (`P108b`) | `txs` | *With the withdrawal* (today), *In December* |
+
+They matter because the whole year's draw leaves at once - the spending money **and** the tax on it -
+so a January draw stops compounding eleven months early. Measured on five households, settling the
+tax in December is worth 0.10%-1.77% of net worth against the automatic rule; most of that is already
+obtainable by choosing *Always November* instead. Income tax only: Medicare premiums are billed
+monthly and are never deferred either way.
+
+Both are **hidden, not disabled**. A link carrying `fwt=late` or `txs=december` still runs that way
+for a reader without the knob, because the alternative is silently running a different plan than the
+link describes.
+
 ### The two deeper variants
 
 Both are gated one notch below the plain knob: they respond only to the **literal value**, and plain

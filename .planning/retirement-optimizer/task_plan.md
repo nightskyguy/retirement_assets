@@ -250,6 +250,67 @@ earlier still wins 353/499 but the RMD reasoning behind it broke, 124 counterexa
 **Out of scope for the first pass:** a flat $100k/yr conversion is a candidate ARM, not a strategy;
 shaped policies belong in the grid. No product changes.
 
+## P109: the sweep stops at its own grid, and the reference point moves  *(NEW 2026-09-04, user-raised)*
+
+Two usability items from one session. The user went looking for a strategy oddity, found it was not
+one, and surfaced these instead.
+
+### A. The Optimizer cannot see past its own grid, and the user's pick sat ON the boundary
+
+Their loaded plan: `str=fixedpct`, `iwp=13`, `obj=earliestbe`. **`OPTIMIZER_GRIDS.fixedpct` is
+`[5, 7, 9, 11, 13]`** - odd integers, and **13 is the maximum**. So "13% is best" meant "13% is the
+best of the five we tried, and we stopped there". An argmax sitting on a grid edge is the classic
+sign the optimum is past it, and nothing in the UI says so.
+
+Swept at 0.5% on their own scenario (reproduces their figures exactly at 13.0% and 13.5%):
+
+| IRA Draw | End Wealth (current $) | BE | vs 13% |
+|---|---|---|---|
+| 12.0% | $4,482,260 | null | **+$9,877** |
+| 12.5% | $4,469,748 | null | -$2,635 |
+| **13.0%** | $4,472,383 | 2045 | grid max, their pick |
+| 13.5% | $4,478,283 | 2044 | **+$5,900** (what they found) |
+| 14.0% | $4,463,018 | 2044 | -$9,365 |
+| **14.5%** | **$4,486,591** | **2043** | **+$14,208** |
+| 15.0%+ | declining | 2043 | negative |
+
+**Three things the table says, and the third is the design constraint:**
+1. **14.5% DOMINATES their pick** - more wealth AND two years earlier Break Even. Not a trade.
+2. **This is not only a boundary problem.** 12.0% also beats 13% and sits BETWEEN existing grid
+   points 11 and 13, so the 2-point spacing misses interior optima too.
+3. **The surface is JAGGED, so a refinement must SCAN, not hill-climb.** Climbing from 13.0 goes
+   13.5 up, 14.0 down, and stops - missing 14.5 entirely. Any gradient method fails here.
+
+Magnitudes are small, about 0.3% of net worth, but they are free: no trade to weigh, and the sweep
+simply could not see them.
+
+### B. The summary-bar reference moves, by design, and a pinned one would serve better
+
+The stats bar shows deltas against the **immediately previous run** (`_prevStatsTotals`, reset
+nowhere). **That is the original intent and is not a defect** - the user confirmed it. But it misleads
+during exploration: they turned Use Cash off, lost ~$100k, and every subsequent change reported
+against that new worse reference, so adding conversions *looked* like an improvement when it was not.
+
+Wanted: a reference that behaves like the Optimizer's comparison - **pin a plan, then show deltas
+against the pin** while parameters and strategies change. Keep the existing behavior as a mode.
+
+### Items
+
+- [ ] **P109a - local refinement around the chosen row.** After a row is loaded or selected, scan its
+      swept parameter at finer granularity and report anything that dominates. **Must extend BEYOND
+      the grid when the pick is on an edge** - that is the case that found 14.5% - and must scan
+      rather than climb. Cost is roughly 10-20 sims, trivial against a full sweep.
+      Present as an offer, never an automatic change: *"tried 9 nearby values; 14.5% is better on
+      both End Wealth and Break Even"*, with one click to apply.
+- [ ] **P109b - pinned comparison baseline.** A pin control on the summary bar and from an Optimizer
+      row. Pinned: deltas read against the pin. Unpinned: today's behavior. The pinned plan should be
+      named in the bar so the reference is never ambiguous.
+- [ ] **P109c - say when the argmax is on a grid edge.** The cheapest half of (a) and useful without
+      it: when the winning row's parameter is the first or last value swept, the table should say so.
+      "Best of what was tried, and it is at the edge" is a different claim from "best".
+- **Related:** `P100` is the other half of this - that ranking defect is about rows that are never
+  scored at all, this is about values that are never tried.
+
 ## P108: WHEN the tax is paid  *(NEW 2026-09-04, user-raised, plan reviewed and approved same day)*
 
 *(user: "pay taxes at the end of the year always - easy to do when drawing from IRA because end of

@@ -3530,6 +3530,68 @@ covers the whole phase. No session is in neither file. Suites 408/61/22 - no cod
 uncompressed. Both phases are complete and archived, so both are fair game for a later pass; they
 were left because compressing a session I have not read risks dropping a number.
 
+## 2026-09-03 - P106 complete: a, b, c and d, measurement only
+
+**Four items, four commits, no product change.** Groundrule 7 held: nothing outside `research/`,
+`.planning/` and `.test_harnesses/` was touched. Suites 415/61/22 throughout.
+
+**P106d** closed `P87g`, whose premise was false. The user overturned "nothing in the engine converts
+INTO the ceiling on purpose" on 2026-08-30 and the correction reached the report and the `P92` status
+block that day, but three places still stated it as live: the item itself, finding 2b, and claim 6
+under `bracketbasis_harness.js`. All three corrected. Both its blockers had already landed (`P88`
+COMPLETE, `P87c` SHIPPED), so nothing was left to build.
+
+**P106a: neither a defect nor a flat optimum. A MOVING PEAK.** The search is sound - idempotent,
+deterministic, genuinely multi-modal so the linear scan is required. Under a shared heirs rate
+exactly ONE cutoff sits within 0.1% of best, so the top is sharp. And it relocates across 2027-2030
+under input changes of 1% or less, over years that differ by 4.5x in conversions and $3.7M in ending
+Roth, at 1.3-4.6% of net worth. **Consequence that shaped everything after it: the stop year is a
+CONTROLLED VARIABLE, held fixed across arms.**
+
+**The thing worth remembering from P106a is the refutation.** `totalNetWealth` discounts the IRA at that
+run's own final-year marginal rate (34.21% against 26.89% between the two peaks, $277,192 of pure
+valuation against a $6,949 margin), so the default basis scores candidates on different bases. That
+looked exactly like the cause of the wandering and this nearly shipped saying so. The direct test
+says the opposite: a shared rate moves the answer in 7 of 11 perturbations against the default's 3 of
+11. **A mechanism that explains the observation is not thereby its cause.** The sensitivity is still
+unexplained and is the follow-up candidate.
+
+**P106b: "conversions off" is AMBIGUOUS and the verdict flips with it.** ROUTING-OFF
+(`convertExcessToRoth:false`, same draw banked in the Brokerage) and DRAW-OFF
+(`_cfSuppressConversions`, never withdrawn) convert $0 and spend the same, and end $3,848,523 apart
+in the IRA. Against the first the user's conversions are DOMINANT; against the second they cost
+$49,121. Any conversion claim naming one baseline is under-specified. This is exactly the confound
+`equalize before a bake-off` was written for.
+
+**And the user's own comparison was 92% strategy, not conversions.** Decomposed: conversion leg
+dRoth $5,000,390 / dNW -$49,121; strategy leg dRoth $0 / dNW -$532,928. So the conversion decision is
+101.80:1, not the 3.26 the combined pair gave, and costs 2.36% of surplus over need. Their instinct
+to take the trade was right; the price they were weighing was mostly a different decision.
+
+**P106c: it generalizes, and three predictions broke toward conversions being better than expected.**
+Converting pays in every household that converts at all. The widow mechanism scales with the window
+and the canonical scenario is nearly its WORST case: 2y saves $380,460, 24y saves $3,227,336 and
+turns the whole decision DOMINANT. A single filer with no survivor transition still gains 40.1:1, so
+compressed brackets and the widow penalty are separate and additive.
+
+**Two results that change how any of this should be quoted.** An IRA-light household converts $0 -
+"Reduce IRA in 11 Years" drains a small IRA into spending and leaves no surplus to route, so there is
+no conversion program to evaluate at all. And the modest household gives up 13.16% of surplus over
+need against the canonical's 2.36% while giving up FEWER absolute dollars: **net worth and surplus
+over need rank households in opposite orders**, and the user's own rule is about the second.
+
+**Process note worth keeping.** Scenario inputs now come from `.test_harnesses/fixtures/`, captured
+as the verbatim output of the page's own `getInputs()`. `stopyear_harness.js` had to live in a
+browser console because a node-side share-URL decoder drifts against `optimizer_ui.js`; capturing the
+real decoder's output once removes the drift without moving the study into a console. Two field-name
+traps were hit and are recorded: a log row's per-year target is `spendGoal`, not `targetSpend` (the
+latter silently produced a funding floor of $0), and `SSincome` is the Social Security column, not
+`s1`/`s2`.
+
+**Open, and named as such:** the stop-year sensitivity is unexplained; `P106e` (routing surplus
+across Cash / Brokerage / Roth) remains deferred engine work; and the landmines `P28j`, `P85` and
+`P100` can each still move a converting row.
+
 ## 2026-09-03 - session opened, state restored, one stale record fixed
 
 Planning files restored from disk; nothing was lost. Working tree **clean**, branch

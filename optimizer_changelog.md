@@ -17,6 +17,77 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.173b"></a>
+
+## 11.173b
+
+**Money you convert now grows for the rest of the year it was converted.**  
+*Behavior change: ending Roth rises in every converting plan.*
+
+A Roth conversion was credited to the account only after the year's growth had already been applied, so the converted amount
+earned nothing in the year you converted it. Surplus banked to Cash or Brokerage instead was credited before growth and did
+earn it, so the same dollar grew or did not purely according to where it landed.
+
+It now grows from the point of conversion for the remainder of the year, which is the same treatment every other destination
+already had. The amount is not given a full year of growth either - it already grew inside the IRA up to the moment it was
+withdrawn, and it grows in the Roth for what remains.
+
+Conversions were being undervalued, so everything that weighs one moves: **Break Even arrives sooner**, the **Marginal Heirs
+Tax Rate** needed to justify a conversion **falls**, and **Optimize Conversions** suggests **larger** amounts. On one test plan
+the break-even heirs rate fell from 65% to 55% and the suggested conversion rose from $100,000 to $150,000 a year.
+
+Spending, taxes and withdrawals are unchanged. A saved plan or shared link will report a different ending Roth and End Wealth
+than it did before this release.
+
+**End Wealth now prices the leftover IRA at your late-life tax rate, not at one year's.**  
+*Behavior change: End Wealth moves for every plan.*
+
+End Wealth has always been an after-tax figure. It subtracts the tax that would be owed on whatever is left in
+the IRA, and the capital-gains tax on brokerage growth above its basis. What changed is the rate used for the
+IRA half.
+
+It used to be the marginal rate of the plan's very last year. One year is a poor guide to a lifetime: a year
+with a large brokerage harvest and a year with a large Roth conversion land in very different brackets. On one
+test plan, two otherwise similar plans were priced 7.3 percentage points apart for that reason alone, which was
+worth $277,192 on the IRA being valued, and it was enough to change which plan looked better.
+
+It is now the average rate across the plan's final years **that share the same filing status**. A plan that
+ends in widowhood is priced at the widow's rate rather than at a blend that includes the married years before
+the first death, and the jump between those two is large. A plan with a long widowhood averages more years and
+is estimated better, which is where the number matters most.
+
+If you have set a **Marginal Heirs Tax Rate**, nothing here applies to you: that rate is used as given, exactly
+as before.
+
+Spending, taxes and withdrawals do not move by a cent. A saved plan or a shared link will report a different
+End Wealth than it did before this release, and where *Optimize for* ranks plans by wealth, the order can
+change with it.
+
+**The IRA Goal greys out for the strategies that ignore it.**
+
+Three strategies never read the *IRA Goal* at all: Proportional Withdraw, Ordered and
+Guyton-Klinger. No value you type there changes their result. The field now greys out and says
+"Not used by this strategy" when one of those is selected, and the number you had is kept rather
+than cleared, so switching away and back does not lose it.
+
+The three that do use it use it differently, and the tooltip now says which is which. *Reduce IRA
+in N Years* treats it as a drawdown target and it moves that plan a great deal. *Fill Fed/IRMAA
+Bracket* and *IRA Draw* treat it as a floor the withdrawal will not cross, so it only takes effect
+once the balance is already near it, and a goal well below your balance will not change anything.
+
+**The wealth total is now named for what it is.**
+
+The total on the balances chart and in the Annual Details table was labeled `TotalWealth`, which
+sounds like a plain sum of your accounts. It is not one. That figure already subtracts the tax that
+would be owed on the IRA if it were drawn, and the capital-gains tax on brokerage growth above its
+basis; Roth, cash and returned basis are counted at face value. It now reads **`TotalNetWealth`** in
+both places.
+
+No number changes, and no plan produces a different answer. If you export the Annual Details or read
+the column by name, the name is what moved.
+
+---
+
 <a id="11.171f"></a>
 
 ## 11.171f

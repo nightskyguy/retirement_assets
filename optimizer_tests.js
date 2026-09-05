@@ -1725,7 +1725,7 @@ assertEqual(
 		assertEqual(result.log.length > 0, true, 'Fixed strategy: runs when IRA is small');
 		// Brokerage or Cash must have been used (total wealth less than starting brokerage+cash+ira)
 		const startingTotal = 30000 + 200000 + 100000 + 50000;
-		assertEqual(lastYear.totalWealth < startingTotal, true, 'Fixed strategy: assets drawn down when IRA small');
+		assertEqual(lastYear.totalNetWealth < startingTotal, true, 'Fixed strategy: assets drawn down when IRA small');
 	}
 
 	// (a-4) Adequate portfolio should succeed
@@ -3531,7 +3531,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 415, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 419, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

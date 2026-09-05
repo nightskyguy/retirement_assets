@@ -218,6 +218,12 @@ function applyNerdKnobVisibility() {
     // inflation, as the IRS and SSA do), not a fallback.
     const fixedIdxWrap = document.getElementById('fixedTaxIndexing-wrap');
     if (fixedIdxWrap) fixedIdxWrap.style.display = NERD_KNOBS ? '' : 'none';
+    // P28jh. Withdrawal month, same treatment and for the same reason: hiding it leaves the
+    // shipped automatic rule in force, not "no rule". A share link carrying fwt=late still loads
+    // and still runs late for someone without the knob - the control is hidden, not disabled -
+    // because the alternative is silently running a different plan than the link describes.
+    const wdTimingWrap = document.getElementById('withdrawTiming-wrap');
+    if (wdTimingWrap) wdTimingWrap.style.display = NERD_KNOBS ? '' : 'none';
     // P102b1. Goal-first mode - gated while it is being lived with, and force-reverted on the way
     // out for the same reason relative view is below: a reader who enabled it once must not be
     // left holding a plan whose controls they can no longer see. goalFirstReset() hands the
@@ -714,6 +720,13 @@ function getInputs() {
         cyclicOrder:   val('cyclicOrder') ?? 'ira-first',
         cycleLTCGTarget: +(val('cycleLTCGTarget') ?? 0.15),
         irmaaMarginMode: val('irmaaMarginMode') || IRMAA_MARGIN_DEFAULT,
+        // P28jh. '' means the shipped auto rule; the engine only reads 'early'/'late', so an
+        // empty select must arrive as undefined rather than as a falsy string it would ignore
+        // by accident. Undefined is the documented off value for this flag.
+        forceWithdrawTiming: val('forceWithdrawTiming') || undefined,
+        // P108b. '' is today's behavior (tax leaves with the withdrawal); the engine only
+        // acts on 'december', so an empty select must arrive as undefined.
+        taxSettlement: val('taxSettlement') || undefined,
         fixedTaxIndexing: !!valChecked('fixedTaxIndexing'),
         // Account Composition (equity/bond ratio selects + intl equity % inputs)
         comp_IRA1_ratio: +val('comp_IRA1_ratio'),
@@ -816,6 +829,12 @@ function computeSuggestedIraGoal() {
 function updateIRAGoalHint() {
     const icon = document.getElementById('suggest-ira-icon');
     if (!icon) return;
+    // P107: offering to set a goal the selected strategy never reads would be a suggestion to do
+    // nothing. Hide it rather than let it sit next to a greyed field.
+    if (OptimizerCore.IRA_GOAL_BLIND_STRATEGIES.includes(val('strategy'))) {
+        icon.style.display = 'none';
+        return;
+    }
     const sug = computeSuggestedIraGoal();
     if (!sug) { icon.style.display = 'none'; return; }
     icon.style.display = '';
@@ -1007,7 +1026,7 @@ function runSimulation() {
     lastTotals = res.totals;
     lastFinalNW = res.finalNW;
     const lastEntry = res.log[res.log.length - 1];
-    lastFinalNWCurrentDollars = lastEntry.totalWealth / (lastEntry.inflationFactor || 1);
+    lastFinalNWCurrentDollars = lastEntry.totalNetWealth / (lastEntry.inflationFactor || 1);
     updateTable(res.log);
     updateStats(res.totals, res.finalNW, lastFinalNWCurrentDollars);
     updateCharts(res.log);
@@ -1363,7 +1382,7 @@ function _runOptimizerNow() {
             _acaBreachYears: acaBreachYears,
             totals: res.totals,
             finalNW: res.finalNW,
-            finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
+            finalNWCurrentDollars: lastEntry.totalNetWealth / (lastEntry.inflationFactor || 1)
         };
         results.push(row);
         strategyOverridesList.push({ strategyLabel, paramLabel, paramSortVal, overrides, family: _fk, modifier });
@@ -1458,7 +1477,7 @@ function _runOptimizerNow() {
                     _hitCeiling: opt.hitCeiling,
                     totals: opt.result.totals,
                     finalNW: opt.result.finalNW,
-                    finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
+                    finalNWCurrentDollars: lastEntry.totalNetWealth / (lastEntry.inflationFactor || 1)
                 });
             }
         } else {
@@ -1484,7 +1503,7 @@ function _runOptimizerNow() {
                     _hitCeiling: false,
                     totals: opt.result.totals,
                     finalNW: opt.result.finalNW,
-                    finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
+                    finalNWCurrentDollars: lastEntry.totalNetWealth / (lastEntry.inflationFactor || 1)
                 });
             } else {
                 // Reverse search also failed - report the lowest spend level that was tried
@@ -1685,7 +1704,7 @@ function _runOptimizerNow() {
                 _convOCFinal: lastEntry?.convOC ?? null,
                 totals: beResult.totals,
                 finalNW: beResult.finalNW,
-                finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
+                finalNWCurrentDollars: lastEntry.totalNetWealth / (lastEntry.inflationFactor || 1)
             });
             convRowsAdded++;
         }
@@ -2669,7 +2688,7 @@ const columnCategories = {
     'status': ['Summary', 'Taxation'],
     'spendGoal': ['Summary', 'Income'],
     'netIncome': ['Summary', 'Income'],
-    'totalWealth': ['Summary', 'Balances'],
+    'totalNetWealth': ['Summary', 'Balances'],
     'totalTax': ['Summary', 'Taxation', 'Income'],
     'NominalRate%': ['Summary', 'Taxation'],
     'surplus': ['Summary', 'Income'],
@@ -2796,7 +2815,7 @@ const columnGroupDefs = {
     'IRA1': 'Balances', 'IRA2': 'Balances', 'TotalIRA': 'Balances',
     'Roth1': 'Balances', 'Roth2': 'Balances',
     'Cash': 'Balances', 'CashReserve': 'Balances', 'Roth': 'Balances', 'Brokerage': 'Balances',
-    'Basis': 'Balances', 'totalWealth': 'Balances', 'SumSpendable': 'Balances',
+    'Basis': 'Balances', 'totalNetWealth': 'Balances', 'SumSpendable': 'Balances',
     'brokerageG': 'Balances', 'DRIP': 'Balances', 'SurplusBrok': 'Balances', 'SumBrokIn': 'Balances',
     'cashG': 'Balances', 'rothG': 'Balances', 'RMD%': 'Balances',
     'ConvTaxCash': 'Withdrawals',
@@ -2927,7 +2946,7 @@ function isTableColumnKey(key) {
 // all-zero Roth2 for a single filer is not an empty account, it is an absent person - suppressing
 // that one is right.
 const ALWAYS_SHOW_BALANCE_COLS = new Set([
-    'Cash', 'Brokerage', 'Basis', 'TotalIRA', 'Roth', 'totalWealth', 'SumSpendable',
+    'Cash', 'Brokerage', 'Basis', 'TotalIRA', 'Roth', 'totalNetWealth', 'SumSpendable',
 ]);
 
 // Analyze which columns have content (non-zero, non-empty values)
@@ -3354,13 +3373,13 @@ function updateTable(log) {
         // Check conditions for highlighting
         const spendGoal = row['SpendGoal'] ?? row['spendGoal'];
         const netIncome = row['NetIncome'] ?? row['netIncome'];
-        const totalWealth = row['TotalWealth'] ?? row['totalWealth'];
+        const totalNetWealth = row['TotalNetWealth'] ?? row['totalNetWealth'];
         const age1 = row['Age1'] ?? row['age1'];
         const age2 = row['Age2'] ?? row['age2'];
 
         // Underfunded when income falls short, or portfolio can't cover its required draw.
         const rowGuaranteed = row['guaranteedIncome'] ?? 0;
-        const rowPortfolio  = row['portfolioBalance'] ?? (totalWealth ?? 0);
+        const rowPortfolio  = row['portfolioBalance'] ?? (totalNetWealth ?? 0);
         const rowRequired   = Math.max(0, spendGoal - rowGuaranteed);
         const incomeShortfall = (netIncome < spendGoal * 0.99) || (rowPortfolio < rowRequired);
         const deathOccurred = maritalStatus != row['status'];
@@ -4761,17 +4780,17 @@ function updateCharts(log) {
                 mkLine(rothLabel,     '#8e44ad', rothData),
                 mkLine('Brokerage',   '#4F4FDC', r => r.Brokerage   * adj(r)),
                 mkLine('Cash',        '#27ae60', r => r.Cash        * adj(r)),
-                mkLine('TotalWealth', '#555555', r => r.totalWealth * adj(r)),
+                mkLine('TotalNetWealth', '#555555', r => r.totalNetWealth * adj(r)),
                 // P69 replay overlay: the same plan run on steady assumptions, one dashed total.
                 // Deflated by ITS OWN inflationFactor (fixed-inflation compounding) - deflating by
                 // the path's factors would smuggle the path back into the "expected" line. It
                 // cannot use mkLine/adj, which both close over the replayed log. Appended last so
                 // it draws behind the five solid lines; person views keep it as-is because the
-                // solid TotalWealth line is person-agnostic too.
+                // solid TotalNetWealth line is person-agnostic too.
                 ...(_replayState?.baselineLog ? [{
                     label: 'Plan (steady assumptions)',
                     data: _replayState.baselineLog.map(r =>
-                        pt(r.totalWealth * (inCurrentDollars ? 1 / (r.inflationFactor || 1) : 1))),
+                        pt(r.totalNetWealth * (inCurrentDollars ? 1 / (r.inflationFactor || 1) : 1))),
                     borderColor: '#888888', backgroundColor: '#888888',
                     pointBackgroundColor: '#888888',
                     fill: false, borderDash: [6, 4], pointRadius: 0, borderWidth: 2, spanGaps: true,
@@ -5733,6 +5752,19 @@ function toggleStrategyUI() {
         rgLabel.classList.toggle('knob-na', m === 'ordered');
         document.getElementById('rothGapFill').disabled = (m === 'ordered');
     }
+    // P107: four strategies never read the IRA Goal, so no value of it can change their result.
+    // Greyed and disabled rather than hidden, and the VALUE IS NOT CLEARED - switching away and back
+    // would otherwise throw the number away, the same reasoning as rothGapFill above. The visible
+    // note carries the reason, because a tooltip alone cannot be read on a phone.
+    const goalBlind = OptimizerCore.IRA_GOAL_BLIND_STRATEGIES.includes(m);
+    const goalLabel = document.getElementById('iraBaseGoal-label');
+    if (goalLabel) goalLabel.classList.toggle('knob-na', goalBlind);
+    const goalInput = document.getElementById('iraBaseGoal');
+    if (goalInput) goalInput.disabled = goalBlind;
+    const goalNote = document.getElementById('iraGoal-na-note');
+    if (goalNote) goalNote.style.display = goalBlind ? '' : 'none';
+    updateIRAGoalHint();   // the suggestion icon has nothing to suggest while the field is inert
+
     // document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
     updateExtraConvWarning();   // P88e: the ceiling it warns about is the one just switched to
     updateLimitFeasibilityWarning();   // P92c: and so is the limit this one reports on
@@ -5748,6 +5780,7 @@ const OPT_LONG_TO_SHORT = {
     propWithdraw:'pw', stratRate:'sr', iraWithdrawPct:'iwp', orderedSeq:'os', rothGapFill:'rgf',
     convertExcessToRoth:'mc', fundConversionWithCash:'fcc', extraConversionAmount:'eca', iraBaseGoal:'ibg',
     convEndYear:'cey', convEndMode:'cem', irmaaMarginMode:'imm', fixedTaxIndexing:'fti',
+    forceWithdrawTiming:'fwt', taxSettlement:'txs',
     advisorFeeAmount:'af', advisorFeeMode:'afm', advisorFeeScope:'afs',
     birthyear1:'by1', birthmonth1:'bm1', die1:'d1', startAge:'sa',
     birthyear2:'by2', birthmonth2:'bm2', die2:'d2', hasSpouse:'hs',

@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.171f</title>
+    <title>Retirement Optimizer 11.173b</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,14 +59,14 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1116d7"></script>
-	<script src="optimizer_core.js?v=11171f"></script>
+	<script src="optimizer_core.js?v=11173b"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=11171f"></script>
-	<script src="optimizer_tests.js?v=11171f"></script>
+	<script src="optimizer_ui.js?v=11173b"></script>
+	<script src="optimizer_tests.js?v=11173b"></script>
 </head>
 <body>
 
@@ -312,8 +312,9 @@
 		</div>  <!-- strategy-container -->
 
 		<div class="row" style="margin-top:8px;">
-			<label title="Minimum IRA balance to preserve, in today's dollars (inflation-adjusted each year). For 'Reduce IRA in N Years': the drawdown target. For all other strategies: a floor the optimizer will not draw below."><span style="white-space:nowrap;">IRA Goal (today's $)<span id="suggest-ira-icon" title="" style="cursor:pointer;font-size:1.05em;margin-left:4px;display:none;" onclick="applySuggestIraGoal()">ⓘ</span></span>
+			<label id="iraBaseGoal-label" title="Minimum IRA balance to preserve, in today's dollars (inflation-adjusted each year). For 'Reduce IRA in N Years' it is the drawdown target and it moves the plan a lot. For 'Fill Fed/IRMAA Bracket' and 'IRA Draw' it is a floor the withdrawal will not cross, so it only bites once the balance is near it. Proportional Withdraw, Ordered and Guyton-Klinger do not read it at all, and this field greys out when one of those is selected."><span style="white-space:nowrap;">IRA Goal (today's $)<span id="suggest-ira-icon" title="" style="cursor:pointer;font-size:1.05em;margin-left:4px;display:none;" onclick="applySuggestIraGoal()">ⓘ</span></span>
 			<input type="text" id="iraBaseGoal" value="750000" style="width:110px;font-size:14px;"></label>
+			<span id="iraGoal-na-note" style="display:none;font-size:12px;color:#666;margin-left:8px;">Not used by this strategy.</span>
 		</div>
 
 		
@@ -559,6 +560,27 @@
             <div><label style="font-size:0.9em;" title="Diagnostic. Indexes brackets, IRMAA tiers, the ACA cap, the QCD limit, Social Security COLA and Medicare premium growth at the CPI and Inflation rates you typed, ignoring each Monte Carlo path's own inflation. Spending still follows the path. Run a Monte Carlo with it on and off to see what variable inflation costs in tax alone.">
                 <input type="checkbox" id="fixedTaxIndexing"> Fixed tax indexing</label>
                 <div style="font-size:0.78em;color:#666;margin-top:2px;">Taxes index at your typed rates; spending still follows each path. Off by default.</div></div>
+        </div>
+        <!-- P28jh. Withdrawal month, gated. The engine has always picked this per year - January
+             when last year converted, November otherwise - and nobody could see or set it. The
+             month matters because the whole year's withdrawal leaves at once, spending AND the tax
+             on it, and money that leaves in January stops compounding for eleven months. Exposed
+             as a diagnostic so the long-run difference is visible; left on Automatic it is exactly
+             today's behavior. -->
+        <div class="row" id="withdrawTiming-wrap" style="display:none;">
+            <div><label style="font-size:0.9em;" title="Diagnostic. Which month the year's withdrawal leaves the portfolio. The whole draw moves together - the money you spend and the tax on it - so a January draw stops compounding for eleven months while a November draw keeps compounding until it leaves. Automatic is the shipped rule: January in any year following one that converted more than $1,000, November otherwise. Run it each way to see what the choice is worth over a full plan.">Withdrawal month
+                <select id="forceWithdrawTiming">
+                    <option value="">Automatic (today's rule)</option>
+                    <option value="early">Always January (early)</option>
+                    <option value="late">Always November (late)</option>
+                </select></label>
+                <div style="font-size:0.78em;color:#666;margin-top:2px;">Moves spending and its tax together. Automatic by default; nothing else changes.</div></div>
+            <div><label style="font-size:0.9em;" title="Diagnostic. When the year's income tax is actually paid. Today it leaves with the withdrawal, so a January draw pays the tax in January and those dollars stop compounding for eleven months. Withholding is treated as paid evenly across the year no matter when it is withheld, so withholding on a December distribution satisfies the year - which is what the December option models. Medicare premiums are billed monthly and are never deferred either way.">Tax paid
+                <select id="taxSettlement">
+                    <option value="">With the withdrawal (today)</option>
+                    <option value="december">In December</option>
+                </select></label>
+                <div style="font-size:0.78em;color:#666;margin-top:2px;">Income tax only; Medicare premiums are unaffected. Spending, taxes owed and withdrawals do not change.</div></div>
         </div>
         <div class="row">
             <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (3.0)%?<input type="number" id="cashYield" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
@@ -977,6 +999,27 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="behavior"><b>11.173b</b>
+					<strong>Money you convert now grows for the rest of the year it was converted.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li><strong>Every plan that converts will show a higher ending Roth, and most will show higher End Wealth.</strong> A converted amount used to be added to the Roth only after the year's growth had already been applied, so it earned nothing at all in the year you converted it. Surplus you banked to Cash or Brokerage instead did earn that growth, so the same dollar grew or did not purely because of where it landed. It now grows from the point it is converted, for the remainder of the year.</li>
+					<li>Conversions were being undervalued, so anything that weighs them shifts: Break Even arrives sooner, the <i>Marginal Heirs Tax Rate</i> needed to justify a conversion falls, and <i>Optimize Conversions</i> will suggest larger amounts than it used to.</li>
+					</ul>
+					<strong>End Wealth now prices the leftover IRA at your late-life tax rate, not at one year's.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li><strong>Your End Wealth will change, and no other number will.</strong> The figure always subtracted the tax owed on whatever is left in the IRA, but it used the marginal rate of the plan's very last year. A single year is a poor guide: a year with a large brokerage harvest and a year with a large conversion land in very different brackets, and on one test plan two otherwise-similar plans were priced 7.3 points apart for that reason alone. It now uses the average rate across the plan's final years <i>with the same filing status</i>, so a plan ending in widowhood is priced at the widow's rate rather than at a blend that includes married years. Spending, taxes and withdrawals are untouched.</li>
+					<li>A saved plan or a shared link will report a different End Wealth than it did before this release. Where <i>Optimize for</i> ranks plans by wealth, the order can change with it.</li>
+					</ul>
+					<strong>The IRA Goal greys out for the strategies that ignore it.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>Proportional Withdraw, Ordered and Guyton-Klinger never read the <i>IRA Goal</i>, so no value you type there changes their result. The field now greys out and says so when one of those is selected, and your number is kept for when you switch back. <i>Reduce IRA in N Years</i> uses it as a drawdown target; <i>Fill Fed/IRMAA Bracket</i> and <i>IRA Draw</i> use it as a floor, which only bites once the balance is near it.</li>
+					</ul>
+					<strong>The wealth total is now named for what it is.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>The total on the balances chart and in the Annual Details table read <i>TotalWealth</i>, which sounds like a plain sum of your accounts. It is not one: that figure already subtracts the tax that would be owed on the IRA, and the capital-gains tax on brokerage growth above its basis. It now reads <strong>TotalNetWealth</strong> in both places. No number changes.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.173b" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="behavior"><b>11.171f</b>
 					<strong>The required distribution on an inherited IRA is calculated again.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1667,7 +1710,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=11171f';
+    const V = '?v=11173b';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

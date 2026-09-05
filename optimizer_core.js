@@ -1139,6 +1139,10 @@ function buildSimYearLogRecord(p) {
         'surplusCash': p.surplus.Cash,
         '-surplusToBrokerage': p.surplusToBrokerage ?? 0,   // Cash Reserve overflow reinvested (hidden)
         '-cashBreach': p.cashBreach ? 1 : 0,                // spending forced a draw into the reserve (hidden)
+        // P108b. Growth credited because the income tax settled in December instead of leaving
+        // with the withdrawal. 0 unless taxSettlement is 'december'. Hidden: a diagnostic for
+        // harnesses and for anyone checking the option did what it says.
+        '-taxCarryCredit': p.taxCarryCredit ?? 0,
         'cashDividends': p.taxableDividends,
         'cashInterest': p.taxableInterest,
         // Taxes
@@ -1224,7 +1228,7 @@ function buildSimYearLogRecord(p) {
         Roth2: p.balance.Roth2,
         Brokerage: p.balance.Brokerage,
         Basis: p.balance.BrokerageBasis,
-        totalWealth: p.totalWealth,
+        totalNetWealth: p.totalNetWealth,
         portfolioBalance: p.portfolioBalance,
         guaranteedIncome: p.guaranteedIncome,
         brokerageG: p.gains.Brokerage,
@@ -1423,7 +1427,34 @@ function beginYear(sim, yr) {
           ((inputs.strategy === 'bracket' || _acaLive || _sched0) && !_convSuppressedThisYear(inputs, 0))
        || _extraConvAmountFor(inputs, 0) > 0;
     const _prevConv    = y > 0 ? (log[y - 1].rothConv ?? 0) : 0;
-    yr._useEarly    = y === 0 ? _stratImpliesConversion : (_prevConv > 1000);
+    // P28jb research input (no UI, no URL param): `inputs.timingConvThreshold` replaces the bare
+    // 1000. Nobody chose that 1000 - it has been a literal since Phase 12 - and one dollar either
+    // side of it moves a whole year's withdrawal by ten months, then keeps moving it for every year
+    // the flag stays flipped. Same species as P30's [40, 60], and it gets the same treatment: make
+    // it a swept input before asking whether it is load-bearing.
+    //
+    // Validated to a SHAPE rather than for truthiness, the discipline gapFillWeights records: a
+    // malformed value must mean "leave today's behavior alone", never "model something else
+    // silently". Finite and >= 0. `?? ` would not do here, because 0 is a legal value.
+    //
+    // BOTH ENDPOINTS ARE MEANINGFUL, which is what makes a sweep of this a sweep of the policy
+    // rather than of two different policies. At 0 ANY conversion flips the year to Early - and
+    // measured, that is not obviously the intended rule either, because plans do produce sub-dollar
+    // residual conversions and a $0.01 remainder would move a whole year's withdrawal by ten months.
+    // At a threshold above any conversion the plan makes, the flag never flips and years 1+ are
+    // pinned Late - the same plan `forceWithdrawTiming: 'late'` produces, reached through the
+    // trigger instead of around it.
+    //
+    // WHERE THE CONSTANT BITES IS A PROPERTY OF THE STRATEGY, not of the household (P28jb, measured
+    // 2026-09-04 on one 15-year fixture). Fill Bracket 22% converted in 11 years and the smallest
+    // was $27,365, so 1000 is inert for it at any value below that. Proportional +% converted in 11
+    // years and EVERY one was under $1,000, so the same constant means that plan never flips at all
+    // today and would flip every year at 0. Reduce straddles it. A threshold sweep will therefore
+    // look flat or decisive depending entirely on which strategies are in the grid, which is a trap
+    // P28je has to avoid rather than a result.
+    const _tct = inputs.timingConvThreshold;
+    const _tctOK = Number.isFinite(_tct) && _tct >= 0;
+    yr._useEarly    = y === 0 ? _stratImpliesConversion : (_prevConv > (_tctOK ? _tct : 1000));
     // Research override (no UI, default off): pin the timing to 'early' or 'late' for every year.
     // Exists because converting flips this rule, so any A/B of convertExcessToRoth silently compares
     // a month-1 withdrawal schedule against a month-11 one on top of the tax difference. Pinning it
@@ -3723,9 +3754,75 @@ function growAndSettle(sim, yr) {
     // Brokerage tax treatment is correct: dividends are taxed as qualifiedDiv in calculateTaxes()
     // (line ~864), liquidations are taxed as capGains above BrokerageBasis, and the growth
     // applied here is unrealized appreciation - not taxable until sold. The one valuation nuance:
-    // unrealized gains are carried at face value during the simulation; totalWealth (line ~1091)
+    // unrealized gains are carried at face value during the simulation; totalNetWealth (line ~1091)
     // discounts them by nominalTaxRate, but year-by-year spendable wealth does not reserve for
     // deferred tax on gains that are never liquidated.
+
+    // P28jg. The conversion is credited HERE, before the post-withdrawal growth, so the converted
+    // dollars compound for `postMonths` exactly as every other surplus destination already did.
+    //
+    // It used to be credited at the very END of this function, after applyGrowth, which gave a
+    // converted dollar ZERO growth in the year it converted. That was not a rounding choice, it was
+    // an inconsistency: surplus routed to Cash or Brokerage is credited well before this point
+    // (balance.Cash/Brokerage += at the surplus-routing block) and therefore DID earn postMonths of
+    // growth. The same surplus earned growth or not depending only on which account it landed in,
+    // which biased every conversion-versus-banking comparison against the Roth.
+    //
+    // The fraction matters and a full year would be just as wrong. The converted money already grew
+    // inside the IRA for `preMonths` as part of the pre-withdrawal balance; it grows in the Roth for
+    // the remaining `postMonths`. preMonths + postMonths = 12, and IRA and Roth carry the same rate
+    // (computeYearGrowthRates), so WITHIN a year the conversion month is growth-neutral - which is
+    // the correct answer and was not obtainable before this fix. Across YEARS converting earlier
+    // still compounds tax-free sooner; that is a different question and CONVERSION_TIMING.md's.
+    //
+    // Placed immediately above applyGrowth rather than arithmetically, so the growth and the gains
+    // bookkeeping (yr.gains.Roth1/Roth2, which feed the rothG column) stay in one place and cannot
+    // drift from it.
+    balance.Roth1 += yr.surplus.Roth1;
+    balance.Roth2 += yr.surplus.Roth2;
+
+    // P108b. TAX SETTLEMENT DATE. `taxSettlement: 'december'` keeps the tax portion of the year's
+    // draw invested until year end instead of letting it leave with the spending money.
+    //
+    // WHY THIS IS A REAL OPTION AND NOT AN ACCOUNTING TRICK: withholding is deemed paid RATABLY
+    // across the year no matter which month it is actually withheld, so withholding on a December
+    // IRA distribution satisfies the whole year's obligation. That is why this needs no safe-harbor
+    // machinery, and it is the technique the option models.
+    //
+    // IMPLEMENTED AS A GROWTH CREDIT, not as a second cash flow, and the two are equivalent here.
+    // Holding the tax dollars until December and then paying them leaves the SAME December 31
+    // balance as paying them at month m and crediting the growth they would have earned - and the
+    // December 31 balance is what every downstream reader uses, including next year's RMD basis.
+    // The credit form avoids re-sequencing the withdrawal cascade for a result identical to the cent.
+    //
+    // INCOME TAX ONLY. `yr.tax.totalTax` excludes IRMAA, which `yr.totalTax` adds. Medicare premiums
+    // are billed monthly and are not withheld from a distribution, so they cannot be deferred to
+    // December and are deliberately left out of the credit.
+    //
+    // Credited to the accounts the draw actually came from, in proportion, each at its own rate: the
+    // tax rode out with those dollars, so it is those balances that were short. A year with no
+    // voluntary withdrawal has nothing to credit and correctly gets nothing.
+    if (inputs.taxSettlement === 'december' && yr.postMonths > 0) {
+        const _incomeTax = Math.max(0, (yr.tax?.totalTax ?? 0));
+        const _nw = yr.netWithdrawals || {};
+        const _src = ['IRA1', 'IRA2', 'Brokerage', 'Cash', 'Roth1', 'Roth2'];
+        const _drawn = _src.reduce((t, k) => t + Math.max(0, _nw[k] ?? 0), 0);
+        if (_incomeTax > 0 && _drawn > 0) {
+            const _frac = yr.postMonths / 12;
+            let _credited = 0;
+            for (const k of _src) {
+                const share = Math.max(0, _nw[k] ?? 0) / _drawn;
+                if (share <= 0) continue;
+                const g = (yr.growthRates[k] ?? 0) * _frac;
+                const add = _incomeTax * share * g;
+                balance[k] = (balance[k] ?? 0) + add;
+                // Brokerage basis rises with it: this is money that was never withdrawn, not a gain.
+                if (k === 'Brokerage') balance.BrokerageBasis = (balance.BrokerageBasis ?? 0) + add;
+                _credited += add;
+            }
+            yr.taxCarryCredit = _credited;   // surfaced as the hidden '-taxCarryCredit' column
+        }
+    }
 
     // Post-withdrawal growth (Phase 12): remaining postMonths after withdrawal exits portfolio.
     yr.gains = applyGrowth(balance, yr.growthRates, yr.postMonths);
@@ -3760,8 +3857,6 @@ function growAndSettle(sim, yr) {
     totals.qcdCurrentDollars = (totals.qcdCurrentDollars || 0) + yr.totalQCD / sim.inflation;
     totals.advisorFees = (totals.advisorFees || 0) + (yr.advisorFee || 0);
     totals.advisorFeesCurrentDollars = (totals.advisorFeesCurrentDollars || 0) + (yr.advisorFee || 0) / sim.inflation;
-    balance.Roth1 += yr.surplus.Roth1;
-    balance.Roth2 += yr.surplus.Roth2;
     totals.shortfall += yr.surplus.Shortfall;
 }
 
@@ -3798,7 +3893,7 @@ function evaluateYearOutcome(sim, yr) {
     // After-tax terminal valuation: IRA taxed at ordinary marginal (nominalTaxRate),
     // brokerage gains above basis taxed at the capital-gains rate (not ordinary),
     // Roth + Cash + returned basis at face.
-    yr.totalWealth = (balance.IRA1 + balance.IRA2) * (1 - sim.nominalTaxRate)
+    yr.totalNetWealth = (balance.IRA1 + balance.IRA2) * (1 - sim.nominalTaxRate)
         + Math.max(0, balance.Brokerage - balance.BrokerageBasis) * (1 - sim.capitalGainsRate)
         + balance.Roth1 + balance.Roth2 + balance.Cash + balance.BrokerageBasis
 
@@ -3814,7 +3909,7 @@ function evaluateYearOutcome(sim, yr) {
         totals.yearsfunded += 1
     }
 
-    inspectForErrors({ totalWealth: yr.totalWealth })  // See if any numbers look fishy.
+    inspectForErrors({ totalNetWealth: yr.totalNetWealth })  // See if any numbers look fishy.
 
     // Withdrawal rate = portfolio withdrawals / start-of-year portfolio balance.
     // SS and pension are NOT netted out of the numerator: the classic 4% rule measures what
@@ -3849,9 +3944,10 @@ function logYear(sim, yr) {
         fixedInc: yr.fixedInc, pension: yr.pension, targetSpend: yr.targetSpend, netIncome: yr.netIncome, totalIncome: yr.totalIncome,
         surplus: yr.surplus, totalRMD: yr.totalRMD, qcd1: yr.qcd1, qcd2: yr.qcd2, taxableDividends: yr.taxableDividends, taxableInterest: yr.taxableInterest,
         netWithdrawals: yr.netWithdrawals, rmd1: yr.rmd1, rmd2: yr.rmd2, totalConverted: yr.totalConverted, tax: yr.tax, IRMAA: yr.IRMAA, IRMAATier: yr.IRMAATier, medicareBase: yr.medicareBase, cpiRate: sim.cpiRate,
+        taxCarryCredit: yr.taxCarryCredit,
         iraVolSpend1: yr.iraVolSpend1, iraVolSpend2: yr.iraVolSpend2, iraConvGross1: yr.iraConvGross1, iraConvGross2: yr.iraConvGross2,
         totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, rateBasis: yr.rateBasis, volIRAwd: yr.volIRAwd, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
-        balance: balance, nominalTaxRate: sim.nominalTaxRate, totalWealth: yr.totalWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
+        balance: balance, nominalTaxRate: sim.nominalTaxRate, totalNetWealth: yr.totalNetWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
         gains: yr.gains, rmd1Pct: yr.rmd1Pct, subCycleLabel: yr.subCycleLabel, convNetValue: null, excessNetValue: null,
         incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,
         extraConvGross: yr.extraConvGross,
@@ -4183,7 +4279,7 @@ function simulate(inputs) {
     // happens to touch non-negative, since a plan can blip positive for a year on its way to a
     // permanently worse outcome. Reported only once the costed action has actually occurred by
     // that year; null if the plan never sustains a non-negative gap through its final year.
-    // Valuation: row totalWealth (IRA at the run's own nominal rate, brokerage gains at the
+    // Valuation: row totalNetWealth (IRA at the run's own nominal rate, brokerage gains at the
     // cap-gains rate, Roth/Cash/basis at face) unless the user supplied futureIRATaxRate
     // (Marginal Heirs Tax Rate) - then both runs' IRAs are discounted at that shared rate.
     totals.convBEYear = null;
@@ -4202,21 +4298,7 @@ function simulate(inputs) {
         // two cutoffs, including the edge case where OC is trivially non-negative before the
         // action even starts. Returns null when the plan ends negative (no sustained crossing
         // exists) or the action never occurred.
-        const _sustainedBEYear = (key, actionAmount) => {
-            let ocCutoff = log.length;
-            for (let i = log.length - 1; i >= 0; i--) {
-                const oc = log[i][key];
-                if (oc == null || oc < 0) break;
-                ocCutoff = i;
-            }
-            if (ocCutoff >= log.length) return null;
-            let cum = 0, actionCutoff = -1;
-            for (let i = 0; i < log.length; i++) {
-                cum += actionAmount(log[i]);
-                if (cum > 1) { actionCutoff = i; break; }
-            }
-            return actionCutoff < 0 ? null : log[Math.max(ocCutoff, actionCutoff)].year;
-        };
+        const _sustainedBEYear = (key, actionAmount) => sustainedBreakEvenYear(log, key, actionAmount);
         if (log.some(r => (r.rothConv ?? 0) > 1)) {
             // extraConversionAmount: 0 (not just the suppress flag) so conversion-driven
             // early-withdrawal timing (line ~1038) doesn't leak into the no-conversion plan.
@@ -4284,19 +4366,47 @@ function simulate(inputs) {
     if (!inputs._cfRun) {
         const _last = log[log.length - 1];
         const _gainAtDeath = Math.max(0, _last.Brokerage - _last.Basis);
-        // Exactly inverts the cap-gains haircut in the totalWealth formula (evaluateYearOutcome):
+        // Exactly inverts the cap-gains haircut in the totalNetWealth formula (evaluateYearOutcome):
         // old contribution was gain*(1-capG) + basis, new is basis + gain, so the difference is
         // gain*capG. Adding the delta rather than restating the whole formula keeps the IRA half
         // in one place, where it cannot drift from this.
-        // Both pre-step-up values are kept. '-totalWealthPreStepUp' is the terminal row's
+        // Both pre-step-up values are kept. '-totalNetWealthPreStepUp' is the terminal row's
         // LIQUIDATION value - what the estate would net by selling instead of inheriting - and it
         // is the basis the Break Even series above is computed on. Keeping it makes the two bases
         // recoverable from a finished run rather than implicit, which is what lets the convOC
         // identity still be asserted and what a legacy-basis Break Even would build on.
         _last['-basisPreStepUp'] = _last.Basis;              // leading '-' -> no table column
-        _last['-totalWealthPreStepUp'] = _last.totalWealth;
-        _last.totalWealth += _gainAtDeath * sim.capitalGainsRate;
+        _last['-totalNetWealthPreStepUp'] = _last.totalNetWealth;
+        _last.totalNetWealth += _gainAtDeath * sim.capitalGainsRate;
         _last.Basis = _last.Brokerage;
+
+        // P106g. Re-discount the terminal IRA at a widow-scoped trailing average instead of the
+        // final year's own marginal. See terminalIRARateFromLog for why that window and why not the
+        // heirs' own rate.
+        //
+        // BOTH of the placement constraints above apply here for the same reasons, which is why this
+        // sits inside this guard rather than in evaluateYearOutcome: it must land after the Break
+        // Even block (which values every row, this one included, on the pre-step-up basis), and it
+        // must be skipped on counterfactual runs or convOC's final year would difference a
+        // re-valued row against one that is not.
+        //
+        // Applied as a DELTA against the rate the row was actually built with, the same idiom the
+        // step-up above uses, so the formula stays in one place: the old IRA contribution was
+        // IRA*(1-old) and the new is IRA*(1-new), a difference of IRA*(old-new).
+        // Only the TERMINAL row moves. Every other row keeps its own year's marginal, because a
+        // per-year net-worth series is a statement about that year, not about the estate.
+        const _termIRA = (_last.IRA1 ?? 0) + (_last.IRA2 ?? 0);
+        const _termRate = terminalIRARateFromLog(log);
+        const _rowRate = _last['NominalRate%'] ?? 0;
+        _last['-termIRARate'] = _termRate.rate;
+        _last['-termIRARateMax'] = _termRate.max;
+        _last['-termIRARateYears'] = _termRate.years;
+        _last['-termIRARateBasis'] = _termRate.basis;
+        _last['-totalNetWealthAtFinalYearRate'] = _last.totalNetWealth;
+        _last.totalNetWealth += _termIRA * (_rowRate - _termRate.rate);
+        // The conservative edge of the band, reported and never applied. A caller showing a range
+        // reads this; nothing in the engine ranks on it.
+        _last['-totalNetWealthAtMaxRate'] = _last.totalNetWealth - _termIRA * (_termRate.max - _termRate.rate);
     }
 
     // Baseline accounting: expose the terminal capital-gains rate + terminal balance
@@ -4321,7 +4431,7 @@ function simulate(inputs) {
     // draw instead. The page shows it; nothing in the engine reads it. See _splitWeightsFor.
     totals.splitWeightsInvalid = !!sim.splitWeightsInvalid;
 
-    return { log, totals, finalNW: log[log.length - 1].totalWealth };
+    return { log, totals, finalNW: log[log.length - 1].totalNetWealth };
 }
 
 ///////////////////////////
@@ -4368,13 +4478,100 @@ function diagnoseConvBreakEvenFailure(inputs, actualLog) {
     return null; // unreachable given the precondition (j=k is numerically the real plan, already null)
 }
 
+// The SUSTAINED break-even year: the first year after which the opportunity-cost series never goes
+// negative again, and never before the action being priced has actually happened.
+//
+// Lifted out of simulate() (P28jg) so it can be tested on a series directly. It was previously a
+// closure, and the only test of it drove a whole household to manufacture the shape it cares about -
+// "one non-negative year, then negative forever". That fixture stopped producing the shape the
+// moment conversions started compounding correctly, and 225 knob combinations could not restore it,
+// because the shape was partly an artifact of the defect. The logic is a pure function of a series;
+// testing it as one cannot rot when the engine changes.
+//
+// Two guards, both load-bearing: a series that ends negative has NO sustained crossing and returns
+// null (the old first-touch `.find()` reported an early blip instead), and the answer is never
+// earlier than the year the action first occurs, so a plan cannot break even before it converts.
+function sustainedBreakEvenYear(log, key, actionAmount) {
+    let ocCutoff = log.length;
+    for (let i = log.length - 1; i >= 0; i--) {
+        const oc = log[i][key];
+        if (oc == null || oc < 0) break;
+        ocCutoff = i;
+    }
+    if (ocCutoff >= log.length) return null;
+    let cum = 0, actionCutoff = -1;
+    for (let i = 0; i < log.length; i++) {
+        cum += actionAmount(log[i]);
+        if (cum > 1) { actionCutoff = i; break; }
+    }
+    return actionCutoff < 0 ? null : log[Math.max(ocCutoff, actionCutoff)].year;
+}
+
+// The rate the TERMINAL IRA is discounted at, estimated from the plan's own late-life experience
+// instead of from its single final year (P106g).
+//
+// WHY NOT THE FINAL YEAR. `totalNetWealth` discounted the IRA at `sim.nominalTaxRate`, that row's own
+// ordinary marginal. One year is one draw of an idiosyncratic process: a brokerage harvest year and
+// a large-conversion year land in very different brackets. Measured on the P106 reference household,
+// two candidate stop years that the search could barely separate ($6,949 apart) were discounted at
+// 34.21% and 26.89% - 7.32pp, worth $277,192 of pure valuation - purely because of which bracket
+// each one's last year happened to fall in. Two consecutive widow years on the same plan differed by
+// 8pp.
+//
+// WHY NOT THE HEIRS' OWN RATE. That was the first proposal and it is worse. Heirs are plural, filing
+// differently, resident in different states, and the rate would be a projection 5-30 years out. It
+// replaces measurable noise with noise nobody can see. This estimator instead uses only what the
+// model already knows, which is the point.
+//
+// WHY SCOPED TO THE FILING STATUS. The terminal estate is held by whoever survives, and the jump at
+// the first death is the largest single move in the series: 17-21% while married, 27-35% after, on
+// the reference household. A flat trailing window straddles that transition and blends married-rate
+// years into an estate a single filer will hold, dragging the estimate ~5pp low. Scoping to the
+// terminal status is also what makes this a better read on a LONG widowhood, where there are many
+// same-status years to average and the widow regime is what the remaining assets will actually face.
+//
+// MARGINAL, not effective. `NominalRate%` is the rate a further ordinary dollar meets, and an IRA
+// withdrawal is an ordinary dollar. An effective tax/income ratio would mix in capital-gains tax and
+// the untaxed share of Social Security. On the reference household the two agree within about 1pp
+// (29.58% against 30.66%), so this choice is not load-bearing there; it is chosen for being the
+// right KIND of rate rather than for the number it produces.
+//
+// Returns { rate, max, years, basis }. `max` is the other edge of the band - the worst late-life
+// rate the plan actually saw - and is reported rather than applied, because on a short window it is
+// a max of two draws and it collapses the difference between plans that the average preserves
+// (34.21% against 34.98% on the two candidates above, a 0.77pp spread against the average's 3.10pp).
+function terminalIRARateFromLog(log) {
+    const rateOf = (r) => r['NominalRate%'] ?? 0;
+    const last = log[log.length - 1];
+    const termStatus = last.status;
+    // Trailing run of rows sharing the terminal filing status. Contiguous from the end on purpose:
+    // an earlier same-status stretch (a plan that somehow returned to MFJ) is not the widow regime.
+    let i = log.length - 1;
+    while (i > 0 && log[i - 1].status === termStatus) i--;
+    let window = log.slice(i);
+    let basis = 'status';
+    if (window.length < 2) {
+        // Death in the final year, or a single-row plan. Two points is the least that can average
+        // anything, so fall back to calendar years rather than report a one-year "average".
+        window = log.slice(Math.max(0, log.length - 3));
+        basis = 'trailing3';
+    }
+    const rates = window.map(rateOf);
+    return {
+        rate: rates.reduce((a, b) => a + b, 0) / rates.length,
+        max: Math.max(...rates),
+        years: window.length,
+        basis,
+    };
+}
+
 // After-tax value of a single simulate() LOG ROW, in the Break Even valuation basis: the row's
-// own totalWealth (IRA at that run's nominal rate) unless a Marginal Heirs Tax Rate is supplied,
+// own totalNetWealth (IRA at that run's nominal rate) unless a Marginal Heirs Tax Rate is supplied,
 // in which case the IRA is discounted at that shared rate and brokerage gains at the row's own
 // cap-gains rate. Factored out of simulate()'s Break Even block so bestConversionStopYear scores
 // on the identical basis -- the two can never drift.
 function afterTaxWealthOfLogRow(r, futureIRATaxRate) {
-    if (futureIRATaxRate == null) return r.totalWealth;
+    if (futureIRATaxRate == null) return r.totalNetWealth;
     return (r.IRA1 + r.IRA2) * (1 - futureIRATaxRate)
         + Math.max(0, r.Brokerage - r.Basis) * (1 - (r['-capGainsRate'] ?? 0.15))
         + r.Roth + r.Cash + r.Basis;
@@ -4399,7 +4596,7 @@ function afterTaxWealthOfLogRow(r, futureIRATaxRate) {
 //                 differently-timed plan than the one the user could load.)
 //
 // Scores each cutoff on afterTaxWealthOfLogRow of the final row, the same basis as Break Even
-// (honors the user's Marginal Heirs Tax Rate when set, else row totalWealth). Any stop-year the
+// (honors the user's Marginal Heirs Tax Rate when set, else row totalNetWealth). Any stop-year the
 // user has already set is stripped first, so the search always explores from a full-conversion
 // baseline. Caller should gate on conversions actually occurring (log.some(rothConv > 1)), same
 // precondition as the Break Even diagnostic. Cost: n+1 cheap (no-OC) simulate() calls plus one
@@ -4460,6 +4657,23 @@ function bestConversionStopYear(inputs, opts) {
         neverStopIsBest: bestCut >= n,
     };
 }
+
+// Strategies whose withdrawal branch never reads `yr.curIRA` or `yr.iraGoalNominal`, so no value of
+// the IRA Goal can change their outcome. The UI greys the IRA Goal field for exactly these.
+//
+// Measured 2026-09-04 (P107a), sweeping the goal at 0.1x - 2x of the starting IRA rather than in
+// absolute dollars: an absolute grid tests whether the floor BINDS, not whether the strategy reads
+// it, and a coarse absolute grid reported `bracket` as insensitive when it is not.
+//   reads it and reaches it .......... 'fixed'    (the goal is its amortization target; $3,057k of
+//                                                  ending-IRA spread on the P106 reference household)
+//   reads it, rarely reaches it ...... 'bracket', 'fixedpct'  (a floor on the balance, so it only
+//                                                  binds once the draw brings the IRA near it;
+//                                                  $990k-$1,314k of spread, and only above 1x)
+//   never reads it ................... everything below ($0 spread at every goal value tested)
+// 'bracket' covers the Fed / IRMAA-tier / ACA-multiple sub-modes, which are parameters on it rather
+// than separate strategies. Pinned by a test; if a strategy starts honoring the goal, remove it here
+// or the field greys out on a control that works.
+const IRA_GOAL_BLIND_STRATEGIES = Object.freeze(['propwd', 'ordered', 'split', 'gk']);
 
 // When ALL strategies fail at baseline, searches downward across every strategy to find
 // the highest spend goal where at least one strategy succeeds.
@@ -4726,8 +4940,8 @@ function optimizeSpend(baseInputs, overrides) {
 // Real-dollar, spendable-weighted score for one simulate() result. Same value as the optimizer
 // table's per-row `_baselineScore` (optimizer_ui.js), but computed from a result object so the
 // conversion sweep can rank on it too. Note: the UI derives real-dollar after-tax NW as
-// afterTaxNW * (finalNWCurrentDollars / finalNW); since finalNWCurrentDollars = totalWealth /
-// inflationFactor and finalNW = totalWealth, that ratio IS 1/inflationFactor, so dividing here is
+// afterTaxNW * (finalNWCurrentDollars / finalNW); since finalNWCurrentDollars = totalNetWealth /
+// inflationFactor and finalNW = totalNetWealth, that ratio IS 1/inflationFactor, so dividing here is
 // algebraically identical and drops the finalNW===0 guard. futureIRARate MUST be the caller's
 // SHARED rate across strategies -- passing a per-run rate reintroduces exactly the self-referential
 // comparison this metric exists to remove (raw finalNW discounts each run's IRA at its own rate).
@@ -5871,7 +6085,7 @@ function buildVariations(base) {
  *   Roth + Cash + returned basis → at face (already after-tax)
  *   Brokerage gains above basis  → discounted by the capital-gains rate
  *   Traditional IRA              → discounted by the expected future liquidation rate
- * Unlike the per-year `totalWealth` (which uses the current-year ordinary marginal for the
+ * Unlike the per-year `totalNetWealth` (which uses the current-year ordinary marginal for the
  * IRA), this uses a single shared `futureIRARate` so deltas between strategies are fair.
  * @param {{ira:number,roth:number,cash:number,brokerage:number,basis:number}} t terminal balances (totals.terminal)
  * @param {number} futureIRARate expected future tax rate on IRA distributions (decimal)
@@ -5940,7 +6154,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -5948,7 +6162,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

@@ -93,7 +93,7 @@ for (const [tl,tov] of STATUS) {
     }
     const last=log[log.length-1]||{};
     stat[aName]={short,shortYears,over,overYears,years:rows.length,
-      nw:(last.totalWealth ?? 0),
+      nw:(last.totalNetWealth ?? 0),
       tax:runs[aName].totals.tax,
       conv:log.reduce((s,e)=>s+(e.rothConv??0),0)};
     const A=acc[aName];

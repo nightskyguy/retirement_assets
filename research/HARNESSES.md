@@ -203,6 +203,127 @@ EV2.reportStopYear();        // per-cutoff table for the current sidebar scenari
 EV2.reportPolicies();        // best amount vs best stop-year vs joint
 ```
 
+**One claim in this file's header is wrong.** It says `futureIRATaxRate` "never changes plan
+mechanics, so it cannot move the optimal stop year". The first half is right and the second does not
+follow: the argmax is over a score, and the heirs rate is in the score. Measured, it moves the answer
+across `convert nothing` (at 0%), 2027 (10-12%) and 2029 (22-40%) on one scenario. See
+`stopyear_stability_harness.js` and prediction `A7`.
+
+## stopyear_stability_harness.js  (node)
+
+```bash
+node .test_harnesses/stopyear_stability_harness.js          # add --json for the raw curve
+```
+
+**Full results and the scored predictions live in [`CONVERSION_STOP_YEAR.md`](CONVERSION_STOP_YEAR.md).**
+Asks whether the Stop Conversion year the tool suggests is trustworthy, after an observation that it
+"seems unstable" (P106a). Dumps the whole cutoff curve, then separates the two explanations that
+would look identical from the outside: a flat optimum where the jumping is cosmetic, and a moving
+peak where it is not.
+
+The node half of the answer to a problem this repo used to solve in a console. Scenario inputs come
+from `fixtures/*.json`, captured as the verbatim output of the page's own `getInputs()`, so no
+share-URL decoder is re-implemented in node and none can drift. See `.test_harnesses/fixtures/README.md`.
+
+1. **A moving peak, not a flat optimum.** Sharp for any one input set (exactly one cutoff within 0.1%
+   under any shared heirs rate) and relocated across 2027-2030 by input changes of 1% or less. Those
+   years differ by 4.5x in lifetime conversions and $3.7M in ending Roth, and 1.3-4.6% of net worth.
+2. **The search itself is sound.** Idempotent from any starting stop year, deterministic, and the
+   curve really is multi-modal so the linear scan is necessary rather than merely cautious.
+3. **The default valuation basis is not neutral.** `totalNetWealth` discounts the IRA at that run's OWN
+   final-year marginal rate, so candidates are scored at different rates - 34.21% against 26.89%
+   between two peaks here, $277,192 of pure valuation against a $6,949 margin. It is the only basis
+   that picks 2032; every shared rate from 12% to 37% picks 2029 head to head.
+4. **A mechanism proposed and refuted in the same run.** Finding (3) looked like the cause of (1), and
+   the direct test says no: re-running the perturbations under a shared rate moves the answer in 7 of
+   11 cases against the default's 3 of 11. More sensitive, not less. The sensitivity is still
+   unexplained.
+5. **A prediction that held on the wrong question.** `A6` asked what being wrong costs inside the 0.1%
+   band and got 0.075%; asked over the years perturbation actually reaches, the same question gives
+   17x to 68x more. Both are in the report, `A6` scored as written.
+
+## conversion_frontier_harness.js  (node)
+
+```bash
+node .test_harnesses/conversion_frontier_harness.js
+```
+
+**Full results and the scored predictions live in [`CONVERSION_FRONTIER.md`](CONVERSION_FRONTIER.md).**
+Prices every plan against the highest-net-worth plan on the whole board - 10 strategies crossed with
+conversions on and off - rather than against the same strategy with conversions off (P106f).
+
+1. **Attribution and choice are different questions and differ by 12x.** The conversion LEVER costs
+   $49,121 at 50.08:1 inside a fixed strategy; the CHOICE of that plan over the board's best costs
+   $582,049 at 4.23:1. Quoting one for the other is wrong in both directions.
+2. **The best-net-worth plan is non-converting in all five households** (`D2` BROKEN). Conversions
+   can still raise net worth *within* a strategy - they do on H2 - but never enough to reach the top
+   of the board.
+3. **Only 3 of 10 strategies convert anything.** For the other seven the on/off rows are identical,
+   because they draw only what the year needs and leave no surplus to route. That is why converting
+   plans cluster at the bottom of a net-worth ranking: the ranking is picking up withdrawal
+   behavior, not conversion.
+4. **One household where the trade is bad, and it is the IRA-light one:** 0.50 Roth dollars per
+   dollar given up, the only exchange under 1:1 anywhere in P106.
+5. **Net worth is not measuring the stated objective.** Reduce-with-conversions holds the most
+   Roth+Brokerage+Cash on the board while ranking 14th of 18 by net worth (`D5`, 4 of 5 households).
+
+## conversion_value_general_harness.js  (node)
+
+```bash
+node .test_harnesses/conversion_value_general_harness.js
+```
+
+**Full results and the scored predictions live in [`CONVERSION_VALUE_HOUSEHOLDS.md`](CONVERSION_VALUE_HOUSEHOLDS.md).**
+The generalization check for `conversion_value_harness.js` (P106c): four deliberately varied
+households plus the canonical one, reported separately and never averaged. Households are built by
+overriding named fields on `fixtures/p106_canonical.json`, so nothing re-decodes a share URL.
+
+1. **It generalizes, and three predictions broke toward conversions being better than expected.**
+   Converting pays in every household that converts at all - 50.1:1, 17.5:1, DOMINANT, 13.6:1 - and
+   `C8`, registered to catch a reversal, found none.
+2. **The widow mechanism scales with the window, and the canonical scenario is nearly its worst
+   case.** 2 years saves $380,460; 24 years saves $3,227,336 and drops the survivor's average
+   marginal rate from 30.0% to 19.3%, which is the one household where converting is DOMINANT against
+   both baselines.
+3. **A single filer isolates the other half.** No survivor transition exists, so none of its 17.5:1
+   can be the widow penalty. Compressed brackets and the widow penalty are separate, additive sources.
+4. **An IRA-light household converts $0.** With $700k of IRA against $2.6M of brokerage, "Reduce IRA
+   in 11 Years" drains the IRA into spending and leaves no surplus to route, so all three arms are the
+   same plan. A fact about the strategy, not about conversions.
+5. **Quote the cost against surplus over need, not net worth - they rank households oppositely.** The
+   same decision costs the canonical household 2.36% of surplus and the modest one 13.16%, while the
+   absolute dollars run the other way ($49,121 against $36,411).
+
+## conversion_value_harness.js  (node)
+
+```bash
+node .test_harnesses/conversion_value_harness.js
+```
+
+**Full results and the scored predictions live in [`CONVERSION_VALUE.md`](CONVERSION_VALUE.md).**
+Measures whether converting pays in the terms the study set - more Roth for the smallest reduction in
+net worth, spending held fixed (P106b). Reads `fixtures/p106_canonical.json`. Replaces `_convSavings`
+for this study.
+
+1. **"Conversions off" is ambiguous, and the verdict flips with the choice.** `convertExcessToRoth:false`
+   draws the same money and banks it in the Brokerage (terminal IRA $1,589,225);
+   `_cfSuppressConversions` never withdraws it (terminal IRA $5,437,748). Same $0 converted and the
+   same lifetime spend, $3.85M apart in the IRA. Against the first the conversions are DOMINANT,
+   against the second they cost $49,121. **Any conversion result that names only one baseline is
+   under-specified.**
+2. **Decomposing a two-variable comparison changes its meaning.** The original pair moved strategy
+   and conversions together. Split: the conversion leg carries $2,459,861 of Roth and -$49,121 of net
+   worth; the strategy leg carries $0 of Roth and -$532,928. 92% of the cost was the strategy.
+3. **The widow column is the strongest result, on the scenario least able to show it.** Converting
+   more than halves survivor-year tax, $708,658 to $328,198, over a survivor window only two years
+   long. Prediction `B7` said it would move less than 5% and broke at 53.69%.
+4. **An ordered strategy is a degenerate arm for this metric.** Ordered CIBR converts $0 with
+   conversions switched on, because it draws only what the year needs and leaves no surplus to route.
+   All three of its columns are the same plan.
+5. **Two field-name traps, both hit here.** The per-year spending target on a log row is `spendGoal`,
+   not `targetSpend` - the latter is undefined and silently produced a funding floor of $0. And
+   `s1`/`s2` are not the Social Security columns; `SSincome` is.
+
 ## gapfill_harness.js  (node)
 
 ```bash
@@ -809,10 +930,16 @@ Headline findings (2026-08-29):
    `yr.IRMAALimit`, built from the bracket top containing the SPENDING GOAL, which sits below the
    federal ceiling the user picked. So the zero test covers four families, not the two it was
    written for, and the "24%" in that row's label is close to decorative.
-6. **Nothing sizes a conversion against the ceiling, and that gap is bigger than the deduction
-   one.** Total voluntary draw rose in only 18 of 74 cells and just 32% of the extra draw became
-   conversion. `iRAbracketRoom` sizes a WITHDRAWAL; `convertExcessToRoth` reallocates leftover
-   surplus capped by the IRA draw; `applyConversionGrossUp` never reads `yr.limit`. Tracked as P87g.
+6. **Only 32% of a MOVED ceiling becomes extra conversion** - a statement about the margin, not the
+   mechanism. Total voluntary draw rose in only 18 of 74 cells and just 32% of the extra draw became
+   conversion; the other 68% funded spending that would otherwise have come from Brokerage and Cash.
+   `iRAbracketRoom` sizes a WITHDRAWAL and `convertExcessToRoth` reallocates the surplus above
+   spending, so composed they DO size the conversion against the ceiling - measured at a binding
+   year, MAGI lands on the $243,600 ceiling to the dollar with $92,458 converted. This entry
+   previously read "nothing sizes a conversion against the ceiling, and that gap is bigger than the
+   deduction one"; **that was wrong, corrected 2026-08-30 after the user challenged it**, and see
+   section 7 of the report. `applyConversionGrossUp` never reading `yr.limit` was the real defect and
+   became `P88` (COMPLETE). `P87g` is CLOSED, not tracked.
 7. **A prediction scored on the wrong quantity.** B1's first form asked a per-year claim of a
    LIFETIME total and condemned a working arm in 70 of 120 cells. Same failure as `rmdbasis`'s R2.
 

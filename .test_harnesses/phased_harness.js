@@ -143,7 +143,7 @@ function runCell(cellBase) {
         rows.push({
             arm: armKeyOf(f), famKey: famKeyOf(f), family: f.family, mod: modClass(f.modifier),
             totals: res.totals, finalNW: res.finalNW,
-            finalNWCurrentDollars: last.totalWealth / (last.inflationFactor || 1),
+            finalNWCurrentDollars: last.totalNetWealth / (last.inflationFactor || 1),
             _convBEYear: res.totals.convBEYear ?? null,
             flagged: isBracketInfeasible || isACAUntenable,
             isBracketInfeasible, isACAUntenable,

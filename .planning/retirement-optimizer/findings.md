@@ -88,6 +88,43 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
   line is read; "give it its own item when someone picks it up" inside a sub-bullet is neither, and
   sat unnoticed until a sweep went looking for that exact shape.
 
+## The suggested Stop Conversion year is a MOVING PEAK, and `totalNetWealth` is not a shared basis (2026-09-03, P106a)
+
+Full report `research/CONVERSION_STOP_YEAR.md`; harness
+`.test_harnesses/stopyear_stability_harness.js`. On the user's own plan, the canonical `P106`
+scenario. Four things worth carrying forward.
+
+1. **"Unstable" was right, and neither of the two obvious explanations is what it is.** The search is
+   sound - idempotent from any starting stop year, deterministic, genuinely multi-modal so the linear
+   scan is required. The optimum is not flat either: under a shared heirs rate exactly one cutoff
+   sits within 0.1% of best. It is a **sharp peak that relocates**, moving across 2027-2030 under
+   input changes of 1% or less. Sharp and mobile is the bad combination: the tool is entitled to
+   report one confident year and that year is not reproducible.
+   **When an answer wanders, measure the neighbors' scores, not just the answer.** Watching the
+   argmax move cannot tell a flat optimum from a moving peak, and the two call for opposite
+   responses.
+2. **A stop year quoted without the inputs it was derived from means very little.** The years a 1%
+   nudge reaches differ by 4.5x in lifetime conversions and $3.7M in ending Roth, at 1.3-4.6% of net
+   worth. Any comparison of arms "each at its own optimal stop year" is a comparison of two argmaxes
+   that a rounding-scale input change would move. Hold it fixed, or report the band and its cost.
+3. **`totalNetWealth` is already after-tax, and NOT on a shared basis.** `evaluateYearOutcome`
+   (`optimizer_core.js:3801`) discounts the IRA at `sim.nominalTaxRate`, **that run's own final-year
+   ordinary marginal rate**. So anything that ranks several runs by `totalNetWealth` - which is what
+   `afterTaxWealthOfLogRow` returns whenever no Marginal Heirs Tax Rate is set, the default - is
+   comparing plans valued at different discount rates. Measured at 34.21% against 26.89% between two
+   candidates, $277,192 of pure valuation against a $6,949 margin. **Anywhere a metric ranks runs,
+   check whether its valuation rate is shared across them.** This is separable from (1) and is a
+   defect on its own.
+4. **The refutation is the part to imitate.** (3) was found while explaining (1) and looked exactly
+   like its cause; the report nearly shipped saying so. The test is direct - if the per-run rate
+   causes the wandering, a shared rate should calm it - and it says the opposite: 7 of 11
+   perturbations move a shared-rate answer against the default's 3 of 11. **A mechanism that explains
+   the observation is not thereby its cause.** The sensitivity is still unexplained.
+
+Also: `A6` predicted being wrong is cheap and HELD at 0.075%, because it asked about the 0.1% band.
+The same question over the years perturbation actually reaches gives 17x to 68x more. A prediction
+can hold and still mislead if its scope is narrower than the decision it is quoted for.
+
 ## P35n endgame: the Phased tail should be a SEQUENCE, Cash -> Roth -> Brokerage - the PR-5 proportional spec is refuted (2026-08-10)
 
 The endgame bake-off (`research/ENDGAME_DRAW_ORDER.md`, 144 cells starting AT the
@@ -488,9 +525,9 @@ Using the additive shape where the subtractive one belongs compares a baseline t
 
 **`extraConversionAmount` is structurally invisible outside the sweep machinery.** This engine field (flat annual $ IRA-to-Roth conversion) is read by `applyExtraConversion()`/`optimizeConversionAmount()` and set by the Optimizer's Phase-23 sweep and Monte Carlo's baseline pass -- but has zero presence in `retirement_optimizer.html` (no input), `getInputs()` (not read), or `OPT_LONG_TO_SHORT` (not URL-shareable). Any UI path that shows a result computed WITH this field (e.g. the Optimizer's ⇌ rows) but then lets the user "load"/reproduce that result elsewhere silently drops it, since there's nowhere for it to land. Worth checking for this same class of gap if other engine-only fields ever get surfaced in optimizer-only computed values.
 
-**`sim.nominalTaxRate` is a discrete bracket-table step function, not continuous.** It's the `nr` field from `taxengine.js`'s bracket tables (via `calculateProgressive()`/`findUpperLimitByAmount()`), looked up fresh each year based on whichever bracket that year's top marginal dollar falls into. Used to discount an ENTIRE remaining IRA balance in `totalWealth`/`convOC` valuation. Because it's a step function, two simulate() runs with slightly different income trajectories (e.g. an actual run vs. its conversion-suppressed counterfactual) can cross the same bracket boundary in different years, producing a one-year valuation "jump" in their relative comparison that has nothing to do with that specific year's dollar amounts -- pure timing-mismatch noise. This was originally described here as "the same underlying gap" as the pre-existing "TAX GAP" comment in `routeSurplusAndConvert` -- **PF10 disproved that and the comment is now gone** (that path is a pure reallocation with no tax netted out of it; see the PF10 notes above). The step-function noise described in this paragraph is real and independent of that comment. PF6's sustained-crossing Break Even definition already absorbs/suppresses this noise at the stat level (a lone blip surrounded by negative years correctly reports "never breaks even") -- but the per-year convOC column itself can still show this noise, which is fine/expected once understood, not a bug.
+**`sim.nominalTaxRate` is a discrete bracket-table step function, not continuous.** It's the `nr` field from `taxengine.js`'s bracket tables (via `calculateProgressive()`/`findUpperLimitByAmount()`), looked up fresh each year based on whichever bracket that year's top marginal dollar falls into. Used to discount an ENTIRE remaining IRA balance in `totalNetWealth`/`convOC` valuation. Because it's a step function, two simulate() runs with slightly different income trajectories (e.g. an actual run vs. its conversion-suppressed counterfactual) can cross the same bracket boundary in different years, producing a one-year valuation "jump" in their relative comparison that has nothing to do with that specific year's dollar amounts -- pure timing-mismatch noise. This was originally described here as "the same underlying gap" as the pre-existing "TAX GAP" comment in `routeSurplusAndConvert` -- **PF10 disproved that and the comment is now gone** (that path is a pure reallocation with no tax netted out of it; see the PF10 notes above). The step-function noise described in this paragraph is real and independent of that comment. PF6's sustained-crossing Break Even definition already absorbs/suppresses this noise at the stat level (a lone blip surrounded by negative years correctly reports "never breaks even") -- but the per-year convOC column itself can still show this noise, which is fine/expected once understood, not a bug.
 
-**`_convSavings` (realized lifetime tax $ saved) and `convOC`/`convBEYear` (after-tax wealth, deferred-tax-aware) are different metrics that can disagree.** `_convSavings` only sums `totals.tax` actually paid during the simulated horizon; it never reserves for tax still owed on whatever IRA balance a counterfactual/lesser-conversion plan has left standing. `totalWealth`/`convOC` explicitly discount remaining IRA balance by the applicable tax rate every year, so they're the more complete "did this actually pay off" answer. A strategy can look great on Conv Savings while never reaching Break Even. General pattern to watch for in this codebase: any metric summing `totals.tax` alone (realized-only) vs. any metric built from `totalWealth` (after-tax, deferred-liability-aware) are not directly comparable and can point opposite directions.
+**`_convSavings` (realized lifetime tax $ saved) and `convOC`/`convBEYear` (after-tax wealth, deferred-tax-aware) are different metrics that can disagree.** `_convSavings` only sums `totals.tax` actually paid during the simulated horizon; it never reserves for tax still owed on whatever IRA balance a counterfactual/lesser-conversion plan has left standing. `totalNetWealth`/`convOC` explicitly discount remaining IRA balance by the applicable tax rate every year, so they're the more complete "did this actually pay off" answer. A strategy can look great on Conv Savings while never reaching Break Even. General pattern to watch for in this codebase: any metric summing `totals.tax` alone (realized-only) vs. any metric built from `totalNetWealth` (after-tax, deferred-liability-aware) are not directly comparable and can point opposite directions.
 
 **Top-N-by-finalNW selection pools are orthogonal to conversion-specific outcomes.** The Optimizer's Phase-23 "top 5 successful strategies" is chosen by each family's BASE (non-extra-conversion) finalNW -- a criterion unrelated to whether THAT family's conversions specifically would break even. A lower-finalNW family could be the true best converter and never get evaluated for it. Relevant if extending Break Even search to a smarter/broader pool later (see task_plan.md Phase PF8 issue 3 tiers).
 > **Confirmed empirically 2026-07-16 (PF10), now tracked as PF11.** No longer hypothetical. On a $2M-IRA/$90k-spend scenario the top-5 were all cyclic `fixedpct` rows whose sweep correctly returns `optConv: 0` (extra conversion strictly hurts them: $9,266,756 at $0 → $8,635,273 at $150k), while `propwd` at rank **6** returns **$125,000** and never gets considered. Result: zero ⇌ rows for a plan that genuinely has a good conversion answer. PF10 defaulted Optimize Conversions ON, so this now fires for everyone rather than only for users who opted in.
@@ -528,7 +565,7 @@ Note: for implementation, use current inflation-adjusted thresholds but with pre
 
 **Ranking by ending wealth is orthogonal to "who benefits from converting."** The Optimize Conversions candidate pool was `results.filter(success).sort(finalNW desc).slice(0,5)`. Measured on a $2M-IRA/$90k-spend scenario, all five slots went to cyclic `fixedpct` rows that correctly return `optConv: 0` (extra conversion strictly hurts them), while `propwd` at rank 6 returns a real conversion and was never considered. **A flat top-N over a homogeneous metric lets one strategy family monopolize every seat.** Fix: pick the best row per FAMILY (`selectConversionCandidates`), which guarantees structural diversity instead of hoping a scalar surfaces it.
 
-**`finalNW` is not comparable across plans and must not be used to rank them.** `finalNW` = terminal `totalWealth`, which discounts each run's remaining IRA at *that run's own* `sim.nominalTaxRate`. Two plans are therefore valued with two different tax rates, and it ignores spendable entirely (the hoarding bias v11.1098 already removed from baseline ranking). Anything comparing plans must use a SHARED rate: `afterTaxNetWorth(terminal, sharedRate, capGainsRate)`. PF11 moved the conversion sweep's own objective onto `_baselineScore` for the same reason. **Rule: a per-run rate belongs inside a run, never in a cross-run comparison.**
+**`finalNW` is not comparable across plans and must not be used to rank them.** `finalNW` = terminal `totalNetWealth`, which discounts each run's remaining IRA at *that run's own* `sim.nominalTaxRate`. Two plans are therefore valued with two different tax rates, and it ignores spendable entirely (the hoarding bias v11.1098 already removed from baseline ranking). Anything comparing plans must use a SHARED rate: `afterTaxNetWorth(terminal, sharedRate, capGainsRate)`. PF11 moved the conversion sweep's own objective onto `_baselineScore` for the same reason. **Rule: a per-run rate belongs inside a run, never in a cross-run comparison.**
 
 **Family keys need more than `_strategy`.** IRMAA Ceil rows carry `strategy:'bracket'` with `stratIRMAATier` 0-4, while Fill Bracket carries `strategy:'bracket'` with tier -1. Keying a family map on `_strategy` alone silently merges two sweeps that answer different questions and drops one. Cyclic must also be its own dimension, since the observed failure was exactly cyclic rows crowding out the non-cyclic champion of the *same* strategy.
 
@@ -1765,15 +1802,23 @@ The three sentences worth carrying without opening the report:
    `n% Fed` and `IRMAA Tier n` are targets (reaching them is success); `n% FPL` is a cap (staying
    under is success). The engine splits them on BREACH behavior already, not on FILL behavior.
 
-2b. **Nothing sizes a conversion against the ceiling, and this gap is larger than the deduction
-   one.** Over the same 74 cells, total voluntary draw rose in only 18, and just 32% of the extra
-   draw became conversion - the rest became IRA-sourced spending displacing Brokerage and Cash.
-   Conversions were unchanged in 29 of 74. Only `iRAbracketRoom` (sizes the WITHDRAWAL) and the
-   user-typed `extraConversionAmount` claim the headroom; `convertExcessToRoth` is a reallocation
-   of leftover surplus capped by the IRA draw, `applyConversionGrossUp` never reads `yr.limit`, and
-   "Maximize Conversions" is just those two flags. **User model: limit minus spending = conversion
-   headroom. Engine model: limit sizes a withdrawal, conversion falls out of surplus routing.**
-   Tracked as `P87g`.
+2b. ~~**Nothing sizes a conversion against the ceiling, and this gap is larger than the deduction
+   one.**~~ **HEADLINE RETRACTED 2026-08-30 (user), and the retraction finished 2026-09-03 in
+   `P106d`. The measurement below stands; the claim drawn from it did not.** Picking the limit IS
+   the ceiling: `iRAbracketRoom` sizes the withdrawal to it and `convertExcessToRoth` turns the room
+   above spending into the conversion, so the composition of the two sizes the CONVERSION against
+   the ceiling by construction. Measured at a binding year: ceiling $243,600, MAGI landing on
+   $243,600 to the dollar, $238,179 drawn, $145,721 to spending, **$92,458 converted**. The two
+   models in the struck sentence below do not diverge in the ordinary case.
+   **What the 74 cells actually measured is a statement about the MARGIN**, not the mechanism: when
+   the ceiling MOVED by one deduction, total voluntary draw rose in only 18 cells and just 32% of
+   the extra draw became conversion, the other 68% becoming IRA-sourced spending that displaced
+   Brokerage and Cash. Conversions were unchanged in 29 of 74 - which is what a minority of binding
+   years predicts, not a missing mechanism. Still true as mechanism description: `applyConversionGrossUp`
+   never reads `yr.limit` (that thread ended in `P88`, COMPLETE), and "Maximize Conversions" is just
+   those two flags. ~~User model: limit minus spending = conversion headroom. Engine model: limit
+   sizes a withdrawal, conversion falls out of surplus routing.~~
+   `P87g` is CLOSED, not open: `P88` and `P87c` settled everything it was waiting on.
 3. **`minlimit` is governed entirely by `yr.IRMAALimit`, which is built from the SPENDING GOAL, not
    from the federal rate the user picked.** 0 of 40 cells respond to a federal ceiling change. Any
    claim about what `Min Limit n%` targets should be measured before it is believed.

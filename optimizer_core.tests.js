@@ -872,14 +872,14 @@ test('wdRate%: equals netOut ÷ prior-year portfolio balance', () => {
     }
 });
 
-test('wdRate%: denominator is the raw portfolio, not tax-discounted totalWealth', () => {
-    // BASE holds a $600k IRA, so totalWealth is materially below portfolioBalance. If the old
+test('wdRate%: denominator is the raw portfolio, not tax-discounted totalNetWealth', () => {
+    // BASE holds a $600k IRA, so totalNetWealth is materially below portfolioBalance. If the old
     // after-tax denominator leaked back in, the rate would read high by roughly that discount.
     const result = simulate({ ...BASE });
     const r0 = result.log[0], r1 = result.log[1];
-    assert(r0.portfolioBalance > r0.totalWealth + 1000,
+    assert(r0.portfolioBalance > r0.totalNetWealth + 1000,
         'Fixture no longer distinguishes the two denominators; pick balances with a bigger IRA');
-    const wrongWay = r1.netOut / r0.totalWealth;
+    const wrongWay = r1.netOut / r0.totalNetWealth;
     assert(Math.abs(r1['wdRate%'] - wrongWay) > 1e-6,
         'wdRate% still matches the after-tax denominator');
 });
@@ -998,7 +998,7 @@ test('avgNetDepletion: negative when the portfolio outgrows withdrawals, positiv
 });
 
 test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses', () => {
-    // prevPortfolio replaced the old gkPrevPortfolio/prevTotalWealth pair. GK always used the raw
+    // prevPortfolio replaced the old gkPrevPortfolio/prevTotalNetWealth pair. GK always used the raw
     // balance sum, so merging the two fields must not move its output by a cent. The expected
     // values below were captured from a run made BEFORE that merge.
     //
@@ -1068,14 +1068,23 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
     // $242,194 it previously kept deferred in 2053. Years 2054-2056 each fall $11k-$14k, which is
     // the knock-on and not a second effect - the larger 2053 draw leaves a smaller balance for the
     // next year's basis.
+    // Re-pinned at P106g (2026-09-04). The terminal IRA is now discounted at a trailing average of
+    // the years sharing the terminal FILING STATUS rather than at the final year's own marginal.
+    // This fixture's survivor files single for its last 4 years, and averaging them moves the rate
+    // 27.983% -> 27.844%, worth $4,744 on $3,408,828 of terminal IRA. Final NW 9,207,491.698594 ->
+    // 9,212,235.314359. Spend and tax do not move by a cent and the guardrail count is still 3,
+    // which is the signature this test's own comments above describe for a valuation change: the
+    // withdrawal engine did not run differently, only the price put on what it left behind.
+    // The 4-year window is the interesting part here - a plan with a long widowhood averages more
+    // years and is estimated better, which is the whole reason for scoping to filing status.
     assertNear(gk.totals.spend, 7447682.634423317, 'GK total spend', 0.01);
     assertNear(gk.totals.tax, 1973741.0219859004, 'GK total tax', 0.01);
-    assertNear(gk.finalNW, 9207491.698593603, 'GK final net worth', 0.01);
+    assertNear(gk.finalNW, 9212235.314359205, 'GK final net worth', 0.01);
     assert(gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length === 3,
         `Expected 3 guardrail adjustments, got ${gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length}`);
 });
 
-// ── Baseline accounting (after-tax NW + totalWealth fix) ───────────────────────
+// ── Baseline accounting (after-tax NW + totalNetWealth fix) ───────────────────────
 const afterTaxNetWorth = core.afterTaxNetWorth;
 
 test('afterTaxNetWorth: Roth/Cash/basis at face; brokerage gains × (1−capG); IRA × (1−futureRate)', () => {
@@ -1109,7 +1118,7 @@ test('simulate: exposes totals.terminal breakdown + totals.capGainsRate', () => 
     assertNear(res.totals.terminal.basis, last.Basis, 'terminal.basis vs log', 1);
 });
 
-test('totalWealth: IRA discounted by ordinary rate, terminal brokerage at face after the 1014 step-up', () => {
+test('totalNetWealth: IRA discounted by ordinary rate, terminal brokerage at face after the 1014 step-up', () => {
     // Single filer (BASE has no spouse), so the ONLY step-up in play is the terminal one.
     const inp = { ...BASE, IRA1: 100000, Brokerage: 500000, BrokerageBasis: 100000,
                   Cash: 200000, spendGoal: 30000, die1: 78 };
@@ -1136,7 +1145,7 @@ test('totalWealth: IRA discounted by ordinary rate, terminal brokerage at face a
             + last.Roth1 + last.Roth2 + last.Cash + last['-basisPreStepUp'];
         assertNear(res.finalNW - oldLiquidation, brokGainPreStepUp * capG,
             'the step-up is worth exactly the cap-gains tax it removes', 1);
-        assertNear(last['-totalWealthPreStepUp'], oldLiquidation,
+        assertNear(last['-totalNetWealthPreStepUp'], oldLiquidation,
             'the preserved liquidation value must match the pre-step-up formula', 1);
     }
 });
@@ -1271,8 +1280,8 @@ test('P35g: terminal valuation is stepped up and both pre-step-up bases are pres
     assertNear(res.totals.terminal.basis, res.totals.terminal.brokerage,
         'totals.terminal must carry the stepped-up basis', 1);
     assert(last['-basisPreStepUp'] !== undefined, 'the pre-step-up basis must be preserved');
-    assert(last['-totalWealthPreStepUp'] !== undefined, 'the liquidation value must be preserved');
-    assert(res.finalNW > last['-totalWealthPreStepUp'], 'the step-up can only raise terminal wealth');
+    assert(last['-totalNetWealthPreStepUp'] !== undefined, 'the liquidation value must be preserved');
+    assert(res.finalNW > last['-totalNetWealthPreStepUp'], 'the step-up can only raise terminal wealth');
     // The step-up is a terminal event, not a per-year one: no other row may carry these keys.
     const others = res.log.slice(0, -1).filter(r => r['-basisPreStepUp'] !== undefined);
     assert(others.length === 0, `only the terminal row may be stepped up, got ${others.length} others`);
@@ -1288,7 +1297,7 @@ test('P35g: the correction favors NOT converting - the one-sided bias it removes
     // the arm that KEEPS its brokerage; a converting plan spends brokerage on conversion tax and
     // so has less unrealized gain left for 1014 to reach.
     const base = { ...STEPUP_BASE, convertExcessToRoth: false };
-    const stepUpValue = res => res.finalNW - res.log[res.log.length - 1]['-totalWealthPreStepUp'];
+    const stepUpValue = res => res.finalNW - res.log[res.log.length - 1]['-totalNetWealthPreStepUp'];
     const noConv   = simulate({ ...base, extraConversionAmount: 0 });
     const withConv = simulate({ ...base, extraConversionAmount: 40000 });
     assert(stepUpValue(noConv) > 0, 'the no-conversion arm must hold gains worth stepping up');
@@ -1325,7 +1334,7 @@ test('baseline metric: higher after-tax NW ranks a richer terminal portfolio hig
 });
 
 // ── Phase 22: Guyton-Klinger tests ───────────────────────────────────────────
-// GK uses raw portfolio balance (not tax-discounted totalWealth) for IWR and WR
+// GK uses raw portfolio balance (not tax-discounted totalNetWealth) for IWR and WR
 // checks, so both sides of the comparison are on equal footing.
 
 const GK_BASE = {
@@ -3509,13 +3518,13 @@ test('OC: counterfactual pays the RMD counter-effect (bigger IRA → bigger RMDs
     // and only the actual run needs its pre-step-up value.
     const lastRow = actual.log[actual.log.length - 1];
     const lastOC = lastRow.convOC;
-    const actualLiquidation = lastRow['-totalWealthPreStepUp'] ?? actual.finalNW;
+    const actualLiquidation = lastRow['-totalNetWealthPreStepUp'] ?? actual.finalNW;
     assertNear(lastOC, actualLiquidation - cf.finalNW, 'convOC identity vs counterfactual finalNW', 1);
     // And pin the relationship between the bases, so a change that quietly puts Break Even onto
     // the step-up basis fails here instead of silently moving every reported break-even year.
     assert(actual.finalNW > actualLiquidation,
         'the terminal step-up must lift finalNW above the liquidation value Break Even scores on');
-    assert(cf.log[cf.log.length - 1]['-totalWealthPreStepUp'] === undefined,
+    assert(cf.log[cf.log.length - 1]['-totalNetWealthPreStepUp'] === undefined,
         'a _cfRun must NOT be stepped up, or convOC differences two different valuations');
     // Refund really shrank the counterfactual's year-0 IRA draw (over-withdrawal not taken).
     assert(cf.log[0].IRAwd < actual.log[0].IRAwd - 1000,
@@ -3548,28 +3557,45 @@ test('OC: optimizer/MC path (computeOC unset) skips counterfactual, convOC null'
     assert(r.log.every(x => x.convOC == null), 'without computeOC, convOC must stay null');
 });
 
-test('OC: brief positive blip then sustained negative through plan end → convBEYear null', () => {
-    // fixedpct converts a fixed % of the CURRENT (not original) IRA balance every year with no
-    // bracket ceiling, so conversions keep firing long after they stop paying off. Combined with
-    // a flat futureIRATaxRate valuation and a horizon (die1:80) that ends before the plan's later
-    // years would have recovered, this reproduces the reported bug shape: convOC touches
-    // non-negative for exactly the first year, then stays negative for every remaining year
-    // (never recovers). The old first-touch .find() reported the year-0 blip as Break Even; the
-    // correct answer is null (no sustained crossing exists).
-    // Retuned when OBBBA was switched on: the senior deduction lowers tax in 2026-2028, which
-    // shifted the year-0 blip from +$0.4k to -$77 and destroyed the shape the test needs. The
-    // PROPERTY is what matters (one non-negative year, then negative forever, so no sustained
-    // crossing exists), not the particular knobs. futureIRATaxRate 0.34 -> 0.35, die1 80 -> 78,
-    // iraWithdrawPct 0.10 -> 0.12 restores it with room to spare (year-0 convOC ~ +$365).
-    const inputs = { ...OC_BASE, strategy: 'fixedpct', iraWithdrawPct: 0.12,
-                     convertExcessToRoth: true, futureIRATaxRate: 0.35, die1: 78 };
-    const r = simulate(inputs);
-    const totalConv = r.log.reduce((s, x) => s + (x.rothConv ?? 0), 0);
-    assert(totalConv > 100000, `expected substantial conversions, got ${totalConv}`);
-    assert(r.log[0].convOC > 0, `year-0 convOC should be the reported blip (positive), got ${r.log[0].convOC}`);
-    assert(r.log.slice(1).every(x => x.convOC < 0), 'every year after the blip must be negative (never recovers)');
-    assert(r.totals.convBEYear === null,
-        `a blip that never sustains must report convBEYear null, got ${r.totals.convBEYear}`);
+test('P28jg: sustainedBreakEvenYear — a blip that never recovers reports null, not the blip', () => {
+    // WAS a household fixture. `fixedpct` was tuned until its convOC went non-negative for exactly
+    // one year and then stayed negative forever, so that convBEYear had to come back null. That
+    // shape did not survive P28jg: once converted dollars compound in the year they convert, this
+    // family recovers by plan end, and 225 combinations of futureIRATaxRate / die1 / iraWithdrawPct
+    // failed to reproduce it. The shape was partly an artifact of the defect.
+    //
+    // The property under test was never about a household. It is that `sustainedBreakEvenYear`
+    // reports the start of the FINAL non-negative run and returns null when the series ends
+    // negative - the old first-touch `.find()` reported an early blip as Break Even. Driven as a
+    // series it cannot rot when the engine changes, which is the third time that has cost this repo
+    // a research table.
+    const be = core.sustainedBreakEvenYear;
+    const series = (ocs, convs) => ocs.map((oc, i) => ({ year: 2026 + i, convOC: oc, rothConv: convs[i] }));
+    const conv = (n) => new Array(n).fill(0).map((_, i) => (i === 0 ? 50000 : 0));
+
+    // The original shape: one non-negative year, negative for every year after. No sustained
+    // crossing exists, so null - even though year 0 touches positive.
+    assert((be(series([365, -80, -900, -1200, -1500], conv(5)), 'convOC', r => r.rothConv ?? 0)) === null,
+        'P28jg: a blip followed by permanent negatives must report null');
+
+    // Ends non-negative: the answer is the START of the final run, not the first touch.
+    assert((be(series([40, -80, -900, 120, 300], conv(5)), 'convOC', r => r.rothConv ?? 0)) === 2029,
+        'P28jg: the answer is the start of the final non-negative run');
+
+    // Never earlier than the action. The series is non-negative from year 0, but nothing converts
+    // until 2028, and a plan cannot break even on a conversion it has not made.
+    const late = [{ year: 2026, convOC: 10, rothConv: 0 }, { year: 2027, convOC: 10, rothConv: 0 },
+                  { year: 2028, convOC: 10, rothConv: 50000 }, { year: 2029, convOC: 10, rothConv: 0 }];
+    assert((be(late, 'convOC', r => r.rothConv ?? 0)) === 2028,
+        'P28jg: the crossing cannot precede the year the action first happens');
+
+    // The action never happens at all.
+    assert((be(series([10, 20, 30], [0, 0, 0]), 'convOC', r => r.rothConv ?? 0)) === null,
+        'P28jg: no action means no break-even year');
+
+    // A null in the series is treated as negative - it breaks the trailing run.
+    assert((be(series([10, 20, null, 40, 50], conv(5)), 'convOC', r => r.rothConv ?? 0)) === 2029,
+        'P28jg: a null OC year breaks the run rather than extending it');
 });
 
 test('OC: excess-withdrawal double-dip → excessBEYear is the sustained crossing, not the first touch', () => {
@@ -3599,9 +3625,14 @@ test('OC: excess-withdrawal double-dip → excessBEYear is the sustained crossin
 test('diagnoseConvBreakEvenFailure: boundary — pinpoints the specific conversion year that breaks a sustained lead', () => {
     // 5 modest conversions (2026-2030) each individually sustain a Break Even on their own;
     // a large 6th lump conversion (2031) is the one that permanently erases the lead.
+    // P28jg RETUNE, lump 600,000 -> 800,000. Converted dollars now compound in the year they
+    // convert, so the old lump no longer erased the lead (convBEYear came back 2056 instead of
+    // null) and the test's own setup assertion fired. The PROPERTY is what matters - a 6th
+    // conversion large enough to break a lead the first five sustain - not the size. 800,000
+    // restores it at every futureIRATaxRate from 0.10 to 0.30, so it is not knife-edge.
     const arr = new Array(30).fill(0);
     for (let y = 0; y < 5; y++) arr[y] = 40000;
-    arr[5] = 600000;
+    arr[5] = 800000;
     const inputs = { ...OC_BASE, birthyear1: 1966, die1: 90, IRA1: 1200000,
                      inflation: 0.025, cpi: 0.025, nYears: 30,
                      extraConversionAmount: arr, futureIRATaxRate: 0.30 };
@@ -3614,9 +3645,14 @@ test('diagnoseConvBreakEvenFailure: boundary — pinpoints the specific conversi
     // 355,562 not the pre-fix 355,478: this fixture drives conversions through a per-year ARRAY,
     // whose year 0 used to be mis-timed Late(Spend) because `extraConversionAmount > 0` coerced a
     // multi-element array to NaN. Re-derived from the engine after _extraConvAmountFor.
-    assertNear(d.breakingAmount, 355562, 'breaking conversion amount', 5);
+    // P28jg: 355,562 -> 460,204. The lump this fixture needs grew 600k -> 800k (see the setup note),
+    // and the realized breaking conversion grew with it.
+    assertNear(d.breakingAmount, 460204, 'breaking conversion amount', 5);
     assert(d.lastSustainableYear === 2030, `expected 2030 as the last sustainable conversion year, got ${d.lastSustainableYear}`);
-    assert(d.lastSustainableBEYear === 2042, `expected the truncated plan to break even in 2042, got ${d.lastSustainableBEYear}`);
+    // P28jg: 2042 -> 2039. The lump grew 600k -> 800k (setup note above) and conversions now
+    // compound in-year, so the truncated plan - the one WITHOUT the breaking lump - breaks even
+    // three years sooner.
+    assert(d.lastSustainableBEYear === 2039, `expected the truncated plan to break even in 2039, got ${d.lastSustainableBEYear}`);
 
     // Invariant: re-running truncated exactly at the reported boundaries must reproduce them.
     const convIdxs = [];
@@ -3778,9 +3814,9 @@ test('representation: a suppressed year 0 is not a conversion year (timing must 
 
 test('P24: afterTaxWealthOfLogRow matches the Break Even block valuation (guards the shared-helper extraction)', () => {
     const r = simulate({ ...STOP_BASE }).log[10];
-    // Unset heirs rate -> row totalWealth verbatim.
-    assert(afterTaxWealthOfLogRow(r, null) === r.totalWealth, 'null rate must return row totalWealth');
-    assert(afterTaxWealthOfLogRow(r, undefined) === r.totalWealth, 'undefined rate must return row totalWealth');
+    // Unset heirs rate -> row totalNetWealth verbatim.
+    assert(afterTaxWealthOfLogRow(r, null) === r.totalNetWealth, 'null rate must return row totalNetWealth');
+    assert(afterTaxWealthOfLogRow(r, undefined) === r.totalNetWealth, 'undefined rate must return row totalNetWealth');
     // With a heirs rate -> IRA discounted, brokerage gains at the row cap-gains rate, rest at face.
     const rate = 0.30;
     const expected = (r.IRA1 + r.IRA2) * (1 - rate)
@@ -3900,11 +3936,16 @@ test('optimizeConversionAmount: GK sweep rejects a higher-scoring but spend-unst
     // P88b an extra conversion never reached MAGI, so the IRMAA lookback never charged it and the
     // sweep's finalNW curve was missing a real cost that grows with the conversion. This fixture is
     // 65 at the start and on Medicare throughout: lifetime IRMAA was $0 at every candidate and is
-    // now $29k-$39k across them, which moves the argmax down one $25k step. $150,000 now scores
-    // $1,056,138 against $100,000's $1,066,185. The two assertions above are the test's actual
-    // subject and both still hold unchanged - $425,000 still out-scores everything on raw finalNW
-    // and the stability gate still refuses it.
-    assertNear(gated.optConv, 100000, 'gated sweep should land on the largest still-stable candidate', 1);
+    // now $29k-$39k across them, which moves the argmax down one $25k step. $150,000 then scored
+    // $1,056,138 against $100,000's $1,066,185.
+    // P28jg RE-BASELINE, 100000 -> 150000, back up the same step and for the mirror-image reason:
+    // that correction added a cost conversions always owed, this one restores a gain they were
+    // always due, so a larger conversion is affordable again. Checked, not accepted: $150,000 now
+    // scores $1,139,590 against $100,000's $1,115,521, and $175,000 falls back to $1,130,757 - so
+    // 150k is a genuine interior peak rather than the top of the swept range.
+    // The two assertions above are the test's actual subject and both still hold unchanged -
+    // $425,000 still out-scores everything on raw finalNW and the stability gate still refuses it.
+    assertNear(gated.optConv, 150000, 'gated sweep should land on the largest still-stable candidate', 1);
 });
 
 test('optimizeConversionAmount: non-GK strategies are unaffected by the stability gate', () => {
@@ -4413,17 +4454,26 @@ const PF11_BASE = {
 // rate, tips to $0; baselineScore, which discounts at the user's stated heirs rate, still finds
 // $50k.
 //
-// baselineScore is the honest measure of the two here: the question is what the heirs net, so the
-// heirs' rate is the right discount. finalNW reporting "no benefit" where a real conversion exists
-// is exactly the defect T6 documented, so these are a divergence guard again, not an agreement one.
-test("optimizeConversionAmount: 'finalNW' and 'baselineScore' diverge (the T6 defect, restored)", () => {
+// AND P28jg CLOSES IT AGAIN, which is the third time this gap has turned out to be a modeling
+// defect rather than a metric disagreement. Converted dollars used to earn no growth in the year
+// they converted, so the converting arm was denied a real gain while the non-conversion arm kept
+// the stepped-up brokerage gains described above. Crediting the conversion before the
+// post-withdrawal growth hands that gain back, and it is enough to close the gap: both metrics now
+// pick $75,000 on this fixture, and both are larger than either picked before.
+//
+// So this is an AGREEMENT guard again. That is not a weaker test than the divergence one it
+// replaces - the useful signal in either direction is a CHANGE. If a future engine change reopens
+// this gap, the two metrics are measuring the same plan through different discounts and one of them
+// is wrong about it; that is worth a phase, not a re-derive. The history above is kept because the
+// direction has now reversed three times and each reversal was informative.
+test("optimizeConversionAmount: 'finalNW' and 'baselineScore' agree (the T6 gap, closed by P28jg)", () => {
     const ov = { strategy: 'propwd', propWithdraw: 0 };
     assert(simulate({ ...PF11_BASE }).totals.success, 'test setup: base scenario must succeed');
     const fn = optimizeConversionAmount(PF11_BASE, ov, 'finalNW').optConv;
     const bl = optimizeConversionAmount(PF11_BASE, ov, 'baselineScore', { futureIRARate: 0.37 }).optConv;
-    assertNear(fn, 0, 'finalNW reports no worthwhile conversion', 1);
-    assertNear(bl, 50000, 'baselineScore still finds $50k/yr at the heirs rate', 1);
-    assert(bl > fn, 'the honest measure must find a conversion that the finalNW metric misses');
+    assertNear(fn, 75000, 'finalNW now finds the conversion it used to miss', 1);
+    assertNear(bl, 75000, 'baselineScore finds the same amount at the heirs rate', 1);
+    assert(bl === fn, 'the two discounts must agree on this fixture; a reopened gap is a finding');
 });
 
 test('optimizeConversionAmount: legacy metric modes and the 3-arg signature agree', () => {
@@ -4432,8 +4482,9 @@ test('optimizeConversionAmount: legacy metric modes and the 3-arg signature agre
     // 3-arg must all route to the same metric and return the same answer. The shared value has now
     // moved twice - $0 to $50k with the double-credit fix, $50k back to $0 with the IRC 1014
     // step-up (see the note above) - which is exactly why the agreement is the point, not the number.
+    // Moved a third time by P28jg, $0 -> $75k, for the reason recorded above the T6 test.
     const fourArg = optimizeConversionAmount(PF11_BASE, ov, 'finalNW').optConv;
-    assertNear(fourArg, 0, "4-arg 'finalNW'", 1);
+    assertNear(fourArg, 75000, "4-arg 'finalNW'", 1);
     assert(optimizeConversionAmount(PF11_BASE, ov, 'finalNW', {}).optConv === fourArg, 'explicit empty opts must match');
     assert(optimizeConversionAmount(PF11_BASE, ov).optConv === fourArg, 'default metric (no 3rd/4th arg) must match');
 });
@@ -5574,7 +5625,11 @@ test.slow('breakEvenHeirsRate: the rate/amount pair it reports is self-consisten
     // a HIGHER heirs rate to justify - the direction a correction must move this. Checked on the
     // fixture rather than accepted: age 74 in year 0 and on Medicare throughout, lifetime IRMAA
     // $6,001 with no extra conversion and $35,704 at $100,000 of it.
-    assertNear(r.rate, 0.65, 'break-even heirs rate for the fixedpct fixture', 0.011);
+    // P28jg RE-BASELINE, 0.65 -> 0.55. Converted dollars now compound in the year they convert, so
+    // a conversion is worth more and needs a LOWER heirs rate to justify itself. Opposite direction
+    // to P88b and for the opposite reason: that correction added a cost conversions always owed,
+    // this one restores a gain they were always due.
+    assertNear(r.rate, 0.55, 'break-even heirs rate for the fixedpct fixture', 0.011);
     assert(r.optConv === 75000, `expected a $75,000 conversion at the threshold, got ${r.optConv}`);
     // The rounding nudge exists so a reported rate never comes back with a $0 conversion.
     assert(r.optConv > 0, 'a reported rate must always carry a real conversion amount');
@@ -5605,8 +5660,9 @@ test.slow('lowestBreakEvenHeirsRate: finds a threshold the best-scoring candidat
         { overrides: FIXEDPCT_OV, terminalIRA: 500000, label: 'fixedpct' }
     ], {});
     assert(best !== null, 'the pool search must find the candidate that does have a threshold');
-    // P88b RE-BASELINE, 0.57 -> 0.65: same fixture, same cause as the test above.
-    assertNear(best.rate, 0.65, 'pool-wide lowest break-even heirs rate', 0.011);
+    // P88b RE-BASELINE, 0.57 -> 0.65, then P28jg 0.65 -> 0.55: same fixture, same causes as the
+    // test above.
+    assertNear(best.rate, 0.55, 'pool-wide lowest break-even heirs rate', 0.011);
     assert(best.label === 'fixedpct', `expected the fixedpct candidate to win, got ${best.label}`);
 });
 
@@ -7438,7 +7494,7 @@ function schedReplayDelta(overrides, mutate) {
     let maxYr = 0;
     if (a.log.length !== b.log.length) return { maxYr: Infinity, dNW: Infinity, scheduled: plan.filter(Boolean).length };
     for (let i = 0; i < a.log.length; i++) {
-        maxYr = Math.max(maxYr, Math.abs((b.log[i].totalWealth ?? 0) - (a.log[i].totalWealth ?? 0)));
+        maxYr = Math.max(maxYr, Math.abs((b.log[i].totalNetWealth ?? 0) - (a.log[i].totalNetWealth ?? 0)));
     }
     return { maxYr, dNW: (b.finalNW ?? 0) - (a.finalNW ?? 0), scheduled: plan.filter(Boolean).length };
 }
@@ -7689,6 +7745,180 @@ async function runOptimizerCoreTests(opts) {
         }
     };
 }
+
+// ── Tax settlement date (Phase P108b) ────────────────────────────────────────────────────────
+// `taxSettlement: 'december'` keeps the income-tax portion of the draw invested until year end
+// instead of letting it leave with the spending money. Withholding is deemed paid ratably across
+// the year whenever it is withheld, so a December distribution satisfies the year - that is what
+// makes this a real option rather than an accounting trick.
+test('P108b: december tax settlement is opt-in, raises wealth, and leaves spending untouched', () => {
+    const TAXY = {
+        ...BASE, strategy: 'bracket', stratRate: 0.22, convertExcessToRoth: true,
+        IRA1: 1400000, Brokerage: 300000, BrokerageBasis: 150000, Cash: 90000,
+        spendGoal: 80000, growth: 0.06, inflation: 0.02, cpi: 0.02, nYears: 15,
+    };
+    const run = (over) => simulate({ ...TAXY, ...over, computeOC: false });
+    const credit = (r) => r.log.reduce((s, x) => s + (x['-taxCarryCredit'] ?? 0), 0);
+
+    const base = run({});
+    // Unset is today's behavior exactly, and nothing is credited.
+    for (const junk of [undefined, '', 'withdrawal', 'nonsense', null]) {
+        const j = run({ taxSettlement: junk });
+        assertNear(j.finalNW, base.finalNW, `P108b: taxSettlement ${JSON.stringify(junk)} must not change the plan`, 0.01);
+        assertNear(credit(j), 0, `P108b: taxSettlement ${JSON.stringify(junk)} must credit nothing`, 0.01);
+    }
+
+    // The option pays, and it pays MORE when the draw leaves in January - there is more of the year
+    // left for the deferred tax dollars to earn.
+    const early = run({ forceWithdrawTiming: 'early' });
+    const earlyDec = run({ forceWithdrawTiming: 'early', taxSettlement: 'december' });
+    const late = run({ forceWithdrawTiming: 'late' });
+    const lateDec = run({ forceWithdrawTiming: 'late', taxSettlement: 'december' });
+    assert(earlyDec.finalNW > early.finalNW, 'P108b: december settlement must raise ending wealth');
+    assert(lateDec.finalNW > late.finalNW, 'P108b: it must help from a November draw too, by less');
+    assert((earlyDec.finalNW - early.finalNW) > (lateDec.finalNW - late.finalNW),
+        'P108b: a January draw has more of the year left, so it must gain more than a November one');
+    assert(credit(earlyDec) > credit(lateDec), 'P108b: the credit itself must follow the same order');
+
+    // Spending is untouched. This moves WHEN tax is paid, never how much is spent.
+    assertNear(earlyDec.totals.spend, early.totals.spend, 'P108b: spending must not move', 100);
+    assertNear(lateDec.totals.spend, late.totals.spend, 'P108b: spending must not move (late)', 100);
+
+    // IRMAA is excluded on purpose: Medicare premiums are billed monthly and cannot be deferred to
+    // December, so the credit must be strictly smaller than one built on totalTax would be.
+    const incomeTaxOnly = base.log.reduce((s, x) => s + ((x.totalTax ?? 0) - (x.IRMAA ?? 0)), 0);
+    const withIRMAA = base.log.reduce((s, x) => s + (x.totalTax ?? 0), 0);
+    assert(withIRMAA >= incomeTaxOnly, 'P108b: test setup - totalTax includes IRMAA');
+    assert(credit(earlyDec) < withIRMAA, 'P108b: the credit is growth on tax, never the tax itself');
+});
+
+// ── timingConvThreshold research input (Phase P28jb) ─────────────────────────────────────────
+// The withdrawal-timing rule flips a whole year to Early when the PRIOR year converted more than a
+// bare 1000. This pins the input that replaces that literal, before P28je sweeps it. Three things
+// have to hold or the sweep measures the wrong thing: unset must be bit-identical to today, the
+// endpoints must be reachable, and a malformed value must leave behavior alone rather than model
+// something else silently.
+test('P28jb: timingConvThreshold defaults bit-identically, both endpoints work, junk is ignored', () => {
+    const CONV = {
+        ...BASE, strategy: 'bracket', stratRate: 0.22, convertExcessToRoth: true,
+        IRA1: 1200000, Brokerage: 300000, BrokerageBasis: 150000, Cash: 80000,
+        spendGoal: 70000, growth: 0.05, inflation: 0.02, cpi: 0.02, nYears: 15,
+    };
+    const timings = (over) => simulate({ ...CONV, ...over, computeOC: false }).log.map(r => r.timing);
+    const base = timings({});
+
+    // Unset === the literal it replaced. This is the whole reason the default is 1000.
+    assertSameList(timings({ timingConvThreshold: 1000 }), base,
+        'P28jb: an explicit 1000 must reproduce the unset default exactly');
+
+    // Junk of every shape leaves today's behavior alone. 0 is legal, so a truthiness check here
+    // would silently swallow the low endpoint - that is the bug this shape check exists to avoid.
+    for (const junk of [undefined, null, NaN, Infinity, -1, '500', {}, []]) {
+        assertSameList(timings({ timingConvThreshold: junk }), base,
+            `P28jb: timingConvThreshold ${JSON.stringify(junk)} must be ignored, not honored`);
+    }
+
+    // Low endpoint: any conversion at all flips the next year Early. Reachability has to be tested
+    // on a plan that actually converts BELOW the threshold, and which plans those are is a property
+    // of the strategy: this fixture's Fill Bracket arm converts in 11 years and never less than
+    // $27,365, so 1000 is inert for it and it would pass this check vacuously. Proportional's
+    // conversions on the same fixture are all under $1,000, which is what makes it the arm that can
+    // tell the endpoints apart at all.
+    const propBase = timings({ strategy: 'propwd' });
+    const propZero = timings({ strategy: 'propwd', timingConvThreshold: 0 });
+    assert(propZero.some((t, i) => t !== propBase[i]),
+        'P28jb: threshold 0 should flip years that the 1000 default left Late on a small-conversion plan');
+
+    // High endpoint: above anything the plan converts, years 1+ never flip and match a pinned-late
+    // run. Year 0 is excluded on purpose - it keys off _stratImpliesConversion, not the threshold.
+    const atHuge = timings({ timingConvThreshold: 1e12 }).slice(1);
+    const pinnedLate = timings({ forceWithdrawTiming: 'late' }).slice(1);
+    assertSameList(atHuge, pinnedLate,
+        'P28jb: a threshold above every conversion should equal pinned-late from year 1 on');
+});
+
+// ── Widow-scoped terminal IRA rate (Phase P106g) ─────────────────────────────────────────────
+// The helper reads only `status` and `NominalRate%`, so synthetic rows pin the WINDOW RULE without
+// dragging a whole simulation in. The rule is the part that can silently rot; the arithmetic cannot.
+test('P106g: the terminal IRA rate averages the trailing same-filing-status years, else last 3', () => {
+    const row = (status, rate) => ({ status, 'NominalRate%': rate });
+    const f = core.terminalIRARateFromLog;
+
+    // Four married years then two widow years: only the widow years count, and a 17% married year
+    // must not be blended into an estate a single filer holds.
+    const widowed = f([row('MFJ', 0.17), row('MFJ', 0.17), row('MFJ', 0.20), row('MFJ', 0.21),
+                       row('SGL', 0.35), row('SGL', 0.27)]);
+    assertNear(widowed.rate, 0.31, 'P106g: averages the two SGL years, not the MFJ ones', 1e-9);
+    assertNear(widowed.max, 0.35, 'P106g: max is the worst year in the window', 1e-9);
+    assert(widowed.years === 2 && widowed.basis === 'status', 'P106g: window is the SGL run');
+
+    // A long widowhood averages more years, which is the point of scoping to status.
+    const longWidow = f([row('MFJ', 0.17), ...Array.from({ length: 6 }, () => row('SGL', 0.30))]);
+    assert(longWidow.years === 6 && longWidow.basis === 'status', 'P106g: 6 SGL years all count');
+
+    // Death in the FINAL year leaves one same-status row, which cannot be averaged. Fall back to
+    // the trailing three calendar years rather than report a one-year "average".
+    const diedLast = f([row('MFJ', 0.10), row('MFJ', 0.20), row('MFJ', 0.30), row('SGL', 0.40)]);
+    assertNear(diedLast.rate, 0.30, 'P106g: falls back to the trailing 3 calendar years', 1e-9);
+    assert(diedLast.years === 3 && diedLast.basis === 'trailing3', 'P106g: fallback is flagged');
+
+    // A plan that never changes status uses its whole trailing run, and a single filer's plan is
+    // just that case - there is no transition to scope to.
+    const single = f([row('SGL', 0.22), row('SGL', 0.24), row('SGL', 0.26)]);
+    assertNear(single.rate, 0.24, 'P106g: an all-single plan averages its own years', 1e-9);
+    assert(single.basis === 'status', 'P106g: no transition still counts as a status run');
+
+    // Shorter than the fallback window: take what exists rather than reading off the front.
+    const tiny = f([row('MFJ', 0.12), row('SGL', 0.33)]);
+    assert(tiny.years === 2 && tiny.basis === 'trailing3', 'P106g: a 2-row plan uses both rows');
+});
+
+// ── IRA Goal sensitivity partition (Phase P107) ──────────────────────────────────────────────
+// The UI greys the IRA Goal field for IRA_GOAL_BLIND_STRATEGIES. That is a claim about the ENGINE,
+// so it is pinned here in BOTH directions: a blind strategy must be unmoved by any goal, and a
+// goal-reading strategy must actually move. Without the second half, deleting the goal logic from
+// `bracket` would leave the field enabled on a control that no longer does anything.
+//
+// The goal is swept relative to the STARTING IRA, not in absolute dollars. An absolute grid tests
+// whether the floor happens to bind on one fixture and reported `bracket` as insensitive when it is
+// not - that mistake is what P107a corrected.
+test('P107: IRA_GOAL_BLIND_STRATEGIES are unmoved by the goal, and the others are not', () => {
+    const GOAL_BASE = {
+        ...BASE,
+        IRA1: 900000, Brokerage: 300000, BrokerageBasis: 150000, Cash: 60000,
+        spendGoal: 55000, growth: 0.05, inflation: 0.02, cpi: 0.02,
+        nYears: 12, convertExcessToRoth: true,
+    };
+    const IRA0 = GOAL_BASE.IRA1 + (GOAL_BASE.IRA2 || 0);
+    const finals = (over) => [0.1, 0.5, 1.0, 2.0].map(mult =>
+        simulate({ ...GOAL_BASE, ...over, iraBaseGoal: IRA0 * mult, computeOC: false }).finalNW);
+    const spread = (a) => Math.max(...a) - Math.min(...a);
+
+    const BLIND = {
+        propwd: { strategy: 'propwd' },
+        ordered: { strategy: 'ordered', orderedSeq: 'CIBR' },
+        split: { strategy: 'split', splitWeights: [0, 9, 1, 0] },
+        gk: { strategy: 'gk' },
+    };
+    for (const key of core.IRA_GOAL_BLIND_STRATEGIES) {
+        assert(Object.prototype.hasOwnProperty.call(BLIND, key),
+            `P107: no coverage for blind strategy '${key}' - add it to this test`);
+        assert(spread(finals(BLIND[key])) < 0.01,
+            `P107: '${key}' is listed as ignoring the IRA Goal but its result moved`);
+    }
+
+    // The other side. These read the goal, so the field must stay enabled for them.
+    for (const [label, over] of [
+        ['fixed', { strategy: 'fixed' }],
+        ['bracket', { strategy: 'bracket', stratRate: 0.22 }],
+        ['fixedpct', { strategy: 'fixedpct' }],
+    ]) {
+        assert(!core.IRA_GOAL_BLIND_STRATEGIES.includes(over.strategy),
+            `P107: '${label}' reads the IRA Goal and must not be greyed`);
+        assert(spread(finals(over)) > 1,
+            `P107: '${label}' should respond to the IRA Goal and did not`);
+    }
+});
 
 if (IS_NODE) {
     // Exported BEFORE the run, not after: the runner is async now, so `await` inside it yields to

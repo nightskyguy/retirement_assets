@@ -165,7 +165,7 @@ for (const mode of MODES) {
                 const last = r.log[r.log.length - 1];
                 const atnw = afterTaxNetWorth(r.totals.terminal, r.totals.futureIRARate ?? 0, r.totals.capGainsRate);
                 const defl = (r.finalNW && r.finalNW !== 0)
-                    ? ((last.totalWealth / (last.inflationFactor || 1)) / r.finalNW) : 1;
+                    ? ((last.totalNetWealth / (last.inflationFactor || 1)) / r.finalNW) : 1;
                 rec.w.push(atnw * defl);
                 rec.spend.push(r.totals.spendCurrentDollars ?? 0);
             }

@@ -58,7 +58,7 @@ the Documentation checkbox cannot reach them.
 | URL | what it unlocks |
 |---|---|
 | `?nerdknob=goal` | **Goal-first mode** (`P102`). An alternative planning surface that drives the classic controls rather than replacing them. Experimental, kept deliberately, and not something to stumble into. |
-| `?nerdknob=split` | **Fixed Split** withdrawal family (`P104b3`), **on probation**. Adds the strategy menu entry, its panel, and its sweep rows. |
+| `?nerdknob=split` | **Fixed Split** withdrawal family (`P104b3`), **on probation**. Adds the strategy menu entry, its panel, and its sweep rows. Like Proportional Withdraw, Ordered and Guyton-Klinger, it **never reads the IRA Goal**, so that field greys out when it is selected - a fact that belongs here rather than in the changelog, because a reader without this knob has no way to select the strategy it describes. |
 
 Both still count as the plain knob for everything else, because `has('nerdknob')` is true for them.
 

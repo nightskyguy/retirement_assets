@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1739"></a>
+<a id="11.173b"></a>
 
-## 11.1739
+## 11.173b
 
 **Money you convert now grows for the rest of the year it was converted.**  
 *Behavior change: ending Roth rises in every converting plan.*
@@ -65,7 +65,7 @@ change with it.
 
 **The IRA Goal greys out for the strategies that ignore it.**
 
-Four strategies never read the *IRA Goal* at all: Proportional Withdraw, Ordered, Fixed Split and
+Three strategies never read the *IRA Goal* at all: Proportional Withdraw, Ordered and
 Guyton-Klinger. No value you type there changes their result. The field now greys out and says
 "Not used by this strategy" when one of those is selected, and the number you had is kept rather
 than cleared, so switching away and back does not lose it.

@@ -86,6 +86,19 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
 - *A fixture inherited without being read is its own failure mode*, distinct from a scorer bug: the
   scorer was right about the data it was given. `iraBaseGoal: 0` copied wholesale from another
   harness against a shipped default of $750,000 broke a 186-of-186 claim into 124 counterexamples.
+- *Green node suites and a green badge do not mean the in-page tests passed.* The page-writing
+  suites WRITE to the live page, so they are skipped unless `?runtests` is passed, and the badge
+  reports the tier it ran, not the tier that exists. A removed pair of columns broke an assertion
+  reading `OPT_COLUMN_KEYS.length - 2` while `node optimizer_core.tests.js` stayed at 424/424 and
+  the default badge read green at 838; `?runtests=fast` reported **1 failed of 1029**. After any
+  change to the column set, the tab set, or anything else an in-page suite inspects, load
+  `?runtests=fast` before believing the gate. ("P114 - the in-page suite the badge does not run")
+- *A grep scoped to a file TYPE is scoped to a guess about where the strings live.* Four
+  user-facing strings still named the removed Δ columns after a sweep that covered `*.js` and not
+  `retirement_optimizer.html`, and the user found them. Tooltips, hints and help copy live in the
+  page as often as in the code. Sweep by CONTENT across the tree, then decide what is history and
+  must not be rewritten - a shipped changelog entry stays as written.
+  ("P114 - the sweep that covered only the .js files")
 
 **On engine code**
 
@@ -119,6 +132,11 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
   exactly one collision, which is the only way to know a guard works.
 - *A cache token must move with any engine file the test tier depends on*, and stale HTML is the
   harder half - a warm tab keeps requesting the old token regardless.
+- *Restarting the preview server does not bust the browser cache.* The cache is keyed by URL, not
+  by server process or by socket, so a restarted server hands back the same URLs and the tab keeps
+  its old copies. Two browser findings this session were read off pre-edit files after a restart was
+  taken as a refresh. Move the `?v=` stamp, or hard-reload; a new port and a new process do neither.
+  ("P114 - a restarted server is not a cleared cache")
 
 **On measurement**
 

@@ -4556,3 +4556,47 @@ to the ⓘ.
 **Verified against DISK, not the page.** The hour has not turned so the `?v=` stamp is unchanged and
 the browser still serves the cached `optimizer_ui.js`; fetched the fresh source with a cache-buster
 and re-defined `manageScenarios` from it before measuring. Suites 424/61/22.
+
+## 2026-09-07 - shipped as PR #216, and the planning files brought level with it
+
+Four commits on `worktrees/retirement-optimizer-phases-414fe1`, base `main`, opened as
+**PR #216** (`nightskyguy/retirement_assets`). #211 is superseded by it. 16 files, +3,335 / -155,
+v11.1779, suites **424 / 61 / 22** with `TestTiers.EXPECTED` and `.githooks/README.md` reconciled,
+pre-commit hook green on every commit.
+
+| commit | what it carries |
+|---|---|
+| `dc04341` | research: `WITHDRAWAL_TIMING_TRIGGER.md` and three harnesses |
+| `8a07a6b` | `P108e` growth-credit ordering, `P28jk` conversion month, `P113` saved-plan metadata |
+| `c0de4cd` | planning: P110-P113 opened, `P28j` reframed, four retractions recorded |
+| `2e7e2c8` | `P114`: the Optimizer table and the Saved Scenarios list |
+
+**Three features share `8a07a6b` deliberately.** They overlap in `optimizer_core.js`,
+`optimizer_core.tests.js` and `retirement_optimizer.html`, and any intermediate commit carrying code
+without the matching `TestTiers.EXPECTED` bump fails the pre-commit hook. The body is sectioned by
+phase so the audit trail survives the merge.
+
+### Planning files updated to match
+
+- **`P114` OPENED and marked SHIPPED** in `task_plan.md` - it existed only inside a progress entry
+  until now, which is exactly the shape the "a prose deferral is invisible" rule names. Two open
+  items: `P114a` (`_dNW`/`_dTax` are computed and no longer read by any display path) and **`P114b`
+  (the ⇌ row set was EMPTY in every household tried, so `extraConv` was verified by INJECTING
+  `_optConvAmt`)** - `convOptRowsAdded: 0` on both the page defaults and the canonical household, so
+  the column has never been seen carrying a real number. `P112`'s bank is what unblocks it.
+- **`P113` cross-referenced to the ⓘ**, since its own text describes an Info button that `P114`
+  removed, and a reader following the phase would look for a control that is not there.
+- **Header and the `P28j` NOW row** rewritten to PR #216 and to `jg`/`jh`/`ji`/`jk` SHIPPED with `jf`
+  measured and not acted on. The LINE-30 BOUNDARY marker was re-checked on line 30 after every
+  edit - all four changes were in-place or below it.
+- **Three rules added to `findings.md`**, each one a defect from this session: the page-writing
+  suites are skipped unless `?runtests` is passed, so a green badge is not a green tier; a grep
+  scoped to a file TYPE is scoped to a guess about where the strings live; and restarting the
+  preview server does not clear a URL-keyed cache.
+
+### What is deliberately NOT done
+
+`P28jf` is measured and the timing trigger is unchanged - acting on it would be a default behavior
+change and the case for it was withdrawn. `P104c`'s phased model is specified with a zero-engine-
+change recipe and not built. `P112`'s bank is designed and not seeded, which is what `P114b`,
+`P28jn` and `P106f` are all waiting on.

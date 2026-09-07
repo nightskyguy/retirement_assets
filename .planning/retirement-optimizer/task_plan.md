@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-09-03**, v11.1718 in **PR #211** (open, base `main`; #209/#210 merged). Suites **411 / 61 / 22**, `TestTiers.EXPECTED` pinned to match.
+**As of 2026-09-07**, v11.1779 in **PR #216** (open, base `main`; #211 superseded by it). Suites **424 / 61 / 22**, `TestTiers.EXPECTED` pinned to match. Four commits: research, `P108e`+`P28jk`+`P113`, planning, Optimizer table.
 **Planning files pruned 2026-09-02.** Every completed phase keeps a one-line stub below; the bodies are in `.planning/task_completed.md`. Phases nobody is working on are in `task_parked.md`. Findings that are no longer live - fixed defects, superseded claims, the pre-`Pnn` legacy block - are in `findings_archive.md`, and the rules they earned sit at the top of `findings.md` under "Rules earned the hard way".
 The ID migration table is still below. The Open Task Index and the second recency trail were deleted as stale: **the NOW table here is the only priority list.**
 Citations into `findings.md` are by HEADING, never by line number - about half the old line cites were already dead. Keep it that way.
@@ -18,7 +18,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P35 | **`P104b3` SHIPPED 09-03 v11.1719: Fixed Split, 4 vectors, NERDKNOB-GATED. Goldens untouched (gate off by default). MC grid deliberately empty** | `P104c` / un-gate |
 | **O1** | P36 | round 2 measures against the `P103a` ceiling, not rank-among-arms | `P36b` |
 | **O1** | P34 | NOT a P103 prerequisite (a-d are node harnesses); still the whole slow-machine story | `P34a` |
-| **O1** | P28j | `jg`/`jh`/`ji` SHIPPED - conversion leg fixed and growth-neutral. Left: the trigger, which moves the SPENDING draw and whose justification `jg` removed | `P28jf` |
+| **O1** | P28j | `jg`/`jh`/`ji`/`jk` SHIPPED. `jf` MEASURED and NOT acted on - the trigger is unchanged, and its removal case was withdrawn | `P28jn` / `P28jo` |
 
 **Live carry-overs from finished phases** - the rest of what those phases did is in their stubs below:
 - `P85` RE-RUN: converting earlier still wins 353 of 499, but **the RMD claim BROKE** - 124 counterexamples, all bracket strategies at a live IRA Goal. `P72` is still pending.
@@ -26,7 +26,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 - `P91` was on `main` too - never a regression from this branch.
 - `P91d` is the one open item left inside a phase marked DONE: the Monte Carlo controls are in neither the saved scenario nor the share URL.
 
-User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. 2026-08-31: P98 opened and closed - an in-page test read the Limit menu before `DOMContentLoaded` built it. **2026-08-31 CLEANUP (user):** P35 to **O1** (cannot be "ideal" until P75/P36 land), leaving P87 the sole O0; 34 stale boxes closed under phases already shipped; **29 never-started phases moved to `.planning/retirement-optimizer/task_parked.md`** (nothing deleted); P28f/g/h confirmed shipped v11.162B; the 40/60 closed for good in **`P30i`**. **P101 opened** (2026-08-31, user): worked examples served from `examples/` and loadable by name, with notes - O2. **P102 opened and Stage B SHIPPED** (2026-09-01, user): goal-first mode, an ALTERNATIVE nerdknob-gated surface that drives the classic controls and never replaces them; `P30i` closed inside it. **P103 opened, O0** (2026-09-01, user: "reorder as you proposed"): the ceiling then the rules - `P75` and parked `P5` merged into it, `P100` to O1 as SELECTION not RESULT, `P102` Stages C/D deferred behind `P103d`. **`P103a` DONE same day**: oracle re-run on `1b7b366`, median gap 4.35% -> 1.58%, dominant lever flipped to the withdrawal split, `P51d` closed at <=0.013%. Full index next.
+User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. 2026-08-31: P98 opened and closed - an in-page test read the Limit menu before `DOMContentLoaded` built it. **2026-08-31 CLEANUP (user):** P35 to **O1** (cannot be "ideal" until P75/P36 land), leaving P87 the sole O0; 34 stale boxes closed under phases already shipped; **29 never-started phases moved to `.planning/retirement-optimizer/task_parked.md`** (nothing deleted); P28f/g/h confirmed shipped v11.162B; the 40/60 closed for good in **`P30i`**. **P101 opened** (2026-08-31, user): worked examples served from `examples/` and loadable by name, with notes - O2. **P102 opened and Stage B SHIPPED** (2026-09-01, user): goal-first mode, an ALTERNATIVE nerdknob-gated surface that drives the classic controls and never replaces them; `P30i` closed inside it. **P103 opened, O0** (2026-09-01, user: "reorder as you proposed"): the ceiling then the rules - `P75` and parked `P5` merged into it, `P100` to O1 as SELECTION not RESULT, `P102` Stages C/D deferred behind `P103d`. **`P103a` DONE same day**: oracle re-run on `1b7b366`, median gap 4.35% -> 1.58%, dominant lever flipped to the withdrawal split, `P51d` closed at <=0.013%. **P113 opened and SHIPPED** (2026-09-06, user) v11.1769: saved plans carry notes, a statistics snapshot and the `appVersion` that produced them; Load and Import unified, which fixed an unversioned import that Load would then refuse forever. **P114 opened and SHIPPED** (2026-09-07, user) v11.1779: the Optimizer table drops both Δ columns, gains **Extra Conv**, keeps a pinned compare row across an objective change and hoists it, and `?tab=optimizer` runs the sweep. Full index next.
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
@@ -250,6 +250,62 @@ earlier still wins 353/499 but the RMD reasoning behind it broke, 124 counterexa
 **Out of scope for the first pass:** a flat $100k/yr conversion is a candidate ARM, not a strategy;
 shaped policies belong in the grid. No product changes.
 
+## P114: the Optimizer table and the Saved Scenarios list  *(NEW 2026-09-07, user-raised, SHIPPED v11.1779)*
+
+Seven changes, all user-reported, all shipped in one pass.
+
+**Δ columns REMOVED.** `ΔEnd Wealth` and `ΔTax` are gone from the column list, `OPT_COLUMN_KEYS`,
+the keep-set special case, the filter and the baseline row's zero case. **"Show as Differences"
+already turns every comparable column into a difference from the same reference row**, so a pair of
+columns named for a delta was a narrower second copy of it that only ever covered two metrics.
+Pinning a row with ⚖ now steers what Show as Differences measures against. `_dNW`/`_dTax` still
+compute and are commented as console/harness conveniences rather than left looking live.
+
+**`extraConv` column ADDED**, reading `_optConvAmt` - already on every ⇌ row and the current-plan
+row, and previously read only when LOADING one. The ⇌ marker said a row converted more without ever
+saying how much, so the only way to find out was to load it, which replaces the plan you were
+comparing against. On `maxroth`/`conveffect`/`earliestbe` and All Columns, with the amount and any
+stop year on the Strategy cell's hover regardless.
+
+**The pinned compare row survives an objective change and is hoisted** to a third sticky row under
+the ⚓ baseline and 📍 current plan, at a MEASURED offset (30 / 60 / 87px), because a plan missing
+either row above would otherwise gap or overlap. It stays in the ranked body too, like the
+current-plan row and unlike the baseline, so its Rank is still readable.
+**The reported unpin was never reproduced** - across programmatic `setOptObjective`, the real
+`<select>` change, and with and without a pin, the row survived in state, in `deltaReferenceRow()`
+and in the banner. `resolveCompareRow` now keeps the pinned row by IDENTITY when it is still in
+`results`, which is a real improvement regardless: the selection match is NOT unique, since a ⇌ row
+and the plain row it was built from share a `_selection` and only `_isCurrentPlan` separates them,
+so `find()` could return a different row than the one pinned.
+
+**Selecting the ⚓ baseline now stops comparing.** `toggleCompareRow` only cleared when the clicked
+row was the CURRENT reference, so pinning the baseline explicitly produced a banner claiming every
+column was measured "from this row instead of from the ⚓ baseline" while being the baseline.
+
+**`?tab=optimizer` now runs the sweep.** The tab button is `{runOptimizer(); showTab('tab-opt')}` but
+`applyTabFromUrl` called only `showTab` plus a Monte Carlo hook, so a URL arrival opened an empty
+table and the only way to fill it was to click the tab you were already on. That function's own
+comment said Monte Carlo "needs its own activation hook, the same one its tab button calls".
+
+**Saved Scenarios list fits its modal.** Four buttons plus a full timestamp plus a release stamp made
+the table wider than the modal. Info folded into an **ⓘ** beside the name - it is the only one of the
+four that does not DO anything to the plan - with the handler on the `<td>` so any part of the Name
+or Saved cell opens it. Seconds dropped from the timestamp; Actions cells and header both
+right-aligned. Measured 585px inside a 625px modal, no sideways scroll.
+
+### Items
+
+- [ ] **P114a - `_dNW`/`_dTax` are now unread by any display path.** Kept as console conveniences and
+      commented as such. Decide whether they earn their computation in `recomputeDeltasAgainst` at all,
+      or whether `deltaCellHtml` should be the single source. Not urgent; it is four assignments.
+- [ ] **P114b - the ⇌ row set was EMPTY in every household tried**, so `extraConv` was verified by
+      injecting `_optConvAmt` rather than by seeing a real one. `convOptRowsAdded: 0` on both the page
+      defaults and the canonical household. A household that actually produces ⇌ rows is wanted -
+      which is `P112`'s bank - before the column's real-world formatting is trusted.
+- **Related:** `P109b` (the summary bar's moving reference is a DIFFERENT comparison from this one and
+  is still unpinned), `P112` (the bank that would give `P114b` a household).
+
+
 ## P113: saved plans carry their notes and their numbers  *(NEW 2026-09-06, user-raised, SHIPPED v11.1769)*
 
 *(user: "what I think is missing from the Export content are some useful metrics... a Notes field to
@@ -298,12 +354,18 @@ first match anywhere; and the scenario name went into `innerHTML` through `escap
 escapes quotes but not `<` or `&` - notes are free user text on the same path, so a real
 `escapeHtml` was required rather than optional.
 
+**The Info BUTTON no longer exists** - `P114` folded it into an **ⓘ** beside the saved name, with
+the whole Name cell and the whole Saved cell as the click target, because four action buttons plus a
+timestamp plus a release stamp made the list wider than its own modal. The panel it opens is
+unchanged. Anything here that says "the Info button" means that ⓘ.
+
 - [ ] **P113a - the Info panel is per-plan; a compare-two-plans view is not built.** The `P112` bank
       will want it once there are enough entries to choose between.
 - [ ] **P113b - `summary` is captured at SAVE only.** A plan whose inputs are edited after loading
       keeps the old snapshot until it is saved again, which is correct but unsignalled.
 - **Related:** `P112` (the bank this exists to serve), `P101` (serving the same JSON to users by
-  name), `P109b` (the summary bar's moving reference is a different comparison from this one).
+  name), `P109b` (the summary bar's moving reference is a different comparison from this one),
+  `P114` (the ⓘ that replaced the Info button).
 
 
 ## P112: a bank of plans to measure against  *(NEW 2026-09-06, user-raised)*

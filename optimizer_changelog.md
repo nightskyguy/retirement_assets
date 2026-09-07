@@ -17,12 +17,26 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.173b"></a>
+<a id="11.176a"></a>
 
-## 11.173b
+## 11.176a
 
 **Money you convert now grows for the rest of the year it was converted.**  
 *Behavior change: ending Roth rises in every converting plan.*
+
+**Saved plans now remember what they are and what they produced.** Saving takes an optional note, and
+records the plan's key statistics along with the release you were on. In Load, Delete, Export, a new
+**Info** button shows all of that before you load anything, so you can tell one saved plan from
+another without opening it. Import shows the same panel for a file before it is applied.
+
+When you load a plan, the tool compares the numbers it recorded against the ones it produces now. If
+they differ it says so and names the release the plan was saved under, which is what the note at the
+end of this entry is about. **Save &amp; Export** does both steps at once, and a plan loaded or
+imported now offers its own name back the next time you save or export it.
+
+Two smaller fixes came with it. An exported file whose name contained a colon, which is what an
+unnamed plan gets, could not be saved on Windows. And a scenario file with no version stamp could be
+imported but never loaded again afterwards; those files now import and load like any other.
 
 A Roth conversion was credited to the account only after the year's growth had already been applied, so the converted amount
 earned nothing in the year you converted it. Surplus banked to Cash or Brokerage instead was credited before growth and did

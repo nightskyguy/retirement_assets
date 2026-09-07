@@ -1143,6 +1143,7 @@ function buildSimYearLogRecord(p) {
         // with the withdrawal. 0 unless taxSettlement is 'december'. Hidden: a diagnostic for
         // harnesses and for anyone checking the option did what it says.
         '-taxCarryCredit': p.taxCarryCredit ?? 0,
+        '-convTimingShift': p.convTimingShift ?? 0,
         'cashDividends': p.taxableDividends,
         'cashInterest': p.taxableInterest,
         // Taxes
@@ -3802,6 +3803,26 @@ function growAndSettle(sim, yr) {
     // Credited to the accounts the draw actually came from, in proportion, each at its own rate: the
     // tax rode out with those dollars, so it is those balances that were short. A year with no
     // voluntary withdrawal has nothing to credit and correctly gets nothing.
+    // P108e. THE CREDIT IS APPLIED AFTER THE POST-WITHDRAWAL GROWTH, and the order is the whole
+    // point. It used to run above `applyGrowth`, so the credited dollars earned `postMonths` of
+    // growth on top of BEING that growth - an over-credit of `T * r^2 * (postMonths/12)^2`, which is
+    // 0.5% of the credit in a Late year and 5.5% in an Early one (`.test_harnesses/growthcredit_check.js`).
+    //
+    // The arithmetic the credit is supposed to reproduce: hold `T` in the account through the
+    // post-withdrawal growth and pay it on December 31.
+    //     December 31 = (bal + T)*(1 + r*post/12) - T = bal*(1 + r*post/12) + T*r*post/12
+    // So the exact credit is `T*r*post/12` added to the ALREADY-GROWN balance. Adding it before the
+    // growth call instead gives `T*(r*post/12)*(1 + r*post/12)`, which is the same term multiplied
+    // by the growth factor a second time.
+    //
+    // Credited to the accounts the draw actually came from, in proportion, each at its own rate: the
+    // tax rode out with those dollars, so it is those balances that were short. A year with no
+    // voluntary withdrawal has nothing to credit and correctly gets nothing.
+
+    // Post-withdrawal growth (Phase 12): remaining postMonths after withdrawal exits portfolio.
+    yr.gains = applyGrowth(balance, yr.growthRates, yr.postMonths);
+    inspectForErrors(yr.growthRates, balance, yr.gains);
+
     if (inputs.taxSettlement === 'december' && yr.postMonths > 0) {
         const _incomeTax = Math.max(0, (yr.tax?.totalTax ?? 0));
         const _nw = yr.netWithdrawals || {};
@@ -3818,15 +3839,88 @@ function growAndSettle(sim, yr) {
                 balance[k] = (balance[k] ?? 0) + add;
                 // Brokerage basis rises with it: this is money that was never withdrawn, not a gain.
                 if (k === 'Brokerage') balance.BrokerageBasis = (balance.BrokerageBasis ?? 0) + add;
+                // The credit IS growth those dollars earned, so it belongs in the gains the display
+                // columns read. Sitting below applyGrowth it is no longer swept up by that call, and
+                // leaving it out would under-report brokerageG / cashG / rothG by exactly the credit.
+                yr.gains[k] = (yr.gains[k] ?? 0) + add;
                 _credited += add;
             }
             yr.taxCarryCredit = _credited;   // surfaced as the hidden '-taxCarryCredit' column
         }
     }
 
-    // Post-withdrawal growth (Phase 12): remaining postMonths after withdrawal exits portfolio.
-    yr.gains = applyGrowth(balance, yr.growthRates, yr.postMonths);
-    inspectForErrors(yr.growthRates, balance, yr.gains);
+    // P28jk. CONVERSION MONTH, independent of the spending-withdrawal month.
+    //
+    // THE COUPLING THIS REMOVES. A plan year has three legs and until now only two were separable:
+    // the spending withdrawal leaves at `preMonths` (forceWithdrawTiming), the income tax leaves
+    // then too or in December (taxSettlement, P108b) - and the conversion was welded to the
+    // withdrawal, because it is credited to the Roth at that same point and grows `postMonths`.
+    // So "convert in January, take spending in November" was not a state this engine could enter,
+    // which is why P28jf could measure the automatic TRIGGER but never the idea behind it.
+    //
+    // IMPLEMENTED AS A GROWTH TRANSFER, and the direction is the whole content. Converted dollars
+    // that move at month m_c instead of month `preMonths` spend `(preMonths - m_c)` more months in
+    // the Roth and that many fewer in the IRA. Under simple proportional growth that is exactly
+    //     shift_i = X_i * rate_i * (preMonths - m_c) / 12
+    // credited to Roth_i at the ROTH's rate and debited from IRA_i at the IRA's rate. Deterministically
+    // those rates are equal so the household total is unchanged - but the SPLIT moves, and the
+    // December 31 IRA balance is next year's RMD basis (P84l), which is the entire mechanism. Under
+    // Monte Carlo the two rates differ and the total moves as well; that is P28ji's effect, and using
+    // each account's own rate is what makes this correct there rather than only here.
+    //
+    // APPLIED AFTER `applyGrowth`, for the reason P108e had to be fixed for: this shift IS growth, so
+    // adding it before the growth call would grow it a second time.
+    //
+    // WHAT IT DOES NOT DO, stated because it is the honest limit. The conversion AMOUNT is still
+    // whatever the strategy decided at the withdrawal point. Only its growth is relocated. For a
+    // ceiling family that is exact - `bracket` sizes the draw from income, so the month it is decided
+    // in does not change it. For a family that sizes off the BALANCE (`fixedpct`, `fixed`, or
+    // `bracket` once the IRA Target binds) a genuinely earlier conversion would have changed the
+    // balance the sizing read, and this does not model that. Measured residual against a true
+    // three-segment year: the Roth leg is exact and the IRA leg is off by `(10g^2/144)*(X - a*B)`,
+    // about 2 bp of balance at 6% (.test_harnesses/growthcredit_check.js).
+    //
+    // Unset means today's behavior, bit for bit: the shift is zero when m_c === preMonths.
+    // THE RMD IS FIRST MONEY OUT, AND IT CONSTRAINS THIS (user, 2026-09-06). In a year an RMD is
+    // due, the first dollars distributed from the IRA are deemed to satisfy it, and an RMD may not
+    // be converted or rolled over. So a conversion CANNOT precede the RMD - and because the RMD is
+    // taken at `preMonths`, the conversion month is floored at `preMonths` in any year an RMD is
+    // actually distributed. The first version of this shipped without the floor and made
+    // "January conversion, November RMD" reachable, which is a prohibited transaction, not a plan.
+    // It measured as dominant, which is exactly how a missing legal constraint presents.
+    //
+    // Before RMD age there is no such rule and the conversion may be moved freely, which is where
+    // whatever benefit survives now comes from.
+    const _ct = inputs.conversionTiming;
+    if ((_ct === 'early' || _ct === 'late') && (yr.surplus.Roth1 > 0 || yr.surplus.Roth2 > 0)) {
+        const _preMonths = 12 - yr.postMonths;
+        const _rmdDue = (yr.totalRMD ?? 0) > 0;
+        // Floored at the RMD month when one is due; free otherwise.
+        const _mc = Math.max(_ct === 'early' ? 1 : 11, _rmdDue ? _preMonths : 0);
+        const _months = _preMonths - _mc;
+        if (_rmdDue && _months > 0) {
+            throw new Error('conversionTiming: RMD-year floor failed - a conversion cannot precede the RMD');
+        }
+        if (_months !== 0) {
+            let _shifted = 0;
+            for (const i of [1, 2]) {
+                const X = yr.surplus['Roth' + i] ?? 0;
+                if (X <= 0) continue;
+                const toRoth = X * (yr.growthRates['Roth' + i] ?? 0) * _months / 12;
+                const fromIRA = X * (yr.growthRates['IRA' + i] ?? 0) * _months / 12;
+                // Never drive a drained IRA negative; a balance that cannot give the growth back
+                // simply gives what it has, and the asymmetry is reported rather than hidden.
+                const take = Math.min(fromIRA, balance['IRA' + i] ?? 0);
+                balance['Roth' + i] = (balance['Roth' + i] ?? 0) + toRoth;
+                balance['IRA' + i] = (balance['IRA' + i] ?? 0) - take;
+                yr.gains['Roth' + i] = (yr.gains['Roth' + i] ?? 0) + toRoth;
+                yr.gains['IRA' + i] = (yr.gains['IRA' + i] ?? 0) - take;
+                _shifted += toRoth;
+            }
+            yr.convTimingShift = _shifted;   // surfaced as the hidden '-convTimingShift' column
+        }
+    }
+
     // Merge pre-growth gains so annual display stats (brokerageG / cashG / rothG) reflect full year.
     for (const k in yr.preGains) yr.gains[k] = (yr.gains[k] ?? 0) + (yr.preGains[k] ?? 0);
 
@@ -3945,6 +4039,7 @@ function logYear(sim, yr) {
         surplus: yr.surplus, totalRMD: yr.totalRMD, qcd1: yr.qcd1, qcd2: yr.qcd2, taxableDividends: yr.taxableDividends, taxableInterest: yr.taxableInterest,
         netWithdrawals: yr.netWithdrawals, rmd1: yr.rmd1, rmd2: yr.rmd2, totalConverted: yr.totalConverted, tax: yr.tax, IRMAA: yr.IRMAA, IRMAATier: yr.IRMAATier, medicareBase: yr.medicareBase, cpiRate: sim.cpiRate,
         taxCarryCredit: yr.taxCarryCredit,
+        convTimingShift: yr.convTimingShift,
         iraVolSpend1: yr.iraVolSpend1, iraVolSpend2: yr.iraVolSpend2, iraConvGross1: yr.iraConvGross1, iraConvGross2: yr.iraConvGross2,
         totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, rateBasis: yr.rateBasis, volIRAwd: yr.volIRAwd, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
         balance: balance, nominalTaxRate: sim.nominalTaxRate, totalNetWealth: yr.totalNetWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
@@ -6150,11 +6245,159 @@ function compactNum(numStr) {
 }
 
 // ============================================================================
+// SAVED-PLAN SUMMARY - what a scenario records about the run that produced it
+// ============================================================================
+//
+// A saved plan used to record its inputs and nothing else, so it could never report that it had gone
+// stale. The changelog for 11.1766 had to warn in prose that "a saved plan or shared link will report
+// a different ending Roth and End Wealth than it did before this release", because the tool had no
+// way to notice. These four functions are the pure half of fixing that; the DOM half lives in
+// optimizer_ui.js, per the no-DOM contract at the top of this file.
+//
+// summarizeRun exists because there was NO function returning the summary numbers as data. updateStats
+// computed them as locals and wrote them straight into innerText, so the tiles and anything else that
+// wanted the same figures were two derivations that could drift. updateStats now consumes this.
+
+// The fields a saved summary carries, their labels, and how far each may move before it counts as a
+// difference. The table is the single definition: summarizeRun fills it, diffSummaries walks it, and
+// the Info panel labels from it, so a field cannot be recorded and then not compared.
+const SUMMARY_FIELDS = Object.freeze([
+    { key: 'yearsFunded', label: 'Funded Yrs',       eps: 0.5,    kind: 'count' },
+    { key: 'taxRate',     label: 'Tax Rate',         eps: 0.0001, kind: 'rate'  },
+    { key: 'tax',         label: 'All Taxes',        eps: 1,      kind: 'money' },
+    { key: 'rmd',         label: 'All RMDs',         eps: 1,      kind: 'money' },
+    { key: 'advisorFees', label: 'Advisor Fees',     eps: 1,      kind: 'money' },
+    { key: 'spend',       label: 'Spendable',        eps: 1,      kind: 'money' },
+    { key: 'endWealth',   label: 'End Wealth',       eps: 1,      kind: 'money' },
+    { key: 'convBEYear',  label: 'Break Even',       eps: 0.5,    kind: 'year'  },
+    { key: 'avgWdRate',   label: 'Withdrawal Rate',  eps: 0.0001, kind: 'rate'  },
+]);
+
+// Terminal balances are compared too, because "does the IRA survive to the end" is the fact that
+// decides what a saved plan can and cannot be used to measure. A household that drains its IRA to
+// zero cannot answer an ending-IRA question, and the Info panel should be able to say so.
+const SUMMARY_TERMINAL_FIELDS = Object.freeze([
+    { key: 'ira',       label: 'Ending IRA',       eps: 1, kind: 'money' },
+    { key: 'roth',      label: 'Ending Roth',      eps: 1, kind: 'money' },
+    { key: 'brokerage', label: 'Ending Brokerage', eps: 1, kind: 'money' },
+    { key: 'cash',      label: 'Ending Cash',      eps: 1, kind: 'money' },
+]);
+
+/**
+ * Snapshot the numbers a run produced, as plain data.
+ *
+ * `finalNW` and `finalNWCurrentDollars` are arguments rather than totals fields because simulate()
+ * does not return the current-dollar twin - the UI derives it from the last log row's own
+ * inflationFactor (optimizer_ui.js), and optimizer rows carry their own copy.
+ *
+ * `meta` carries what the engine does not know: which strategy and objective were in force. Optional,
+ * so a harness can call this with two arguments and still get every number.
+ */
+function summarizeRun(totals, finalNW, finalNWCurrentDollars, meta = {}) {
+    if (!totals) return null;
+    const num = v => (Number.isFinite(v) ? v : null);
+    return {
+        tiles: {
+            yearsFunded:              num(totals.yearsfunded),
+            yearsTested:              num(totals.yearstested),
+            success:                  !!totals.success,
+            // The displayed rate is a nominal ratio and is deliberately NOT switched to current
+            // dollars anywhere, so there is no twin to record.
+            taxRate:                  totals.gross > 0 ? totals.tax / totals.gross : null,
+            tax:                      num(totals.tax),
+            taxCurrentDollars:        num(totals.taxCurrentDollars),
+            rmd:                      num(totals.rmd),
+            rmdCurrentDollars:        num(totals.rmdCurrentDollars),
+            advisorFees:              num(totals.advisorFees),
+            advisorFeesCurrentDollars: num(totals.advisorFeesCurrentDollars),
+            spend:                    num(totals.spend),
+            spendCurrentDollars:      num(totals.spendCurrentDollars),
+            endWealth:                num(finalNW),
+            endWealthCurrentDollars:  num(finalNWCurrentDollars ?? finalNW),
+            convBEYear:               num(totals.convBEYear),
+            avgWdRate:                num(totals.avgWdRate),
+        },
+        terminal: totals.terminal ? { ...totals.terminal } : null,
+        strategy:  meta.strategy  ?? null,
+        objective: meta.objective ?? null,
+    };
+}
+
+/**
+ * Compare a recorded summary against a fresh one. Returns only the fields that actually moved.
+ *
+ * Returns [] when there is nothing to compare - a plan saved before summaries existed, or one saved
+ * without ever being run. An empty result means "no difference to report", never "not checked"; the
+ * caller distinguishes those by testing whether `saved` exists at all.
+ */
+function diffSummaries(saved, fresh) {
+    if (!saved || !fresh) return [];
+    const out = [];
+    const walk = (fields, aObj, bObj) => {
+        if (!aObj || !bObj) return;
+        for (const f of fields) {
+            const was = aObj[f.key], now = bObj[f.key];
+            if (!Number.isFinite(was) || !Number.isFinite(now)) continue;
+            const delta = now - was;
+            if (Math.abs(delta) < f.eps) continue;
+            out.push({
+                key: f.key, label: f.label, kind: f.kind, was, now, delta,
+                pct: was !== 0 ? delta / Math.abs(was) : null,
+            });
+        }
+    };
+    walk(SUMMARY_FIELDS, saved.tiles, fresh.tiles);
+    walk(SUMMARY_TERMINAL_FIELDS, saved.terminal, fresh.terminal);
+    return out;
+}
+
+// Windows rejects < > : " / \ | ? * and control characters in a filename, and also trailing dots or
+// spaces. The blank-name path produces a timestamp containing colons, so the unsanitised
+// `${name}.json` this replaces could not be saved on Windows at all.
+const _WIN_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
+/** Strip a trailing extension. `.replace('.json','')` removed the FIRST match anywhere, so
+ *  `my.json.backup.json` became `my.backup.json`. This removes only a real trailing extension. */
+function stripFileExtension(name) {
+    const s = String(name ?? '');
+    return s.replace(/\.[A-Za-z0-9]{1,8}$/, '');
+}
+
+function safeExportFilename(name, ext = '.json') {
+    // Built without regex escapes on purpose: an earlier version wrote LITERAL control bytes into
+    // this source instead of the escape sequence, which made the class a control-character range
+    // and turned the file binary to grep. Spaces are legal on Windows and are deliberately kept.
+    let s = Array.from(String(name ?? '').trim())
+        .filter(ch => ch.charCodeAt(0) >= 32)          // drop control characters
+        .join('')
+        .replace(/[<>:"/\\|?*]/g, '-')                 // illegal on Windows
+        .replace(/[. ]+$/, '')                        // trailing dot or space
+        .replace(/-{2,}/g, '-');
+    if (!s || _WIN_RESERVED.test(s)) s = s ? s + '-plan' : 'retirement-plan';
+    if (s.length > 120) s = s.slice(0, 120);
+    return s + ext;
+}
+
+/**
+ * The two names a plan carries, and which one to offer where.
+ *
+ * A plan has a NAME (its key in the browser's store) and, if it came from a file, a FILE NAME. They
+ * are different things and neither was remembered: Import used the filename as a prompt default and
+ * then discarded it. Preference order is the plan's own name, then the file it arrived in.
+ */
+function planNameDefaults({ lastPlanName, lastFileName } = {}) {
+    const plan = String(lastPlanName ?? '').trim();
+    const file = stripFileExtension(String(lastFileName ?? '').trim());
+    const saveName = plan || file || '';
+    return { saveName, exportName: saveName };
+}
+
+// ============================================================================
 // INITIALIZATION - Call on page load
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -6162,7 +6405,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

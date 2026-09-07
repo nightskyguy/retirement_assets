@@ -62,6 +62,11 @@ const core = IS_NODE ? require('./optimizer_core.js') : window.OptimizerCore;
 if (IS_NODE) require('./displayhelpers.js');
 
 const simulate = core.simulate;
+const summarizeRun = core.summarizeRun;
+const diffSummaries = core.diffSummaries;
+const safeExportFilename = core.safeExportFilename;
+const stripFileExtension = core.stripFileExtension;
+const planNameDefaults = core.planNameDefaults;
 const compileScheduleFromRun = core.compileScheduleFromRun;
 const scheduleOptionsForRun = core.scheduleOptionsForRun;
 const ADVISOR_FEE_PCT_MAX = core.ADVISOR_FEE_PCT_MAX;
@@ -7790,6 +7795,207 @@ test('P108b: december tax settlement is opt-in, raises wealth, and leaves spendi
     const withIRMAA = base.log.reduce((s, x) => s + (x.totalTax ?? 0), 0);
     assert(withIRMAA >= incomeTaxOnly, 'P108b: test setup - totalTax includes IRMAA');
     assert(credit(earlyDec) < withIRMAA, 'P108b: the credit is growth on tax, never the tax itself');
+});
+
+// The credit must land AFTER the post-withdrawal growth, or the credited dollars earn that growth on
+// top of BEING it. Until P108e the block ran above `applyGrowth`, which over-credited by
+// `T * r^2 * (postMonths/12)^2` - 0.6% of the reported benefit in a November year and 6.97% in a
+// January one on the canonical household.
+//
+// Pinned on YEAR 0, where the two runs are identical up to the credit itself, so the balance delta
+// IS the credit and nothing else. Later years diverge through feedback and cannot pin placement.
+// A cent of tolerance: the pre-fix form misses by 0.5% to 5.5% of the credit, so this fails loudly
+// against it rather than drifting.
+test('P108e: the december credit lands after growth, so it is never grown a second time', () => {
+    const TAXY = {
+        ...BASE, strategy: 'bracket', stratRate: 0.22, convertExcessToRoth: true,
+        IRA1: 1400000, Brokerage: 300000, BrokerageBasis: 150000, Cash: 90000,
+        spendGoal: 80000, growth: 0.06, inflation: 0.02, cpi: 0.02, nYears: 15,
+    };
+    const run = (over) => simulate({ ...TAXY, ...over, computeOC: false });
+    const bal0 = (r) => {
+        const e = r.log[0];
+        return (e.IRA1 ?? 0) + (e.IRA2 ?? 0) + (e.Brokerage ?? 0) +
+               (e.Cash ?? 0) + (e.Roth1 ?? 0) + (e.Roth2 ?? 0);
+    };
+    for (const fwt of ['early', 'late']) {
+        const off = run({ forceWithdrawTiming: fwt });
+        const dec = run({ forceWithdrawTiming: fwt, taxSettlement: 'december' });
+        const credit0 = dec.log[0]['-taxCarryCredit'] ?? 0;
+        assert(credit0 > 0, `P108e: test setup - ${fwt} must actually credit something in year 0`);
+        assertNear(bal0(dec) - bal0(off), credit0,
+            `P108e: ${fwt} year-0 balance must rise by exactly the reported credit, not by the ` +
+            'credit times another growth factor', 0.01);
+    }
+});
+
+// ── Conversion month, independent of the spending withdrawal (Phase P28jk) ───────────────────
+// Until this, one `preMonths` served both legs, so "convert in January, take spending in November"
+// was not a state the engine could enter. The shift is a growth transfer: converted dollars that
+// move `n` months earlier spend `n` more months in the Roth and `n` fewer in the IRA.
+//
+// The two assertions that matter are opposites and both are here on purpose. Deterministically the
+// household TOTAL cannot move - IRA and Roth carry the same rate - but the SPLIT must, because the
+// December 31 IRA balance is next year's RMD basis. Reading the first as though it implied the
+// second is exactly the error P28jf's write-up made.
+test('P28jk: the conversion month is separable from the spending withdrawal month', () => {
+    // Deliberately PRE-RMD: born 1962, so 64 in 2026 and RMDs do not start until 75. The forward
+    // shift this test exercises is legal only before the RMD years - see the RMD-ordering test
+    // below, which is the other half of the same rule. BASE is born 1952 and is already past RMD
+    // age, which is why the ages are overridden here rather than inherited.
+    const CONV = {
+        ...BASE, strategy: 'bracket', stratRate: 0.22, convertExcessToRoth: true,
+        birthyear1: 1962, birthmonth1: 6, startAge: 64, startInYear: 2026, die1: 92,
+        IRA1: 1400000, Brokerage: 300000, BrokerageBasis: 150000, Cash: 90000,
+        spendGoal: 80000, growth: 0.06, inflation: 0.02, cpi: 0.02, nYears: 15,
+    };
+    const run = (over) => simulate({ ...CONV, ...over, computeOC: false });
+    const shift0 = (r) => r.log[0]['-convTimingShift'] ?? 0;
+    const roth0 = (r) => (r.log[0].Roth1 ?? 0) + (r.log[0].Roth2 ?? 0);
+    const ira0 = (r) => (r.log[0].IRA1 ?? 0) + (r.log[0].IRA2 ?? 0);
+
+    // Unset - and anything malformed - is today's behavior exactly, and shifts nothing.
+    const base = run({ forceWithdrawTiming: 'late' });
+    for (const junk of [undefined, '', 'nonsense', null, 0]) {
+        const j = run({ forceWithdrawTiming: 'late', conversionTiming: junk });
+        assertNear(j.finalNW, base.finalNW,
+            `P28jk: conversionTiming ${JSON.stringify(junk)} must not change the plan`, 0.01);
+        assertNear(shift0(j), 0, `P28jk: conversionTiming ${JSON.stringify(junk)} must shift nothing`, 0.01);
+    }
+
+    // Asking for the month the withdrawal already uses is a no-op, not a rounding difference.
+    const early = run({ forceWithdrawTiming: 'early' });
+    const earlyEarly = run({ forceWithdrawTiming: 'early', conversionTiming: 'early' });
+    assertNear(earlyEarly.finalNW, early.finalNW,
+        'P28jk: convert-early on an already-January withdrawal must be a no-op', 0.01);
+    assertNear(shift0(earlyEarly), 0, 'P28jk: and it must shift nothing', 0.01);
+
+    // THE COMBINATION THAT DID NOT EXIST: convert in January, spend in November.
+    const lateEarlyConv = run({ forceWithdrawTiming: 'late', conversionTiming: 'early' });
+    const s = shift0(lateEarlyConv);
+    assert(s > 0, 'P28jk: test setup - year 0 must actually convert and shift');
+    assertNear(roth0(lateEarlyConv) - roth0(base), s,
+        'P28jk: the Roth must gain exactly the reported shift', 0.01);
+    assertNear(ira0(lateEarlyConv) - ira0(base), -s,
+        'P28jk: and the IRA must lose exactly the same - equal rates, so it is a transfer', 0.01);
+
+    // Deterministic neutrality: the household total is unchanged, only the split moved. This is the
+    // claim that makes the RMD channel the whole mechanism rather than a free lunch.
+    const tot = (r) => roth0(r) + ira0(r) + (r.log[0].Brokerage ?? 0) + (r.log[0].Cash ?? 0);
+    assertNear(tot(lateEarlyConv), tot(base),
+        'P28jk: deterministically the total cannot move, only the IRA/Roth split', 0.01);
+
+    // And it runs the other way when asked to convert later than the withdrawal.
+    const earlyLateConv = run({ forceWithdrawTiming: 'early', conversionTiming: 'late' });
+    assert(shift0(earlyLateConv) < 0, 'P28jk: converting later than the draw must move the Roth down');
+});
+
+// THE RMD IS FIRST MONEY OUT. In a year an RMD is due, the first dollars distributed from the IRA
+// satisfy it and an RMD may NOT be converted, so a conversion cannot precede it. The engine takes
+// the RMD at `preMonths`, so the conversion month is floored there in any RMD year.
+//
+// This shipped without the floor for about an hour and made "January conversion, November RMD"
+// reachable - a prohibited transaction that measured as DOMINANT, which is how a missing legal
+// constraint presents. The pin below is the reason it cannot come back.
+test('P28jk: a conversion can never precede the RMD in a year one is due', () => {
+    // Ages chosen so RMDs are live from year 0: born 1948, so 78 in 2026.
+    const RMDY = {
+        ...BASE, strategy: 'bracket', stratRate: 0.22, convertExcessToRoth: true,
+        hasSpouse: false, birthyear1: 1948, birthmonth1: 6, die1: 95, startAge: 78, startInYear: 2026,
+        IRA1: 2000000, IRA2: 0, Brokerage: 300000, BrokerageBasis: 150000, Cash: 90000,
+        spendGoal: 90000, growth: 0.06, inflation: 0.02, cpi: 0.02, nYears: 15,
+    };
+    const run = (over) => simulate({ ...RMDY, ...over, computeOC: false });
+    const rmdYears = (r) => r.log.filter(e => (e['RMDwd'] ?? 0) > 0).length;
+
+    const late = run({ forceWithdrawTiming: 'late' });
+    assert(rmdYears(late) > 0, 'P28jk: test setup - this fixture must actually take RMDs');
+
+    // Asking to convert in JANUARY while the RMD is taken in NOVEMBER is not permitted. The floor
+    // makes it a no-op rather than a silently illegal plan, so the run must match the unset one.
+    const lateEarlyConv = run({ forceWithdrawTiming: 'late', conversionTiming: 'early' });
+    assertNear(lateEarlyConv.finalNW, late.finalNW,
+        'P28jk: an RMD year must not let the conversion jump ahead of the RMD', 0.01);
+    const shifted = lateEarlyConv.log.filter(e => Math.abs(e['-convTimingShift'] ?? 0) > 0.005 &&
+                                                  (e['RMDwd'] ?? 0) > 0).length;
+    assertNear(shifted, 0, 'P28jk: no RMD year may carry a forward conversion shift', 0.5);
+
+    // The legal direction still works: RMD in January, conversion deferred to November.
+    const earlyLateConv = run({ forceWithdrawTiming: 'early', conversionTiming: 'late' });
+    const early = run({ forceWithdrawTiming: 'early' });
+    assert(Math.abs(earlyLateConv.finalNW - early.finalNW) > 0.01,
+        'P28jk: deferring the conversion AFTER the RMD is legal and must still move the plan');
+});
+
+// ── Saved-plan summaries (Phase P113) ────────────────────────────────────────────────────────
+// A saved plan recorded its inputs and nothing else, so it could never report that it had gone
+// stale. These are the pure halves of fixing that. Before this there was NO function returning the
+// summary numbers as data - updateStats computed them as locals and wrote them into innerText - so
+// the tiles and anything else wanting the same figures were two derivations that could drift.
+test('P113: summarizeRun snapshots a run, and diffSummaries reports only what moved', () => {
+    const PLAN = {
+        ...BASE, strategy: 'bracket', stratRate: 0.22, convertExcessToRoth: true,
+        IRA1: 1400000, Brokerage: 300000, BrokerageBasis: 150000, Cash: 90000,
+        spendGoal: 80000, growth: 0.06, inflation: 0.02, cpi: 0.02, nYears: 15,
+    };
+    const res = simulate({ ...PLAN, computeOC: false });
+    const last = res.log[res.log.length - 1];
+    const cd = last.totalNetWealth / (last.inflationFactor || 1);
+    const snap = summarizeRun(res.totals, res.finalNW, cd, { strategy: 'bracket', objective: 'networth' });
+
+    // Every field the Info panel and the drift banner rely on must be present and finite.
+    for (const k of ['yearsFunded', 'yearsTested', 'tax', 'spend', 'rmd', 'endWealth']) {
+        assert(Number.isFinite(snap.tiles[k]), `P113: summarizeRun must record ${k}`);
+    }
+    assertNear(snap.tiles.endWealth, res.finalNW, 'P113: end wealth is the run\'s finalNW', 0.01);
+    assertNear(snap.tiles.taxRate, res.totals.tax / res.totals.gross,
+        'P113: the tax rate is the nominal ratio the tile shows', 1e-9);
+    assert(snap.terminal && Number.isFinite(snap.terminal.ira),
+        'P113: terminal balances are recorded - "does the IRA survive" is what decides whether a ' +
+        'saved plan can answer an ending-IRA question at all');
+    assert(snap.strategy === 'bracket' && snap.objective === 'networth',
+        'P113: caller-supplied strategy and objective ride along');
+    assertNear(summarizeRun(null, 0, 0), null, 'P113: no totals means no snapshot', 0);
+
+    // A snapshot compared with itself has nothing to report.
+    assertNear(diffSummaries(snap, snap).length, 0, 'P113: identical runs produce no differences', 0);
+    // A moved field is reported once, with sign and magnitude.
+    const moved = JSON.parse(JSON.stringify(snap));
+    moved.tiles.endWealth = snap.tiles.endWealth - 57184;
+    const d = diffSummaries(moved, snap);
+    assertNear(d.length, 1, 'P113: exactly the field that moved is reported', 0);
+    assertNear(d[0].delta, 57184, 'P113: the delta runs saved -> fresh', 0.01);
+    assert(d[0].label === 'End Wealth', 'P113: differences carry the tile label the user sees');
+    // Nothing to compare against is not the same as nothing changed; both return [], and the caller
+    // distinguishes them by whether a saved summary exists at all.
+    assertNear(diffSummaries(null, snap).length, 0, 'P113: a plan saved before summaries existed diffs to nothing', 0);
+});
+
+// Filenames and the two names a plan carries. Both replace live defects: the export filename was
+// interpolated unsanitised, and the blank-name fallback is a timestamp containing colons, which
+// cannot be saved on Windows at all.
+test('P113: export filenames are legal, and the two plan names resolve in order', () => {
+    assert(!safeExportFilename('2026-09-06 14:22:01').includes(':'),
+        'P113: the timestamp fallback name must not keep a colon');
+    for (const ch of ['<', '>', '"', '/', '|', '?', '*']) {
+        assert(!safeExportFilename('a' + ch + 'b').includes(ch),
+            `P113: ${ch} is illegal in a Windows filename`);
+    }
+    assert(safeExportFilename('a' + String.fromCharCode(9) + 'b') === 'ab.json',
+        'P113: control characters are dropped, not replaced');
+    assert(safeExportFilename('') === 'retirement-plan.json', 'P113: a blank name still yields a file');
+    assert(safeExportFilename('CON') !== 'CON.json', 'P113: Windows reserved device names are avoided');
+    assert(safeExportFilename('a b') === 'a b.json', 'P113: spaces are legal and are kept');
+
+    // `.replace('.json','')` removed the FIRST match anywhere, so this returned `my.backup.json`.
+    assert(stripFileExtension('my.json.backup.json') === 'my.json.backup',
+        'P113: only a real trailing extension is stripped');
+
+    assert(planNameDefaults({ lastPlanName: 'Household A', lastFileName: 'b.json' }).saveName === 'Household A',
+        'P113: the plan name wins over the file it arrived in');
+    assert(planNameDefaults({ lastFileName: 'household-a.json' }).saveName === 'household-a',
+        'P113: with no plan name, the file name supplies one, without its extension');
+    assert(planNameDefaults({}).saveName === '', 'P113: knowing neither name suggests nothing');
 });
 
 // ── timingConvThreshold research input (Phase P28jb) ─────────────────────────────────────────

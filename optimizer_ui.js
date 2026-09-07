@@ -727,6 +727,9 @@ function getInputs() {
         // P108b. '' is today's behavior (tax leaves with the withdrawal); the engine only
         // acts on 'december', so an empty select must arrive as undefined.
         taxSettlement: val('taxSettlement') || undefined,
+        // P28jk. Same convention: '' is today's behavior (the conversion rides the withdrawal
+        // month), and the engine acts only on 'early' / 'late'.
+        conversionTiming: val('conversionTiming') || undefined,
         fixedTaxIndexing: !!valChecked('fixedTaxIndexing'),
         // Account Composition (equity/bond ratio selects + intl equity % inputs)
         comp_IRA1_ratio: +val('comp_IRA1_ratio'),
@@ -3605,11 +3608,16 @@ function openTaxPlanner(row, prevRow) {
 
 
 function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWorth = 100000) {
+    // P113. The tiles read the SAME snapshot a saved plan records, so the two cannot drift apart.
+    // They used to be independent derivations of the same quantities - these values as locals here,
+    // and nothing at all on the save side, because no function returned them as data.
+    const _snap = OptimizerCore.summarizeRun(totals, finalNW, finalNWCurrentDollars).tiles;
+
     const inCD = document.getElementById('show-current-dollars')?.checked;
-    const dispTax   = inCD ? totals.taxCurrentDollars   : totals.tax;
-    const dispSpend = inCD ? totals.spendCurrentDollars : totals.spend;
-    const dispNW    = inCD ? finalNWCurrentDollars      : finalNW;
-    const dispRate  = totals.tax / totals.gross;
+    const dispTax   = inCD ? _snap.taxCurrentDollars   : _snap.tax;
+    const dispSpend = inCD ? _snap.spendCurrentDollars : _snap.spend;
+    const dispNW    = inCD ? _snap.endWealthCurrentDollars : _snap.endWealth;
+    const dispRate  = _snap.taxRate;
 
     document.getElementById('stat-rate').innerText  = (dispRate * 100).toFixed(1) + '%';
     document.getElementById('stat-spend').innerText = '$' + Math.round(dispSpend).toLocaleString();
@@ -5780,7 +5788,7 @@ const OPT_LONG_TO_SHORT = {
     propWithdraw:'pw', stratRate:'sr', iraWithdrawPct:'iwp', orderedSeq:'os', rothGapFill:'rgf',
     convertExcessToRoth:'mc', fundConversionWithCash:'fcc', extraConversionAmount:'eca', iraBaseGoal:'ibg',
     convEndYear:'cey', convEndMode:'cem', irmaaMarginMode:'imm', fixedTaxIndexing:'fti',
-    forceWithdrawTiming:'fwt', taxSettlement:'txs',
+    forceWithdrawTiming:'fwt', taxSettlement:'txs', conversionTiming:'cvt',
     advisorFeeAmount:'af', advisorFeeMode:'afm', advisorFeeScope:'afs',
     birthyear1:'by1', birthmonth1:'bm1', die1:'d1', startAge:'sa',
     birthyear2:'by2', birthmonth2:'bm2', die2:'d2', hasSpouse:'hs',
@@ -6095,6 +6103,76 @@ function escapeQuotes(str) {
     return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
 }
 
+/**
+ * Escape text for insertion as HTML CONTENT. escapeQuotes above handles attribute values only; it
+ * leaves < and & alone, which was survivable while the only interpolated text was a scenario name
+ * and is not once free-form notes go through the same innerHTML path.
+ */
+function escapeHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ============================================================================
+// PLAN PROVENANCE - the release a plan was saved under, and where it came from
+// ============================================================================
+
+/**
+ * The changelog release currently running, e.g. "11.1766".
+ *
+ * Single source for the version tile, the save path, the export path and the drift banner. It used
+ * to be an inline IIFE in the page that only fed the tile, so nothing else could ask.
+ *
+ * This is NOT SCENARIO_VERSION. That one guards the payload FORMAT and decides whether a plan can be
+ * loaded at all. This one records which engine produced the numbers, and is what makes a difference
+ * between a saved figure and a fresh one interpretable rather than merely puzzling.
+ */
+function appVersionString() {
+    const m = (typeof document !== 'undefined' && document.title || '').match(/\d+\.[0-9a-f]+/i);
+    return m ? m[0] : 'unknown';
+}
+
+// The two names a plan carries. The plan NAME is its key in the browser's store; the FILE NAME is
+// what it arrived in, if it arrived as a file. Import used to use the filename as a prompt default
+// and then throw it away, so neither survived to be offered back.
+let _lastLoadedPlanName = null;
+let _lastLoadedFileName = null;
+
+/** Snapshot of the run currently on screen, or null if nothing has been run yet. */
+function currentRunSummary() {
+    if (!lastTotals) return null;
+    return OptimizerCore.summarizeRun(lastTotals, lastFinalNW, lastFinalNWCurrentDollars, {
+        strategy:  lastSimInputs ? lastSimInputs.strategy : null,
+        objective: OptimizerState.objective,
+    });
+}
+
+/**
+ * Bring any entry to the shape the rest of the code expects, whatever it arrived as.
+ *
+ * Load and Import used to validate differently: Load demanded an exact version match, while Import
+ * tested `if (scenario.version && ...)` so a payload with NO version key skipped the check entirely,
+ * was applied, and was then stored unversioned - after which the list rendered it incompatible and
+ * Load refused it forever. Import could manufacture entries Load would not open. Normalising on the
+ * way in removes that class of entry rather than teaching two code paths to disagree politely.
+ */
+function normalizeScenarioEntry(raw, { sourceFile = null } = {}) {
+    if (!raw || typeof raw !== 'object') throw new Error('not a scenario file');
+    const data = raw.data ?? raw;          // legacy flat exports have no .data wrapper
+    if (!data || typeof data !== 'object') throw new Error('scenario has no input data');
+    return {
+        version:    raw.version ?? SCENARIO_VERSION,   // absent means "written before versioning"
+        data,
+        savedAt:    raw.savedAt ?? new Date().toISOString(),
+        appVersion: raw.appVersion ?? null,            // null = saved before releases were recorded
+        notes:      typeof raw.notes === 'string' ? raw.notes : '',
+        summary:    raw.summary ?? null,               // null = never run, or saved before snapshots
+        sourceFile: raw.sourceFile ?? sourceFile ?? null,
+        isOldStorage: !!raw.isOldStorage,
+    };
+}
+
 
 // ============================================================================
 // MAIN USER ACTION FUNCTIONS
@@ -6107,30 +6185,50 @@ function escapeQuotes(str) {
  * Displays success or error message
  * No parameters
  */
-function saveScenario() {
+function saveScenario({ alsoExport = false } = {}) {
     const inputs = getInputs();
     const scenarioName = document.getElementById('scenarioName').value.trim() ||
         `${new Date().toISOString().slice(0, 19).replace('T', ' ')}`;
+    const notesEl = document.getElementById('scenarioNotes');
+    const summary = currentRunSummary();
 
     try {
         const scenarios = getSavedScenarios();
 
-        scenarios[scenarioName] = {
+        const entry = {
             version: SCENARIO_VERSION,
             // P100b1: `optObjective` rides along beside the engine inputs. It is NOT added to
             // getInputs() on purpose - that object feeds simulate() and the MC cache hash, and a
             // ranking preference has no business changing either.
             data: { ...inputs, optObjective: OptimizerState.objective },
-            savedAt: new Date().toISOString()
+            savedAt: new Date().toISOString(),
+            // P113. The release that produced the numbers below. Without it a later difference is
+            // just a difference; with it the tool can say which release moved them.
+            appVersion: appVersionString(),
+            notes: notesEl ? notesEl.value.trim() : '',
+            summary,
+            sourceFile: _lastLoadedFileName,
         };
+        scenarios[scenarioName] = entry;
 
         localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
+        _lastLoadedPlanName = scenarioName;
 
-        showMessage(`Scenario "${scenarioName}" saved successfully!`, 'success');
+        // A plan saved before it was ever run carries no statistics, and saying so is better than a
+        // saved plan that silently claims none exist.
+        const note = summary ? '' : ' (no statistics recorded - run the plan first)';
+        showMessage(`Scenario "${scenarioName}" saved successfully!${note}`, summary ? 'success' : 'warning');
         document.getElementById('scenarioName').value = '';
+        if (notesEl) notesEl.value = '';
+        if (alsoExport) exportScenario(scenarioName);
     } catch (error) {
         showMessage(`Failed to save scenario: ${error.message}`, 'error');
     }
+}
+
+/** Save and Export in one action. Saving then exporting was always two steps for one intent. */
+function saveAndExportScenario() {
+    saveScenario({ alsoExport: true });
 }
 
 /**
@@ -6405,10 +6503,14 @@ function manageScenarios() {
 
             const rowStyle = isCurrent ? '' : 'background-color: #ffeeee;';
 
+            // The name is user text and goes into innerHTML, so it is escaped as CONTENT here.
+            // escapeQuotes below covers the attribute position only, which is a different job.
+            const rel = scenario.appVersion ? ` <span style="color:#888;">(${escapeHtml(scenario.appVersion)})</span>` : '';
             html += `<tr style="${rowStyle}">
-                <td style="padding: 4px; border-bottom: 1px solid #eee;">${name}</td>
-                <td style="padding: 4px; border-bottom: 1px solid #eee;">${savedDate}</td>
+                <td style="padding: 4px; border-bottom: 1px solid #eee;">${escapeHtml(name)}</td>
+                <td style="padding: 4px; border-bottom: 1px solid #eee;">${escapeHtml(savedDate)}${rel}</td>
                 <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">
+					<button class="modal-btn" onclick="showScenarioInfo('${escapeQuotes(name)}')">Info</button>
 					<button class="modal-btn" onclick="loadScenarioByName('${escapeQuotes(name)}')" ${!isCurrent ? 'disabled title="Incompatible version"' : ''}>Load</button>
 					<button class="modal-btn" onclick="deleteScenario('${escapeQuotes(name)}')">Delete</button>
 					<button class="modal-btn" onclick="exportScenario('${escapeQuotes(name)}')">Export</button>
@@ -6438,6 +6540,9 @@ function manageScenarios() {
         content.innerHTML = html;
     }
 
+    // The list view owns no buttons of its own; every row carries its own. Clearing here is what
+    // makes Back from the Info panel return to a clean action row rather than keeping its Load.
+    setModalActions('');
     modal.style.display = 'block';
 }
 
@@ -6447,6 +6552,176 @@ function manageScenarios() {
  * Closes modal and shows success/error message
  * @param {string} name - Name of the scenario to load
  */
+// ============================================================================
+// PREVIEW AND COMMIT - the one path Load and Import both take
+// ============================================================================
+// Load and Import used to differ in validation, naming, storage and messaging, which is how Import
+// came to be able to store entries Load would refuse. Both now normalise, then preview, then commit.
+
+/** An imported file waiting for the user to confirm it, so preview can show it before it is applied. */
+let _pendingImport = null;
+
+const _fmtMoney = n => (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString();
+
+/** One recorded figure, formatted the way its tile is. */
+function _fmtSummaryValue(kind, v) {
+    if (!Number.isFinite(v)) return '-';
+    if (kind === 'rate') return (v * 100).toFixed(2) + '%';
+    if (kind === 'year' || kind === 'count') return String(v);
+    return _fmtMoney(v);
+}
+
+/**
+ * What this plan is, before you load it: the note, the release it was saved under, and the numbers
+ * it recorded. Rendered as real content rather than a tooltip - essential information must not be
+ * hover-only, because a phone cannot hover.
+ */
+function scenarioInfoHtml(entry, name) {
+    const rows = [];
+    const push = (k, v) => rows.push(`<tr><td style="padding:3px 10px 3px 0;color:#555;">${escapeHtml(k)}</td>` +
+                                     `<td style="padding:3px 0;"><strong>${escapeHtml(v)}</strong></td></tr>`);
+    push('Saved', entry.savedAt && entry.savedAt !== 'Unknown'
+        ? new Date(entry.savedAt).toLocaleString() : 'Unknown');
+    push('Saved under release', entry.appVersion || 'not recorded');
+    if (entry.sourceFile) push('From file', entry.sourceFile);
+    if (entry.summary && entry.summary.strategy) push('Strategy', entry.summary.strategy);
+
+    let html = `<h4 style="margin:0 0 8px;">${escapeHtml(name)}</h4>`;
+    html += `<table style="border-collapse:collapse;font-size:0.9em;margin-bottom:10px;">${rows.join('')}</table>`;
+
+    html += '<div style="margin-bottom:10px;"><em>Notes</em><br>';
+    html += entry.notes
+        ? `<div style="white-space:pre-wrap;">${escapeHtml(entry.notes)}</div>`
+        : '<span style="color:#777;">No notes recorded.</span>';
+    html += '</div>';
+
+    if (!entry.summary) {
+        html += '<p style="color:#777;">No statistics were recorded for this plan. It was saved ' +
+                'before it was run, or before plans recorded their numbers.</p>';
+    } else {
+        const t = entry.summary.tiles || {};
+        html += '<em>Recorded when saved</em><table style="border-collapse:collapse;font-size:0.9em;">';
+        for (const f of OptimizerCore.SUMMARY_FIELDS) {
+            html += `<tr><td style="padding:2px 10px 2px 0;color:#555;">${escapeHtml(f.label)}</td>` +
+                    `<td style="padding:2px 0;">${escapeHtml(_fmtSummaryValue(f.kind, t[f.key]))}</td></tr>`;
+        }
+        const term = entry.summary.terminal;
+        if (term) {
+            for (const f of OptimizerCore.SUMMARY_TERMINAL_FIELDS) {
+                html += `<tr><td style="padding:2px 10px 2px 0;color:#555;">${escapeHtml(f.label)}</td>` +
+                        `<td style="padding:2px 0;">${escapeHtml(_fmtSummaryValue(f.kind, term[f.key]))}</td></tr>`;
+            }
+            // The fact that decides what this plan can be used to measure at all.
+            if (Number.isFinite(term.ira) && term.ira <= 0) {
+                html += '<tr><td colspan="2" style="padding-top:6px;color:#a06000;">This plan ends ' +
+                        'with an empty IRA, so it cannot answer questions about ending IRA balances.</td></tr>';
+            }
+        }
+        html += '</table>';
+    }
+    return html;
+}
+
+/**
+ * Buttons a view adds to the modal's single action row, placed BEFORE the permanent Close so all of
+ * them share one line. Passing nothing clears them, which is what the list view wants.
+ */
+function setModalActions(html) {
+    const bar = document.getElementById('scenarioModalActions');
+    if (!bar) return;
+    const close = bar.querySelector('button:last-child');
+    bar.innerHTML = (html || '') + (close ? close.outerHTML : '');
+}
+
+/** Show one saved plan's details inside the modal, with Load and Back beside Close. */
+function showScenarioInfo(name) {
+    const scenarios = getAllScenarios();
+    const raw = scenarios[name];
+    if (!raw) return;
+    const entry = normalizeScenarioEntry(raw);
+    const content = document.getElementById('scenarioListContent');
+    const disabled = isCompatibleScenario(raw) ? '' : ' disabled title="Incompatible version"';
+    content.innerHTML = scenarioInfoHtml(entry, name);
+    setModalActions(
+        `<button class="modal-btn" onclick="loadScenarioByName('${escapeQuotes(name)}')"${disabled}>Load</button>` +
+        `<button class="modal-btn" onclick="manageScenarios()">Back</button>`);
+}
+
+/** Show an imported file's details before anything is applied or stored. */
+function previewImport() {
+    if (!_pendingImport) return;
+    const content = document.getElementById('scenarioListContent');
+    const { entry, name } = _pendingImport;
+    content.innerHTML =
+        '<p style="margin-top:0;color:#555;">Imported from a file. Nothing has been saved or loaded yet.</p>' +
+        scenarioInfoHtml(entry, name);
+    setModalActions(
+        `<button class="modal-btn" onclick="commitImport()">Load &amp; Save</button>` +
+        `<button class="modal-btn" onclick="cancelImport()">Cancel</button>`);
+    document.getElementById('scenarioModal').style.display = 'block';
+}
+
+function cancelImport() {
+    _pendingImport = null;
+    closeScenarioModal();
+    showMessage('Import cancelled.', 'warning');
+}
+
+/**
+ * Apply an entry, remember where it came from, and report anything that moved since it was saved.
+ * applyScenario runs the plan at its tail, so the fresh numbers are available on return.
+ */
+function commitScenario(entry, name) {
+    applyScenario(entry.data);
+    _lastLoadedPlanName = name;
+    _lastLoadedFileName = entry.sourceFile || null;
+    const nameEl = document.getElementById('scenarioName');
+    if (nameEl) {
+        nameEl.value = OptimizerCore.planNameDefaults({
+            lastPlanName: _lastLoadedPlanName, lastFileName: _lastLoadedFileName,
+        }).saveName;
+    }
+    const notesEl = document.getElementById('scenarioNotes');
+    if (notesEl) notesEl.value = entry.notes || '';
+    closeScenarioModal();
+    reportSummaryDrift(entry, name);
+}
+
+/**
+ * Compare what the plan recorded against what it produces now.
+ *
+ * The two causes mean opposite things and the release is what separates them. A different release is
+ * expected and explains itself. The SAME release with different numbers is a fidelity problem, not
+ * drift: applyScenario leaves a field alone when the saved data omits its key, so a plan loaded on
+ * top of a different one can inherit a stray input. Nothing detected that before.
+ */
+function reportSummaryDrift(entry, name) {
+    const fresh = currentRunSummary();
+    if (!entry.summary || !fresh) {
+        showMessage(`Scenario "${name}" loaded.`, 'success');
+        return;
+    }
+    const diffs = OptimizerCore.diffSummaries(entry.summary, fresh);
+    if (diffs.length === 0) {
+        showMessage(`Scenario "${name}" loaded, and it reproduces the numbers it was saved with.`, 'success');
+        return;
+    }
+    const now = appVersionString();
+    const then = entry.appVersion;
+    const worst = diffs.slice().sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)).slice(0, 3);
+    const detail = worst.map(d =>
+        `${d.label} ${d.delta > 0 ? 'up' : 'down'} ${_fmtSummaryValue(d.kind, Math.abs(d.delta))}`).join(', ');
+    if (then && then !== now) {
+        showMessage(`Scenario "${name}" loaded. It was saved under ${then} and you are on ${now}: ${detail}.`, 'warning');
+    } else if (then) {
+        showMessage(`Scenario "${name}" loaded, but ${diffs.length} figure(s) differ on the same ` +
+                    `release (${now}): ${detail}. The plan may not have been restored exactly.`, 'error');
+    } else {
+        showMessage(`Scenario "${name}" loaded. It predates release stamping, so this difference ` +
+                    `cannot be attributed: ${detail}.`, 'warning');
+    }
+}
+
 function loadScenarioByName(name) {
     try {
         const scenarios = getAllScenarios();
@@ -6455,12 +6730,25 @@ function loadScenarioByName(name) {
                 showMessage(`Scenario "${name}" is from an incompatible version (v${scenarios[name].version || 1}) and cannot be loaded. Current version: v${SCENARIO_VERSION}`, 'error');
                 return;
             }
-            applyScenario(scenarios[name].data);
-            closeScenarioModal();
-            showMessage(`Scenario "${name}" loaded successfully!`, 'success');
+            commitScenario(normalizeScenarioEntry(scenarios[name]), name);
         }
     } catch (error) {
         showMessage(`Failed to load scenario: ${error.message}`, 'error');
+    }
+}
+
+/** Commit a previewed import: store it through the normal save shape, then load it. */
+function commitImport() {
+    if (!_pendingImport) return;
+    const { entry, name } = _pendingImport;
+    try {
+        const scenarios = getSavedScenarios();
+        scenarios[name] = entry;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
+        _pendingImport = null;
+        commitScenario(entry, name);
+    } catch (error) {
+        showMessage(`Failed to import scenario: ${error.message}`, 'error');
     }
 }
 
@@ -6576,13 +6864,18 @@ function exportScenario(name) {
         const scenarios = getAllScenarios();
         const scenario = scenarios[name];
 
-        const dataStr = JSON.stringify(scenario, null, 2);
+        // Stamp the release on the way out as well as on save, so a file handed to someone else
+        // says which engine produced the numbers inside it even if it was saved before stamping.
+        const out = { ...normalizeScenarioEntry(scenario), appVersion: scenario.appVersion || appVersionString() };
+        const dataStr = JSON.stringify(out, null, 2);
         const dataBlob = new Blob([dataStr], { type: 'application/json' });
         const url = URL.createObjectURL(dataBlob);
 
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${name}.json`;
+        // `${name}.json` was unsanitised, and the blank-name fallback is a timestamp containing
+        // colons - a filename Windows will not accept.
+        link.download = OptimizerCore.safeExportFilename(name);
         link.click();
 
         URL.revokeObjectURL(url);
@@ -6613,29 +6906,28 @@ function importScenario() {
 
         reader.onload = (event) => {
             try {
-                const scenario = JSON.parse(event.target.result);
+                const raw = JSON.parse(event.target.result);
 
-                if (scenario.version && scenario.version !== SCENARIO_VERSION) {
-                    if (!confirm(`Warning: This scenario is from version ${scenario.version}, current version is ${SCENARIO_VERSION}.\n\nIt may not load correctly. Continue anyway?`)) {
+                // Normalise FIRST. The old test was `if (raw.version && ...)`, so a payload with no
+                // version key skipped the check, was applied, and was stored unversioned - after
+                // which the list rendered it incompatible and Load refused it for good. An entry
+                // that Import accepts must be one Load will open.
+                const entry = normalizeScenarioEntry(raw, { sourceFile: file.name });
+
+                if (raw.version && raw.version !== SCENARIO_VERSION) {
+                    if (!confirm(`Warning: This scenario is from version ${raw.version}, current version is ${SCENARIO_VERSION}.\n\nIt may not load correctly. Continue anyway?`)) {
                         showMessage('Import cancelled.', 'warning');
                         return;
                     }
                 }
 
-                const name = prompt('Enter name for imported scenario:', file.name.replace('.json', ''));
-
-                if (name) {
-                    const scenarios = getSavedScenarios();
-                    scenarios[name] = scenario;
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
-                    // Apply immediately so Import also loads into the form (not just stages to
-                    // localStorage). scenario.data is the field map; fall back to scenario for
-                    // legacy flat exports without a .data wrapper.
-                    applyScenario(scenario.data ?? scenario);
-                    showMessage(`Scenario "${name}" imported and loaded!`, 'success');
-                } else {
-                    showMessage('Import cancelled.', 'warning');
-                }
+                // The filename supplies the default name, stripped properly: `.replace('.json','')`
+                // removed the first match ANYWHERE, so `my.json.backup.json` became `my.backup.json`.
+                const suggested = OptimizerCore.stripFileExtension(file.name);
+                _pendingImport = { entry, name: suggested };
+                // Same preview Load uses, for the same reason - and it matters more here, because
+                // this file came from somewhere else.
+                previewImport();
             } catch (error) {
                 showMessage(`Error importing scenario: ${error.message}`, 'error');
             }

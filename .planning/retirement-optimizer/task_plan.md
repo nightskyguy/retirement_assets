@@ -18,7 +18,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P35 | **`P104b3` SHIPPED 09-03 v11.1719: Fixed Split, 4 vectors, NERDKNOB-GATED. Goldens untouched (gate off by default). MC grid deliberately empty** | `P104c` / un-gate |
 | **O1** | P36 | round 2 measures against the `P103a` ceiling, not rank-among-arms | `P36b` |
 | **O1** | P34 | NOT a P103 prerequisite (a-d are node harnesses); still the whole slow-machine story | `P34a` |
-| **O1** | P28j | `P28jf` is the one RESULT item here: the timing rule moves every converting row | `P28jb` |
+| **O1** | P28j | `jg`/`jh`/`ji` SHIPPED - conversion leg fixed and growth-neutral. Left: the trigger, which moves the SPENDING draw and whose justification `jg` removed | `P28jf` |
 
 **Live carry-overs from finished phases** - the rest of what those phases did is in their stubs below:
 - `P85` RE-RUN: converting earlier still wins 353 of 499, but **the RMD claim BROKE** - 124 counterexamples, all bracket strategies at a live IRA Goal. `P72` is still pending.
@@ -250,6 +250,278 @@ earlier still wins 353/499 but the RMD reasoning behind it broke, 124 counterexa
 **Out of scope for the first pass:** a flat $100k/yr conversion is a candidate ARM, not a strategy;
 shaped policies belong in the grid. No product changes.
 
+## P113: saved plans carry their notes and their numbers  *(NEW 2026-09-06, user-raised, SHIPPED v11.1769)*
+
+*(user: "what I think is missing from the Export content are some useful metrics... a Notes field to
+the Save, the copied summary information from the plan (so that when it's later loaded and run the
+differences will be known)... 'Save & Export' can be combined into one step... remember the name of
+the last file/summary loaded... there are two names: the Name of the plan, and the name of the file
+it came from." Then: "Loading and Importing should work the same way." Then: "An additional captured
+datum should be the changelog version that was in effect when a plan is saved or exported.")*
+
+A saved entry was `{ version, data, savedAt }` and nothing else, so a plan could not say what it was
+for or that it had gone stale - the 11.1769 changelog had to warn in prose that saved plans would
+report different numbers, because the tool had no way to notice. Four measurements failed this
+session for the same reason: `P112`.
+
+**SHIPPED.** Entry gains `appVersion`, `notes`, `summary` and `sourceFile`, all optional metadata on
+the ENTRY, never inside `data`.
+
+**TWO VERSIONS, and keeping them apart is the design.** `SCENARIO_VERSION` guards the payload FORMAT
+and decides whether a plan loads at all; **it stays 4**, because `isCompatibleScenario` is strict
+equality with no migration layer and the only remedy offered is bulk deletion - bumping it would have
+made every plan a user had already saved unloadable, while the user is building a bank of them.
+`appVersion` (the changelog release, from `document.title`) records which engine produced the
+numbers, and is what makes a later difference interpretable rather than merely puzzling.
+
+**Pure in core, DOM in ui**, per the no-DOM contract: `summarizeRun`, `diffSummaries`,
+`safeExportFilename`, `stripFileExtension`, `planNameDefaults`, and the `SUMMARY_FIELDS` /
+`SUMMARY_TERMINAL_FIELDS` tables that are the single definition of what is recorded, compared and
+labelled. `summarizeRun` did not exist in any form - `updateStats` computed the tile values as
+locals and wrote them straight to `innerText` - and `updateStats` now consumes it, so the tiles and a
+saved snapshot are provably the same numbers.
+
+**Load and Import are one path now,** which fixed a real defect rather than an inconsistency:
+Import's check was `if (raw.version && ...)`, so an unversioned file **skipped validation, was
+applied, and was stored unversioned** - after which the list rendered it incompatible and Load
+refused it forever. Import could manufacture entries Load would not open. Both now normalise, then
+preview, then commit. Verified in the browser: an unversioned payload imports and is loadable.
+
+**The drift banner separates two causes that mean opposite things.** Different release: expected, and
+it names the release. **Same release, different numbers: a fidelity problem**, because
+`applyScenario` leaves a field alone when the saved data omits its key, so a plan loaded on top of
+another can inherit a stray input. Nothing detected that before. All three cases verified.
+
+Also fixed on the way: the export filename was interpolated unsanitised and the blank-name fallback
+is a timestamp containing colons, which Windows will not accept; `.replace('.json','')` stripped the
+first match anywhere; and the scenario name went into `innerHTML` through `escapeQuotes`, which
+escapes quotes but not `<` or `&` - notes are free user text on the same path, so a real
+`escapeHtml` was required rather than optional.
+
+- [ ] **P113a - the Info panel is per-plan; a compare-two-plans view is not built.** The `P112` bank
+      will want it once there are enough entries to choose between.
+- [ ] **P113b - `summary` is captured at SAVE only.** A plan whose inputs are edited after loading
+      keeps the old snapshot until it is saved again, which is correct but unsignalled.
+- **Related:** `P112` (the bank this exists to serve), `P101` (serving the same JSON to users by
+  name), `P109b` (the summary bar's moving reference is a different comparison from this one).
+
+
+## P112: a bank of plans to measure against  *(NEW 2026-09-06, user-raised)*
+
+*(user: "While it has been convenient to use the built-in defaults for analysis, that appears to be
+handicapping your ability to measure a more 'reasonable' scenario. The default scenario was
+originally built to show the tradeoffs that a user may want to make to arrive at a viable plan...
+A bank of plans to test against might prevent some of the incomplete conclusions, and can be grown
+over time as needed.")*
+
+**The diagnosis is specific, not general. The page defaults are a TEACHING scenario** - built to
+show a user the tradeoffs needed to reach a viable plan - and using it as a measurement fixture
+produced four dead measurements in one day:
+
+| what happened | why the defaults caused it |
+|---|---|
+| `P28jk` measured the conversion-month feature at **$0** | the household converts nothing in its three pre-RMD years, which is the only window the feature is legal in |
+| ending-IRA and peak-IRA said nothing in `P28jn` | the IRA drains to $0 and peaks in year 0, so both measures are floored |
+| the household ends **100% Roth** | no bucket spread survives, so `P106f`'s objective cannot be read on it |
+| **189 of 270** households skipped in `P111a` | the crossed grid's 8% spend rate fails, and a strained base makes that worse |
+
+**ONE BANK, TWO CONSUMERS, and that is the argument for doing it properly.** `P101` wants worked
+examples served from the site and loadable by name; harnesses want fixtures. They are the same JSON.
+`P101` also records why they must be synthetic: the scenario that reproduced `P100` arrived under a
+real surname and could not be committed to a public repo. A curated bank is publishable by
+construction and arrives with the tool.
+
+**The capture convention already exists and must be kept** (`.test_harnesses/fixtures/README.md`):
+each fixture is the **verbatim output of the page's own `getInputs()`**, captured in a browser
+against a share URL, with `__meta` carrying the source URL, page version, UTC timestamp and
+`undefinedKeys`. Node harnesses read these rather than re-implementing the share decoder, which is
+the drift that kept `stopyear_harness.js` in a browser console. **Hand-written fixture JSON is not
+acceptable** - it is how the decoder and the fixtures diverge.
+
+### What each entry must carry, beyond the inputs
+
+- **What it EXERCISES**, in one line. A harness author picks deliberately instead of inheriting.
+- **What it CANNOT test.** The defaults household cannot answer any ending-IRA question; saying so in
+  the table is what would have saved `P28jn`.
+- **Whether it is VIABLE** - funds every year - because a strained plan is skipped by every scorer
+  and silently shrinks the sample.
+- `iraBaseGoal` explicitly, like every other field. The capture convention gives this for free, and
+  `P85` is what happens without it.
+
+### Items
+
+- [ ] **P112a - seed the bank against the gaps that are open RIGHT NOW**, not a general survey.
+      `P28jn` needs a **gap-years converter** (retire early sixties, large IRA, modest spend,
+      converting hard until 75) and `P28jn`/`P28jo` need a household whose **IRA survives to the
+      end** so the reduction measures are not floored. Those two unblock live work; the rest can
+      grow as the user says.
+- [ ] **P112b - candidate shapes beyond the two**, for the user to choose from rather than for me to
+      invent: a single filer (no survivor transition), a long widowhood (`P106c` measured 24 years
+      saving $3,227,336, the shape where the widow penalty dominates), a household that converts
+      nothing as a control, a short horizon, and a brokerage-heavy household. **The user knows what
+      "reasonable" means for this audience better than a crossed grid does** - that is the whole
+      point of the bank, so the list is a proposal, not a plan.
+- [ ] **P112c - retire the copy-pasted `COMMON` block.** Every harness this session carried the same
+      verbatim `COMMON` and `MIXES` ladder, which fixes ages, state, Social Security, growth and a
+      20-year horizon across all of them - `P111a2` exists only because of it. Harnesses should name
+      the plans they used. Keep the crossed grid for breadth where breadth is the point; use named
+      plans where representativeness is.
+- [ ] **P112d - each report names its plans and says why.** The `research/` convention already
+      requires defining every code before use; the same applies to the households a verdict rests on.
+- **Related:** `P101` (serve them to users by name), `P111a2` (what `COMMON` holds fixed),
+  `P28jn`/`P28jo` (the open items blocked on two of these), `P85` (the fixture inherited unread).
+
+
+## P111: cue the best withdrawal-month / tax-date pair, as the Insights panel's first card  *(NEW 2026-09-06, user-raised)*
+
+*(user: "Before we expose this to normal users, I think it would be useful to run the plan with
+different withdrawal timing and tax paid timing and cue the user which ones are likely to be the most
+beneficial. The insight gained might be the first thing noted in the proposed Insights panel.")*
+
+The surface already exists and is claimed twice: `#tab-insight` with an empty `#insights-table`.
+**`P33`** (parked) wants it for a statistics section, **`P45`** (parked) for narrative cards with
+`computeInsights(totals, log, inputs) -> Insight[]` and `{id, severity, title, body, suggestion}`.
+This is a `P45` card. The standing recommendation - one surface, two sections - is unchanged.
+
+### The grid is 6 cells and 5 of them are extra sims
+
+`forceWithdrawTiming` {auto, early, late} x `taxSettlement` {with the draw, december}. One cell is
+the plan already on screen, so the cost is **5 extra `simulate()` calls**.
+
+**Run on the page defaults 2026-09-06** (Proportional +%, $1M IRA, $140k spend, conversions on,
+25 years), sorted by real after-tax net worth:
+
+| rank | month | tax paid | net worth (real) | lifetime tax |
+|---|---|---|---|---|
+| 1 | Always November | December | **$534,255** | $492,275 |
+| 2 | Always November | with the draw | $531,587 | $491,153 |
+| 3 | Automatic | December | $450,362 | $456,704 |
+| 4 | Always January | December | $425,007 | $453,718 |
+| 5 | **Automatic / with the draw - THE SHIPPED DEFAULT** | | $422,231 | $450,600 |
+| 6 | Always January | with the draw | $394,453 | $447,131 |
+
+Spend identical in all six (verified, under $2). **The shipped default ranks 5th of 6**, $112,024
+behind the best.
+
+**THE FIRST WRITE-UP OVER-GENERALIZED FROM THIS ONE HOUSEHOLD. Corrected 2026-09-06 after the
+user stopped it**: *"the rank here may only apply to households with this asset mix, and spending.
+E.g. assuming 'always January' will be worst or 'Always November' is best is not likely to be true
+universally."* Measured across a crossed grid instead - `.test_harnesses/timinggrid_harness.js`,
+5 mixes x 3 wealth x 3 spend x 6 strategies x 6 cells, 81 households scored at the shipped IRA Goal
+and 80 at 0.
+
+**Q1. The direction holds better than the caution implied, but the RANKING does not.**
+| cell | wins (of 81) |
+|---|---|
+| `late/december` | **74 (91.4%)** |
+| `auto/december` | **7 (8.6%)** |
+| everything else | 0 |
+**"Always November is best" is FALSE in 7 of 81 households** - beaten there by the shipped Automatic
+rule with December settlement, not by January. "Always January is best" was true in **0 of 81**, and
+`late/draw` won 1 of 80 in the robustness pass.
+**The design consequence is the important part: a card cannot hard-code a recommendation.** A static
+"switch to Always November" would be wrong about 9% of the time. The grid has to be RUN per
+household, which is what `P111` proposed anyway - but now for a measured reason rather than caution.
+
+**Q2. There is always something to cue.** Median spread best-to-worst is **8.27% of net worth**
+(7.30% at goal 0), and **no household was flat**. Median gain over the shipped default:
+`late/december` **+$117,073**, `late/draw` +$96,005, `auto/december` +$34,546; `early/draw` is
+**-$149,227**, so the January end of the range is where the money is lost.
+
+**Q3. THE FRAMING I PROPOSED WAS WRONG, and this is the real correction.** On the defaults household
+tax and wealth ranked identically, so the card was going to say "expect the tax bill to rise; it is
+the price of holding more money". Across the grid:
+- the wealth-best cell is also the highest-tax cell in **72 of 81** - they disagree in 9;
+- and **20 of 81 households contain a DOMINANT cell: more wealth AND less tax.**
+So **"it is always a trade" is false in about a quarter of households.** The card must report both
+quantities and let dominance be discovered per household - and when a dominant cell exists it should
+say so plainly, because "more money and a smaller tax bill" is a far stronger cue than a trade.
+
+**Coverage limit, stated rather than buried:** 189 of 270 households were skipped - most fail at the
+8% spend rate, and **the six cells disagreed about SURVIVAL in 18 of them**. Timing alone can decide
+whether a plan lasts, which is a stronger result than any wealth delta here and is its own item.
+
+
+### Items
+
+- [x] **P111a - DONE 2026-09-06, and it broke the framing rather than the ranking.**
+      `.test_harnesses/timinggrid_harness.js`. Results above. The two things a card must inherit
+      from it: **the recommendation cannot be static** (Always November loses in 7 of 81), and
+      **tax does not always rise with wealth** (20 of 81 households hold a dominant cell).
+      **Still NOT established, so do not let the card imply it:** every household here shares
+      `COMMON`'s ages, state, Social Security, growth and 20-year horizon. "Always January never
+      wins" is 0 of 81 ON THIS GRID, not a fact about the world - a household with a very short
+      horizon or a very large Roth relative to spending was not tested and is exactly where it could
+      flip. `P111a2` is the follow-up if the card's copy ever wants to lean on it.
+- [ ] **P111a2 - vary what `COMMON` holds fixed** before any wording asserts a universal. Ages and
+      horizon first (a 5-year plan cannot lose ten months of growth the way a 30-year one can), then
+      filing status and state. Cheap: the harness already takes a household, only the fixture list
+      changes.
+- [ ] **P111e - timing decides SURVIVAL in 18 of 270 households, and that outranks the wealth cue.**
+      The six cells disagreed about whether the plan lasts. A cue that says "you could have $117,073
+      more" is worth less than one that says "this choice is the difference between the plan working
+      and not". Measure which cells fail and why - the suspicion is the January draw removing money
+      before a bad early year - and if it holds, that becomes the card's headline for those
+      households and the wealth delta becomes the footnote.
+
+- [ ] **P111b - the card.** Compare against the user's CURRENT setting, never the previous run - the
+      summary bar's moving reference (`P109b`) is exactly the confusion this card must not inherit.
+      Report wealth AND tax together with the "already after-tax" sentence, because reporting wealth
+      alone hides a rising tax bill and reporting tax alone recommends the worst cell. Name the pair
+      to switch to and what it is worth. Say "dominates" only when a cell wins on every reported
+      metric; otherwise present it as a trade and let the user choose (`P106` groundrule 4).
+- [ ] **P111c - decide against `P45`'s stated architecture.** `P45` says "Projection formulas (no
+      extra simulate() calls)" and this card needs five. **Compute it when the Insights tab is
+      opened, not inside `runSimulation()`** - the audience runs machines 3.5-6x slower than the dev
+      box, and five extra sims on every debounced recalc is not free. Measure the cost on the slow-
+      machine assumption before wiring it anywhere.
+- [ ] **P111d - the exposure decision the user actually opened with.** A card recommending these
+      settings makes them user-facing, so `forceWithdrawTiming` and `taxSettlement` come out from
+      behind the nerdknob. Both are currently gated diagnostics. Un-gating means a changelog entry
+      and user-facing copy, and the December option carries a real-world precondition - it works
+      because withholding is deemed paid ratably, so the user must actually withhold from a December
+      distribution. The card must not recommend it without that sentence.
+- **Related:** `P28jf` measured the automatic rule as dominated by a pinned Late across 79 cells,
+  which is the same direction this grid shows, and `P28jk` may yet change what "auto" should do -
+  so the card's wording must not hard-code today's three options.
+
+
+## P110: Fixed tax indexing sits on the main sidebar and does nothing there  *(NEW 2026-09-06, user-raised)*
+
+*(user: "Seems the 'Fixed tax indexing' selector belongs on the Monte Carlo tab.")*
+
+**It is worse than misplaced - where it sits it is a strict NO-OP.** `optimizer_core.js`:
+`const i_t = inputs.fixedTaxIndexing ? inputs.inflation : yr.yearInflation`. On a deterministic run
+`yr.yearInflation` IS `inputs.inflation`, so the two branches are the same number. **Measured
+2026-09-06** on the page defaults with `mc=1`: total tax, final net worth, lifetime RMDs and spend
+all identical to the cent, `dTax $0 / dNW $0`. It changes something only when paths carry their own
+inflation - Monte Carlo or Stress.
+
+The control already documents itself as Monte-Carlo-only: its tooltip ends *"Run a Monte Carlo with
+it on and off to see what variable inflation costs in tax alone"*, and the HTML comment distinguishes
+it from the MC tab's own **Fixed Inflation** preset, which pins the generated paths rather than what
+the tax code does with them. So the intent was always MC; only the placement is wrong.
+
+### Items
+
+- [ ] **P110a - move it to the Monte Carlo tab**, beside the Fixed Inflation preset it is explicitly
+      contrasted with. The two are a natural pair and the contrast only reads if they are adjacent:
+      one pins the paths, the other pins what the tax code does with whatever the paths produced.
+      Keep `fti` as the share key so existing links round-trip, and keep the nerdknob gate.
+- [ ] **P110b - decide what a checked box means on the deterministic run.** Today it silently does
+      nothing, which is the same failure shape as `P107e`'s greyed IRA Goal: a live-looking control
+      that cannot affect the result. Options are to grey it outside MC the way
+      `IRA_GOAL_BLIND_STRATEGIES` does, or to let the move to the MC tab make the scope self-evident.
+      Prefer the second if the move lands - a control that only exists where it works needs no note.
+- [ ] **P110c - sweep the sidebar for the same species.** `fti` was found by a user toggling controls
+      and seeing nothing happen. Any other nerdknob-gated control whose effect is conditional on a
+      mode should be checked the same way: set it, run deterministically, assert the result MOVES.
+      A control that cannot change the number it sits next to is a defect regardless of its label.
+- **Related:** `P109b`'s pinned baseline makes this class of thing findable - with the reference
+  moving, "I changed it and nothing happened" is hard to distinguish from "I changed it and the
+  reference moved with it".
+
+
 ## P109: the sweep stops at its own grid, and the reference point moves  *(NEW 2026-09-04, user-raised)*
 
 Two usability items from one session. The user went looking for a strategy oddity, found it was not
@@ -373,13 +645,41 @@ the `r - hysaNet` SPREAD, because cash held for an estimate earns something mean
       one would be.
       Credited to the accounts the draw came from, in proportion, each at its own rate; brokerage
       basis rises with it, because this is money never withdrawn rather than a gain.
-      **Measured, and it cross-validates `P108a` to within ~6%:** on the canonical household
-      early $4,429,643 -> $4,572,690 (+$143,047, `P108a` estimated $135,242) and
-      late $4,775,070 -> $4,788,808 (+$13,738, estimated $12,938). The excess over the estimate is
-      exactly the feedback `P108a` said it omitted.
+      **Measured. FIGURES CORRECTED BY `P108e` 2026-09-06** - the ones below are the current ones;
+      the originals were inflated by a credit applied before the growth call:
+      early $4,429,643 -> **$4,562,713** (+**$133,070**, was +$143,047; `P108a` estimated $135,242)
+      and late $4,775,070 -> **$4,788,725** (+**$13,655**, was +$13,738; estimated $12,938).
+      **The correction moved both TOWARD `P108a`'s independent estimate** - the early arm from 5.8%
+      above it to 1.6% away - so the cross-validation is stronger after the fix, not weaker.
       Suites 419/61/22, badge 833. Browser-verified: `txs=december` round-trips, gated with the
       withdrawal-month control, `-taxCarryCredit` surfaces. No changelog entry - gated, default off,
       goldens untouched, same scope test as `P28jh`.
+- [x] **P108e - the December credit was applied BEFORE the post-withdrawal growth. FIXED and
+      re-measured 2026-09-06, v11.1763.** Found while checking whether the trick carried to `P28jk`.
+      `balance[k] += add` ran above `applyGrowth(balance, rates, postMonths)`, so the credited
+      dollars earned that growth on top of BEING it. The arithmetic it is meant to reproduce - hold
+      `T` through the growth, pay on December 31 - is
+      `bal*(1+r*post/12) + T*r*post/12`, so the exact credit is `T*r*post/12` added to the
+      ALREADY-GROWN balance. **Over-credit was `T*r^2*(post/12)^2`.**
+      **Fixed** by moving the block below `applyGrowth`, and the credit is now added into `yr.gains`
+      explicitly - sitting under that call it is no longer swept up by it, and leaving it out would
+      under-report `brokerageG`/`cashG`/`rothG` by exactly the credit.
+      **P108b RE-MEASURED, canonical household, old engine against new** (the pre-fix engine was
+      taken straight from HEAD, which reproduced `P108b`'s recorded figures to the dollar - that is
+      the check that the A/B was set up right):
+      | arm | reported | corrected | overstated by |
+      |---|---|---|---|
+      | early | +$143,047 | **+$133,070** | $9,977 = **6.97%** |
+      | late | +$13,738 | **+$13,655** | $83 = 0.60% |
+      **Settlement OFF is unchanged to the cent in both arms**, so nothing outside the gated feature
+      moved and goldens were never at risk.
+      **The correction CORROBORATES the fix rather than merely shrinking a number.** `P108a` estimated
+      the early prize independently, from the Tax Planner's carry model, at $135,242. The buggy
+      engine sat 5.8% above that; the fixed engine sits **1.6%** away. An independent estimate and
+      the engine agreeing more closely after a change is the outcome a correct fix should produce.
+      One test added (420 total), **verified to FAIL against a pre-fix copy** - 7.33% off in an Early
+      year, 0.67% in a Late one, against a $0.01 tolerance. Suites 420/61/22, badge green at 834,
+      17 critical guards. No changelog entry: gated, default off, and nothing a user can see moved.
 - [ ] **P108c - option (c), April 15 of the FOLLOWING year. DEFERRED, decide after `P108a`.**
       The accurate one and the invasive one: it creates a **cross-year liability the engine has never
       had**, so every log row would carry tax owed from last year, and it touches the death year, the
@@ -420,10 +720,103 @@ clip at a $4M goal. `propwd`, `ordered` and `split` never reference it at all.
 Only `fixed`/Reduce treats it as a TARGET: `calculateAmortizedWithdrawal(IRA, goalNominal, ...)`
 (`optimizer_core.js:1383`) sizes every year's draw from it, which is why it is the one sensitive arm.
 
-**And on Reduce the lever runs BACKWARD from the documented intent.** Raising the goal $0 -> $4M
-raises net worth $8,922k -> $10,438k AND raises the ending IRA $1,796k -> $6,270k. So "force more
-Roth/Brokerage and less IRA" means setting the goal LOW, and on this household that costs $1.5M of
-net worth. The goal is a drawdown target, not a dividing line between ideal and less ideal mixes.
+**CORRECTED 2026-09-05, by the user: Reduce is not backward, it is the REFERENCE behavior.** The
+IRA Goal is **the level to reduce TO, not an amount to obtain.** Raising it $0 -> $4M asks for LESS
+reduction, so the higher ending IRA ($1,796k -> $6,270k) is the control doing exactly what it says,
+and the higher net worth ($8,922k -> $10,438k) is the PRICE of reduction rather than evidence
+against the lever. Forcing more Roth/Brokerage and less IRA means setting the goal LOW; on this
+household that costs $1.5M of net worth, and that trade is the whole point of the control.
+
+**CORRECTED A THIRD TIME 2026-09-05, and this is the one to build against.** The first pass called
+it a reduce-to target, the second called it a level to HOLD. Both wrong on the same half. The user:
+*"Once the goal is met, the point is not to hold the IRA level - the point is to treat it like any
+other asset."*
+
+**The target governs the SURPLUS ONLY** - the draw taken beyond what spending needs, in order to
+shrink the IRA or fill a limit. At or below the target that surplus goes to zero and **the IRA
+reverts to being an ordinary source in the strategy's normal spending draw.** Not frozen, not
+preserved, not held at a level.
+
+| family | the surplus the target must switch off | at or below target |
+|---|---|---|
+| `bracket` / IRMAA / ACA | draws IRA up to the income ceiling whether spending needs it or not | stop filling the limit; keep drawing the IRA for SPENDING like any other account |
+| `fixedpct` (IRA Draw) | X% of the original IRA balance | same |
+| `fixed` (Reduce) | the amortization payment | same |
+| `propwd` (Proportional +X%) | **`boost = spendGoal x pct`, IRA-only, added AFTER the proportional spending draw** (`optimizer_core.js`, propwd branch). A real surplus, and it never consults the target | drop the boost, keep the proportional draw |
+| `ordered`, `split`, `gk`, `propwd` at +0% | none - they draw only what spending needs | nothing to switch off |
+
+**Two things this corrects in items already written here.**
+1. **`P107e`'s greying is mostly RIGHT, not a wholesale stopgap.** `ordered`, `split` and `gk` take
+   no surplus draw, so no value of the target can change them and the field greying out is honest.
+   The one wrong entry is **`propwd` with a boost**, which does take a surplus and ignores the
+   target. Narrow the list, do not empty it.
+2. **The at-target defect is sharper than "a hold rather than an optimization".** It is that the IRA
+   LEAVES THE SPENDING CASCADE: `fillSpendingGap` funds the year Cash -> Brokerage -> Roth, and the
+   IRA appears only as the last-resort spill inside `calculateWithdrawals`. Treating it like any
+   other asset means it belongs in the normal draw, not at the back of the queue.
+
+**And a third mode, which is not "stop" and not "fill":** once a threshold has been crossed
+involuntarily, running to just under the NEXT one can beat both. The user's example - IRMAA Tier 1
+crossed, the selected limit is Tier 3, and the better move may be to draw to just below Tier 2. The
+Tier 1 premium is already paid, so the marginal cost up to the next cliff is tax alone.
+**The codebase already does exactly this elsewhere**: the cyclic brokerage-harvest branch tops off
+"whichever LTCG bracket the forced amount actually lands in (capture the room in the bracket you're
+already paying for)". So it is a known-good shape here, not a new invention. See `P107h`.
+This is also the companion the standing "a selected limit is a contract to FILL" rule needs: the
+contract holds until the target is met, and after that the binding ceiling is the nearest cliff above
+realized income rather than the one the user picked.
+
+**Why the CHOICE of target matters** (`P107c`): it is where the plan stops managing tax brackets and
+starts behaving like an ordinary portfolio. It is not a safety floor. The name follows the meaning -
+`P107g`, decided as `IRA Target`. The two-mode structure with re-entry is what `P35`/`P104c`
+"Phased" was always meant to be, and that is where it gets measured.
+
+
+### Prerequisites - what has to be true before any of this is BUILT
+
+*(user, 2026-09-05: "what defects should we fix before we make changes to the strategies?" This is
+the answer, sequenced. `P104c` carries the shorter MODEL list - a harness can equalize around more of
+this than a shipped change can.)*
+
+| # | blocker | blocks | why it corrupts THIS work specifically |
+|---|---|---|---|
+| 1 | **`P28jf` / `P28jb`** - the withdrawal-timing trigger | `P107f` | `_useEarly = (_prevConv > 1000)` moves the whole SPENDING draw from month 11 to month 1 for the year after any conversion over $1,000. A target-tracking plan converts in its aggressive years and not in its passive ones, so **the flip fires exactly on the mode boundary** and the measured difference between modes carries a timing change nobody asked for |
+| 2 | **`P100`** - the selection defect | `P107c` | `_convSavings` is null on every non-`⇌` row and `conveffect` ranks on `?? -Infinity`, so untwinned rows are dumped below every twinned one, and only 12 rows get a twin. Any "which target is best" read off the table inherits it |
+| 3 | **`P87d`** - ACA overage reads low | `P107h` only | `tax.MAGI` carries no non-taxable-SS add-back. `P107h` is entirely cliff arithmetic - which cliff is next, and have we crossed it - and at the ACA cliff that arithmetic is on the wrong basis |
+
+**On (1), state it precisely, because half of `P28j` IS fixed.** `P28jg` corrected the CONVERSION
+leg - a converted dollar earned no growth in its conversion year - and the conversion month is now
+growth-neutral deterministically and under GBM (`P28ji`: bootstrap median +$5,364, 0.057% of NW, not
+building). `P28jh` shipped the control. **What remains is the trigger, and it drives the SPENDING
+leg.** `P28jg` also removed that trigger's own justification: it existed so a conversion year would
+get money out early for the Roth to compound, which is now a no-op, leaving only the cost - and the
+spending leg wants to stay invested (late still +$345,427 NW on the canonical household post-`jg`).
+So `P28jf` may close as "drop the trigger, default late" rather than the redesign it was scoped as.
+**It needs one confirmation run on the post-`jg` engine before that is claimed:** `P28ja`'s 39-cell
+evidence is pre-`jg`, and three research tables in this repo have stopped reproducing after an
+engine change.
+
+**Two data hazards. Neither is code, and neither will announce itself.**
+- **Every figure in `research/CONVERSION_*.md` predates `P28jg`** and was measured on an engine that
+  undervalued conversions, so they are CONSERVATIVE, not overstated. Same for pre-2026-09-02
+  Proportional and Guyton-Klinger numbers, which `P104b1x` moved by +$241,868 and +$103,349 mean.
+  Quote them as a floor or re-run them; do not carry them forward as current.
+- **The `P85` fixture trap is aimed straight at this phase.** Its 124 counterexamples were never an
+  engine defect: `iraBaseGoal: 0` was copied wholesale from another harness against a shipped default
+  of $750,000. Under the new rule **the target CHOOSES THE MODE**, so a copied fixture value does not
+  shift a number, it measures a different policy. Every fixture sets the target explicitly and prints
+  it.
+
+**Explicitly NOT blockers**, listed so nobody re-derives them: `P95a` (share-link load path),
+`P73` (the strategy sort reads the label), `P91d` (MC controls in neither saved scenario nor share
+URL), `P109a`/`P109c` (the sweep's grid edge - that is parameter search, not the rules), `P72` (the
+first-year stub - a uniform approximation, so it moves levels rather than the comparison between
+strategies).
+
+**One process guard, not a defect:** `P104d` is not optional before anything here ships. `P103e`
+caught a single-path winner reaching **0% bootstrap survival**, and a phased policy selected on a
+median is that same shape of arm.
+
 
 ### Items
 
@@ -450,6 +843,12 @@ net worth. The goal is a drawdown target, not a dividing line between ideal and 
       `bracket` fails rather than silently leaving the field enabled on a dead control.
       Browser-verified: all 7 strategies, the load path (`?str=ordered` arrives greyed with `ibg`
       preserved), badge green at 830.
+      **RE-SCOPED TWICE 2026-09-05, and it survives mostly intact.** Under the final rule the target
+      caps a SURPLUS draw, and `ordered`, `split` and `gk` take none - so greying the field for those
+      three is honest and stays. The list loses exactly one entry: **`propwd`**, whose `+X%` boost is
+      a surplus that ignores the target. When `P107f` lands, `IRA_GOAL_BLIND_STRATEGIES` drops
+      `propwd` (or keeps it only at `propWithdraw === 0`, which is the same statement) and the
+      pinning test gains that case.
 - [ ] **P107b - promote the probe to a harness and a `research/` report**, with the sweep run across
       the P106 household set rather than the canonical one alone, and with the goal swept RELATIVE to
       the starting IRA (0.25x, 0.5x, 1x, 2x) rather than in absolute dollars - an absolute grid tests
@@ -458,10 +857,61 @@ net worth. The goal is a drawdown target, not a dividing line between ideal and 
       FIRST: by net worth the answer is trivially "set it high"; by `P106f`'s Roth+Brokerage+Cash it
       will not be. **Do not run this before that choice is made**, or it measures the metric rather
       than the goal.
-- [ ] **P107d - decide what the IRA Goal should MEAN.** Three live options, not equivalent: keep it a
-      floor (status quo, mostly inert), make it a target every strategy amortizes toward (Reduce's
-      behavior generalized), or retire it in favor of the `P106f` bucket objective. A product
-      decision, not a measurement.
+- [x] **P107d - what the target MEANS. DECIDED 2026-09-05 by the user**, closing the three options
+      this item was opened to weigh, and corrected twice inside the same session before it settled.
+      **It caps the SURPLUS draw, not the balance.** Above it, draw hard toward it; at or below it,
+      the surplus stops and the IRA is treated like any other asset in the normal spending draw.
+      It binds every strategy that takes a surplus, not the three that happen to read it. Retiring it
+      for the `P106f` bucket objective is OFF the table; leaving it a mostly-inert floor is off the
+      table too. `P104c` measures the policy, `P107f` builds it, `P107g` renames it.
+- [ ] **P107f - the surplus stops at the target; the IRA stays an ordinary asset** *(user,
+      2026-09-05; the build item, and it should not start before `P104c` has measured the policy)*.
+      Above target, take the surplus as hard as the strategy's own limit allows. At or below, the
+      surplus is zero and the IRA draws for SPENDING like every other account. Re-enter the
+      aggressive mode if the balance climbs back above.
+      **Three pieces of work, in increasing size:**
+      - **`propwd`**: gate `boost = spendGoal x pct` on the target. Smallest change in the phase, and
+        the only one of the four greyed strategies that is greyed wrongly.
+      - **`bracket` / `fixedpct` / `fixed` / `schedule`**: they already stop the surplus, via
+        `IRAwd = min(yr.curIRA, room)` and Reduce's amortization. What they do NOT do is put the IRA
+        back in the spending draw - `fillSpendingGap` funds the year Cash -> Brokerage -> Roth and
+        the IRA is only the last-resort spill inside `calculateWithdrawals`. That is the real change
+        and it moves money in every at-target year.
+      - **`ordered` / `split` / `gk`**: nothing to do. They take no surplus, so the target has
+        nothing to switch off, and `P107e`'s greying stays correct for them.
+      **PRECEDENCE:** a selected limit is otherwise a contract to FILL (`findings.md`). The target
+      ends that contract - and `P107h` is what replaces it, rather than a bare stop.
+      Expect goldens to move on any household where the target actually binds.
+
+- [ ] **P107h - the crossed-cliff top-off** *(user, 2026-09-05, and it may be worth more than
+      `P107f` itself)*. Below the target the plan does not need to fill the SELECTED limit, but
+      stopping dead is not obviously right either: if realized income has already crossed a lower
+      threshold, drawing to just under the NEXT one captures room that is already paid for. The
+      user's case: IRMAA Tier 1 crossed, limit set at Tier 3, and the better move may be to stop just
+      below Tier 2.
+      **Precedent, so this is a known shape rather than a new idea:** the cyclic brokerage-harvest
+      branch already tops off "whichever LTCG bracket the forced amount actually lands in (capture the
+      room in the bracket you're already paying for)". Same rule, different tax.
+      Measure before building: the arms are STOP (surplus zero), FILL (today's selected limit) and
+      TOP-OFF (nearest cliff above realized income), and the cliff set is federal brackets plus IRMAA
+      tiers plus the ACA cliff. Whether the top-off should also apply ABOVE the target - i.e. as a
+      cheaper ceiling than the one the user picked - is a separate question and is NOT in this item;
+      `P100`'s selection defect is the reason to keep them apart.
+
+- [ ] **P107g - rename it, and rewrite three pieces of copy that state the OLD meaning**
+      *(user, 2026-09-05: "if it confused you, it may confuse a user")*. **NAME DECIDED BY THE USER
+      2026-09-05: `IRA Target`**, over `Max IRA`, because the control is two-sided - the balance can
+      be above it or below it and converges either way, and "Max" states only the ceiling half. It
+      is user-facing, so it carries the label, the greyed note and the ⓘ suggestion. `ibg` stays as
+      the URL key - saved links must round-trip.
+      Three places say FLOOR or MINIMUM, all of them the meaning the user has now rejected: the field
+      tooltip (`retirement_optimizer.html:315`, *"Minimum IRA balance to preserve ... a floor the
+      withdrawal will not cross"*), the help section (`:1175`, *"sets a floor ... the minimum balance
+      the optimizer will not draw below"*), and the `P107e` greying note (`:1013`). A changelog `<li>`
+      for a shipped release is history and is NOT rewritten.
+      Also re-examine the Extra Annual Roth Conversion tooltip (`:254` and `:1199`), which explains at
+      length that conversions do NOT stop at the goal. Under a two-sided target that carve-out needs
+      re-justifying, not copy-editing.
 - **Related:** `P85`'s broken RMD claim has 124 counterexamples, **all bracket strategies at a live
   IRA Goal** - so the goal is already implicated in a finding that broke. `P104c`'s phased-strategy
   question ("switch once the IRA Goal is reached and held") presumes a goal that binds; on six of
@@ -682,11 +1132,82 @@ What nobody had measured is the thing that decides what to BUILD: per-year freed
             anything is trimmed to pay for it, the page says so; no arm is dropped on a predicted
             winner. Rule `C2`: deterministic truncation order.
       - **Out of scope here, named so it is not re-derived:** the `+%` boost on a split; a per-year
-        vector (that is `P103b2`'s field, gated by `P104e`); the switch, which `P104c` adds as
-        `splitAfter: { year, weights }` on top of this field, additive.
+        vector (that is `P103b2`'s field, gated by `P104e`); the switch, which `P104c` owns and which
+        is NOT a dated `splitAfter` - the user re-scoped it 2026-09-05 to a target-tracking mode with
+        re-entry, so the switch year is neither known in advance nor unique.
 
-- [ ] **P104c** - extend it to ONE switch (archetype A until year t, B after). This is `P35`'s
-      phased carrier, and `P104a` says it reaches 85-100% of the ceiling in most regimes.
+- [ ] **P104c - RE-SCOPED 2026-09-05 by the user. Phased is TARGET-TRACKING, not one dated switch.**
+      *("as effectively as possible reduce the IRA, thereafter use whatever spend strategy produces
+      the best total outcome AND if the IRA rises above the target, go back into aggressive mode")*
+      Two modes and a threshold, with re-entry. `splitAfter: { year, weights }` cannot express it:
+      the crossing year is not known in advance and there can be several. This is the same policy
+      `P107` just defined - `P104c` measures it, `P107f` builds it, and neither should start before
+      this measurement exists. The user's ask is explicit: *"it would be great to model this proposed
+      behavior without having to build it all."*
+
+      **IT CAN BE MODELLED WITH ZERO ENGINE CHANGE.** Two per-year research inputs already exist,
+      both preempt the strategy chain, and both fall through on a null entry
+      (`_oracleWithdrawalPlanFor` returns null for a missing year, `_schedulePlanFor` likewise) - so
+      they compose DISJOINTLY, one vehicle per year. Between them they cover the whole board:
+
+      | mode's family | vehicle | note |
+      |---|---|---|
+      | Fill Bracket / IRMAA / ACA | `schedulePlan[y].ordTarget` | exact, and **path-INdependent** - an income ceiling stays valid whatever the balance does |
+      | IRA Draw, Reduce | `schedulePlan[y].iraDraw` | exact, path-DEpendent (a compiled dollar amount) |
+      | Guyton-Klinger | `schedulePlan[y].iraDraw` + `scheduleOptionsForRun`'s `spendRule:'gk'` | carries the RULE forward, not the realized numbers (`P103b5b`) |
+      | Proportional | `oracleWithdrawalPlan[y] = {prop:true}` | exact |
+      | Ordered | `oracleWithdrawalPlan[y] = {seq:[...]}` | exact |
+      | Fixed Split | `oracleWithdrawalPlan[y] = {IRA:w, Brokerage:w, Cash:w, Roth:w}` | exact |
+
+      `compileScheduleFromRun` + `scheduleOptionsForRun` already build the first three from a
+      finished run, and `schedule_replay_harness.js` already pins the replay identity, so none of
+      that is new code either.
+
+      **Recipe.** (1) Run arm A (aggressive) and arm B (passive) separately. (2) Mode vector `m[y]`:
+      A while `IRA > target`, B at or below, back to A on re-crossing; seed it from A's own path.
+      (3) Splice - A-years from A's vehicle, B-years from B's. (4) Run the spliced plan, read the
+      realized IRA path, recompute `m`, repeat **to a fixed point** (2-4 passes expected; report
+      non-convergence, never cap it silently). (5) Score against A alone, B alone, and the `P103a`
+      per-year oracle ceiling. (6) Inner loop over passive candidates picks the best-NW B per
+      household - that is the "whatever produces the best total outcome" half.
+
+      **Three constraints, all real, all from the engine:**
+      - `cyclicEnabled` throws against both vehicles, so the model runs cyclic OFF. Equalize the arms
+        against that, per the standing bake-off rule.
+      - **Prefer a CEILING family for the aggressive mode.** Its entries never need recompiling as
+        the path moves, so only `m` iterates. A quantity aggressive arm (Reduce) has its dollars
+        recompiled every pass, which is where a fixed point can fail to exist.
+      - The below-target arms are **STOP** (surplus zero, IRA back in the normal spending draw) and
+        **TOP-OFF** (`P107h`: run to the nearest cliff above realized income). "Hold the balance at
+        the target" was an earlier misreading of the user and is NOT an arm - the IRA is an ordinary
+        asset down there. Today's engine is a third thing, and not a candidate: it stops the surplus
+        AND leaves the IRA at the back of the gap-fill queue.
+
+      **PREREQUISITES for the MODEL** - shorter than `P107`'s build list, because a harness can
+      equalize around most of it. Full reasoning under `P107`, "Prerequisites".
+      - **Pin `forceWithdrawTiming` on every arm and report the pin.** Shipped by `P28jh`, share key
+        `fwt`, and it is a plain input so a node harness sets it directly. **Never run this on
+        Automatic:** `_useEarly = (_prevConv > 1000)` flips the whole spending draw ten months on the
+        year after a conversion, and a target-tracking plan converts in aggressive years and not in
+        passive ones - so the flip lands on the mode boundary this phase exists to measure.
+      - **Score on an explicit metric written into the harness, never the Optimizer's ranking**
+        (`P100`: untwinned rows sort below every `⇌` row rather than on their merits).
+      - **Set `iraBaseGoal` explicitly in every fixture and print it** (`P85`: `iraBaseGoal: 0`
+        inherited from another harness against a $750,000 default broke a 186-of-186 claim). Here it
+        is worse than a wrong number - the target picks the MODE, so a copied value measures a
+        different policy.
+      - `cyclicEnabled` off: both vehicles throw against it.
+      - Do not cite `research/CONVERSION_*.md` as current - every figure in it predates `P28jg`.
+      - `P87d` is NOT a blocker for the model unless an ACA arm is in the grid. If one is, say that
+        the ACA overage reads low rather than quietly reporting it.
+
+      **Policy or hindsight?** The mode rule is evaluated forward from the realized balance, so the
+      SWITCHING is a policy someone could adopt. Choosing which passive family is best per household
+      is the same hindsight the shipped sweep already has - no worse, but say so rather than claiming
+      more. Cost is roughly 6 candidates x 4 passes x 5 households plus baselines, a few hundred
+      sims, which is nothing next to a sweep.
+      `P104a`'s 85-100%-of-ceiling result stands as the prior, but it measured ONE switch on the
+      pre-v11.1701 engine; re-entry is untested and the engine has moved.
 
 - [ ] **P104d** - Monte Carlo pass on whatever `P104b`/`P104c` pick, BEFORE anything ships. Not
       optional: this is the exact shape `P103e` caught, where the single-path winner reached 0%
@@ -2356,8 +2877,13 @@ That is now the third time in this repo a research table stopped reproducing aft
       (median -$250,887 -> -$16,480) but does NOT collapse it - still negative in all 49 live cells,
       never $0. Something beyond compounding charges for a month-1 withdrawal; the dividend accrual
       on the PRE-withdrawal balance (`optimizer_core.js:1152`) is the suspect and is unproven.
-- [ ] **P28jb** - `timingConvThreshold` research input replacing the bare `1000`, default `1000` so
+- [x] **P28jb - ALREADY IN THE ENGINE, box was never ticked.** `timingConvThreshold` research input
       unset is bit-identical; shape-validated (finite, `>= 0`) the way `gapFillWeights` is
+      Found 2026-09-06 while writing `P28jf`'s harness: `optimizer_core.js:1455-1457` reads `_tct`,
+      shape-validates it (finite, `>= 0`, so a malformed value means today's behavior rather than
+      something else silently), and carries a measured note dated 2026-09-04. Only the checkbox was
+      outstanding. **The sweep of it, `P28je`, is a different item and is now probably moot** - see
+      `P28jf`.
 - [x] **P28jg - A CONVERTED DOLLAR EARNED NO GROWTH IN ITS CONVERSION YEAR. SHIPPED v11.1734.**
       *(user, 2026-09-04: "I fail to see where early conversions vs late can harm any plan... It
       might be worse HERE because of the mechanics of how its being done, not because the
@@ -2446,19 +2972,137 @@ That is now the third time in this repo a research table stopped reproducing aft
       meaningless here - same rule P29 carries. `P28ja` scored 59 of 90 cells clean (delivered spend
       equal in both arms at both timings), so a third of the grid needs the paired report before its
       dollar figures mean anything
-- [ ] **P28je** - sweep the threshold (Q3) and measure the flip run length (Q4)
-- [ ] **P28jf** - **DECISION:** ship `forceWithdrawTiming` as a real control, change the trigger,
-      change the constant, or record and leave alone. `P30g` is the template for "measured, and
-      deliberately not shipped, with the reason written down"
-- **Status:** `P28ja` DONE 2026-08-27, Q1/Q2 answered and Q5 scored by it; `P28jb`-`P28jf` open.
-  **The phase's premise changed and its priority should be re-decided:** it is no longer "a checkbox
-  costing >$1M", it is "the Early-on-conversion rule never pays and nobody can turn it off". **Harness:** extend `.test_harnesses/unifiedconv_harness.js`
-  section 5, which already carries the arm shape (`forceWithdrawTiming` crossed with `convertExcessToRoth`)
-- **Independent:** no phase dependencies. Touches `beginYear` only, so it does not collide with
-  `P35i`'s `fillSpendingGap` arm.
+- [x] **P28jk - BUILT AND MEASURED 2026-09-06, v11.1766. The unbundled early conversion is real,
+      and it is DOMINANT.** *(user: "But this was just fixed with separate controls for Withdrawal and
+      Tax Paid. If not, let's fix that." It was not - `P108b` separated the TAX leg; the conversion
+      was still welded to the spending withdrawal.)*
+      A plan year has three legs and only two were separable. `conversionTiming` (share key `cvt`,
+      select beside the other two, same nerdknob gate) makes the third independent.
+      **Implemented as a growth TRANSFER, applied after `applyGrowth`** - the `P108e` lesson taken
+      first time rather than after the fact, since the shift IS growth and adding it before the
+      growth call would grow it twice. `shift = X * rate * (preMonths - m_c) / 12`, credited to the
+      Roth at the Roth's rate and debited from the IRA at the IRA's, per matched pair. Equal rates
+      deterministically, so the household total cannot move - but the split does, and the December 31
+      IRA balance is next year's RMD basis, which is the whole mechanism. Per-account rates mean it is
+      also correct under Monte Carlo, where `P28ji` found the rates diverge.
+      **THE FIRST MEASUREMENT WAS VOID AND IS RETRACTED. THE RMD IS FIRST MONEY OUT** (user,
+      2026-09-06): in a year an RMD is due the first dollars distributed satisfy it, and an RMD may
+      not be converted or rolled over, so **a conversion cannot precede the RMD.** The engine takes
+      the RMD at `preMonths`, so the conversion month is now FLOORED there in any year an RMD is
+      actually distributed. Shipped without that floor for about an hour, which made
+      "January conversion, November RMD" reachable - a prohibited transaction, not a plan.
+      **It measured as dominant (+$7,436 net worth, -$8,845 tax), and with the law enforced the same
+      comparison returns $0.00 on both, with zero years carrying a shift.** The whole reported gain
+      was the missing constraint. That is how an absent legal rule presents: as free money.
+      **What survives.** Deferring a conversion until AFTER the RMD is legal and still moves the plan.
+      Moving one EARLIER is legal only before RMD age - the classic gap years between retiring and
+      75 - and the page-defaults household converts nothing in its three pre-RMD years, so the
+      feature is worth exactly zero there. Whether it is worth anything on a household that converts
+      hard in the gap years is unmeasured and is `P28jn`.
+      **The user's menu was right for a reason I had argued against.** Their mode 2 groups the RMD
+      WITH the January conversion because the law requires the RMD first; I objected to the pairing
+      on growth grounds while missing the rule that forces it.
+      **The honest limit, in the code comment too:** only the conversion's GROWTH is relocated; the
+      AMOUNT is still what the strategy decided at the withdrawal point. Exact for `bracket`, which
+      sizes from income; an approximation for the balance-sized families. Residual against a true
+      three-segment year is `(10g^2/144)*(X - a*B)`, about 2 bp of balance at 6%.
+      One test (421 total) pinning both halves: the total cannot move, the split must, unset is
+      bit-identical, and asking for the month the withdrawal already uses is a no-op. Suites
+      421/61/22. No changelog entry - gated, default off, goldens untouched.
 
----
+- [ ] **P28jo - the timing MENU, as the user specified it** *(user, 2026-09-06)*. One control,
+      "Timing of Voluntary Withdrawals & Conversions", replacing two of the three selects with four
+      named modes. *RMDs* is italicised with a "when required" footnote - it tells the reader what
+      moves, and a household before RMD age simply has none.
+      | # | mode | conversion | *RMD* | spending withdrawal |
+      |---|---|---|---|---|
+      | 1 | early | January | January | January |
+      | 2 | **split** | January | January | November |
+      | 3 | late | November | November | November |
+      | 4 | Automatic | resolved by running 1-3, see below |
+      **Mode 2 needs the RMD leg** - RMDs currently ride the spending-withdrawal month, so "January
+      *RMD*, November spending" is not expressible. It is also the ONLY way to get a January
+      conversion in an RMD year, because `P28jk`'s floor requires the *RMD* first.
+      **AUTOMATIC IS NOT FORESIGHT, and my objection to it was wrong** *(user: "Hybrid/Automatic
+      doesn't require foresight... calculate each of the options under the given assumptions and
+      pick the one that results in higher net wealth")*. Running each fixed mode under the user's own
+      stated assumptions and picking the best is a search over POLICIES, each followable - the same
+      thing the Optimizer already does across strategies. The narrower caveat that does survive:
+      **under Monte Carlo a per-year selection that reads the path IS foresight**, so Automatic must
+      resolve once from the assumptions rather than re-picking per path.
+      **AND THE MODES RANK OPPOSITELY BY OBJECTIVE - measured, user predicted it exactly.** On the
+      page defaults, mode 3 (all late) vs mode 1 (all early): net wealth **+$137,134 for LATE**,
+      lifetime *RMDs* **-$85,692 for EARLY**, tax -$44,022 for early. The user's own statement:
+      *"it's almost certainly better (for net wealth) to take that RMD and do the conversion late...
+      it is also almost certain that early RMD + conversion will reduce the IRA more effectively."*
+      Both halves hold. **So Automatic cannot be defined on net wealth alone** - it has to name its
+      objective, and a user optimising the IRA Target wants the opposite mode from one optimising
+      wealth. That is `P111`'s card content, not a winner to pick.
 
+- [ ] **P28jn - is an early conversion worth anything in the GAP YEARS?** `P28jk`'s floor confines
+      a forward conversion move to years before an RMD is due, and the page-defaults household
+      converts nothing in its three pre-RMD years, so the feature measured exactly $0 there. The
+      case that could pay is the classic conversion window - retire in the early sixties, convert
+      hard until 75 - which is a household this grid does not contain. Measure that before deciding
+      whether the control earns its place, and note the answer decays to zero as RMD age approaches
+      no matter what, because the legal room does.
+
+      **PICK A MEASURE THAT CAN DISCRIMINATE.** On the page defaults both arms end with a $0 IRA and
+      both peak in year 0 at the starting balance, so ending IRA and peak IRA say nothing; only
+      lifetime *RMDs* moved. A household whose IRA SURVIVES to the end is required, or the
+      "reduces the IRA more effectively" half is measured against a floor.
+- [ ] **P28je - NO LONGER "moot".** The 2026-09-06 re-score reopened it: the trigger is a poor trade,
+      not a pure cost, so where it fires may be worth tuning after `P28jk` says what the two legs are worth apart.
+- [ ] **P28jf - MEASURED 2026-09-06, and the first verdict was WRONG. The measurement does NOT
+      support removing the trigger.** `research/WITHDRAWAL_TIMING_TRIGGER.md`, harness
+      `.test_harnesses/timingtrigger_harness.js`. Three arms - AUTO (shipped), pinned EARLY, pinned
+      LATE - across 6 strategies x 45 households, at the shipped IRA Goal and at 0.
+      **What holds.** On net worth AUTO is dominated: it beats LATE in **1 cell of 79**, median
+      -$115,103 (-2.963% of NW). `T2` held 79 of 79 for a pinned Late; `T3` plumbing held, 30 inert
+      cells identical to the cent. EARLY fails where LATE survives 17 times to 1 the other way.
+      **THE ERROR, caught by the user 2026-09-06.** The first pass scored a CONVERSION-motivated rule
+      on wealth alone - it captured no Roth balance and no conversion volume, so it never tested the
+      trigger's own claim. Same species as the scorer defects `findings.md` catalogues.
+      **Re-scored with Roth and conversion gross (`T5`), the picture changes:** AUTO holds MORE Roth
+      in **32 of 79** cells, and in **31 of 79 it buys more Roth at less net worth** - a real trade,
+      erased entirely by wealth-only scoring. Priced on `P106`'s yardstick the trade is poor - median
+      **0.24:1**, best 2.05:1, only **3 of 31** at or above the 1:1 bad-trade line, against the
+      **50.08:1** `P106` measured for a real conversion decision - and **47 of 79** are dominated on
+      both axes. Poor trade, but not "no upside", which is what the first write-up claimed.
+      **THE LIMITATION THAT DECIDES THIS ITEM, and the user's point.** The engine has ONE flag and ONE
+      `preMonths` per year, so **"early conversion with a LATE spending withdrawal" is a state it
+      cannot enter.** Every cell bundles the two legs. The grid therefore cannot test the trigger's
+      intent, and removing a conversion-beneficial rule on evidence that could not measure the
+      conversion benefit is not supportable.
+      **THE "$0 DETERMINISTICALLY" CLAIM WAS WRONG, corrected by the user 2026-09-06**, and the
+      error is a species worth keeping: a one-year BALANCE IDENTITY promoted to a plan-level
+      neutrality. With `a = 1 + g/12`, `b = 1 + 11g/12`, conversion `X`, and `applyGrowth` simple
+      proportional (`optimizer_core.js:701`), the COMBINED IRA+Roth is identical and `X` cancels -
+      `(B·a - X)·b + X·b = B·a·b` either way. **The SPLIT does not**: Early leaves the Roth larger by
+      `X·(10g/12)` and the IRA smaller by the same, and **the December 31 IRA balance is next year's
+      RMD basis** (`P84l`). So the plan diverges from the following year on, through forced income
+      and tax, **deterministically and at perfectly flat growth**. Escalation amplifies that channel
+      through bracket and IRMAA nonlinearity rather than creating it.
+      **The scaling result, which decides how to design `P28jk`:** per conversion year the unbundled
+      benefit is about `τ·X·10g/12` (the shift is free pre-tax, so its worth is the tax never paid,
+      plus the RMD knock-on) against a spending cost of `W·10g/12` in full pre-tax dollars. **Sign is
+      decided by roughly `τ·X` versus `W`.** This grid sampled mostly `W >> τ·X` and never controlled
+      the ratio, which explains its result without the trigger being worthless.
+      **DECIDED DIRECTION (user, 2026-09-06): plug the hole, do not discard the feature.** The defect
+      was the COUPLING - one flag serving two legs, which foreclosed the question instead of
+      answering it.
+      **`P28jk` LANDED THE SAME DAY, AND ITS FIRST ANSWER WAS VOID.** "Convert in January, spend in
+      November" measured as dominant only because the build was missing the rule that **an RMD is
+      first money out** - a conversion cannot precede it. With the floor added the same comparison
+      returns $0.00. So this grid still cannot be read as evidence against early conversion, but
+      neither is there yet evidence FOR it: the legal room is confined to pre-RMD years, and the
+      defaults household converts nothing in its three. `P28jn` measures a gap-years household.
+      **What is still true and still unaddressed:** the AUTOMATIC rule keys the SPENDING month off
+      last year's conversion, which is a different thing from converting early, and it wins only 7
+      of 81 households in `P111a`'s grid. The open question is no longer "remove or keep" but
+      **"what should Automatic do now that the legs are separable"** - plausibly late spending plus
+      early conversion, which is the dominant cell, rather than a flag that moves both. Measure that
+      before changing any default; `P111a`'s grid must be re-run over the wider cell set first.
 ## P83: which IRMAA safety margin is best against Monte Carlo inflation?  *(user-raised 2026-08-27, RESEARCH COMPLETE same day)*
 
 **Ask, as raised:** now that Monte Carlo varies inflation in all three modes, re-run the IRMAA margin

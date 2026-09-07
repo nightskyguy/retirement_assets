@@ -117,6 +117,11 @@ function applyTabFromUrl() {
     if (!id) return;
     showTab(id);
     if (id === 'tab-mc') mcTabActivated?.();
+    // The Optimizer needs its activation hook for exactly the reason Monte Carlo does, and did not
+    // have one: its tab BUTTON is `{runOptimizer(); showTab('tab-opt')}`, so arriving by ?tab=
+    // opened the tab with no sweep behind it and an empty table, and the only way to fill it was to
+    // click the tab you were already on. Same hook the button calls, so both routes land identically.
+    if (id === 'tab-opt') runOptimizer?.();
 }
 
 // Optimizer UI state - replaces window.optimizer* globals.
@@ -369,6 +374,9 @@ function deltaReferenceRow() {
 function recomputeDeltasAgainst(referenceRow) {
     const results = OptimizerState.results;
     if (!results) return;
+        // Kept although the Δ columns that displayed these are gone: deltaCellHtml computes its own
+        // per-column differences for 'Show as Differences', and these four remain the cheapest
+        // place to read a row's headline gap against the reference from the console or a harness.
     for (const r of results) {
         r._dNW  = referenceRow ? (r.afterTaxNW   - referenceRow.afterTaxNW)   : null;
         r._dTax = referenceRow ? (referenceRow.totals.tax - r.totals.tax)     : null;
@@ -383,6 +391,18 @@ function recomputeDeltasAgainst(referenceRow) {
 // longer in the table (the user changed a parameter out from under it) is dropped rather than left
 // pointing at a stale object.
 function resolveCompareRow() {
+    // Keep the pinned row itself when it is still one of the rows on screen, instead of re-deriving
+    // it from `compareSelection`. Changing the goal is allowed to move the ⚓ BASELINE; it must not
+    // disturb the row the user chose to compare against.
+    //
+    // Re-deriving was never safe for an objective change, because `results` is not rebuilt then and
+    // the match below is not unique: a ⇌ conversion row and the plain row it was built from share a
+    // `_selection`, and only `_isCurrentPlan` separates any two candidates. So find() could return a
+    // DIFFERENT row than the one that was pinned, which reads as the pin having moved or vanished.
+    // Identity is exact and cannot mis-resolve; the selection match below still handles the case it
+    // was written for, a fresh sweep where these row objects no longer exist.
+    const _cur = OptimizerState.compareRow;
+    if (_cur && Array.isArray(OptimizerState.results) && OptimizerState.results.includes(_cur)) return;
     const results = OptimizerState.results;
     const sel = OptimizerState.compareSelection;
     if (!results || !sel) { OptimizerState.compareRow = null; return; }
@@ -401,7 +421,12 @@ function toggleCompareRow(id) {
     const results = OptimizerState.results;
     const row = results?.find(r => r._id === id);
     if (!row) return;
-    if (deltaReferenceRow() === row) {
+    // Clicking the row that is ALREADY the reference stops comparing - and that includes the ⚓
+    // baseline even when nothing is pinned, because the baseline IS the default reference. Pinning
+    // it explicitly used to produce a state that claimed to measure "from this row instead of from
+    // the ⚓ baseline" while being the baseline, so the banner contradicted itself and the only way
+    // out was the ✕ button. Selecting the baseline now means the same thing as stopping.
+    if (deltaReferenceRow() === row || row === OptimizerState.baseline) {
         OptimizerState.compareSelection = null;
         OptimizerState.compareIsCurrentPlan = false;
         OptimizerState.compareRow = null;
@@ -501,8 +526,8 @@ function cellActionAttrs(col, r, loadTitle) {
     if (col.compareZone) {
         const isRef = deltaReferenceRow() === r;
         const tip = (isRef
-            ? 'Every Δ column is currently measured against this row. Click to go back to the ⚓ baseline.'
-            : 'Compare against this row: the ΔNetWealth and ΔTax columns are re-measured from it instead of the ⚓ baseline.')
+            ? 'Every column is currently measured against this row when Show as Differences is on. Click to go back to the ⚓ baseline.'
+            : 'Compare against this row: with Show as Differences on, every column is measured from it instead of from the ⚓ baseline.')
             + rowDetailTip(r);
         return ` onclick="toggleCompareRow(${r._id})" title="${tip}"`;
     }
@@ -526,8 +551,8 @@ function renderCompareBanner() {
     if (hint) hint.style.display = 'none';
     const label = `${row._strategyLabel}${row._paramLabel ? ' - ' + row._paramLabel : ''}`;
     el.innerHTML = `⚖ <strong>Comparing every row against:</strong> ${label}.`
-        + ` The ΔNetWealth and ΔTax columns now show the difference from this row instead of the ⚓ baseline,`
-        + ` and this row itself reads 0.`
+        + ` With <em>Show as Differences</em> on, every column is measured from this row instead of`
+        + ` from the ⚓ baseline, and this row itself reads 0.`
         + ` <button onclick="clearCompareRow()" style="margin-left:8px;padding:3px 12px;font-size:0.95em;cursor:pointer;font-weight:600;">✕ Stop comparing</button>`;
     el.style.display = '';
 }
@@ -727,6 +752,9 @@ function getInputs() {
         // P108b. '' is today's behavior (tax leaves with the withdrawal); the engine only
         // acts on 'december', so an empty select must arrive as undefined.
         taxSettlement: val('taxSettlement') || undefined,
+        // P28jk. Same convention: '' is today's behavior (the conversion rides the withdrawal
+        // month), and the engine acts only on 'early' / 'late'.
+        conversionTiming: val('conversionTiming') || undefined,
         fixedTaxIndexing: !!valChecked('fixedTaxIndexing'),
         // Account Composition (equity/bond ratio selects + intl equity % inputs)
         comp_IRA1_ratio: +val('comp_IRA1_ratio'),
@@ -1876,7 +1904,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
         // two zones with a spacer column makes the two actions hard to confuse.
         {
             key: 'compare', label: '⚖', sortable: false, compareZone: true,
-            title: 'Click to compare every other strategy against this row. The ΔNetWealth and ΔTax columns then measure from it instead of the ⚓ baseline. Click the highlighted one again to go back to the baseline.',
+            title: 'Click to compare every other strategy against this row. With Show as Differences on, every column then measures from it instead of from the ⚓ baseline. Click the highlighted one again to go back to the baseline.',
             getValue: r => compareToggleHtml(r),
             getSortValue: () => 0
         },
@@ -1896,7 +1924,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
         },
         {
             key: 'strategy', label: 'Strategy',
-            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = unreachable target: the bracket/IRMAA/ACA ceiling cannot be hit. ⤴ = this row conversion goes ABOVE its own ceiling: the conversion is added on top of a draw already sized to fill the bracket or tier, so income lands over it. The row still scores well or it would not be here, but it is no longer respecting the limit in its name. Sorting this column groups each family together and orders it by parameter. Click any row to load it, or ⚖ at the start of the row to measure every Δ column against it.',
+            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = unreachable target: the bracket/IRMAA/ACA ceiling cannot be hit. ⤴ = this row conversion goes ABOVE its own ceiling: the conversion is added on top of a draw already sized to fill the bracket or tier, so income lands over it. The row still scores well or it would not be here, but it is no longer respecting the limit in its name. Sorting this column groups each family together and orders it by parameter. Click any row to load it, or ⚖ at the start of the row to measure every column against it when Show as Differences is on.',
             getValue: r => r._strategyLabel,
             // Family, then parameter, then modifier - NOT the rendered label, which starts with markup
             // and emoji and scattered every clone away from the family it clones. rawSort compares
@@ -1975,30 +2003,11 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             },
             getSortValue: r => afterTaxBucketSpread(r, OptimizerState.sharedFutureIRARate ?? 0)
         },
-        {
-            key: 'dNW', label: 'ΔEnd Wealth' + deltaRefSuffix(),
-            title: 'End Wealth minus ' + deltaRefDescription() + '. Positive (green) = this strategy ends wealthier after tax than that reference; negative (red) = it ends behind it.',
-            getValue: r => {
-                const d = inC() ? r._dNWCurrent : r._dNW;
-                if (d == null) return '—';
-                const v = Math.round(d);
-                const c = v > 0 ? '#1a7f37' : v < 0 ? '#cf222e' : '#57606a';
-                return `<span style="color:${c}">${v > 0 ? '+' : ''}${v.toLocaleString()}</span>`;
-            },
-            getSortValue: r => (inC() ? r._dNWCurrent : r._dNW) ?? -Infinity
-        },
-        {
-            key: 'dTax', label: 'ΔTax' + deltaRefSuffix(),
-            title: 'Lifetime tax of ' + deltaRefDescription() + ' minus this strategy\'s lifetime tax (each = federal incl. NIIT + state + IRMAA). Positive (green) = this strategy pays less total tax than that reference; negative (red) = it pays more.',
-            getValue: r => {
-                const d = inC() ? r._dTaxCurrent : r._dTax;
-                if (d == null) return '—';
-                const v = Math.round(d);
-                const c = v > 0 ? '#1a7f37' : v < 0 ? '#cf222e' : '#57606a';
-                return `<span style="color:${c}">${v > 0 ? '+' : ''}${v.toLocaleString()}</span>`;
-            },
-            getSortValue: r => (inC() ? r._dTaxCurrent : r._dTax) ?? -Infinity
-        },
+        // The ΔEnd Wealth and ΔTax columns were removed 2026-09-07. 'Show as Differences' already
+        // turns every comparable column into a difference from the same reference row, so a pair of
+        // columns whose NAMES say delta was a second, narrower copy of that feature - and one that
+        // only ever covered two of the metrics. Pinning a row with the compare control now changes
+        // what 'Show as Differences' measures against, which is the whole of what it used to do.
         {
             key: 'rate', label: 'Tax Rate',
             title: 'Lifetime tax as a percentage of lifetime gross income (total tax ÷ total income). A blended effective rate across the whole plan.',
@@ -2033,6 +2042,15 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             // Renamed from "Tax Paid Δ". The Δ was misleading: unlike every other Δ in this table it
             // is not measured against the ⚓ baseline or a ⚖ pinned row, it is one row's own
             // conversion search compared against itself without the extra conversions.
+            // The ⇌ in the Strategy label says a row carries extra conversions but never how much,
+            // so the amount could only be discovered by loading the row - which replaces the plan you
+            // were comparing against. It is on the row already as _optConvAmt; this shows it.
+            key: 'extraConv', label: 'Extra Conv',
+            title: 'The additional yearly IRA→Roth conversion this row runs, on top of whatever the strategy already converts. This is the amount Optimize Conversions searched for, and it is what the Extra Annual Roth Conversion field is set to when you load the row. A dash means the row adds no extra conversion. The amount is also in the tooltip on the Strategy cell, so it is readable without turning this column on.',
+            getValue: r => (r._optConvAmt ? Math.round(r._optConvAmt).toLocaleString() : '—'),
+            getSortValue: r => r._optConvAmt ?? -Infinity
+        },
+        {
             key: 'convSaved', label: 'Conv Tax',
             title: 'Counts only tax actually paid during the plan, so it is NOT a verdict on whether converting was worth it. Positive = the extra IRA→Roth conversions run by Optimize Conversions lowered lifetime tax vs the same strategy without them. It does not price the deferred tax still owed on the no-extra-conversion plan\'s larger remaining IRA, so a big positive number here can sit alongside a plan that ends up worse off overall. Use the Break Even column, which prices in that deferred tax, for the actual answer.',
             // Colored by SIGN, not left plain. This is a saving, so a negative means the extra
@@ -2062,25 +2080,14 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
         console.error('getOptimizerColumns: column(s) not listed in OPT_COLUMN_KEYS:', missing);
     }
     cols = (_ordered.length === cols.length) ? _ordered : cols;
-
-    // In relative view every comparable column already IS a difference from the reference row, so a
-    // column whose name says delta is a second copy of one. Dropped on BOTH paths: switching all
-    // columns on must not bring them back, which is exactly how they reappeared the first time.
-    const dropDeltaCols = c => !(OptimizerState.relativeView && (c.key === 'dNW' || c.key === 'dTax'));
-    if (showAll) return cols.filter(dropDeltaCols);
+    if (showAll) return cols;
     // Union with the pinned set, not a straight read of the goal's list. `compare` MUST survive:
     // the Best summary table drops the leading column on the understanding that it is the ⚖
     // control. A typo in the data above cannot take it out.
     const keep = new Set([...OPT_COLUMNS_PINNED, ...(OPT_OBJECTIVE_COLUMNS[objKey] || OPT_OBJECTIVE_COLUMNS.taxflex)]);
-    // The Δ columns are in no goal's list. They measure against a reference, so they earn their
-    // space only once the reader has chosen one by pinning a ⚖ row - until then they restate the
-    // ⚓ baseline the table is already ordered around.
-    // ...except in relative view, where every comparable column is already a difference from that
-    // same row, so a column whose NAME says delta is just two of them.
-    if (OptimizerState.compareRow) { keep.add('dNW'); keep.add('dTax'); }
     // filter(), never a map over the goal's list: this array IS the display order, so a goal's
     // columns can be written in any order and `compare` still lands at index 0.
-    return cols.filter(c => keep.has(c.key) && dropDeltaCols(c));
+    return cols.filter(c => keep.has(c.key));
 }
 
 function renderOptimizerTable(results) {
@@ -2217,7 +2224,14 @@ function renderOptimizerTable(results) {
                     ? `ACA subsidy cliff: spending cannot be met within the FPL cap in ${r._acaBreachYears} year(s) - plan untenable at this spend (strict ACA never breaches the cap)`
                     : `ACA not applicable - everyone is already on Medicare (age ${TAXData.IRMAA.ELIGIBILITY_AGE}+) at the start, so there is no premium subsidy for a cap to protect. This row simulates as Proportional 0%.`)
                 : 'Bracket target exceeded in >50% of years - income sources already push MAGI above this ceiling')
-            : 'Click to load this strategy';
+            // The ⇌ marker says a row runs extra conversions; without the amount the only way to
+            // learn it was to LOAD the row, which replaces the plan you were comparing against. Put
+            // it on the hover so it is readable whatever the Optimize for goal is showing.
+            : (r._optConvAmt
+                ? `Extra annual Roth conversion: $${Math.round(r._optConvAmt).toLocaleString()}/yr`
+                  + (r._convEndYear != null ? `, stopping after ${r._convEndYear}` : '')
+                  + '. Click to load this strategy.'
+                : 'Click to load this strategy');
         const isCompareRef = deltaReferenceRow() === r;
         const cells = columns.map(col => {
             const cellWin = (col.key === 'tax'    && r._id === colWinners.tax)
@@ -2256,13 +2270,12 @@ function renderOptimizerTable(results) {
     let baselineRowHtml = '';
     if (baselineRow) {
         const _bCell = 'padding:4px 8px;background-color:#dbeafe;font-weight:bold;position:sticky;top:30px;z-index:1;';
-        const bTitle = 'BASELINE - the strongest plan with no Roth conversions and no cyclic brokerage maneuvering. Every other row\'s Δ columns are measured against this. Click to load it.';
+        const bTitle = 'BASELINE - the strongest plan with no Roth conversions and no cyclic brokerage maneuvering. Every other row\'s numbers are measured against this when Show as Differences is on, unless you pin another row with ⚖. Click to load it.';
         baselineRowHtml = '<div style="display:contents;" id="opt-baseline-row">' + columns.map(col => {
             let v;
             if (col.key === 'strategy')      v = BASELINE_MARK + baselineRow._strategyLabel;
             // Zero only when the baseline IS the reference. With a compare row pinned the baseline
             // has a real Δ like every other row, and printing 0 would be a lie.
-            else if ((col.key === 'dNW' || col.key === 'dTax') && !OptimizerState.compareRow) v = '0';
             // Both pinned rows go through the delta wrapper too. They are rows like any other in
             // relative view: the reference one returns null and falls through to its own numbers,
             // and any pinned row that is NOT the reference reads as a difference. Without this the
@@ -2309,7 +2322,26 @@ function renderOptimizerTable(results) {
     renderCompareBanner();
     const optTableEl = document.getElementById('opt-table');
     optTableEl.style.gridTemplateColumns = columns.map(() => 'max-content').join(' ');
-    optTableEl.innerHTML = headerHtml + baselineRowHtml + currentRowHtml + rowsHtml;
+    // Pinned ⚖ COMPARE row - a third sticky row under the other two. Changing the goal re-ranks the
+    // body, so the row you pinned can land hundreds of rows down and off screen while every column
+    // is still being measured from it. Hoisting it keeps the thing being compared against visible
+    // beside the two rows that are always visible. It stays in the ranked body as well, like the
+    // current-plan row and unlike the ⚓ baseline, so its Rank is still readable in context.
+    // Skipped when it IS one of the rows already pinned above, which would render it twice.
+    let compareRowHtml = '';
+    const cmpRow = OptimizerState.compareRow;
+    if (cmpRow && cmpRow !== baselineRow && !cmpRow._isCurrentPlan) {
+        const _mCell = 'padding:4px 8px;background-color:#dbeafe;font-weight:bold;position:sticky;z-index:1;';
+        const mTitle = 'COMPARING AGAINST THIS ROW - with Show as Differences on, every column is '
+            + 'measured from it instead of from the ⚓ baseline. Click it again to stop comparing.';
+        compareRowHtml = '<div style="display:contents;" id="opt-compare-row">' + columns.map(col => {
+            const v = (OptimizerState.relativeView ? deltaCellHtml(col, cmpRow, deltaReferenceRow()) : null)
+                   ?? col.getValue(cmpRow);
+            return `<div style="${_mCell}${cellActionCss(col)}"${cellActionAttrs(col, cmpRow, mTitle)}>${v}</div>`;
+        }).join('') + '</div>';
+    }
+
+    optTableEl.innerHTML = headerHtml + baselineRowHtml + currentRowHtml + compareRowHtml + rowsHtml;
     // Stack the second sticky row directly under the first: the 60px default assumes header +
     // baseline row heights, which depend on the rendered font/zoom, so measure once it is in the DOM.
     if (currentRowHtml) {
@@ -2319,6 +2351,16 @@ function renderOptimizerTable(results) {
         const _baseH = document.querySelector('#opt-baseline-row > div')?.offsetHeight ?? 0;
         const _top = _hdrH + _baseH;
         document.querySelectorAll('#opt-current-row > div').forEach(d => { d.style.top = _top + 'px'; });
+    }
+    // Third sticky row, stacked the same measured way. Its own offset has to include whichever of
+    // the two rows above it actually rendered, so it is measured rather than assumed: a plan with no
+    // baseline or no current row would otherwise leave a gap or overlap.
+    if (compareRowHtml) {
+        const _hdrH  = optTableEl.children[0]?.offsetHeight ?? 30;
+        const _baseH = document.querySelector('#opt-baseline-row > div')?.offsetHeight ?? 0;
+        const _curH  = document.querySelector('#opt-current-row > div')?.offsetHeight ?? 0;
+        const _top = _hdrH + _baseH + _curH;
+        document.querySelectorAll('#opt-compare-row > div').forEach(d => { d.style.top = _top + 'px'; });
     }
 
     // Column-count escape hatch. Written here rather than in the markup for the same reason the two
@@ -2443,8 +2485,8 @@ function renderOptimizerTable(results) {
             // Names the columns that are ACTUALLY on screen. The old string named three fixed
             // columns, one of which (Yrs Funded) is no longer a default column at all and two of
             // which the active goal may have put away. Advice pointing at a column the reader
-            // cannot see is worse than no advice. dNW/dTax are excluded on purpose: their labels
-            // carry the ' vs ⚖' suffix and read strangely mid-sentence.
+            // cannot see is worse than no advice. (The two Δ columns this list used to exclude are
+            // gone; "Show as Differences" turns these same columns into differences instead.)
             const _diffKeys = ['tax', 'afterTaxNW', 'mixSpread', 'finalRoth', 'finalIRA', 'rmdtax', 'convBE'];
             const _diffNames = columns.filter(c => _diffKeys.includes(c.key)).map(c => c.label).slice(0, 3);
             noteEl.textContent = 'ℹ️ All strategies show the same Total Spendable - this means every strategy fully funds your spending goal. '
@@ -3605,11 +3647,16 @@ function openTaxPlanner(row, prevRow) {
 
 
 function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWorth = 100000) {
+    // P113. The tiles read the SAME snapshot a saved plan records, so the two cannot drift apart.
+    // They used to be independent derivations of the same quantities - these values as locals here,
+    // and nothing at all on the save side, because no function returned them as data.
+    const _snap = OptimizerCore.summarizeRun(totals, finalNW, finalNWCurrentDollars).tiles;
+
     const inCD = document.getElementById('show-current-dollars')?.checked;
-    const dispTax   = inCD ? totals.taxCurrentDollars   : totals.tax;
-    const dispSpend = inCD ? totals.spendCurrentDollars : totals.spend;
-    const dispNW    = inCD ? finalNWCurrentDollars      : finalNW;
-    const dispRate  = totals.tax / totals.gross;
+    const dispTax   = inCD ? _snap.taxCurrentDollars   : _snap.tax;
+    const dispSpend = inCD ? _snap.spendCurrentDollars : _snap.spend;
+    const dispNW    = inCD ? _snap.endWealthCurrentDollars : _snap.endWealth;
+    const dispRate  = _snap.taxRate;
 
     document.getElementById('stat-rate').innerText  = (dispRate * 100).toFixed(1) + '%';
     document.getElementById('stat-spend').innerText = '$' + Math.round(dispSpend).toLocaleString();
@@ -5780,7 +5827,7 @@ const OPT_LONG_TO_SHORT = {
     propWithdraw:'pw', stratRate:'sr', iraWithdrawPct:'iwp', orderedSeq:'os', rothGapFill:'rgf',
     convertExcessToRoth:'mc', fundConversionWithCash:'fcc', extraConversionAmount:'eca', iraBaseGoal:'ibg',
     convEndYear:'cey', convEndMode:'cem', irmaaMarginMode:'imm', fixedTaxIndexing:'fti',
-    forceWithdrawTiming:'fwt', taxSettlement:'txs',
+    forceWithdrawTiming:'fwt', taxSettlement:'txs', conversionTiming:'cvt',
     advisorFeeAmount:'af', advisorFeeMode:'afm', advisorFeeScope:'afs',
     birthyear1:'by1', birthmonth1:'bm1', die1:'d1', startAge:'sa',
     birthyear2:'by2', birthmonth2:'bm2', die2:'d2', hasSpouse:'hs',
@@ -6095,6 +6142,76 @@ function escapeQuotes(str) {
     return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
 }
 
+/**
+ * Escape text for insertion as HTML CONTENT. escapeQuotes above handles attribute values only; it
+ * leaves < and & alone, which was survivable while the only interpolated text was a scenario name
+ * and is not once free-form notes go through the same innerHTML path.
+ */
+function escapeHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ============================================================================
+// PLAN PROVENANCE - the release a plan was saved under, and where it came from
+// ============================================================================
+
+/**
+ * The changelog release currently running, e.g. "11.1766".
+ *
+ * Single source for the version tile, the save path, the export path and the drift banner. It used
+ * to be an inline IIFE in the page that only fed the tile, so nothing else could ask.
+ *
+ * This is NOT SCENARIO_VERSION. That one guards the payload FORMAT and decides whether a plan can be
+ * loaded at all. This one records which engine produced the numbers, and is what makes a difference
+ * between a saved figure and a fresh one interpretable rather than merely puzzling.
+ */
+function appVersionString() {
+    const m = (typeof document !== 'undefined' && document.title || '').match(/\d+\.[0-9a-f]+/i);
+    return m ? m[0] : 'unknown';
+}
+
+// The two names a plan carries. The plan NAME is its key in the browser's store; the FILE NAME is
+// what it arrived in, if it arrived as a file. Import used to use the filename as a prompt default
+// and then throw it away, so neither survived to be offered back.
+let _lastLoadedPlanName = null;
+let _lastLoadedFileName = null;
+
+/** Snapshot of the run currently on screen, or null if nothing has been run yet. */
+function currentRunSummary() {
+    if (!lastTotals) return null;
+    return OptimizerCore.summarizeRun(lastTotals, lastFinalNW, lastFinalNWCurrentDollars, {
+        strategy:  lastSimInputs ? lastSimInputs.strategy : null,
+        objective: OptimizerState.objective,
+    });
+}
+
+/**
+ * Bring any entry to the shape the rest of the code expects, whatever it arrived as.
+ *
+ * Load and Import used to validate differently: Load demanded an exact version match, while Import
+ * tested `if (scenario.version && ...)` so a payload with NO version key skipped the check entirely,
+ * was applied, and was then stored unversioned - after which the list rendered it incompatible and
+ * Load refused it forever. Import could manufacture entries Load would not open. Normalising on the
+ * way in removes that class of entry rather than teaching two code paths to disagree politely.
+ */
+function normalizeScenarioEntry(raw, { sourceFile = null } = {}) {
+    if (!raw || typeof raw !== 'object') throw new Error('not a scenario file');
+    const data = raw.data ?? raw;          // legacy flat exports have no .data wrapper
+    if (!data || typeof data !== 'object') throw new Error('scenario has no input data');
+    return {
+        version:    raw.version ?? SCENARIO_VERSION,   // absent means "written before versioning"
+        data,
+        savedAt:    raw.savedAt ?? new Date().toISOString(),
+        appVersion: raw.appVersion ?? null,            // null = saved before releases were recorded
+        notes:      typeof raw.notes === 'string' ? raw.notes : '',
+        summary:    raw.summary ?? null,               // null = never run, or saved before snapshots
+        sourceFile: raw.sourceFile ?? sourceFile ?? null,
+        isOldStorage: !!raw.isOldStorage,
+    };
+}
+
 
 // ============================================================================
 // MAIN USER ACTION FUNCTIONS
@@ -6107,30 +6224,50 @@ function escapeQuotes(str) {
  * Displays success or error message
  * No parameters
  */
-function saveScenario() {
+function saveScenario({ alsoExport = false } = {}) {
     const inputs = getInputs();
     const scenarioName = document.getElementById('scenarioName').value.trim() ||
         `${new Date().toISOString().slice(0, 19).replace('T', ' ')}`;
+    const notesEl = document.getElementById('scenarioNotes');
+    const summary = currentRunSummary();
 
     try {
         const scenarios = getSavedScenarios();
 
-        scenarios[scenarioName] = {
+        const entry = {
             version: SCENARIO_VERSION,
             // P100b1: `optObjective` rides along beside the engine inputs. It is NOT added to
             // getInputs() on purpose - that object feeds simulate() and the MC cache hash, and a
             // ranking preference has no business changing either.
             data: { ...inputs, optObjective: OptimizerState.objective },
-            savedAt: new Date().toISOString()
+            savedAt: new Date().toISOString(),
+            // P113. The release that produced the numbers below. Without it a later difference is
+            // just a difference; with it the tool can say which release moved them.
+            appVersion: appVersionString(),
+            notes: notesEl ? notesEl.value.trim() : '',
+            summary,
+            sourceFile: _lastLoadedFileName,
         };
+        scenarios[scenarioName] = entry;
 
         localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
+        _lastLoadedPlanName = scenarioName;
 
-        showMessage(`Scenario "${scenarioName}" saved successfully!`, 'success');
+        // A plan saved before it was ever run carries no statistics, and saying so is better than a
+        // saved plan that silently claims none exist.
+        const note = summary ? '' : ' (no statistics recorded - run the plan first)';
+        showMessage(`Scenario "${scenarioName}" saved successfully!${note}`, summary ? 'success' : 'warning');
         document.getElementById('scenarioName').value = '';
+        if (notesEl) notesEl.value = '';
+        if (alsoExport) exportScenario(scenarioName);
     } catch (error) {
         showMessage(`Failed to save scenario: ${error.message}`, 'error');
     }
+}
+
+/** Save and Export in one action. Saving then exporting was always two steps for one intent. */
+function saveAndExportScenario() {
+    saveScenario({ alsoExport: true });
 }
 
 /**
@@ -6393,11 +6530,15 @@ function manageScenarios() {
         // No Version column. An incompatible scenario is already unmistakable without one: the row is
         // tinted red, its Load button is disabled and says why, and the warning below counts them.
         // A column of green ticks next to every other row was three states of nothing.
-        html += '<th style="text-align: center; padding: 8px; border-bottom: 2px solid #ddd;">Actions</th></tr>';
+        html += '<th style="text-align: right; padding: 8px; border-bottom: 2px solid #ddd;">Actions</th></tr>';
 
         for (const [name, scenario] of Object.entries(scenarios)) {
+            // Seconds dropped. Four action buttons plus a full timestamp plus a release stamp made
+            // the table wider than the modal, so it scrolled sideways and the headers read as
+            // misaligned against it. Nobody picks a saved plan by the second it was written.
             const savedDate = scenario.savedAt !== 'Unknown'
-                ? new Date(scenario.savedAt).toLocaleString()
+                ? new Date(scenario.savedAt).toLocaleString(undefined,
+                    { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })
                 : 'Unknown';
             const version = scenario.version || 1;
             const isCurrent = version === SCENARIO_VERSION;
@@ -6405,13 +6546,25 @@ function manageScenarios() {
 
             const rowStyle = isCurrent ? '' : 'background-color: #ffeeee;';
 
+            // The name is user text and goes into innerHTML, so it is escaped as CONTENT here.
+            // escapeQuotes below covers the attribute position only, which is a different job.
+            const rel = scenario.appVersion ? ` <span style="color:#888;">(${escapeHtml(scenario.appVersion)})</span>` : '';
+            // Info is an ⓘ beside the name rather than a fourth button. It is the only action that
+            // does not DO anything to the plan - it just describes it - so it belongs with the
+            // identity rather than in the row of verbs, and moving it there is what gets the table
+            // back inside the modal. The name itself opens the same panel: it is the largest and
+            // most obvious target, and a dotted underline says it is clickable.
+            const _q = escapeQuotes(name);
             html += `<tr style="${rowStyle}">
-                <td style="padding: 4px; border-bottom: 1px solid #eee;">${name}</td>
-                <td style="padding: 4px; border-bottom: 1px solid #eee;">${savedDate}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">
-					<button class="modal-btn" onclick="loadScenarioByName('${escapeQuotes(name)}')" ${!isCurrent ? 'disabled title="Incompatible version"' : ''}>Load</button>
-					<button class="modal-btn" onclick="deleteScenario('${escapeQuotes(name)}')">Delete</button>
-					<button class="modal-btn" onclick="exportScenario('${escapeQuotes(name)}')">Export</button>
+                <td onclick="showScenarioInfo('${_q}')" title="Notes and recorded statistics for this plan" style="padding: 4px; border-bottom: 1px solid #eee; text-align: left; white-space: nowrap; cursor: pointer;">
+                    <span style="color:#2980b9;">ⓘ</span>
+                    <span style="text-decoration:underline;text-decoration-style:dotted;">${escapeHtml(name)}</span>
+                </td>
+                <td onclick="showScenarioInfo('${_q}')" title="Notes and recorded statistics for this plan" style="padding: 4px; border-bottom: 1px solid #eee; text-align: left; white-space: nowrap; cursor: pointer;">${escapeHtml(savedDate)}${rel}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right; white-space: nowrap;">
+					<button class="modal-btn" onclick="loadScenarioByName('${_q}')" ${!isCurrent ? 'disabled title="Incompatible version"' : ''}>Load</button>
+					<button class="modal-btn" onclick="deleteScenario('${_q}')">Delete</button>
+					<button class="modal-btn" onclick="exportScenario('${_q}')">Export</button>
                 </td>
             </tr>`;
         }
@@ -6438,6 +6591,9 @@ function manageScenarios() {
         content.innerHTML = html;
     }
 
+    // The list view owns no buttons of its own; every row carries its own. Clearing here is what
+    // makes Back from the Info panel return to a clean action row rather than keeping its Load.
+    setModalActions('');
     modal.style.display = 'block';
 }
 
@@ -6447,6 +6603,176 @@ function manageScenarios() {
  * Closes modal and shows success/error message
  * @param {string} name - Name of the scenario to load
  */
+// ============================================================================
+// PREVIEW AND COMMIT - the one path Load and Import both take
+// ============================================================================
+// Load and Import used to differ in validation, naming, storage and messaging, which is how Import
+// came to be able to store entries Load would refuse. Both now normalise, then preview, then commit.
+
+/** An imported file waiting for the user to confirm it, so preview can show it before it is applied. */
+let _pendingImport = null;
+
+const _fmtMoney = n => (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString();
+
+/** One recorded figure, formatted the way its tile is. */
+function _fmtSummaryValue(kind, v) {
+    if (!Number.isFinite(v)) return '-';
+    if (kind === 'rate') return (v * 100).toFixed(2) + '%';
+    if (kind === 'year' || kind === 'count') return String(v);
+    return _fmtMoney(v);
+}
+
+/**
+ * What this plan is, before you load it: the note, the release it was saved under, and the numbers
+ * it recorded. Rendered as real content rather than a tooltip - essential information must not be
+ * hover-only, because a phone cannot hover.
+ */
+function scenarioInfoHtml(entry, name) {
+    const rows = [];
+    const push = (k, v) => rows.push(`<tr><td style="padding:3px 10px 3px 0;color:#555;">${escapeHtml(k)}</td>` +
+                                     `<td style="padding:3px 0;"><strong>${escapeHtml(v)}</strong></td></tr>`);
+    push('Saved', entry.savedAt && entry.savedAt !== 'Unknown'
+        ? new Date(entry.savedAt).toLocaleString() : 'Unknown');
+    push('Saved under release', entry.appVersion || 'not recorded');
+    if (entry.sourceFile) push('From file', entry.sourceFile);
+    if (entry.summary && entry.summary.strategy) push('Strategy', entry.summary.strategy);
+
+    let html = `<h4 style="margin:0 0 8px;">${escapeHtml(name)}</h4>`;
+    html += `<table style="border-collapse:collapse;font-size:0.9em;margin-bottom:10px;">${rows.join('')}</table>`;
+
+    html += '<div style="margin-bottom:10px;"><em>Notes</em><br>';
+    html += entry.notes
+        ? `<div style="white-space:pre-wrap;">${escapeHtml(entry.notes)}</div>`
+        : '<span style="color:#777;">No notes recorded.</span>';
+    html += '</div>';
+
+    if (!entry.summary) {
+        html += '<p style="color:#777;">No statistics were recorded for this plan. It was saved ' +
+                'before it was run, or before plans recorded their numbers.</p>';
+    } else {
+        const t = entry.summary.tiles || {};
+        html += '<em>Recorded when saved</em><table style="border-collapse:collapse;font-size:0.9em;">';
+        for (const f of OptimizerCore.SUMMARY_FIELDS) {
+            html += `<tr><td style="padding:2px 10px 2px 0;color:#555;">${escapeHtml(f.label)}</td>` +
+                    `<td style="padding:2px 0;">${escapeHtml(_fmtSummaryValue(f.kind, t[f.key]))}</td></tr>`;
+        }
+        const term = entry.summary.terminal;
+        if (term) {
+            for (const f of OptimizerCore.SUMMARY_TERMINAL_FIELDS) {
+                html += `<tr><td style="padding:2px 10px 2px 0;color:#555;">${escapeHtml(f.label)}</td>` +
+                        `<td style="padding:2px 0;">${escapeHtml(_fmtSummaryValue(f.kind, term[f.key]))}</td></tr>`;
+            }
+            // The fact that decides what this plan can be used to measure at all.
+            if (Number.isFinite(term.ira) && term.ira <= 0) {
+                html += '<tr><td colspan="2" style="padding-top:6px;color:#a06000;">This plan ends ' +
+                        'with an empty IRA, so it cannot answer questions about ending IRA balances.</td></tr>';
+            }
+        }
+        html += '</table>';
+    }
+    return html;
+}
+
+/**
+ * Buttons a view adds to the modal's single action row, placed BEFORE the permanent Close so all of
+ * them share one line. Passing nothing clears them, which is what the list view wants.
+ */
+function setModalActions(html) {
+    const bar = document.getElementById('scenarioModalActions');
+    if (!bar) return;
+    const close = bar.querySelector('button:last-child');
+    bar.innerHTML = (html || '') + (close ? close.outerHTML : '');
+}
+
+/** Show one saved plan's details inside the modal, with Load and Back beside Close. */
+function showScenarioInfo(name) {
+    const scenarios = getAllScenarios();
+    const raw = scenarios[name];
+    if (!raw) return;
+    const entry = normalizeScenarioEntry(raw);
+    const content = document.getElementById('scenarioListContent');
+    const disabled = isCompatibleScenario(raw) ? '' : ' disabled title="Incompatible version"';
+    content.innerHTML = scenarioInfoHtml(entry, name);
+    setModalActions(
+        `<button class="modal-btn" onclick="loadScenarioByName('${escapeQuotes(name)}')"${disabled}>Load</button>` +
+        `<button class="modal-btn" onclick="manageScenarios()">Back</button>`);
+}
+
+/** Show an imported file's details before anything is applied or stored. */
+function previewImport() {
+    if (!_pendingImport) return;
+    const content = document.getElementById('scenarioListContent');
+    const { entry, name } = _pendingImport;
+    content.innerHTML =
+        '<p style="margin-top:0;color:#555;">Imported from a file. Nothing has been saved or loaded yet.</p>' +
+        scenarioInfoHtml(entry, name);
+    setModalActions(
+        `<button class="modal-btn" onclick="commitImport()">Load &amp; Save</button>` +
+        `<button class="modal-btn" onclick="cancelImport()">Cancel</button>`);
+    document.getElementById('scenarioModal').style.display = 'block';
+}
+
+function cancelImport() {
+    _pendingImport = null;
+    closeScenarioModal();
+    showMessage('Import cancelled.', 'warning');
+}
+
+/**
+ * Apply an entry, remember where it came from, and report anything that moved since it was saved.
+ * applyScenario runs the plan at its tail, so the fresh numbers are available on return.
+ */
+function commitScenario(entry, name) {
+    applyScenario(entry.data);
+    _lastLoadedPlanName = name;
+    _lastLoadedFileName = entry.sourceFile || null;
+    const nameEl = document.getElementById('scenarioName');
+    if (nameEl) {
+        nameEl.value = OptimizerCore.planNameDefaults({
+            lastPlanName: _lastLoadedPlanName, lastFileName: _lastLoadedFileName,
+        }).saveName;
+    }
+    const notesEl = document.getElementById('scenarioNotes');
+    if (notesEl) notesEl.value = entry.notes || '';
+    closeScenarioModal();
+    reportSummaryDrift(entry, name);
+}
+
+/**
+ * Compare what the plan recorded against what it produces now.
+ *
+ * The two causes mean opposite things and the release is what separates them. A different release is
+ * expected and explains itself. The SAME release with different numbers is a fidelity problem, not
+ * drift: applyScenario leaves a field alone when the saved data omits its key, so a plan loaded on
+ * top of a different one can inherit a stray input. Nothing detected that before.
+ */
+function reportSummaryDrift(entry, name) {
+    const fresh = currentRunSummary();
+    if (!entry.summary || !fresh) {
+        showMessage(`Scenario "${name}" loaded.`, 'success');
+        return;
+    }
+    const diffs = OptimizerCore.diffSummaries(entry.summary, fresh);
+    if (diffs.length === 0) {
+        showMessage(`Scenario "${name}" loaded, and it reproduces the numbers it was saved with.`, 'success');
+        return;
+    }
+    const now = appVersionString();
+    const then = entry.appVersion;
+    const worst = diffs.slice().sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)).slice(0, 3);
+    const detail = worst.map(d =>
+        `${d.label} ${d.delta > 0 ? 'up' : 'down'} ${_fmtSummaryValue(d.kind, Math.abs(d.delta))}`).join(', ');
+    if (then && then !== now) {
+        showMessage(`Scenario "${name}" loaded. It was saved under ${then} and you are on ${now}: ${detail}.`, 'warning');
+    } else if (then) {
+        showMessage(`Scenario "${name}" loaded, but ${diffs.length} figure(s) differ on the same ` +
+                    `release (${now}): ${detail}. The plan may not have been restored exactly.`, 'error');
+    } else {
+        showMessage(`Scenario "${name}" loaded. It predates release stamping, so this difference ` +
+                    `cannot be attributed: ${detail}.`, 'warning');
+    }
+}
+
 function loadScenarioByName(name) {
     try {
         const scenarios = getAllScenarios();
@@ -6455,12 +6781,25 @@ function loadScenarioByName(name) {
                 showMessage(`Scenario "${name}" is from an incompatible version (v${scenarios[name].version || 1}) and cannot be loaded. Current version: v${SCENARIO_VERSION}`, 'error');
                 return;
             }
-            applyScenario(scenarios[name].data);
-            closeScenarioModal();
-            showMessage(`Scenario "${name}" loaded successfully!`, 'success');
+            commitScenario(normalizeScenarioEntry(scenarios[name]), name);
         }
     } catch (error) {
         showMessage(`Failed to load scenario: ${error.message}`, 'error');
+    }
+}
+
+/** Commit a previewed import: store it through the normal save shape, then load it. */
+function commitImport() {
+    if (!_pendingImport) return;
+    const { entry, name } = _pendingImport;
+    try {
+        const scenarios = getSavedScenarios();
+        scenarios[name] = entry;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
+        _pendingImport = null;
+        commitScenario(entry, name);
+    } catch (error) {
+        showMessage(`Failed to import scenario: ${error.message}`, 'error');
     }
 }
 
@@ -6576,13 +6915,18 @@ function exportScenario(name) {
         const scenarios = getAllScenarios();
         const scenario = scenarios[name];
 
-        const dataStr = JSON.stringify(scenario, null, 2);
+        // Stamp the release on the way out as well as on save, so a file handed to someone else
+        // says which engine produced the numbers inside it even if it was saved before stamping.
+        const out = { ...normalizeScenarioEntry(scenario), appVersion: scenario.appVersion || appVersionString() };
+        const dataStr = JSON.stringify(out, null, 2);
         const dataBlob = new Blob([dataStr], { type: 'application/json' });
         const url = URL.createObjectURL(dataBlob);
 
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${name}.json`;
+        // `${name}.json` was unsanitised, and the blank-name fallback is a timestamp containing
+        // colons - a filename Windows will not accept.
+        link.download = OptimizerCore.safeExportFilename(name);
         link.click();
 
         URL.revokeObjectURL(url);
@@ -6613,29 +6957,28 @@ function importScenario() {
 
         reader.onload = (event) => {
             try {
-                const scenario = JSON.parse(event.target.result);
+                const raw = JSON.parse(event.target.result);
 
-                if (scenario.version && scenario.version !== SCENARIO_VERSION) {
-                    if (!confirm(`Warning: This scenario is from version ${scenario.version}, current version is ${SCENARIO_VERSION}.\n\nIt may not load correctly. Continue anyway?`)) {
+                // Normalise FIRST. The old test was `if (raw.version && ...)`, so a payload with no
+                // version key skipped the check, was applied, and was stored unversioned - after
+                // which the list rendered it incompatible and Load refused it for good. An entry
+                // that Import accepts must be one Load will open.
+                const entry = normalizeScenarioEntry(raw, { sourceFile: file.name });
+
+                if (raw.version && raw.version !== SCENARIO_VERSION) {
+                    if (!confirm(`Warning: This scenario is from version ${raw.version}, current version is ${SCENARIO_VERSION}.\n\nIt may not load correctly. Continue anyway?`)) {
                         showMessage('Import cancelled.', 'warning');
                         return;
                     }
                 }
 
-                const name = prompt('Enter name for imported scenario:', file.name.replace('.json', ''));
-
-                if (name) {
-                    const scenarios = getSavedScenarios();
-                    scenarios[name] = scenario;
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
-                    // Apply immediately so Import also loads into the form (not just stages to
-                    // localStorage). scenario.data is the field map; fall back to scenario for
-                    // legacy flat exports without a .data wrapper.
-                    applyScenario(scenario.data ?? scenario);
-                    showMessage(`Scenario "${name}" imported and loaded!`, 'success');
-                } else {
-                    showMessage('Import cancelled.', 'warning');
-                }
+                // The filename supplies the default name, stripped properly: `.replace('.json','')`
+                // removed the first match ANYWHERE, so `my.json.backup.json` became `my.backup.json`.
+                const suggested = OptimizerCore.stripFileExtension(file.name);
+                _pendingImport = { entry, name: suggested };
+                // Same preview Load uses, for the same reason - and it matters more here, because
+                // this file came from somewhere else.
+                previewImport();
             } catch (error) {
                 showMessage(`Error importing scenario: ${error.message}`, 'error');
             }

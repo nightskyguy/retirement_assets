@@ -17,6 +17,54 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
   (`totalCovered + shortfall === totalTaxDue`) passed throughout a 497% withholding bug: it
   confirmed the books balanced and said nothing about whether the quantities were possible. Replaced
   by property tests over grids. ("Self-consistent arithmetic is not a correct model")
+- *A fixture built to TEACH is not a fixture built to MEASURE, and the page defaults are the former.*
+  That scenario exists to show a user the tradeoffs needed to reach a viable plan, so it is strained
+  by design: the IRA drains to $0 and peaks in year 0 (every ending-IRA and peak-IRA measure is
+  floored), it converts nothing in its three pre-RMD years (the only window a conversion-timing
+  feature is legal in, so that feature measured $0), and it ends 100% Roth (no bucket spread to
+  read). Four dead measurements in one day, none of them wrong arithmetic. Before a fixture carries
+  a verdict, ask what it CANNOT show. ("P112 - a bank of plans to measure against")
+
+- *A missing LEGAL constraint presents as free money, and the engine will not flag it.* The RMD is
+  first money out: in a year an RMD is due the first dollars distributed satisfy it, and an RMD may
+  not be converted. A conversion-month control shipped without that floor made "January conversion,
+  November RMD" reachable, and it measured **dominant** - +$7,436 net worth and -$8,845 tax against
+  the best legal plan. With the floor added the same comparison returns **$0.00**. Nothing in the
+  arithmetic was wrong; the modelled transaction was simply not permitted. Before believing a timing
+  or ordering result, ask what the tax code says about the ORDER, not only the amounts.
+  ("P28jk - a conversion cannot precede the RMD")
+
+- *Splitting a year into more growth segments MANUFACTURES growth, and the excess peaks mid-year.*
+  `applyGrowth` is simple proportional, so two segments give `1 + g + g^2*m*(12-m)/144` where one
+  gives `1 + g`. Consequences, all measured 2026-09-06: an interior withdrawal month beats both ends
+  in this engine whenever `W < B*g`, at exactly `m* = 6 + 6W/(B*g)` (predicted 8.00 and 9.33, the
+  scan returned months 8 and 9); the peak is `B*g^2/4` a year, $900 on $1M at 6% and $6,125 on $5M
+  at 7%; and under TRUE compounding the term does not exist at all, because
+  `(1+g)^(m/12) * (1+g)^((12-m)/12) = (1+g)` for every m. **The saving grace for everything measured
+  so far: `m*(12-m)` is 11 at BOTH m=1 and m=11, so the artifact is identical in the January and
+  November arms and cancels exactly in every early-vs-late comparison.** It would NOT cancel against
+  a mid-year, monthly or quarterly option, which would be flattered by the model rather than by the
+  finance. Anything that subdivides the year further needs compounding first.
+  ("P28jm - do January and November bound every intra-year schedule")
+
+- *A one-year balance identity is not a plan-level neutrality, and the difference is the RMD basis.*
+  Moving a conversion between months leaves the COMBINED IRA+Roth identical - the converted amount
+  cancels - so it was written up as "provably worth $0 deterministically". But it shifts `X·(10g/12)`
+  from the IRA to the Roth, and the December 31 IRA balance is the next year's RMD basis, so the
+  plan diverges from the following year on at perfectly flat growth. Before quoting an identity as a
+  result, ask which downstream reader consumes the quantity that DID move.
+  ("P28jf - the timing trigger, corrected twice in one day")
+- *Score a feature on the metric it exists to serve, not the one already in the harness.* A
+  conversion-motivated timing rule was measured on net worth alone, with no Roth balance and no
+  conversion volume captured, and written up as a pure cost. Re-scored, it bought more Roth at less
+  net worth in 31 of 79 cells - a poor trade at 0.24:1, but not the "no upside" that was reported.
+  ("P28jf - scored on wealth alone")
+- *A feature whose intent the engine cannot express has not been tested, whatever the numbers say.*
+  One flag set one withdrawal month for both the conversion and the spending draw, so "early
+  conversion with a late spending withdrawal" was not a state any arm could occupy. Every cell
+  bundled the two legs, and the grid was used to argue for deletion anyway. The coupling was the
+  defect; measuring around it was not possible. ("P28jf - one flag, two legs")
+
 - *Test the USE of a function, not only the function.* Two OBBBA provisions were implemented,
   tested, and never switched on because no test asserted the engine passed the flags. The guard is a
   use-site spy - `optimizer_core.tests.js:2880` asserts every `calculateTaxes` call in a run is
@@ -38,6 +86,19 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
 - *A fixture inherited without being read is its own failure mode*, distinct from a scorer bug: the
   scorer was right about the data it was given. `iraBaseGoal: 0` copied wholesale from another
   harness against a shipped default of $750,000 broke a 186-of-186 claim into 124 counterexamples.
+- *Green node suites and a green badge do not mean the in-page tests passed.* The page-writing
+  suites WRITE to the live page, so they are skipped unless `?runtests` is passed, and the badge
+  reports the tier it ran, not the tier that exists. A removed pair of columns broke an assertion
+  reading `OPT_COLUMN_KEYS.length - 2` while `node optimizer_core.tests.js` stayed at 424/424 and
+  the default badge read green at 838; `?runtests=fast` reported **1 failed of 1029**. After any
+  change to the column set, the tab set, or anything else an in-page suite inspects, load
+  `?runtests=fast` before believing the gate. ("P114 - the in-page suite the badge does not run")
+- *A grep scoped to a file TYPE is scoped to a guess about where the strings live.* Four
+  user-facing strings still named the removed Δ columns after a sweep that covered `*.js` and not
+  `retirement_optimizer.html`, and the user found them. Tooltips, hints and help copy live in the
+  page as often as in the code. Sweep by CONTENT across the tree, then decide what is history and
+  must not be rewritten - a shipped changelog entry stays as written.
+  ("P114 - the sweep that covered only the .js files")
 
 **On engine code**
 
@@ -71,6 +132,11 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
   exactly one collision, which is the only way to know a guard works.
 - *A cache token must move with any engine file the test tier depends on*, and stale HTML is the
   harder half - a warm tab keeps requesting the old token regardless.
+- *Restarting the preview server does not bust the browser cache.* The cache is keyed by URL, not
+  by server process or by socket, so a restarted server hands back the same URLs and the tab keeps
+  its old copies. Two browser findings this session were read off pre-edit files after a restart was
+  taken as a refresh. Move the `?v=` stamp, or hard-reload; a new port and a new process do neither.
+  ("P114 - a restarted server is not a cleared cache")
 
 **On measurement**
 

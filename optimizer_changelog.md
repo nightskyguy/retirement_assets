@@ -17,12 +17,49 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.173b"></a>
+<a id="11.1779"></a>
 
-## 11.173b
+## 11.1779
 
 **Money you convert now grows for the rest of the year it was converted.**  
 *Behavior change: ending Roth rises in every converting plan.*
+
+**The Optimizer table drops its two Δ columns and gains an Extra Conv column.** ΔEnd Wealth and ΔTax
+are gone: **Show as Differences** already turns every comparable column into a difference from the
+same reference row, so a pair of columns named for a delta was a narrower second copy of it. Pinning
+a row with ⚖ now steers what Show as Differences measures against, and the wording says so.
+
+**Extra Conv** shows the additional yearly conversion a ⇌ row actually runs. The marker said a row
+converted more without ever saying how much, so the only way to find out was to load the row, which
+replaced the plan you were comparing against. It appears on the three Roth-facing goals and under
+All Columns, and the amount is on the Strategy cell's hover regardless.
+
+Pinning a row to compare against also survives a change of **Optimize for**, and the pinned row is
+now held at the top of the table beside the ⚓ baseline and your own plan. Re-ranking used to leave it
+hundreds of rows down and off screen while every column was still being measured from it. The goal is
+still free to move the baseline; the row you pinned stays where you put it and stays visible.
+
+Selecting the ⚓ baseline as the comparison row now means the same thing as **Stop comparing**. It was
+possible to pin the baseline explicitly and be told every column was measured "from this row instead
+of from the ⚓ baseline" when it was the baseline, with only the ✕ button to get out.
+
+Opening the page straight onto the Optimizer with `?tab=optimizer` now runs the sweep. It used to
+open the tab with an empty table, and the only way to fill it was to click the tab you were already
+on.
+
+**Saved plans now remember what they are and what they produced.** Saving takes an optional note, and
+records the plan's key statistics along with the release you were on. In Load, Delete, Export, an
+**ⓘ** beside each name shows all of that before you load anything, so you can tell one saved plan
+from another without opening it - click the ⓘ, the name or the date. Import shows the same panel for a file before it is applied.
+
+When you load a plan, the tool compares the numbers it recorded against the ones it produces now. If
+they differ it says so and names the release the plan was saved under, which is what the note at the
+end of this entry is about. **Save &amp; Export** does both steps at once, and a plan loaded or
+imported now offers its own name back the next time you save or export it.
+
+Two smaller fixes came with it. An exported file whose name contained a colon, which is what an
+unnamed plan gets, could not be saved on Windows. And a scenario file with no version stamp could be
+imported but never loaded again afterwards; those files now import and load like any other.
 
 A Roth conversion was credited to the account only after the year's growth had already been applied, so the converted amount
 earned nothing in the year you converted it. Surplus banked to Cash or Brokerage instead was credited before growth and did

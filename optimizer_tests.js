@@ -3018,8 +3018,8 @@ assertEqual(
 			relativeView: OptimizerState.relativeView,
 		};
 		try {
-			OptimizerState.compareRow = null;   // the two Δ columns are pinned-compare-only
-			OptimizerState.relativeView = false;  // relative view drops the two Δ columns from BOTH paths
+			OptimizerState.compareRow = null;    // no pin, so the ⚓ baseline is the reference
+			OptimizerState.relativeView = false; // absolute values; the column SET is the same either way
 
 			const all = getOptimizerColumns(true).map(c => c.key);
 			assertEqual(all.join(','), OPT_COLUMN_KEYS.join(','),
@@ -3042,15 +3042,18 @@ assertEqual(
 				assertEqual(keys.length < all.length, true, objKey + ': actually hides something');
 			});
 
-			// Relative view makes every comparable column a difference, so the two columns whose names
-			// say delta are redundant. They must go even with all columns switched on - showing all
-			// columns is how they came back the first time.
+			// The two Δ-named columns are GONE (2026-09-07): "Show as Differences" already turns every
+			// comparable column into a difference from the reference row, so a pair of columns named
+			// for a delta was a narrower second copy of it. What this used to assert - that relative
+			// view removed exactly those two - is now the wrong shape of claim. The claim that
+			// survives is stronger: relative view changes what the cells SAY, never which columns
+			// exist, so it can no longer add or drop anything.
 			OptimizerState.relativeView = true;
 			const relAll = getOptimizerColumns(true).map(c => c.key);
-			assertEqual(relAll.includes('dNW') || relAll.includes('dTax'), false,
-				'relative view drops the two Δ columns even when all columns are shown');
-			assertEqual(relAll.length, OPT_COLUMN_KEYS.length - 2,
-				'relative view drops exactly the two Δ columns, nothing else');
+			assertEqual(relAll.some(k => /^d[A-Z]/.test(k)), false,
+				'no column is named for a delta any more - Show as Differences does that job');
+			assertEqual(relAll.join(','), OPT_COLUMN_KEYS.join(','),
+				'relative view changes cell contents, not the column set');
 			OptimizerState.relativeView = false;
 
 			// A sort column the active goal has put away must fall back to goal order, not leave the
@@ -3531,7 +3534,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 419, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 424, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

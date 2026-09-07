@@ -5193,7 +5193,10 @@ const OPTIMIZER_OBJECTIVES = {
 const OPT_COLUMN_KEYS = Object.freeze([
     'compare', 'status', 'gap', 'strategy', 'param', 'rank', 'afterTaxNW', 'tax',
     'spendGoal', 'spend', 'finalIRA', 'finalRoth', 'mixSpread',
-    'dNW', 'dTax', 'rate', 'years', 'rmd', 'rmdtax', 'convBE', 'convSaved',
+    // 'dNW' and 'dTax' were removed 2026-09-07: "Show as Differences" already turns every comparable
+    // column into a difference from the same reference row, so two columns named for a delta were a
+    // narrower second copy of it.
+    'extraConv', 'rate', 'years', 'rmd', 'rmdtax', 'convBE', 'convSaved',
 ]);
 
 // Never filtered out, whatever a goal's list says. `compare` because the Best summary table drops
@@ -5224,13 +5227,16 @@ const OPT_OBJECTIVE_COLUMNS = Object.freeze({
     widowrmd:   ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','finalIRA','rmd','rmdtax'],
     mintax:     ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','rate'],
     maxspend:   ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','spend'],
-    maxroth:    ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','finalRoth'],
+    maxroth:    ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','finalRoth','extraConv'],
     balanced:   ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','spend'],
-    conveffect: ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','convBE','convSaved','finalRoth'],
+    conveffect: ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','convBE','convSaved','extraConv','finalRoth'],
     // finalIRA and finalRoth are here because the tie keys are: a reader looking at two rows that
     // broke even in the same year needs the number that separated them on screen, and the pre-tax
     // balance beside it is what the conversions were drawn from.
-    earliestbe: ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','convBE','convSaved','finalIRA','finalRoth'],
+    earliestbe: ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','convBE','convSaved','extraConv','finalIRA','finalRoth'],
+    // `extraConv` is on the three Roth-facing goals only. The ⇌ marker says a row converts extra;
+    // without the amount beside it the only way to learn the number was to LOAD the row, which
+    // replaces the plan you were comparing against. All Columns shows it everywhere else.
 });
 
 // The two conversion goals rank on numbers that only a CONVERTING row has. The ⚓ baseline is drawn

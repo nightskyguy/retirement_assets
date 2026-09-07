@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.176a</title>
+    <title>Retirement Optimizer 11.1779</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,14 +59,14 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1116d7"></script>
-	<script src="optimizer_core.js?v=11176a"></script>
+	<script src="optimizer_core.js?v=111779"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=11176a"></script>
-	<script src="optimizer_tests.js?v=11176a"></script>
+	<script src="optimizer_ui.js?v=111779"></script>
+	<script src="optimizer_tests.js?v=111779"></script>
 </head>
 <body>
 
@@ -1019,13 +1019,14 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.176a</b>
+				<li data-flag="behavior"><b>11.1779</b>
+					<strong>Optimizer table: a row you pin to compare against now stays pinned and stays visible.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>It survives a change of <i>Optimize for</i> and is held at the top beside the ⚓ baseline and your own plan, instead of being re-ranked off screen while every column is still measured from it. A new <strong>Extra Conv</strong> column shows what a ⇌ row actually converts.</li>
+					</ul>
 					<strong>Saved plans now remember what they are and what they produced.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>Saving takes an optional <i>note</i>, and records the plan's key statistics along with the release you were on. In <i>Load, Delete, Export</i> a new <strong>Info</strong> button shows all of it before you load anything, so you can tell one saved plan from another without opening it. Import shows the same panel for a file before it is applied.</li>
-					<li>Loading a plan compares the numbers it recorded against the ones it produces now, and says so when they differ, naming the release it was saved under.</li>
-					<li><strong>Save &amp; Export</strong> does both steps at once, and a plan you loaded or imported offers its own name back the next time you save or export it.</li>
-					<li>Two smaller fixes: an exported file whose name contained a colon, which is what an unnamed plan gets, could not be saved on Windows; and a scenario file with no version stamp could be imported but never loaded again afterwards.</li>
+					<li>Saving takes an optional <i>note</i> and records the plan's key statistics and the release you were on. An <strong>ⓘ</strong> beside each saved name shows all of it before you load anything, and loading a plan tells you when its numbers no longer match.</li>
 					</ul>
 					<strong>Money you convert now grows for the rest of the year it was converted.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1045,7 +1046,7 @@
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li>The total on the balances chart and in the Annual Details table read <i>TotalWealth</i>, which sounds like a plain sum of your accounts. It is not one: that figure already subtracts the tax that would be owed on the IRA, and the capital-gains tax on brokerage growth above its basis. It now reads <strong>TotalNetWealth</strong> in both places. No number changes.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.176a" target="_blank" rel="noopener">Details</a>
+					<a href="optimizer_changelog.md#11.1779" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="behavior"><b>11.171f</b>
 					<strong>The required distribution on an inherited IRA is calculated again.</strong>
@@ -1518,10 +1519,10 @@
                     <span title="Optimize Conversions row: swept extra fixed annual Roth conversions ($25k steps) on top of Max Conversions.">⇌ Optimize Conversions</span>
                     <span title="Conversions stop after the year shown. These rows convert only up to that year and then stop, which often beats converting for the rest of the plan. Clicking the row fills in both the amount and the stop year.">⏹2026 Conversions stop after</span>
                     <span title="Plan success - every year of the plan was fully funded.">🟢 Success</span>
-                    <span title="The pinned reference row that every Δ column measures against. Normally the strongest no-conversion plan; under Roth Conversion Effectiveness and Earliest Break Even it is the best converting row instead, because a plan that never converts has no break-even year and no conversion tax saved to compare against.">⚓ Baseline</span>
+                    <span title="The pinned reference row that every column is measured against when Show as Differences is on. Normally the strongest no-conversion plan; under Roth Conversion Effectiveness and Earliest Break Even it is the best converting row instead, because a plan that never converts has no break-even year and no conversion tax saved to compare against.">⚓ Baseline</span>
                 </div>
                 <div id="opt-compare-hint" style="padding:6px 12px;background:#f4f8fb;border:1px solid #dfe8ef;border-radius:4px;color:#4a5c6a;margin-bottom:8px;font-size:0.88em;">
-                ⚖ <strong>Compare two strategies:</strong> click the first cell of any row, under the ⚖ heading, to measure every other row against that one. The ΔEnd Wealth and ΔTax columns appear as soon as you do, showing the difference from your chosen row instead of the ⚓ baseline. The ⚖ marks whichever row is currently the comparison point, and that row is shaded like the ⚓ baseline it stands in for; click it again to put everything back.
+                ⚖ <strong>Compare two strategies:</strong> click the first cell of any row, under the ⚖ heading, to measure every other row against that one. Turn on <strong>Show as Differences</strong> and every column then reads as the difference from your chosen row instead of from the ⚓ baseline. The ⚖ marks whichever row is currently the comparison point; that row is shaded like the ⚓ baseline it stands in for and is held at the top of the table so it stays visible while you scroll or re-rank. Click it again, or click the ⚓ baseline, to put everything back.
                 </div>
             </details>
             <!-- These two swap: the hint whenever no comparison is running, the banner whenever one
@@ -1742,7 +1743,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=11176a';
+    const V = '?v=111779';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

@@ -4438,3 +4438,121 @@ Suites 424/61/22.
 reported three different tops, which looked like the flex row had failed. It had not - layout had not
 settled. Re-measuring live showed one row. Do not conclude a layout bug from a rect read taken in the
 same tick as the render.
+
+## 2026-09-07 - P114, v11.1779: Optimizer table, three user-raised changes
+
+**1. The two Δ columns are gone.** `ΔEnd Wealth` and `ΔTax` removed from the column list,
+`OPT_COLUMN_KEYS`, the `keep.add` special case, the `dropDeltaCols` filter and the baseline row's
+zero case. "Show as Differences" already turns every comparable column into a difference from the
+same reference row, so a pair named for a delta was a narrower second copy of it. The three wording
+sites (compare tooltip, the ⚖ cell title, the "Comparing every row against" banner) now say that
+pinning steers what Show as Differences measures against. `_dNW`/`_dTax` are still computed and are
+commented as console/harness conveniences rather than left looking live.
+
+**2. Extra Conv column added**, reading `_optConvAmt`, which was already on every ⇌ row and the
+current-plan row and previously only read when LOADING a row. On `maxroth`, `conveffect` and
+`earliestbe`, plus All Columns; the amount and any stop year are also on the Strategy cell's hover so
+it is readable whatever goal is selected.
+
+**3. The pinned compare row survives an objective change** - `resolveCompareRow` now keeps the pinned
+row when it is still in `results`, instead of re-deriving it from `compareSelection`.
+
+**I GOT THE DIAGNOSIS OF (3) WRONG AND SAID SO IN THE CODE BEFORE CHECKING.** A grep found
+`_selection:` assigned in exactly one place, so I wrote a comment asserting that ⇌ / spend-optimised /
+current-plan rows carry none and could never be re-found. Measured: **0 of 193 rows lack
+`_selection`** - it arrives by another route. Comment rewritten to the defensible reason, which is
+that the match is NOT UNIQUE: a ⇌ row and the plain row it was built from share a `_selection`, and
+only `_isCurrentPlan` separates candidates, so `find()` can return a different row than the one
+pinned. Identity cannot mis-resolve.
+
+**Also could not reproduce the reported unpin**, and said so rather than claiming a fix. Across
+programmatic `setOptObjective`, the real `<select>` change, and both with and without a pin, the row
+survived in state, in `deltaReferenceRow()` and in the banner. The guard is a correctness improvement
+either way; whether it addresses what the user saw is unconfirmed.
+
+**Two verification traps hit, both mine:** the browser served a CACHED `optimizer_core.js` because
+the `?v=` stamp predated the edit, so `OPT_COLUMN_KEYS` still had `dNW` and Extra Conv never
+appeared - bumping the version fixed it, and this is exactly the four-site cache-bust hazard. And
+rows are wrapped in `display:contents` divs, so cells are GRANDCHILDREN of `#opt-table`; querying
+`children` found headers only and made a working column and tooltip look broken twice.
+
+No household in this session produces ⇌ rows (`convOptRowsAdded: 0` on both the page defaults and the
+canonical household), so Extra Conv was verified by injecting `_optConvAmt` on a row and confirming
+both the cell and the hover render it. Suites 424/61/22.
+
+## 2026-09-07 (later) - three more Optimizer fixes, all user-found
+
+**`?tab=optimizer` opened an empty table.** The tab BUTTON is
+`{runOptimizer(); showTab('tab-opt')}`, but `applyTabFromUrl` only called `showTab` plus a Monte
+Carlo hook - so arriving by URL showed the tab with no sweep behind it, and the only way to fill it
+was to click the tab you were already on. The function's own comment said Monte Carlo "needs its own
+activation hook, the same one its tab button calls"; the Optimizer needed the same one and never got
+it. Verified: 193 rows and a populated table straight from the URL.
+
+**The pinned compare row is hoisted to a third sticky row**, under the ⚓ baseline and the 📍 current
+plan, at a measured offset rather than an assumed one. Changing the goal re-ranks the body, so the
+pinned row could sit hundreds of rows down and off screen while every column was still measured from
+it. It stays in the ranked body too, like the current-plan row and unlike the baseline, so its Rank
+stays readable. Verified at 30 / 60 / 87px with a bottom-ranked row pinned, surviving a goal change.
+
+**Selecting the ⚓ baseline now stops comparing.** `toggleCompareRow` only cleared when the clicked
+row was the CURRENT reference, so pinning the baseline explicitly produced a state whose banner
+claimed every column was measured "from this row instead of from the ⚓ baseline" while being the
+baseline. Self-contradictory, and only the ✕ button escaped it. Clicking the baseline from a clean
+state is also a no-op rather than a self-referential pin. Both verified.
+
+**Verification note:** the version stamp is hour-granular, so a second change inside the same hour
+cannot bust the cache. Restarted the preview server for a cold cache rather than trusting a reload -
+the same cache trap cost a wrong conclusion earlier today. Suites 424/61/22.
+
+## 2026-09-07 - stale Δ-column text, an in-page test I broke, and a changelog trim
+
+**The user found text I missed: my grep covered only the .js files.** The compare hint at
+`retirement_optimizer.html` still said "The ΔEnd Wealth and ΔTax columns appear as soon as you do".
+Re-scanned across html/md/js and reworded four more user-facing places: that hint, the ⚓ Baseline
+tooltip, the ⚖ cell tooltip and the Strategy-column tooltip. Historical changelog entries and the
+README's release notes are NOT rewritten - a shipped entry is history.
+
+**AND I BROKE AN IN-PAGE TEST WITHOUT NOTICING.** `optimizer_tests.js` asserted
+`relAll.length === OPT_COLUMN_KEYS.length - 2` - "relative view drops exactly the two Δ columns" -
+which cannot hold once the columns do not exist. **Neither the node suites nor the default badge
+catches it**: that suite writes to the live page, so it is skipped unless `?runtests` is passed, and
+the badge read a cheerful green 838 while `?runtests=fast` reported **1 failed of 1029**. Rewritten
+to the claim that survives: relative view changes what cells SAY, never which columns exist.
+
+**A cache trap that nearly cost a second wrong conclusion.** After fixing the test the count was
+STILL 1 of 1029. Restarting the preview server does NOT give a cold cache - the browser keys on URL,
+and same port plus same `?v=` means the same cached file. Proved it by fetching the script twice, once
+at the cached URL and once with a buster: the cached copy still held the OLD assertion and the fresh
+one held the new. The fix is correct; the failure was stale JS. **The only reliable cache-bust is the
+version stamp, which is hour-granular, so two changes inside one hour cannot both be verified in the
+browser without waiting.**
+
+**Changelog trimmed at the user's request.** The in-page `<li>` is the source of the banner text, so
+length there is not cosmetic. The Optimizer and saved-plan sections are now one bullet each, 63 words
+for the whole entry; the detail stays in `optimizer_changelog.md`. Dropped from the page: the
+Δ-columns-are-gone bullet, the long Extra Conv explanation, the baseline-stops-comparing bullet, the
+`?tab=optimizer` bullet, Save & Export, and the two smaller fixes. Suites 424/61/22.
+
+## 2026-09-07 - Saved Scenarios list: Info becomes an ⓘ on the name
+
+User, with a screenshot: four action buttons plus a full timestamp plus a release stamp made the
+table wider than the modal, so it scrolled sideways and the headers read as misaligned against the
+columns. Their suggestion, taken: fold Info into an ⓘ beside the name.
+
+Info was the only one of the four that does not DO anything to the plan - it describes it - so it
+belongs with the identity rather than in the row of verbs. The whole Name cell AND the whole Saved
+cell are the click target (user follow-up: "clicking ANY part of the name or date"), with the
+onclick on the `<td>` rather than on spans so padding counts too; the ⓘ and a dotted underline are
+the affordance. Seconds dropped from the timestamp - nobody picks a saved plan by the second it was
+written. Actions cells right-aligned and the Actions header moved to match, which is the other half
+of what looked misaligned.
+
+**Measured:** table 585px inside a 625px modal, 40px to spare, `horizontalScrollbar: false`, headers
+and cells aligned left/left/right in both, only Load/Delete/Export left in the row, and a click on
+the date cell and on the name cell each opens the panel. Both changelogs reworded from "Info button"
+to the ⓘ.
+
+**Verified against DISK, not the page.** The hour has not turned so the `?v=` stamp is unchanged and
+the browser still serves the cached `optimizer_ui.js`; fetched the fresh source with a cache-buster
+and re-defined `manageScenarios` from it before measuring. Suites 424/61/22.

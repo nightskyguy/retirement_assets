@@ -117,6 +117,11 @@ function applyTabFromUrl() {
     if (!id) return;
     showTab(id);
     if (id === 'tab-mc') mcTabActivated?.();
+    // The Optimizer needs its activation hook for exactly the reason Monte Carlo does, and did not
+    // have one: its tab BUTTON is `{runOptimizer(); showTab('tab-opt')}`, so arriving by ?tab=
+    // opened the tab with no sweep behind it and an empty table, and the only way to fill it was to
+    // click the tab you were already on. Same hook the button calls, so both routes land identically.
+    if (id === 'tab-opt') runOptimizer?.();
 }
 
 // Optimizer UI state - replaces window.optimizer* globals.
@@ -369,6 +374,9 @@ function deltaReferenceRow() {
 function recomputeDeltasAgainst(referenceRow) {
     const results = OptimizerState.results;
     if (!results) return;
+        // Kept although the Δ columns that displayed these are gone: deltaCellHtml computes its own
+        // per-column differences for 'Show as Differences', and these four remain the cheapest
+        // place to read a row's headline gap against the reference from the console or a harness.
     for (const r of results) {
         r._dNW  = referenceRow ? (r.afterTaxNW   - referenceRow.afterTaxNW)   : null;
         r._dTax = referenceRow ? (referenceRow.totals.tax - r.totals.tax)     : null;
@@ -383,6 +391,18 @@ function recomputeDeltasAgainst(referenceRow) {
 // longer in the table (the user changed a parameter out from under it) is dropped rather than left
 // pointing at a stale object.
 function resolveCompareRow() {
+    // Keep the pinned row itself when it is still one of the rows on screen, instead of re-deriving
+    // it from `compareSelection`. Changing the goal is allowed to move the ⚓ BASELINE; it must not
+    // disturb the row the user chose to compare against.
+    //
+    // Re-deriving was never safe for an objective change, because `results` is not rebuilt then and
+    // the match below is not unique: a ⇌ conversion row and the plain row it was built from share a
+    // `_selection`, and only `_isCurrentPlan` separates any two candidates. So find() could return a
+    // DIFFERENT row than the one that was pinned, which reads as the pin having moved or vanished.
+    // Identity is exact and cannot mis-resolve; the selection match below still handles the case it
+    // was written for, a fresh sweep where these row objects no longer exist.
+    const _cur = OptimizerState.compareRow;
+    if (_cur && Array.isArray(OptimizerState.results) && OptimizerState.results.includes(_cur)) return;
     const results = OptimizerState.results;
     const sel = OptimizerState.compareSelection;
     if (!results || !sel) { OptimizerState.compareRow = null; return; }
@@ -401,7 +421,12 @@ function toggleCompareRow(id) {
     const results = OptimizerState.results;
     const row = results?.find(r => r._id === id);
     if (!row) return;
-    if (deltaReferenceRow() === row) {
+    // Clicking the row that is ALREADY the reference stops comparing - and that includes the ⚓
+    // baseline even when nothing is pinned, because the baseline IS the default reference. Pinning
+    // it explicitly used to produce a state that claimed to measure "from this row instead of from
+    // the ⚓ baseline" while being the baseline, so the banner contradicted itself and the only way
+    // out was the ✕ button. Selecting the baseline now means the same thing as stopping.
+    if (deltaReferenceRow() === row || row === OptimizerState.baseline) {
         OptimizerState.compareSelection = null;
         OptimizerState.compareIsCurrentPlan = false;
         OptimizerState.compareRow = null;
@@ -501,8 +526,8 @@ function cellActionAttrs(col, r, loadTitle) {
     if (col.compareZone) {
         const isRef = deltaReferenceRow() === r;
         const tip = (isRef
-            ? 'Every Δ column is currently measured against this row. Click to go back to the ⚓ baseline.'
-            : 'Compare against this row: the ΔNetWealth and ΔTax columns are re-measured from it instead of the ⚓ baseline.')
+            ? 'Every column is currently measured against this row when Show as Differences is on. Click to go back to the ⚓ baseline.'
+            : 'Compare against this row: with Show as Differences on, every column is measured from it instead of from the ⚓ baseline.')
             + rowDetailTip(r);
         return ` onclick="toggleCompareRow(${r._id})" title="${tip}"`;
     }
@@ -526,8 +551,8 @@ function renderCompareBanner() {
     if (hint) hint.style.display = 'none';
     const label = `${row._strategyLabel}${row._paramLabel ? ' - ' + row._paramLabel : ''}`;
     el.innerHTML = `⚖ <strong>Comparing every row against:</strong> ${label}.`
-        + ` The ΔNetWealth and ΔTax columns now show the difference from this row instead of the ⚓ baseline,`
-        + ` and this row itself reads 0.`
+        + ` With <em>Show as Differences</em> on, every column is measured from this row instead of`
+        + ` from the ⚓ baseline, and this row itself reads 0.`
         + ` <button onclick="clearCompareRow()" style="margin-left:8px;padding:3px 12px;font-size:0.95em;cursor:pointer;font-weight:600;">✕ Stop comparing</button>`;
     el.style.display = '';
 }
@@ -1879,7 +1904,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
         // two zones with a spacer column makes the two actions hard to confuse.
         {
             key: 'compare', label: '⚖', sortable: false, compareZone: true,
-            title: 'Click to compare every other strategy against this row. The ΔNetWealth and ΔTax columns then measure from it instead of the ⚓ baseline. Click the highlighted one again to go back to the baseline.',
+            title: 'Click to compare every other strategy against this row. With Show as Differences on, every column then measures from it instead of from the ⚓ baseline. Click the highlighted one again to go back to the baseline.',
             getValue: r => compareToggleHtml(r),
             getSortValue: () => 0
         },
@@ -1899,7 +1924,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
         },
         {
             key: 'strategy', label: 'Strategy',
-            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = unreachable target: the bracket/IRMAA/ACA ceiling cannot be hit. ⤴ = this row conversion goes ABOVE its own ceiling: the conversion is added on top of a draw already sized to fill the bracket or tier, so income lands over it. The row still scores well or it would not be here, but it is no longer respecting the limit in its name. Sorting this column groups each family together and orders it by parameter. Click any row to load it, or ⚖ at the start of the row to measure every Δ column against it.',
+            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = unreachable target: the bracket/IRMAA/ACA ceiling cannot be hit. ⤴ = this row conversion goes ABOVE its own ceiling: the conversion is added on top of a draw already sized to fill the bracket or tier, so income lands over it. The row still scores well or it would not be here, but it is no longer respecting the limit in its name. Sorting this column groups each family together and orders it by parameter. Click any row to load it, or ⚖ at the start of the row to measure every column against it when Show as Differences is on.',
             getValue: r => r._strategyLabel,
             // Family, then parameter, then modifier - NOT the rendered label, which starts with markup
             // and emoji and scattered every clone away from the family it clones. rawSort compares
@@ -1978,30 +2003,11 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             },
             getSortValue: r => afterTaxBucketSpread(r, OptimizerState.sharedFutureIRARate ?? 0)
         },
-        {
-            key: 'dNW', label: 'ΔEnd Wealth' + deltaRefSuffix(),
-            title: 'End Wealth minus ' + deltaRefDescription() + '. Positive (green) = this strategy ends wealthier after tax than that reference; negative (red) = it ends behind it.',
-            getValue: r => {
-                const d = inC() ? r._dNWCurrent : r._dNW;
-                if (d == null) return '—';
-                const v = Math.round(d);
-                const c = v > 0 ? '#1a7f37' : v < 0 ? '#cf222e' : '#57606a';
-                return `<span style="color:${c}">${v > 0 ? '+' : ''}${v.toLocaleString()}</span>`;
-            },
-            getSortValue: r => (inC() ? r._dNWCurrent : r._dNW) ?? -Infinity
-        },
-        {
-            key: 'dTax', label: 'ΔTax' + deltaRefSuffix(),
-            title: 'Lifetime tax of ' + deltaRefDescription() + ' minus this strategy\'s lifetime tax (each = federal incl. NIIT + state + IRMAA). Positive (green) = this strategy pays less total tax than that reference; negative (red) = it pays more.',
-            getValue: r => {
-                const d = inC() ? r._dTaxCurrent : r._dTax;
-                if (d == null) return '—';
-                const v = Math.round(d);
-                const c = v > 0 ? '#1a7f37' : v < 0 ? '#cf222e' : '#57606a';
-                return `<span style="color:${c}">${v > 0 ? '+' : ''}${v.toLocaleString()}</span>`;
-            },
-            getSortValue: r => (inC() ? r._dTaxCurrent : r._dTax) ?? -Infinity
-        },
+        // The ΔEnd Wealth and ΔTax columns were removed 2026-09-07. 'Show as Differences' already
+        // turns every comparable column into a difference from the same reference row, so a pair of
+        // columns whose NAMES say delta was a second, narrower copy of that feature - and one that
+        // only ever covered two of the metrics. Pinning a row with the compare control now changes
+        // what 'Show as Differences' measures against, which is the whole of what it used to do.
         {
             key: 'rate', label: 'Tax Rate',
             title: 'Lifetime tax as a percentage of lifetime gross income (total tax ÷ total income). A blended effective rate across the whole plan.',
@@ -2036,6 +2042,15 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             // Renamed from "Tax Paid Δ". The Δ was misleading: unlike every other Δ in this table it
             // is not measured against the ⚓ baseline or a ⚖ pinned row, it is one row's own
             // conversion search compared against itself without the extra conversions.
+            // The ⇌ in the Strategy label says a row carries extra conversions but never how much,
+            // so the amount could only be discovered by loading the row - which replaces the plan you
+            // were comparing against. It is on the row already as _optConvAmt; this shows it.
+            key: 'extraConv', label: 'Extra Conv',
+            title: 'The additional yearly IRA→Roth conversion this row runs, on top of whatever the strategy already converts. This is the amount Optimize Conversions searched for, and it is what the Extra Annual Roth Conversion field is set to when you load the row. A dash means the row adds no extra conversion. The amount is also in the tooltip on the Strategy cell, so it is readable without turning this column on.',
+            getValue: r => (r._optConvAmt ? Math.round(r._optConvAmt).toLocaleString() : '—'),
+            getSortValue: r => r._optConvAmt ?? -Infinity
+        },
+        {
             key: 'convSaved', label: 'Conv Tax',
             title: 'Counts only tax actually paid during the plan, so it is NOT a verdict on whether converting was worth it. Positive = the extra IRA→Roth conversions run by Optimize Conversions lowered lifetime tax vs the same strategy without them. It does not price the deferred tax still owed on the no-extra-conversion plan\'s larger remaining IRA, so a big positive number here can sit alongside a plan that ends up worse off overall. Use the Break Even column, which prices in that deferred tax, for the actual answer.',
             // Colored by SIGN, not left plain. This is a saving, so a negative means the extra
@@ -2065,25 +2080,14 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
         console.error('getOptimizerColumns: column(s) not listed in OPT_COLUMN_KEYS:', missing);
     }
     cols = (_ordered.length === cols.length) ? _ordered : cols;
-
-    // In relative view every comparable column already IS a difference from the reference row, so a
-    // column whose name says delta is a second copy of one. Dropped on BOTH paths: switching all
-    // columns on must not bring them back, which is exactly how they reappeared the first time.
-    const dropDeltaCols = c => !(OptimizerState.relativeView && (c.key === 'dNW' || c.key === 'dTax'));
-    if (showAll) return cols.filter(dropDeltaCols);
+    if (showAll) return cols;
     // Union with the pinned set, not a straight read of the goal's list. `compare` MUST survive:
     // the Best summary table drops the leading column on the understanding that it is the ⚖
     // control. A typo in the data above cannot take it out.
     const keep = new Set([...OPT_COLUMNS_PINNED, ...(OPT_OBJECTIVE_COLUMNS[objKey] || OPT_OBJECTIVE_COLUMNS.taxflex)]);
-    // The Δ columns are in no goal's list. They measure against a reference, so they earn their
-    // space only once the reader has chosen one by pinning a ⚖ row - until then they restate the
-    // ⚓ baseline the table is already ordered around.
-    // ...except in relative view, where every comparable column is already a difference from that
-    // same row, so a column whose NAME says delta is just two of them.
-    if (OptimizerState.compareRow) { keep.add('dNW'); keep.add('dTax'); }
     // filter(), never a map over the goal's list: this array IS the display order, so a goal's
     // columns can be written in any order and `compare` still lands at index 0.
-    return cols.filter(c => keep.has(c.key) && dropDeltaCols(c));
+    return cols.filter(c => keep.has(c.key));
 }
 
 function renderOptimizerTable(results) {
@@ -2220,7 +2224,14 @@ function renderOptimizerTable(results) {
                     ? `ACA subsidy cliff: spending cannot be met within the FPL cap in ${r._acaBreachYears} year(s) - plan untenable at this spend (strict ACA never breaches the cap)`
                     : `ACA not applicable - everyone is already on Medicare (age ${TAXData.IRMAA.ELIGIBILITY_AGE}+) at the start, so there is no premium subsidy for a cap to protect. This row simulates as Proportional 0%.`)
                 : 'Bracket target exceeded in >50% of years - income sources already push MAGI above this ceiling')
-            : 'Click to load this strategy';
+            // The ⇌ marker says a row runs extra conversions; without the amount the only way to
+            // learn it was to LOAD the row, which replaces the plan you were comparing against. Put
+            // it on the hover so it is readable whatever the Optimize for goal is showing.
+            : (r._optConvAmt
+                ? `Extra annual Roth conversion: $${Math.round(r._optConvAmt).toLocaleString()}/yr`
+                  + (r._convEndYear != null ? `, stopping after ${r._convEndYear}` : '')
+                  + '. Click to load this strategy.'
+                : 'Click to load this strategy');
         const isCompareRef = deltaReferenceRow() === r;
         const cells = columns.map(col => {
             const cellWin = (col.key === 'tax'    && r._id === colWinners.tax)
@@ -2259,13 +2270,12 @@ function renderOptimizerTable(results) {
     let baselineRowHtml = '';
     if (baselineRow) {
         const _bCell = 'padding:4px 8px;background-color:#dbeafe;font-weight:bold;position:sticky;top:30px;z-index:1;';
-        const bTitle = 'BASELINE - the strongest plan with no Roth conversions and no cyclic brokerage maneuvering. Every other row\'s Δ columns are measured against this. Click to load it.';
+        const bTitle = 'BASELINE - the strongest plan with no Roth conversions and no cyclic brokerage maneuvering. Every other row\'s numbers are measured against this when Show as Differences is on, unless you pin another row with ⚖. Click to load it.';
         baselineRowHtml = '<div style="display:contents;" id="opt-baseline-row">' + columns.map(col => {
             let v;
             if (col.key === 'strategy')      v = BASELINE_MARK + baselineRow._strategyLabel;
             // Zero only when the baseline IS the reference. With a compare row pinned the baseline
             // has a real Δ like every other row, and printing 0 would be a lie.
-            else if ((col.key === 'dNW' || col.key === 'dTax') && !OptimizerState.compareRow) v = '0';
             // Both pinned rows go through the delta wrapper too. They are rows like any other in
             // relative view: the reference one returns null and falls through to its own numbers,
             // and any pinned row that is NOT the reference reads as a difference. Without this the
@@ -2312,7 +2322,26 @@ function renderOptimizerTable(results) {
     renderCompareBanner();
     const optTableEl = document.getElementById('opt-table');
     optTableEl.style.gridTemplateColumns = columns.map(() => 'max-content').join(' ');
-    optTableEl.innerHTML = headerHtml + baselineRowHtml + currentRowHtml + rowsHtml;
+    // Pinned ⚖ COMPARE row - a third sticky row under the other two. Changing the goal re-ranks the
+    // body, so the row you pinned can land hundreds of rows down and off screen while every column
+    // is still being measured from it. Hoisting it keeps the thing being compared against visible
+    // beside the two rows that are always visible. It stays in the ranked body as well, like the
+    // current-plan row and unlike the ⚓ baseline, so its Rank is still readable in context.
+    // Skipped when it IS one of the rows already pinned above, which would render it twice.
+    let compareRowHtml = '';
+    const cmpRow = OptimizerState.compareRow;
+    if (cmpRow && cmpRow !== baselineRow && !cmpRow._isCurrentPlan) {
+        const _mCell = 'padding:4px 8px;background-color:#dbeafe;font-weight:bold;position:sticky;z-index:1;';
+        const mTitle = 'COMPARING AGAINST THIS ROW - with Show as Differences on, every column is '
+            + 'measured from it instead of from the ⚓ baseline. Click it again to stop comparing.';
+        compareRowHtml = '<div style="display:contents;" id="opt-compare-row">' + columns.map(col => {
+            const v = (OptimizerState.relativeView ? deltaCellHtml(col, cmpRow, deltaReferenceRow()) : null)
+                   ?? col.getValue(cmpRow);
+            return `<div style="${_mCell}${cellActionCss(col)}"${cellActionAttrs(col, cmpRow, mTitle)}>${v}</div>`;
+        }).join('') + '</div>';
+    }
+
+    optTableEl.innerHTML = headerHtml + baselineRowHtml + currentRowHtml + compareRowHtml + rowsHtml;
     // Stack the second sticky row directly under the first: the 60px default assumes header +
     // baseline row heights, which depend on the rendered font/zoom, so measure once it is in the DOM.
     if (currentRowHtml) {
@@ -2322,6 +2351,16 @@ function renderOptimizerTable(results) {
         const _baseH = document.querySelector('#opt-baseline-row > div')?.offsetHeight ?? 0;
         const _top = _hdrH + _baseH;
         document.querySelectorAll('#opt-current-row > div').forEach(d => { d.style.top = _top + 'px'; });
+    }
+    // Third sticky row, stacked the same measured way. Its own offset has to include whichever of
+    // the two rows above it actually rendered, so it is measured rather than assumed: a plan with no
+    // baseline or no current row would otherwise leave a gap or overlap.
+    if (compareRowHtml) {
+        const _hdrH  = optTableEl.children[0]?.offsetHeight ?? 30;
+        const _baseH = document.querySelector('#opt-baseline-row > div')?.offsetHeight ?? 0;
+        const _curH  = document.querySelector('#opt-current-row > div')?.offsetHeight ?? 0;
+        const _top = _hdrH + _baseH + _curH;
+        document.querySelectorAll('#opt-compare-row > div').forEach(d => { d.style.top = _top + 'px'; });
     }
 
     // Column-count escape hatch. Written here rather than in the markup for the same reason the two
@@ -2446,8 +2485,8 @@ function renderOptimizerTable(results) {
             // Names the columns that are ACTUALLY on screen. The old string named three fixed
             // columns, one of which (Yrs Funded) is no longer a default column at all and two of
             // which the active goal may have put away. Advice pointing at a column the reader
-            // cannot see is worse than no advice. dNW/dTax are excluded on purpose: their labels
-            // carry the ' vs ⚖' suffix and read strangely mid-sentence.
+            // cannot see is worse than no advice. (The two Δ columns this list used to exclude are
+            // gone; "Show as Differences" turns these same columns into differences instead.)
             const _diffKeys = ['tax', 'afterTaxNW', 'mixSpread', 'finalRoth', 'finalIRA', 'rmdtax', 'convBE'];
             const _diffNames = columns.filter(c => _diffKeys.includes(c.key)).map(c => c.label).slice(0, 3);
             noteEl.textContent = 'ℹ️ All strategies show the same Total Spendable - this means every strategy fully funds your spending goal. '
@@ -6491,11 +6530,15 @@ function manageScenarios() {
         // No Version column. An incompatible scenario is already unmistakable without one: the row is
         // tinted red, its Load button is disabled and says why, and the warning below counts them.
         // A column of green ticks next to every other row was three states of nothing.
-        html += '<th style="text-align: center; padding: 8px; border-bottom: 2px solid #ddd;">Actions</th></tr>';
+        html += '<th style="text-align: right; padding: 8px; border-bottom: 2px solid #ddd;">Actions</th></tr>';
 
         for (const [name, scenario] of Object.entries(scenarios)) {
+            // Seconds dropped. Four action buttons plus a full timestamp plus a release stamp made
+            // the table wider than the modal, so it scrolled sideways and the headers read as
+            // misaligned against it. Nobody picks a saved plan by the second it was written.
             const savedDate = scenario.savedAt !== 'Unknown'
-                ? new Date(scenario.savedAt).toLocaleString()
+                ? new Date(scenario.savedAt).toLocaleString(undefined,
+                    { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })
                 : 'Unknown';
             const version = scenario.version || 1;
             const isCurrent = version === SCENARIO_VERSION;
@@ -6506,14 +6549,22 @@ function manageScenarios() {
             // The name is user text and goes into innerHTML, so it is escaped as CONTENT here.
             // escapeQuotes below covers the attribute position only, which is a different job.
             const rel = scenario.appVersion ? ` <span style="color:#888;">(${escapeHtml(scenario.appVersion)})</span>` : '';
+            // Info is an ⓘ beside the name rather than a fourth button. It is the only action that
+            // does not DO anything to the plan - it just describes it - so it belongs with the
+            // identity rather than in the row of verbs, and moving it there is what gets the table
+            // back inside the modal. The name itself opens the same panel: it is the largest and
+            // most obvious target, and a dotted underline says it is clickable.
+            const _q = escapeQuotes(name);
             html += `<tr style="${rowStyle}">
-                <td style="padding: 4px; border-bottom: 1px solid #eee;">${escapeHtml(name)}</td>
-                <td style="padding: 4px; border-bottom: 1px solid #eee;">${escapeHtml(savedDate)}${rel}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">
-					<button class="modal-btn" onclick="showScenarioInfo('${escapeQuotes(name)}')">Info</button>
-					<button class="modal-btn" onclick="loadScenarioByName('${escapeQuotes(name)}')" ${!isCurrent ? 'disabled title="Incompatible version"' : ''}>Load</button>
-					<button class="modal-btn" onclick="deleteScenario('${escapeQuotes(name)}')">Delete</button>
-					<button class="modal-btn" onclick="exportScenario('${escapeQuotes(name)}')">Export</button>
+                <td onclick="showScenarioInfo('${_q}')" title="Notes and recorded statistics for this plan" style="padding: 4px; border-bottom: 1px solid #eee; text-align: left; white-space: nowrap; cursor: pointer;">
+                    <span style="color:#2980b9;">ⓘ</span>
+                    <span style="text-decoration:underline;text-decoration-style:dotted;">${escapeHtml(name)}</span>
+                </td>
+                <td onclick="showScenarioInfo('${_q}')" title="Notes and recorded statistics for this plan" style="padding: 4px; border-bottom: 1px solid #eee; text-align: left; white-space: nowrap; cursor: pointer;">${escapeHtml(savedDate)}${rel}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right; white-space: nowrap;">
+					<button class="modal-btn" onclick="loadScenarioByName('${_q}')" ${!isCurrent ? 'disabled title="Incompatible version"' : ''}>Load</button>
+					<button class="modal-btn" onclick="deleteScenario('${_q}')">Delete</button>
+					<button class="modal-btn" onclick="exportScenario('${_q}')">Export</button>
                 </td>
             </tr>`;
         }

@@ -4600,3 +4600,51 @@ phase so the audit trail survives the merge.
 change and the case for it was withdrawn. `P104c`'s phased model is specified with a zero-engine-
 change recipe and not built. `P112`'s bank is designed and not seeded, which is what `P114b`,
 `P28jn` and `P106f` are all waiting on.
+
+## Session: 2026-09-07 (worktree next-in-plan-84c7d6) - P95, and its own diagnosis was the defect
+
+Branch off `main` = `c6204b0` (PR #216 merged). Shipped **v11.177b**. Suites 424 / 61 / 22 unchanged
+(`TestTiers.EXPECTED` untouched: the two new tests are in-page, which that table does not count);
+in-page 533, badge green at 1040 total with 0 unsafe skipped.
+
+**The measurement came before the fix, and overturned the phase.** `P95` had stood since 08-29 as
+"an ACA share link does not round-trip", with `refreshStratRateOptions()` named as the suspect for
+rebuilding the option list out from under `loadFromURL`. Loading every menu value in its own iframe
+and reading `stratRate` and `getInputs()` back showed **15 of 15 selectable values survive**, ACA
+included; the only two that move are the disabled `IRMAA5` / `37` sentinels, clamping down one entry
+as designed. The rebuild restores its selection correctly and there is nothing to fix there.
+
+**What the repro URL actually did.** `?str=bracket&sr=aca400` carries no ages, so it ran on the page
+defaults - where both people are on Medicare at retirement start and the ACA rows are correctly
+disabled. The real defect was one line in `updateACAWarning`: the fallback took
+`[...sel.options].find(o => !o.disabled)`, and that list is **sorted by dollars**, so an $84,049 cap
+was answered with the $24,800 row. Three times tighter, taxable income where the request was MAGI, a
+target to fill where the request was a cap to stay under, and silent - `medicareAlready` suppresses
+the sidebar note on purpose (`P96`).
+
+**What shipped.** The fallback is the menu's own default, read off the option list's `selected`
+attribute so `generateStratRateOptions` stays the only place that decides it. The substitution is
+recorded in `ACA_GATE_SWAP` and reported by `loadFromURL` and `commitScenario` only - a sidebar age
+edit stays as quiet as it was, per the user's call. `reportACAGateSwap()` **appends** to the message
+box instead of calling `showMessage`, because `reportSummaryDrift` writes the scenario's own "loaded"
+line into that same single box immediately before it; verified both paths in the browser, with the
+combined line reading as one warning.
+
+**The user's call on the substitute**, put as three options with the dollars: **Below IRMAA** (the
+default) over "nearest enabled limit" (12% Fed, $100,800) and over keeping `10% Fed` with only the
+silence fixed. Both people on Medicare is the case where the cap has lost its purpose rather than
+needing a near-miss replacement, and the default is a MAGI ceiling like the entry it replaces.
+
+**Two rules added to `findings.md`**, both from this session: a repro URL that omits a parameter is a
+different household, not a smaller test case, and the share format's own default-omission rule is
+what makes the shortest link the least representative one; and a fallback to "the first enabled
+option" is a fallback to whatever the sort order put there, so a substitute has to be chosen on
+meaning. The second is pinned by a test that asserts the landing spot is **not a federal bracket**
+rather than asserting a value, so a re-sort cannot quietly restore the old behavior.
+
+### What is deliberately NOT done
+
+`P95` is closed and out of the NOW table. Nothing else from that phase remains; the IRMAA half of
+`P95a` was checked in the same sweep and is covered by the 15 of 15. The blocked items from the
+previous session are untouched: `P112`'s bank is still unseeded, and `P114b`, `P28jn` and `P106f`
+still wait on it.

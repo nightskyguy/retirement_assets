@@ -153,6 +153,21 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
 - *A prose deferral is invisible to every check the repo has.* A checkbox is greppable and a status
   line is read; "give it its own item when someone picks it up" inside a sub-bullet is neither, and
   sat unnoticed until a sweep went looking for that exact shape.
+- *A repro URL that omits a parameter is not a smaller test case, it is a different household.*
+  `?str=bracket&sr=aca400` carries no ages, so it runs on the page defaults, where both people are
+  already on Medicare and the ACA rows are correctly unavailable. `P95` read the resulting fallback
+  as a decoder that could not round-trip its own output, named `refreshStratRateOptions` as "the
+  obvious suspect", and sat open for nine days. The share format's own rule is what made it
+  deceptive: `buildShareURL` OMITS a parameter whose value equals the default, so the shortest link
+  is the one running on the least representative plan. **Reproduce on the plan the link came from,
+  not on what the link says.** Measured the other way at v11.1779: 15 of 15 selectable limits
+  round-trip. ("P95")
+- *Falling back to "the first enabled option" is a fallback to whatever the sort order put there.*
+  The Limit menu is sorted by dollars, so the ACA gate's `find(o => !o.disabled)` answered a $84,049
+  cap with the $24,800 row - three times tighter, on the other income basis, and a target to fill
+  where the user had chosen a cap to stay under. A substitute has to be chosen on MEANING. Pinned by
+  `anUnavailableCapFallsBackToTheDefaultAndSaysSo`, which asserts the landing spot is not a federal
+  bracket rather than asserting a value, so a re-sort cannot quietly restore it. ("P95")
 
 ## The suggested Stop Conversion year is a MOVING PEAK, and `totalNetWealth` is not a shared basis (2026-09-03, P106a)
 

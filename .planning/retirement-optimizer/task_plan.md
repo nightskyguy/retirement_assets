@@ -13,7 +13,6 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 |---|---|---|---|
 | **O0** | P103 | **`a`-`e` DONE, 3 MC modes.** GK spend + bracket-fill draw wins 12/18 mode-cells at 95-100% survival; ordered seqs hit **0%** and are out | `P103c` / ship |
 | **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
-| **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
 | **O0** | P35 | **`P104b3` SHIPPED 09-03 v11.1719: Fixed Split, 4 vectors, NERDKNOB-GATED. Goldens untouched (gate off by default). MC grid deliberately empty** | `P104c` / un-gate |
 | **O1** | P36 | round 2 measures against the `P103a` ceiling, not rank-among-arms | `P36b` |
@@ -27,6 +26,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 - `P91d` is the one open item left inside a phase marked DONE: the Monte Carlo controls are in neither the saved scenario nor the share URL.
 
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. 2026-08-31: P98 opened and closed - an in-page test read the Limit menu before `DOMContentLoaded` built it. **2026-08-31 CLEANUP (user):** P35 to **O1** (cannot be "ideal" until P75/P36 land), leaving P87 the sole O0; 34 stale boxes closed under phases already shipped; **29 never-started phases moved to `.planning/retirement-optimizer/task_parked.md`** (nothing deleted); P28f/g/h confirmed shipped v11.162B; the 40/60 closed for good in **`P30i`**. **P101 opened** (2026-08-31, user): worked examples served from `examples/` and loadable by name, with notes - O2. **P102 opened and Stage B SHIPPED** (2026-09-01, user): goal-first mode, an ALTERNATIVE nerdknob-gated surface that drives the classic controls and never replaces them; `P30i` closed inside it. **P103 opened, O0** (2026-09-01, user: "reorder as you proposed"): the ceiling then the rules - `P75` and parked `P5` merged into it, `P100` to O1 as SELECTION not RESULT, `P102` Stages C/D deferred behind `P103d`. **`P103a` DONE same day**: oracle re-run on `1b7b366`, median gap 4.35% -> 1.58%, dominant lever flipped to the withdrawal split, `P51d` closed at <=0.013%. **P113 opened and SHIPPED** (2026-09-06, user) v11.1769: saved plans carry notes, a statistics snapshot and the `appVersion` that produced them; Load and Import unified, which fixed an unversioned import that Load would then refuse forever. **P114 opened and SHIPPED** (2026-09-07, user) v11.1779: the Optimizer table drops both Δ columns, gains **Extra Conv**, keeps a pinned compare row across an objective change and hoists it, and `?tab=optimizer` runs the sweep. Full index next.
+**P95 CLOSED 2026-09-07** (user: "let's fix P95") v11.177b, and its own diagnosis was wrong: the share link round trip was never broken - 15 of 15 selectable limits survive one - and the real defect was the ACA age gate's fallback, which answered a $84k cap with the $24.8k row at the top of a list sorted by dollars, silently. It now falls to the menu default and the load paths say so.
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
@@ -2225,26 +2225,52 @@ Ordered by payoff per line of code. All three are live defects today, independen
 ## P96: the ACA note told a household past 65 to change something that cannot help  *(2026-08-29, user-reported, DONE v11.16ab)*
 **COMPLETE.** v11.16ab, 2026-08-29. Full body in `.planning/task_completed.md`.
 
-## P95: an ACA share link does not round-trip  *(NEW 2026-08-29, found while verifying P94, O1, NOT A REGRESSION)*
+## P95: an ACA cap that cannot be used is replaced silently  *(2026-08-29, found while verifying P94, DONE v11.177b 2026-09-07)*
 
-`buildShareURL` emits an ACA plan as `?str=bracket&sr=aca400`. Loading that link lands the ceiling
-dropdown on `10`, not `aca400`, so `getInputs().stratACAMultiple` reads **0** and the plan comes up
-as **Fill Bracket 10%** - a different, much tighter strategy than the one shared, with no message.
+**THE ORIGINAL DIAGNOSIS WAS WRONG, and the title above is the corrected one.** As written this
+phase said `buildShareURL` emits `?str=bracket&sr=aca400`, that loading it lands the dropdown on
+`10`, and that `refreshStratRateOptions()` was "the obvious suspect" for rebuilding the list out
+from under `loadFromURL`. The observation was real. Every inference from it was not.
 
-Measured in the browser at v11.16aa, and **pre-existing on `main`**: `git diff main` on the P94
-branch touches no `stratRate` code at all. `loadFromURL` sets the select correctly and something
-after it rebuilds the option list - `refreshStratRateOptions()` is the obvious suspect, since
-`applyScenario` calls it deliberately at `optimizer_ui.js:5429` and has a comment (`:5384`) about
-exactly this failure mode on the SCENARIO path, where it was already found and fixed once.
+**The round trip is not broken and probably never was.** Measured at v11.1779 by loading every
+value the menu offers in its own iframe and reading `stratRate` and `getInputs()` back: **15 of 15
+selectable values survive**, ACA included. The two that move - `IRMAA5` and `37` - are the disabled
+sentinel rows that name a floor rather than a ceiling, and clamping them down one entry is the
+behavior `clampStratRateSelection` exists for. `refreshStratRateOptions` restores the selection
+across its own rebuild correctly.
 
-- [ ] **P95a** - Find what rebuilds the list after `loadFromURL` and reapply the selection the way
-      `applyScenario` does, or capture and restore it around the rebuild. Then check the IRMAA
-      values (`IRMAA0`..`IRMAA4`) the same way - they are rebuilt by the same function and may have
-      the same defect.
-- [ ] **P95b** - A browser-tier test: every value the ceiling dropdown offers survives a share-URL
-      round trip. A per-value loop, not one case, because the defect is per-option-family.
+**What actually happened** is that the repro URL carried no ages, so it ran on the page defaults,
+where both people are on Medicare when the plan starts. `updateACAWarning` disables the ACA rows in
+that case - correctly, there is no premium subsidy for a cap to protect - and then moved the
+selection to `[...sel.options].find(o => !o.disabled)`. **The list is sorted by dollars, so "first
+enabled" is the SMALLEST limit in the menu**: an $84,049 cap was answered with a $24,800 one, three
+times tighter, on taxable income where the request was MAGI, and a target to fill where the request
+was a cap to stay under. `medicareAlready` makes the sidebar warning silent on purpose (`P96`), so
+nothing on the page said any of it.
 
-- **Status:** measured, nothing built. The user has not been asked about priority yet.
+- [x] **P95a DONE** - the fallback is now the menu's own default, read off the option list's
+      `selected` attribute rather than named in the gate, and the substitution is recorded in
+      `ACA_GATE_SWAP` for the two paths that load a plan the user did not choose: `loadFromURL` and
+      `commitScenario`. `reportACAGateSwap()` **appends** to the message box rather than calling
+      `showMessage`, because `reportSummaryDrift` writes the scenario's own "loaded" line into the
+      same single box immediately before it. A sidebar age edit still swaps quietly, per the user's
+      call - the loaders are the only callers who read the record.
+      The IRMAA values were checked the same way and are fine (see the 15 of 15 above).
+- [x] **P95b DONE** - two in-page tests. `everyLimitSurvivesAShareLink` loops every ENABLED option
+      through `buildShareURL` and asserts the emitted `sr` decodes back to an option that exists with
+      exactly that value, with an omitted param accepted only for the default. It moves the ages off
+      the page defaults first, or the ACA family is not in the sample at all - which is the mistake
+      the original repro made. `anUnavailableCapFallsBackToTheDefaultAndSaysSo` pins the gate: the
+      landing spot is the default, is not a federal bracket, names both limits, and clears on read.
+
+- **The user's call, 2026-09-07:** the substitute is **Below IRMAA**, the menu default, over
+  "nearest enabled limit" (12% Fed, $100,800) and over keeping today's `10% Fed`. Both people being
+  on Medicare is exactly the case where the cap has lost its purpose rather than needing a near-miss
+  replacement, and the default is a MAGI ceiling like the entry it replaces where a federal bracket
+  is taxable income (`P87`). Announced on **load paths only**.
+- **What this cost:** one line of fallback, and the evidence to know which line. The lesson is in
+  `findings.md` - a repro URL that omits a parameter is not a smaller test case, it is a different
+  household.
 
 ---
 

@@ -2460,6 +2460,122 @@ assertEqual(
 		}
 	})();
 
+	// ===== Every limit the menu offers survives a share link =====
+	// P95b. A per-value loop, not one case, because the families are three separate code paths in
+	// generateStratRateOptions() and a defect in one is invisible from the others: the federal rows
+	// carry bare numbers ("22"), the IRMAA rows a mixed-case prefix that was renamed once already
+	// ("IRMAA2", and old links say "irmaa2"), the ACA rows a lowercase one ("aca400").
+	//
+	// Checked without navigating: the emit half is buildShareURL()'s own output, and the decode half
+	// is the pair of facts loadFromURL() relies on - the short code maps back to `stratRate`, and the
+	// menu holds an option with exactly that value, which is what a <select> needs or it silently
+	// deselects. The ages are moved off the defaults first because the defaults put both people on
+	// Medicare, and the ACA rows are then not offered at all.
+	//
+	// The two DISABLED sentinels are excluded on purpose: "IRMAA Tier 5" and "37% Fed" are the top
+	// bands, they name a floor rather than a ceiling, and a link carrying one is meant to clamp down
+	// to the entry below it. That is behavior, not drift.
+	// ⚠ UNSAFE - MUTATES: #strategy, #stratRate, the birth years, spouse flag and start age.
+	(function everyLimitSurvivesAShareLink() {
+		if (!unsafeTest('everyLimitSurvivesAShareLink')) return;   // writes the profile and the menu
+		const sel = document.getElementById('stratRate'), strat = document.getElementById('strategy');
+		const by1 = document.getElementById('birthyear1'), by2 = document.getElementById('birthyear2');
+		const spouse = document.getElementById('hasSpouse'), start = document.getElementById('startAge');
+		if (!sel || !strat || !by1 || !spouse || !start) return;
+		if (typeof buildShareURL !== 'function' || typeof OPT_SHORT_TO_LONG === 'undefined') return;
+		const snap = [[by1, by1.value], [start, start.value], [strat, strat.value], [sel, sel.value]]
+			.concat(by2 ? [[by2, by2.value]] : []);
+		const wasSpouse = spouse.checked;
+		try {
+			// Young enough that the ACA rows are live, so all three families are in the sample.
+			const nowYear = new Date().getFullYear();
+			by1.value = String(nowYear - 54); spouse.checked = true;
+			if (by2) by2.value = String(nowYear - 52);
+			start.value = '58';
+			strat.value = 'bracket';
+			toggleSpouseUI?.(); refreshStratRateOptions?.(); toggleStrategyUI?.();
+
+			assertEqual(OPT_SHORT_TO_LONG['sr'], 'stratRate',
+				'the share link short code for the Limit is the one loadFromURL decodes');
+			const offered = [...sel.options].filter(o => !o.disabled).map(o => o.value);
+			const families = ['10', 'IRMAA0', 'aca400'].filter(v => offered.includes(v));
+			assertEqual(families.length, 3,
+				'all three limit families are offered to a household that is not yet on Medicare');
+
+			const dflt = ([...sel.options].find(o => o.defaultSelected) || {}).value;
+			const missed = [];
+			for (const v of offered) {
+				sel.value = v;
+				const sr = new URL(buildShareURL()).searchParams.get('sr');
+				// An omitted `sr` is correct for the default and only for it: buildShareURL drops a
+				// param whose value equals the default, and loadFromURL leaves the menu on it.
+				const emitted = sr === null ? dflt : sr;
+				const lands = [...sel.options].some(o => o.value === emitted && !o.disabled);
+				if (emitted !== v || !lands) missed.push(`${v} → ${sr === null ? '(omitted)' : sr}`);
+			}
+			assertEqual(missed, [], `all ${offered.length} selectable limits round-trip through a share link`);
+		} finally {
+			for (const [el, v] of snap) el.value = v;
+			spouse.checked = wasSpouse;
+			toggleSpouseUI?.(); refreshStratRateOptions?.(); toggleStrategyUI?.();
+			ACA_GATE_SWAP = null;   // the restore itself can trip the gate; it is not a load
+		}
+	})();
+
+	// ===== A limit that is taken away is replaced by the default, and said out loud =====
+	// P95a. The one case that does NOT round-trip, and should not: a link carrying an ACA cap opened
+	// by a household already on Medicare at retirement start. There is no premium subsidy left for a
+	// cap to protect, so the gate greys the ACA rows out and the selection has to move.
+	//
+	// Where it moves is the point. It used to take the first enabled option in a list sorted by
+	// dollars, which is "10% Fed - $24.8k" - three times tighter than the $84k that was asked for,
+	// on the other income basis, and a target to fill rather than a cap to stay under. It now lands
+	// on the menu's own default, and records a sentence naming both limits so the load paths can say
+	// what happened. Silently is how it used to happen.
+	// ⚠ UNSAFE - MUTATES: #stratRate, the birth years, spouse flag and Retirement Start Age.
+	(function anUnavailableCapFallsBackToTheDefaultAndSaysSo() {
+		if (!unsafeTest('anUnavailableCapFallsBackToTheDefaultAndSaysSo')) return;   // writes the profile
+		const sel = document.getElementById('stratRate');
+		const by1 = document.getElementById('birthyear1'), by2 = document.getElementById('birthyear2');
+		const spouse = document.getElementById('hasSpouse'), start = document.getElementById('startAge');
+		if (!sel || !by1 || !spouse || !start || typeof updateACAWarning !== 'function') return;
+		const snap = [[by1, by1.value], [start, start.value]].concat(by2 ? [[by2, by2.value]] : []);
+		const wasSpouse = spouse.checked;
+		const setAges = (b1, b2, age) => {
+			by1.value = String(b1); spouse.checked = true;
+			if (by2) by2.value = String(b2);
+			start.value = String(age);
+			toggleSpouseUI?.(); refreshStratRateOptions?.();
+		};
+		try {
+			const nowYear = new Date().getFullYear();
+			setAges(nowYear - 54, nowYear - 52, 58);          // pre-Medicare: the cap is selectable
+			if (![...sel.options].some(o => o.value === 'aca400')) return;   // no ACA rows in this build
+			sel.value = 'aca400';
+			assertEqual(sel.value, 'aca400', 'a pre-Medicare household can choose the 400% FPL cap');
+			ACA_GATE_SWAP = null;
+
+			setAges(nowYear - 74, nowYear - 76, 74);          // both on Medicare: the cap is gone
+			const dflt = ([...sel.options].find(o => o.defaultSelected) || {}).value;
+			assertEqual(sel.value, dflt,
+				'and a household past 65 lands on the menu default, not on the tightest row in the list');
+			assertEqual(/^(10|12|22|24|32|35|37)$/.test(sel.value), false,
+				'which is a MAGI ceiling, not a federal bracket on the other income basis');
+			assertEqual(typeof ACA_GATE_SWAP === 'string' && ACA_GATE_SWAP.includes('ACA 400% FPL')
+				&& ACA_GATE_SWAP.includes('Below IRMAA'), true,
+				'the substitution is recorded, naming the limit asked for and the one loaded');
+			// Read once and cleared, so a later load cannot report a swap it did not cause.
+			reportACAGateSwap();
+			assertEqual(ACA_GATE_SWAP, null, 'and reporting it clears it');
+		} finally {
+			for (const [el, v] of snap) el.value = v;
+			spouse.checked = wasSpouse;
+			toggleSpouseUI?.(); refreshStratRateOptions?.(); updateACAWarning();
+			ACA_GATE_SWAP = null;
+			clearMessage?.();
+		}
+	})();
+
 	// ===== Every limit says where it sits on the OTHER ladder =====
 	// The menu mixes three families whose numbers are three different measures of income: a federal
 	// entry is a TAXABLE-income threshold, an IRMAA entry is MAGI, an ACA entry is ACA MAGI. Read as

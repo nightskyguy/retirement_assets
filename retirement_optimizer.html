@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1779</title>
+    <title>Retirement Optimizer 11.177b</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -65,8 +65,8 @@
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=111779"></script>
-	<script src="optimizer_tests.js?v=111779"></script>
+	<script src="optimizer_ui.js?v=11177b"></script>
+	<script src="optimizer_tests.js?v=11177b"></script>
 </head>
 <body>
 
@@ -1019,6 +1019,13 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="behavior"><b>11.177b</b>
+					<strong>A plan that asks for an ACA income cap nobody in it can use now says so, and lands somewhere sensible.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>The FPL caps are available only while someone in the plan is still under 65 when it starts; past that there is no premium subsidy left for a cap to protect. Opening a shared link or a saved plan that asks for one used to move the <i>Limit</i> to <i>10% Fed</i> without a word, a ceiling about three times tighter and measured on taxable income rather than on MAGI. It now loads <strong>Below IRMAA</strong> and names both limits: the one the plan asked for and the one it used.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.177b" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="behavior"><b>11.1779</b>
 					<strong>Optimizer table: a row you pin to compare against now stays pinned and stays visible.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1743,7 +1750,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111779';
+    const V = '?v=11177b';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

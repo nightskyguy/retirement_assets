@@ -6020,7 +6020,12 @@ function loadFromURL() {
     resetUnknownStrategy();
     toggleStrategyUI();
     onConvSubFlagChange();   // .checked set programmatically above → no change event; resync the convenience checkbox
+    // P95. The ACA age gate can take this link's Limit away, and it fires several calls down inside
+    // runSimulation() → refreshStratRateOptions() → updateACAWarning(). Cleared first so only this
+    // load's own substitution is reported, then read once the page has settled on its answer.
+    ACA_GATE_SWAP = null;
     runSimulation();
+    reportACAGateSwap();
 }
 
 // The load-time "this scenario sets a Cash Reserve" warning was retired at 11.1702, when 0 became
@@ -6723,6 +6728,7 @@ function cancelImport() {
  * applyScenario runs the plan at its tail, so the fresh numbers are available on return.
  */
 function commitScenario(entry, name) {
+    ACA_GATE_SWAP = null;   // P95: only this load's own ACA substitution is this load's to report
     applyScenario(entry.data);
     _lastLoadedPlanName = name;
     _lastLoadedFileName = entry.sourceFile || null;
@@ -6736,6 +6742,7 @@ function commitScenario(entry, name) {
     if (notesEl) notesEl.value = entry.notes || '';
     closeScenarioModal();
     reportSummaryDrift(entry, name);
+    reportACAGateSwap();   // P95: after the drift report, which it appends to rather than replaces
 }
 
 /**
@@ -7511,6 +7518,44 @@ function buildLimitLadderSVG(status, cpiAdj, selectedLimit) {
          + `this plan's deduction, which is the income the plan measures against.</div>`;
 }
 
+// P95. Set by updateACAWarning() when the age gate takes a selected ACA cap away; read and cleared
+// by the two paths that load a plan somebody else chose - a share URL and a saved scenario. It is a
+// single pending string rather than a queue because only one substitution can happen per load, and
+// both loaders clear it before they start so a swap from an earlier sidebar edit is never reported
+// as though the loaded plan had caused it.
+let ACA_GATE_SWAP = null;
+
+/**
+ * The readable half of a Limit option's label: the name and its own dollar figure, without the
+ * cross-ladder parenthetical. "ACA 400% FPL - $84k" out of "ACA 400% FPL  ·  $84k (12% Fed)".
+ * The annotation is there to be scanned in a menu; in a sentence it is a second limit the reader
+ * has to work out is not the one being talked about.
+ */
+function limitOptionName(opt) {
+    return (opt?.textContent || '').split(' (')[0].replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Report a pending ACA substitution, once, on a load path.
+ *
+ * APPENDS rather than replaces. There is one message box, and the scenario loaders write their own
+ * "loaded" line into it immediately before this runs (reportSummaryDrift), so a second showMessage()
+ * would delete the drift report the user also needs. An existing error keeps its severity; anything
+ * milder becomes a warning, because a limit the user did not choose is the more serious of the two.
+ */
+function reportACAGateSwap() {
+    const msg = ACA_GATE_SWAP;
+    ACA_GATE_SWAP = null;
+    if (!msg) return;
+    const box = document.getElementById('popUpMessage');
+    if (box && box.style.display === 'block' && box.textContent.trim()) {
+        box.textContent = `${box.textContent.trim()} ${msg}`;
+        if (!/\berror\b/.test(box.className)) box.className = 'scenario-message warning';
+    } else {
+        showMessage(msg, 'warning');
+    }
+}
+
 function updateACAWarning() {
     const sel     = document.getElementById('stratRate');
     const warnEl  = document.getElementById('aca-age-warn');
@@ -7554,11 +7599,6 @@ function updateACAWarning() {
         opt.disabled = bothMedicare;
         opt.style.color = bothMedicare ? '#aaa' : '';
     }
-    // If a now-disabled ACA option is selected, switch to first enabled option
-    if (bothMedicare && sel.value.startsWith('aca')) {
-        const first = [...sel.options].find(o => !o.disabled);
-        if (first) { sel.value = first.value; updateBracketFeedback(); }
-    }
 
     // EVERY MESSAGE BELOW NAMES THE START YEAR AND THE AGES IN IT, and that is the whole point of
     // this block rather than a flourish. The age readouts beside the birth-year fields show ages
@@ -7573,6 +7613,37 @@ function updateACAWarning() {
     const p2AgeAtStart = startYear - by2;
     const you  = `you will be ${p1AgeAtStart}`;
     const them = `your spouse ${p2AgeAtStart}`;
+
+    // P95. A now-disabled ACA option falls back to the menu's own DEFAULT, "Below IRMAA".
+    //
+    // It used to take the first enabled option in the list, and the list is sorted by dollars, so a
+    // plan asking for the $84k ACA 400% cap silently came up on "10% Fed - $24.8k": three times
+    // tighter than what was asked for, and a target to FILL where the user had chosen a cap to stay
+    // under. The default is the honest substitute for two reasons. Both people being on Medicare is
+    // exactly the case where no premium subsidy exists for a cap to protect, so the cap has lost its
+    // purpose rather than needing a near-miss replacement; and "Below IRMAA" is a MAGI ceiling like
+    // the ACA entry it replaces, where a federal bracket is taxable income - a different basis (P87).
+    //
+    // Which option is the default comes off the list's own `selected` attribute rather than being
+    // named here, so generateStratRateOptions() stays the single place that decides it.
+    if (bothMedicare && sel.value.startsWith('aca')) {
+        const opts = [...sel.options];
+        const from = opts.find(o => o.value === sel.value);
+        const to   = opts.find(o => o.defaultSelected && !o.disabled) || opts.find(o => !o.disabled);
+        if (to && from) {
+            sel.value = to.value;
+            updateBracketFeedback();
+            // RECORDED, not announced. This runs on every age edit as well as on a load, and only a
+            // load has a user who did not choose the substitution. The loaders read and clear it;
+            // nobody else does, so editing the ages in the sidebar stays as quiet as it was.
+            const whoPhrase = hasSpouse
+                ? `${you} and ${them}, both on Medicare (age ${medAge}+)`
+                : `${you}, already on Medicare (age ${medAge}+)`;
+            ACA_GATE_SWAP = `This plan asked for ${limitOptionName(from)}, which is unavailable: at `
+                + `retirement start in ${startYear}, ${whoPhrase}, so there is no premium subsidy for `
+                + `an income cap to protect. Loaded ${limitOptionName(to)} instead.`;
+        }
+    }
 
     if (bothMedicare && medicareAlready) {
         // Silent, on instruction. The options are greyed out above and nothing here can be acted

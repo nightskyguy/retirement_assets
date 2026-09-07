@@ -17,6 +17,25 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.177b"></a>
+
+## 11.177b
+
+**A shared link or saved plan that asks for an ACA income cap nobody in it can use now says so, and
+lands somewhere sensible.**  
+*Behavior change: a plan in that situation runs against a different limit than it did before, so its
+numbers move.*
+
+The FPL caps are available only while someone in the plan is still under 65 when it starts. Past
+that there is no premium subsidy left for a cap to protect, so the cap cannot be used. Opening such
+a plan used to move the Limit to **10% Fed** without a word: a ceiling roughly three times tighter
+than the one asked for, and measured on taxable income rather than on MAGI. It now loads **Below
+IRMAA** and names both limits, the one the plan asked for and the one it used.
+
+Every other limit the menu offers is now covered by a test that shares it and loads it back.
+
+---
+
 <a id="11.1779"></a>
 
 ## 11.1779

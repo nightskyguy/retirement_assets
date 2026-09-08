@@ -4648,3 +4648,57 @@ rather than asserting a value, so a re-sort cannot quietly restore the old behav
 `P95a` was checked in the same sweep and is covered by the 15 of 15. The blocked items from the
 previous session are untouched: `P112`'s bank is still unseeded, and `P114b`, `P28jn` and `P106f`
 still wait on it.
+
+## Session: 2026-09-08 (worktree next-in-plan-84c7d6) - P87 closed, and it was one defect four times
+
+Second commit on the same branch. Shipped **v11.1790**, one changelog entry covering both commits
+(the branch rule). Suites **429 / 61 / 22**, `TestTiers.EXPECTED` and `.githooks/README.md`
+reconciled; browser badge green at 1045 with 0 unsafe skipped.
+
+**`P87b` was already done and nobody had noticed.** It stood as the phase's central open decision -
+raise the federal ceiling by the year's deduction - while `limit += dedAddBack` had shipped under
+`P92a`, two-pass estimate and all, and the research input `bracketCeilingAddDeduction` that this
+phase's own "Left in the engine" note still listed had been removed with it. Reading the code before
+scheduling the work is what found it. A phase can be finished by another phase.
+
+**`P87d` and `P87c4` turned out to be the same defect in two places**, and measuring first is what
+made them tractable.
+
+- **`P87d`.** The ACA cap was **SIZED** on the ACA definition of MAGI (`_ssCeilRoom = yr.limit -
+  yr.fixedInc` subtracts the FULL benefit, deliberately, kept that way by `P87c`) and **MEASURED**
+  against `tax.MAGI`, the SSA one, which carries at most 85% of it. Two halves of one cap in two
+  units, one-directional because `acaMAGI >= MAGI` always, so **the overage could only read low and a
+  breached cap could report clean.** Over 2,880 live ACA plan-years: 342 flip clean to breached, the
+  breach rate goes 43.5% to 55.4%, and **12 of 360 plans report zero breaches while breaching** -
+  which matters because `acaBreach` feeds `totals.acaBreachYears` and the Optimizer reads that to
+  flag a row untenable. Shipped as `ceilingMAGI(yr)`; `tax.MAGI` untouched, since IRMAA and NIIT read
+  it. Confirmed end to end in the browser: on one plan, 4 of 9 capped years breach only on the
+  add-back, one of them with MAGI reading $19,880 against a $67,351 cap while ACA MAGI is $68,519.
+- **`P87c4`.** The same 15% Social Security error survived in the brokerage-harvest branch, which
+  runs **instead of** the sizing line `P87c` fixed. Guard binds in 339 of 648 cyclic cells, 116 with
+  the shipped `cycleCoexist` default and all 116 clean: median tax +$608, median ending net worth
+  -$5,259. Verdict is `P87a`'s, unchanged - a named ceiling is a contract to FILL and the cost is a
+  consequence to disclose.
+
+**`P87e`** is five tests, **`P87f`** names the income each Limit entry measures in the sidebar note
+and in the README - where one caveat claimed the ACA/IRMAA MAGI difference was not modeled, now
+false and rewritten. Research report gained sections 11 and 12; `research/README.md` and
+`HARNESSES.md` updated in the same commit, per the convention.
+
+**A harness defect worth knowing about:** `ssbasis_harness.js` passes `stratACAMultiple: 2.0` and
+`4.0`. The field is a whole percent, so those arms ran against a **$409 cap**, not $40,880. Section
+10's ACA conclusions do not rest on them, but nothing in that harness's ACA rows should be quoted.
+
+**Three rules added to `findings.md`**: the unit of BOTH sides of a threshold comparison is a thing
+to check; a fix does not reach the branch that runs instead of the one you fixed; and check whether
+the work is already done before scheduling it.
+
+### What is deliberately NOT done
+
+**`getLTCGBracketRoom`'s own basis.** It reads the same `_baseOrdinaryInc` and was left alone on
+purpose: LTCG brackets are TAXABLE-income thresholds, so the right basis involves the deduction as
+well as the benefit - two errors pointing the same way, needing their own measurement rather than a
+copied line. Recorded in `P87c4` and in report section 12.3.
+
+`P112`'s bank is still unseeded, and `P114b`, `P28jn` and `P106f` still wait on it. The branch now
+carries two commits and no open pull request.

@@ -12,7 +12,6 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
 | **O0** | P103 | **`a`-`e` DONE, 3 MC modes.** GK spend + bracket-fill draw wins 12/18 mode-cells at 95-100% survival; ordered seqs hit **0%** and are out | `P103c` / ship |
-| **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
 | **O0** | P35 | **`P104b3` SHIPPED 09-03 v11.1719: Fixed Split, 4 vectors, NERDKNOB-GATED. Goldens untouched (gate off by default). MC grid deliberately empty** | `P104c` / un-gate |
 | **O1** | P36 | round 2 measures against the `P103a` ceiling, not rank-among-arms | `P36b` |
@@ -27,6 +26,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. 2026-08-31: P98 opened and closed - an in-page test read the Limit menu before `DOMContentLoaded` built it. **2026-08-31 CLEANUP (user):** P35 to **O1** (cannot be "ideal" until P75/P36 land), leaving P87 the sole O0; 34 stale boxes closed under phases already shipped; **29 never-started phases moved to `.planning/retirement-optimizer/task_parked.md`** (nothing deleted); P28f/g/h confirmed shipped v11.162B; the 40/60 closed for good in **`P30i`**. **P101 opened** (2026-08-31, user): worked examples served from `examples/` and loadable by name, with notes - O2. **P102 opened and Stage B SHIPPED** (2026-09-01, user): goal-first mode, an ALTERNATIVE nerdknob-gated surface that drives the classic controls and never replaces them; `P30i` closed inside it. **P103 opened, O0** (2026-09-01, user: "reorder as you proposed"): the ceiling then the rules - `P75` and parked `P5` merged into it, `P100` to O1 as SELECTION not RESULT, `P102` Stages C/D deferred behind `P103d`. **`P103a` DONE same day**: oracle re-run on `1b7b366`, median gap 4.35% -> 1.58%, dominant lever flipped to the withdrawal split, `P51d` closed at <=0.013%. **P113 opened and SHIPPED** (2026-09-06, user) v11.1769: saved plans carry notes, a statistics snapshot and the `appVersion` that produced them; Load and Import unified, which fixed an unversioned import that Load would then refuse forever. **P114 opened and SHIPPED** (2026-09-07, user) v11.1779: the Optimizer table drops both Δ columns, gains **Extra Conv**, keeps a pinned compare row across an objective change and hoists it, and `?tab=optimizer` runs the sweep. Full index next.
 **P95 CLOSED 2026-09-07** (user: "let's fix P95") v11.177b, and its own diagnosis was wrong: the share link round trip was never broken - 15 of 15 selectable limits survive one - and the real defect was the ACA age gate's fallback, which answered a $84k cap with the $24.8k row at the top of a list sorted by dollars, silently. It now falls to the menu default and the load paths say so.
+**P87 CLOSED 2026-09-08** (user: "Do P87") v11.1790. `P87b` needed no work - the federal deduction add-back shipped under `P92a` and its box was never ticked. `P87d` and `P87c4` were the same defect twice: an income aggregate compared against a ceiling written in a different definition of income, always under-reporting. The ACA cap was SIZED on ACA MAGI and MEASURED against `tax.MAGI` (342 of 2,880 plan-years flip clean to breached; 12 of 360 plans ranked feasible while breaching), and the 15% Social Security error survived in the harvest branch (binds in 339 of 648 cyclic cells). `P87e` is five tests, `P87f` names the income each Limit entry measures. **`getLTCGBracketRoom`'s own basis is the one thing left open**, deliberately: it is a taxable-income threshold, so the deduction is in it too.
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
@@ -2303,7 +2303,7 @@ live - a real gap, not a plan:
 ## P88: an Extra Roth Conversion never reaches MAGI, so IRMAA never charges it  *(NEW 2026-08-29, user-raised, O0)*
 **COMPLETE.** v11.16a4, 2026-08-29. Full body in `.planning/task_completed.md`.
 
-## P87: the "Limit" dropdown mixes two income bases - IRMAA is MAGI, the federal brackets are not  *(NEW 2026-08-29, user-raised, measure before building)*
+## P87: the "Limit" dropdown mixes THREE income bases  *(2026-08-29, user-raised, DONE v11.1790 2026-09-08)*
 
 **The question, as asked:** the tax-bracket limits in the strategy "Limit" dropdown are income
 thresholds, but the IRMAA limits should be MAGI thresholds - are they?
@@ -2429,7 +2429,13 @@ changelog entry saying saved plans will not reproduce.
 
       Priority verdict: **P87 stays O2**, `P87b` is reclassified from optional optimization to
       correctness fix, and a new `P87g` carries the conversion-sizing gap.
-- [ ] **P87b** - DECIDE the federal fix. **A CORRECTNESS fix, not an optimization** (see the user
+- [x] **P87b DONE - and it needed no work.** The federal deduction add-back SHIPPED under `P92a`
+      (`limit += dedAddBack` in the federal branch, `yr._ceilDedAddBack` computed two-pass in
+      resolveSpendTarget), and the research input `bracketCeilingAddDeduction` this phase's own
+      "Left in the engine" note still lists was removed when it shipped. Nobody ticked the box.
+      **A phase can be finished by another phase; check the code before scheduling the work.**
+      The decision text is kept below for the record - form (i) is what shipped.
+- [x] ~~DECIDE the federal fix.~~ **A CORRECTNESS fix, not an optimization** (see the user
       correction in `P87a`): a named ceiling is a contract to fill, and the engine fills one
       deduction short of it. The measured wealth cost is a CONSEQUENCE TO DISCLOSE, not a reason to
       decline - the changelog entry must say plainly that bracket rows will withdraw and convert
@@ -2468,7 +2474,18 @@ changelog entry saying saved plans will not reproduce.
   - [x] **P87c3** - DONE. SHIP: default on, tests (`P87e` shape), `TestTiers.EXPECTED` reconciled across
         all three suites, changelog entry saying bracket and IRMAA rows draw and convert more and
         saved plans will not reproduce.
-  - [ ] **P87c4** - **NEW, found while shipping `P87c`, NOT fixed.** The SAME full-benefit
+  - [x] **P87c4 DONE v11.1790.** Report section 12, harness `.test_harnesses/harvestceil_harness.js`.
+        `_ceilRoomAbove` forks on the ceiling's KIND, so ACA keeps the full benefit in the harvest
+        branch too. **The guard binds in 339 of 648 cyclic cells**, 116 with the shipped
+        `cycleCoexist` default and all 116 clean: median lifetime tax +$608, median ending net worth
+        -$5,259, down in 98 of 116, worst -$46,443. Same verdict as `P87a`, unchanged.
+        **Still open, deliberately:** `getLTCGBracketRoom(ordFloor, ...)` reads the same aggregate and
+        was NOT corrected. LTCG brackets are TAXABLE-income thresholds, so the right basis there
+        involves the deduction as well as the benefit - two errors pointing the same way, needing
+        their own measurement rather than a copied line.
+        Found on the way: the `cycleCoexist` branch destructured `computeBracketCeiling` without
+        `kind`, so `yr.ceilingKind` was undefined in exactly the years that branch decides a draw.
+  - [x] ~~NEW, found while shipping `P87c`, NOT fixed.~~ The SAME full-benefit
         subtraction survives in the brokerage-harvest branch (`optimizer_core.js`, the
         `isBrokerageYear` arm): `_baseOrdinaryInc` includes `yr.fixedInc`, and it is compared against
         a MAGI ceiling in the LTCG top-off guard. That branch runs INSTEAD of the sizing line, so a
@@ -2478,13 +2495,33 @@ changelog entry saying saved plans will not reproduce.
         harvest cycle, so nothing in section 10 measures it either way.
   - **Cost is a consequence to disclose, not a reason to decline** - the `P87a` user correction
         applies unchanged. A named ceiling is a contract to fill.
-- [ ] **P87d** - ACA overage: either add the non-taxable-SS add-back to a separate `acaMAGI`, or
-      state in the tooltip that the ACA overage reads low. Do not change `tax.MAGI` itself - IRMAA
-      and NIIT read it and their definition is the current one.
-- [ ] **P87e** - Tests: a fixed plan on `22% Fed` lands federal TAXABLE income on the bracket top,
+- [x] **P87d DONE v11.1790 - the add-back, not the tooltip.** Report section 11, harness
+      `.test_harnesses/acamagi_harness.js`. `ceilingMAGI(yr)` at all three sites that decide
+      `bracketOverage`, logged hidden as `-acaMAGI`; `tax.MAGI` untouched, exactly as this item said.
+      Gated on `yr.isACAStrategy`, so a lapsed cap gets no add-back and stays unbreachable.
+      **The measurement is what settled it, and it is bigger than a tooltip could carry:** the cap was
+      SIZED on the ACA definition all along (`_ssCeilRoom = yr.limit - yr.fixedInc`) and MEASURED
+      against the SSA one, so two halves of one cap were in two units - one-directionally, since
+      `acaMAGI >= MAGI` always. Over 2,880 live ACA plan-years: **342 flip clean to breached**, the
+      breach rate goes 43.5% -> 55.4%, and **12 of 360 plans report zero breaches while breaching**.
+      That last figure is not a column - `acaBreach` feeds `totals.acaBreachYears`, which the
+      Optimizer reads to flag a row untenable.
+- [x] **P87e DONE v11.1790.** Five tests, `optimizer_core.tests.js` (429 total). Three for `P87d`
+      (the add-back identity and that it is SCOPED to an ACA cap; that the overage is decided on
+      `acaMAGI`, so a year landed exactly on the cap reads zero rather than the whole untaxed benefit
+      as spare room; that a breach visible only on the add-back is flagged and a lapsed cap still is
+      not) and two for `P87c4` (a harvest year realizes at least as much and still respects its
+      ceiling; an ACA harvest year is byte-identical under both bases). The first two items below were
+      already covered by `P92a`/`P87c` and are still green.
+- [x] ~~Tests: a fixed plan on `22% Fed` lands federal TAXABLE income on the bracket top,~~
       not MAGI; a plan on `IRMAA Tier 1` keeps `tax.MAGI` inside the tier (already covered, keep it
       green); an ACA plan with large SS is measured against the add-back definition.
-- [ ] **P87f** - The dropdown prints `22% Fed  ·  $211,400` and never says WHICH income that is;
+- [x] **P87f DONE v11.1790.** The note under the menu now names the income for all three families:
+      a federal bracket limits TAXABLE income (already did), an IRMAA tier limits MAGI "your total
+      income before your deduction", and an ACA cap limits ACA MAGI, which "counts your whole Social
+      Security benefit, including the part that is not taxed". README updated in two places, one of
+      which was a caveat claiming the ACA/IRMAA MAGI difference was NOT modeled - false as of `P87d`.
+- [x] ~~The dropdown prints `22% Fed  ·  $211,400` and never says WHICH income that is;~~
       the honest answer today is "MAGI, though the number came from a taxable-income table". Label
       it, and say the same in the README's strategy section. **Valuable but not the whole answer** -
       naming the basis helps a reader understand the ceiling; it does not deliver the headroom they
@@ -2518,6 +2555,13 @@ changelog entry saying saved plans will not reproduce.
   ACA is the one entry in the dropdown whose job is to stay UNDER, so its overage reading is the
   number that matters for it.
 - **Depends on:** nothing. P66/P83 already settled the IRMAA indexing and margin.
+- **THE PHASE'S OWN LESSON, and it is not the tax code.** Three separate ceiling families were
+  compared against three different definitions of income by one line of code each, and every one of
+  the three errors ran in the SAME direction - under-reporting or under-filling - so none of them
+  ever announced itself. `P87a` (deduction), `P87c` (Social Security, sizing line), `P87c4` (Social
+  Security, harvest branch), `P87d` (Social Security, ACA measurement). **When a quantity is
+  compared against a threshold, the unit of both sides is a thing to check, not to assume**, and a
+  fix applied to one branch does not reach the branch that runs INSTEAD of it.
 - **Left in the engine by `P87a`:** the research-only input `bracketCeilingAddDeduction`, default
   off and set by no UI (`optimizer_core.js:980`), and two hidden log fields, `-fedTaxableInc` and
   `-fedDeduction`. All three are inert unless the harness arms them.

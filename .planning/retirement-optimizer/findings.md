@@ -138,6 +138,20 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
   taken as a refresh. Move the `?v=` stamp, or hard-reload; a new port and a new process do neither.
   ("P114 - a restarted server is not a cleared cache")
 
+- *When a quantity is compared against a threshold, the UNIT of both sides is a thing to check.*
+  `P87` found the same shape four times in one dropdown: a deduction-basis error on federal
+  brackets, then the Social Security basis in the sizing line, then again in the harvest branch,
+  then again on the ACA measurement side. **All four ran in the same direction** - under-filling or
+  under-reporting - which is why none of them ever announced itself, and why the ACA one sat behind
+  a cap the engine had been SIZING correctly the whole time. ("P87")
+- *A fix does not reach the branch that runs INSTEAD of the one you fixed.* `P87c` corrected the
+  ordinary sizing line; Cycle Brokerage's harvest year builds its own aggregate and preempts that
+  line entirely, so it kept the defect for another eight days. When a correction lands in a branch,
+  grep for the other arms of the same `if`. ("P87c4")
+- *Check whether the work is already done before scheduling it.* `P87b` sat as an open O0 decision
+  while the fix had shipped under `P92a`, research flag removed and all - the box was simply never
+  ticked. A phase can be finished by another phase. ("P87b")
+
 **On measurement**
 
 - *A coarse probe grid invents answers, and a drained IRA is not the absence of an opportunity.*

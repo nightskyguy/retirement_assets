@@ -162,6 +162,22 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
   while the fix had shipped under `P92a`, research flag removed and all - the box was simply never
   ticked. A phase can be finished by another phase. ("P87b")
 
+- *An arm that produces no rows is not a small arm, it is an absent one, and a share table will not
+  say so.* `ssbasis_harness.js` carried two ACA arms whose multiple was wrong by a factor of 100 AND
+  whose household claimed Social Security after its own cap lapsed. Fixing the multiple changed the
+  output by nothing, because the filter had been matching **zero years** on both arms since the
+  harness was written. The regime percentages looked healthy throughout - they were percentages of a
+  sample two arms never entered. **Print the row count per arm, not just the share.** ("P87c1 re-baseline")
+- *A missing input can be worse than a wrong one, because it arrives as NaN rather than as a number
+  you would question.* `inputs.iraBaseGoal * cpiRate` is NaN when the field is absent, and it reached
+  `totalNetWealth` on two strategies - a whole run reporting NaN, silently. The page always sends the
+  field, so only a hand-built inputs object hits it, which is every harness. Read optional numeric
+  inputs with `?? 0` at the point of use. ("absent IRA Goal")
+- *Moving a literal behind a name breaks grep, and grep was the audit tool.* After the plan-bank
+  refit, `grep cyclicEnabled .test_harnesses/` misses exactly the harnesses that were tidied up. The
+  fix is not to stop refactoring but to replace the query: `.test_harnesses/which_plan.js` resolves
+  the name and reports the property. **A refactor that defeats the way a thing was found owes a new
+  way to find it.** ("which_plan")
 **On measurement**
 
 - *A coarse probe grid invents answers, and a drained IRA is not the absence of an opportunity.*

@@ -4808,3 +4808,61 @@ adds and the harness deliberately leaves unset.
 
 Still true from earlier today: nothing loads the plans into the page, and `P112b` and `P112d` remain
 open.
+
+## Session: 2026-09-08 (worktree next-in-plan-84c7d6) - the harness-debt sweep, all seven
+
+v11.1792. Suites **432 / 61 / 22**, browser badge green at 1048. No user-visible behaviour changed,
+so nothing went in the changelog.
+
+Worked in an order set by which items MOVE numbers - fix inputs, then measure, then re-baseline -
+because doing it the other way round means baselining twice.
+
+**The ssbasis ACA arms were wrong twice, and the second one is the interesting half.** They passed
+`stratACAMultiple: 2.0` and `4.0` where the field is a whole percent, so they ran against a $418 cap.
+Correcting them to 200 and 400 changed the harness's output by **nothing** - because the household
+claims Social Security at 70 while an ACA cap lapses at 65, so a benefit and a live cap never
+coexisted and the study's own filter matched **zero years on both arms**. Dead rows for the whole life
+of the harness, inside a study whose entire subject is the taxable-SS regime. Giving them a claim age
+of 62 put them in the sample and moved `10.1`: ceiling-bound years 5,182 -> 5,340, SLOPED 184 (3.6%)
+-> 295 (5.5%), ZERO 6 -> 21. **The conclusion is unchanged and strengthened** - the shipped bisection
+already covers every regime, so no engine change follows.
+
+**An absent `iraBaseGoal` produced NaN for a whole run.** `inputs.iraBaseGoal * cpiRate` is NaN when
+the field is missing and it reached `totalNetWealth` on the bracket and fixed strategies. The page
+always sends it; a hand-built inputs object is what hits it, which is every harness. Two omit it and
+escape only because they set it per-cell as an axis. Now `?? 0`, with a test asserting absent
+simulates identically to zero.
+
+**`getLTCGBracketRoom` measured, not built** (report section 13, new `ltcgroom_harness.js`). The
+floor it is given is overstated in **4,745 of 4,745** harvest years, median $59,276 against a bracket
+about $97k wide - and the DEDUCTION is $50,161 of that, so a fix modelled on `P87c4` would recover
+about a tenth. Not built, and the reason is real: the deduction is circular at sizing time and only
+computed for bracket strategies, so a Proportional plan running Cycle Brokerage has no estimate to
+reuse.
+
+**`P87a`'s figures no longer reproduce** - 51 of 74 clean cells, median -$47,092 is now 49 of 71 and
+-$47,549 - and are re-baselined in all five places that quote them, as a second measurement BESIDE
+the original rather than an overwrite. The original is what the decision was made on.
+
+**`COMMON` is drifted, not merely duplicated, and my own earlier count was wrong.** It is in **24**
+files, not thirteen, and at least four distinct households share the name: `endgame` is a different
+household entirely (born 1951/1953, retiring at 75, a $750k goal), `rmdbasis` carries the same goal,
+and six files run a declining spend and zero Cash Reserve the others do not. A reader seeing
+`COMMON` in two of these is entitled to assume one household and would be wrong.
+
+`betr_harness` re-run and moved to CURRENT (directional). `stopyear_harness` stays unreviewed but is
+no longer BLOCKED: it lived in a browser console because a node-side share-URL decoder would drift,
+and the bank removes that need. `which_plan.js` answers "which harness runs on what" by resolving
+`PLANS.get()`, because grep stopped answering it when the refit moved literals into plan files.
+
+### What is deliberately NOT done
+
+**The `COMMON` refit.** It is not the mechanical swap it looked like when I described it, and saying
+so is the deliverable: four households under one name have to be separated and named before anything
+can be pointed at them. `P112c`.
+
+**The LTCG room fix.** Measured at section 13 and left, for the reason given there.
+
+Still open from earlier: nothing loads the plans into the page, `P112b` and `P112d`, and the seven
+other harnesses whose recorded numbers predate today's engine but which were not individually
+re-baselined - only the two whose drift was actually demonstrated were.

@@ -40,9 +40,6 @@ benefit. The README says the same.
 **A plan asking for an ACA cap nobody in it can use now says so, and loads Below IRMAA** instead of
 the far tighter 10% Fed, naming both limits.
 
-The **Notes** box on Save and Export asks a plainer question. It used to ask what a plan is for "and
-what can it not show", which is a question about a test fixture rather than about your plan.
-
 ---
 
 <a id="11.1779"></a>

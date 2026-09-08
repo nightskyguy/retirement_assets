@@ -1892,7 +1892,7 @@ The three sentences worth carrying without opening the report:
    the deduction reconciles to the cent, OBBBA senior deduction and phase-out included. The defect
    is a UNITS MISMATCH: `iRAbracketRoom` subtracts GROSS income from a POST-deduction threshold and
    `bracketOverage` measures MAGI against it. Do not go looking for a bad number; there isn't one.
-2. **Closing that gap COSTS money in 51 of 74 clean cells, median -$47,092 - and that is a fact
+2. **Closing that gap COSTS money in 51 of 74 clean cells (49 of 71 when re-run 2026-09-08), median -$47,092 then, -$47,549 now - and that is a fact
    about the STRATEGY, not a verdict on the fix.** A named ceiling is a contract to fill: the user
    picking `22% Fed` or `IRMAA Tier 2` wants the room between their spending and the limit
    converted or banked, and is not asking the tool to minimize their tax. The first version of this
@@ -2012,8 +2012,8 @@ where Social Security is paid, the IRA still holds money, and a ceiling was comp
 | regime | years | share | under-filled | headroom never used |
 |---|---:|---:|---:|---:|
 | ZERO (`taxableSS` = 0) | 6 | 0.1% | 6 | $213,043 |
-| **SLOPED** (0 < `taxableSS` < 0.85 SS) | **184** | **3.6%** | **144** | **$4,359,006** |
-| CAPPED (`taxableSS` = 0.85 SS) | 4,992 | 96.3% | 1,520 | $12,205,886 |
+| **SLOPED** (0 < `taxableSS` < 0.85 SS) | **184 -> 295 on 2026-09-08** | **3.6% -> 5.5%** | **144** | **$4,359,006** |
+| CAPPED (`taxableSS` = 0.85 SS) | 4,992 -> 5,024 | 96.3% -> 94.1% | 1,520 | $12,205,886 |
 
 SLOPED appears in **31 of 270 populated cells** and is concentrated exactly where predicted: the LOW
 ceilings. Every one of the top 15 is `Fed 10%` or `Fed 12%`.

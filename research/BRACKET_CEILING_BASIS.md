@@ -248,7 +248,7 @@ larger than what is reported here - in both directions, since the sign is not un
 
 **This section replaces an earlier conclusion that was wrong, and the error is worth naming because
 it is a whole class of error.** The first version of this report read section 3 as a verdict on the
-fix: net worth falls in 51 of 74 clean cells, therefore the premise is refuted, therefore do not
+fix: net worth falls in 51 of 74 clean cells (49 of 71 on 2026-09-08, median -$47,549), therefore the premise is refuted, therefore do not
 build `P87b`. That reasoning judges a **correctness** question with a **wealth** metric, and the two
 are not the same question.
 
@@ -476,17 +476,33 @@ would be inert.
 `.test_harnesses/ssbasis_harness.js`. 720 cells: 10 ceiling families x 4 benefit sizes x 3 IRA sizes
 x 3 spend levels x 2 filing statuses. A **ceiling-bound year** is one where the benefit is paid, the
 IRA still holds money (a drained IRA cannot reach any ceiling and its short is not a defect) and a
-ceiling was computed. 5,182 such years.
+ceiling was computed. 5,182 such years in the original run, 5,340 after the 2026-09-08 re-baseline below.
 
-| regime | definition | years | share |
-|---|---|---:|---:|
-| ZERO | `taxableSS` = 0 | 6 | 0.1% |
-| **SLOPED** | 0 < `taxableSS` < 0.85 x SS | **184** | **3.6%** |
-| CAPPED | `taxableSS` = 0.85 x SS | 4,992 | 96.3% |
+| regime | definition | years (2026-08-31) | share | years (2026-09-08) | share |
+|---|---|---:|---:|---:|---:|
+| ZERO | `taxableSS` = 0 | 6 | 0.1% | **21** | **0.4%** |
+| **SLOPED** | 0 < `taxableSS` < 0.85 x SS | **184** | **3.6%** | **295** | **5.5%** |
+| CAPPED | `taxableSS` = 0.85 x SS | 4,992 | 96.3% | 5,024 | 94.1% |
 
-SLOPED is not empty, and it is not scattered: it appears in 31 of 270 populated cells and every one
-of the top 15 by count is `Fed 10%` or `Fed 12%`. The low ceilings are where a household's provisional
-income can still sit below the second statutory threshold.
+SLOPED is not empty, and it is not scattered: it appears in 99 of 378 populated cells (31 of 270 in
+the original run) and the top of the list by count is `Fed 10%` or `Fed 12%`. The low ceilings are
+where a household's provisional income can still sit below the second statutory threshold.
+
+**RE-BASELINED 2026-09-08, and the second column is not just drift.** Two things moved it, and the
+first is a defect in this harness that had been there its whole life. Its two ACA arms passed
+`stratACAMultiple: 2.0` and `4.0` where the field is a WHOLE PERCENT, so they ran against a $418 and
+$837 cap. Correcting them to 200 and 400 changed nothing on its own - because the household claims
+Social Security at 70 while an ACA cap lapses at 65, so a benefit and a live cap never coexisted and
+this study's own filter (`SSincome > 0 && BracketTarget > 0`) matched **zero years on both ACA arms**.
+They were dead rows. Giving them a claim age of 62 is what put them in the sample, and 216 of the 218
+new ceiling-bound years are theirs.
+
+**The conclusion is unchanged and strengthened.** The decision 10.1 fed was "if the sloped tiers
+appear, the fix must solve the fixed point rather than subtract a flat share". They appear more, not
+less, and a real ZERO population now exists where the first run found six years. The shipped form
+(`nonSSIncomeForMAGI`, bisection) already covers every regime including ZERO, so **no engine change
+follows from this** - the conservative choice made in 10.3 turns out to have been the right one for a
+reason the original measurement understated.
 
 ### 10.2 A wrong claim, and the correction
 
@@ -663,3 +679,56 @@ One latent defect was found on the way: the `cycleCoexist` branch destructured
 definition a ceiling is written in - was **undefined** in exactly the years that branch decides a
 draw. A coexist harvest year is meant to look downstream as though the family branch had run. It now
 does.
+
+
+---
+
+## 13. The LTCG bracket room is asked about the wrong income  *(2026-09-08)*
+
+Harness `.test_harnesses/ltcgroom_harness.js`, 360 cyclic cells, 4,745 harvest years.
+
+Section 12 corrected two of the three consumers of the harvest branch's ordinary-income aggregate
+and deliberately left the third, because it is a different question. The other two compare that
+aggregate against a **MAGI** ceiling, so their only error was the Social Security share. An LTCG
+bracket top is a **TAXABLE-income** threshold - gains stack on top of ordinary income *after* the
+deduction - so this call site carries **two** errors, and they point the same way:
+
+| error | effect on the floor | effect on the room |
+|---|---|---|
+| the FULL benefit counted, where at most 85% is taxable | too high | too small |
+| NO deduction subtracted, against a post-deduction threshold | too high | too small |
+
+### 13.1 It is not marginal
+
+How much higher the floor passed to `getLTCGBracketRoom` is than the ordinary taxable income the
+year actually produced. Every dollar is a dollar of LTCG room the harvest was not offered.
+
+| | overstatement |
+|---|---:|
+| median | **$59,276** |
+| p90 | $85,390 |
+| worst | $210,186 |
+| years overstated by more than $1,000 | **4,745 of 4,745** |
+
+**Every harvest year on the grid, without exception.** For scale, the 0% LTCG bracket for a couple
+tops out around $97k, so the median overstatement is more than half of the bracket the harvest is
+trying to fill.
+
+### 13.2 The deduction is the larger half, which is why this is not a copy of section 12
+
+| cause | median | worst |
+|---|---:|---:|
+| the untaxed part of the benefit | $6,136 | $139,311 |
+| **the deduction, never subtracted** | **$50,161** | $70,876 |
+
+The benefit half scales with the benefit exactly as expected - $0 with no Social Security, $21,455
+median on the largest - and the deduction half is present in **every** year including the ones with
+no benefit at all. A fix modelled on section 12 would therefore recover about a tenth of this.
+
+### 13.3 No engine change is proposed here, and that is the finding
+
+The fix is not a copied line. The deduction is circular at sizing time - that is what `P92a`'s
+two-pass estimate exists for - and it is only computed at all for a `bracket` strategy, so a
+Proportional or Ordered plan running Cycle Brokerage has no estimate to reuse. The taxable-SS share
+moves with the draw as well. **This measures what is at stake so that the work can be scheduled
+against a number rather than a suspicion**, which is what section 12 left it open to do.

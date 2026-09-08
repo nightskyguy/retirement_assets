@@ -2391,7 +2391,7 @@ changelog entry saying saved plans will not reproduce.
       MISMATCH: `iRAbracketRoom` subtracts GROSS income from a POST-deduction threshold and
       `bracketOverage` measures MAGI against it, so a pre-deduction quantity is capped at a
       post-deduction number and nothing in between converts one to the other.
-      **Correcting it costs money in 51 of 74 clean cells, median -$47,092** - but see the user
+      **Correcting it costs money in 51 of 74 clean cells (49 of 71 when re-run 2026-09-08), median -$47,092 then, -$47,549 now** - but see the user
       correction below, because that is a fact about the STRATEGY and NOT a verdict on the fix.
       The sign is set by the BRACKET: 12%
       gains (median +$159,278, best +$1,201,973), 22% loses (-$173,437, worst -$2,523,647), 24%

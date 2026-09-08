@@ -9,9 +9,16 @@ usefully, what it CANNOT show.
 `growthcredit_check`, `irmaa_margin` and `ordered_fill`. Each was verified by diffing its own output
 before and after the swap - all ten byte-identical. A new harness should pick a plan by name.
 
-**The thirteen that share a copy-pasted `COMMON` block have NOT been converted.** That block is
-crossed with a five-entry balance ladder rather than used whole, so replacing it is a decision about
-what the ladder becomes - `P112c`, still open - not a mechanical swap.
+**The `COMMON` block has NOT been converted, and it is worse than the duplication it looked like.**
+**Twenty-four** files declare a `COMMON`, not thirteen, and they have DRIFTED: at least four
+distinct households share that one variable name. `endgame_harness.js` is a different household
+entirely (born 1951/1953, retiring at 75, a $750k IRA goal); `rmdbasis_harness.js` carries the same
+$750k goal; the `split_*` trio, `gk_drawrule*`, `magi_edge_gate` and `family_equivalence` all run a
+declining spend (`spendChange: -0.01`) and a zero Cash Reserve that the others do not. **A reader
+seeing `COMMON` in two of these files is entitled to assume one household and would be wrong.**
+That, not the copying, is what `P112c` has to fix, and it is why the block is also crossed with a
+five-entry balance ladder rather than used whole. Naming the drift is the prerequisite; the refit is
+not a mechanical swap.
 
 Index of the investigative / audit scripts for the retirement optimizer engine, and of the reports
 they produce. These are **not** part of the regular unit-test suite (`optimizer_core.tests.js`); they
@@ -45,6 +52,8 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `stopyear_harness.js` | **browser console** | When should a plan stop Roth conversions? |
 | `unifiedconv_harness.js` | **node** | Does modeling every voluntary IRA withdrawal as a Roth conversion change anything? |
 | `gapfill_harness.js` | **node** | Is the `[40, 60]` Brokerage/Cash split in the default gap fill load-bearing, and is 40 right? |
+| `ltcgroom_harness.js` | **node** | The LTCG bracket room reads the same aggregate P87c4 corrected twice, against a TAXABLE-income threshold rather than a MAGI one - so it carries the deduction error as well as the benefit error. How big, and is a fix worth building? |
+| `which_plan.js` | **node, tool** | Which household does each harness actually run on? Resolves `PLANS.get(...)` so that a property moved into a plan file is still findable - grep stopped answering this when the refit moved the literals. |
 | • `ordered_fill_harness.js` | **node** | Ordered strategy: does the account sequence restart from the top every year, and where does the year's leftover surplus get banked? |
 | • `brokerage_harness.js` | **node** | Why is Brokerage barely drawn, and is the third-pass exclusion to blame? |
 | `phased_harness.js` | **node** | P36 round 1: which families rank where under every objective, and do any arms never win? |
@@ -139,8 +148,8 @@ evidence of currency.
 | `harvestceil_harness.js` | **CURRENT** | 2026-09-08, section 12. Keeps its A/B: `harvestCeilSSBasis: 'full'` still selects the pre-fix arm |
 | `ceilded_harness.js` | **CURRENT** | shipped with `F4` |
 | `cpi_index_harness.js` | **CURRENT** | re-run 2026-08-26 carrying the CPI spread |
-| `betr_harness.js` | **UNREVIEWED** | 2026-07-23, the oldest finding here; `F2` and `F3` both bear on it |
-| `stopyear_harness.js` | **UNREVIEWED** | browser console, not runnable in this sweep |
+| `betr_harness.js` | **CURRENT (directional)** | re-run 2026-09-08: the OFF column still reads "convert always" against 59-86% with a reserve, so the recorded finding - the closed form materially overstates the rate needed - still reproduces. It was never given numeric constants to pin, so "current" means the direction, not a figure |
+| `stopyear_harness.js` | **UNREVIEWED, and now unblockable** | browser console, not runnable in this sweep. It lives there because a node-side re-implementation of the share-URL decoder would drift - but the plan bank removes that need entirely, since a harness can name a household instead of decoding a URL. Porting it is now a small item rather than a blocked one |
 | `gapfill_objectives_harness.js` | **DRIFTED** | `W4` damping 10x -> 3.0x ($33,203 off vs $10,997 on) |
 | `irmaa_margin_harness.js` | **DRIFTED** (`F3`) | P1/P2/P5 all score WRONG against a header that expected them to hold |
 | `irmaa_cpi_risk_harness.js` | **DRIFTED** (`F1`,`F3`) | 2026-08-20, predates path-following indexation and the MAGI fix it re-bills against |
@@ -936,7 +945,7 @@ Headline findings (2026-08-29):
    bumps, $32,200 in 2026 to $70,876 by 2054. Neither operand is wrong: the bracket top is correct
    and the deduction reconciles to the cent, OBBBA senior deduction and its phase-out included. The
    defect is a units mismatch - a pre-deduction quantity capped at a post-deduction threshold.
-2. **Correcting it COSTS money in 51 of 74 clean cells**, median -$47,092 - a finding about the
+2. **Correcting it COSTS money in 51 of 74 clean cells (49 of 71 when re-run 2026-09-08)**, median -$47,092 then, -$47,549 now - a finding about the
    STRATEGY, not a verdict on the fix. A named ceiling is a contract to fill, so the cost is a
    changelog disclosure rather than a reason to under-deliver the strategy the user selected. The
    report's section 7 records the earlier, wrong reading and why it was wrong.

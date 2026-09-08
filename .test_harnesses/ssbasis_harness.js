@@ -47,8 +47,13 @@ const CEILINGS=[
   ['IRMAA T1',  {stratRate:0, stratIRMAATier:1, stratACAMultiple:0}],
   ['IRMAA T2',  {stratRate:0, stratIRMAATier:2, stratACAMultiple:0}],
   ['IRMAA T4',  {stratRate:0, stratIRMAATier:4, stratACAMultiple:0}],
-  ['ACA 200FPL',{strategy:'aca', stratRate:0, stratIRMAATier:-1, stratACAMultiple:2.0}],
-  ['ACA 400FPL',{strategy:'aca', stratRate:0, stratIRMAATier:-1, stratACAMultiple:4.0}],
+  // CLAIM AGE, and without it these two rows measure NOTHING. This household claims at 70 and 67
+  // while an ACA cap lapses at Medicare, so a benefit and a live cap never coexist and the filter
+  // below (`SSincome > 0 && BracketTarget > 0`) matched zero years - for the whole life of this
+  // harness. Claiming at 62 puts the benefit inside the capped window, which is the only way an
+  // ACA row can say anything about the taxable-SS regime this study is about.
+  ['ACA 200FPL',{strategy:'aca', stratRate:0, stratIRMAATier:-1, stratACAMultiple:200, ss1Age:62, ss2Age:62}],
+  ['ACA 400FPL',{strategy:'aca', stratRate:0, stratIRMAATier:-1, stratACAMultiple:400, ss1Age:62, ss2Age:62}],
 ];
 
 // Benefit size drives which SS tier a year can land in; spending and IRA size drive how much of the

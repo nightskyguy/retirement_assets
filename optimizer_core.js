@@ -1426,7 +1426,14 @@ function beginYear(sim, yr) {
     // this goal exists to keep the IRA small enough that its RMDs clear under a bracket, an IRMAA
     // tier or an ACA cap - all of which move on cpiRate. Indexing the goal on a faster clock than
     // the ceilings it is aimed at would make it drift out from under them.
-    yr.iraGoalNominal = inputs.iraBaseGoal * sim.cpiRate;
+    // `?? 0` and it is not defensive noise. An ABSENT iraBaseGoal made this NaN, and NaN then
+    // propagated all the way to `totalNetWealth` on the `bracket` and `fixed` strategies - a whole
+    // run reporting NaN instead of a number, silently, from one missing input. The page always
+    // sends the field, so only a node caller could hit it, which is exactly who does: a harness
+    // building an inputs object by hand. Two of them omit it today and get away with it only
+    // because they set it per-cell as an axis. Absent now means "no goal", which is what every
+    // caller that omits it intends.
+    yr.iraGoalNominal = (inputs.iraBaseGoal ?? 0) * sim.cpiRate;
     sim.fixedWithdrawal = calculateAmortizedWithdrawal(balance.IRA1 + balance.IRA2, yr.iraGoalNominal, amortYears, inputs.growth)
 
     // Phase 12: growthRates moved here (from below withdrawal block) to enable pre-withdrawal growth.

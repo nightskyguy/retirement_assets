@@ -8246,6 +8246,28 @@ test('P107: IRA_GOAL_BLIND_STRATEGIES are unmoved by the goal, and the others ar
     }
 });
 
+test('an absent IRA Goal means no goal, not NaN across the whole run', () => {
+    // Found while auditing the harnesses: `inputs.iraBaseGoal * cpiRate` is NaN when the field is
+    // absent, and NaN reached `totalNetWealth` on the bracket and fixed strategies - an entire run
+    // reporting NaN from one missing input, with nothing to notice it. The page always sends the
+    // field; a node caller building inputs by hand is who hits this, which is every harness.
+    const base = _planBank ? _planBank.get('ira-heavy-couple').inputs : null;
+    if (!base) return;   // browser tier, see the note below
+    for (const strat of [{ strategy: 'propwd', propWithdraw: 0.10 },
+                         { strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1, stratACAMultiple: 0 },
+                         { strategy: 'fixed' }]) {
+        const without = { ...base, ...strat };
+        delete without.iraBaseGoal;
+        const r = simulate(without);
+        const nw = r.log[r.log.length - 1].totalNetWealth;
+        assert(Number.isFinite(nw), `${strat.strategy}: an absent IRA Goal produced ${nw}`);
+        // And absent must mean the same as zero, not merely be finite.
+        const zero = simulate({ ...base, ...strat, iraBaseGoal: 0 });
+        assert(JSON.stringify(r.log) === JSON.stringify(zero.log),
+            `${strat.strategy}: absent IRA Goal must simulate identically to a goal of 0`);
+    }
+});
+
 // ── The plan bank's cards say MEASURED things, so they can go stale ───────────────────────────
 // Every plan in plans/ carries a `notes.viability` block that was produced by running the plan, not
 // typed in: years funded, whether it funds every year, its ending and peak IRA. Those are the

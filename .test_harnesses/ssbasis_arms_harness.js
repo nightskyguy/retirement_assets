@@ -47,8 +47,13 @@ const CEILINGS=[
   ['IRMAA T1',  {stratRate:0, stratIRMAATier:1, stratACAMultiple:0}],
   ['IRMAA T2',  {stratRate:0, stratIRMAATier:2, stratACAMultiple:0}],
   ['IRMAA T4',  {stratRate:0, stratIRMAATier:4, stratACAMultiple:0}],
-  ['ACA 200FPL',{strategy:'aca', stratRate:0, stratIRMAATier:-1, stratACAMultiple:2.0}],
-  ['ACA 400FPL',{strategy:'aca', stratRate:0, stratIRMAATier:-1, stratACAMultiple:4.0}],
+  // CLAIM AGE, and without it these two rows measure NOTHING. This household claims at 70 and 67
+  // while an ACA cap lapses at Medicare, so a benefit and a live cap never coexist and the filter
+  // below (`SSincome > 0 && BracketTarget > 0`) matched zero years - for the whole life of this
+  // harness. Claiming at 62 puts the benefit inside the capped window, which is the only way an
+  // ACA row can say anything about the taxable-SS regime this study is about.
+  ['ACA 200FPL',{strategy:'aca', stratRate:0, stratIRMAATier:-1, stratACAMultiple:200, ss1Age:62, ss2Age:62}],
+  ['ACA 400FPL',{strategy:'aca', stratRate:0, stratIRMAATier:-1, stratACAMultiple:400, ss1Age:62, ss2Age:62}],
 ];
 const SS=[['SS none',{ss1:0,ss2:0}],['SS small',{ss1:9000,ss2:6000}],['SS mid',{ss1:30000,ss2:20000}],['SS large',{ss1:54000,ss2:40000}]];
 const WEALTH=[['IRA 400k',{IRA1:300000,IRA2:100000}],['IRA 2.8M',{IRA1:2000000,IRA2:800000}],['IRA 8M',{IRA1:6000000,IRA2:2000000}]];

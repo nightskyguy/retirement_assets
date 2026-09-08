@@ -31,7 +31,7 @@ const PLAN = {
             peakIRAYear: 0,
             acaBreachYears: 0
         },
-        origin: "`brokerage_harness.js` (`CAP_BASE`). **Measured not fully funded**, by design.",
+        origin: "READ BY `brokerage_harness.js` (as `CAP_BASE`). **Measured not fully funded**, by design.",
     },
     inputs: {
         STATEname: "CA",

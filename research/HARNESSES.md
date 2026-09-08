@@ -1,9 +1,17 @@
 # Test harnesses
 
-**The households these harnesses run on are now a bank: [`plans/`](../plans/README.md).** Every
-harness that built its own base plan has had it extracted there with a card naming what it can and
-cannot show. A new harness should pick one by name rather than copy a `COMMON` block, which is how
-thirteen of the scripts below ended up crossing the same household without anyone choosing it.
+**The households these harnesses run on are a bank: [`plans/`](../plans/README.md).** Every harness
+that built its own base plan has had it extracted there with a card naming what it can and, more
+usefully, what it CANNOT show.
+
+**Ten of the scripts below now read the bank rather than carrying a literal**, marked • in the table:
+`ssbasis`, `ssbasis_arms`, `underfill`, `harvestceil`, `acamagi`, `betr`, `brokerage`,
+`growthcredit_check`, `irmaa_margin` and `ordered_fill`. Each was verified by diffing its own output
+before and after the swap - all ten byte-identical. A new harness should pick a plan by name.
+
+**The thirteen that share a copy-pasted `COMMON` block have NOT been converted.** That block is
+crossed with a five-entry balance ladder rather than used whole, so replacing it is a decision about
+what the ladder becomes - `P112c`, still open - not a mechanical swap.
 
 Index of the investigative / audit scripts for the retirement optimizer engine, and of the reports
 they produce. These are **not** part of the regular unit-test suite (`optimizer_core.tests.js`); they
@@ -33,12 +41,12 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 
 | harness | runs in | what it answers |
 |---|---|---|
-| `betr_harness.js` | **node** | Is the Break-Even Tax Rate (BETR) signal trustworthy? |
+| • `betr_harness.js` | **node** | Is the Break-Even Tax Rate (BETR) signal trustworthy? |
 | `stopyear_harness.js` | **browser console** | When should a plan stop Roth conversions? |
 | `unifiedconv_harness.js` | **node** | Does modeling every voluntary IRA withdrawal as a Roth conversion change anything? |
 | `gapfill_harness.js` | **node** | Is the `[40, 60]` Brokerage/Cash split in the default gap fill load-bearing, and is 40 right? |
-| `ordered_fill_harness.js` | **node** | Ordered strategy: does the account sequence restart from the top every year, and where does the year's leftover surplus get banked? |
-| `brokerage_harness.js` | **node** | Why is Brokerage barely drawn, and is the third-pass exclusion to blame? |
+| • `ordered_fill_harness.js` | **node** | Ordered strategy: does the account sequence restart from the top every year, and where does the year's leftover surplus get banked? |
+| • `brokerage_harness.js` | **node** | Why is Brokerage barely drawn, and is the third-pass exclusion to blame? |
 | `phased_harness.js` | **node** | P36 round 1: which families rank where under every objective, and do any arms never win? |
 | `oracle_harness.js` | **node** | P51: how far below the perfect-foresight ceiling does each family sit, and is it conversions or the split? |
 | `oracle_crosscheck.js` | **node** | P51d: is the oracle's ceiling really a ceiling? Runs a search of a different shape at the same sim cost and reports how much more it finds. |
@@ -53,7 +61,7 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `gk_drawrule_mc_harness.js` | **node** | P103e: does that survive uncertainty? Re-runs the P103d candidates over Monte Carlo paths and reports medians, p10 and SURVIVAL rather than an argmax. |
 | `spend_objective_harness.js` | **node** | P103b5a: can the spend axis be searched, and under what objective? Traces the (spend, wealth) frontier and asks where each candidate objective's optimum lands. |
 | `endgame_harness.js` | **node** | P35n: once the IRA sits at its target, what should the tail draw from? |
-| `irmaa_margin_harness.js` | **node** | Does an explicit IRMAA safety margin buy anything, now that the tier ceiling is projected forward? |
+| • `irmaa_margin_harness.js` | **node** | Does an explicit IRMAA safety margin buy anything, now that the tier ceiling is projected forward? |
 | `irmaa_cpi_risk_harness.js` | **node** | Same question with the CPI allowed to come out different from the one the plan assumed. Reverses the answer. |
 | `irmaa_default_harness.js` | **node** | Which margin setting should be the DEFAULT, and which of the six can be deleted. Separates the IRMAA effect from the conversion-sizing side effect that dwarfs it. |
 | `cpi_index_harness.js` | **node** | P70a: does indexing the tax code at a FIXED CPI, while spending follows the path, overstate tax on high-inflation paths? Yes, by 8% overall, and it invents plan failures. |
@@ -61,18 +69,18 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `gapfill_objectives_harness.js` | **node** | P30h: should the `[40,60]` gap-fill blend be deleted and unified on the Cash-first cascade? Scores every OPTIMIZER_OBJECTIVES key plus a liquidity measure. |
 | `convtiming_harness.js` | **node** | P85: does it matter WHICH YEARS a conversion program lands in, and is RMD suppression the reason? Front-load vs level vs back-load at equal lifetime gross. |
 | `timingtrigger_harness.js` | **node** | P28jf: does the automatic withdrawal-timing trigger ever pay, on the post-`P28jg` engine? Three arms (auto / pinned early / pinned late) x 6 strategies x 45 households, run at two IRA Goal values. Report: [WITHDRAWAL_TIMING_TRIGGER.md](WITHDRAWAL_TIMING_TRIGGER.md). |
-| `growthcredit_check.js` | **node** | P28jk/P108e: does `P108b`’s growth-credit trick reproduce a three-segment year, and where does that credit actually land? Q1 arithmetic, Q2 against the engine. No report - the answers are two closed forms and they are in the script header. |
+| • `growthcredit_check.js` | **node** | P28jk/P108e: does `P108b`’s growth-credit trick reproduce a three-segment year, and where does that credit actually land? Q1 arithmetic, Q2 against the engine. No report - the answers are two closed forms and they are in the script header. |
 | `timinggrid_harness.js` | **node** | P111a: does the withdrawal-month / tax-date ranking generalize, or is it a fact about one asset mix and spending level? 6 cells x 81 households. Finds the ranking mostly holds but is not static, and that "more wealth always costs more tax" is false in a quarter of households. |
 | `rmdbasis_harness.js` | **node** | P84k/P84n: how wrong was the RMD basis, and did fixing it move what the characterization predicted? Run before and after `P84l`. |
 | `bracketbasis_harness.js` | **node** | P87a: the strategy Limit dropdown's federal entries are taxable-income thresholds spent as MAGI ceilings. How much room does that leave unused, and is the room worth anything? |
 | `convopt_ceiling_harness.js` | **node** | P88f: should the Optimizer's conversion search skip the families that target a ceiling? Measures what it picks for them, whether those picks break the ceiling, and what excluding them would cost. |
 | `extraconv_magi_harness.js` | **node** | P88a/P88b: an Extra Roth Conversion never reached MAGI, so the IRMAA lookback charged a figure that omitted it. How wrong was it, and did fixing it move what the characterization predicted? |
 | `ceilded_harness.js` | **node** | P92a: the ceiling cannot ask for the year's own deduction without circularity, so which OBTAINABLE deduction is least wrong? Scores three candidates against the one actually charged. |
-| `underfill_harness.js` | **node** | P87c: a Fill Bracket plan stops exactly 15% of its Social Security short of its own ceiling. Which years, and how much headroom goes unused? |
-| `ssbasis_harness.js` | **node** | P87c1: in a year where a ceiling binds, is the taxable share of Social Security pinned at its 85% cap, in a sloped tier, or zero? Decides whether the fix can be a flat subtraction or has to solve the fixed point. |
-| `ssbasis_arms_harness.js` | **node** | P87c2: three arms over 720 cells - full benefit (the defect), flat 0.85, and inverting the MAGI relation. Neither armed form can breach, so the question is how much headroom each recovers. |
-| `acamagi_harness.js` | **node** | P87d: an ACA cap is SIZED on the ACA definition of MAGI and was MEASURED against the SSA one, an error that can only read low. How many plan-years flip clean to breached, and how many plans lose their feasible flag? |
-| `harvestceil_harness.js` | **node** | P87c4: the 15% Social Security error survived in the brokerage-harvest branch, which runs INSTEAD of the sizing line P87c fixed. Does that guard ever bind, and what does correcting it cost? |
+| • `underfill_harness.js` | **node** | P87c: a Fill Bracket plan stops exactly 15% of its Social Security short of its own ceiling. Which years, and how much headroom goes unused? |
+| • `ssbasis_harness.js` | **node** | P87c1: in a year where a ceiling binds, is the taxable share of Social Security pinned at its 85% cap, in a sloped tier, or zero? Decides whether the fix can be a flat subtraction or has to solve the fixed point. |
+| • `ssbasis_arms_harness.js` | **node** | P87c2: three arms over 720 cells - full benefit (the defect), flat 0.85, and inverting the MAGI relation. Neither armed form can breach, so the question is how much headroom each recovers. |
+| • `acamagi_harness.js` | **node** | P87d: an ACA cap is SIZED on the ACA definition of MAGI and was MEASURED against the SSA one, an error that can only read low. How many plan-years flip clean to breached, and how many plans lose their feasible flag? |
+| • `harvestceil_harness.js` | **node** | P87c4: the 15% Social Security error survived in the brokerage-harvest branch, which runs INSTEAD of the sizing line P87c fixed. Does that guard ever bind, and what does correcting it cost? |
 
 ## Re-evaluation status (2026-08-30)
 

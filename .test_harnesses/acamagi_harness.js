@@ -46,23 +46,13 @@ const R = '../';
 Object.assign(globalThis, require(R + 'taxengine.js'));
 require(R + 'displayhelpers.js');
 const { simulate } = require(R + 'optimizer_core.js');
+const PLANS = require(R + 'plans');
 
-const BASE = {
-    STATEname: 'TX', nYears: 30,
-    birthyear1: 1968, birthmonth1: 6, die1: 92, birthyear2: 1970, birthmonth2: 3, die2: 94, hasSpouse: true,
-    ss1: 30000, ss1Age: 67, ss2: 20000, ss2Age: 67, pensionAnnual: 0, pensionStartAge: 0,
-    survivorPct: 0, pensionCola: false, spendChange: 0,
-    inflation: .025, cpi: .025, growth: .06, cashYield: .03, dividendRate: .02,
-    ssFailYear: 2099, ssFailPct: 1,
-    convertExcessToRoth: true, fundConversionWithCash: false,
-    propWithdraw: .10, iraWithdrawPct: .06, extraConversionAmount: 0,
-    startAge: 57, startInYear: 2026, dividendReinvest: true,
-    gkGuard: .2, gkAdjPct: .1, cycleLTCGTarget: .15, qcdHHMax: 0, qcdMode: 'asneeded', computeOC: false,
-    IRA1: 2000000, IRA2: 800000, Roth: 50000, Roth2: 20000,
-    Brokerage: 150000, BrokerageBasis: 80000, Cash: 80000, iraBaseGoal: 0,
-    strategy: 'aca', stratRate: 0, stratIRMAATier: -1, stratACAMultiple: 400,
-    spendGoal: 110000,
-};
+// P112. The household is `aca-gap-years-texas` in the plan bank, not a literal copied into
+// this file. Its card records what it exercises, what its measured viability is, and what it
+// CANNOT show: the ACA definition of MAGI - it claims Social Security at 67, after its cap has lapsed.
+// Read plans/aca-gap-years-texas.js before reading a verdict off this harness.
+const BASE = { ...PLANS.get("aca-gap-years-texas").inputs };
 
 const CAPS = [['ACA 200%', { stratACAMultiple: 200 }], ['ACA 250%', { stratACAMultiple: 250 }],
               ['ACA 300%', { stratACAMultiple: 300 }], ['ACA 400%', { stratACAMultiple: 400 }]];

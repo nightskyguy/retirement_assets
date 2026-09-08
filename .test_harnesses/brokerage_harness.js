@@ -54,6 +54,7 @@ globalThis.document = { getElementById: () => null, addEventListener: () => {} }
 const taxengine = require('../taxengine.js');
 Object.assign(globalThis, taxengine);
 const core = require('../optimizer_core.js');
+const PLANS = require('../plans');
 const simulate = core.simulate;
 // q3/q4 (P32e) additionally use the sweep's own enumeration + the UI's scoring recipe.
 const { afterTaxNetWorth, SPENDABLE_WEIGHT, buildStrategyFamilies, OPTIMIZER_GRIDS,
@@ -66,19 +67,11 @@ const pct = (a, b) => b === 0 ? '  n/a' : (100 * a / b).toFixed(1).padStart(5) +
 // CAP_BASE is the fixture the P32 tripwire is pinned on; the ladder walks Brokerage-poor to
 // Brokerage-rich holding total wealth constant, because "how often is Brokerage drawn" is
 // meaningless without knowing how much of it there is.
-const CAP_BASE = {
-    STATEname: 'CA', strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1, stratACAMultiple: 0,
-    nYears: 30, birthyear1: 1960, birthmonth1: 12, die1: 74,
-    birthyear2: 1959, birthmonth2: 12, die2: 90, hasSpouse: true,
-    IRA1: 2000000, IRA2: 100000, Roth: 0, Roth2: 0,
-    Brokerage: 100000, BrokerageBasis: 50000, Cash: 50000, CashReserve: 0,
-    ss1: 48000, ss1Age: 67, ss2: 24000, ss2Age: 67,
-    pensionAnnual: 0, survivorPct: 75, pensionCola: false,
-    spendGoal: 160000, spendChange: -0.01, iraBaseGoal: 0,
-    inflation: 0.025, cpi: 0.025, growth: 0.05, cashYield: 0.02, dividendRate: 0.0,
-    ssFailYear: 2099, ssFailPct: 1.0, convertExcessToRoth: false, propWithdraw: 0,
-    iraWithdrawPct: 0.05, startYear: 2026, dividendReinvest: false,
-};
+// P112. The household is `soft-cap-underfunded` in the plan bank, not a literal copied into
+// this file. Its card records what it exercises, what its measured viability is, and what it
+// CANNOT show: ranking against other households - it does not fund its last year, on purpose.
+// Read plans/soft-cap-underfunded.js before reading a verdict off this harness.
+const CAP_BASE = { ...PLANS.get("soft-cap-underfunded").inputs };
 // Total investable held at $2.25M across the ladder; only the split moves.
 const ladder = (brok, ira, cash, roth) => ({
     ...CAP_BASE, IRA1: ira, IRA2: 0, Brokerage: brok, BrokerageBasis: brok / 2,

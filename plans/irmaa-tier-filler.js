@@ -31,7 +31,7 @@ const PLAN = {
             peakIRAYear: 17,
             acaBreachYears: 0
         },
-        origin: "`irmaa_margin_harness.js`.",
+        origin: "READ BY `irmaa_margin_harness.js`.",
     },
     inputs: {
         STATEname: "CA",

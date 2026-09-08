@@ -29,6 +29,7 @@ globalThis.document = { getElementById: () => null, addEventListener: () => {} }
 const taxengine = require('../taxengine.js');
 Object.assign(globalThis, taxengine);
 const core = require('../optimizer_core.js');
+const PLANS = require('../plans');
 const { simulate } = core;
 
 const money = n => (n < 0 ? '-' : '') + '$' + (Math.round(Math.abs(n) * 100) / 100).toLocaleString();
@@ -103,27 +104,11 @@ console.log('\n' + '='.repeat(78));
 console.log('Q2  P108b: is the credit applied before or after the post-withdrawal growth?');
 console.log('='.repeat(78));
 
-const BASE = {
-    STATEname: 'CA', nYears: 20,
-    birthyear1: 1955, birthmonth1: 6, die1: 92,
-    birthyear2: 1957, birthmonth2: 3, die2: 94, hasSpouse: true,
-    ss1: 45000, ss1Age: 70, ss2: 24000, ss2Age: 67,
-    pensionAnnual: 0, pensionStartAge: 0, survivorPct: 0, pensionCola: false,
-    spendChange: 0, iraBaseGoal: 750000,
-    inflation: 0.025, cpi: 0.025, growth: 0.06,
-    cashYield: 0.03, dividendRate: 0.02,
-    ssFailYear: 2099, ssFailPct: 1.0,
-    convertExcessToRoth: true, propWithdraw: 0, iraWithdrawPct: 0.06,
-    extraConversionAmount: 0, fundConversionWithCash: false,
-    startAge: 71, startInYear: 2026, dividendReinvest: true,
-    gkGuard: 0.20, gkAdjPct: 0.10, cycleLTCGTarget: 0.15,
-    qcdHHMax: 0, qcdMode: 'asneeded', computeOC: false,
-    strategy: 'bracket', stratRate: 0.22,
-    IRA1: 3000000, IRA2: 1200000, Roth: 150000, Roth2: 60000,
-    Brokerage: 300000, BrokerageBasis: 150000, Cash: 150000,
-    spendGoal: 240000,
-    forceWithdrawTiming: 'late',      // pin it: this check is about the credit, not the trigger
-};
+// P112. The household is `high-spend-large-ira` in the plan bank, not a literal copied into
+// this file. Its card records what it exercises, what its measured viability is, and what it
+// CANNOT show: low-bracket behaviour of any kind - it never visits the bottom of the ladder.
+// Read plans/high-spend-large-ira.js before reading a verdict off this harness.
+const BASE = { ...PLANS.get("high-spend-large-ira").inputs };
 
 const off = simulate({ ...BASE });
 const on  = simulate({ ...BASE, taxSettlement: 'december' });

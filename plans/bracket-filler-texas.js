@@ -32,7 +32,7 @@ const PLAN = {
             peakIRAYear: 0,
             acaBreachYears: 0
         },
-        origin: "`ssbasis_harness.js` and `ssbasis_arms_harness.js`. `underfill_harness.js` runs the same household over 20 years instead of 30.",
+        origin: "READ BY `ssbasis_harness.js`, `ssbasis_arms_harness.js` and `underfill_harness.js` (that one over 20 years instead of 30, its only difference). Extracted from the literal all three carried separately; the refit was verified by diffing each harness's output before and after.",
     },
     inputs: {
         STATEname: "TX",

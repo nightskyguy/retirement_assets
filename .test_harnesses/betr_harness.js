@@ -47,25 +47,16 @@ globalThis.document = { getElementById: () => null, addEventListener: () => {} }
 const taxengine = require('../taxengine.js');
 Object.assign(globalThis, taxengine);
 const core = require('../optimizer_core.js');
+const PLANS = require('../plans');
 require('../displayhelpers.js');
 const { simulate, afterTaxNetWorth, computeBETR } = core;
 
 // ── Scenarios: legacy plans (big IRA, modest spend) so a large terminal IRA survives ─────────
-const BASE = {
-    STATEname: 'CA', strategy: 'fixed', nYears: 40,
-    birthyear1: 1965, birthmonth1: 1, die1: 90,
-    birthyear2: 0, birthmonth2: 12, die2: 0,
-    IRA1: 3000000, IRA2: 0, Roth: 0, Roth2: 0,
-    Brokerage: 300000, BrokerageBasis: 300000, Cash: 200000,
-    ss1: 40000, ss1Age: 70, ss2: 0, ss2Age: 70,
-    pensionAnnual: 0, survivorPct: 0, pensionCola: false,
-    spendGoal: 90000, spendChange: 0, iraBaseGoal: 0,
-    inflation: 0.025, cpi: 0.025, growth: 0.06,
-    cashYield: 0.03, dividendRate: 0.02,
-    ssFailYear: 2099, ssFailPct: 1.0,
-    convertExcessToRoth: false, propWithdraw: 0, iraWithdrawPct: 0.05,
-    startInYear: 2026, dividendReinvest: true, startYear: 2026, hasSpouse: false,
-};
+// P112. The household is `single-filer-long-horizon` in the plan bank, not a literal copied into
+// this file. Its card records what it exercises, what its measured viability is, and what it
+// CANNOT show: the widow penalty, or anything about a change of filing status - there is one person.
+// Read plans/single-filer-long-horizon.js before reading a verdict off this harness.
+const BASE = { ...PLANS.get("single-filer-long-horizon").inputs };
 
 function mkLump(amt) { const a = new Array(45).fill(0); a[0] = amt; return a; }
 

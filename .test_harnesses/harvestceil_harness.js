@@ -41,26 +41,13 @@ const R = '../';
 Object.assign(globalThis, require(R + 'taxengine.js'));
 require(R + 'displayhelpers.js');
 const { simulate } = require(R + 'optimizer_core.js');
+const PLANS = require(R + 'plans');
 
-const BASE = {
-    STATEname: 'TX', nYears: 30,
-    birthyear1: 1962, birthmonth1: 6, die1: 92, birthyear2: 1964, birthmonth2: 3, die2: 94, hasSpouse: true,
-    ss1: 30000, ss1Age: 67, ss2: 20000, ss2Age: 67, pensionAnnual: 0, pensionStartAge: 0,
-    survivorPct: 0, pensionCola: false, spendChange: 0,
-    inflation: .025, cpi: .025, growth: .06, cashYield: .03, dividendRate: .02,
-    ssFailYear: 2099, ssFailPct: 1,
-    convertExcessToRoth: true, fundConversionWithCash: false,
-    propWithdraw: .10, iraWithdrawPct: .06, extraConversionAmount: 0,
-    startAge: 64, startInYear: 2026, dividendReinvest: true,
-    gkGuard: .2, gkAdjPct: .1, cycleLTCGTarget: .15, qcdHHMax: 0, qcdMode: 'asneeded', computeOC: false,
-    IRA1: 2000000, IRA2: 800000, Roth: 50000, Roth2: 20000,
-    // A harvest year needs a Brokerage worth harvesting, and the cycle length is
-    // round(IRA/Brokerage), so a tiny Brokerage means a harvest year almost never arrives.
-    Brokerage: 900000, BrokerageBasis: 400000, Cash: 80000, iraBaseGoal: 0,
-    strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1, stratACAMultiple: 0,
-    spendGoal: 110000,
-    cyclicEnabled: true, cyclicOrder: 'ira-first',
-};
+// P112. The household is `bracket-filler-texas-cyclic` in the plan bank, not a literal copied into
+// this file. Its card records what it exercises, what its measured viability is, and what it
+// CANNOT show: the plain sizing line in a harvest year - the harvest branch preempts it by construction.
+// Read plans/bracket-filler-texas-cyclic.js before reading a verdict off this harness.
+const BASE = { ...PLANS.get("bracket-filler-texas-cyclic").inputs };
 
 const CEILINGS = [
     ['Fed 12%', { strategy: 'bracket', stratRate: 0.12, stratIRMAATier: -1, stratACAMultiple: 0 }],

@@ -26,6 +26,7 @@
 const taxengine = require('../taxengine.js');
 Object.assign(globalThis, taxengine);
 const core = require('../optimizer_core.js');
+const PLANS = require('../plans');
 const simulate = core.simulate;
 
 const money = n => (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString();
@@ -42,25 +43,11 @@ const FUNDABLE_FIRST = seq => SEQ_ORDER[seq].find(a => a === 'Cash' || a === 'Br
 // A plan that runs a deficit early (retire at 64, SS deferred to 70) and a surplus later
 // (SS at 70, big RMDs at 73+), so Cash is spent down and then refilled -- exactly the shape Q_C
 // needs. No state tax (TX) keeps the surplus arithmetic clean.
-const ORD_BASE = {
-    STATEname: 'TX', strategy: 'ordered', orderedSeq: 'CBIR',
-    stratRate: 0, stratIRMAATier: -1, stratACAMultiple: 0,
-    nYears: 30, startYear: 2026,
-    birthyear1: 1962, birthmonth1: 6, die1: 92,
-    birthyear2: 1962, birthmonth2: 6, die2: 92, hasSpouse: true,
-    IRA1: 1600000, IRA2: 0, Roth: 150000, Roth2: 0,
-    Brokerage: 300000, BrokerageBasis: 150000, Cash: 60000,
-    ss1: 50000, ss1Age: 70, ss2: 30000, ss2Age: 70,
-    pensionAnnual: 0, survivorPct: 75, pensionCola: false,
-    // Spend rises in real terms: small early (pre-SS) deficit drains Cash, the SS+RMD window banks a
-    // surplus that refills it, then rising spend outpaces income again and re-draws it -> oscillation.
-    spendGoal: 90000, spendChange: 0.02, iraBaseGoal: 0,
-    inflation: 0.025, cpi: 0.025, growth: 0.05, cashYield: 0.03, dividendRate: 0.0,
-    ssFailYear: 2099, ssFailPct: 1.0, convertExcessToRoth: false, propWithdraw: 0,
-    iraWithdrawPct: 0.05, dividendReinvest: false,
-    // CashReserve intentionally omitted -> legacy all-to-cash path, so the ordered fill branch (b)
-    // is what governs. Setting it to 0 would instead force the reserve branch for every strategy.
-};
+// P112. The household is `ordered-sequence-texas` in the plan bank, not a literal copied into
+// this file. Its card records what it exercises, what its measured viability is, and what it
+// CANNOT show: third-pass forced-draw behaviour - Ordered is exempt from it by design.
+// Read plans/ordered-sequence-texas.js before reading a verdict off this harness.
+const ORD_BASE = { ...PLANS.get("ordered-sequence-texas").inputs };
 const run = seq => simulate({ ...ORD_BASE, orderedSeq: seq });
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════

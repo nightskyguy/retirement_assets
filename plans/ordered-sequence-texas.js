@@ -32,7 +32,7 @@ const PLAN = {
             peakIRAYear: 16,
             acaBreachYears: 0
         },
-        origin: "`ordered_fill_harness.js` (`ORD_BASE`).",
+        origin: "READ BY `ordered_fill_harness.js` (as `ORD_BASE`).",
     },
     inputs: {
         STATEname: "TX",

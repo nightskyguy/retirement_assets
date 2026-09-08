@@ -33,7 +33,7 @@ const PLAN = {
             peakIRAYear: 16,
             acaBreachYears: 0
         },
-        origin: "`betr_harness.js`. Its `nYears: 40` is a cap, not the horizon - the plan funds 30 years and ends at the death age.",
+        origin: "READ BY `betr_harness.js`. Its `nYears: 40` is a cap, not the horizon - the plan funds 30 years and ends at the death age.",
     },
     inputs: {
         STATEname: "CA",

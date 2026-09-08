@@ -32,7 +32,7 @@ const PLAN = {
             peakIRAYear: 26,
             acaBreachYears: 0
         },
-        origin: "`harvestceil_harness.js`. Same household as the Texas bracket-filler with the brokerage raised to $900k and the cycle on.",
+        origin: "READ BY `harvestceil_harness.js`. The Texas bracket-filler with the brokerage raised to $900k and Cycle Brokerage on.",
     },
     inputs: {
         STATEname: "TX",

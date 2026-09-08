@@ -74,6 +74,7 @@ globalThis.document = { getElementById: () => null, addEventListener: () => {} }
 const taxengine = require('../taxengine.js');
 Object.assign(globalThis, taxengine);
 const core = require('../optimizer_core.js');
+const PLANS = require('../plans');
 const { simulate, afterTaxWealthOfLogRow, IRMAA_MARGIN_MODES } = core;
 const { TAXData, getRateBracket } = taxengine;
 
@@ -83,26 +84,11 @@ const FUTURE_IRA_RATE = 0.22;   // the rate the Optimizer's default objective di
 // ── Base household ───────────────────────────────────────────────────────────────────────────────
 // Born 1955/1956: past Medicare, past 70.5, so both the tier ceiling and QCD eligibility are live
 // from year 0 and no cell is measuring an age gate opening instead of the thing under test.
-const BASE = {
-    STATEname: 'CA', strategy: 'bracket', stratRate: 0, stratACAMultiple: 0, stratIRMAATier: -1,
-    nYears: 25,
-    birthyear1: 1955, birthmonth1: 3, die1: 92,
-    birthyear2: 1956, birthmonth2: 3, die2: 95, hasSpouse: true,
-    IRA1: 2500000, IRA2: 500000, Roth: 200000, Roth2: 0,
-    Brokerage: 600000, BrokerageBasis: 300000, Cash: 150000, CashReserve: 0,
-    ss1: 45000, ss1Age: 70, ss2: 24000, ss2Age: 70,
-    pensionAnnual: 0, survivorPct: 75, pensionCola: false,
-    spendGoal: 180000, spendChange: 0, iraBaseGoal: 0,
-    inflation: 0.03, cpi: 0.03, growth: 0.06, cashYield: 0.02, dividendRate: 0.015,
-    ssFailYear: 2099, ssFailPct: 1.0,
-    convertExcessToRoth: true, propWithdraw: 0, iraWithdrawPct: 0.05,
-    startYear: 2026, dividendReinvest: false,
-    qcdHHMax: 0, qcdMode: 'always',
-    // PINNED, not defaulted. The margin's apparent value on a hand-run plan turned out to be a
-    // Cycle Brokerage harvest-timing artifact worth up to +2.8%, an order of magnitude larger than
-    // anything IRMAA does here. Leaving it off keeps this harness measuring IRMAA.
-    cyclicEnabled: false,
-};
+// P112. The household is `irmaa-tier-filler` in the plan bank, not a literal copied into
+// this file. Its card records what it exercises, what its measured viability is, and what it
+// CANNOT show: the ACA cap - both are on Medicare, which is the point of an IRMAA study.
+// Read plans/irmaa-tier-filler.js before reading a verdict off this harness.
+const BASE = { ...PLANS.get("irmaa-tier-filler").inputs };
 
 // ── The arms where the forward projection can actually change a result ─────────────────────────────
 // Each names the site it exercises, so a result can be attributed without reading the engine.

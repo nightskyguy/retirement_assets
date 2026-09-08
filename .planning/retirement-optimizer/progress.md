@@ -4766,3 +4766,45 @@ would also close `P101`, which wants the same files served to users by name.
 asked for; the pointers in `research/HARNESSES.md` and `.test_harnesses/fixtures/README.md` are
 there so the next harness author finds it. `P112b` (more shapes), `P112c` (retire the copy-pasted
 `COMMON`) and `P112d` (each report names its plans) remain open.
+
+## Session: 2026-09-08 (worktree next-in-plan-84c7d6) - the selective refit
+
+Fifth and sixth commits on the branch. No engine or page code touched, so no version bump and
+nothing for the changelog; suites 431 / 61 / 22 throughout.
+
+**The question that started it was worth asking: zero of forty-one harnesses were using the bank.**
+The extraction had run one way. Every harness still held its own copy of the household, so the bank
+was guarded by two tests and consumed by nothing - and the plan files were now a SECOND copy, free to
+drift from the harness literal with nothing to catch it. The viability guard would have caught an
+engine change, not a fixture edit.
+
+**Ten refitted, and the boundary was the one already promised.** Only harnesses whose base plan was
+duplicated one-to-one: `ssbasis`, `ssbasis_arms`, `underfill`, `harvestceil`, `acamagi`, `betr`,
+`brokerage`, `growthcredit_check`, `irmaa_margin`, `ordered_fill`. `underfill` carries the single
+override `nYears: 20`, which had been its only difference from the plan the other two share - a fact
+about two files nobody had compared, now stated in one place.
+
+**Proved twice, because "should be identical" is not a measurement.** First a field-by-field compare
+of each live literal against its plan (nine identical; `underfill` differing by exactly the one
+expected key). Then every harness's full stdout captured before and after and diffed - all ten
+byte-identical, including `brokerage`'s 610 lines and 50 seconds.
+
+**The refit turned the cards' provenance backwards** and that had to be fixed with it: `origin` said
+a household was extracted FROM a harness, when the harness now reads it FROM the bank. The eight
+affected cards name their readers instead, so a number in a report traces to a plan and a plan traces
+to the harnesses that produced it.
+
+### What is deliberately NOT done, and it is a decision rather than effort
+
+**The thirteen harnesses sharing `COMMON` are not converted, and the refit is what scoped why.**
+`COMMON` is never run as a plan. It is crossed with a five-entry balance ladder, three spend rates,
+two states, two reserve settings and a family list, so replacing it is not a swap - it decides what
+the LADDER becomes. Five named plans exist for its rungs, but each was materialised at ONE spend rate
+and ONE strategy while the harnesses vary both. That is `P112c`, updated in place with this.
+
+`schedule_replay_harness.js` was excluded for the same reason and is the smallest case to start on:
+its base is exactly one rung at 6%, differing from `ira-heavy-couple` only by the strategy the plan
+adds and the harness deliberately leaves unset.
+
+Still true from earlier today: nothing loads the plans into the page, and `P112b` and `P112d` remain
+open.

@@ -4702,3 +4702,67 @@ copied line. Recorded in `P87c4` and in report section 12.3.
 
 `P112`'s bank is still unseeded, and `P114b`, `P28jn` and `P106f` still wait on it. The branch now
 carries two commits and no open pull request.
+
+## Session: 2026-09-08 (worktree next-in-plan-84c7d6) - P112a, a bank of reference plans
+
+Third commit on the branch, v11.1791. Suites **431 / 61 / 22**; browser badge green at 1047.
+
+**The user redirected HOW the bank gets built, and the redirection is the interesting part.** `P112`
+said fixtures must be verbatim browser `getInputs()` captures and that hand-written JSON is not
+acceptable. The user asked instead for **the plans the harnesses already build** to be emitted as
+standalone `.js` files. That is a third category - extracted, neither captured nor authored - and it
+does something neither of the other two would: it INVENTORIES what the studies have actually been
+running on. What the extraction found is the argument for the phase:
+
+- the shared `COMMON` block is copy-pasted across **thirteen** harnesses and crossed with a five-entry
+  balance ladder, so thirteen studies share a household nobody chose;
+- nine harnesses carry their own base, two of which are duplicates of things already in the set
+  (`schedule_replay`'s base is `COMMON` x defaults at 6%; `underfill` differs from `ssbasis` only in
+  `nYears`);
+- the five `P106` households, built off the captured fixture, are the only ones that were varied
+  deliberately - and they are the only ones that all end with a live IRA.
+
+**19 plans in `plans/`, each a plan card.** `summary` is one plain sentence and the ONLY field a
+person sees; `cannotShow` is the field that saves a wasted study and never reaches a user;
+`viability` is measured by re-running the plan. That split is the direct answer to the user's
+complaint about the Notes placeholder - "what can it not show" is a fixture question, so it moved
+into the card and out of the user's box.
+
+**Measuring rather than asserting paid immediately.** `ira-heavy-couple-overreaching` funds 23 of 33
+years. **Six of nineteen end with a drained IRA and peak in year 0**, so every ending-IRA and
+peak-IRA measure is floored on them - which is exactly the trap `P28jn` fell into. `viable()` and
+`withLiveIRA()` exist so a harness can exclude them by name instead of discovering it afterwards.
+
+**Two cards were written with claims their own inputs did not support.** The ACA one is worth
+keeping: it advertised the ACA definition of MAGI while claiming Social Security at 67 against a cap
+that lapses at 65, so no benefit is ever paid inside a capped year and the add-back is $0 in all of
+them - the same $0 my own `P87d` harness had already reported for its `SS mid @67` arm, which I did
+not connect until I checked the card against the inputs. That is why
+`aca-gap-years-texas-early-ss` exists: same household claiming at 62, add-back $22,514 at its
+largest and one year breaching on it alone.
+
+**Two guards**, both registered in BOTH tiers and deciding the tier inside the test. Wrapping them in
+`if (IS_NODE)` would have made the browser report two fewer than `TestTiers.EXPECTED` and reddened
+the badge - the pinned counts catching drift arriving from the tests rather than the code, which is
+a trap worth naming.
+
+**A line-ending defect, recorded in `findings.md`.** Appending to `task_plan.md` with a lone `\n`
+where the file uses `\r\n` merged two entries into one physical line and pushed the LINE-30 marker
+off 30, while `sed -n 30p` still printed something plausible. Git normalizes on commit, so it left
+no diff either. Four files in the tree had picked up the same mixed endings this session; normalizing
+them produced no diff at all, which is the proof the damage was working-tree-only - and the working
+tree is exactly what the planning hook reads.
+
+### What is deliberately NOT done
+
+**Nothing loads these into the page.** The user floated it ("directly loaded by the tool for a User to
+kick the tires") as a possibility, not a request. Checked rather than assumed: the emitted `inputs`
+are already `applyScenario`-shaped - 49 of 54 keys match an input element by id, and the other five
+(`startInYear`, `qcdMode`, `computeOC`, `stratIRMAATier`, `stratACAMultiple`) are ones
+`applyScenario` already special-cases - so the loader is a small step whenever it is wanted. It
+would also close `P101`, which wants the same files served to users by name.
+
+**No harness has been converted to use the bank.** That is the natural next step and it was not
+asked for; the pointers in `research/HARNESSES.md` and `.test_harnesses/fixtures/README.md` are
+there so the next harness author finds it. `P112b` (more shapes), `P112c` (retire the copy-pasted
+`COMMON`) and `P112d` (each report names its plans) remain open.

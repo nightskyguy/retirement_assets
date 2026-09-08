@@ -120,6 +120,16 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
   RMDs across two timing arms is simply false - timing legitimately changes the balance path - and the
   first version of it would have condemned a correct fix.
 
+- *A lone LF written into `task_plan.md` moves the LINE-30 window and leaves no diff.* The file is
+  CRLF; the planning hook injects `head -30`, which splits on `
+`; git normalizes endings on
+  commit, so the mistake is invisible in review and invisible in `git diff`. Appending a line with a
+  `
+` where the file uses `
+` therefore silently merged two entries into one physical line and
+  pushed the marker off 30 while `sed -n 30p` still looked right. **Write the file's own newline, and
+  check the marker with the same tool the hook uses.** (2026-09-08)
+
 **On the browser, the build and the worker**
 
 - *The page is not the file, and a fresh tab is not a reload.* Browser findings have twice been

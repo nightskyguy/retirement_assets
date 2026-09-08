@@ -1,5 +1,10 @@
 # Test harnesses
 
+**The households these harnesses run on are now a bank: [`plans/`](../plans/README.md).** Every
+harness that built its own base plan has had it extracted there with a card naming what it can and
+cannot show. A new harness should pick one by name rather than copy a `COMMON` block, which is how
+thirteen of the scripts below ended up crossing the same household without anyone choosing it.
+
 Index of the investigative / audit scripts for the retirement optimizer engine, and of the reports
 they produce. These are **not** part of the regular unit-test suite (`optimizer_core.tests.js`); they
 are kept so a finding can be re-derived on demand.

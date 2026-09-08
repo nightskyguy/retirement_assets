@@ -8246,6 +8246,76 @@ test('P107: IRA_GOAL_BLIND_STRATEGIES are unmoved by the goal, and the others ar
     }
 });
 
+// ── The plan bank's cards say MEASURED things, so they can go stale ───────────────────────────
+// Every plan in plans/ carries a `notes.viability` block that was produced by running the plan, not
+// typed in: years funded, whether it funds every year, its ending and peak IRA. Those are the
+// numbers a study reads when it picks a household - "this one ends with a live IRA" is why an
+// ending-IRA measure is not floored on it - so a card that has drifted from the engine is worse
+// than no card, because it is believed.
+//
+// REGISTERED IN BOTH TIERS, and that is not a detail. `TestTiers.EXPECTED` pins ONE count for this
+// suite and the browser runs this same file, so a test wrapped in `if (IS_NODE)` would make the
+// browser report two fewer than expected and turn the self-check badge red - the exact drift the
+// pinned counts exist to catch, arriving from the tests rather than from the code.
+//
+// So the tier is decided INSIDE the test, on whether the bank is loadable: node requires it, and a
+// browser reads `window.PlanBank`, which the page does not currently populate (the bank is 19
+// separate script files and the tier-2 loader does not fetch them). If a page ever does load them,
+// these two start running there with no edit. Same shape as `_mcPrng` and `SWEEP_BASES` above.
+const _planBank = IS_NODE ? require('./plans') : (typeof window !== 'undefined' ? window.PlanBank : null);
+
+test("the plan bank: every card's measured viability still reproduces", () => {
+    const bank = _planBank;
+    if (!bank) return;   // browser tier: the bank is not loaded there, see the note above
+    {
+        const all = bank.list();
+        assert(all.length > 0, 'the bank must not be empty');
+        const stale = [];
+        for (const plan of all) {
+            const r = simulate({ ...plan.inputs });
+            const last = r.log[r.log.length - 1] || {};
+            const peak = Math.max(...r.log.map(e => e.TotalIRA ?? 0));
+            const got = {
+                funded: `${r.totals.yearsfunded}/${r.totals.yearstested}`,
+                fundsEveryYear: !!r.totals.success && Math.abs(r.totals.shortfall) < 100,
+                endingIRA: Math.round(last.TotalIRA ?? 0),
+                peakIRAYear: r.log.findIndex(e => (e.TotalIRA ?? 0) === peak),
+                acaBreachYears: r.totals.acaBreachYears ?? 0,
+            };
+            for (const k of Object.keys(got))
+                if (JSON.stringify(got[k]) !== JSON.stringify(plan.notes.viability[k]))
+                    stale.push(`${plan.id}.${k}: card ${JSON.stringify(plan.notes.viability[k])} -> now ${JSON.stringify(got[k])}`);
+        }
+        assert(stale.length === 0,
+            'plan cards must match what the engine produces today: ' + stale.join(' | '));
+    }
+});
+
+test('the plan bank: the card fields a chooser relies on are all present and honest', () => {
+    const bank = _planBank;
+    if (!bank) return;   // browser tier, as above
+    {
+        for (const plan of bank.list()) {
+            const n = plan.notes;
+            assert(typeof n.summary === 'string' && n.summary.length > 20,
+                `${plan.id}: summary is the only line a user sees and must be a sentence`);
+            // The one that saves a wasted study. "I could not think of anything" means unfinished:
+            // every household has a shape it cannot show, including the good ones.
+            assert(Array.isArray(n.cannotShow) && n.cannotShow.length > 0,
+                `${plan.id}: cannotShow must name at least one thing this plan cannot answer`);
+            assert(Array.isArray(n.exercises) && n.exercises.length > 0, `${plan.id}: exercises is empty`);
+            assert(typeof n.origin === 'string' && n.origin.length > 0, `${plan.id}: origin must trace the household`);
+            assert(plan.inputs && plan.inputs.spendGoal > 0, `${plan.id}: inputs must be a runnable plan`);
+        }
+        // The two filters a harness uses to avoid the fixture traps must both be non-trivial, or a
+        // study calling them would silently get the whole bank back.
+        assert(bank.viable().length < bank.list().length,
+            'the bank must keep at least one deliberately failing plan, or viable() proves nothing');
+        assert(bank.withLiveIRA().length < bank.list().length,
+            'and at least one whose IRA drains, or withLiveIRA() proves nothing');
+    }
+});
+
 if (IS_NODE) {
     // Exported BEFORE the run, not after: the runner is async now, so `await` inside it yields to
     // the event loop and anything requiring this file mid-run would otherwise see an empty exports.

@@ -1,5 +1,10 @@
 # Scenario fixtures
 
+**Looking for a household to measure on? Start at [`plans/`](../../plans/README.md), not here.**
+That directory is the plan bank: 19 named reference households, each with a card saying what it
+exercises, what it CANNOT show, and a measured viability. This directory holds the raw browser
+captures a few of those plans were built from.
+
 Each `.json` here is the **verbatim output of the page's own `getInputs()`**, captured in a browser
 against a share URL and saved. Node harnesses read these instead of re-implementing the share-URL
 decoder.

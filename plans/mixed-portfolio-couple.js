@@ -1,0 +1,92 @@
+'use strict';
+/**
+ * Mixed portfolio couple, California
+ *
+ * A California couple with a real brokerage account alongside a large IRA.
+ *
+ * A PLAN CARD, not just a plan. `notes.summary` is the only line a person ever sees - loading this
+ * plan writes it into the tool's own Notes box. Everything else in `notes` is for whoever is
+ * choosing a household to measure on, and answers the question that saves a wasted study: not
+ * "what is this plan" but "what can this plan NOT show".
+ *
+ * `notes.viability` is MEASURED, by re-running the plan, not asserted. See plans/README.md.
+ */
+
+const PLAN = {
+    id: "mixed-portfolio-couple",
+    title: "Mixed portfolio couple, California",
+    notes: {
+        summary: "A California couple with a real brokerage account alongside a large IRA.",
+        exercises: [
+            "draw-order questions, which need a brokerage worth drawing: $900k of it against $2.5M of IRA",
+            "basis step-up and harvest timing, with a 55% basis",
+        ],
+        cannotShow: [
+            "ending-IRA or peak-IRA measures - the IRA drains to zero and peaks in year 0",
+        ],
+        viability: {
+            funded: "33/33",
+            fundsEveryYear: true,
+            endingIRA: 0,
+            peakIRAYear: 0,
+            acaBreachYears: 0
+        },
+        origin: "the `round1` mix at 6% spend.",
+    },
+    inputs: {
+        STATEname: "CA",
+        nYears: 20,
+        birthyear1: 1962,
+        birthmonth1: 6,
+        die1: 92,
+        birthyear2: 1964,
+        birthmonth2: 3,
+        die2: 94,
+        hasSpouse: true,
+        ss1: 45000,
+        ss1Age: 70,
+        ss2: 24000,
+        ss2Age: 67,
+        pensionAnnual: 0,
+        pensionStartAge: 0,
+        survivorPct: 0,
+        pensionCola: false,
+        spendChange: 0,
+        iraBaseGoal: 0,
+        inflation: 0.025,
+        cpi: 0.025,
+        growth: 0.06,
+        cashYield: 0.03,
+        dividendRate: 0.02,
+        ssFailYear: 2099,
+        ssFailPct: 1,
+        convertExcessToRoth: true,
+        propWithdraw: 0.1,
+        iraWithdrawPct: 0.06,
+        extraConversionAmount: 0,
+        fundConversionWithCash: false,
+        startAge: 64,
+        startInYear: 2026,
+        dividendReinvest: true,
+        gkGuard: 0.2,
+        gkAdjPct: 0.1,
+        cycleLTCGTarget: 0.15,
+        qcdHHMax: 0,
+        qcdMode: "asneeded",
+        computeOC: false,
+        IRA1: 1800000,
+        IRA2: 700000,
+        Roth: 250000,
+        Roth2: 100000,
+        Brokerage: 900000,
+        BrokerageBasis: 500000,
+        Cash: 150000,
+        spendGoal: 234000,
+        strategy: "propwd"
+    },
+};
+
+// Dual-mode export, the repo's classic-script contract: `require()` in node, `window.Plans` in the
+// browser, so the same file can back a harness and a page load without a build step.
+if (typeof module !== 'undefined' && module.exports) module.exports = PLAN;
+if (typeof window !== 'undefined') (window.Plans = window.Plans || {})[PLAN.id] = PLAN;

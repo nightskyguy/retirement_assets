@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1790</title>
+    <title>Retirement Optimizer 11.1791</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -66,7 +66,7 @@
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
 	<script src="optimizer_ui.js?v=111790"></script>
-	<script src="optimizer_tests.js?v=111790"></script>
+	<script src="optimizer_tests.js?v=111791"></script>
 </head>
 <body>
 
@@ -953,7 +953,7 @@
 				     being used as a measurement fixture: nothing recorded that the scenario exists
 				     to teach tradeoffs rather than to be representative. -->
 				<div class="scenario-row" style="margin-top:6px;">
-					<textarea id="scenarioNotes" rows="2" style="flex:1;" placeholder="Notes (optional): what is this plan for, and what can it not show?"></textarea>
+					<textarea id="scenarioNotes" rows="2" style="flex:1;" placeholder="Notes (optional): what is this plan for? e.g. &quot;baseline before we sell the house&quot;"></textarea>
 				</div>
 				<div style="font-size:0.78em;color:#666;margin-top:2px;">Saving also records the plan's key statistics and the release you are on, so a later load can report what changed.</div>
 				<div id="scenarioList" style="display: none; margin-top: 10px;">
@@ -1019,7 +1019,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.1790</b>
+				<li data-flag="behavior"><b>11.1791</b>
 					<strong>An ACA cap counts your whole Social Security benefit, and the tool now measures it that way.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li>The income an ACA FPL cap is tested against includes the part of your benefit that is never taxed. Each year is now checked against that figure, so a year over the cap is reported as one. <strong>More ACA rows are flagged untenable (⚠️), and the Optimizer can rank them differently.</strong> Measured across 2,880 capped plan-years, one year in eight was over without saying so.</li>
@@ -1036,7 +1036,11 @@
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li>The caps are available only while someone in the plan is still under 65 when it starts. Opening such a link or saved plan now loads <strong>Below IRMAA</strong> and names both limits, instead of moving the <i>Limit</i> to the far tighter <i>10% Fed</i> without a word.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.1790" target="_blank" rel="noopener">Details</a>
+					<strong>The Notes box on Save and Export asks a plainer question.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>It used to ask what a plan is for <i>"and what can it not show"</i>, which is a question about a test fixture rather than about your plan.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.1791" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="behavior"><b>11.1779</b>
 					<strong>Optimizer table: a row you pin to compare against now stays pinned and stays visible.</strong>
@@ -1762,7 +1766,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111790';
+    const V = '?v=111791';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

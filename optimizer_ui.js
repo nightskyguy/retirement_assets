@@ -7357,14 +7357,22 @@ function updateLimitBasisNote() {
         const ded = dropdownDeduction(status);
         const topBracket = fedBracketPctAt(Math.max(0, limit - ded), status, cpiAdj);
         const floorBracket = fedBracketPctAt(Math.max(0, floor - ded), status, cpiAdj);
+        // P87f. "Income" named, not left to the reader. An IRMAA tier is a limit on MAGI, which is
+        // total income before the deduction and counts at most 85% of a Social Security benefit -
+        // a different quantity from the federal branch's taxable income AND from the ACA branch's
+        // own MAGI below. Three ceilings, three definitions, and the menu used to print all three
+        // as bare dollars.
         sentence = tier === 0
-            ? `Filling income up to ${money(limit)} keeps you under every IRMAA tier, and lands in the ${topBracket}% bracket.`
+            ? `Filling MAGI up to ${money(limit)} keeps you under every IRMAA tier, and lands in the ${topBracket}% bracket. MAGI is your total income before your deduction, counting at most 85% of Social Security.`
             : (floorBracket === topBracket
-                ? `IRMAA Tier ${tier} runs ${money(floor)} to ${money(limit)}, all of it inside the ${topBracket}% bracket.`
-                : `IRMAA Tier ${tier} runs ${money(floor)} to ${money(limit)}. It <b>begins</b> in the ${floorBracket}% bracket and <b>ends</b> in the ${topBracket}% one, so filling this tier crosses a bracket on the way.`);
+                ? `IRMAA Tier ${tier} runs ${money(floor)} to ${money(limit)} of MAGI - total income before your deduction - all of it inside the ${topBracket}% bracket.`
+                : `IRMAA Tier ${tier} runs ${money(floor)} to ${money(limit)} of MAGI, your total income before your deduction. It <b>begins</b> in the ${floorBracket}% bracket and <b>ends</b> in the ${topBracket}% one, so filling this tier crosses a bracket on the way.`);
     } else if (isACA) {
         const ded = dropdownDeduction(status);
-        sentence = `This cap holds income to ${money(limit)}, which is inside the ${fedBracketPctAt(Math.max(0, limit - ded), status, cpiAdj)}% bracket. It is a cap to stay under, not a target to fill.`;
+        // P87f / P87d. ACA MAGI is its own quantity and the difference is not a footnote: it adds
+        // back the untaxed part of the benefit, so a household with a large benefit sits tens of
+        // thousands higher against this cap than against an IRMAA one printed with the same dollars.
+        sentence = `This cap holds ACA MAGI to ${money(limit)}, which is inside the ${fedBracketPctAt(Math.max(0, limit - ded), status, cpiAdj)}% bracket. ACA MAGI counts your <b>whole</b> Social Security benefit, including the part that is not taxed. It is a cap to stay under, not a target to fill.`;
     } else {
         const ded = dropdownDeduction(status);
         const magi = limit + ded;

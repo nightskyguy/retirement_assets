@@ -17,22 +17,28 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.177b"></a>
+<a id="11.1790"></a>
 
-## 11.177b
+## 11.1790
 
-**A shared link or saved plan that asks for an ACA income cap nobody in it can use now says so, and
-lands somewhere sensible.**  
-*Behavior change: a plan in that situation runs against a different limit than it did before, so its
-numbers move.*
+**An ACA cap counts your whole Social Security benefit, and the tool now measures it that way.**  
+*Behavior change: more ACA rows are flagged untenable, and the Optimizer can rank them differently.*
 
-The FPL caps are available only while someone in the plan is still under 65 when it starts. Past
-that there is no premium subsidy left for a cap to protect, so the cap cannot be used. Opening such
-a plan used to move the Limit to **10% Fed** without a word: a ceiling roughly three times tighter
-than the one asked for, and measured on taxable income rather than on MAGI. It now loads **Below
-IRMAA** and names both limits, the one the plan asked for and the one it used.
+The income an ACA FPL cap is tested against includes the part of your benefit that is never taxed.
+Each year is now checked against that figure, so a year over the cap is reported as one. Measured
+across 2,880 capped plan-years, one year in eight was over without saying so.
 
-Every other limit the menu offers is now covered by a test that shares it and loads it back.
+**Cycle Brokerage harvest years now fill more of a Fill Bracket or IRMAA ceiling.** Plans with Cycle
+Brokerage on realize more gains in a harvest year and will show different lifetime tax and ending
+wealth. On the plans tested, more tax and slightly less wealth. Saved plans using it will not
+reproduce.
+
+**Each entry in the Limit menu now says which income it measures**: a federal bracket limits taxable
+income, an IRMAA tier limits MAGI, and an ACA cap limits an MAGI of its own that counts the whole
+benefit. The README says the same.
+
+**A plan asking for an ACA cap nobody in it can use now says so, and loads Below IRMAA** instead of
+the far tighter 10% Fed, naming both limits.
 
 ---
 

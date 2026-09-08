@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.177b</title>
+    <title>Retirement Optimizer 11.1790</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,14 +59,14 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1116d7"></script>
-	<script src="optimizer_core.js?v=111779"></script>
+	<script src="optimizer_core.js?v=111790"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=11177b"></script>
-	<script src="optimizer_tests.js?v=11177b"></script>
+	<script src="optimizer_ui.js?v=111790"></script>
+	<script src="optimizer_tests.js?v=111790"></script>
 </head>
 <body>
 
@@ -1019,12 +1019,24 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.177b</b>
-					<strong>A plan that asks for an ACA income cap nobody in it can use now says so, and lands somewhere sensible.</strong>
+				<li data-flag="behavior"><b>11.1790</b>
+					<strong>An ACA cap counts your whole Social Security benefit, and the tool now measures it that way.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>The FPL caps are available only while someone in the plan is still under 65 when it starts; past that there is no premium subsidy left for a cap to protect. Opening a shared link or a saved plan that asks for one used to move the <i>Limit</i> to <i>10% Fed</i> without a word, a ceiling about three times tighter and measured on taxable income rather than on MAGI. It now loads <strong>Below IRMAA</strong> and names both limits: the one the plan asked for and the one it used.</li>
+					<li>The income an ACA FPL cap is tested against includes the part of your benefit that is never taxed. Each year is now checked against that figure, so a year over the cap is reported as one. <strong>More ACA rows are flagged untenable (⚠️), and the Optimizer can rank them differently.</strong> Measured across 2,880 capped plan-years, one year in eight was over without saying so.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.177b" target="_blank" rel="noopener">Details</a>
+					<strong>Cycle Brokerage harvest years now fill more of a Fill Bracket or IRMAA ceiling.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>Plans with <i>Cycle Brokerage</i> on realize more gains in a harvest year and will show different lifetime tax and ending wealth. On the plans tested, more tax and slightly less wealth. A saved plan using it will not reproduce.</li>
+					</ul>
+					<strong>Each entry in the Limit menu now says which income it measures.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>A federal bracket limits taxable income, an IRMAA tier limits MAGI, and an ACA cap limits an MAGI of its own that counts the whole benefit. The README says the same.</li>
+					</ul>
+					<strong>A plan asking for an ACA cap nobody in it can use now says so.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>The caps are available only while someone in the plan is still under 65 when it starts. Opening such a link or saved plan now loads <strong>Below IRMAA</strong> and names both limits, instead of moving the <i>Limit</i> to the far tighter <i>10% Fed</i> without a word.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.1790" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="behavior"><b>11.1779</b>
 					<strong>Optimizer table: a row you pin to compare against now stays pinned and stays visible.</strong>
@@ -1750,7 +1762,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=11177b';
+    const V = '?v=111790';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

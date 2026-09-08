@@ -551,3 +551,115 @@ One tripwire moved, `P32h`, for its seventh recorded time: total stranded 29,367
 the Brokerage headline 1,016,150.36 -> 1,000,311.35, with the COUNT still 10 and still 2040-2049. The
 arm draws its headroom earlier and reaches the stranded tail with less unfunded. The subject of that
 test did not change.
+
+---
+
+## 11. The ACA cap was SIZED in one unit and MEASURED in another  *(P87d, 2026-09-08)*
+
+Harness `.test_harnesses/acamagi_harness.js`, 360 cells, 2,880 plan-years with a live ACA cap.
+
+### 11.1 The two definitions, and why only one of them was being used
+
+| quantity | what it counts | who reads it |
+|---|---|---|
+| `tax.MAGI` | federal AGI + tax-exempt interest, so at most 85% of a Social Security benefit | IRMAA, NIIT, the federal and IRMAA ceilings |
+| **ACA MAGI** | the same, **plus the untaxed part of the benefit** | the ACA FPL cap, and nothing else |
+
+The SIZING side of an ACA cap has always been ACA-shaped. `_ssCeilRoom = yr.limit - yr.fixedInc`
+subtracts the FULL benefit, deliberately, and section 10 kept it that way while changing the other
+two ceiling kinds. **The measurement side never followed.** `bracketOverage` was
+`max(0, tax.MAGI - bracketTarget)` for every ceiling kind, so the two halves of one cap were written
+in different units - and the error is one-directional, because `acaMAGI >= MAGI` always. **The
+overage could only read LOW. A breached cap could report clean.**
+
+### 11.2 What it measured
+
+| | reported today | on the ACA definition |
+|---|---|---|
+| breach years, of 2,880 | 1,253 (43.5%) | 1,595 (55.4%) |
+| years flipping clean to breached | | **342** |
+| plans whose breach count rises | | 132 of 360 |
+| plans reporting ZERO breaches that do breach | | **12 of 360** |
+
+Median per-year add-back $3,311 over plans with any benefit; largest single year $97,255. Median
+understatement of the overage $2,037, largest $70,341.
+
+**The 12 is the number that matters, and it is not a column.** `acaBreach` is set from this overage,
+`totals.acaBreachYears` accumulates it, and the Optimizer reads that to flag an ACA row UNTENABLE
+(`optimizer_ui.js`, `isACAUntenable`). Twelve plans could not hold their cap and ranked as though
+they could.
+
+The `SS mid @67` arm is the control and reads **$0** add-back across all 72 of its plans: the cap
+lapses at 65 and that benefit starts at 67, so the two never overlap. Every flip sits in an arm
+claiming at 62.
+
+### 11.3 What shipped
+
+`ceilingMAGI(yr)` (`optimizer_core.js`), called at all three sites that decide `bracketOverage`.
+`tax.MAGI` is **not** touched - IRMAA and NIIT read it and their definition is the current one - so
+this is a second, narrower quantity for the one ceiling that needs it, logged as the hidden
+`-acaMAGI`. The gate is `yr.isACAStrategy`, which is already false in a lapsed year, so a lapsed cap
+gets no add-back and remains unbreachable.
+
+**Sizing and measurement now agree, and one probe shows what that is worth.** On a 250% FPL plan with
+a $29,803 benefit: `MAGI` $33,467 against a $57,814 cap, which read as $24,347 of spare room. On the
+ACA definition the year lands on **$57,814 exactly** - the cap was full, and the headroom did not
+exist. The sizing line had put it there all along.
+
+### 11.4 A note for anyone reading `ssbasis_harness.js`
+
+Its ACA arms pass `stratACAMultiple: 2.0` and `4.0`. The field is a whole percent - the dropdown's
+`aca400` decodes to `400`, and `computeBracketCeiling` divides by 100 - so those arms ran against a
+**$409 and $818 cap**, not $40,880 and $81,760. Section 10's ACA conclusions do not rest on them (the
+fork was established from the code and from the sizing line), but nothing in that harness's ACA rows
+should be quoted.
+
+---
+
+## 12. The same 15% survived in the harvest branch  *(P87c4, 2026-09-08)*
+
+Harness `.test_harnesses/harvestceil_harness.js`, 648 cyclic cells, two arms.
+
+When Cycle Brokerage picks a harvest year the `isBrokerageYear` arm runs **instead of** the sizing
+branch section 10 corrected, and it builds its own aggregate:
+
+```
+_baseOrdinaryInc = yr.taxableInc + yr.fixedInc + yr.taxableInterest + yr.taxableDividends
+```
+
+with `yr.fixedInc` the FULL benefit. That is then compared against the same MAGI ceiling in the LTCG
+top-off guard, and under the `cycleCoexist` nerdknob in `_iraRoom`. Same units mismatch, same
+direction, in the one branch section 10 could not reach.
+
+### 12.1 The guard binds
+
+| | cells | median d(tax) | median d(net worth) | up / down | worst |
+|---|---|---|---|---|---|
+| all moved | 339 of 648 | +$188 | -$2,566 | 87 / 225 | -$201,795 |
+| **cycleCoexist OFF** (shipped default) | 116, all clean | **+$608** | **-$5,259** | 2 / 98 | -$46,443 |
+| cycleCoexist ON (nerdknob) | 217 clean of 223 | -$861 | -$408 | 85 / 125 | -$201,795 |
+
+CLEAN = same delivered spending in both arms, both plans funded to the end; the 116 shipped-default
+cells are all clean.
+
+### 12.2 The verdict is section 7's, unchanged
+
+Correcting the basis costs money in the median, again, and for the same reason: **filling a 22%
+bracket is often a worse plan than under-filling it.** That is the Optimizer ranking's job to
+surface. It is not a licence for the engine to under-deliver the strategy that was selected, and the
+standing user correction on this phase settles it - a named ceiling is a contract to FILL, and the
+cost is a consequence to disclose. The blast radius is narrower than section 10's: only plans with
+**Cycle Brokerage** turned on are affected at all.
+
+### 12.3 What was deliberately left alone
+
+`getLTCGBracketRoom(ordFloor, ...)` reads the same aggregate and is **not** corrected here. LTCG
+brackets are TAXABLE-income thresholds, so the right basis there involves the deduction as well as
+the benefit - two errors pointing the same way, needing their own measurement rather than a copied
+line. Recorded as still open.
+
+One latent defect was found on the way: the `cycleCoexist` branch destructured
+`computeBracketCeiling` without `kind`, so `yr.ceilingKind` - the one field that says which income
+definition a ceiling is written in - was **undefined** in exactly the years that branch decides a
+draw. A coexist harvest year is meant to look downstream as though the family branch had run. It now
+does.

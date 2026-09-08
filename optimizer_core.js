@@ -1027,6 +1027,42 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
     return { limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit, kind, rateBasis };
 }
 
+/**
+ * P87d. The year's MAGI **on the income definition the active ceiling is written in**, which is the
+ * only quantity an overage against that ceiling may be measured with.
+ *
+ * `yr.tax.MAGI` is the SSA/IRMAA definition - federal AGI plus tax-exempt interest, where AGI
+ * already carries only the TAXABLE share of Social Security, at most 85% and less in the two lower
+ * statutory tiers. ACA MAGI is a different statutory quantity: it adds the whole benefit back,
+ * taxable or not. So for an ACA cap and only for an ACA cap:
+ *
+ *     acaMAGI = MAGI + (totalSS - taxableSS)
+ *
+ * WHY THIS IS A CORRECTNESS FIX AND NOT A REFINEMENT. The SIZING side of the ACA cap has always
+ * been ACA-shaped: `_ssCeilRoom = yr.limit - yr.fixedInc` subtracts the FULL benefit, deliberately,
+ * and P87c kept it that way while changing the other two ceiling kinds. The MEASUREMENT side never
+ * followed - `bracketOverage` judged every kind against `tax.MAGI` - so the two halves of the same
+ * cap were written in different units. The error is one-directional: the overage can only read LOW,
+ * so a breached cap could report clean.
+ *
+ * That is not only a column. `acaBreach` is set from this overage and feeds `totals.acaBreachYears`,
+ * which the Optimizer reads to flag an ACA row UNTENABLE - so an ACA plan that cannot hold its cap
+ * could rank as though it could. Measured over 2,880 live ACA plan-years
+ * (`.test_harnesses/acamagi_harness.js`): 342 years flip clean to breached, the reported breach rate
+ * goes 43.5% -> 55.4%, and **12 of 360 plans report zero breaches while actually breaching**.
+ *
+ * `tax.MAGI` ITSELF IS NOT TOUCHED, on purpose: IRMAA and NIIT read it and their definition is the
+ * current one. This is a second, narrower quantity for the one ceiling that needs it.
+ */
+function ceilingMAGI(yr) {
+    const magi = yr.tax?.MAGI ?? 0;
+    // `isACAStrategy`, not `ceilingKind`, and not `inputs.strategy`: it is already false in a year
+    // the cap has lapsed at Medicare eligibility, which is the same gate acaBreach uses two lines
+    // below its own call site. A lapsed year has no ACA cap and no add-back to make.
+    if (!yr.isACAStrategy) return magi;
+    return magi + Math.max(0, (yr.fixedInc ?? 0) - (yr.tax?.taxableSS ?? 0));
+}
+
 let simulationCount = 0;
 
 // ---- simulate() helper functions ----
@@ -1191,6 +1227,12 @@ function buildSimYearLogRecord(p) {
         '-ssStart2': p.ssStart2,
         '-ssStartSurvivor': p.ssStartSurvivor,
         MAGI: p.tax.MAGI,
+        // P87d. MAGI on the ACA statute's definition - the SSA one above plus the non-taxable share
+        // of the benefit. Equal to `MAGI` for every ceiling that is not a live ACA cap, which is why
+        // it is hidden rather than a column: on all but one strategy it would be a duplicate. It is
+        // the number `BracketOverage` and `acaBreach` are decided on for an ACA plan, so a reader
+        // auditing a breach needs it and cannot reconstruct it from `MAGI` and `SSincome` alone.
+        '-acaMAGI': p.acaMAGI,
         'NominalRate%': p.nominalTaxRate,
         'FedCap': p.tax.fedLimit,
         'StateCap': p.tax.stLimit,
@@ -1584,6 +1626,7 @@ function resolveHousehold(sim, yr) {
     yr._overageFromConv = 0; // the part of the above a voluntary conversion is responsible for
     yr.forcedIRA = 0;      // soft-cap break: IRA drawn ABOVE the ceiling to fund mandatory spending
     yr.acaBreach = false;  // strict ACA cap could not fund spending → plan untenable this year
+    yr.acaMAGI = 0;        // P87d: MAGI on the ACA statute's definition (see ceilingMAGI below)
 
     // Soft caps (Fill Federal Bracket / IRMAA Tier / IRA Draw %): when spending can't be met
     // within the ceiling and Cash/Brokerage/Roth are exhausted, the 3rd-pass fallback draws
@@ -2315,6 +2358,38 @@ function planPrimaryWithdrawals(sim, yr) {
         const _baseOrdinaryInc = yr.taxableInc + yr.fixedInc + yr.taxableInterest + yr.taxableDividends;
         const _cycleTargetRate = inputs.cycleLTCGTarget ?? 0.15;   // nerdknob: 0.15=target 0% bracket (default), 0.20=target 15% bracket
         const _harvestMode = inputs.cycleHarvestMode ?? 'maxbracket';
+        // P87c4. How much room a strategy ceiling still has above an ordinary-income floor, on the
+        // ceiling's OWN income definition.
+        //
+        // `_baseOrdinaryInc` carries the FULL Social Security benefit, and every caller below
+        // compares it against a MAGI ceiling. Federal-bracket and IRMAA ceilings are spent against
+        // `tax.MAGI`, which carries at most 85% of the benefit, so the plain subtraction charges the
+        // ceiling for income it never receives and the harvest stops short - the same units mismatch
+        // P87c fixed in the ordinary sizing line, in the branch that runs INSTEAD of it.
+        //
+        // ACA KEEPS THE FULL BENEFIT, for the same statutory reason it does there: ACA MAGI adds
+        // non-taxable Social Security back, so the whole benefit really does occupy that cap. The
+        // fork is on the ceiling's KIND, which is why computeBracketCeiling's `kind` is read here
+        // rather than `inputs.stratACAMultiple` - a lapsed ACA year is not an ACA ceiling.
+        //
+        // MEASURED BEFORE SHIPPING, `.test_harnesses/harvestceil_harness.js`, 648 cyclic cells. The
+        // guard binds in 339 of them, 116 with the shipped cycleCoexist default, and every one of
+        // those 116 is clean (same delivered spending, both arms funded). Median lifetime tax +$608,
+        // median ending net worth -$5,259, down in 98 of 116, worst -$46,443.
+        // **The cost is a consequence to disclose, not a reason to decline** - the standing P87a
+        // correction. A named ceiling is a contract to FILL; that filling a 22% bracket is often a
+        // worse plan than under-filling it is the Optimizer ranking's job to surface, not a licence
+        // for the engine to under-deliver the strategy that was selected.
+        // `harvestCeilSSBasis: 'full'` restores the old arm and exists so the harness can re-measure.
+        const _ceilRoomAbove = (ceil, ordFloor) => {
+            if ((inputs.harvestCeilSSBasis ?? 'magi') !== 'magi' || ceil.kind === 'aca') {
+                return ceil.limit - ordFloor;
+            }
+            // nonSSIncomeForMAGI answers "what NON-SS income puts MAGI exactly on this limit", so
+            // the floor has to be reduced to its own non-SS part to be comparable. ordFloor always
+            // contains yr.fixedInc exactly once, at both call sites.
+            return nonSSIncomeForMAGI(yr.status, ceil.limit, yr.fixedInc) - (ordFloor - yr.fixedInc);
+        };
         // Harvest sizing as a function of the ordinary-income floor. With ordFloor =
         // _baseOrdinaryInc this is byte-for-byte today's logic; cycleCoexist calls it with the
         // floor raised by the IRA draw.
@@ -2342,8 +2417,8 @@ function planPrimaryWithdrawals(sim, yr) {
                 // year, so compute it fresh here rather than reading a stale/undefined `limit`.
                 // yr.isACAStrategy, not inputs.strategy: a lapsed ACA year has no ceiling to
                 // respect, and computeBracketCeiling would still hand back the FPL cap if asked.
-                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack).limit;
-                _room = Math.min(_room, Math.max(0, _ceil - ordFloor));
+                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack);
+                _room = Math.min(_room, Math.max(0, _ceilRoomAbove(_ceil, ordFloor)));
             }
             return Math.max(yr.additionalSpendNeeded, _room * (1 - yr.capGainsPercentage * sim.capitalGainsRate));
         };
@@ -2353,10 +2428,14 @@ function planPrimaryWithdrawals(sim, yr) {
             if (inputs.strategy === 'bracket' || yr.isACAStrategy) {
                 // Same ceiling call and field assignments as the family's own branch below, so a
                 // coexist harvest year looks to downstream passes like the family branch ran.
-                ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit } =
+                // P87c4. `kind` is taken here too. The family branch below sets `yr.ceilingKind` and
+                // a coexist harvest year is meant to look like that branch ran, but this destructure
+                // dropped it - so the one field that says WHICH income definition the ceiling uses
+                // was undefined in exactly the years this block decides a draw.
+                ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit, kind: yr.ceilingKind } =
                     computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack));
                 yr.bracketTarget = yr.limit;
-                let _iraRoom = Math.max(0, yr.limit - _baseOrdinaryInc);
+                let _iraRoom = Math.max(0, _ceilRoomAbove({ limit: yr.limit, kind: yr.ceilingKind }, _baseOrdinaryInc));
                 const _magiShaped = (inputs.stratIRMAATier ?? -1) >= 0 || yr.isACAStrategy;
                 if (_magiShaped) {
                     // Pass 1 of the fixed point: harvest sized at IRAwd=0; its realized LTCG
@@ -2828,7 +2907,8 @@ function fillSpendingGap(sim, yr) {
 
     // Now we have the "real tax"
     yr.totalTax = yr.tax.totalTax + yr.IRMAA;
-    yr.bracketOverage = yr.bracketTarget > 0 ? Math.max(0, yr.tax.MAGI - yr.bracketTarget) : 0;
+    yr.acaMAGI = ceilingMAGI(yr);   // P87d
+    yr.bracketOverage = yr.bracketTarget > 0 ? Math.max(0, yr.acaMAGI - yr.bracketTarget) : 0;
     // Update marginal rates so the third pass grosses up correctly at actual bracket.
     yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
     yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
@@ -3070,7 +3150,8 @@ function resolveResidualAndForcedIRA(sim, yr) {
     // Recompute overage after any 3rd-pass forced IRA draw (soft caps may now exceed the
     // ceiling). For the strict ACA strategy, a MAGI above the FPL cap - whether from a
     // forced draw (blocked) or unavoidable income (RMDs/SS) - flags the plan untenable.
-    yr.bracketOverage = yr.bracketTarget > 0 ? Math.max(0, yr.tax.MAGI - yr.bracketTarget) : 0;
+    yr.acaMAGI = ceilingMAGI(yr);   // P87d
+    yr.bracketOverage = yr.bracketTarget > 0 ? Math.max(0, yr.acaMAGI - yr.bracketTarget) : 0;
     if (yr.isACAStrategy && yr.bracketOverage > 1) yr.acaBreach = true;
     if (yr.acaBreach) totals.acaBreachYears += 1;
     totals.forcedIRATotal += yr.forcedIRA;
@@ -3384,7 +3465,8 @@ function adoptTaxBasis(yr, calc) {
 function recomputeBracketOverage(yr) {
     if (!(yr.bracketTarget > 0)) { yr._overageFromConv = 0; return; }
     const fromSpending = yr.bracketOverage ?? 0;
-    yr.bracketOverage = Math.max(0, (yr.tax?.MAGI ?? 0) - yr.bracketTarget);
+    yr.acaMAGI = ceilingMAGI(yr);   // P87d
+    yr.bracketOverage = Math.max(0, yr.acaMAGI - yr.bracketTarget);
     yr._overageFromConv = Math.max(0, yr.bracketOverage - fromSpending);
 }
 
@@ -4041,7 +4123,7 @@ function logYear(sim, yr) {
         taxCarryCredit: yr.taxCarryCredit,
         convTimingShift: yr.convTimingShift,
         iraVolSpend1: yr.iraVolSpend1, iraVolSpend2: yr.iraVolSpend2, iraConvGross1: yr.iraConvGross1, iraConvGross2: yr.iraConvGross2,
-        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, rateBasis: yr.rateBasis, volIRAwd: yr.volIRAwd, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
+        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, rateBasis: yr.rateBasis, volIRAwd: yr.volIRAwd, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach, acaMAGI: yr.acaMAGI,
         balance: balance, nominalTaxRate: sim.nominalTaxRate, totalNetWealth: yr.totalNetWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
         gains: yr.gains, rmd1Pct: yr.rmd1Pct, subCycleLabel: yr.subCycleLabel, convNetValue: null, excessNetValue: null,
         incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,

@@ -66,6 +66,8 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `underfill_harness.js` | **node** | P87c: a Fill Bracket plan stops exactly 15% of its Social Security short of its own ceiling. Which years, and how much headroom goes unused? |
 | `ssbasis_harness.js` | **node** | P87c1: in a year where a ceiling binds, is the taxable share of Social Security pinned at its 85% cap, in a sloped tier, or zero? Decides whether the fix can be a flat subtraction or has to solve the fixed point. |
 | `ssbasis_arms_harness.js` | **node** | P87c2: three arms over 720 cells - full benefit (the defect), flat 0.85, and inverting the MAGI relation. Neither armed form can breach, so the question is how much headroom each recovers. |
+| `acamagi_harness.js` | **node** | P87d: an ACA cap is SIZED on the ACA definition of MAGI and was MEASURED against the SSA one, an error that can only read low. How many plan-years flip clean to breached, and how many plans lose their feasible flag? |
+| `harvestceil_harness.js` | **node** | P87c4: the 15% Social Security error survived in the brokerage-harvest branch, which runs INSTEAD of the sizing line P87c fixed. Does that guard ever bind, and what does correcting it cost? |
 
 ## Re-evaluation status (2026-08-30)
 
@@ -120,6 +122,8 @@ evidence of currency.
 | `underfill_harness.js` | **SUPERSEDED by its own fix** | measured the defect P87c then shipped (v11.16d4). It now reads 0.000000 and $0 on the same fixture, which is the check it has become; section 9's numbers are the pre-fix record |
 | `ssbasis_harness.js` | **CURRENT** | 2026-08-31, section 10.1. Run against the PRE-fix engine; re-running it post-fix measures the new sizing, not the regime split |
 | `ssbasis_arms_harness.js` | **SUPERSEDED by its own fix** | its OFF and flat85 arms were removed from the engine when `exact` shipped unconditionally, so the three-way comparison is no longer reproducible. Section 10.3 is the record |
+| `acamagi_harness.js` | **CURRENT** | 2026-09-08, section 11. Its two overage figures are recomputed from `MAGI` and `-taxableSS`, not read off `BracketOverage`, so it stays a valid A/B of the two DEFINITIONS after the fix shipped |
+| `harvestceil_harness.js` | **CURRENT** | 2026-09-08, section 12. Keeps its A/B: `harvestCeilSSBasis: 'full'` still selects the pre-fix arm |
 | `ceilded_harness.js` | **CURRENT** | shipped with `F4` |
 | `cpi_index_harness.js` | **CURRENT** | re-run 2026-08-26 carrying the CPI spread |
 | `betr_harness.js` | **UNREVIEWED** | 2026-07-23, the oldest finding here; `F2` and `F3` both bear on it |

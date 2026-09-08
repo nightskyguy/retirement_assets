@@ -2137,6 +2137,126 @@ test('P87c: an ACA cap still counts the WHOLE benefit', () => {
         'an ACA cap may never be exceeded by the sizing line');
 });
 
+// ── P87d: the ACA cap is MEASURED in the units it is written in ────────────────────────────────
+// The sizing side of an ACA cap has always been ACA-shaped (full benefit subtracted, above). The
+// measurement side judged every ceiling kind against `tax.MAGI`, the SSA definition, which carries
+// at most 85% of the benefit. Two halves of one cap in two different units, and one-directional: the
+// overage could only read LOW, so a breached cap could report clean. That is not only a column -
+// `acaBreach` is set from it and `totals.acaBreachYears` is what flags an ACA row untenable.
+const ACA_ADDBACK = { ...CEIL_SS, strategy: 'aca', stratRate: 0, stratIRMAATier: -1,
+                      stratACAMultiple: 250, birthyear1: 1975, die1: 95, ss1Age: 62,
+                      ss1: 54000, IRA1: 400000, spendGoal: 60000, nYears: 14 };
+
+test('P87d: acaMAGI is MAGI plus the non-taxable share of the benefit, and only under an ACA cap', () => {
+    const log = simulate({ ...ACA_ADDBACK }).log;
+    const live = log.filter(e => e.BracketTarget > 0 && e.SSincome > 0);
+    assert(live.length > 0, 'fixture must produce live ACA years with the benefit being paid');
+    for (const e of live) {
+        assertNear(e['-acaMAGI'], e.MAGI + Math.max(0, e.SSincome - e['-taxableSS']),
+            'acaMAGI must be MAGI plus the untaxed benefit', 0.01);
+    }
+    // At least one year where the two definitions genuinely disagree, or this proves nothing.
+    assert(live.some(e => e['-acaMAGI'] - e.MAGI > 1000),
+        'fixture must reach a year where the untaxed share of the benefit is material');
+    // SCOPED. A federal ceiling and an IRMAA tier are spent against tax.MAGI and must be unmoved:
+    // this is a second quantity for one ceiling, not a redefinition of MAGI, which IRMAA and NIIT
+    // both read.
+    for (const other of [{ strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1, stratACAMultiple: 0 },
+                         { strategy: 'bracket', stratRate: 0, stratIRMAATier: 1, stratACAMultiple: 0 }]) {
+        const rows = simulate({ ...ACA_ADDBACK, ...other }).log.filter(e => e.SSincome > 0);
+        assert(rows.length > 0, 'fixture must pay a benefit under the other ceilings too');
+        assert(rows.every(e => Math.abs(e['-acaMAGI'] - e.MAGI) <= 0.01),
+            'a federal or IRMAA ceiling gets no add-back - its MAGI definition is the SSA one');
+    }
+});
+
+// The same fixture the P87c ACA test uses, and deliberately so: a 400% cap with a $3M IRA behind it
+// has room to FILL rather than breach, which is the case this test is about.
+const ACA_ONCAP = { ...CEIL_SS, strategy: 'aca', stratRate: 0, stratIRMAATier: -1,
+                    stratACAMultiple: 400, birthyear1: 1975, die1: 95, ss1Age: 62 };
+
+test('P87d: the overage is decided on acaMAGI, so a cap landed on exactly reads zero, not headroom', () => {
+    const log = simulate({ ...ACA_ONCAP }).log;
+    const live = log.filter(e => e.BracketTarget > 0 && e.SSincome > 0);
+    assert(live.length > 0, 'fixture must produce live ACA years');
+    for (const e of live) {
+        assertNear(e.BracketOverage, Math.max(0, e['-acaMAGI'] - e.BracketTarget),
+            'the reported overage must be the one acaMAGI implies', 1);
+    }
+    // The case the old basis got backwards: the sizing line puts acaMAGI ON the cap, so the year is
+    // exactly full. Read against tax.MAGI it looked like a year with the whole untaxed benefit still
+    // spare - headroom the household does not have.
+    const onTheCap = live.filter(e => Math.abs(e['-acaMAGI'] - e.BracketTarget) <= 1);
+    assert(onTheCap.length > 0, 'fixture must land at least one year exactly on the cap');
+    assert(onTheCap.every(e => e.BracketOverage <= 1), 'a year on the cap has no overage');
+    assert(onTheCap.some(e => e.BracketTarget - e.MAGI > 1000),
+        'and on the old basis that same year read thousands below the cap');
+});
+
+test('P87d: a year that breaches only on the add-back is flagged, and a lapsed cap still is not', () => {
+    const r = simulate({ ...ACA_ADDBACK });
+    const live = r.log.filter(e => e.BracketTarget > 0);
+    // Breaches that exist ONLY because the untaxed benefit is counted. These are the years that
+    // reported clean before, and the ones that move an Optimizer row off "feasible".
+    const addBackOnly = live.filter(e => e['-acaMAGI'] - e.BracketTarget > 1
+                                      && e.MAGI - e.BracketTarget <= 1);
+    assert(addBackOnly.length > 0, 'fixture must contain a breach the SSA definition could not see');
+    assert(addBackOnly.every(e => e['acaBreach'] === 'Yes'),
+        'a cap breached on the ACA definition must be flagged as breached');
+    assert((r.totals.acaBreachYears ?? 0) >= addBackOnly.length,
+        'and those years must reach the total the Optimizer reads');
+    // The lapse gate is unchanged: once every living spouse is on Medicare there is no cap, so
+    // there is no add-back and nothing to breach.
+    const lapsed = r.log.filter(e => !(e.BracketTarget > 0));
+    assert(lapsed.every(e => !e['acaBreach']), 'a lapsed cap cannot be breached');
+    assert(lapsed.every(e => Math.abs(e['-acaMAGI'] - e.MAGI) <= 0.01),
+        'and a lapsed year gets no add-back either');
+});
+
+// ── P87c4: the harvest branch fills its ceiling on the ceiling's own basis ──────────────────────
+// Cycle Brokerage's harvest year runs INSTEAD of the sizing branch and built its own aggregate with
+// the FULL benefit in it, then compared that against the same MAGI ceiling - so P87c's correction
+// never reached it and a harvest year still stopped short. Measured over 648 cyclic cells
+// (.test_harnesses/harvestceil_harness.js): the guard binds in 339, 116 of them with the shipped
+// cycleCoexist default.
+const HARVEST_CEIL = { ...CEIL_SS, strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1,
+                       stratACAMultiple: 0, cyclicEnabled: true, cyclicOrder: 'ira-first',
+                       Brokerage: 900000, BrokerageBasis: 400000, ss1: 54000, ss1Age: 67,
+                       IRA1: 2000000, spendGoal: 110000, nYears: 20 };
+
+test('P87c4: a harvest year fills more of its ceiling once the benefit is counted as MAGI does', () => {
+    const fixed = simulate({ ...HARVEST_CEIL });
+    const old = simulate({ ...HARVEST_CEIL, harvestCeilSSBasis: 'full' });
+    const hv = fixed.log.filter(e => String(e.subCycle ?? '').includes('Brok'));
+    assert(hv.length > 0, 'fixture must actually produce brokerage harvest years');
+    // The two arms must differ, or the guard never binds here and this proves nothing.
+    assert(fixed.totals.gross !== old.totals.gross,
+        'the corrected basis must change what a harvest year realizes on this fixture');
+    // Direction: charging the ceiling for income it never receives can only hold the harvest DOWN,
+    // so correcting it can only realize the same or more.
+    assert(fixed.totals.gross >= old.totals.gross - 1,
+        `corrected basis must not realize less: ${Math.round(fixed.totals.gross)} vs ${Math.round(old.totals.gross)}`);
+    // And it still respects the ceiling it is filling - filling one is not breaching it.
+    const overFilled = hv.filter(e => e.BracketTarget > 0 && e.MAGI - e.BracketTarget > 1000);
+    assert(overFilled.length === 0,
+        `a harvest year may fill its ceiling but not blow past it (${overFilled.length} years over)`);
+});
+
+test('P87c4: an ACA harvest year keeps the FULL benefit, like every other ACA sizing path', () => {
+    // Same fork as P87c, in the branch P87c did not reach: ACA MAGI adds the untaxed benefit back,
+    // so the plain subtraction is already right there and correcting it would push a household over
+    // a cliff. The two arms must therefore be byte-identical under an ACA cap.
+    const aca = { ...HARVEST_CEIL, strategy: 'aca', stratRate: 0, stratIRMAATier: -1,
+                  stratACAMultiple: 400, birthyear1: 1975, die1: 95, ss1Age: 62 };
+    const fixed = simulate({ ...aca });
+    const old = simulate({ ...aca, harvestCeilSSBasis: 'full' });
+    assert(fixed.log.some(e => String(e.subCycle ?? '').includes('Brok')),
+        'fixture must produce brokerage harvest years under the ACA cap');
+    assert(fixed.log.some(e => e.BracketTarget > 0), 'and the cap must be live in some year');
+    assert(JSON.stringify(fixed.log) === JSON.stringify(old.log),
+        'an ACA ceiling must be unmoved by the harvest-branch SS basis');
+});
+
 test('soft cap (fixedpct): capped % with spend over cap still funds spending from IRA', () => {
     const r = simulate({ ...CAP_BASE, strategy: 'fixedpct', iraWithdrawPct: 0.02 });
     assert(_sumForcedIRA(r.log) > 0, 'fixedpct should force IRA when 2% draw + buffers underfund spend');

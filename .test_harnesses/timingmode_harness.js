@@ -60,6 +60,15 @@ for (const plan of PLANS.list()) {
     const rmdYears = out.late.log.filter(e => (e.RMDwd ?? 0) > 0).length;
     // Only a household that actually reaches RMD age can answer the question this harness asks.
     if (!rmdYears) continue;
+    // AND ONLY ONE THAT CONVERTS. Split moves the distribution and the conversion together; a
+    // household that never converts has nothing for the mode to move, so Split is Late for it by
+    // construction - verified, byte-identical logs. Including such a household does not measure a
+    // draw, it dilutes the sample with a structural zero. Five of the bank's households are in that
+    // position and averaging them in pulled the median from $23,480 down to $1,588, which reads as
+    // "barely worth doing" when the truth is "cannot apply here". Same discipline as a plan card's
+    // `cannotShow`: ask what a household is unable to show BEFORE putting it in the denominator.
+    const convYears = out.split.log.filter(e => (e.rothConv ?? 0) > 0).length;
+    if (!convYears) continue;
     // Spending must match across the modes or the comparison is between two different lives.
     const spends = MODES.map(m => out[m].totals.spend ?? 0);
     const clean = Math.max(...spends) - Math.min(...spends) <= 1
@@ -81,8 +90,10 @@ for (const plan of PLANS.list()) {
 
 const cl = rows.filter(r => r.clean);
 console.log('\n=== Split at RMD age: the comparison that could not be made before ===\n');
-console.log(`households from the plan bank that reach RMD age: ${rows.length}   (clean: ${cl.length})`);
-console.log('clean = identical delivered spending across all three modes, and all three fund every year\n');
+console.log(`households from the plan bank that reach RMD age AND convert: ${rows.length}   (clean: ${cl.length})`);
+console.log('clean = identical delivered spending across all three modes, and all three fund every year.');
+console.log('A household that converts nothing is EXCLUDED, not counted as a tie: Split is Late for it by');
+console.log('construction, so it measures the mode no more than an empty grid cell does.\n');
 
 console.log('  household                        RMD yrs  conv-shift   Split - Late      as %    Split - Early');
 console.log('  ' + '-'.repeat(96));
@@ -102,6 +113,14 @@ console.log(`  Split ahead in ${wins} of ${cl.length}, behind in ${loses}, level
 console.log(`  median  d(net worth) ${money(med(cl.map(r => r.dSplitLate)))}    d(lifetime tax) ${money(med(cl.map(r => r.taxSplitLate)))}`);
 console.log(`  median  d(lifetime RMDs) ${money(med(cl.map(r => r.rmdSplitLate)))}   <- the IRA-basis effect`);
 console.log(`  best ${money(Math.max(...cl.map(r => r.dSplitLate)))}   worst ${money(Math.min(...cl.map(r => r.dSplitLate)))}`);
+const taxWorse = cl.filter(r => r.taxSplitLate > 1).length;
+const rmdWorse = cl.filter(r => r.rmdSplitLate > 1).length;
+console.log(`
+  households where Split pays MORE tax:      ${taxWorse} of ${cl.length}`);
+console.log(`  households with LARGER lifetime RMDs:     ${rmdWorse} of ${cl.length}`);
+console.log('  Those two are the point. Net worth is a trade and it goes both ways, but if Split never');
+console.log('  costs tax and never leaves a bigger IRA, the two objectives do not conflict here - which');
+console.log('  is what P28jo predicted they would.');
 
 console.log('\n--- what the early distribution itself costs ---');
 console.log('  the RMD leaves the IRA ten months early and sits in Cash; this is the net of the cash');

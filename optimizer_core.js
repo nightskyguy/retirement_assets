@@ -1519,6 +1519,15 @@ function beginYear(sim, yr) {
     yr.timingReason = yr._useEarly ? 'Conv'  : 'Spend';
     const preMonths    = yearTiming === 'early' ? 1 : 11;
     yr.postMonths   = 12 - preMonths;
+    // THE RMD'S OWN MONTH, named rather than inferred. Today it is always the spending month - the
+    // required distribution rides the withdrawal, which is why `preMonths` has been able to stand in
+    // for it everywhere. That proxy is about to stop being true: the Split mode takes the RMD and the
+    // conversion in January while spending waits until November, and it is the ONLY way to reach a
+    // January conversion in an RMD year, because the conversion may not precede the distribution.
+    //
+    // Introduced first, equal to `preMonths`, so the substitution downstream is provably a no-op
+    // before anything is allowed to move it.
+    yr.rmdMonth = preMonths;
 
     // Pre-withdrawal growth: portfolio earns for preMonths before withdrawal exits.
     yr.preGains = applyGrowth(balance, yr.growthRates, preMonths);
@@ -4051,10 +4060,17 @@ function growAndSettle(sim, yr) {
     if ((_ct === 'early' || _ct === 'late') && (yr.surplus.Roth1 > 0 || yr.surplus.Roth2 > 0)) {
         const _preMonths = 12 - yr.postMonths;
         const _rmdDue = (yr.totalRMD ?? 0) > 0;
-        // Floored at the RMD month when one is due; free otherwise.
-        const _mc = Math.max(_ct === 'early' ? 1 : 11, _rmdDue ? _preMonths : 0);
+        // Floored at THE RMD'S OWN MONTH when one is due; free otherwise. It was floored at
+        // `_preMonths`, which is the spending month - correct only while the two legs were welded
+        // together, and wrong the moment a mode takes the distribution in January and spends in
+        // November. The rule was always about the distribution, never about the spending.
+        const _mc = Math.max(_ct === 'early' ? 1 : 11, _rmdDue ? yr.rmdMonth : 0);
         const _months = _preMonths - _mc;
-        if (_rmdDue && _months > 0) {
+        // The invariant is stated against the same quantity the floor is: a conversion may not sit
+        // earlier in the year than the distribution it cannot precede. Testing `_months > 0` instead
+        // asserted that the conversion may not precede the SPENDING, which is not a rule at all and
+        // which fires on every legitimate Split year.
+        if (_rmdDue && _mc < yr.rmdMonth) {
             throw new Error('conversionTiming: RMD-year floor failed - a conversion cannot precede the RMD');
         }
         if (_months !== 0) {

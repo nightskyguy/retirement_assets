@@ -24,7 +24,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 - `P56` open call: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 - `P91` was on `main` too - never a regression from this branch; `P91d` is the one open item left inside that phase: the Monte Carlo controls are in neither the saved scenario nor the share URL.
 
-User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. 2026-08-31: P98 opened and closed - an in-page test read the Limit menu before `DOMContentLoaded` built it. **2026-08-31 CLEANUP (user):** P35 to **O1** (cannot be "ideal" until P75/P36 land), leaving P87 the sole O0; 34 stale boxes closed under phases already shipped; **29 never-started phases moved to `.planning/retirement-optimizer/task_parked.md`** (nothing deleted); P28f/g/h confirmed shipped v11.162B; the 40/60 closed for good in **`P30i`**. **P101 opened** (2026-08-31, user): worked examples served from `examples/` and loadable by name, with notes - O2. **P102 opened and Stage B SHIPPED** (2026-09-01, user): goal-first mode, an ALTERNATIVE nerdknob-gated surface that drives the classic controls and never replaces them; `P30i` closed inside it. **P103 opened, O0** (2026-09-01, user: "reorder as you proposed"): the ceiling then the rules - `P75` and parked `P5` merged into it, `P100` to O1 as SELECTION not RESULT, `P102` Stages C/D deferred behind `P103d`. **`P103a` DONE same day**: oracle re-run on `1b7b366`, median gap 4.35% -> 1.58%, dominant lever flipped to the withdrawal split, `P51d` closed at <=0.013%. **P113 opened and SHIPPED** (2026-09-06, user) v11.1769: saved plans carry notes, a statistics snapshot and the `appVersion` that produced them; Load and Import unified, which fixed an unversioned import that Load would then refuse forever. **P114 opened and SHIPPED** (2026-09-07, user) v11.1779: the Optimizer table drops both Δ columns, gains **Extra Conv**, keeps a pinned compare row across an objective change and hoists it, and `?tab=optimizer` runs the sweep. **P115 opened and `a` SHIPPED** (2026-09-09, user: "Open a phase for tax-payment attribution and fix the Split interest gap") v11.17b1: interest on cash is now trued up the following year to what the cash actually earned; `b` (the December credit shared by tax paid, not by net withdrawal, and never into basis) is open. Full index next.
+User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. 2026-08-31: P98 opened and closed - an in-page test read the Limit menu before `DOMContentLoaded` built it. **2026-08-31 CLEANUP (user):** P35 to **O1** (cannot be "ideal" until P75/P36 land), leaving P87 the sole O0; 34 stale boxes closed under phases already shipped; **29 never-started phases moved to `.planning/retirement-optimizer/task_parked.md`** (nothing deleted); P28f/g/h confirmed shipped v11.162B; the 40/60 closed for good in **`P30i`**. **P101 opened** (2026-08-31, user): worked examples served from `examples/` and loadable by name, with notes - O2. **P102 opened and Stage B SHIPPED** (2026-09-01, user): goal-first mode, an ALTERNATIVE nerdknob-gated surface that drives the classic controls and never replaces them; `P30i` closed inside it. **P103 opened, O0** (2026-09-01, user: "reorder as you proposed"): the ceiling then the rules - `P75` and parked `P5` merged into it, `P100` to O1 as SELECTION not RESULT, `P102` Stages C/D deferred behind `P103d`. **`P103a` DONE same day**: oracle re-run on `1b7b366`, median gap 4.35% -> 1.58%, dominant lever flipped to the withdrawal split, `P51d` closed at <=0.013%. **P113 opened and SHIPPED** (2026-09-06, user) v11.1769: saved plans carry notes, a statistics snapshot and the `appVersion` that produced them; Load and Import unified, which fixed an unversioned import that Load would then refuse forever. **P114 opened and SHIPPED** (2026-09-07, user) v11.1779: the Optimizer table drops both Δ columns, gains **Extra Conv**, keeps a pinned compare row across an objective change and hoists it, and `?tab=optimizer` runs the sweep. **P115 opened and `a` SHIPPED** (2026-09-09, user: "Open a phase for tax-payment attribution and fix the Split interest gap") v11.17b1: interest on cash is now trued up the following year to what the cash actually earned; `b` (the December credit shared by tax paid, not by net withdrawal, and never into basis) is open. **P116 opened** (2026-09-09, user: "add that as a new Phase and I'll undertake it later"): the harness and report pruning - 28 harnesses and 16 reports whose decisions have shipped are deleted with their references, the 20 harnesses and 8 reports belonging to open phases are re-run on the current engine. **O2 at my choice**, not the user's, and therefore not in the table above; promote it when it starts. Full index next.
 **P95 CLOSED 2026-09-07** (user: "let's fix P95") v11.177b, and its own diagnosis was wrong: the share link round trip was never broken - 15 of 15 selectable limits survive one - and the real defect was the ACA age gate's fallback, which answered a $84k cap with the $24.8k row at the top of a list sorted by dollars, silently. It now falls to the menu default and the load paths say so.
 **P87 CLOSED 2026-09-08** (user: "Do P87") v11.1790. `P87b` needed no work - the federal deduction add-back shipped under `P92a` and its box was never ticked. `P87d` and `P87c4` were the same defect twice: an income aggregate compared against a ceiling written in a different definition of income, always under-reporting. The ACA cap was SIZED on ACA MAGI and MEASURED against `tax.MAGI` (342 of 2,880 plan-years flip clean to breached; 12 of 360 plans ranked feasible while breaching), and the 15% Social Security error survived in the harvest branch (binds in 339 of 648 cyclic cells). `P87e` is five tests, `P87f` names the income each Limit entry measures. **`getLTCGBracketRoom` CLOSED 2026-09-09** v11.17a7: its floor now reads ordinary taxable income, and fixing it exposed a second defect - the strategy's own MAGI ceiling was enforced on only one of the two harvest paths. **P112a SHIPPED 2026-09-08** (user: "supply a number of reference plans that research harnesses should consider") v11.1791. `plans/` holds 19 named households EXTRACTED from what the harnesses already build, not invented: the `COMMON` block crossed with its five-mix ladder (13 harnesses share it), nine harness bases, and the five `P106` households off the captured fixture. Each carries a **plan card** - `summary` (the only line a user sees), `exercises`, **`cannotShow`**, a MEASURED `viability`, and `origin`. Two guards in `optimizer_core.tests.js`. The user's Notes placeholder no longer asks "what can it not show", which was a fixture question in a user's box. **Nothing loads them into the page yet**, though every file now CAN be: they each declared `PLAN` at global scope, so only one could ever load into a page. Inputs are `applyScenario`-shaped, 49 of 54 keys. **Selective refit DONE same day:** ten harnesses now read a named plan instead of a literal (`ssbasis`, `ssbasis_arms`, `underfill`, `harvestceil`, `acamagi`, `betr`, `brokerage`, `growthcredit_check`, `irmaa_margin`, `ordered_fill`), each proved byte-identical by diffing its own stdout before and after. The thirteen sharing `COMMON` are NOT converted - they cross it with a ladder rather than use it whole, which is `P112c`. **Harness-debt sweep DONE 2026-09-08** (user: "do all 7") v11.1792. `COMMON` is in **24** files, not thirteen, and has DRIFTED into at least four distinct households under one name - that is what `P112c` must fix, and it is why no refit was attempted. Two defects found: the `ssbasis` ACA arms were dead rows for the harness's whole life (wrong multiple AND a claim age after the cap lapses), which overturns `10.1`'s regime split without changing its conclusion; and an ABSENT `iraBaseGoal` produced NaN net worth for a whole run on bracket/fixed, now `?? 0` with a test. `getLTCGBracketRoom` SHIPPED 2026-09-09 (see the P87 line above). `P87a`'s figures re-baselined in all five places that quote them.
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
@@ -249,6 +249,63 @@ earlier still wins 353/499 but the RMD reasoning behind it broke, 124 counterexa
 
 **Out of scope for the first pass:** a flat $100k/yr conversion is a candidate ARM, not a strategy;
 shaped policies belong in the grid. No product changes.
+
+## P116: prune the harnesses and research reports  *(NEW 2026-09-09, user-raised. O2, priority mine. NOT STARTED)*
+
+**The user's rule, 2026-09-09:** "old records and conclusions from them are a problem not a help."
+This phase applies it. Inventory taken the same day (read-only, every file in `.test_harnesses/`
+and `research/`): 51 harnesses, 24 reports, 1.5 MB tracked. **Every report predates at least one
+of six engine changes** - the Split timing default, the ACA-MAGI measurement, the LTCG floor and
+both-path ceiling, in-year conversion compounding (`P28jg`), the prior-December RMD basis (`P84l`),
+and the cash-interest true-up (`P115a`) - so none of their numbers reproduces today, and they get
+cited anyway: the PR #217 body's "Split ahead 7, behind 1" came from a pre-fix run and is 10 and 5
+now. 16 of the 24 document a decision that has shipped and is pinned by a test or the changelog.
+Eight harnesses are silently wrong: four still set the retired `forceWithdrawTiming`
+(`timingtrigger`, `timinggrid`, `tax_timing`, `unifiedconv`) and four parse the `timing` column with
+`startsWith('Early')`, which now reads the conversion label rather than the withdrawal
+(`convtiming`, `rmdbasis`, `tax_timing`, `timingtrigger`). Ten feed no report; four are not in
+`HARNESSES.md` at all, whose status column stops at the 08-30 changes.
+
+**The rule for each file:** a study whose decision has SHIPPED is deleted with its harness; a study
+for an OPEN phase is kept, re-run on the current engine, and its numbers replaced. Nothing is kept
+as a historical record - the commit messages are the record.
+
+**`P116a` - delete, 28 harnesses and 16 reports.**
+
+| why | harnesses | reports |
+|---|---|---|
+| subject retired | `timingtrigger`, `timinggrid`, `tax_timing`, `unifiedconv` | `WITHDRAWAL_TIMING_TRIGGER`, `CONVERSION_ROUTING` |
+| decision shipped, invariant pinned | `rmdbasis`, `bracketbasis`, `ceilded`, `ssbasis`, `ssbasis_arms`, `underfill`, `irmaa_cpi_risk`, `irmaa_default`, `irmaa_margin`, `irmaa_margin_paths`, `gapfill`, `gapfill_objectives`, `brokerage`, `extraconv_magi`, `convopt_ceiling`, `cpi_index` | `RMD_BASIS`, `BRACKET_CEILING_BASIS`, `IRMAA_FORECAST_ERROR`, `IRMAA_MARGIN_DEFAULT`, `IRMAA_MARGIN_FIXED_CPI`, `IRMAA_MARGIN_MONTE_CARLO`, `GAPFILL_SPLIT`, `GAPFILL_CASCADE_VS_BLEND`, `BROKERAGE_DRAW`, `EXTRA_CONVERSION_MAGI`, `CONVERSION_SEARCH_CEILINGS`, `BRACKET_INDEXATION` |
+| a planned re-measure replaces it | `phased` (`P36b`), `endgame` (re-run from the bank if `P35n` is still open) | `STRATEGY_FAMILY_RANKING`, `ENDGAME_DRAW_ORDER` |
+| no report, question answered or pinned | `stopyear`, `convtiming_mc`, `growthcredit_check`, `betr`, `ordered_fill`, `mix_steering` | |
+
+Per deletion: the file, its rows in `research/README.md` and `research/HARNESSES.md`, and EVERY
+reference - grep first. Measured 2026-09-09: engine and UI comments cite `IRMAA_MARGIN_DEFAULT`
+eight times and `BRACKET_CEILING_BASIS` three, `BROKERAGE_DRAW` and `CONVERSION_ROUTING` twice each;
+`CLAUDE.md`'s research-conventions section names three as examples; old changelog entries link to
+reports and would 404 on the site, so those links become plain text or a commit hash.
+
+**`P116b` - keep and re-run, 20 harnesses and 8 reports**, all for open phases, all re-run on the
+current engine in one commit with the numbers replaced and a "measured on `<commit>`" line at the
+top of each report: the ten oracle harnesses (`oracle`, `oracle_crosscheck`, `schedule_replay`,
+`schedule_oracle`, `gk_drawrule`, `gk_drawrule_mc`, `spend_objective`, `split_expressiveness`,
+`family_equivalence`, `magi_edge_gate`) with `PERFECT_FORESIGHT_ORACLE` (`P103`, the oracle alone
+is six minutes); `split_fine` and `split_mc` with `CONSTANT_SPLIT` (`P104`); `conversion_value`,
+`conversion_value_general`, `conversion_frontier`, `stopyear_stability` and the `p106_canonical`
+fixture with the four `P106` reports; `convtiming` with `CONVERSION_TIMING` (the `P85`
+carry-over); `timingmode` (write its report, or fold its table into `HARNESSES.md`); `taxattrib`
+(`P115`); `which_plan` (a tool); and `OPTIMIZER_RANK_STABILITY` (`P100`, a browser reproduction).
+
+**`P116c` - `HARNESSES.md` rewritten** to the survivors, one row each, with a new column: the engine
+commit each was last run on. The 08-30 verdict table (F1-F5) goes; it describes files that no
+longer exist.
+
+**`P116d` - after PR #217 merges:** delete `acamagi`, `harvestceil` and `ltcgroom`, together with the
+`harvestCeilSSBasis` and `ltcgRoomBasis` research knobs in `optimizer_core.js` that exist only for
+them. `P87` is closed and its tests pin the fixes.
+
+**Not in this phase:** `P112c`, the `COMMON` refit (24 files, at least four households under one
+name). Deleting 28 harnesses shrinks that job; do it after, not inside.
 
 ## P115: tax-payment attribution  *(NEW 2026-09-09, user-raised. `a` SHIPPED v11.17b1, `b` and `c` open)*
 

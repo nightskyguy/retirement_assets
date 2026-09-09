@@ -4951,5 +4951,5 @@ A review of PR #217 (user: "several false starts make me wary"), then the fixes 
 
 **`P115b`** (the December credit by tax share and out of basis) and **`P115c`** (dividends on money
 landing in Brokerage) - opened, not started. **The harness and report pruning** proposed in the review
-(28 harnesses and 16 reports whose decisions have shipped) - a list, not an action, until the user
-says so.
+(28 harnesses and 16 reports whose decisions have shipped, 20 and 8 to re-run) is now **`P116`**, at
+O2 by my choice; the user said "I'll undertake it later". Nothing deleted.

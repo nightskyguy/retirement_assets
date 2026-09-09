@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.17af"></a>
+<a id="11.17b0"></a>
 
-## 11.17af
+## 11.17b0
 
 **One control now decides when your money moves, and the default has changed.**  
 *Behavior change: every plan's numbers move, and a saved plan will not reproduce.*
@@ -79,6 +79,11 @@ benefit. The README says the same.
 
 **A plan asking for an ACA cap nobody in it can use now says so, and loads Below IRMAA** instead of
 the far tighter 10% Fed, naming both limits.
+
+**The page paints sooner.** Its self-check tests now run after the first paint instead of before
+it, and the engine test suites no longer re-run in your browser on every visit; they run on every
+commit instead. Hover over the green dot for what was checked, or add `?runtests` to the address
+to run everything on the page.
 
 ---
 <a id="11.1779"></a>

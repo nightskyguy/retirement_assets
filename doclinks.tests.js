@@ -239,6 +239,73 @@ test('the DOM half of the module is exported', () => {
 
 // ── Runner ────────────────────────────────────────────────────────────────
 // Returns the counts instead of setting process.exitCode, so the browser can render them.
+// ── 9. The Optimizer page's changelog closes every inline tag it opens ─────────
+// v11.15a2 shipped a changelog <li> whose <strong> was never closed. Nothing threw and nothing
+// looked wrong in the source, but the HTML parser's recovery re-parented the two entries below it
+// INSIDE a stray <strong> hung directly off the <ul>, and carried the bold out of the list and into
+// the How to Use section. It was reported as "everything is bold", a long way from the one missing
+// tag that caused it.
+//
+// Lived in optimizer_tests.js until 11.17b0, where it ran against the live DOM before first paint.
+// It is a check on a document, so it sits with the other document checks and runs in the
+// pre-commit hook. In node it reads the page source and counts open against close for every
+// inline tag that can leak - an unclosed <strong> anywhere in the file is an imbalance. In a
+// browser it asks the parsed DOM the original question: a list may contain only <li> children,
+// because a leaked inline tag always surfaces there, wrapped around the orphaned items.
+function _optimizerPageSource() {
+  const fs = require('fs'), path = require('path');
+  return fs.readFileSync(path.join(__dirname, 'retirement_optimizer.html'), 'utf8');
+}
+
+test('retirement_optimizer.html closes every inline tag it opens', () => {
+  if (IS_NODE) {
+    // <script>, <style> and HTML comment bodies are dropped first: they hold template strings and
+    // prose that NAME tags without opening them. Measured, not assumed: the comments alone account
+    // for two <b> and one <ul> that never open. <li> is not in the set because its end tag is
+    // optional in HTML, so an open/close count says nothing about it.
+    const src = _optimizerPageSource()
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<!--[\s\S]*?-->/g, '');
+    const bad = [];
+    for (const tag of ['b', 'strong', 'i', 'em', 'a', 'span', 'ul', 'ol']) {
+      const open = (src.match(new RegExp('<' + tag + '(\\s[^>]*)?>', 'gi')) || []).length;
+      const close = (src.match(new RegExp('</' + tag + '\\s*>', 'gi')) || []).length;
+      if (open !== close) bad.push(`<${tag}> opened ${open} times, closed ${close}`);
+    }
+    assert(bad.length === 0, 'unbalanced inline tags in retirement_optimizer.html: ' + bad.join('; '));
+  } else {
+    const lists = document.querySelectorAll('ul, ol');
+    const bad = [...lists].filter(l => [...l.children].some(c => c.tagName !== 'LI'))
+      .map(l => `${l.tagName.toLowerCase()}#${l.id || '(no id)'} contains `
+        + [...new Set([...l.children].map(c => c.tagName))].filter(t => t !== 'LI').join(','));
+    assert(bad.length === 0, 'every <ul>/<ol> must contain only <li> children: ' + bad.join(' | '));
+  }
+});
+
+test('every changelog version stamp sits in its own <li>', () => {
+  if (IS_NODE) {
+    // Each entry opens with <li data-flag="..."><b>version</b>. The two counts move together
+    // only while every stamp is still the first thing inside its own list item.
+    const src = _optimizerPageSource();
+    const entries = (src.match(/<li data-flag="[a-z]+">/g) || []).length;
+    const stamped = (src.match(/<li data-flag="[a-z]+"><b>\d+\.[0-9a-f]+<\/b>/g) || []).length;
+    assert(entries > 0, 'the changelog must have at least one entry');
+    assert(entries === stamped, `${entries} changelog entries but ${stamped} open with a version stamp`);
+  } else {
+    const ul = document.getElementById('changelog-list');
+    if (!ul) return;   // the suite also runs on pages without a changelog
+    // When an entry gets swallowed the <li> count drops and the stamp count does not, because
+    // the stray wrapper stays inside the same <ul>.
+    assert(ul.querySelectorAll(':scope > li').length === ul.querySelectorAll('b').length,
+      'every changelog version stamp must sit in its own <li>');
+    // The visible symptom, pinned at the place it was actually noticed.
+    const howTo = [...document.querySelectorAll('li')].find(li => /Withdrawal Strategy:/.test(li.textContent || ''));
+    assert(!howTo || (!howTo.closest('strong') && !howTo.closest('em')),
+      'How to Use must not sit inside an inline tag that leaked out of the changelog');
+  }
+});
+
 function runDocLinksTests() {
   passed = 0;
   failed = 0;

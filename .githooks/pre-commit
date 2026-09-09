@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# pre-commit - run the three node-only test suites and the markdown preview gate,
+# pre-commit - run the four node-only test suites and the markdown preview gate,
 #              block the commit on any failure.
 #
 # WHY THIS EXISTS (P39, work item 1). Release gating relies on the Red X badge that
@@ -34,7 +34,7 @@ fi
 
 # Every suite here sets process.exitCode = 1 on failure, so exit status is the signal.
 # Listed slowest first: a broken engine is the likeliest failure and should surface first.
-suites="optimizer_core.tests.js taxPaymentPlanner.tests.js doclinks.tests.js"
+suites="optimizer_core.tests.js taxengine.tests.js taxPaymentPlanner.tests.js doclinks.tests.js"
 
 # Completeness. The missing-suite check further down catches a LISTED suite that vanished; this
 # catches the opposite and likelier case - a NEW suite committed to the repo and never added to the
@@ -99,7 +99,7 @@ if [ -n "$failed" ]; then
 	exit 1
 fi
 
-echo "pre-commit: all three node suites passed in ${elapsed}s."
+echo "pre-commit: all four node suites passed in ${elapsed}s."
 
 # Markdown that silently hides the rest of itself. A bare <select> in task_plan.md cost 4,430
 # lines of VS Code preview on 2026-08-28, and a bare <details> cost progress.md ~1,944.

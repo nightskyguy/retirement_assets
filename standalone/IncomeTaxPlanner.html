@@ -142,8 +142,7 @@
 <!-- Shared tax modules — NOTE: these require file:// or http:// (CORS blocks in data: URLs) -->
 <script src="../displayhelpers.js"></script>
 <script src="../taxengine.js?v=1115c9"></script>
-<script src="../optimizer_core.js?v=1116f4"></script>
-<script src="../optimizer_tests.js?v=111494"></script>
+<script src="../taxengine.tests.js?v=1117b0"></script>
 </head>
 <body>
 <header>
@@ -319,8 +318,9 @@
 // Loaded from external scripts:
 //   taxengine.js  → TAXData, calculateProgressive, getRateBracket, findUpperLimitByAmount,
 //                   calculateTaxes(), calcIRMAA() — self-contained, no dependency on core.js
-//   optimizer_core.js → simulation engine, loaded so runTests() (optimizer_tests.js) can
-//                       exercise it here; this page's share/UI helpers are defined inline below
+//   taxengine.tests.js → the tax engine's own suite (also run by the pre-commit hook), loaded so
+//                        the badge in the header reports on the engine this page depends on.
+//                        This page's share/UI helpers are defined inline below
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const FULL_MAX  = 1_100_000;
@@ -1293,7 +1293,23 @@ initInfoPanel();
 });
 // Register chart canvas for tap-outside-to-dismiss on mobile
 DisplayHelpers.registerChartDismissal(document.getElementById('chart-main'));
-runTests();
+// The tax-engine suite drives the badge. It used to be the whole in-page Optimizer suite, most of
+// which bailed out on this page for want of the Optimizer's DOM; the engine this page actually
+// depends on is what is checked now.
+(function () {
+  const el = document.getElementById('testsFailed');
+  if (!el) return;
+  if (typeof window.runTaxEngineTests !== 'function') {
+    el.textContent = '🟢⚠';
+    el.title = 'taxengine.tests.js did not load, so the tax engine was not checked on this page.';
+    return;
+  }
+  const r = window.runTaxEngineTests();
+  el.textContent = r.failed > 0 ? '❌ tests failed' : '🟢';
+  el.title = r.failed > 0
+    ? `${r.failed} of ${r.total} tax-engine tests failed.`
+    : `All ${r.total} tax-engine tests passed.`;
+})();
 
 // ─── HOW TO USE MODAL ────────────────────────────────────────────────────────
 function openModal()  { buildStateNotes(); document.getElementById('modal-bg').style.display='block'; }

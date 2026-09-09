@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.17af</title>
+    <title>Retirement Optimizer 11.17b0</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -66,7 +66,7 @@
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
 	<script src="optimizer_ui.js?v=1117ae"></script>
-	<script src="optimizer_tests.js?v=1117ad"></script>
+	<script src="optimizer_tests.js?v=1117b0"></script>
 </head>
 <body>
 
@@ -1014,7 +1014,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.17af</b>
+				<li data-flag="behavior"><b>11.17b0</b>
 					<strong>One control now decides when your money moves, and the default has changed.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li><strong>Every plan's numbers move, and a saved plan will not reproduce.</strong> The month used to be picked by a rule you could not see: a year that converted more than $1,000 pushed the <i>next</i> year's whole withdrawal into January and left it there. What a converting year wants early is the conversion, not the spending - and one year should not decide the next one. The new default, <strong>Split</strong>, converts early and spends late; <i>Early</i> and <i>Late</i> move everything together.</li>
@@ -1040,7 +1040,11 @@
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li>The caps are available only while someone in the plan is still under 65 when it starts. Opening such a link or saved plan now loads <strong>Below IRMAA</strong> and names both limits, instead of moving the <i>Limit</i> to the far tighter <i>10% Fed</i> without a word.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.17af" target="_blank" rel="noopener">Details</a>
+					<strong>The page paints sooner.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>Its self-check tests now run after the first paint instead of before it, and the engine test suites no longer re-run in your browser on every visit; they run on every commit instead. Hover over the green dot for what was checked, or add <code>?runtests</code> to the address to run everything on the page.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.17b0" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="behavior"><b>11.1779</b>
 					<strong>Optimizer table: a row you pin to compare against now stays pinned and stays visible.</strong>
@@ -1736,14 +1740,8 @@ window.addEventListener('DOMContentLoaded', function () {
     }
 });
 
-// Auto-run tests when page loads (comment out if you don't want auto-run)
-// window.addEventListener('DOMContentLoaded', runTests);
-
-// Tier 2 opt-in. Must be set BEFORE runTests(), so the badge renders neutral rather than green
-// while the node suites are still outstanding. See the badge protocol in optimizer_tests.js.
-window.TIER2_PENDING = true;
-runTests?.();
-
+// The in-page tests used to run right here, synchronously, before runSimulation() and before the
+// page had painted. They now run from the idle callback at the bottom of this block, after boot.
 runSimulation?.();
 
 // ?tab=optimizer / annual / charts / montecarlo / importexport / documentation opens the page on
@@ -1752,25 +1750,33 @@ runSimulation?.();
 // mcTabActivated (it would race the Experiment).
 if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
 
-// ── Tier 2: the node-only suites, after first paint ──────────────────────────
-// 352 tests in optimizer_core.tests.js, taxPaymentPlanner.tests.js and doclinks.tests.js never ran
-// in a browser, so breaking one was invisible at release time. They run here instead, and NOTHING
-// about this is on the critical path: the scripts are not <script> tags, they are injected from
-// requestIdleCallback after the page has painted and the first simulation has rendered.
+// ── The test tiers, after first paint ─────────────────────────────────────────
+// Tier 1 is the in-page suite, optimizer_tests.js: the DOM-facing checks only a live page can
+// make. It ran synchronously at parse time until 11.17b0 - about 0.2 s on a fast machine and about
+// a second on the ten-year-old laptops this page is written for, all of it before first paint. It
+// now runs from requestIdleCallback, after boot. Nothing it asserts depends on running first, and
+// the tests that write to live page state stay gated behind ?runtests exactly as before.
 //
-// ?runtests forces the whole thing SYNCHRONOUSLY, slow tests included, for a deliberate full check
-// before a release. ?runtests=fast opts back out of the slow tests while still skipping the wait.
+// Tier 2 is the node suites: optimizer_core.tests.js, taxengine.tests.js, taxPaymentPlanner.tests.js
+// and doclinks.tests.js. They are ?runtests-ONLY. The pre-commit hook runs every one of them on
+// every commit, so re-running them in each visitor's browser verified nothing new and cost about
+// four seconds of main thread on a fast machine - fifteen or more on the audience's - and a
+// megabyte of test code per visit. Without ?runtests the badge reports the in-page result and says
+// where the node suites ran instead.
+//
+// ?runtests runs both tiers immediately, slow tests included, for a deliberate full check before
+// a release. ?runtests=fast opts back out of the slow tests while still running everything else.
 (() => {
     const RT = new URLSearchParams(location.search).get('runtests');
     const ALL = RT !== null && RT !== 'fast';
-    // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
+    // Bump with the suites, not with the page: these six are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1117af';
+    const V = '?v=1117b0';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
-    const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',
-                     'optimizer_core.tests.js', 'taxPaymentPlanner.tests.js', 'doclinks.tests.js'];
+    const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',
+                     'taxengine.tests.js', 'taxPaymentPlanner.tests.js', 'doclinks.tests.js'];
 
     const load = src => new Promise((resolve, reject) => {
         const s = document.createElement('script');
@@ -1779,6 +1785,13 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
         s.onerror = () => reject(new Error(src + ' could not be fetched'));
         document.head.appendChild(s);
     });
+
+    function runTier1() {
+        // Set BEFORE runTests(), so the badge renders neutral rather than green while the node
+        // suites are still outstanding. See the badge protocol in optimizer_tests.js.
+        if (RT !== null) window.TIER2_PENDING = true;
+        runTests?.();
+    }
 
     async function runTier2() {
         try {
@@ -1797,6 +1810,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
             // count reads undefined.
             results.push(Object.assign({ name: 'optimizer_core' },
                 await window.runOptimizerCoreTests({ skipSlow: !ALL })));
+            results.push(Object.assign({ name: 'taxengine' }, window.runTaxEngineTests()));
             results.push(Object.assign({ name: 'taxPaymentPlanner' }, window.runTaxPlannerTests()));
             results.push(Object.assign({ name: 'doclinks' }, window.runDocLinksTests()));
         } catch (e) {
@@ -1809,11 +1823,12 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     }
 
     if (RT !== null) {
+        runTier1();
         runTier2();                     // asked for explicitly: run now, do not wait for idle
     } else if (typeof requestIdleCallback === 'function') {
-        requestIdleCallback(() => runTier2(), { timeout: 3000 });
+        requestIdleCallback(runTier1, { timeout: 3000 });
     } else {
-        setTimeout(runTier2, 0);
+        setTimeout(runTier1, 0);
     }
 })();
 </script>

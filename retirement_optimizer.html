@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.17a7</title>
+    <title>Retirement Optimizer 11.17ae</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,14 +59,14 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1116d7"></script>
-	<script src="optimizer_core.js?v=1117a7"></script>
+	<script src="optimizer_core.js?v=1117ad"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=111790"></script>
-	<script src="optimizer_tests.js?v=1117a7"></script>
+	<script src="optimizer_ui.js?v=1117ae"></script>
+	<script src="optimizer_tests.js?v=1117ad"></script>
 </head>
 <body>
 
@@ -552,42 +552,26 @@
              felt inflation, and under Monte Carlo the index is the drawn path less this gap.
              Derived rather than entered, so it is shown rather than left to be inferred. -->
         <div id="cpi-spread-info" style="margin-top:-4px;margin-bottom:6px;font-size:0.82em;color:#555;"></div>
-        <!-- P70e. Diagnostic: hold the tax code still while the paths keep moving, so a Monte
-             Carlo comparison prices what variable inflation costs in TAX alone. Distinct from the
-             Monte Carlo tab's "Fixed Inflation" preset, which pins the generated paths themselves;
-             this one changes only what the tax code does with whatever the paths produced. -->
-        <div class="row" id="fixedTaxIndexing-wrap" style="display:none;">
-            <div><label style="font-size:0.9em;" title="Diagnostic. Indexes brackets, IRMAA tiers, the ACA cap, the QCD limit, Social Security COLA and Medicare premium growth at the CPI and Inflation rates you typed, ignoring each Monte Carlo path's own inflation. Spending still follows the path. Run a Monte Carlo with it on and off to see what variable inflation costs in tax alone.">
-                <input type="checkbox" id="fixedTaxIndexing"> Fixed tax indexing</label>
-                <div style="font-size:0.78em;color:#666;margin-top:2px;">Taxes index at your typed rates; spending still follows each path. Off by default.</div></div>
-        </div>
-        <!-- P28jh. Withdrawal month, gated. The engine has always picked this per year - January
-             when last year converted, November otherwise - and nobody could see or set it. The
-             month matters because the whole year's withdrawal leaves at once, spending AND the tax
-             on it, and money that leaves in January stops compounding for eleven months. Exposed
-             as a diagnostic so the long-run difference is visible; left on Automatic it is exactly
-             today's behavior. -->
+        <!-- One control names the whole year's shape. It replaced two - a withdrawal month and a
+             conversion month - which between them could not express the combination people
+             actually want: a conversion may not precede the required distribution, and the
+             distribution rode the spending draw, so "convert in January, spend in November" was
+             silently a no-op in every year a distribution was due. Giving the distribution its own
+             month is what makes Split reachable, and Split is the default. -->
         <div class="row" id="withdrawTiming-wrap" style="display:none;">
-            <div><label style="font-size:0.9em;" title="Diagnostic. Which month the year's withdrawal leaves the portfolio. The whole draw moves together - the money you spend and the tax on it - so a January draw stops compounding for eleven months while a November draw keeps compounding until it leaves. Automatic is the shipped rule: January in any year following one that converted more than $1,000, November otherwise. Run it each way to see what the choice is worth over a full plan.">Withdrawal month
-                <select id="forceWithdrawTiming">
-                    <option value="">Automatic (today's rule)</option>
-                    <option value="early">Always January (early)</option>
-                    <option value="late">Always November (late)</option>
+            <div><label style="font-size:0.9em;" title="Diagnostic. When the year's money actually moves. A withdrawal that leaves in January stops compounding for eleven months, while one that waits until November keeps earning until it goes. A conversion is the opposite: the sooner it lands in the Roth, the longer it grows there. Split does both - it converts early and spends late - which is why it is the default. A required distribution, when there is one, moves with the first of the two, because a conversion may not come before it.">Money moves
+                <select id="withdrawTiming">
+                    <option value="split">Split: convert early, spend late</option>
+                    <option value="early">Early: everything in January</option>
+                    <option value="late">Late: everything in November</option>
                 </select></label>
-                <div style="font-size:0.78em;color:#666;margin-top:2px;">Moves spending and its tax together. Automatic by default; nothing else changes.</div></div>
+                <div style="font-size:0.78em;color:#666;margin-top:2px;">Split by default. A year that converts nothing runs the same as Late.</div></div>
             <div><label style="font-size:0.9em;" title="Diagnostic. When the year's income tax is actually paid. Today it leaves with the withdrawal, so a January draw pays the tax in January and those dollars stop compounding for eleven months. Withholding is treated as paid evenly across the year no matter when it is withheld, so withholding on a December distribution satisfies the year - which is what the December option models. Medicare premiums are billed monthly and are never deferred either way.">Tax paid
                 <select id="taxSettlement">
                     <option value="">With the withdrawal (today)</option>
                     <option value="december">In December</option>
                 </select></label>
                 <div style="font-size:0.78em;color:#666;margin-top:2px;">Income tax only; Medicare premiums are unaffected. Spending, taxes owed and withdrawals do not change.</div></div>
-            <div><label style="font-size:0.9em;" title="Diagnostic. Which month a Roth conversion lands in the Roth. By default it rides the withdrawal month above, so converting in January and taking spending in November was not something the plan could do. Setting it separately moves only the conversion: the same dollars are converted, they simply spend more of the year in the Roth and less in the IRA. Your total does not change, but the IRA balance on December 31 does, and that balance sets next year's required distribution.">Conversion month
-                <select id="conversionTiming">
-                    <option value="">Same as withdrawal (today)</option>
-                    <option value="early">Always January (early)</option>
-                    <option value="late">Always November (late)</option>
-                </select></label>
-                <div style="font-size:0.78em;color:#666;margin-top:2px;">Moves only the conversion, not the spending draw. Same amount converted either way.</div></div>
         </div>
         <div class="row">
             <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (3.0)%?<input type="number" id="cashYield" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
@@ -757,6 +741,17 @@
 			     When hidden, clicking the tab auto-runs with default parameters. -->
 			<div id="mc-nerd-panel" style="display:none;margin-bottom:12px;padding:10px 14px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;">
 				<strong style="font-size:0.9em;color:#555;">Advanced Parameters</strong>
+				<!-- Moved here from the main sidebar, where it was a strict NO-OP. On a deterministic
+				     run `inputs.fixedTaxIndexing ? inputs.inflation : yr.yearInflation` has the same
+				     number on both sides, so the box could not change the figure it sat next to. It
+				     only bites when paths carry their own inflation, which is here - its own tooltip
+				     always said so. Distinct from the Fixed Inflation preset above: that one pins the
+				     generated paths, this one pins what the tax code does with whatever they produced. -->
+				<div style="margin-top:8px;">
+					<label style="font-size:0.85em;" title="Diagnostic. Indexes brackets, IRMAA tiers, the ACA cap, the QCD limit, Social Security COLA and Medicare premium growth at the CPI and Inflation rates you typed, ignoring each path's own inflation. Spending still follows the path. Run with it on and off to see what variable inflation costs in tax alone.">
+						<input type="checkbox" id="fixedTaxIndexing"> Fixed tax indexing</label>
+					<div style="font-size:0.78em;color:#666;margin-top:2px;">Taxes index at your typed rates; spending still follows each path. Off by default.</div>
+				</div>
 				<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;align-items:center;">
 					<label style="font-size:0.85em;color:#888;">(Mode selector above)</label>
 					<label style="font-size:0.85em;" title="Number of simulated market scenarios PER STRATEGY. The sweep runs this many paths against every withdrawal strategy it compares (about 144 of them on a typical plan), so 400 here is about 58,000 simulations. The running total is shown next to the Run button. More paths = more stable results, slower run.">Paths (per strategy)
@@ -1019,7 +1014,16 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.17a7</b>
+				<li data-flag="behavior"><b>11.17ae</b>
+					<strong>One control now decides when your money moves, and the default has changed.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li><strong>Every plan's numbers move, and a saved plan will not reproduce.</strong> The month used to be picked by a rule you could not see: a year that converted more than $1,000 pushed the <i>next</i> year's whole withdrawal into January and left it there. What a converting year wants early is the conversion, not the spending - and one year should not decide the next one. The new default, <strong>Split</strong>, converts early and spends late; <i>Early</i> and <i>Late</i> move everything together.</li>
+					<li><strong>Split was not reachable before.</strong> Your spending draw carried the required distribution with it, and a conversion may not come before that distribution, so "convert in January, spend in November" did nothing in any year a distribution was due. Across ten households that convert and reach distribution age, Split is ahead in seven and behind in one - and <strong>not one pays more tax or ends with a larger IRA</strong>. A year that converts nothing runs exactly as Late.</li>
+					</ul>
+					<strong>Fixed tax indexing has moved to the Monte Carlo tab.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>On the main sidebar it could not do anything - it changes how the tax code is indexed against each path's own inflation, and a single deterministic run has no such path. It now sits with the other simulation parameters, where it works.</li>
+					</ul>
 					<strong>An ACA cap counts your whole Social Security benefit, and the tool now measures it that way.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li>The income an ACA FPL cap is tested against includes the part of your benefit that is never taxed. Each year is now checked against that figure, so a year over the cap is reported as one. <strong>More ACA rows are flagged untenable (⚠️), and the Optimizer can rank them differently.</strong> Measured across 2,880 capped plan-years, one year in eight was over without saying so.</li>
@@ -1036,7 +1040,7 @@
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li>The caps are available only while someone in the plan is still under 65 when it starts. Opening such a link or saved plan now loads <strong>Below IRMAA</strong> and names both limits, instead of moving the <i>Limit</i> to the far tighter <i>10% Fed</i> without a word.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.17a7" target="_blank" rel="noopener">Details</a>
+					<a href="optimizer_changelog.md#11.17ae" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="behavior"><b>11.1779</b>
 					<strong>Optimizer table: a row you pin to compare against now stays pinned and stays visible.</strong>
@@ -1762,7 +1766,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1117a7';
+    const V = '?v=1117ae';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

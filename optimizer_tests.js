@@ -2565,7 +2565,7 @@ assertEqual(
 				&& ACA_GATE_SWAP.includes('Below IRMAA'), true,
 				'the substitution is recorded, naming the limit asked for and the one loaded');
 			// Read once and cleared, so a later load cannot report a swap it did not cause.
-			reportACAGateSwap();
+			reportLoadSubstitutions();
 			assertEqual(ACA_GATE_SWAP, null, 'and reporting it clears it');
 		} finally {
 			for (const [el, v] of snap) el.value = v;

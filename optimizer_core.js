@@ -1216,6 +1216,10 @@ function buildSimYearLogRecord(p) {
         // residual auditable from a finished run instead of an argument. 0 for every ceiling that
         // is not a federal bracket top.
         '-ceilDedAddBack': p._ceilDedAddBack,
+        // The ordinary TAXABLE income floor the LTCG bracket room was sized against, in a
+        // harvest year. 0 in every other year. Its residual against `-fedTaxableInc` minus
+        // realized gains is the one-pass estimate's error.
+        '-ltcgFloor': p._ltcgFloor ?? 0,
         // Tax-rate creep multipliers actually applied this year (1 = today's statutory rates).
         '-fedRateCreep': p.fedRateCreep,
         '-stateRateCreep': p.stateRateCreep,
@@ -1634,6 +1638,7 @@ function resolveHousehold(sim, yr) {
     yr.forcedIRA = 0;      // soft-cap break: IRA drawn ABOVE the ceiling to fund mandatory spending
     yr.acaBreach = false;  // strict ACA cap could not fund spending → plan untenable this year
     yr.acaMAGI = 0;        // P87d: MAGI on the ACA statute's definition (see ceilingMAGI below)
+    yr._ltcgFloor = 0;     // the LTCG room's ordinary-taxable floor, set only in a harvest year
 
     // Soft caps (Fill Federal Bracket / IRMAA Tier / IRA Draw %): when spending can't be met
     // within the ceiling and Cash/Brokerage/Roth are exhausted, the 3rd-pass fallback draws
@@ -2400,9 +2405,79 @@ function planPrimaryWithdrawals(sim, yr) {
         // Harvest sizing as a function of the ordinary-income floor. With ordFloor =
         // _baseOrdinaryInc this is byte-for-byte today's logic; cycleCoexist calls it with the
         // floor raised by the IRA draw.
+        // P87c4's deferred third consumer, now measured and corrected. An LTCG bracket top is a
+        // TAXABLE-income threshold - gains stack on top of ordinary income AFTER the deduction -
+        // and `_baseOrdinaryInc` is neither: it carries the FULL Social Security benefit and has no
+        // deduction subtracted at all. TWO errors, both making the floor look higher than it is, so
+        // the room comes back too small and the harvest stops short of the bracket it was told to
+        // fill. Measured over 4,745 harvest years (`.test_harnesses/ltcgroom_harness.js`): the floor
+        // is overstated in EVERY one, median $59,276 against a 0% bracket about $97k wide, and the
+        // deduction is $50,161 of that - so this is not a copy of the benefit-only fix above.
+        //
+        // The two corrections are ASKED FOR rather than rebuilt. `calculateTaxes` already decides
+        // the taxable share of the benefit and which deduction this household gets (standard or
+        // itemized, the age-65 bumps, the senior deduction after its phase-out), and it is the same
+        // call `P92a` uses for the ceiling's own deduction. Deriving either by hand here would be a
+        // second source of truth free to drift from the one charging the tax.
+        //
+        // `ordFloor`'s COMPOSITION is deliberately untouched - only its BASIS is corrected - so this
+        // cannot silently change which components the harvest counts.
+        //
+        // ASKED AT ZERO GAINS, on purpose, and a second pass was tried and removed. Capital gains do
+        // enter PROVISIONAL income for the Social Security calculation, so this understates the
+        // taxable share slightly; re-asking at the gains pass 1 implied moved 4 harvest years out of
+        // 292 and was not worth its call. The residual that remains is NOT that circularity at all -
+        // it is income the year gains AFTER the harvest is sized (a Roth conversion, a forced draw),
+        // which no estimate made at sizing time could have known. `-ltcgFloor` is logged so that gap
+        // stays auditable rather than assumed.
+        const _ltcgFloor = (ordFloor) => {
+            if ((inputs.ltcgRoomBasis ?? 'taxable') !== 'taxable') return ordFloor;
+            const _ss = yr.fixedInc;
+            const _nonSS = Math.max(0, ordFloor - _ss);
+            const _t = calculateTaxes({
+                filingStatus: yr.status, ages: [yr.age1, yr.age2],
+                birthyears: [sim.birthyear1, sim.birthyear2],
+                totalSS: _ss, IRMAAAnnualCost: 0,
+                earnedIncome: yr.pension + yr.taxableRMD + yr.taxableInterest
+                            + Math.max(0, _nonSS - yr.pension - yr.taxableRMD - yr.taxableInterest - yr.taxableDividends),
+                inflation: sim.cpiRate,
+                pensionIncome: yr.pension, iraIncome: yr.taxableRMD,
+                qualifiedDiv: yr.taxableDividends, capGains: 0, hsaContrib: 0,
+                taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep,
+                stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh,
+                propTax: yr.propTax, taxYear: yr.taxYear
+            });
+            const _untaxedBenefit = Math.max(0, _ss - (_t.taxableSS ?? 0));
+            const _floor = Math.max(0, ordFloor - _untaxedBenefit - (_t.federalStdDeduction ?? 0));
+            // Recorded so the estimate's residual is auditable from a finished run rather than
+            // argued, the same way `-ceilDedAddBack` records P92a's.
+            yr._ltcgFloor = _floor;
+            return _floor;
+        };
         const _sizeHarvest = (ordFloor) => {
             if (_harvestMode === 'spendonly') return yr.additionalSpendNeeded;
-            const _targetRoom = getLTCGBracketRoom(ordFloor, yr.status, _cycleTargetRate, sim.cpiRate);
+            // TWO FLOORS, and they are not interchangeable. `_ltcgOrd` is ordinary TAXABLE income,
+            // which is what an LTCG bracket top bounds. `ordFloor` stays the gross MAGI-shaped
+            // aggregate, which is what the strategy's own ceiling is measured against further down.
+            // Collapsing them into one variable would feed a post-deduction figure to a MAGI ceiling
+            // and undo the correction above.
+            const _ltcgOrd = _ltcgFloor(ordFloor);
+            // The strategy's own ceiling caps the harvest on EVERY path, not only the top-off one.
+            // It used to be applied to the top-off branch alone, so a harvest that fitted inside the
+            // LTCG target bracket was returned without ever being tested against the IRMAA tier or
+            // ACA cap the plan was holding. That hole was unreachable only because the room was too
+            // small to reach a threshold; correcting the floor above made it reachable, and a
+            // coexist harvest year promptly crossed from no tier into IRMAA Tier 1.
+            const _capToCeiling = (grossRoom) => {
+                if (!(inputs.strategy === 'bracket' || yr.isACAStrategy)) return grossRoom;
+                // This branch (isBrokerageYear) runs INSTEAD of the ceiling-computing branch this
+                // year, so compute it fresh rather than reading a stale or undefined `limit`.
+                // yr.isACAStrategy, not inputs.strategy: a lapsed ACA year has no ceiling to
+                // respect, and computeBracketCeiling would still hand back the FPL cap if asked.
+                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack);
+                return Math.min(grossRoom, Math.max(0, _ceilRoomAbove(_ceil, ordFloor)));
+            };
+            const _targetRoom = _capToCeiling(getLTCGBracketRoom(_ltcgOrd, yr.status, _cycleTargetRate, sim.cpiRate));
             const _targetNetRoom = _targetRoom * (1 - yr.capGainsPercentage * sim.capitalGainsRate);
             if (yr.additionalSpendNeeded <= _targetNetRoom) {
                 // Spend fits inside the target bracket - max it out anyway.
@@ -2411,24 +2486,16 @@ function planPrimaryWithdrawals(sim, yr) {
             // Spend forces gains beyond the target bracket. Find which LTCG bracket the
             // forced realization lands in and top off to that bracket's own ceiling.
             const _spendGrossNeeded = yr.additionalSpendNeeded / Math.max(0.01, 1 - yr.capGainsPercentage * sim.capitalGainsRate);
-            const _landedRate = getLTCGBracketTopRate(ordFloor, _spendGrossNeeded, yr.status, sim.cpiRate);
+            const _landedRate = getLTCGBracketTopRate(_ltcgOrd, _spendGrossNeeded, yr.status, sim.cpiRate);
             const _ltcgRates = (TAXData.FEDERAL.CAPITAL_GAINS[yr.status]?.brackets ?? []).map(b => b.r);
             const _nextRate = _ltcgRates.find(r => r > _landedRate);
             let _room = (_nextRate !== undefined)
-                ? getLTCGBracketRoom(ordFloor, yr.status, _nextRate, sim.cpiRate)
+                ? getLTCGBracketRoom(_ltcgOrd, yr.status, _nextRate, sim.cpiRate)
                 : _spendGrossNeeded;   // already in the top LTCG bracket - no higher ceiling to top off to
-            if (inputs.strategy === 'bracket' || yr.isACAStrategy) {
-                // Don't let the LTCG top-off push total realized income past the active
-                // strategy's own ceiling (IRMAA tier / ACA cliff / bracket ceiling). This
-                // branch (isBrokerageYear) runs INSTEAD of the ceiling-computing branch this
-                // year, so compute it fresh here rather than reading a stale/undefined `limit`.
-                // yr.isACAStrategy, not inputs.strategy: a lapsed ACA year has no ceiling to
-                // respect, and computeBracketCeiling would still hand back the FPL cap if asked.
-                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack);
-                _room = Math.min(_room, Math.max(0, _ceilRoomAbove(_ceil, ordFloor)));
-            }
+            _room = _capToCeiling(_room);
             return Math.max(yr.additionalSpendNeeded, _room * (1 - yr.capGainsPercentage * sim.capitalGainsRate));
         };
+
         // cycleCoexist: size the family's IRA draw FIRST (v1 families only), then harvest above it.
         let _coexistIRAwd = 0;
         if ((inputs.cycleCoexist ?? 'off') === 'bracketfill') {
@@ -4130,7 +4197,7 @@ function logYear(sim, yr) {
         taxCarryCredit: yr.taxCarryCredit,
         convTimingShift: yr.convTimingShift,
         iraVolSpend1: yr.iraVolSpend1, iraVolSpend2: yr.iraVolSpend2, iraConvGross1: yr.iraConvGross1, iraConvGross2: yr.iraConvGross2,
-        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, rateBasis: yr.rateBasis, volIRAwd: yr.volIRAwd, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach, acaMAGI: yr.acaMAGI,
+        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, rateBasis: yr.rateBasis, volIRAwd: yr.volIRAwd, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach, acaMAGI: yr.acaMAGI, _ltcgFloor: yr._ltcgFloor,
         balance: balance, nominalTaxRate: sim.nominalTaxRate, totalNetWealth: yr.totalNetWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
         gains: yr.gains, rmd1Pct: yr.rmd1Pct, subCycleLabel: yr.subCycleLabel, convNetValue: null, excessNetValue: null,
         incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,

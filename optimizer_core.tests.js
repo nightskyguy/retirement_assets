@@ -394,21 +394,35 @@ test('P32c: cycleCoexist bracketfill — harvest years regain the IRA draw and c
 
 test('P32c: cycleCoexist MAGI ceiling (IRMAA tier) — coexist must not push a harvest year into a higher tier', () => {
     // IRMAA tier 1: the family ceiling is MAGI-shaped, so the IRA room subtracts the planned
-    // harvest LTCG (two-pass fixed point). The observable contract: the coexist harvest year's
-    // IRMAA tier never exceeds the same year's tier with coexist off.
+    // harvest LTCG (two-pass fixed point).
+    //
+    // THE CONTRACT WAS RESTATED 2026-09-09, and the restatement is the point. It used to be "the
+    // coexist harvest year's IRMAA tier never exceeds the same year's tier with coexist off", which
+    // is not a ceiling test - it is a test that coexist stays UNDER-FILLED. Correcting the LTCG
+    // room's income basis made the harvest reach the tier it was told to fill and this failed,
+    // reporting `-none- -> Tier 1` on a year whose MAGI was $109,293 against a $136,999 ceiling with
+    // a recorded overage of zero. Landing inside Tier 1 is what `stratIRMAATier: 1` ASKS FOR; the
+    // coexist-off arm does not even compute a ceiling in a harvest year, so it was never the right
+    // reference. The real invariant is that the ceiling is not BREACHED, which is stronger and is
+    // what is asserted now.
     const scen = { ...BASE, cyclicEnabled: true, strategy: 'bracket', stratRate: 0,
                    stratIRMAATier: 1, birthyear1: 1958, IRA1: 900000, Brokerage: 600000,
                    BrokerageBasis: 200000 };
     const off = simulate({ ...scen });
     const on = simulate({ ...scen, cycleCoexist: 'bracketfill' });
-    const tierRank = t => t === '-none-' || t == null ? 0 : (parseInt(String(t).replace(/\D/g, ''), 10) || 0);
     assert(off.log.length === on.log.length, 'same horizon');
-    for (let i = 0; i < on.log.length; i++) {
-        const e = on.log[i];
+    let checked = 0;
+    for (const e of on.log) {
         if (!(e.subCycle === 'Brok' || e.subCycle === '⚠Brok')) continue;
-        assert(tierRank(e.IRMAATier) <= tierRank(off.log[i].IRMAATier),
-            `year ${e.year}: coexist pushed IRMAA tier ${off.log[i].IRMAATier} -> ${e.IRMAATier}`);
+        if (!(e.BracketTarget > 0)) continue;   // no ceiling computed this year, nothing to breach
+        checked++;
+        assert((e.BracketOverage ?? 0) <= 1,
+            `year ${e.year}: coexist breached its own ceiling by ${Math.round(e.BracketOverage)} ` +
+            `(MAGI ${Math.round(e.MAGI)} against ${Math.round(e.BracketTarget)})`);
+        assert(e.MAGI <= e.BracketTarget + 1,
+            `year ${e.year}: MAGI ${Math.round(e.MAGI)} above ceiling ${Math.round(e.BracketTarget)}`);
     }
+    assert(checked > 0, 'coexist must compute a ceiling in at least one harvest year, or this proves nothing');
 });
 
 test('P32c: cycleHarvestMode spendonly harvests no more than maxbracket', () => {

@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1791"></a>
+<a id="11.17a7"></a>
 
-## 11.1791
+## 11.17a7
 
 **An ACA cap counts your whole Social Security benefit, and the tool now measures it that way.**  
 *Behavior change: more ACA rows are flagged untenable, and the Optimizer can rank them differently.*
@@ -28,10 +28,17 @@ The income an ACA FPL cap is tested against includes the part of your benefit th
 Each year is now checked against that figure, so a year over the cap is reported as one. Measured
 across 2,880 capped plan-years, one year in eight was over without saying so.
 
-**Cycle Brokerage harvest years now fill more of a Fill Bracket or IRMAA ceiling.** Plans with Cycle
-Brokerage on realize more gains in a harvest year and will show different lifetime tax and ending
-wealth. On the plans tested, more tax and slightly less wealth. Saved plans using it will not
-reproduce.
+**Cycle Brokerage harvest years now fill the bracket they are aimed at.** A harvest year was
+measuring its remaining capital-gains room against the wrong income, counting your whole Social
+Security benefit and ignoring your deduction, so it stopped well short of the 0% or 15% bracket it
+was told to fill. It also now respects your chosen income limit on every path; before, a harvest
+that fitted inside the target bracket was never checked against an IRMAA tier or ACA cap at all.
+
+Plans with **Cycle Brokerage** on realize more gains in a harvest year and will show different
+lifetime tax and ending wealth, and a saved plan using it will not reproduce. Most plans move very
+little: where your Limit is what holds the harvest down, nothing changes. The plans that move are
+the ones whose limit sits high enough that the capital-gains bracket was the real constraint, and
+the ones running no income limit at all.
 
 **Each entry in the Limit menu now says which income it measures**: a federal bracket limits taxable
 income, an IRMAA tier limits MAGI, and an ACA cap limits an MAGI of its own that counts the whole

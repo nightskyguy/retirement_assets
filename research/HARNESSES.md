@@ -52,7 +52,7 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `stopyear_harness.js` | **browser console** | When should a plan stop Roth conversions? |
 | `unifiedconv_harness.js` | **node** | Does modeling every voluntary IRA withdrawal as a Roth conversion change anything? |
 | `gapfill_harness.js` | **node** | Is the `[40, 60]` Brokerage/Cash split in the default gap fill load-bearing, and is 40 right? |
-| `ltcgroom_harness.js` | **node** | The LTCG bracket room reads the same aggregate P87c4 corrected twice, against a TAXABLE-income threshold rather than a MAGI one - so it carries the deduction error as well as the benefit error. How big, and is a fix worth building? |
+| `ltcgroom_harness.js` | **node** | The LTCG bracket room against a TAXABLE-income threshold: it carried the deduction error as well as the benefit one. Reports what correcting it is worth, A/B against `ltcgRoomBasis: 'gross'`, and the size of the old error by cause. |
 | `which_plan.js` | **node, tool** | Which household does each harness actually run on? Resolves `PLANS.get(...)` so that a property moved into a plan file is still findable - grep stopped answering this when the refit moved the literals. |
 | • `ordered_fill_harness.js` | **node** | Ordered strategy: does the account sequence restart from the top every year, and where does the year's leftover surplus get banked? |
 | • `brokerage_harness.js` | **node** | Why is Brokerage barely drawn, and is the third-pass exclusion to blame? |

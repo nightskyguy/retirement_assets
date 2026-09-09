@@ -1521,7 +1521,25 @@ function beginYear(sim, yr) {
     else if (inputs.forceWithdrawTiming === 'late') yr._useEarly = false;
     const yearTiming   = yr._useEarly ? 'early' : 'late';
     yr.timingReason = yr._useEarly ? 'Conv'  : 'Spend';
-    const preMonths    = yearTiming === 'early' ? 1 : 11;
+    let preMonths      = yearTiming === 'early' ? 1 : 11;
+    // ── ONE MODE, THREE MONTHS ────────────────────────────────────────────────────────────────
+    // `withdrawTiming` names the whole year's shape rather than one leg of it:
+    //
+    //     mode     RMD   conversion   spending
+    //     early     1        1           1
+    //     split     1        1          11
+    //     late     11       11          11
+    //
+    // Split is the one the two-select arrangement could not express. With a late spending draw the
+    // RMD sat in month 11, and a conversion may not precede the distribution, so asking for a
+    // January conversion was silently a no-op in every RMD year. Giving the distribution its own
+    // month is what makes the mode reachable at all.
+    //
+    // Anything unrecognised - including absent - leaves the legacy rule above in charge for now, so
+    // this phase changes nothing. That fallback is what the next phase removes.
+    const _MODE_MONTHS = { early: [1, 1, 1], split: [1, 1, 11], late: [11, 11, 11] };
+    const _modeM = _MODE_MONTHS[inputs.withdrawTiming];
+    if (_modeM) preMonths = _modeM[2];
     yr.postMonths   = 12 - preMonths;
     // THE RMD'S OWN MONTH, named rather than inferred. Today it is always the spending month - the
     // required distribution rides the withdrawal, which is why `preMonths` has been able to stand in
@@ -1530,8 +1548,9 @@ function beginYear(sim, yr) {
     // January conversion in an RMD year, because the conversion may not precede the distribution.
     //
     // Introduced first, equal to `preMonths`, so the substitution downstream is provably a no-op
-    // before anything is allowed to move it.
-    yr.rmdMonth = preMonths;
+    // before anything is allowed to move it. A mode is the only thing that separates them.
+    yr.rmdMonth  = _modeM ? _modeM[0] : preMonths;
+    yr.convMonth = _modeM ? _modeM[1] : preMonths;
 
     // Pre-withdrawal growth: portfolio earns for preMonths before withdrawal exits.
     yr.preGains = applyGrowth(balance, yr.growthRates, preMonths);
@@ -4067,15 +4086,21 @@ function growAndSettle(sim, yr) {
     //
     // Before RMD age there is no such rule and the conversion may be moved freely, which is where
     // whatever benefit survives now comes from.
-    const _ct = inputs.conversionTiming;
-    if ((_ct === 'early' || _ct === 'late') && (yr.surplus.Roth1 > 0 || yr.surplus.Roth2 > 0)) {
+    // The conversion's target month comes from the MODE when one is set, and from the standalone
+    // control otherwise. Both express the same thing; the mode simply names it once for the whole
+    // year instead of asking twice.
+    const _convTarget = inputs.withdrawTiming && yr.convMonth !== undefined
+        ? yr.convMonth
+        : (inputs.conversionTiming === 'early' ? 1
+        :  inputs.conversionTiming === 'late'  ? 11 : null);
+    if (_convTarget !== null && (yr.surplus.Roth1 > 0 || yr.surplus.Roth2 > 0)) {
         const _preMonths = 12 - yr.postMonths;
         const _rmdDue = (yr.totalRMD ?? 0) > 0;
         // Floored at THE RMD'S OWN MONTH when one is due; free otherwise. It was floored at
         // `_preMonths`, which is the spending month - correct only while the two legs were welded
         // together, and wrong the moment a mode takes the distribution in January and spends in
         // November. The rule was always about the distribution, never about the spending.
-        const _mc = Math.max(_ct === 'early' ? 1 : 11, _rmdDue ? yr.rmdMonth : 0);
+        const _mc = Math.max(_convTarget, _rmdDue ? yr.rmdMonth : 0);
         const _months = _preMonths - _mc;
         // The invariant is stated against the same quantity the floor is: a conversion may not sit
         // earlier in the year than the distribution it cannot precede. Testing `_months > 0` instead

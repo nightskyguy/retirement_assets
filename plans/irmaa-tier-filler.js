@@ -12,6 +12,12 @@
  * `notes.viability` is MEASURED, by re-running the plan, not asserted. See plans/README.md.
  */
 
+// WRAPPED IN AN IIFE, and it is not style. Each of these files declares `PLAN`, and a classic
+// script declaring `const PLAN` at global scope throws a redeclaration SyntaxError the moment a
+// SECOND one is loaded - so the bank could be required in node but only ever ONE file could be
+// loaded into a page, silently killing every load after the first. Found while trying to run the
+// Optimizer against every household in the bank.
+(function () {
 const PLAN = {
     id: "irmaa-tier-filler",
     title: "IRMAA-tier-filling couple, California",
@@ -87,3 +93,4 @@ const PLAN = {
 // browser, so the same file can back a harness and a page load without a build step.
 if (typeof module !== 'undefined' && module.exports) module.exports = PLAN;
 if (typeof window !== 'undefined') (window.Plans = window.Plans || {})[PLAN.id] = PLAN;
+})();

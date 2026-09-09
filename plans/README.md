@@ -42,7 +42,10 @@ only the ones an ending-IRA or peak-IRA measure can be read on. `get()` throws o
 rather than returning `undefined`, because a typo would otherwise run a whole study on nothing.
 
 Files are dual-mode, the repo's classic-script contract: `require()` in node, `window.Plans` in a
-browser, no build step.
+browser, no build step. Each is wrapped in an IIFE, and that wrapper is load-bearing: they all
+declare `PLAN`, so at global scope the SECOND file loaded into a page throws a redeclaration error
+and every load after the first dies silently. A test asserts the wrapper, because `require()` gives
+every module its own scope and cannot reproduce the failure.
 
 ## The bank
 

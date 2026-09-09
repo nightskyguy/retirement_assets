@@ -8327,6 +8327,27 @@ test("the plan bank: every card's measured viability still reproduces", () => {
     }
 });
 
+test('the plan bank: every plan file can be loaded ALONGSIDE the others in a page', () => {
+    // Each file declares `PLAN`. A classic script declaring `const PLAN` at global scope throws a
+    // redeclaration SyntaxError the moment a SECOND one is loaded, so the bank required cleanly in
+    // node while only ever ONE file could reach a browser - every load after the first died
+    // silently. Found by trying to run the Optimizer against all 19 households; the page had one.
+    //
+    // A source check, because `require()` cannot reproduce the failure: node gives every module its
+    // own scope, so the bug is invisible to the very suite that covers the bank.
+    if (!IS_NODE) return;
+    const fs = require('fs'), path = require('path');
+    const dir = path.join(__dirname, 'plans');
+    const bad = [];
+    for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.js') && f !== 'index.js')) {
+        const src = fs.readFileSync(path.join(dir, f), 'utf8');
+        // The declaration must not sit at column 0, which is the only place it would collide.
+        if (/^const PLAN/m.test(src)) bad.push(f);
+    }
+    assert(bad.length === 0,
+        'these plan files declare PLAN at global scope and cannot be loaded together: ' + bad.join(', '));
+});
+
 test('the plan bank: the card fields a chooser relies on are all present and honest', () => {
     const bank = _planBank;
     if (!bank) return;   // browser tier, as above

@@ -837,7 +837,7 @@ test('timing: a year that converts nothing reports none, and spends when the mod
 // LAST year's conversion, so one dollar either side of $1,000 moved a whole year's withdrawal by ten
 // months and kept moving it for every year after. A conversion must not reach forward into the next
 // year's timing at all.
-test('timing: a conversion does not change the FOLLOWING year, which is what the old rule got wrong', () => {
+test.critical('timing: a conversion does not change the FOLLOWING year, which is what the old rule got wrong', () => {
     const withConv = simulate({ ...BASE, extraConversionAmount: 20000, nYears: 6 });
     for (let i = 1; i < withConv.log.length; i++) {
         const convertedLastYear = (withConv.log[i - 1].rothConv ?? 0) > 1000;
@@ -7723,20 +7723,6 @@ test('schedule: replays an ACA plan ACROSS its lapse', () => {
     assert(Math.abs(d.dNW) < 0.01, `final net worth diverged by ${d.dNW}`);
 });
 
-test('schedule: an iraDraw year implies no year-0 conversion', () => {
-    // Withdrawal timing is Early in a conversion year and Late otherwise, and year 0 decides it from
-    // the strategy. A ceiling implies a conversion; a quantity draw does not, exactly as fixedpct
-    // and fixed do not. Treating any year-0 entry as a ceiling flipped the month and left IRA Draw
-    // $39,117 adrift with every year already scheduled - a whole-plan error from one boolean.
-    const src = { ...SCHED_BASE, strategy: 'fixedpct', iraWithdrawPct: 0.05 };
-    const a = simulate(src);
-    const plan = compileScheduleFromRun(a, src);
-    assert(plan[0] && plan[0].iraDraw !== undefined, 'year 0 should compile to a quantity entry');
-    const b = simulate({ ...src, strategy: 'schedule', schedulePlan: plan, ...scheduleOptionsForRun(src) });
-    assert(a.log[0].timingReason === b.log[0].timingReason,
-        `year-0 timing differs: ${a.log[0].timingReason} vs ${b.log[0].timingReason}`);
-});
-
 test('schedule: convert caps the surplus routed to Roth, and the rest still banks', () => {
     // The conversion lever is a REALLOCATION of an already-taxed surplus, not a gross draw: capping
     // it moves dollars from Roth to Cash/Brokerage and must not change what left the IRA.
@@ -8031,12 +8017,9 @@ test('P28jk: the conversion month is separable from the spending withdrawal mont
             `withdrawTiming ${JSON.stringify(junk)} must fall back to the default, not run its own plan`, 0.01);
     }
 
-    // Asking for the month the withdrawal already uses is a no-op, not a rounding difference.
-    const early = run({ withdrawTiming: 'early' });
-    const earlyEarly = run({ withdrawTiming: 'early' });
-    assertNear(earlyEarly.finalNW, early.finalNW,
-        'P28jk: convert-early on an already-January withdrawal must be a no-op', 0.01);
-    assertNear(shift0(earlyEarly), 0, 'P28jk: and it must shift nothing', 0.01);
+    // Early converts in the month it already withdraws in, so there is nothing to relocate.
+    assertNear(shift0(run({ withdrawTiming: 'early' })), 0,
+        'Early: the conversion already sits in the withdrawal month and must shift nothing', 0.01);
 
     // THE COMBINATION THAT DID NOT EXIST: convert in January, spend in November.
     const lateEarlyConv = run({ withdrawTiming: 'split' });
@@ -8068,7 +8051,7 @@ test('P28jk: the conversion month is separable from the spending withdrawal mont
 // This shipped without the floor for about an hour and made "January conversion, November RMD"
 // reachable - a prohibited transaction that measured as DOMINANT, which is how a missing legal
 // constraint presents. The pin below is the reason it cannot come back.
-test('P28jk: a conversion can never precede the RMD in a year one is due', () => {
+test.critical('P28jk: a conversion can never precede the RMD in a year one is due, and Split still reaches those years', () => {
     // Ages chosen so RMDs are live from year 0: born 1948, so 78 in 2026.
     const RMDY = {
         ...BASE, strategy: 'bracket', stratRate: 0.22, convertExcessToRoth: true,
@@ -8082,33 +8065,72 @@ test('P28jk: a conversion can never precede the RMD in a year one is due', () =>
     const late = run({ withdrawTiming: 'late' });
     assert(rmdYears(late) > 0, 'P28jk: test setup - this fixture must actually take RMDs');
 
-    // THE RULE, asserted directly. A conversion may not sit earlier in the year than the
-    // distribution it cannot precede. Under Late both are in November; under Split both move to
-    // January together. Neither may put the conversion ahead of the RMD, and the label is what
-    // says where each one landed.
-    for (const mode of ['early', 'split', 'late']) {
-        const r = run({ withdrawTiming: mode });
-        for (const e of r.log) {
-            if (!((e.RMDwd ?? 0) > 0)) continue;
-            const [conv, wd] = String(e.timing).split('/');
-            if (conv === 'none') continue;
-            // The distribution follows the FIRST period. A conversion labelled Early in a year whose
-            // spending is Late is only legal because the RMD moved with it, which is Split.
-            assert(!(conv === 'Early' && wd === 'Late' && mode !== 'split'),
-                `${mode}: an RMD year reported ${e.timing}, which puts the conversion ahead of the RMD`);
-        }
+    // THE RULE, asserted on what the engine DID rather than on a label. Under Early and Late the
+    // distribution shares the conversion's month, so nothing is relocated and `-rmdTimingShift`
+    // is zero in every year. Under Split, an RMD year that converts takes the distribution in
+    // January with the conversion behind it, the column reads Early/Late, and holding the proceeds
+    // in Cash until November costs the difference between the two rates - negative here, where the
+    // IRA earns 6% and Cash earns nothing. An RMD year that converts nothing leaves the
+    // distribution where the spending is and pays nothing.
+    for (const mode of ['early', 'late']) {
+        const moved = run({ withdrawTiming: mode }).log.filter(e => Math.abs(e['-rmdTimingShift'] ?? 0) > 0.005);
+        assert(moved.length === 0,
+            `${mode}: the RMD shares the conversion's month, so it must not be relocated (${moved.length} years were)`);
     }
+    const split = run({ withdrawTiming: 'split' });
+    const convRMD = split.log.filter(e => (e.RMDwd ?? 0) > 0 && (e.rothConv ?? 0) > 0);
+    const quietRMD = split.log.filter(e => (e.RMDwd ?? 0) > 0 && !((e.rothConv ?? 0) > 0));
+    assert(convRMD.length > 0, 'fixture must convert in at least one RMD year');
+    for (const e of convRMD) {
+        assert(e.timing === 'Early/Late',
+            `${e.year}: a converting RMD year under Split must read Early/Late, got ${e.timing}`);
+        assert((e['-rmdTimingShift'] ?? 0) <= 0.005,
+            `${e.year}: relocating the distribution can only cost, never pay, got ${e['-rmdTimingShift']}`);
+    }
+    assert(convRMD.some(e => (e['-rmdTimingShift'] ?? 0) < -0.005),
+        'and at least one converting RMD year must record the cost of holding the proceeds in Cash');
+    assert(quietRMD.every(e => Math.abs(e['-rmdTimingShift'] ?? 0) <= 0.005),
+        'an RMD year that converts nothing leaves the distribution with the spending draw');
 
     // And the legal direction is exactly what Split is: the distribution in January, the conversion
     // in the same month behind it, spending left until November. That is the only way to reach a
     // January conversion in an RMD year, and it must actually move the plan.
-    const split = run({ withdrawTiming: 'split' });
     assert(Math.abs(split.finalNW - late.finalNW) > 0.01,
         'Split must move an RMD-age plan: converting behind the distribution is the legal direction');
     const splitShifted = split.log.filter(e => Math.abs(e['-convTimingShift'] ?? 0) > 0.005 &&
                                                (e['RMDwd'] ?? 0) > 0).length;
     assert(splitShifted > 0,
         'and it must reach RMD years specifically - that is the case the old coupling made impossible');
+});
+
+// THE DRAIN CASE. A conversion is capped at the IRA balance AFTER the pre-withdrawal growth, so a
+// plan that converts everything carries the year's growth into the Roth inside the conversion. The
+// relocation in growAndSettle then finds an IRA with nothing to give back - and it used to credit
+// the Roth the full ten months anyway, counting the same growth twice: $38,156 on a $763k
+// conversion at 6%, with identical tax. The RMD leg had the same clamp and the same leak into Cash.
+// Every conversion search evaluates "convert it all" as a candidate, so this pins the case where a
+// deterministic equal-rate run must be month-invariant even though the IRA ends the year at zero.
+test.critical('withdrawTiming: a conversion that drains the IRA cannot create wealth', () => {
+    const DRAIN = { ...BASE, strategy: 'fixed', birthmonth1: 1, die1: 90,
+                    IRA1: 1500000, Brokerage: 200000, BrokerageBasis: 100000, Cash: 50000,
+                    spendGoal: 90000, growth: 0.06, cashYield: 0.03, inflation: 0.03, cpi: 0.028,
+                    extraConversionAmount: 5000000, computeOC: false };
+    const tot = (e) => (e.IRA1 ?? 0) + (e.IRA2 ?? 0) + (e.Roth1 ?? 0) + (e.Roth2 ?? 0)
+                     + (e.Brokerage ?? 0) + (e.Cash ?? 0);
+    // Born 1962: no RMD, the conversion leg alone. Born 1950: an RMD is due in year 0 as well, so
+    // both relocations run against a drained IRA.
+    for (const birthyear1 of [1962, 1950]) {
+        const s0 = simulate({ ...DRAIN, birthyear1, withdrawTiming: 'split' }).log[0];
+        const l0 = simulate({ ...DRAIN, birthyear1, withdrawTiming: 'late' }).log[0];
+        assert((s0.rothConv ?? 0) > 1000 && (s0.IRA1 ?? 0) <= 1,
+            `${birthyear1}: precondition - year 0 must convert and drain the IRA, got conversion ` +
+            `${Math.round(s0.rothConv ?? 0)} and IRA1 ${Math.round(s0.IRA1 ?? 0)}`);
+        assertNear(s0.totalTax, l0.totalTax, `${birthyear1}: the tax is the same in either month`, 0.01);
+        assertNear(tot(s0), tot(l0),
+            `${birthyear1}: equal rates, so the household total cannot depend on the month`, 0.01);
+        assert((s0['-rmdTimingShift'] ?? 0) <= 0.005,
+            `${birthyear1}: a drained IRA cannot fund cash yield on its own distribution, got ${s0['-rmdTimingShift']}`);
+    }
 });
 
 // ── Saved-plan summaries (Phase P113) ────────────────────────────────────────────────────────

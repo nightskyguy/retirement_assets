@@ -4091,14 +4091,24 @@ function growAndSettle(sim, yr) {
                 if (X <= 0) continue;
                 const toRoth = X * (yr.growthRates['Roth' + i] ?? 0) * _months / 12;
                 const fromIRA = X * (yr.growthRates['IRA' + i] ?? 0) * _months / 12;
-                // Never drive a drained IRA negative; a balance that cannot give the growth back
-                // simply gives what it has, and the asymmetry is reported rather than hidden.
+                // THE IRA MAY NOT HAVE IT TO GIVE, AND THEN THE ROTH MAY NOT RECEIVE IT. A conversion
+                // is capped at the IRA balance AFTER the pre-withdrawal growth, so a conversion that
+                // drains the IRA carried that growth into the Roth already - it is inside X. Taking
+                // only what the balance can cover was always right; crediting the Roth the full
+                // amount regardless was not. It counted the same ten months of growth twice and
+                // manufactured X * g * 10/12 of wealth at identical tax: $38,156 on a $763k
+                // conversion at 6%, and $631,051 of ending net worth on one bank household asked to
+                // convert everything. Reachable by any "convert it all" candidate, which is exactly
+                // what the conversion searches try. The Roth now receives the same FRACTION the IRA
+                // surrendered. When the IRA's own rate is zero nothing was owed and nothing is
+                // withheld, so the Roth keeps its full credit at its own rate.
                 const take = Math.min(fromIRA, balance['IRA' + i] ?? 0);
-                balance['Roth' + i] = (balance['Roth' + i] ?? 0) + toRoth;
+                const credit = toRoth * (fromIRA > 0 ? take / fromIRA : 1);
+                balance['Roth' + i] = (balance['Roth' + i] ?? 0) + credit;
                 balance['IRA' + i] = (balance['IRA' + i] ?? 0) - take;
-                yr.gains['Roth' + i] = (yr.gains['Roth' + i] ?? 0) + toRoth;
+                yr.gains['Roth' + i] = (yr.gains['Roth' + i] ?? 0) + credit;
                 yr.gains['IRA' + i] = (yr.gains['IRA' + i] ?? 0) - take;
-                _shifted += toRoth;
+                _shifted += credit;
             }
             yr.convTimingShift = _shifted;   // surfaced as the hidden '-convTimingShift' column
         }
@@ -4140,22 +4150,28 @@ function growAndSettle(sim, yr) {
     const _convertsThisYear = (yr.surplus.Roth1 ?? 0) > 0 || (yr.surplus.Roth2 ?? 0) > 0;
     const _rmdShiftMonths = _convertsThisYear ? (12 - yr.postMonths) - yr.rmdMonth : 0;
     if (_rmdShiftMonths > 0) {
-        let _cashBase = 0, _pulled = 0;
+        let _cashBase = 0, _pulled = 0, _owed = 0;
         for (const i of [1, 2]) {
             const _out = yr['_iraOut' + i] ?? 0;
             if (_out > 0) {
                 const _giveBack = _out * (yr.growthRates['IRA' + i] ?? 0) * _rmdShiftMonths / 12;
-                // Same clamp as the conversion leg: a drained IRA gives what it has, and the
-                // asymmetry is reported rather than hidden.
+                // Same clamp as the conversion leg, and the same rule below it: a drained IRA gives
+                // what it has, and the household is credited only in that proportion.
                 const _take = Math.min(_giveBack, balance['IRA' + i] ?? 0);
                 balance['IRA' + i] = (balance['IRA' + i] ?? 0) - _take;
                 yr.gains['IRA' + i] = (yr.gains['IRA' + i] ?? 0) - _take;
                 _pulled += _take;
+                _owed += _giveBack;
             }
             _cashBase += yr['_toCash' + i] ?? 0;
         }
         if (_cashBase > 0) {
-            const _toCash = _cashBase * (yr.growthRates.Cash ?? 0) * _rmdShiftMonths / 12;
+            // Cash yield on the same FRACTION of the proceeds the IRA could give the growth back
+            // on. When a conversion drains the IRA in the same year, the growth on the distribution
+            // went to the Roth inside that conversion; crediting Cash for it as well counted it
+            // twice, at identical tax. Nothing owed means nothing withheld.
+            const _frac = _owed > 0 ? _pulled / _owed : 1;
+            const _toCash = _cashBase * (yr.growthRates.Cash ?? 0) * _rmdShiftMonths / 12 * _frac;
             balance.Cash = (balance.Cash ?? 0) + _toCash;
             // Into yr.gains as well, or cashG under-reports it - the defect the tax-settlement
             // credit above records in its own comment.

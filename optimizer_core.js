@@ -1220,6 +1220,10 @@ function buildSimYearLogRecord(p) {
         // harvest year. 0 in every other year. Its residual against `-fedTaxableInc` minus
         // realized gains is the one-pass estimate's error.
         '-ltcgFloor': p._ltcgFloor ?? 0,
+        // The net dollars the RMD's own month moved: cash yield gained on the proceeds MINUS the
+        // IRA growth given back. Negative whenever the IRA out-earns cash, which is the usual
+        // case and is the real cost of taking the distribution early. 0 unless a mode moves it.
+        '-rmdTimingShift': p.rmdTimingShift ?? 0,
         // Tax-rate creep multipliers actually applied this year (1 = today's statutory rates).
         '-fedRateCreep': p.fedRateCreep,
         '-stateRateCreep': p.stateRateCreep,
@@ -1647,6 +1651,7 @@ function resolveHousehold(sim, yr) {
     yr.forcedIRA = 0;      // soft-cap break: IRA drawn ABOVE the ceiling to fund mandatory spending
     yr.acaBreach = false;  // strict ACA cap could not fund spending → plan untenable this year
     yr.acaMAGI = 0;        // P87d: MAGI on the ACA statute's definition (see ceilingMAGI below)
+    yr.rmdTimingShift = 0; // net effect of taking the RMD earlier than the spending draw
     yr._ltcgFloor = 0;     // the LTCG room's ordinary-taxable floor, set only in a harvest year
 
     // Soft caps (Fill Federal Bracket / IRMAA Tier / IRA Draw %): when spending can't be met
@@ -1849,6 +1854,12 @@ function computeIncome(sim, yr) {
 
     yr.totalRMD = _qcdOut1 + _rmdOut1 + _qcdOut2 + _rmdOut2;    // realized, not merely required
     yr.taxableRMD = _rmdOut1 + _rmdOut2;                        // taxable portion (excludes QCDs)
+    // Per spouse, and split by DESTINATION rather than by tax treatment, because the RMD timing leg
+    // in growAndSettle needs both halves and they do not go to the same place. Every distributed
+    // dollar leaves the IRA and stops earning the IRA's rate; only the non-QCD part reaches the
+    // household and can sit in Cash. A QCD goes to charity and earns the household nothing.
+    yr._iraOut1 = _qcdOut1 + _rmdOut1;   yr._iraOut2 = _qcdOut2 + _rmdOut2;
+    yr._toCash1 = _rmdOut1;              yr._toCash2 = _rmdOut2;
     yr.totalIRAForcedWithdrawals = _qcdOut1 + _rmdOut1 + _qcdOut2 + _rmdOut2; // actual IRA outflow
     yr.taxableInc += yr.taxableRMD;                                       // only non-QCD RMDs are income
     // SPENDABLE income only. Dividends and interest are taxable (they reach calculateTaxes through
@@ -4093,6 +4104,59 @@ function growAndSettle(sim, yr) {
         }
     }
 
+    // ── The RMD's own month ───────────────────────────────────────────────────────────────────
+    // Sibling of the conversion shift above, and here for the same reason: an after-growth
+    // ARITHMETIC CORRECTION, not a third call to applyGrowth. A genuine third segment would be
+    // measurably wrong, not merely inelegant - `applyGrowth` is simple proportional, so a year cut
+    // into 1/10/1 manufactures `21g^2/144` of growth against `11g^2/144` for both 1/11 and 11/1.
+    // That is about 2.5 bp of the whole balance a year at 6%, and it would land on Split ALONE,
+    // putting a mode-correlated artifact exactly on the Early/Split/Late comparison this control
+    // exists to let a user make. See findings.md, "Splitting a year into more growth segments
+    // MANUFACTURES growth".
+    //
+    // WHAT IS BEING CORRECTED. The distribution is subtracted in resolveHousehold, which runs after
+    // the pre-withdrawal growth call, so the engine has already credited the IRA with `preMonths` of
+    // growth on money that - in a mode taking the RMD early - left in month `rmdMonth`. Two entries:
+    // take back the IRA growth that did not happen, and credit the household the cash yield that
+    // did, for the months the proceeds actually sat there waiting to be spent.
+    //
+    // THE DESTINATION IS THE LOAD-BEARING CHOICE. Cash at the cash yield, never the surplus
+    // destinations at their own rate. Crediting it back at the rate it left at would make an early
+    // RMD cost exactly zero deterministically, and Split would arrive as a free lunch - the same
+    // shape as the "$0 deterministically" claim this phase already had to retract once. An RMD taken
+    // in January to unlock a January conversion really does sit in cash until November, and the
+    // difference between the two rates is what the choice actually costs.
+    //
+    // The amount itself never moves: P84l fixes it off the prior December 31 balance, so it is
+    // month-independent by regulation. Only its growth is relocated.
+    const _rmdShiftMonths = (12 - yr.postMonths) - yr.rmdMonth;
+    if (_rmdShiftMonths > 0) {
+        let _cashBase = 0, _pulled = 0;
+        for (const i of [1, 2]) {
+            const _out = yr['_iraOut' + i] ?? 0;
+            if (_out > 0) {
+                const _giveBack = _out * (yr.growthRates['IRA' + i] ?? 0) * _rmdShiftMonths / 12;
+                // Same clamp as the conversion leg: a drained IRA gives what it has, and the
+                // asymmetry is reported rather than hidden.
+                const _take = Math.min(_giveBack, balance['IRA' + i] ?? 0);
+                balance['IRA' + i] = (balance['IRA' + i] ?? 0) - _take;
+                yr.gains['IRA' + i] = (yr.gains['IRA' + i] ?? 0) - _take;
+                _pulled += _take;
+            }
+            _cashBase += yr['_toCash' + i] ?? 0;
+        }
+        if (_cashBase > 0) {
+            const _toCash = _cashBase * (yr.growthRates.Cash ?? 0) * _rmdShiftMonths / 12;
+            balance.Cash = (balance.Cash ?? 0) + _toCash;
+            // Into yr.gains as well, or cashG under-reports it - the defect the tax-settlement
+            // credit above records in its own comment.
+            yr.gains.Cash = (yr.gains.Cash ?? 0) + _toCash;
+            yr.rmdTimingShift = _toCash - _pulled;
+        } else {
+            yr.rmdTimingShift = -_pulled;
+        }
+    }
+
     // Merge pre-growth gains so annual display stats (brokerageG / cashG / rothG) reflect full year.
     for (const k in yr.preGains) yr.gains[k] = (yr.gains[k] ?? 0) + (yr.preGains[k] ?? 0);
 
@@ -4213,7 +4277,7 @@ function logYear(sim, yr) {
         taxCarryCredit: yr.taxCarryCredit,
         convTimingShift: yr.convTimingShift,
         iraVolSpend1: yr.iraVolSpend1, iraVolSpend2: yr.iraVolSpend2, iraConvGross1: yr.iraConvGross1, iraConvGross2: yr.iraConvGross2,
-        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, rateBasis: yr.rateBasis, volIRAwd: yr.volIRAwd, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach, acaMAGI: yr.acaMAGI, _ltcgFloor: yr._ltcgFloor,
+        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, rateBasis: yr.rateBasis, volIRAwd: yr.volIRAwd, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach, acaMAGI: yr.acaMAGI, _ltcgFloor: yr._ltcgFloor, rmdTimingShift: yr.rmdTimingShift,
         balance: balance, nominalTaxRate: sim.nominalTaxRate, totalNetWealth: yr.totalNetWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
         gains: yr.gains, rmd1Pct: yr.rmd1Pct, subCycleLabel: yr.subCycleLabel, convNetValue: null, excessNetValue: null,
         incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,

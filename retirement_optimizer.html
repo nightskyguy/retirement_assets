@@ -1015,22 +1015,17 @@
 
 				<ul id="changelog-list">
 				<li data-flag="behavior"><b>11.17b1</b>
-					<strong>One control now decides when your money moves, and the default has changed.</strong>
+					<strong>A flaw was identified in the conversion/withdrawal timing and fixed.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li><strong>Every plan's numbers move, and a saved plan will not reproduce.</strong> The month used to be picked by a rule you could not see: a year that converted more than $1,000 pushed the <i>next</i> year's whole withdrawal into January and left it there. What a converting year wants early is the conversion, not the spending - and one year should not decide the next one. The new default, <strong>Split</strong>, converts early and spends late; <i>Early</i> and <i>Late</i> move everything together.</li>
-					<li><strong>Split was not reachable before.</strong> Your spending draw carried the required distribution with it, and a conversion may not come before that distribution, so "convert in January, spend in November" did nothing in any year a distribution was due. Across ten households that convert and reach distribution age, Split is ahead in seven and behind in one - and <strong>not one pays more tax or ends with a larger IRA</strong>. A year that converts nothing runs exactly as Late.</li>
-					</ul>
-					<strong>Fixed tax indexing has moved to the Monte Carlo tab.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>On the main sidebar it could not do anything - it changes how the tax code is indexed against each path's own inflation, and a single deterministic run has no such path. It now sits with the other simulation parameters, where it works.</li>
+					<li>The month in which conversions and withdrawals were modeled - as stated in the Annual Details - incorrectly moved the wrong operations and usually ended up costing more taxes, and resulted in less benefit. Now the tool properly moves conversions to January, and keeps withdrawal in November (this is called "Split" mode). There is a not-yet-public control to change that choice as well.</li>
 					</ul>
 					<strong>An ACA cap counts your whole Social Security benefit, and the tool now measures it that way.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>The income an ACA FPL cap is tested against includes the part of your benefit that is never taxed. Each year is now checked against that figure, so a year over the cap is reported as one. <strong>More ACA rows are flagged untenable (⚠️), and the Optimizer can rank them differently.</strong> Measured across 2,880 capped plan-years, one year in eight was over without saying so.</li>
+					<li>The income an ACA FPL cap is tested against includes part of your benefit that is never taxed. Each year is now checked against that figure, so a year over the cap is reported as one. <strong>More ACA rows are flagged untenable (⚠️), and the Optimizer can rank them differently.</strong> A previous plan may have failed to flag a year where the ACA Cap was breached.</li>
 					</ul>
-					<strong>Cycle Brokerage harvest years now fill the bracket they are aimed at.</strong>
+					<strong>Cycle Brokerage harvest year now fills the bracket they are aimed at.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>A harvest year was measuring its remaining capital-gains room against the wrong income, counting your whole Social Security benefit and ignoring your deduction, so it stopped short of the 0% or 15% bracket it was told to fill. It also now respects your chosen income limit on every path. Plans with <i>Cycle Brokerage</i> on realize more gains in a harvest year and will show different lifetime tax and ending wealth, and a saved plan using it will not reproduce. <strong>Where your Limit is what holds the harvest down, nothing changes</strong>; the plans that move are those whose limit sits high enough that the capital-gains bracket was the real constraint.</li>
+					<li>A harvest year was measuring its remaining capital-gains room against the wrong income, counting your whole Social Security benefit and ignoring your deduction, so it stopped short of the 0% or 15% bracket it was intended to fill. It also now respects your chosen income limit on every path. Plans with <i>Cycle Brokerage</i> on realize more gains in a harvest year and will show different lifetime tax and ending wealth. <strong>Where your Limit is what holds the harvest down, nothing changes</strong>; the plans that move are those whose limit sits high enough that the capital-gains bracket was the real constraint.</li>
 					</ul>
 					<strong>Each entry in the Limit menu now says which income it measures.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1038,16 +1033,11 @@
 					</ul>
 					<strong>A plan asking for an ACA cap nobody in it can use now says so.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>The caps are available only while someone in the plan is still under 65 when it starts. Opening such a link or saved plan now loads <strong>Below IRMAA</strong> and names both limits, instead of moving the <i>Limit</i> to the far tighter <i>10% Fed</i> without a word.</li>
+					<li>The caps are applicable only while someone in the plan is still under 65 when it starts. Opening a link or saved plan that does not support ACA limits now loads the <strong>Below IRMAA</strong> bracket. Previous it silently chose the far tighter <i>10% Fed</i>.</li>
 					</ul>
 					<strong>Interest on cash is now taxed on what the cash actually earned.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li><strong>Every plan's tax moves a little.</strong> Interest used to be taxed on the cash balance at the moment of the withdrawal, times a full year's yield, so cash you spent was taxed on interest it never earned and cash that arrived later in the year - a banked surplus, a required distribution taken in January - was never taxed on its interest at all. Each year now checks what the cash actually earned and carries the difference into the next year. Under 2% of lifetime tax on the reference households; no plan changes rank.</li>
-					</ul>
-					<strong>The page paints sooner.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>Its self-check tests now run after the first paint instead of before it, and the engine test suites no longer re-run in your browser on every visit; they run on every commit instead. Hover over the green dot for what was checked, or add <code>?runtests</code> to the address to run everything on the page.</li>
-					</ul>
+					<li><strong>Every plan's tax moves a little.</strong> Interest was taxed on the cash balance at the moment of the withdrawal times a full year's yield. The net is that cash you spent was taxed on interest it never earned and not interest on cash that arrived later in the year. A required distribution taken in cash in January was not taxed on its interest at all. Each year now checks what the cash actually earned and carries the difference into the next year. Generally the error was small. Now the tool is more likely to over calculate and over tax slightly because it does not know exactly when you spend.</li>
 					<a href="optimizer_changelog.md#11.17b1" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="behavior"><b>11.1779</b>

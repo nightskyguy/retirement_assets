@@ -12,15 +12,15 @@ function runTests() {
 	/**
 	 * UNSAFE TESTS: the ones that write to live page state.
 	 *
-	 * runTests() is called at TOP LEVEL from retirement_optimizer.html (the DOMContentLoaded
-	 * registration next to it is commented out), so this whole suite runs BEFORE the boot sequence:
-	 * before captureDefaults(), before loadScenarioByName('default'), and before loadFromURL().
-	 * Anything a test leaves behind is therefore not a cosmetic smudge - it is the state the page
-	 * then treats as pristine:
+	 * runTests() is called from retirement_optimizer.html's idle callback, AFTER the boot sequence
+	 * (captureDefaults(), loadScenarioByName('default'), loadFromURL(), the first runSimulation())
+	 * and after first paint. Until 11.17b0 it ran at top level, before all of that. Either way,
+	 * anything a test leaves behind is the plan the reader is now looking at, and on the old order
+	 * it was worse still - the state the page then treated as pristine:
 	 *
-	 *   - captureDefaults() snapshots it as OPT_DEFAULTS, which Share uses to decide which fields
-	 *     it may OMIT from a share link. A polluted snapshot silently drops real fields from a
-	 *     shared URL, or carries junk into one.
+	 *   - captureDefaults() snapshots the controls as OPT_DEFAULTS, which Share uses to decide which
+	 *     fields it may OMIT from a share link. A polluted snapshot silently drops real fields from
+	 *     a shared URL, or carries junk into one.
 	 *   - a saved scenario and a URL both merge ONTO the live controls; a field the incoming data
 	 *     does not mention keeps whatever the test left.
 	 *   - the reader simply sees a plan they never entered.
@@ -278,7 +278,6 @@ function runTests() {
 			{"401k_Main": 1250, "529_College": 525, "IRA-Spouse": 400},
 			"applyGrowth: 6 months with special characters in account names"
 		);
-
 
 
 	
@@ -713,21 +712,6 @@ assertEqual(
     'calculateWithdrawals: Different order - Roth and IRA prioritized with taxes'
 );
 
-	// These use TEST data and should NOT need to be changed.
-    assertEqual(findLimitByRate('TEST', 'MFJ', 0.2, 1), {limit: 2000, rate: 0.2}, 
-                'findLimitByRate: TEST MFJ 20% rate correct');
-    
-    assertEqual(findLimitByRate('TEST', 'SGL', 0.2, 3), {limit: 3000, rate: 0.2}, 
-                'findLimitByRate: TEST SGL 20% rate w/ 300% inflation');	
-
-    assertEqual(findLimitByRate('TEST', 'SGL', 0.9, 1), {limit: 20000, rate: 0.8}, 
-                'findLimitByRate: TEST SGL 90% - finds lower rate: 80%');	
-    
-    assertEqual(findLimitByRate('TEST', 'SGL', 0.05, 1), {limit: 0, rate: 0}, 
-                'findLimitByRate: TEST SGL 5% finds no limit or rate (0)');	
-
-    assertEqual(findUpperLimitByAmount('TEST', 'SGL', 998, 1), {"limit": 999,"rate": 0.1, "nominalRate": 0.1}, 
-                'findUpperLimitByAmount: TEST SGL 998 finds limit: 999, rate: 0.1');
 				
 	// getInputs() requires live DOM - test manually in retirement_optimizer.html or in a future Playwright/DOM test suite
 	// assertEqual(getInputs(), { ... }, 'getInputs()')
@@ -749,18 +733,6 @@ assertEqual(
 		'calculateAmortizedWithdrawal(950, 1000, 5, 0.1) = 86.81');			
 
 				
-	// 😭😭😭 NOTE NOTE NOTE: All of the following tests are sensitive to the real TAXData. 😭😭😭
-
-    assertEqual(findLimitByRate('FEDERAL', 'MFJ', 0.24, 1), {limit: 403550, rate: 0.24}, 
-                '😭findLimitByRate: FEDERAL MFJ 24% bracket');
-	
-    assertEqual(findLimitByRate('CA', 'SGL', 0.06, 1), { limit: 55867, rate: 0.06 },
-                '😭findLimitByRate: State SGL 6% bracket');
-
-		
-	assertEqual(calculateProgressive('SOCIALSECURITY', 'MFJ', 55000).marginal, 
-		0.85,
-		'😭calculateProgressive(SOCIALSECURITY, MFJ, 55000) CHANGES with SOCIALSECURITY data.')
 
 	// RMD Percentages.  First should be 0, second should match.
     // RMD percentage lookup
@@ -774,81 +746,6 @@ assertEqual(
 	assertEqual(getRMDPercentage(1950+76, 1950), 0.042,
 			'getRMDPercentage for age 76, birth year 1950 correct (4.2%)');
 
-	assertEqual(calcIRMAA(100, 'SGL', 1), 0,
-				'😭calcIRMAA  0 for SGL at 100 income');
-
-	assertEqual(calcIRMAA(109001, 'SGL', 1, 1), 12 * 202.9,
-				'😭calcIRMAA  202.9 for 109001 SGL income');
-
-	assertEqual(calcIRMAA(273999, 'MFJ', 1, 1.5), 1.5 * 2 * (12 * 202.90),
-				'😭calcIRMAA no CPI, 1.5 medicareRate @ 273999 MFJ income');    
-
-	assertEqual(calcIRMAA(274000, 'MFJ', 1, 1), 12 * 2 * (284.10 + 14.50),
-				'😭calcIRMAA  2 * (284.10 + 14.50) for 274000 MFJ income');
-
-	assertEqual(calcIRMAA(218000, 'MFJ', 2, 1), 0,
-				'😭calcIRMAA  2 * (284.10 + 14.50) for 218000 MFJ income at 2');
-
-	// Per-person Medicare gate (onMedicareCount param). MFJ bracket rates are household
-	// (2x per-person) totals; count scales them to who is actually 65+.
-	assertEqual(calcIRMAA(274000, 'MFJ', 1, 1, 1), 12 * (284.10 + 14.50),
-				'😭calcIRMAA MFJ one spouse on Medicare = half the household surcharge');
-
-	assertEqual(calcIRMAA(274000, 'MFJ', 1, 1, 0), 0,
-				'😭calcIRMAA MFJ neither spouse 65+ = no surcharge');
-
-	assertEqual(calcIRMAA(274000, 'MFJ', 1, 1, 2), 12 * 2 * (284.10 + 14.50),
-				'😭calcIRMAA MFJ both on Medicare = full household surcharge');
-
-	assertEqual(calcIRMAA(274000, 'MFJ', 1, 1, 3), 12 * 2 * (284.10 + 14.50),
-				'😭calcIRMAA MFJ count clamps at 2 persons');
-
-	assertEqual(calcIRMAA(109001, 'SGL', 1, 1, 1), 12 * 202.9,
-				'😭calcIRMAA SGL on Medicare = full single surcharge');
-
-	assertEqual(calcIRMAA(109001, 'SGL', 1, 1, 0), 0,
-				'😭calcIRMAA SGL under 65 = no surcharge');
-
-	assertEqual(calculateProgressive('TEST','MFJ',72000), 
-		{"cumulative": 30700, "total": 30700, "marginal": 0.8, "limit": 40000, "nominalRate": 0.4}, 
-		'calculateProgressive(TEST, MFJ, 72000) ok')	
-
-	assertEqual(calculateProgressive('TEST','SGL',72000), 
-		{"cumulative": 15350,"total": 15350,"marginal": 0.8,"limit": 20000,"nominalRate": 0.45}, 
-		'calculateProgressive(TEST,SGL,72000) ok')
-		
-	assertEqual(calculateProgressive('NONEXISTENT','SGL',72000), 
-		{  "cumulative": 0,
-  "total": 0,
-  "marginal": 0,
-  "limit": 0,
-  "error": "Invalid entity (NONEXISTENT) or status (SGL)"}, 
-		'calculateProgressive(NONEXISTENT,...) ok')
-
-	assertEqual(calculateProgressive('TEST','NONEXISTENT',72000),
-		{  "cumulative": 0,
-  "total": 0,
-  "marginal": 0,
-  "limit": 0,
-  "error": "Invalid entity (TEST) or status (NONEXISTENT)"},
-		'calculateProgressive(TEST,NONEXISTENT,...) ok')
-
-	// INFLATION_INDEXED: false - MT/ND/AL/OH/SC brackets must NOT inflate regardless of passed inflation value.
-	const mtBase     = calculateProgressive('MT', 'MFJ', 50000, 1.0);
-	const mtInflated = calculateProgressive('MT', 'MFJ', 50000, 1.1);
-	assertEqual(mtBase.total, mtInflated.total,
-		'MT (INFLATION_INDEXED:false) - bracket inflation ignored, tax same at inflation=1.1 vs 1.0')
-	assertEqual(mtBase.marginal, mtInflated.marginal,
-		'MT marginal rate unchanged with inflation=1.1')
-	const ndBase     = calculateProgressive('ND', 'SGL', 60000, 1.0);
-	const ndInflated = calculateProgressive('ND', 'SGL', 60000, 1.1);
-	assertEqual(ndBase.total, ndInflated.total,
-		'ND (INFLATION_INDEXED:false) - bracket inflation ignored')
-	// CA IS indexed - inflation=1.1 widens brackets → less tax at same income
-	const caBase     = calculateProgressive('CA', 'MFJ', 200000, 1.0);
-	const caInflated = calculateProgressive('CA', 'MFJ', 200000, 1.1);
-	assertEqual(caBase.total > caInflated.total, true,
-		'CA (indexed) - inflation=1.1 widens brackets, lowers tax vs inflation=1.0')
 
 	assertEqual(Math.round(calculateInflationAdjustedWithdrawal(1000000, 0.07, 0.03, 30),0), 57830,
 		'calculateInflationAdjustedWithdrawal(1000000, 0.07, 0.03, 30) (growth > inflation)')
@@ -865,717 +762,10 @@ assertEqual(
 	assertEqual(Math.round(calculateInflationAdjustedWithdrawal(-1000, -0.03, 0.00, 30),0), 0,
 		'calculateInflationAdjustedWithdrawal(-1000, 0.07, 0.03, 30) (principal < 0)')		
 
-	// ============================================================================
-	// Add TESTTAXATION state to TAXData for testing purposes
-	// ============================================================================
-	TAXData.TESTTAXATION = {
-		STATE: 'Test State',
-		YEAR: 2026,
-		SSTaxation: 0.00,  // Does not tax Social Security
-		MFJ: {
-			std: 10000,  // Simple round number for testing
-			brackets: [
-				{ l: 50000, r: 0.05 },
-				{ l: 100000, r: 0.10 },
-				{ l: Infinity, r: 0.15 }
-			]
-		},
-		SGL: {
-			std: 5000,  // Simple round number for testing
-			brackets: [
-				{ l: 25000, r: 0.05 },
-				{ l: 50000, r: 0.10 },
-				{ l: Infinity, r: 0.15 }
-			]
-		}
-	};
 
-	// ============================================================================
-	// TEST CASE 1: Simple - Only SS income, below taxability threshold
-	// ============================================================================
-	function testCase1_OnlySSBelowThreshold() {
-		console.log('\n=== Test Case 1: Only SS Income, Below Threshold ===');
-		
-		const result = calculateTaxes({
-			filingStatus: 'SGL',
-			ages: [67],
-			earnedIncome: 0,
-			totalSS: 20000,
-			ordDivInterest: 0,
-			qualifiedDiv: 0,
-			capGains: 0,
-			taxExemptInterest: 0,
-			hsaContrib: 0,
-			inflation: 1.0,
-			state: 'TESTTAXATION'
-		});
-		
-		// Provisional income = 0 + 0.5 * 20000 = 10,000 (below $25,000 threshold)
-		assertEqual(result.provisionalIncome, 10000, 'Provisional Income');
-		assertEqual(result.taxableSS, 0, 'Taxable SS (should be 0)');
-		assertEqual(result.AGI, 0, 'AGI (no taxable income)');
-		assertEqual(result.federalTax, 0, 'Federal Tax');
-		assertEqual(result.stateTax, 0, 'State Tax');
-		assertEqual(result.totalTax, 0, 'Total Tax');
-	} // testCase1_OnlySSBelowThreshold()
-
-	// ============================================================================
-	// TEST CASE 2: SS with 50% taxability (between thresholds)
-	// ============================================================================
-	function testCase2_SS50PercentTaxable() {
-		console.log('\n=== Test Case 2: SS 50% Taxable (MFJ) ===');
-		
-		const result = calculateTaxes({
-			filingStatus: 'MFJ',
-			ages: [64, 62],  // Under 65, no age bump
-			earnedIncome: 20000,
-			totalSS: 15000 + 15000,
-			ordDivInterest: 0,
-			qualifiedDiv: 0,
-			capGains: 0,
-			taxExemptInterest: 0,
-			hsaContrib: 0,
-			inflation: 1.0,
-			state: 'TESTTAXATION'
-		});
-		
-		// Provisional income = 20000 + 0.5 * 30000 = 35,000
-		// Between $32,000 and $44,000 thresholds
-		// Excess over $32,000 = 3,000
-		// Taxable SS = min(0.5 * 30000, 0.5 * 3000) = min(15000, 1500) = 1,500
-		assertEqual(result.provisionalIncome, 35000, 'Provisional Income');
-		assertEqual(result.taxableSS, 1500, 'Taxable SS (50% tier)');
-		assertEqual(result.AGI, 21500, 'AGI');
-		assertEqual(result.federalTaxableIncome, 0, 'Federal Taxable Income (below std deduction)');
-		assertEqual(result.federalTax, 0, 'Federal Tax');
-	} // testCase2_SS50PercentTaxable()
-
-	// ============================================================================
-	// TEST CASE 3: SS with 85% taxability (above second threshold)
-	// ============================================================================
-	function testCase3_SS85PercentTaxable() {
-		console.log('\n=== Test Case 3: SS 85% Taxable (MFJ) ===');
-		
-		const result = calculateTaxes({
-			filingStatus: 'MFJ',
-			ages: [70, 68],  // Both over 65, get age bumps
-			earnedIncome: 50000,
-			totalSS: 20000 + 20000,
-			ordDivInterest: 0,
-			qualifiedDiv: 0,
-			capGains: 0,
-			taxExemptInterest: 0,
-			hsaContrib: 0,
-			inflation: 1.0,
-			state: 'TESTTAXATION'
-		});
-		
-		// Provisional income = 50000 + 0.5 * 40000 = 70,000 (above $44,000)
-		assertEqual(result.provisionalIncome, 70000, 'Provisional Income');
-		
-		// Tier 1: 0.5 * (44000 - 32000) = 6,000
-		// Tier 2: 0.85 * (70000 - 44000) = 22,100
-		// Total: 28,100 (max would be 0.85 * 40000 = 34,000)
-		assertEqual(result.taxableSS, 28100, 'Taxable SS (85% tier)');
-		assertEqual(result.AGI, 78100, 'AGI');
-		assertEqual(result.federalStdDeduction, 35500, 'Federal Std Deduction with age bumps');
-		assertEqual(result.federalTaxableIncome, 42600, 'Federal Taxable Income');
-		
-		// Federal tax on 42,600:
-		// First $24,800 @ 10% = 2,480
-		// Remaining $17,800 @ 12% = 2,136
-		// Total = 4,616
-		assertEqual(result.federalTax, 4616, 'Federal Tax');
-	} // testCase3_SS85PercentTaxable()
-
-	// ============================================================================
-	// TEST CASE 4: Large Capital Gains (testing preferential rates)
-	// ============================================================================
-	function testCase4_LargeCapitalGains() {
-		console.log('\n=== Test Case 4: Large Capital Gains ===');
-		
-		const result = calculateTaxes({
-			filingStatus: 'MFJ',
-			ages: [55, 53],
-			earnedIncome: 60000,
-			totalSS: 0,
-			ordDivInterest: 5000,
-			qualifiedDiv: 10000,
-			capGains: 200000,  // Large cap gains
-			taxExemptInterest: 0,
-			hsaContrib: 0,
-			inflation: 1.0,
-			state: 'TESTTAXATION'
-		});
-		
-		// AGI = 60000 + 5000 + 10000 + 200000 = 275,000
-		assertEqual(result.AGI, 275000, 'AGI');
-		assertEqual(result.federalTaxableIncome, 242800, 'Federal Taxable Income');
-		assertEqual(result.ordinaryIncomeInAGI, 65000, 'Ordinary Income in AGI');
-		assertEqual(result.preferentialIncomeInAGI, 210000, 'Preferential Income in AGI');
-		assertEqual(result.taxableOrdinaryIncome, 32800, 'Taxable Ordinary Income');
-		assertEqual(result.taxablePreferentialIncome, 210000, 'Taxable Preferential Income');
-		
-		// Federal ordinary tax on 32,800:
-		// First $24,800 @ 10% = 2,480
-		// Remaining $8,000 @ 12% = 960
-		// Total ordinary = 3,440
-		assertEqual(result.federalOrdinaryTax, 3440, 'Federal Ordinary Tax');
-		
-		// Capital gains tax (position starts at 32,800):
-		// From 32,800 to 98,900 = 66,100 @ 0% = 0
-		// From 98,900 to 242,800 = 143,900 @ 15% = 21,585
-		assertEqual(result.capitalGainsTax, 21585, 'Capital Gains Tax');
-		// Highest CG bracket reached is 15% (gain ends at 242,800, below the 20% threshold)
-		assertEqual(result.capitalGainsRate, 0.15, 'Capital Gains Rate');
-		// NIIT: MAGI 275k - threshold 250k = 25k; NII 215k; 3.8% × 25k = 950
-		assertEqual(result.niitTax, 950, 'NIIT');
-		assertEqual(result.federalTax, 25975, 'Total Federal Tax');
-	} // testCase4_LargeCapitalGains()
-
-	// ============================================================================
-	// TEST CASE 5: Complex - Multiple income types with HSA
-	// ============================================================================
-	function testCase5_ComplexMultipleIncomes() {
-		console.log('\n=== Test Case 5: Complex Multiple Income Types ===');
-		
-		const result = calculateTaxes({
-			filingStatus: 'MFJ',
-			ages: [67, 65],  // Both get age bump
-			earnedIncome: 80000,
-			totalSS: 25000 + 18000,
-			ordDivInterest: 8000,
-			qualifiedDiv: 12000,
-			capGains: 15000,
-			taxExemptInterest: 5000,  // Tax-exempt interest
-			hsaContrib: 10000,
-			inflation: 1.0,
-			state: 'TESTTAXATION'
-		});
-		
-		// Provisional income = (80000 - 10000) + 8000 + 12000 + 15000 + 5000 + 0.5 * 43000
-		// = 70000 + 8000 + 12000 + 15000 + 5000 + 21500 = 131,500
-		assertEqual(result.provisionalIncome, 131500, 'Provisional Income');
-		
-		// Well above $44,000 threshold
-		// Tier 1: 0.5 * (44000 - 32000) = 6,000
-		// Tier 2: 0.85 * (131500 - 44000) = 74,375
-		// Total: 80,375, but max is 0.85 * 43000 = 36,550
-		assertEqual(result.taxableSS, 36550, 'Taxable SS (capped at 85%)');
-		
-		// Federal AGI = (80000 - 10000) + 36550 + 8000 + 12000 + 15000 = 141,550
-		assertEqual(result.AGI, 141550, 'Federal AGI');
-		
-		// IRMAA MAGI = AGI + tax-exempt interest = 141550 + 5000 = 146,550
-		assertEqual(result.MAGI, 146550, 'IRMAA MAGI');
-		
-		// Federal std deduction = 32200 + 1650 + 1650 = 35,500
-		assertEqual(result.federalStdDeduction, 35500, 'Federal Std Deduction');
-		
-		// State AGI (TEST state allows HSA deduction, no SS tax)
-		// = (80000 - 10000) + 0 + 8000 + 12000 + 15000 = 105,000
-		assertEqual(result.stateAGI, 105000, 'State AGI (TEST state)');
-	} // testCase5_ComplexMultipleIncomes()
-
-	// ============================================================================
-	// TEST CASE 6: High income testing NIIT inclusion in capital gains
-	// ============================================================================
-	function testCase6_HighIncomeNIIT() {
-		console.log('\n=== Test Case 6: High Income with NIIT ===');
-		
-		const result = calculateTaxes({
-			filingStatus: 'MFJ',
-			ages: [45, 43],
-			earnedIncome: 300000,
-			totalSS: 0,
-			ordDivInterest: 20000,
-			qualifiedDiv: 50000,
-			capGains: 400000,  // Large cap gains triggering NIIT
-			taxExemptInterest: 0,
-			hsaContrib: 0,
-			inflation: 1.0,
-			state: 'TESTTAXATION'
-		});
-		
-		// AGI = 300000 + 20000 + 50000 + 400000 = 770,000
-		assertEqual(result.AGI, 770000, 'AGI');
-		assertEqual(result.federalTaxableIncome, 737800, 'Federal Taxable Income');
-		assertEqual(result.taxableOrdinaryIncome, 287800, 'Taxable Ordinary Income');
-		assertEqual(result.taxablePreferentialIncome, 450000, 'Taxable Preferential Income');
-		
-		// Capital gains start at position 287,800 (well past 0% and 15% brackets)
-		// All 450,000 falls in 20% bracket: 450,000 @ 20% = 90,000
-		assertEqual(result.capitalGainsTax, 90000, 'Capital Gains Tax');
-		// Entire gain sits in the top 20% CG bracket
-		assertEqual(result.capitalGainsRate, 0.20, 'Capital Gains Rate');
-		// NIIT: MAGI 770k - threshold 250k = 520k; NII = 470k; 3.8% × min(470k, 520k) = 17,860
-		assertEqual(result.niitTax, 17860, 'NIIT Tax');
-	} // testCase6_HighIncomeNIIT()
-
-	// ============================================================================
-	// TEST CASE 7: Single filer with inflation adjustment
-	// ============================================================================
-	function testCase7_SingleWithInflation() {
-		console.log('\n=== Test Case 7: Single Filer with Inflation ===');
-		
-		const result = calculateTaxes({
-			filingStatus: 'SGL',
-			ages: [68],  // Gets age bump
-			earnedIncome: 50000,
-			totalSS: 30000,
-			ordDivInterest: 2000,
-			qualifiedDiv: 0,
-			capGains: 0,
-			taxExemptInterest: 0,
-			hsaContrib: 0,
-			inflation: 1.10,  // 10% inflation
-			state: 'TESTTAXATION'
-		});
-		
-		// Provisional income = 50000 + 2000 + 0.5 * 30000 = 67,000
-		assertEqual(result.provisionalIncome, 67000, 'Provisional Income');
-		
-		// SS thresholds are statutory (NOT inflation-indexed): t1=$25,000, t2=$34,000
-		// Provisional 67,000 > 34,000 (second threshold)
-		// Tier 1: 0.5 * (34000 - 25000) = 4,500
-		// Tier 2: 0.85 * (67000 - 34000) = 28,050
-		// Total: 32,550, max is 0.85 * 30000 = 25,500
-		assertEqual(result.taxableSS, 25500, 'Taxable SS (85% max, thresholds not inflated)');
-		
-		// Federal std deduction = (16100 + 2050) * 1.1 = 19,965
-		assertEqual(result.federalStdDeduction, 19965, 'Federal Std Deduction (inflated)');
-	} // testCase7_SingleWithInflation()
-
-	// ============================================================================
-	// TEST CASE 8: Edge case - exactly at 50% threshold
-	// ============================================================================
-	function testCase8_ExactlyAt50PercentThreshold() {
-		console.log('\n=== Test Case 8: Exactly at 50% Threshold ===');
-		
-		const result = calculateTaxes({
-			filingStatus: 'SGL',
-			ages: [66],
-			earnedIncome: 10000,
-			totalSS: 30000,
-			ordDivInterest: 0,
-			qualifiedDiv: 0,
-			capGains: 0,
-			taxExemptInterest: 0,
-			hsaContrib: 0,
-			inflation: 1.0,
-			state: 'TESTTAXATION'
-		});
-		
-		// Provisional income = 10000 + 0.5 * 30000 = 25,000 (exactly at first threshold)
-		assertEqual(result.provisionalIncome, 25000, 'Provisional Income (exactly at threshold)');
-		
-		// At exactly $25,000, we're at the boundary
-		// Should trigger 50% taxability for income above this
-		assertEqual(result.taxableSS, 0, 'Taxable SS (at threshold boundary)');
-	} // testCase8_ExactlyAt50PercentThreshold()
-
-	// ============================================================================
-	// TEST CASE 9: SS thresholds are NOT CPI-indexed (validates fix vs old bug)
-	// ============================================================================
-	function testCase9_SSThresholdsNotInflated() {
-		console.log('\n=== Test Case 9: SS Thresholds Not Inflation-Indexed ===');
-
-		const result = calculateTaxes({
-			filingStatus: 'SGL',
-			ages: [66],
-			earnedIncome: 8000,
-			totalSS: 40000,
-			ordDivInterest: 0,
-			qualifiedDiv: 0,
-			capGains: 0,
-			taxExemptInterest: 0,
-			hsaContrib: 0,
-			inflation: 1.5,  // 50% inflation - old code would inflate thresholds
-			state: 'TESTTAXATION'
-		});
-
-		// Provisional income = 8000 + 0.5 * 40000 = 28,000
-		// SS thresholds are NOT inflated: t1=25,000, t2=34,000
-		// 28,000 is in tier-1 band (25k–34k):
-		//   excessOver1 = 28000 - 25000 = 3,000
-		//   taxableSS = min(0.5 * 40000, 0.5 * 3000) = min(20000, 1500) = 1,500
-		// (Old buggy code: inflated t1=37,500 → provisional 28,000 < 37,500 → taxableSS=0)
-		assertEqual(result.provisionalIncome, 28000, 'Provisional Income');
-		assertEqual(result.taxableSS, 1500, 'Taxable SS (SS thresholds not CPI-indexed)');
-	} // testCase9_SSThresholdsNotInflated()
-
-	// ============================================================================
-	// TEST CASE 10: OBBBA senior deduction - full (below phase-out)
-	// ============================================================================
-	function testCase10_OBBASeniorDeductionFull() {
-		console.log('\n=== Test Case 10: OBBBA Senior Deduction Full (below phase-out) ===');
-
-		const result = calculateTaxes({
-			filingStatus: 'MFJ',
-			ages: [70, 68],  // Both seniors
-			earnedIncome: 50000,
-			totalSS: 20000,
-			ordDivInterest: 0,
-			qualifiedDiv: 0,
-			capGains: 0,
-			taxExemptInterest: 0,
-			hsaContrib: 0,
-			inflation: 1.0,
-			state: 'TESTTAXATION',
-			obbaOn: true
-		});
-
-		// Provisional income = 50000 + 0.5*20000 = 60000 > 44000
-		// Tier1=6000, Tier2=0.85*(60000-44000)=13600 → total=19600, max=0.85*20000=17000
-		// taxableSS=17000, AGI=50000+17000=67000
-		// OBBBA: 2 seniors, rawSenDed=12000, phaseoutExcess=max(0,67000-150000)=0
-		assertEqual(result.AGI, 67000, 'AGI');
-		assertEqual(result.seniorDeduction, 12000, 'Senior Deduction (full, below phase-out)');
-		assertEqual(result.useItemized, false, 'Not itemizing (SALT < std deduction)');
-	} // testCase10_OBBASeniorDeductionFull()
-
-	// ============================================================================
-	// TEST CASE 11: OBBBA senior deduction - partial phase-out
-	// ============================================================================
-	function testCase11_OBBASeniorDeductionPartial() {
-		console.log('\n=== Test Case 11: OBBBA Senior Deduction Partial Phase-Out ===');
-
-		const result = calculateTaxes({
-			filingStatus: 'MFJ',
-			ages: [70, 68],
-			earnedIncome: 200000,
-			totalSS: 0,
-			ordDivInterest: 0,
-			qualifiedDiv: 0,
-			capGains: 0,
-			taxExemptInterest: 0,
-			hsaContrib: 0,
-			inflation: 1.0,
-			state: 'TESTTAXATION',
-			obbaOn: true
-		});
-
-		// AGI = 200000; phaseoutExcess = 200000-150000 = 50000
-		// seniorDeduction = max(0, 12000 - 50000*0.06) = max(0, 12000-3000) = 9000
-		assertEqual(result.AGI, 200000, 'AGI');
-		assertEqual(result.seniorDeduction, 9000, 'Senior Deduction (partial phase-out)');
-	} // testCase11_OBBASeniorDeductionPartial()
-
-	// ============================================================================
-	// TEST CASE 12: OBBBA senior deduction - fully phased out
-	// ============================================================================
-	function testCase12_OBBASeniorDeductionZero() {
-		console.log('\n=== Test Case 12: OBBBA Senior Deduction Fully Phased Out ===');
-
-		const result = calculateTaxes({
-			filingStatus: 'MFJ',
-			ages: [70, 68],
-			earnedIncome: 350000,
-			totalSS: 0,
-			ordDivInterest: 0,
-			qualifiedDiv: 0,
-			capGains: 0,
-			taxExemptInterest: 0,
-			hsaContrib: 0,
-			inflation: 1.0,
-			state: 'TESTTAXATION',
-			obbaOn: true
-		});
-
-		// AGI = 350000; phaseoutExcess = 200000; reduction = 200000*0.06=12000 > 8000
-		// seniorDeduction = max(0, 8000-12000) = 0
-		assertEqual(result.AGI, 350000, 'AGI');
-		assertEqual(result.seniorDeduction, 0, 'Senior Deduction (fully phased out)');
-	} // testCase12_OBBASeniorDeductionZero()
-
-	// ============================================================================
-	// TEST CASE 13: SALT itemizing wins with OBBBA $40k cap
-	// ============================================================================
-	function testCase13_SALTItemizingWins() {
-		console.log('\n=== Test Case 13: SALT Itemizing Wins (OBBBA $40k cap) ===');
-
-		const result = calculateTaxes({
-			filingStatus: 'MFJ',
-			ages: [55, 53],
-			earnedIncome: 500000,
-			totalSS: 0,
-			ordDivInterest: 0,
-			qualifiedDiv: 0,
-			capGains: 0,
-			taxExemptInterest: 0,
-			hsaContrib: 0,
-			inflation: 1.0,
-			state: 'TESTTAXATION',
-			obbaOn: true,
-			saltHigh: true
-		});
-
-		// stateAGI=500000, std=10000, taxableState=490000
-		// stateTax = 50000*0.05 + 50000*0.10 + 390000*0.15 = 2500+5000+58500 = 66000
-		// SALT: min(66000+0, 40000)=40000; federalStd=32200 (no age bumps)
-		// 40000 > 32200 → useItemized=true, federalDeduction=40000
-		// federalAGI=500000; federalTaxableIncome=500000-40000=460000
-		assertEqual(result.useItemized, true, 'SALT itemizing wins');
-		assertEqual(result.federalStdDeduction, 40000, 'Federal deduction = SALT $40k cap');
-		assertEqual(result.federalTaxableIncome, 460000, 'Federal taxable income with SALT deduction');
-	} // testCase13_SALTItemizingWins()
-
-	// ============================================================================
-	// TEST CASE 14: SALT $10k cap never beats standard deduction
-	// ============================================================================
-	function testCase14_SALTCapNotWorth() {
-		console.log('\n=== Test Case 14: SALT $10k Cap Does Not Beat Std Deduction ===');
-
-		const result = calculateTaxes({
-			filingStatus: 'MFJ',
-			ages: [55, 53],
-			earnedIncome: 500000,
-			totalSS: 0,
-			ordDivInterest: 0,
-			qualifiedDiv: 0,
-			capGains: 0,
-			taxExemptInterest: 0,
-			hsaContrib: 0,
-			inflation: 1.0,
-			state: 'TESTTAXATION'
-			// obbaOn defaults false → saltCap=$10k
-		});
-
-		// stateTax=66000; SALT=min(66000,10000)=10000 < federalStd=32200
-		// → useItemized=false; federalDeduction=32200
-		assertEqual(result.useItemized, false, 'SALT $10k cap does not beat std deduction');
-		assertEqual(result.federalStdDeduction, 32200, 'Uses standard deduction');
-	} // testCase14_SALTCapNotWorth()
-
-	// ============================================================================
-	// TEST CASE 15: SALT cap mid-phase-out (MAGI $540k → cap reduced to $28k, below std ded)
-	// ============================================================================
-	function testCase15_SALTPhaseoutMid() {
-		console.log('\n=== Test Case 15: SALT Cap Mid Phase-Out ===');
-
-		const result = calculateTaxes({
-			filingStatus: 'MFJ',
-			ages: [55, 53],
-			earnedIncome: 540000,
-			totalSS: 0,
-			ordDivInterest: 0,
-			qualifiedDiv: 0,
-			capGains: 0,
-			taxExemptInterest: 0,
-			hsaContrib: 0,
-			inflation: 1.0,
-			state: 'TESTTAXATION',
-			obbaOn: true,
-			saltHigh: true
-		});
-
-		// saltMagi = 540000; excess = 540000-500000 = 40000
-		// saltCap = max(10000, 40000 - 40000*0.30) = max(10000, 28000) = 28000
-		// stateTax on 530000 (540000-10000 std) =
-		//   50000*0.05 + 50000*0.10 + 430000*0.15 = 2500+5000+64500 = 72000
-		// saltItemized = min(72000, 28000) = 28000 > federalStd=32200? No: 28000 < 32200
-		// → useItemized=false (phased-out cap fell below standard deduction)
-		assertEqual(result.useItemized, false, 'Phased-out SALT cap falls below std deduction');
-		assertEqual(result.federalStdDeduction, 32200, 'Uses standard deduction after phase-out');
-	} // testCase15_SALTPhaseoutMid()
-
-	// ============================================================================
-	// TEST CASE 16: SALT cap fully phased out (MAGI $550k → cap floors at $10k)
-	// ============================================================================
-	function testCase16_SALTPhaseoutFull() {
-		console.log('\n=== Test Case 16: SALT Cap Fully Phased Out ===');
-
-		const result = calculateTaxes({
-			filingStatus: 'MFJ',
-			ages: [55, 53],
-			earnedIncome: 550000,
-			totalSS: 0,
-			ordDivInterest: 0,
-			qualifiedDiv: 0,
-			capGains: 0,
-			taxExemptInterest: 0,
-			hsaContrib: 0,
-			inflation: 1.0,
-			state: 'TESTTAXATION',
-			obbaOn: true,
-			saltHigh: true
-		});
-
-		// saltMagi = 550000; excess = 50000; cap = max(10000, 40000-50000) = 10000 (floor)
-		// Behaves identically to saltHigh=false at this income level
-		assertEqual(result.useItemized, false, 'Fully phased-out SALT cap floors at $10k');
-		assertEqual(result.federalStdDeduction, 32200, 'Uses standard deduction (SALT floor = std ded)');
-	} // testCase16_SALTPhaseoutFull()
-
-	// ============================================================================
-	// TEST CASE 17: CT state taxes SS at 25%
-	// ============================================================================
-	function testCase17_CTStateSSTaxation() {
-		console.log('\n=== Test Case 15: Connecticut SS Taxation (25%) ===');
-
-		const result = calculateTaxes({
-			filingStatus: 'MFJ',
-			ages: [67, 65],
-			earnedIncome: 50000,
-			totalSS: 40000,
-			ordDivInterest: 0,
-			qualifiedDiv: 0,
-			capGains: 0,
-			taxExemptInterest: 0,
-			hsaContrib: 0,
-			inflation: 1.0,
-			state: 'CT'
-		});
-
-		// CT SSTaxation=0.25 → stateTaxableSS = 40000*0.25 = 10000
-		// stateAGI = 50000 + 10000 + 0 + 0 + 0 = 60000
-		// CT MFJ std = 24000 → stateTaxableIncome = 60000-24000 = 36000
-		assertEqual(result.stateAGI, 60000, 'CT stateAGI includes 25% of SS');
-		assertEqual(result.stateTaxableIncome, 36000, 'CT state taxable income');
-	} // testCase17_CTStateSSTaxation()
-
-	// ============================================================================
-	// TEST CASE 18: stateOrdinaryTax / stateCapGainsTax split
-	// ============================================================================
-	function testCase18_StateTaxSplit() {
-		console.log('\n=== Test Case 18: State Ordinary vs Cap Gains Tax Split ===');
-
-		const result = calculateTaxes({
-			filingStatus: 'MFJ',
-			ages: [55, 53],
-			earnedIncome: 100000,
-			totalSS: 0,
-			ordDivInterest: 0,
-			qualifiedDiv: 0,
-			capGains: 50000,
-			taxExemptInterest: 0,
-			hsaContrib: 0,
-			inflation: 1.0,
-			state: 'TESTTAXATION'
-		});
-
-		// stateAGI = 100000+50000 = 150000; std=10000; taxable=140000
-		// stateTax = 50000*0.05 + 50000*0.10 + 40000*0.15 = 2500+5000+6000 = 13500
-		// stateAGIOrdOnly = 150000-50000=100000; taxableOrdOnly=90000
-		// stateOrdinaryTax = 50000*0.05 + 40000*0.10 = 2500+4000 = 6500
-		// stateCapGainsTax = 13500-6500 = 7000
-		assertEqual(result.stateTax, 13500, 'Total state tax');
-		assertEqual(result.stateOrdinaryTax, 6500, 'State ordinary tax');
-		assertEqual(result.stateCapGainsTax, 7000, 'State cap gains tax');
-	} // testCase18_StateTaxSplit()
-
-	// ============================================================================
-	// TEST CASE 19: IL / PA full retirement exclusion regression (unchanged by the
-	// generalized RETIREMENT_EXCLUSION evaluator - mode:'full' behavior is untouched)
-	// ============================================================================
-	function testCase19_ILPARetirementExclusionRegression() {
-		console.log('\n=== Test Case 19: IL/PA Full Retirement Exclusion (regression) ===');
-
-		const il = calculateTaxes({
-			filingStatus: 'MFJ', ages: [70, 68],
-			earnedIncome: 50000, pensionIncome: 30000, iraIncome: 20000,
-			totalSS: 0, ordDivInterest: 5000, qualifiedDiv: 0, capGains: 0,
-			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'IL'
-		});
-		// stateAGI = 50000 + 5000 - stateRetExcl(50000, all pension+ira) = 5000; std 5850 -> taxable 0
-		assertEqual(il.stateAGI, 5000, 'IL stateAGI excludes all pension+IRA income');
-		assertEqual(il.stateTaxableIncome, 0, 'IL state taxable income (below std deduction)');
-		assertEqual(il.stateTax, 0, 'IL state tax');
-
-		const pa = calculateTaxes({
-			filingStatus: 'MFJ', ages: [70, 68],
-			earnedIncome: 50000, pensionIncome: 30000, iraIncome: 20000,
-			totalSS: 0, ordDivInterest: 5000, qualifiedDiv: 0, capGains: 0,
-			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'PA'
-		});
-		// stateAGI = 5000 (same); PA std=0 -> taxable=5000; flat 3.07%
-		assertEqual(pa.stateAGI, 5000, 'PA stateAGI excludes all pension+IRA income');
-		assertEqual(pa.stateTaxableIncome, 5000, 'PA state taxable income (no std deduction)');
-		assertEqual(pa.stateTax, 153.5, 'PA state tax (5000 * 3.07%)');
-	} // testCase19_ILPARetirementExclusionRegression()
-
-	// ============================================================================
-	// TEST CASE 20: GA cap mode - per-person age-tiered cap (ageGateTiers)
-	// ============================================================================
-	function testCase20_GAAgeTieredCap() {
-		console.log('\n=== Test Case 20: Georgia Age-Tiered Retirement Cap ===');
-
-		// Only one filer (age 65) qualifies for the $65,000 tier; the other (age 40) qualifies
-		// for none, so the household cap is $65,000, not $130,000 or unlimited.
-		const result = calculateTaxes({
-			filingStatus: 'MFJ', ages: [65, 40],
-			earnedIncome: 70000, pensionIncome: 70000, iraIncome: 0,
-			totalSS: 0, ordDivInterest: 0, qualifiedDiv: 0, capGains: 0,
-			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'GA'
-		});
-		// stateRetExcl = min(70000, 65000 [one qualifying filer] + 0 [other filer]) = 65000
-		// stateAGI = 70000 - 65000 = 5000
-		assertEqual(result.stateAGI, 5000, 'GA stateAGI reflects one $65k qualifying-filer cap, not full exclusion');
-	} // testCase20_GAAgeTieredCap()
-
-	// ============================================================================
-	// TEST CASE 21: CT phaseout mode - graduated % exclusion by federal AGI
-	// ============================================================================
-	function testCase21_CTPhaseoutMode() {
-		console.log('\n=== Test Case 21: Connecticut Retirement Income Phaseout ===');
-
-		const result = calculateTaxes({
-			filingStatus: 'MFJ', ages: [65, 63],
-			earnedIncome: 50000, pensionIncome: 50000, iraIncome: 0,
-			totalSS: 0, ordDivInterest: 55000, qualifiedDiv: 0, capGains: 0,
-			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'CT'
-		});
-		// federalAGI = 50000 + 55000 = 105000 -> CT MFJ tier at $105,000 = 85% excluded
-		assertEqual(result.AGI, 105000, 'CT test setup: federal AGI lands exactly on the 85% tier');
-		// stateRetExcl = 50000 * 0.85 = 42500; stateAGI = 50000+55000-42500 = 62500
-		assertEqual(result.stateAGI, 62500, 'CT stateAGI reflects 85% (not 100%) retirement-income exclusion');
-		assertEqual(result.stateTaxableIncome, 38500, 'CT state taxable income (62500 - 24000 std)');
-	} // testCase21_CTPhaseoutMode()
-
-	// ============================================================================
-	// TEST CASE 22: OH credit mode - post-tax dollar credit, tiered + MAGI-gated
-	// ============================================================================
-	function testCase22_OHRetirementCredit() {
-		console.log('\n=== Test Case 22: Ohio Retirement Income Credit ===');
-
-		const underGate = calculateTaxes({
-			filingStatus: 'SGL', ages: [70],
-			earnedIncome: 60000, pensionIncome: 6000, iraIncome: 0,
-			totalSS: 0, ordDivInterest: 0, qualifiedDiv: 0, capGains: 0,
-			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'OH'
-		});
-		// stateTaxableIncome = 60000-2400=57600; stateTax pre-credit = (57600-26050)*0.0275 = 867.625
-		// $6,000 of retirement income received -> $130 credit tier -> stateTax = 867.625-130 = 737.625
-		assertEqual(underGate.stateTax, 737.625, 'OH state tax reduced by $130 retirement-income credit');
-
-		const overGate = calculateTaxes({
-			filingStatus: 'SGL', ages: [70],
-			earnedIncome: 150000, pensionIncome: 6000, iraIncome: 0,
-			totalSS: 0, ordDivInterest: 0, qualifiedDiv: 0, capGains: 0,
-			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'OH'
-		});
-		// MAGI (150000) >= $100,000 gate -> credit is zero, stateTax unreduced
-		const preCreditTax = ((150000 - 2400) - 26050) * 0.0275;
-		assertEqual(overGate.stateTax, preCreditTax, 'OH credit is zero once MAGI >= $100,000 gate');
-	} // testCase22_OHRetirementCredit()
-
-	// ============================================================================
-	// TEST CASE 23: AL array-of-rules - disjoint types, pension full-exempt + IRA capped
-	// ============================================================================
-	function testCase23_ALArrayOfRules() {
-		console.log('\n=== Test Case 23: Alabama Array-of-Rules (pension full + IRA cap) ===');
-
-		const result = calculateTaxes({
-			filingStatus: 'SGL', ages: [70],
-			earnedIncome: 30000, pensionIncome: 20000, iraIncome: 10000,
-			totalSS: 0, ordDivInterest: 0, qualifiedDiv: 0, capGains: 0,
-			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'AL'
-		});
-		// stateRetExcl = 20000 (pension, full) + min(10000,6000) (IRA, capped at 65+) = 26000
-		// stateAGI = 30000 - 26000 = 4000; std 3000 -> taxable 1000
-		assertEqual(result.stateAGI, 4000, 'AL stateAGI: pension fully excluded, IRA capped at $6,000');
-		assertEqual(result.stateTax, 30, 'AL state tax on the remaining $1,000 taxable (2%*500 + 4%*500)');
-	} // testCase23_ALArrayOfRules()
+	// The tax-engine cases (calculateTaxes, the bracket lookups, calculateProgressive, calcIRMAA)
+	// moved to taxengine.tests.js in 11.17b0. They need no DOM, and until then they ran here on
+	// every page load before first paint - and nowhere else. See that file's header.
 
 	// ============================================================================
 	// ACCOUNT GROWTH TESTS  (b, c, d)
@@ -2142,43 +1332,7 @@ assertEqual(
 	// ============================================================================
 	// Run all tests
 	// ============================================================================
-	function runAllTaxTests() {
-		console.log('╔════════════════════════════════════════════════════╗');
-		console.log('║     RUNNING calculateTaxes() TEST SUITE            ║');
-		console.log('╚════════════════════════════════════════════════════╝');
-		
-		testCase1_OnlySSBelowThreshold();
-		testCase2_SS50PercentTaxable();
-		testCase3_SS85PercentTaxable();
-		testCase4_LargeCapitalGains();
-		testCase5_ComplexMultipleIncomes();
-		testCase6_HighIncomeNIIT();
-		testCase7_SingleWithInflation();
-		testCase8_ExactlyAt50PercentThreshold();
-		testCase9_SSThresholdsNotInflated();
-		testCase10_OBBASeniorDeductionFull();
-		testCase11_OBBASeniorDeductionPartial();
-		testCase12_OBBASeniorDeductionZero();
-		testCase13_SALTItemizingWins();
-		testCase14_SALTCapNotWorth();
-		testCase15_SALTPhaseoutMid();
-		testCase16_SALTPhaseoutFull();
-		testCase17_CTStateSSTaxation();
-		testCase18_StateTaxSplit();
-		testCase19_ILPARetirementExclusionRegression();
-		testCase20_GAAgeTieredCap();
-		testCase21_CTPhaseoutMode();
-		testCase22_OHRetirementCredit();
-		testCase23_ALArrayOfRules();
 
-		console.log('\n╔════════════════════════════════════════════════════╗');
-		console.log('║     TEST SUITE COMPLETE                            ║');
-		console.log('╚════════════════════════════════════════════════════╝');
-		console.log(`\nResults: ${passed} passed, ${failed} failed`);
-	} // runAllTaxTests()
-
-	// Run the test suite
-	runAllTaxTests();
 
 	// ===== Un-gated controls stay un-gated =====
 	// Stop-conversions-after and the tax-rate creep row both graduated out of the nerdknob
@@ -2457,6 +1611,122 @@ assertEqual(
 			for (const [el, v] of snap) el.value = v;
 			spouse.checked = wasSpouse;
 			toggleSpouseUI?.(); refreshStratRateOptions?.(); updateACAWarning();
+		}
+	})();
+
+	// ===== Every limit the menu offers survives a share link =====
+	// P95b. A per-value loop, not one case, because the families are three separate code paths in
+	// generateStratRateOptions() and a defect in one is invisible from the others: the federal rows
+	// carry bare numbers ("22"), the IRMAA rows a mixed-case prefix that was renamed once already
+	// ("IRMAA2", and old links say "irmaa2"), the ACA rows a lowercase one ("aca400").
+	//
+	// Checked without navigating: the emit half is buildShareURL()'s own output, and the decode half
+	// is the pair of facts loadFromURL() relies on - the short code maps back to `stratRate`, and the
+	// menu holds an option with exactly that value, which is what a <select> needs or it silently
+	// deselects. The ages are moved off the defaults first because the defaults put both people on
+	// Medicare, and the ACA rows are then not offered at all.
+	//
+	// The two DISABLED sentinels are excluded on purpose: "IRMAA Tier 5" and "37% Fed" are the top
+	// bands, they name a floor rather than a ceiling, and a link carrying one is meant to clamp down
+	// to the entry below it. That is behavior, not drift.
+	// ⚠ UNSAFE - MUTATES: #strategy, #stratRate, the birth years, spouse flag and start age.
+	(function everyLimitSurvivesAShareLink() {
+		if (!unsafeTest('everyLimitSurvivesAShareLink')) return;   // writes the profile and the menu
+		const sel = document.getElementById('stratRate'), strat = document.getElementById('strategy');
+		const by1 = document.getElementById('birthyear1'), by2 = document.getElementById('birthyear2');
+		const spouse = document.getElementById('hasSpouse'), start = document.getElementById('startAge');
+		if (!sel || !strat || !by1 || !spouse || !start) return;
+		if (typeof buildShareURL !== 'function' || typeof OPT_SHORT_TO_LONG === 'undefined') return;
+		const snap = [[by1, by1.value], [start, start.value], [strat, strat.value], [sel, sel.value]]
+			.concat(by2 ? [[by2, by2.value]] : []);
+		const wasSpouse = spouse.checked;
+		try {
+			// Young enough that the ACA rows are live, so all three families are in the sample.
+			const nowYear = new Date().getFullYear();
+			by1.value = String(nowYear - 54); spouse.checked = true;
+			if (by2) by2.value = String(nowYear - 52);
+			start.value = '58';
+			strat.value = 'bracket';
+			toggleSpouseUI?.(); refreshStratRateOptions?.(); toggleStrategyUI?.();
+
+			assertEqual(OPT_SHORT_TO_LONG['sr'], 'stratRate',
+				'the share link short code for the Limit is the one loadFromURL decodes');
+			const offered = [...sel.options].filter(o => !o.disabled).map(o => o.value);
+			const families = ['10', 'IRMAA0', 'aca400'].filter(v => offered.includes(v));
+			assertEqual(families.length, 3,
+				'all three limit families are offered to a household that is not yet on Medicare');
+
+			const dflt = ([...sel.options].find(o => o.defaultSelected) || {}).value;
+			const missed = [];
+			for (const v of offered) {
+				sel.value = v;
+				const sr = new URL(buildShareURL()).searchParams.get('sr');
+				// An omitted `sr` is correct for the default and only for it: buildShareURL drops a
+				// param whose value equals the default, and loadFromURL leaves the menu on it.
+				const emitted = sr === null ? dflt : sr;
+				const lands = [...sel.options].some(o => o.value === emitted && !o.disabled);
+				if (emitted !== v || !lands) missed.push(`${v} → ${sr === null ? '(omitted)' : sr}`);
+			}
+			assertEqual(missed, [], `all ${offered.length} selectable limits round-trip through a share link`);
+		} finally {
+			for (const [el, v] of snap) el.value = v;
+			spouse.checked = wasSpouse;
+			toggleSpouseUI?.(); refreshStratRateOptions?.(); toggleStrategyUI?.();
+			ACA_GATE_SWAP = null;   // the restore itself can trip the gate; it is not a load
+		}
+	})();
+
+	// ===== A limit that is taken away is replaced by the default, and said out loud =====
+	// P95a. The one case that does NOT round-trip, and should not: a link carrying an ACA cap opened
+	// by a household already on Medicare at retirement start. There is no premium subsidy left for a
+	// cap to protect, so the gate greys the ACA rows out and the selection has to move.
+	//
+	// Where it moves is the point. It used to take the first enabled option in a list sorted by
+	// dollars, which is "10% Fed - $24.8k" - three times tighter than the $84k that was asked for,
+	// on the other income basis, and a target to fill rather than a cap to stay under. It now lands
+	// on the menu's own default, and records a sentence naming both limits so the load paths can say
+	// what happened. Silently is how it used to happen.
+	// ⚠ UNSAFE - MUTATES: #stratRate, the birth years, spouse flag and Retirement Start Age.
+	(function anUnavailableCapFallsBackToTheDefaultAndSaysSo() {
+		if (!unsafeTest('anUnavailableCapFallsBackToTheDefaultAndSaysSo')) return;   // writes the profile
+		const sel = document.getElementById('stratRate');
+		const by1 = document.getElementById('birthyear1'), by2 = document.getElementById('birthyear2');
+		const spouse = document.getElementById('hasSpouse'), start = document.getElementById('startAge');
+		if (!sel || !by1 || !spouse || !start || typeof updateACAWarning !== 'function') return;
+		const snap = [[by1, by1.value], [start, start.value]].concat(by2 ? [[by2, by2.value]] : []);
+		const wasSpouse = spouse.checked;
+		const setAges = (b1, b2, age) => {
+			by1.value = String(b1); spouse.checked = true;
+			if (by2) by2.value = String(b2);
+			start.value = String(age);
+			toggleSpouseUI?.(); refreshStratRateOptions?.();
+		};
+		try {
+			const nowYear = new Date().getFullYear();
+			setAges(nowYear - 54, nowYear - 52, 58);          // pre-Medicare: the cap is selectable
+			if (![...sel.options].some(o => o.value === 'aca400')) return;   // no ACA rows in this build
+			sel.value = 'aca400';
+			assertEqual(sel.value, 'aca400', 'a pre-Medicare household can choose the 400% FPL cap');
+			ACA_GATE_SWAP = null;
+
+			setAges(nowYear - 74, nowYear - 76, 74);          // both on Medicare: the cap is gone
+			const dflt = ([...sel.options].find(o => o.defaultSelected) || {}).value;
+			assertEqual(sel.value, dflt,
+				'and a household past 65 lands on the menu default, not on the tightest row in the list');
+			assertEqual(/^(10|12|22|24|32|35|37)$/.test(sel.value), false,
+				'which is a MAGI ceiling, not a federal bracket on the other income basis');
+			assertEqual(typeof ACA_GATE_SWAP === 'string' && ACA_GATE_SWAP.includes('ACA 400% FPL')
+				&& ACA_GATE_SWAP.includes('Below IRMAA'), true,
+				'the substitution is recorded, naming the limit asked for and the one loaded');
+			// Read once and cleared, so a later load cannot report a swap it did not cause.
+			reportLoadSubstitutions();
+			assertEqual(ACA_GATE_SWAP, null, 'and reporting it clears it');
+		} finally {
+			for (const [el, v] of snap) el.value = v;
+			spouse.checked = wasSpouse;
+			toggleSpouseUI?.(); refreshStratRateOptions?.(); updateACAWarning();
+			ACA_GATE_SWAP = null;
+			clearMessage?.();
 		}
 	})();
 
@@ -2962,41 +2232,9 @@ assertEqual(
 		}
 	})();
 
-	// ===== An unclosed inline tag in the changelog eats the rest of the page =====
-	// v11.15a2 shipped an <li> whose <strong> was never closed. Nothing threw and nothing looked
-	// wrong in the source, but the HTML parser's recovery re-parented the two entries BELOW it
-	// INSIDE a stray <strong> that became a direct child of the <ul> (four <li> in the file, two in
-	// the DOM), and carried the bold on out of the list and into the How to Use section further
-	// down the page. It was reported as "everything is bold", which is a long way from the one
-	// missing tag that caused it.
-	//
-	// Three assertions, deliberately not one. The first is the general law and catches this class
-	// of mistake anywhere on the page; the other two name the specific damage so a failure message
-	// points at the changelog rather than at "some list".
-	(function changelogMarkupIsClosed() {
-		const lists = document.querySelectorAll('ul, ol');
-		if (!lists.length) return;   // shared suite; not every page carries these
-		// A list may contain ONLY <li> children. A leaked inline tag always shows up here, because
-		// the parser wraps the orphaned items in it and hangs it off the list.
-		const bad = [...lists].filter(l => [...l.children].some(c => c.tagName !== 'LI'))
-			.map(l => `${l.tagName.toLowerCase()}#${l.id || '(no id)'} contains `
-				+ [...new Set([...l.children].map(c => c.tagName))].filter(t => t !== 'LI').join(','));
-		assertEqual(bad.join(' | '), '', 'every <ul>/<ol> contains only <li> children');
-
-		const ul = document.getElementById('changelog-list');
-		if (!ul) return;
-		// Each entry opens with <b>version</b>, so the two counts move together only when every
-		// stamp is still in its own <li>. When an entry gets swallowed the <li> count drops and the
-		// stamp count does not, because the stray wrapper stays inside the same <ul>.
-		assertEqual(ul.querySelectorAll(':scope > li').length, ul.querySelectorAll('b').length,
-			'every changelog version stamp still sits in its own <li>');
-
-		// The visible symptom, pinned at the place it was actually noticed.
-		const howTo = [...document.querySelectorAll('li')]
-			.find(li => /Withdrawal Strategy:/.test(li.textContent || ''));
-		if (howTo) assertEqual(!howTo.closest('strong') && !howTo.closest('em'), true,
-			'How to Use is not inside an inline tag that leaked out of the changelog');
-	})();
+	// The changelog markup check (an unclosed inline tag eats the rest of the page) moved to
+	// doclinks.tests.js in 11.17b0, where it runs in the pre-commit hook against the page source
+	// and, under ?runtests, against this DOM.
 
 	// ── Objective-driven column sets (P67) ────────────────────────────────────
 	// The core data (OPT_OBJECTIVE_COLUMNS, OPT_COLUMN_KEYS) is asserted in optimizer_core.tests.js,
@@ -3509,8 +2747,15 @@ assertEqual(
         statusElement.textContent = '⏳';
 		statusElement.title = `In-page: all ${passed} passed. Node suites still running...`;
     } else {
+        // Without ?runtests the node suites do not run here at all - the pre-commit hook ran them
+        // on every commit - so the badge says what it measured and where the rest was measured,
+        // rather than a green that reads as "the tests passed".
+        const ex = (window.TestTiers && window.TestTiers.EXPECTED) || {};
+        const nodeTotal = Object.keys(ex).filter(k => k !== 'slowInCore').reduce((n, k) => n + ex[k], 0);
         statusElement.textContent = '🟢';
-		statusElement.title = `All ${failed+passed} tests passed`;
+		statusElement.title = `In-page: all ${passed} passed.`
+			+ (nodeTotal ? ` The ${nodeTotal} node tests run on every commit (pre-commit hook); add ?runtests to run them here as well.` : '')
+			+ (skippedUnsafe ? `\n${skippedUnsafe} suite${skippedUnsafe !== 1 ? 's' : ''} that write to the live page were skipped - add ?runtests to include them.` : '');
     }
     return failed === 0;
 }
@@ -3528,13 +2773,13 @@ window.TestTiers = {
     // page would keep reporting green over a number it no longer understands. Measure, do not guess:
     // run `node <suite>` and use the printed total.
     //
-    // ALL FOUR NUMBERS, NOT JUST THE ONE FOR THE TOOL YOU ARE WORKING ON. This object is the single
+    // ALL FIVE NUMBERS, NOT JUST THE ONE FOR THE TOOL YOU ARE WORKING ON. This object is the single
     // pin for every node suite in the repo, and the suites belong to different tools: taxPaymentPlanner
     // covers RetirementTaxPlanner.html, which this page never even loads. On 2026-08-17 a Tax Payment
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 424, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 435, taxengine: 27, taxPaymentPlanner: 61, doclinks: 24, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

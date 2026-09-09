@@ -16,9 +16,9 @@ without editing a single Optimizer file.
 
 In the same commit as the test change:
 
-1. Run all three suites and use the printed totals. Measure, never guess.
+1. Run all four suites and use the printed totals. Measure, never guess.
    ```sh
-   node optimizer_core.tests.js && node taxPaymentPlanner.tests.js && node doclinks.tests.js
+   node optimizer_core.tests.js && node taxengine.tests.js && node taxPaymentPlanner.tests.js && node doclinks.tests.js
    ```
 2. Update every entry in `TestTiers.EXPECTED`, `slowInCore` included.
 3. Update the suite table in `.githooks/README.md`, which carries the same counts as documentation.

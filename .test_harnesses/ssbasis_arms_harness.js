@@ -30,14 +30,13 @@ globalThis.performance={now:()=>0};globalThis.window={};globalThis.document={get
 const R='../';
 Object.assign(globalThis, require(R+'taxengine.js'));require(R+'displayhelpers.js');
 const {simulate}=require(R+'optimizer_core.js');
+const PLANS=require(R+'plans');
 
-const BASE={STATEname:'TX',nYears:30,birthyear1:1962,birthmonth1:6,die1:92,birthyear2:1964,birthmonth2:3,die2:94,hasSpouse:true,
- ss1:30000,ss1Age:70,ss2:20000,ss2Age:67,pensionAnnual:0,pensionStartAge:0,survivorPct:0,pensionCola:false,spendChange:0,
- inflation:.025,cpi:.025,growth:.06,cashYield:.03,dividendRate:.02,ssFailYear:2099,ssFailPct:1,
- convertExcessToRoth:true,fundConversionWithCash:false,propWithdraw:.10,iraWithdrawPct:.06,extraConversionAmount:0,
- startAge:64,startInYear:2026,dividendReinvest:true,gkGuard:.2,gkAdjPct:.1,cycleLTCGTarget:.15,qcdHHMax:0,qcdMode:'asneeded',computeOC:false,
- IRA1:2000000,IRA2:800000,Roth:50000,Roth2:20000,Brokerage:150000,BrokerageBasis:80000,Cash:80000,iraBaseGoal:0,
- strategy:'bracket',stratRate:0.22,stratIRMAATier:-1,stratACAMultiple:0,spendGoal:110000};
+// P112. The household is `bracket-filler-texas` in the plan bank, not a literal copied into
+// this file. Its card records what it exercises, what its measured viability is, and what it
+// CANNOT show: state-tax interactions, and any ending-IRA measure - its IRA drains to zero.
+// Read plans/bracket-filler-texas.js before reading a verdict off this harness.
+const BASE = { ...PLANS.get("bracket-filler-texas").inputs };
 
 const CEILINGS=[
   ['Fed 10%',   {stratRate:0.10, stratIRMAATier:-1, stratACAMultiple:0}],
@@ -48,8 +47,13 @@ const CEILINGS=[
   ['IRMAA T1',  {stratRate:0, stratIRMAATier:1, stratACAMultiple:0}],
   ['IRMAA T2',  {stratRate:0, stratIRMAATier:2, stratACAMultiple:0}],
   ['IRMAA T4',  {stratRate:0, stratIRMAATier:4, stratACAMultiple:0}],
-  ['ACA 200FPL',{strategy:'aca', stratRate:0, stratIRMAATier:-1, stratACAMultiple:2.0}],
-  ['ACA 400FPL',{strategy:'aca', stratRate:0, stratIRMAATier:-1, stratACAMultiple:4.0}],
+  // CLAIM AGE, and without it these two rows measure NOTHING. This household claims at 70 and 67
+  // while an ACA cap lapses at Medicare, so a benefit and a live cap never coexist and the filter
+  // below (`SSincome > 0 && BracketTarget > 0`) matched zero years - for the whole life of this
+  // harness. Claiming at 62 puts the benefit inside the capped window, which is the only way an
+  // ACA row can say anything about the taxable-SS regime this study is about.
+  ['ACA 200FPL',{strategy:'aca', stratRate:0, stratIRMAATier:-1, stratACAMultiple:200, ss1Age:62, ss2Age:62}],
+  ['ACA 400FPL',{strategy:'aca', stratRate:0, stratIRMAATier:-1, stratACAMultiple:400, ss1Age:62, ss2Age:62}],
 ];
 const SS=[['SS none',{ss1:0,ss2:0}],['SS small',{ss1:9000,ss2:6000}],['SS mid',{ss1:30000,ss2:20000}],['SS large',{ss1:54000,ss2:40000}]];
 const WEALTH=[['IRA 400k',{IRA1:300000,IRA2:100000}],['IRA 2.8M',{IRA1:2000000,IRA2:800000}],['IRA 8M',{IRA1:6000000,IRA2:2000000}]];

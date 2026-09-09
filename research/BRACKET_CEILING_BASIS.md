@@ -248,7 +248,7 @@ larger than what is reported here - in both directions, since the sign is not un
 
 **This section replaces an earlier conclusion that was wrong, and the error is worth naming because
 it is a whole class of error.** The first version of this report read section 3 as a verdict on the
-fix: net worth falls in 51 of 74 clean cells, therefore the premise is refuted, therefore do not
+fix: net worth falls in 51 of 74 clean cells (49 of 71 on 2026-09-08, median -$47,549), therefore the premise is refuted, therefore do not
 build `P87b`. That reasoning judges a **correctness** question with a **wealth** metric, and the two
 are not the same question.
 
@@ -476,17 +476,33 @@ would be inert.
 `.test_harnesses/ssbasis_harness.js`. 720 cells: 10 ceiling families x 4 benefit sizes x 3 IRA sizes
 x 3 spend levels x 2 filing statuses. A **ceiling-bound year** is one where the benefit is paid, the
 IRA still holds money (a drained IRA cannot reach any ceiling and its short is not a defect) and a
-ceiling was computed. 5,182 such years.
+ceiling was computed. 5,182 such years in the original run, 5,340 after the 2026-09-08 re-baseline below.
 
-| regime | definition | years | share |
-|---|---|---:|---:|
-| ZERO | `taxableSS` = 0 | 6 | 0.1% |
-| **SLOPED** | 0 < `taxableSS` < 0.85 x SS | **184** | **3.6%** |
-| CAPPED | `taxableSS` = 0.85 x SS | 4,992 | 96.3% |
+| regime | definition | years (2026-08-31) | share | years (2026-09-08) | share |
+|---|---|---:|---:|---:|---:|
+| ZERO | `taxableSS` = 0 | 6 | 0.1% | **21** | **0.4%** |
+| **SLOPED** | 0 < `taxableSS` < 0.85 x SS | **184** | **3.6%** | **295** | **5.5%** |
+| CAPPED | `taxableSS` = 0.85 x SS | 4,992 | 96.3% | 5,024 | 94.1% |
 
-SLOPED is not empty, and it is not scattered: it appears in 31 of 270 populated cells and every one
-of the top 15 by count is `Fed 10%` or `Fed 12%`. The low ceilings are where a household's provisional
-income can still sit below the second statutory threshold.
+SLOPED is not empty, and it is not scattered: it appears in 99 of 378 populated cells (31 of 270 in
+the original run) and the top of the list by count is `Fed 10%` or `Fed 12%`. The low ceilings are
+where a household's provisional income can still sit below the second statutory threshold.
+
+**RE-BASELINED 2026-09-08, and the second column is not just drift.** Two things moved it, and the
+first is a defect in this harness that had been there its whole life. Its two ACA arms passed
+`stratACAMultiple: 2.0` and `4.0` where the field is a WHOLE PERCENT, so they ran against a $418 and
+$837 cap. Correcting them to 200 and 400 changed nothing on its own - because the household claims
+Social Security at 70 while an ACA cap lapses at 65, so a benefit and a live cap never coexisted and
+this study's own filter (`SSincome > 0 && BracketTarget > 0`) matched **zero years on both ACA arms**.
+They were dead rows. Giving them a claim age of 62 is what put them in the sample, and 216 of the 218
+new ceiling-bound years are theirs.
+
+**The conclusion is unchanged and strengthened.** The decision 10.1 fed was "if the sloped tiers
+appear, the fix must solve the fixed point rather than subtract a flat share". They appear more, not
+less, and a real ZERO population now exists where the first run found six years. The shipped form
+(`nonSSIncomeForMAGI`, bisection) already covers every regime including ZERO, so **no engine change
+follows from this** - the conservative choice made in 10.3 turns out to have been the right one for a
+reason the original measurement understated.
 
 ### 10.2 A wrong claim, and the correction
 
@@ -551,3 +567,202 @@ One tripwire moved, `P32h`, for its seventh recorded time: total stranded 29,367
 the Brokerage headline 1,016,150.36 -> 1,000,311.35, with the COUNT still 10 and still 2040-2049. The
 arm draws its headroom earlier and reaches the stranded tail with less unfunded. The subject of that
 test did not change.
+
+---
+
+## 11. The ACA cap was SIZED in one unit and MEASURED in another  *(P87d, 2026-09-08)*
+
+Harness `.test_harnesses/acamagi_harness.js`, 360 cells, 2,880 plan-years with a live ACA cap.
+
+### 11.1 The two definitions, and why only one of them was being used
+
+| quantity | what it counts | who reads it |
+|---|---|---|
+| `tax.MAGI` | federal AGI + tax-exempt interest, so at most 85% of a Social Security benefit | IRMAA, NIIT, the federal and IRMAA ceilings |
+| **ACA MAGI** | the same, **plus the untaxed part of the benefit** | the ACA FPL cap, and nothing else |
+
+The SIZING side of an ACA cap has always been ACA-shaped. `_ssCeilRoom = yr.limit - yr.fixedInc`
+subtracts the FULL benefit, deliberately, and section 10 kept it that way while changing the other
+two ceiling kinds. **The measurement side never followed.** `bracketOverage` was
+`max(0, tax.MAGI - bracketTarget)` for every ceiling kind, so the two halves of one cap were written
+in different units - and the error is one-directional, because `acaMAGI >= MAGI` always. **The
+overage could only read LOW. A breached cap could report clean.**
+
+### 11.2 What it measured
+
+| | reported today | on the ACA definition |
+|---|---|---|
+| breach years, of 2,880 | 1,253 (43.5%) | 1,595 (55.4%) |
+| years flipping clean to breached | | **342** |
+| plans whose breach count rises | | 132 of 360 |
+| plans reporting ZERO breaches that do breach | | **12 of 360** |
+
+Median per-year add-back $3,311 over plans with any benefit; largest single year $97,255. Median
+understatement of the overage $2,037, largest $70,341.
+
+**The 12 is the number that matters, and it is not a column.** `acaBreach` is set from this overage,
+`totals.acaBreachYears` accumulates it, and the Optimizer reads that to flag an ACA row UNTENABLE
+(`optimizer_ui.js`, `isACAUntenable`). Twelve plans could not hold their cap and ranked as though
+they could.
+
+The `SS mid @67` arm is the control and reads **$0** add-back across all 72 of its plans: the cap
+lapses at 65 and that benefit starts at 67, so the two never overlap. Every flip sits in an arm
+claiming at 62.
+
+### 11.3 What shipped
+
+`ceilingMAGI(yr)` (`optimizer_core.js`), called at all three sites that decide `bracketOverage`.
+`tax.MAGI` is **not** touched - IRMAA and NIIT read it and their definition is the current one - so
+this is a second, narrower quantity for the one ceiling that needs it, logged as the hidden
+`-acaMAGI`. The gate is `yr.isACAStrategy`, which is already false in a lapsed year, so a lapsed cap
+gets no add-back and remains unbreachable.
+
+**Sizing and measurement now agree, and one probe shows what that is worth.** On a 250% FPL plan with
+a $29,803 benefit: `MAGI` $33,467 against a $57,814 cap, which read as $24,347 of spare room. On the
+ACA definition the year lands on **$57,814 exactly** - the cap was full, and the headroom did not
+exist. The sizing line had put it there all along.
+
+### 11.4 A note for anyone reading `ssbasis_harness.js`
+
+Its ACA arms pass `stratACAMultiple: 2.0` and `4.0`. The field is a whole percent - the dropdown's
+`aca400` decodes to `400`, and `computeBracketCeiling` divides by 100 - so those arms ran against a
+**$409 and $818 cap**, not $40,880 and $81,760. Section 10's ACA conclusions do not rest on them (the
+fork was established from the code and from the sizing line), but nothing in that harness's ACA rows
+should be quoted.
+
+---
+
+## 12. The same 15% survived in the harvest branch  *(P87c4, 2026-09-08)*
+
+Harness `.test_harnesses/harvestceil_harness.js`, 648 cyclic cells, two arms.
+
+When Cycle Brokerage picks a harvest year the `isBrokerageYear` arm runs **instead of** the sizing
+branch section 10 corrected, and it builds its own aggregate:
+
+```
+_baseOrdinaryInc = yr.taxableInc + yr.fixedInc + yr.taxableInterest + yr.taxableDividends
+```
+
+with `yr.fixedInc` the FULL benefit. That is then compared against the same MAGI ceiling in the LTCG
+top-off guard, and under the `cycleCoexist` nerdknob in `_iraRoom`. Same units mismatch, same
+direction, in the one branch section 10 could not reach.
+
+### 12.1 The guard binds
+
+| | cells | median d(tax) | median d(net worth) | up / down | worst |
+|---|---|---|---|---|---|
+| all moved | 339 of 648 | +$188 | -$2,566 | 87 / 225 | -$201,795 |
+| **cycleCoexist OFF** (shipped default) | 116, all clean | **+$608** | **-$5,259** | 2 / 98 | -$46,443 |
+| cycleCoexist ON (nerdknob) | 217 clean of 223 | -$861 | -$408 | 85 / 125 | -$201,795 |
+
+CLEAN = same delivered spending in both arms, both plans funded to the end; the 116 shipped-default
+cells are all clean.
+
+### 12.2 The verdict is section 7's, unchanged
+
+Correcting the basis costs money in the median, again, and for the same reason: **filling a 22%
+bracket is often a worse plan than under-filling it.** That is the Optimizer ranking's job to
+surface. It is not a licence for the engine to under-deliver the strategy that was selected, and the
+standing user correction on this phase settles it - a named ceiling is a contract to FILL, and the
+cost is a consequence to disclose. The blast radius is narrower than section 10's: only plans with
+**Cycle Brokerage** turned on are affected at all.
+
+### 12.3 What was deliberately left alone
+
+`getLTCGBracketRoom(ordFloor, ...)` reads the same aggregate and is **not** corrected here. LTCG
+brackets are TAXABLE-income thresholds, so the right basis there involves the deduction as well as
+the benefit - two errors pointing the same way, needing their own measurement rather than a copied
+line. Recorded as still open.
+
+One latent defect was found on the way: the `cycleCoexist` branch destructured
+`computeBracketCeiling` without `kind`, so `yr.ceilingKind` - the one field that says which income
+definition a ceiling is written in - was **undefined** in exactly the years that branch decides a
+draw. A coexist harvest year is meant to look downstream as though the family branch had run. It now
+does.
+
+
+---
+
+## 13. The LTCG bracket room, and a ceiling that was only half enforced  *(2026-09-09, SHIPPED)*
+
+Harness `.test_harnesses/ltcgroom_harness.js`, 432 cyclic cells, 5,555 harvest years.
+
+Section 12 corrected two of the three consumers of the harvest branch's ordinary-income aggregate
+and left the third, because it is a different question. The other two compare that aggregate against
+a **MAGI** ceiling, so their only error was the Social Security share. An LTCG bracket top is a
+**TAXABLE-income** threshold - gains stack on top of ordinary income *after* the deduction - so this
+call site carried **two** errors, pointing the same way:
+
+| error | effect on the floor | effect on the room |
+|---|---|---|
+| the FULL benefit counted, where at most 85% is taxable | too high | too small |
+| NO deduction subtracted, against a post-deduction threshold | too high | too small |
+
+### 13.1 How wrong the floor was
+
+| | overstatement |
+|---|---:|
+| median | **$59,625** |
+| p90 | $85,390 |
+| worst | $210,186 |
+| harvest years overstated by more than $1,000 | **every one measured** |
+
+| cause | median | worst |
+|---|---:|---:|
+| the untaxed part of the benefit | $6,136 | $139,311 |
+| **the deduction, never subtracted** | **$50,161** | $70,876 |
+
+The deduction is the larger half and is present in **every** year including those with no benefit at
+all, which is why a fix modelled on section 12 would have recovered about a tenth of it. For scale,
+the 0% LTCG bracket for a couple tops out around $97k, so the median overstatement is more than half
+the bracket the harvest is trying to fill.
+
+`_ltcgFloor` now asks `calculateTaxes` for ordinary taxable income rather than rebuilding the two
+corrections by hand - the same call `P92a` uses for the ceiling's deduction, so no second source of
+truth for either the benefit share or the deduction. It is asked at `capGains: 0`; a second pass at
+the gains the first implies was tried and removed, having moved 4 harvest years out of 292. The
+residual that remains is not that circularity at all but income the year gains AFTER the harvest is
+sized - a conversion, a forced draw - which no estimate made at sizing time could know. `-ltcgFloor`
+is logged so that gap stays auditable.
+
+### 13.2 The second defect, which only became reachable once the first was fixed
+
+**The strategy's own MAGI ceiling was enforced on one path out of two.** A harvest that fitted
+inside the target LTCG bracket returned straight away, never tested against the IRMAA tier or ACA
+cap the plan was holding; only the "spend forces gains past the target" path applied the cap. That
+hole was unreachable while the room was too small to reach a threshold. Correcting the floor made it
+reachable and a `cycleCoexist` harvest year crossed from no tier into IRMAA Tier 1 on the first run.
+The cap is now a named helper applied on both paths.
+
+**A test had to be restated to see it, and the restatement is worth recording.** `P32c`'s ceiling
+test asserted that a coexist harvest year's IRMAA tier never exceeds the same year's tier with
+coexist OFF. That is not a ceiling test - it is a test that coexist stays UNDER-FILLED, and the
+coexist-off arm does not even compute a ceiling in a harvest year, so it was never the right
+reference. It now asserts the ceiling is not BREACHED, which is stronger and which the corrected
+code passes: MAGI $109,293 against a $136,999 ceiling, overage zero.
+
+### 13.3 What it is worth
+
+| | clean cells |
+|---|---:|
+| median lifetime tax | +$58 |
+| median ending net worth | -$201 |
+| net worth up / down / flat | 65 / 224 / 130 |
+
+**The split by family is the finding, not the median.** A family whose own income ceiling binds
+first barely moves, because the ceiling was already holding the harvest down:
+
+| family | median d(net worth) | median d(tax) |
+|---|---:|---:|
+| Fed 12% | $0 | $0 |
+| Fed 22% | -$100 | $39 |
+| IRMAA Tier 0 | $0 | $0 |
+| Fed 24% | -$88,010 | $14,226 |
+| IRMAA Tier 2 | -$119,432 | $13,595 |
+| Proportional 10% (no income ceiling) | -$92,814 | $10,917 |
+
+The movers are the plans where the LTCG bracket, not the income ceiling, is the binding constraint -
+high ceilings, or no ceiling at all. There the harvest now fills the bracket it was told to fill, and
+the cost of doing so is the same consequence section 7 settles: **a named target is a contract to
+fill, and that filling it can cost money is a fact about the strategy rather than a licence to
+under-deliver it.**

@@ -6,6 +6,24 @@ Each line is a defect that already happened, compressed to the rule it produced 
 now enforces it. The narrative behind every one is in `findings_archive.md` under the heading named
 in parentheses. Read this section before adding a guard, a test or an invariant.
 
+- *A check built from the same fields on both sides proves nothing, however exact it looks.* The
+  first attempt to verify the corrected LTCG floor compared it against the year's realized figures
+  using the same log fields to build both - algebraically an identity, so it reported a $0 median
+  error in all 315 years while testing nothing at all. **If a check cannot fail, it is not a check.**
+  ("LTCG floor, 2026-09-09")
+- *An invariant calibrated on broken behavior locks the breakage in.* `P32c` asserted a coexist
+  harvest year's IRMAA tier never exceeds the tier the coexist-OFF arm reaches. That is not a ceiling
+  test - it is a test that coexist stays UNDER-FILLED, and the OFF arm does not even compute a
+  ceiling in a harvest year. It failed the moment the harvest was corrected, on a year whose MAGI was
+  $109,293 against a $136,999 ceiling with zero overage. **Assert the contract, not the current
+  numbers.** ("P32c restated")
+- *A guard that only one code path reaches is a guard nobody has tested.* The strategy's MAGI ceiling
+  was applied on the harvest branch's top-off path only; the path where the harvest fitted inside the
+  target bracket returned unchecked. It was unreachable purely because a separate defect kept the
+  room too small, and it went live the moment that was fixed. ("the half-enforced ceiling")
+- *`require()` cannot see a global-scope collision, so a node suite cannot cover a browser load.* All
+  19 plan files declared `const PLAN` at top level and the bank was green in node while a page could
+  load exactly one of them. The test that catches it reads the SOURCE. ("plan files, IIFE")
 **On tests and invariants**
 
 - *Money must be conserved, not merely accounted for.* A dollar can be recorded correctly in two
@@ -120,6 +138,16 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
   RMDs across two timing arms is simply false - timing legitimately changes the balance path - and the
   first version of it would have condemned a correct fix.
 
+- *A lone LF written into `task_plan.md` moves the LINE-30 window and leaves no diff.* The file is
+  CRLF; the planning hook injects `head -30`, which splits on `
+`; git normalizes endings on
+  commit, so the mistake is invisible in review and invisible in `git diff`. Appending a line with a
+  `
+` where the file uses `
+` therefore silently merged two entries into one physical line and
+  pushed the marker off 30 while `sed -n 30p` still looked right. **Write the file's own newline, and
+  check the marker with the same tool the hook uses.** (2026-09-08)
+
 **On the browser, the build and the worker**
 
 - *The page is not the file, and a fresh tab is not a reload.* Browser findings have twice been
@@ -138,6 +166,36 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
   taken as a refresh. Move the `?v=` stamp, or hard-reload; a new port and a new process do neither.
   ("P114 - a restarted server is not a cleared cache")
 
+- *When a quantity is compared against a threshold, the UNIT of both sides is a thing to check.*
+  `P87` found the same shape four times in one dropdown: a deduction-basis error on federal
+  brackets, then the Social Security basis in the sizing line, then again in the harvest branch,
+  then again on the ACA measurement side. **All four ran in the same direction** - under-filling or
+  under-reporting - which is why none of them ever announced itself, and why the ACA one sat behind
+  a cap the engine had been SIZING correctly the whole time. ("P87")
+- *A fix does not reach the branch that runs INSTEAD of the one you fixed.* `P87c` corrected the
+  ordinary sizing line; Cycle Brokerage's harvest year builds its own aggregate and preempts that
+  line entirely, so it kept the defect for another eight days. When a correction lands in a branch,
+  grep for the other arms of the same `if`. ("P87c4")
+- *Check whether the work is already done before scheduling it.* `P87b` sat as an open O0 decision
+  while the fix had shipped under `P92a`, research flag removed and all - the box was simply never
+  ticked. A phase can be finished by another phase. ("P87b")
+
+- *An arm that produces no rows is not a small arm, it is an absent one, and a share table will not
+  say so.* `ssbasis_harness.js` carried two ACA arms whose multiple was wrong by a factor of 100 AND
+  whose household claimed Social Security after its own cap lapsed. Fixing the multiple changed the
+  output by nothing, because the filter had been matching **zero years** on both arms since the
+  harness was written. The regime percentages looked healthy throughout - they were percentages of a
+  sample two arms never entered. **Print the row count per arm, not just the share.** ("P87c1 re-baseline")
+- *A missing input can be worse than a wrong one, because it arrives as NaN rather than as a number
+  you would question.* `inputs.iraBaseGoal * cpiRate` is NaN when the field is absent, and it reached
+  `totalNetWealth` on two strategies - a whole run reporting NaN, silently. The page always sends the
+  field, so only a hand-built inputs object hits it, which is every harness. Read optional numeric
+  inputs with `?? 0` at the point of use. ("absent IRA Goal")
+- *Moving a literal behind a name breaks grep, and grep was the audit tool.* After the plan-bank
+  refit, `grep cyclicEnabled .test_harnesses/` misses exactly the harnesses that were tidied up. The
+  fix is not to stop refactoring but to replace the query: `.test_harnesses/which_plan.js` resolves
+  the name and reports the property. **A refactor that defeats the way a thing was found owes a new
+  way to find it.** ("which_plan")
 **On measurement**
 
 - *A coarse probe grid invents answers, and a drained IRA is not the absence of an opportunity.*
@@ -153,6 +211,21 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
 - *A prose deferral is invisible to every check the repo has.* A checkbox is greppable and a status
   line is read; "give it its own item when someone picks it up" inside a sub-bullet is neither, and
   sat unnoticed until a sweep went looking for that exact shape.
+- *A repro URL that omits a parameter is not a smaller test case, it is a different household.*
+  `?str=bracket&sr=aca400` carries no ages, so it runs on the page defaults, where both people are
+  already on Medicare and the ACA rows are correctly unavailable. `P95` read the resulting fallback
+  as a decoder that could not round-trip its own output, named `refreshStratRateOptions` as "the
+  obvious suspect", and sat open for nine days. The share format's own rule is what made it
+  deceptive: `buildShareURL` OMITS a parameter whose value equals the default, so the shortest link
+  is the one running on the least representative plan. **Reproduce on the plan the link came from,
+  not on what the link says.** Measured the other way at v11.1779: 15 of 15 selectable limits
+  round-trip. ("P95")
+- *Falling back to "the first enabled option" is a fallback to whatever the sort order put there.*
+  The Limit menu is sorted by dollars, so the ACA gate's `find(o => !o.disabled)` answered a $84,049
+  cap with the $24,800 row - three times tighter, on the other income basis, and a target to fill
+  where the user had chosen a cap to stay under. A substitute has to be chosen on MEANING. Pinned by
+  `anUnavailableCapFallsBackToTheDefaultAndSaysSo`, which asserts the landing spot is not a federal
+  bracket rather than asserting a value, so a re-sort cannot quietly restore it. ("P95")
 
 ## The suggested Stop Conversion year is a MOVING PEAK, and `totalNetWealth` is not a shared basis (2026-09-03, P106a)
 
@@ -1853,7 +1926,7 @@ The three sentences worth carrying without opening the report:
    the deduction reconciles to the cent, OBBBA senior deduction and phase-out included. The defect
    is a UNITS MISMATCH: `iRAbracketRoom` subtracts GROSS income from a POST-deduction threshold and
    `bracketOverage` measures MAGI against it. Do not go looking for a bad number; there isn't one.
-2. **Closing that gap COSTS money in 51 of 74 clean cells, median -$47,092 - and that is a fact
+2. **Closing that gap COSTS money in 51 of 74 clean cells (49 of 71 when re-run 2026-09-08), median -$47,092 then, -$47,549 now - and that is a fact
    about the STRATEGY, not a verdict on the fix.** A named ceiling is a contract to fill: the user
    picking `22% Fed` or `IRMAA Tier 2` wants the room between their spending and the limit
    converted or banked, and is not asking the tool to minimize their tax. The first version of this
@@ -1973,8 +2046,8 @@ where Social Security is paid, the IRA still holds money, and a ceiling was comp
 | regime | years | share | under-filled | headroom never used |
 |---|---:|---:|---:|---:|
 | ZERO (`taxableSS` = 0) | 6 | 0.1% | 6 | $213,043 |
-| **SLOPED** (0 < `taxableSS` < 0.85 SS) | **184** | **3.6%** | **144** | **$4,359,006** |
-| CAPPED (`taxableSS` = 0.85 SS) | 4,992 | 96.3% | 1,520 | $12,205,886 |
+| **SLOPED** (0 < `taxableSS` < 0.85 SS) | **184 -> 295 on 2026-09-08** | **3.6% -> 5.5%** | **144** | **$4,359,006** |
+| CAPPED (`taxableSS` = 0.85 SS) | 4,992 -> 5,024 | 96.3% -> 94.1% | 1,520 | $12,205,886 |
 
 SLOPED appears in **31 of 270 populated cells** and is concentrated exactly where predicted: the LOW
 ceilings. Every one of the top 15 is `Fed 10%` or `Fed 12%`.

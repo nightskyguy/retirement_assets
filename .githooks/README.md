@@ -11,18 +11,21 @@ created later.
 
 ## What the pre-commit hook does
 
-Runs the three `node`-only suites and blocks the commit if any of them fails:
+Runs the four `node`-only suites and blocks the commit if any of them fails:
 
 | suite | tests | approx |
 |---|---|---|
-| `optimizer_core.tests.js` | 424 | 2.9 s |
+| `optimizer_core.tests.js` | 435 | 4.3 s |
+| `taxengine.tests.js` | 27 | 0.1 s |
 | `taxPaymentPlanner.tests.js` | 61 | 0.5 s |
-| `doclinks.tests.js` | 22 | 0.1 s |
+| `doclinks.tests.js` | 24 | 0.1 s |
 
-About 3.5 s total.
+About 5 s total. `taxengine.tests.js` is the tax engine's own suite, moved out of the in-page
+`optimizer_tests.js` in 11.17b0; `doclinks.tests.js` also carries the page-markup check (an
+unclosed inline tag in the changelog) since the same release.
 
 **These counts are documentation, and they rot.** The enforced copy is `TestTiers.EXPECTED` in
-`optimizer_tests.js`, which pins all three suites at once plus the slow-tagged subset of
+`optimizer_tests.js`, which pins all four suites at once plus the slow-tagged subset of
 `optimizer_core`. Adding or removing a test anywhere means updating **every** number in that object
 and then this table, in the same commit - including the suites belonging to tools you did not touch.
 `taxPaymentPlanner.tests.js` covers `RetirementTaxPlanner.html`, and leaving its count stale turns

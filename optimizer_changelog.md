@@ -17,6 +17,87 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.17b1"></a>
+
+## 11.17b1
+
+**One control now decides when your money moves, and the default has changed.**  
+*Behavior change: every plan's numbers move, and a saved plan will not reproduce.*
+
+The tool used to pick the month for you with a rule you could not see: a year in which you had
+converted more than $1,000 pushed the NEXT year's whole withdrawal into January, and it stayed
+there. That was backwards in two ways. What a converting year wants early is the conversion, not
+the spending - and one year's conversion should have no bearing on the next year's timing at all.
+
+In its place, one choice with three options:
+
+| | required distribution | conversion | spending |
+|---|---|---|---|
+| **Split** *(new default)* | January | January | November |
+| Early | January | January | January |
+| Late | November | November | November |
+
+**Split is new, not merely renamed.** It was impossible before: your spending draw carried the
+required distribution with it, and a conversion may not come before that distribution, so asking to
+convert in January while spending in November did nothing at all in any year a distribution was due.
+The distribution now has its own month, which is what makes the combination reachable.
+
+Measured across ten households that convert and reach distribution age, Split is ahead of Late in
+seven and behind in one. More usefully, **not one of them pays more tax under Split, and not one
+ends with a larger IRA** - so it costs nothing on either of the two things a conversion plan is
+usually trying to improve. A year that converts nothing runs exactly as Late.
+
+**Fixed tax indexing has moved to the Monte Carlo tab.** On the main sidebar it could not do
+anything: it changes how the tax code is indexed against each path's own inflation, and a single
+deterministic run has no such path. It now sits with the other simulation parameters, where it works.
+
+A shared link or saved plan written before this release still loads, and says so when the timing it
+named no longer exists.
+
+**An ACA cap counts your whole Social Security benefit, and the tool now measures it that way.**  
+*Behavior change: more ACA rows are flagged untenable, and the Optimizer can rank them differently.*
+
+The income an ACA FPL cap is tested against includes the part of your benefit that is never taxed.
+Each year is now checked against that figure, so a year over the cap is reported as one. Measured
+across 2,880 capped plan-years, one year in eight was over without saying so.
+
+**Cycle Brokerage harvest years now fill the bracket they are aimed at.** A harvest year was
+measuring its remaining capital-gains room against the wrong income, counting your whole Social
+Security benefit and ignoring your deduction, so it stopped well short of the 0% or 15% bracket it
+was told to fill. It also now respects your chosen income limit on every path; before, a harvest
+that fitted inside the target bracket was never checked against an IRMAA tier or ACA cap at all.
+
+Plans with **Cycle Brokerage** on realize more gains in a harvest year and will show different
+lifetime tax and ending wealth, and a saved plan using it will not reproduce. Most plans move very
+little: where your Limit is what holds the harvest down, nothing changes. The plans that move are
+the ones whose limit sits high enough that the capital-gains bracket was the real constraint, and
+the ones running no income limit at all.
+
+**Each entry in the Limit menu now says which income it measures**: a federal bracket limits taxable
+income, an IRMAA tier limits MAGI, and an ACA cap limits an MAGI of its own that counts the whole
+benefit. The README says the same.
+
+**A plan asking for an ACA cap nobody in it can use now says so, and loads Below IRMAA** instead of
+the far tighter 10% Fed, naming both limits.
+
+**Interest on cash is now taxed on what the cash actually earned.**  
+*Behavior change: every plan's tax moves a little.*
+
+Interest used to be taxed once a year on the cash balance at the moment of the withdrawal, times a
+full year's yield. Cash you spent during the year was taxed on interest it never earned, and cash
+that arrived after that moment - a surplus you banked, a required distribution taken in January -
+earned interest that was never taxed at all. Each year now checks what the cash actually earned and
+carries the difference into the next year's interest, so over the plan the interest taxed equals the
+interest earned. Plans that draw their cash down pay slightly less tax; plans that bank money early in
+the year pay slightly more. Measured across the reference households the difference is under 2% of
+lifetime tax, and it changes no plan's ranking.
+
+**The page paints sooner.** Its self-check tests now run after the first paint instead of before
+it, and the engine test suites no longer re-run in your browser on every visit; they run on every
+commit instead. Hover over the green dot for what was checked, or add `?runtests` to the address
+to run everything on the page.
+
+---
 <a id="11.1779"></a>
 
 ## 11.1779

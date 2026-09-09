@@ -218,11 +218,11 @@ function applyNerdKnobVisibility() {
     // (research/IRMAA_MARGIN_FIXED_CPI.md). The FORWARD PROJECTION it sits on is NOT gated:
     // that is a correctness fix and applies to every user. Only the choice of margin is hidden,
     // and hiding it leaves the default (IRMAA_MARGIN_DEFAULT, 'halfcpi') in force, not "no margin".
-    // P70e. Fixed tax indexing - a DIAGNOSTIC, not a modeling choice, so it stays behind the knob.
-    // Leaving it hidden leaves it OFF, which is the correct model (the tax code follows realized
-    // inflation, as the IRS and SSA do), not a fallback.
-    const fixedIdxWrap = document.getElementById('fixedTaxIndexing-wrap');
-    if (fixedIdxWrap) fixedIdxWrap.style.display = NERD_KNOBS ? '' : 'none';
+    // Fixed tax indexing has no line here any more. It moved to the Monte Carlo tab's Advanced
+    // Parameters panel, which gates itself - and it had to move, because on the deterministic
+    // sidebar it was a strict no-op: both branches of its own ternary evaluate to the same number
+    // when there is no path carrying its own inflation. A control that only exists where it works
+    // needs no separate rule about where it does not.
     // P28jh. Withdrawal month, same treatment and for the same reason: hiding it leaves the
     // shipped automatic rule in force, not "no rule". A share link carrying fwt=late still loads
     // and still runs late for someone without the knob - the control is hidden, not disabled -
@@ -748,13 +748,12 @@ function getInputs() {
         // P28jh. '' means the shipped auto rule; the engine only reads 'early'/'late', so an
         // empty select must arrive as undefined rather than as a falsy string it would ignore
         // by accident. Undefined is the documented off value for this flag.
-        forceWithdrawTiming: val('forceWithdrawTiming') || undefined,
+        withdrawTiming: val('withdrawTiming') || undefined,
         // P108b. '' is today's behavior (tax leaves with the withdrawal); the engine only
         // acts on 'december', so an empty select must arrive as undefined.
         taxSettlement: val('taxSettlement') || undefined,
         // P28jk. Same convention: '' is today's behavior (the conversion rides the withdrawal
         // month), and the engine acts only on 'early' / 'late'.
-        conversionTiming: val('conversionTiming') || undefined,
         fixedTaxIndexing: !!valChecked('fixedTaxIndexing'),
         // Account Composition (equity/bond ratio selects + intl equity % inputs)
         comp_IRA1_ratio: +val('comp_IRA1_ratio'),
@@ -5205,7 +5204,8 @@ function setupAutoRecalc() {
             if (typeof mcInputsChanged === 'function') mcInputsChanged();
         }, 400);
     }
-    document.querySelectorAll('.sidebar input, .sidebar select').forEach(el => {
+    document.querySelectorAll('.sidebar input, .sidebar select,'
+                            + ' #mc-nerd-panel input[type=checkbox]').forEach(el => {
         if (el.type === 'checkbox' || el.tagName === 'SELECT') {
             el.addEventListener('change', () => scheduleRecalc(el));
         } else {
@@ -5827,7 +5827,7 @@ const OPT_LONG_TO_SHORT = {
     propWithdraw:'pw', stratRate:'sr', iraWithdrawPct:'iwp', orderedSeq:'os', rothGapFill:'rgf',
     convertExcessToRoth:'mc', fundConversionWithCash:'fcc', extraConversionAmount:'eca', iraBaseGoal:'ibg',
     convEndYear:'cey', convEndMode:'cem', irmaaMarginMode:'imm', fixedTaxIndexing:'fti',
-    forceWithdrawTiming:'fwt', taxSettlement:'txs', conversionTiming:'cvt',
+    withdrawTiming:'wt', taxSettlement:'txs',
     advisorFeeAmount:'af', advisorFeeMode:'afm', advisorFeeScope:'afs',
     birthyear1:'by1', birthmonth1:'bm1', die1:'d1', startAge:'sa',
     birthyear2:'by2', birthmonth2:'bm2', die2:'d2', hasSpouse:'hs',
@@ -5868,7 +5868,8 @@ const OPT_SHORT_TO_LONG = Object.fromEntries(
 // but they are still URL-shareable - 'opt'/'copt' in OPT_LONG_TO_SHORT - so they must be in
 // this selector or buildShareURL would silently stop emitting them while loadFromURL kept
 // restoring them, an asymmetric round-trip.)
-const SHARE_INPUT_SELECTOR = '.sidebar input, .sidebar select, #opt-search-options input';
+const SHARE_INPUT_SELECTOR = '.sidebar input, .sidebar select, #opt-search-options input,'
+                           + ' #mc-nerd-panel input[type=checkbox]';
 const OPT_DEFAULTS = {};
 function captureDefaults() {
     document.querySelectorAll(SHARE_INPUT_SELECTOR).forEach(el => {
@@ -5986,6 +5987,47 @@ function loadFromURL() {
         }
         params.delete('advisorFeeMode');
     }
+    // The two timing selects became one mode, so a link written before that carries `fwt` and
+    // maybe `cvt`. Folded explicitly rather than left to fall through: `OPT_SHORT_TO_LONG` is
+    // DERIVED from the long-to-short map, so dropping the old keys also drops the inbound mapping,
+    // and an old link would quietly load the new default while claiming to describe a plan. That is
+    // the exact failure the gating comment above forbids.
+    //
+    //   fwt=early              -> Early
+    //   fwt=late + cvt=early   -> Split   (the combination that used to be a no-op in RMD years)
+    //   fwt=late               -> Late
+    //   fwt absent (Automatic) -> Split, and SAID, because the rule it names no longer exists
+    //
+    // `fwt=early` with `cvt=late` is the one shape the modes cannot express - spending before a
+    // conversion, which only ever surrendered Roth growth. It takes Early and says so.
+    //
+    // READ UNDER BOTH NAMES. `params` was built by mapping short codes through OPT_SHORT_TO_LONG,
+    // and that map no longer carries `fwt`/`cvt` - so those keys arrive UNMAPPED, still short. A
+    // fold that looked only for the long names would never fire, which is the same silent drop the
+    // paragraph above is about, one level further in.
+    const _fwtKey = params.has('fwt') ? 'fwt' : 'forceWithdrawTiming';
+    const _cvtKey = params.has('cvt') ? 'cvt' : 'conversionTiming';
+    if (params.has(_fwtKey) || params.has(_cvtKey)) {
+        const _fwt = params.get(_fwtKey) || '';
+        const _cvt = params.get(_cvtKey) || '';
+        let _mode = 'split', _note = '';
+        if (_fwt === 'early' && _cvt === 'late') {
+            _mode = 'early';
+            _note = 'This link asks to spend in January and convert in November, which the timing '
+                  + 'control can no longer express - a conversion is only worth moving earlier. Loaded Early.';
+        } else if (_fwt === 'early') { _mode = 'early'; }
+        else if (_fwt === 'late') { _mode = _cvt === 'early' ? 'split' : 'late'; }
+        else {
+            _note = 'This link was written before the timing control was a single choice, and it '
+                  + 'used the old automatic rule. That rule set a year\'s spending month from the '
+                  + 'PREVIOUS year\'s conversion; it has been retired. Loaded Split, which converts '
+                  + 'early and spends late.';
+        }
+        params.set('withdrawTiming', _mode);
+        params.delete(_fwtKey);
+        params.delete(_cvtKey);
+        if (_note) TIMING_MODE_SWAP = _note;
+    }
     params.forEach((value, key) => {
         const el = document.getElementById(key);
         if (!el) return;
@@ -6020,7 +6062,12 @@ function loadFromURL() {
     resetUnknownStrategy();
     toggleStrategyUI();
     onConvSubFlagChange();   // .checked set programmatically above → no change event; resync the convenience checkbox
+    // P95. The ACA age gate can take this link's Limit away, and it fires several calls down inside
+    // runSimulation() → refreshStratRateOptions() → updateACAWarning(). Cleared first so only this
+    // load's own substitution is reported, then read once the page has settled on its answer.
+    ACA_GATE_SWAP = null;
     runSimulation();
+    reportLoadSubstitutions();
 }
 
 // The load-time "this scenario sets a Cash Reserve" warning was retired at 11.1702, when 0 became
@@ -6723,6 +6770,30 @@ function cancelImport() {
  * applyScenario runs the plan at its tail, so the fresh numbers are available on return.
  */
 function commitScenario(entry, name) {
+    ACA_GATE_SWAP = null;      // only this load's own substitutions are this load's to report
+    TIMING_MODE_SWAP = null;
+    // A saved plan predating the single timing control carries the two old keys. applyScenario sets
+    // elements by id and those ids are gone, so without this the plan would quietly load the new
+    // default. Same mapping as the share-link fold in loadFromURL.
+    if (entry && entry.data && (entry.data.forceWithdrawTiming !== undefined
+                             || entry.data.conversionTiming !== undefined)) {
+        const _f = entry.data.forceWithdrawTiming || '';
+        const _c = entry.data.conversionTiming || '';
+        entry = { ...entry, data: { ...entry.data } };
+        entry.data.withdrawTiming = _f === 'early' ? 'early'
+                                  : _f === 'late'  ? (_c === 'early' ? 'split' : 'late')
+                                  : 'split';
+        delete entry.data.forceWithdrawTiming;
+        delete entry.data.conversionTiming;
+        if (!_f) {
+            TIMING_MODE_SWAP = 'This plan was saved before the timing control was a single choice, '
+                + 'and it used the old automatic rule, which has been retired. Loaded Split.';
+        } else if (_f === 'early' && _c === 'late') {
+            TIMING_MODE_SWAP = 'This plan asks to spend in January and convert in November, which '
+                + 'the timing control can no longer express. Loaded Early.';
+            entry.data.withdrawTiming = 'early';
+        }
+    }
     applyScenario(entry.data);
     _lastLoadedPlanName = name;
     _lastLoadedFileName = entry.sourceFile || null;
@@ -6736,6 +6807,7 @@ function commitScenario(entry, name) {
     if (notesEl) notesEl.value = entry.notes || '';
     closeScenarioModal();
     reportSummaryDrift(entry, name);
+    reportLoadSubstitutions();   // after the drift report, which it appends to rather than replaces
 }
 
 /**
@@ -7350,14 +7422,22 @@ function updateLimitBasisNote() {
         const ded = dropdownDeduction(status);
         const topBracket = fedBracketPctAt(Math.max(0, limit - ded), status, cpiAdj);
         const floorBracket = fedBracketPctAt(Math.max(0, floor - ded), status, cpiAdj);
+        // P87f. "Income" named, not left to the reader. An IRMAA tier is a limit on MAGI, which is
+        // total income before the deduction and counts at most 85% of a Social Security benefit -
+        // a different quantity from the federal branch's taxable income AND from the ACA branch's
+        // own MAGI below. Three ceilings, three definitions, and the menu used to print all three
+        // as bare dollars.
         sentence = tier === 0
-            ? `Filling income up to ${money(limit)} keeps you under every IRMAA tier, and lands in the ${topBracket}% bracket.`
+            ? `Filling MAGI up to ${money(limit)} keeps you under every IRMAA tier, and lands in the ${topBracket}% bracket. MAGI is your total income before your deduction, counting at most 85% of Social Security.`
             : (floorBracket === topBracket
-                ? `IRMAA Tier ${tier} runs ${money(floor)} to ${money(limit)}, all of it inside the ${topBracket}% bracket.`
-                : `IRMAA Tier ${tier} runs ${money(floor)} to ${money(limit)}. It <b>begins</b> in the ${floorBracket}% bracket and <b>ends</b> in the ${topBracket}% one, so filling this tier crosses a bracket on the way.`);
+                ? `IRMAA Tier ${tier} runs ${money(floor)} to ${money(limit)} of MAGI - total income before your deduction - all of it inside the ${topBracket}% bracket.`
+                : `IRMAA Tier ${tier} runs ${money(floor)} to ${money(limit)} of MAGI, your total income before your deduction. It <b>begins</b> in the ${floorBracket}% bracket and <b>ends</b> in the ${topBracket}% one, so filling this tier crosses a bracket on the way.`);
     } else if (isACA) {
         const ded = dropdownDeduction(status);
-        sentence = `This cap holds income to ${money(limit)}, which is inside the ${fedBracketPctAt(Math.max(0, limit - ded), status, cpiAdj)}% bracket. It is a cap to stay under, not a target to fill.`;
+        // P87f / P87d. ACA MAGI is its own quantity and the difference is not a footnote: it adds
+        // back the untaxed part of the benefit, so a household with a large benefit sits tens of
+        // thousands higher against this cap than against an IRMAA one printed with the same dollars.
+        sentence = `This cap holds ACA MAGI to ${money(limit)}, which is inside the ${fedBracketPctAt(Math.max(0, limit - ded), status, cpiAdj)}% bracket. ACA MAGI counts your <b>whole</b> Social Security benefit, including the part that is not taxed. It is a cap to stay under, not a target to fill.`;
     } else {
         const ded = dropdownDeduction(status);
         const magi = limit + ded;
@@ -7511,6 +7591,51 @@ function buildLimitLadderSVG(status, cpiAdj, selectedLimit) {
          + `this plan's deduction, which is the income the plan measures against.</div>`;
 }
 
+// P95. Set by updateACAWarning() when the age gate takes a selected ACA cap away; read and cleared
+// by the two paths that load a plan somebody else chose - a share URL and a saved scenario. It is a
+// single pending string rather than a queue because only one substitution can happen per load, and
+// both loaders clear it before they start so a swap from an earlier sidebar edit is never reported
+// as though the loaded plan had caused it.
+let ACA_GATE_SWAP = null;
+
+// The same shape, for the timing modes. A link written before the two selects became one names a
+// rule that no longer exists, so loading it silently would be the same defect in a new place.
+let TIMING_MODE_SWAP = null;
+
+/**
+ * The readable half of a Limit option's label: the name and its own dollar figure, without the
+ * cross-ladder parenthetical. "ACA 400% FPL - $84k" out of "ACA 400% FPL  ·  $84k (12% Fed)".
+ * The annotation is there to be scanned in a menu; in a sentence it is a second limit the reader
+ * has to work out is not the one being talked about.
+ */
+function limitOptionName(opt) {
+    return (opt?.textContent || '').split(' (')[0].replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Report anything a load path SUBSTITUTED, once. Two things can be swapped out from under a plan
+ * the user did not choose: an ACA cap the age gate forbids, and a timing rule that no longer exists.
+ * Both are silent-by-default failures, so both are said out loud here.
+ *
+ * APPENDS rather than replaces. There is one message box, and the scenario loaders write their own
+ * "loaded" line into it immediately before this runs (reportSummaryDrift), so a second showMessage()
+ * would delete the drift report the user also needs. An existing error keeps its severity; anything
+ * milder becomes a warning, because a limit the user did not choose is the more serious of the two.
+ */
+function reportLoadSubstitutions() {
+    const msg = [TIMING_MODE_SWAP, ACA_GATE_SWAP].filter(Boolean).join(' ');
+    ACA_GATE_SWAP = null;
+    TIMING_MODE_SWAP = null;
+    if (!msg) return;
+    const box = document.getElementById('popUpMessage');
+    if (box && box.style.display === 'block' && box.textContent.trim()) {
+        box.textContent = `${box.textContent.trim()} ${msg}`;
+        if (!/\berror\b/.test(box.className)) box.className = 'scenario-message warning';
+    } else {
+        showMessage(msg, 'warning');
+    }
+}
+
 function updateACAWarning() {
     const sel     = document.getElementById('stratRate');
     const warnEl  = document.getElementById('aca-age-warn');
@@ -7554,11 +7679,6 @@ function updateACAWarning() {
         opt.disabled = bothMedicare;
         opt.style.color = bothMedicare ? '#aaa' : '';
     }
-    // If a now-disabled ACA option is selected, switch to first enabled option
-    if (bothMedicare && sel.value.startsWith('aca')) {
-        const first = [...sel.options].find(o => !o.disabled);
-        if (first) { sel.value = first.value; updateBracketFeedback(); }
-    }
 
     // EVERY MESSAGE BELOW NAMES THE START YEAR AND THE AGES IN IT, and that is the whole point of
     // this block rather than a flourish. The age readouts beside the birth-year fields show ages
@@ -7573,6 +7693,37 @@ function updateACAWarning() {
     const p2AgeAtStart = startYear - by2;
     const you  = `you will be ${p1AgeAtStart}`;
     const them = `your spouse ${p2AgeAtStart}`;
+
+    // P95. A now-disabled ACA option falls back to the menu's own DEFAULT, "Below IRMAA".
+    //
+    // It used to take the first enabled option in the list, and the list is sorted by dollars, so a
+    // plan asking for the $84k ACA 400% cap silently came up on "10% Fed - $24.8k": three times
+    // tighter than what was asked for, and a target to FILL where the user had chosen a cap to stay
+    // under. The default is the honest substitute for two reasons. Both people being on Medicare is
+    // exactly the case where no premium subsidy exists for a cap to protect, so the cap has lost its
+    // purpose rather than needing a near-miss replacement; and "Below IRMAA" is a MAGI ceiling like
+    // the ACA entry it replaces, where a federal bracket is taxable income - a different basis (P87).
+    //
+    // Which option is the default comes off the list's own `selected` attribute rather than being
+    // named here, so generateStratRateOptions() stays the single place that decides it.
+    if (bothMedicare && sel.value.startsWith('aca')) {
+        const opts = [...sel.options];
+        const from = opts.find(o => o.value === sel.value);
+        const to   = opts.find(o => o.defaultSelected && !o.disabled) || opts.find(o => !o.disabled);
+        if (to && from) {
+            sel.value = to.value;
+            updateBracketFeedback();
+            // RECORDED, not announced. This runs on every age edit as well as on a load, and only a
+            // load has a user who did not choose the substitution. The loaders read and clear it;
+            // nobody else does, so editing the ages in the sidebar stays as quiet as it was.
+            const whoPhrase = hasSpouse
+                ? `${you} and ${them}, both on Medicare (age ${medAge}+)`
+                : `${you}, already on Medicare (age ${medAge}+)`;
+            ACA_GATE_SWAP = `This plan asked for ${limitOptionName(from)}, which is unavailable: at `
+                + `retirement start in ${startYear}, ${whoPhrase}, so there is no premium subsidy for `
+                + `an income cap to protect. Loaded ${limitOptionName(to)} instead.`;
+        }
+    }
 
     if (bothMedicare && medicareAlready) {
         // Silent, on instruction. The options are greyed out above and nothing here can be acted

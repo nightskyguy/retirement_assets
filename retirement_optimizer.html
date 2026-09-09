@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1779</title>
+    <title>Retirement Optimizer 11.17b1</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,14 +59,14 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1116d7"></script>
-	<script src="optimizer_core.js?v=111779"></script>
+	<script src="optimizer_core.js?v=1117b1"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=111779"></script>
-	<script src="optimizer_tests.js?v=111779"></script>
+	<script src="optimizer_ui.js?v=1117ae"></script>
+	<script src="optimizer_tests.js?v=1117b1"></script>
 </head>
 <body>
 
@@ -552,42 +552,26 @@
              felt inflation, and under Monte Carlo the index is the drawn path less this gap.
              Derived rather than entered, so it is shown rather than left to be inferred. -->
         <div id="cpi-spread-info" style="margin-top:-4px;margin-bottom:6px;font-size:0.82em;color:#555;"></div>
-        <!-- P70e. Diagnostic: hold the tax code still while the paths keep moving, so a Monte
-             Carlo comparison prices what variable inflation costs in TAX alone. Distinct from the
-             Monte Carlo tab's "Fixed Inflation" preset, which pins the generated paths themselves;
-             this one changes only what the tax code does with whatever the paths produced. -->
-        <div class="row" id="fixedTaxIndexing-wrap" style="display:none;">
-            <div><label style="font-size:0.9em;" title="Diagnostic. Indexes brackets, IRMAA tiers, the ACA cap, the QCD limit, Social Security COLA and Medicare premium growth at the CPI and Inflation rates you typed, ignoring each Monte Carlo path's own inflation. Spending still follows the path. Run a Monte Carlo with it on and off to see what variable inflation costs in tax alone.">
-                <input type="checkbox" id="fixedTaxIndexing"> Fixed tax indexing</label>
-                <div style="font-size:0.78em;color:#666;margin-top:2px;">Taxes index at your typed rates; spending still follows each path. Off by default.</div></div>
-        </div>
-        <!-- P28jh. Withdrawal month, gated. The engine has always picked this per year - January
-             when last year converted, November otherwise - and nobody could see or set it. The
-             month matters because the whole year's withdrawal leaves at once, spending AND the tax
-             on it, and money that leaves in January stops compounding for eleven months. Exposed
-             as a diagnostic so the long-run difference is visible; left on Automatic it is exactly
-             today's behavior. -->
+        <!-- One control names the whole year's shape. It replaced two - a withdrawal month and a
+             conversion month - which between them could not express the combination people
+             actually want: a conversion may not precede the required distribution, and the
+             distribution rode the spending draw, so "convert in January, spend in November" was
+             silently a no-op in every year a distribution was due. Giving the distribution its own
+             month is what makes Split reachable, and Split is the default. -->
         <div class="row" id="withdrawTiming-wrap" style="display:none;">
-            <div><label style="font-size:0.9em;" title="Diagnostic. Which month the year's withdrawal leaves the portfolio. The whole draw moves together - the money you spend and the tax on it - so a January draw stops compounding for eleven months while a November draw keeps compounding until it leaves. Automatic is the shipped rule: January in any year following one that converted more than $1,000, November otherwise. Run it each way to see what the choice is worth over a full plan.">Withdrawal month
-                <select id="forceWithdrawTiming">
-                    <option value="">Automatic (today's rule)</option>
-                    <option value="early">Always January (early)</option>
-                    <option value="late">Always November (late)</option>
+            <div><label style="font-size:0.9em;" title="Diagnostic. When the year's money actually moves. A withdrawal that leaves in January stops compounding for eleven months, while one that waits until November keeps earning until it goes. A conversion is the opposite: the sooner it lands in the Roth, the longer it grows there. Split does both - it converts early and spends late - which is why it is the default. A required distribution, when there is one, moves with the first of the two, because a conversion may not come before it.">Money moves
+                <select id="withdrawTiming">
+                    <option value="split">Split: convert early, spend late</option>
+                    <option value="early">Early: everything in January</option>
+                    <option value="late">Late: everything in November</option>
                 </select></label>
-                <div style="font-size:0.78em;color:#666;margin-top:2px;">Moves spending and its tax together. Automatic by default; nothing else changes.</div></div>
+                <div style="font-size:0.78em;color:#666;margin-top:2px;">Split by default. A year that converts nothing runs the same as Late.</div></div>
             <div><label style="font-size:0.9em;" title="Diagnostic. When the year's income tax is actually paid. Today it leaves with the withdrawal, so a January draw pays the tax in January and those dollars stop compounding for eleven months. Withholding is treated as paid evenly across the year no matter when it is withheld, so withholding on a December distribution satisfies the year - which is what the December option models. Medicare premiums are billed monthly and are never deferred either way.">Tax paid
                 <select id="taxSettlement">
                     <option value="">With the withdrawal (today)</option>
                     <option value="december">In December</option>
                 </select></label>
                 <div style="font-size:0.78em;color:#666;margin-top:2px;">Income tax only; Medicare premiums are unaffected. Spending, taxes owed and withdrawals do not change.</div></div>
-            <div><label style="font-size:0.9em;" title="Diagnostic. Which month a Roth conversion lands in the Roth. By default it rides the withdrawal month above, so converting in January and taking spending in November was not something the plan could do. Setting it separately moves only the conversion: the same dollars are converted, they simply spend more of the year in the Roth and less in the IRA. Your total does not change, but the IRA balance on December 31 does, and that balance sets next year's required distribution.">Conversion month
-                <select id="conversionTiming">
-                    <option value="">Same as withdrawal (today)</option>
-                    <option value="early">Always January (early)</option>
-                    <option value="late">Always November (late)</option>
-                </select></label>
-                <div style="font-size:0.78em;color:#666;margin-top:2px;">Moves only the conversion, not the spending draw. Same amount converted either way.</div></div>
         </div>
         <div class="row">
             <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (3.0)%?<input type="number" id="cashYield" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
@@ -757,6 +741,17 @@
 			     When hidden, clicking the tab auto-runs with default parameters. -->
 			<div id="mc-nerd-panel" style="display:none;margin-bottom:12px;padding:10px 14px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;">
 				<strong style="font-size:0.9em;color:#555;">Advanced Parameters</strong>
+				<!-- Moved here from the main sidebar, where it was a strict NO-OP. On a deterministic
+				     run `inputs.fixedTaxIndexing ? inputs.inflation : yr.yearInflation` has the same
+				     number on both sides, so the box could not change the figure it sat next to. It
+				     only bites when paths carry their own inflation, which is here - its own tooltip
+				     always said so. Distinct from the Fixed Inflation preset above: that one pins the
+				     generated paths, this one pins what the tax code does with whatever they produced. -->
+				<div style="margin-top:8px;">
+					<label style="font-size:0.85em;" title="Diagnostic. Indexes brackets, IRMAA tiers, the ACA cap, the QCD limit, Social Security COLA and Medicare premium growth at the CPI and Inflation rates you typed, ignoring each path's own inflation. Spending still follows the path. Run with it on and off to see what variable inflation costs in tax alone.">
+						<input type="checkbox" id="fixedTaxIndexing"> Fixed tax indexing</label>
+					<div style="font-size:0.78em;color:#666;margin-top:2px;">Taxes index at your typed rates; spending still follows each path. Off by default.</div>
+				</div>
 				<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;align-items:center;">
 					<label style="font-size:0.85em;color:#888;">(Mode selector above)</label>
 					<label style="font-size:0.85em;" title="Number of simulated market scenarios PER STRATEGY. The sweep runs this many paths against every withdrawal strategy it compares (about 144 of them on a typical plan), so 400 here is about 58,000 simulations. The running total is shown next to the Run button. More paths = more stable results, slower run.">Paths (per strategy)
@@ -953,7 +948,7 @@
 				     being used as a measurement fixture: nothing recorded that the scenario exists
 				     to teach tradeoffs rather than to be representative. -->
 				<div class="scenario-row" style="margin-top:6px;">
-					<textarea id="scenarioNotes" rows="2" style="flex:1;" placeholder="Notes (optional): what is this plan for, and what can it not show?"></textarea>
+					<textarea id="scenarioNotes" rows="2" style="flex:1;" placeholder="Notes (optional): what is this plan for? e.g. &quot;baseline before we sell the house&quot;"></textarea>
 				</div>
 				<div style="font-size:0.78em;color:#666;margin-top:2px;">Saving also records the plan's key statistics and the release you are on, so a later load can report what changed.</div>
 				<div id="scenarioList" style="display: none; margin-top: 10px;">
@@ -1019,6 +1014,33 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="behavior"><b>11.17b1</b>
+					<strong>A flaw was identified in the conversion/withdrawal timing and fixed.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>The month in which conversions and withdrawals were modeled - as stated in the Annual Details - incorrectly moved the wrong operations and usually ended up costing more taxes, and resulted in less benefit. Now the tool properly moves conversions to January, and keeps withdrawal in November (this is called "Split" mode). There is a not-yet-public control to change that choice as well.</li>
+					</ul>
+					<strong>An ACA cap counts your whole Social Security benefit, and the tool now measures it that way.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>The income an ACA FPL cap is tested against includes part of your benefit that is never taxed. Each year is now checked against that figure, so a year over the cap is reported as one. <strong>More ACA rows are flagged untenable (⚠️), and the Optimizer can rank them differently.</strong> A previous plan may have failed to flag a year where the ACA Cap was breached.</li>
+					</ul>
+					<strong>Cycle Brokerage harvest year now fills the bracket they are aimed at.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>A harvest year was measuring its remaining capital-gains room against the wrong income, counting your whole Social Security benefit and ignoring your deduction, so it stopped short of the 0% or 15% bracket it was intended to fill. It also now respects your chosen income limit on every path. Plans with <i>Cycle Brokerage</i> on realize more gains in a harvest year and will show different lifetime tax and ending wealth. <strong>Where your Limit is what holds the harvest down, nothing changes</strong>; the plans that move are those whose limit sits high enough that the capital-gains bracket was the real constraint.</li>
+					</ul>
+					<strong>Each entry in the Limit menu now says which income it measures.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>A federal bracket limits taxable income, an IRMAA tier limits MAGI, and an ACA cap limits an MAGI of its own that counts the whole benefit. The README says the same.</li>
+					</ul>
+					<strong>A plan asking for an ACA cap nobody in it can use now says so.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>The caps are applicable only while someone in the plan is still under 65 when it starts. Opening a link or saved plan that does not support ACA limits now loads the <strong>Below IRMAA</strong> bracket. Previously it silently chose the far tighter <i>10% Fed</i>.</li>
+					</ul>
+					<strong>Interest on cash is now taxed on what the cash actually earned.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li><strong>Every plan's tax moves a little.</strong> Interest was taxed on the cash balance at the moment of the withdrawal times a full year's yield. The net is that cash you spent was taxed on interest it never earned and not interest on cash that arrived later in the year. A required distribution taken in cash in January was not taxed on its interest at all. Each year now checks what the cash actually earned and carries the difference into the next year. Generally the error was small. Now the tool is more likely to over calculate and over tax slightly because it does not know exactly when you spend.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.17b1" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="behavior"><b>11.1779</b>
 					<strong>Optimizer table: a row you pin to compare against now stays pinned and stays visible.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1713,14 +1735,8 @@ window.addEventListener('DOMContentLoaded', function () {
     }
 });
 
-// Auto-run tests when page loads (comment out if you don't want auto-run)
-// window.addEventListener('DOMContentLoaded', runTests);
-
-// Tier 2 opt-in. Must be set BEFORE runTests(), so the badge renders neutral rather than green
-// while the node suites are still outstanding. See the badge protocol in optimizer_tests.js.
-window.TIER2_PENDING = true;
-runTests?.();
-
+// The in-page tests used to run right here, synchronously, before runSimulation() and before the
+// page had painted. They now run from the idle callback at the bottom of this block, after boot.
 runSimulation?.();
 
 // ?tab=optimizer / annual / charts / montecarlo / importexport / documentation opens the page on
@@ -1729,25 +1745,33 @@ runSimulation?.();
 // mcTabActivated (it would race the Experiment).
 if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
 
-// ── Tier 2: the node-only suites, after first paint ──────────────────────────
-// 352 tests in optimizer_core.tests.js, taxPaymentPlanner.tests.js and doclinks.tests.js never ran
-// in a browser, so breaking one was invisible at release time. They run here instead, and NOTHING
-// about this is on the critical path: the scripts are not <script> tags, they are injected from
-// requestIdleCallback after the page has painted and the first simulation has rendered.
+// ── The test tiers, after first paint ─────────────────────────────────────────
+// Tier 1 is the in-page suite, optimizer_tests.js: the DOM-facing checks only a live page can
+// make. It ran synchronously at parse time until 11.17b0 - about 0.2 s on a fast machine and about
+// a second on the ten-year-old laptops this page is written for, all of it before first paint. It
+// now runs from requestIdleCallback, after boot. Nothing it asserts depends on running first, and
+// the tests that write to live page state stay gated behind ?runtests exactly as before.
 //
-// ?runtests forces the whole thing SYNCHRONOUSLY, slow tests included, for a deliberate full check
-// before a release. ?runtests=fast opts back out of the slow tests while still skipping the wait.
+// Tier 2 is the node suites: optimizer_core.tests.js, taxengine.tests.js, taxPaymentPlanner.tests.js
+// and doclinks.tests.js. They are ?runtests-ONLY. The pre-commit hook runs every one of them on
+// every commit, so re-running them in each visitor's browser verified nothing new and cost about
+// four seconds of main thread on a fast machine - fifteen or more on the audience's - and a
+// megabyte of test code per visit. Without ?runtests the badge reports the in-page result and says
+// where the node suites ran instead.
+//
+// ?runtests runs both tiers immediately, slow tests included, for a deliberate full check before
+// a release. ?runtests=fast opts back out of the slow tests while still running everything else.
 (() => {
     const RT = new URLSearchParams(location.search).get('runtests');
     const ALL = RT !== null && RT !== 'fast';
-    // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
+    // Bump with the suites, not with the page: these six are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111779';
+    const V = '?v=1117b1';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
-    const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',
-                     'optimizer_core.tests.js', 'taxPaymentPlanner.tests.js', 'doclinks.tests.js'];
+    const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',
+                     'taxengine.tests.js', 'taxPaymentPlanner.tests.js', 'doclinks.tests.js'];
 
     const load = src => new Promise((resolve, reject) => {
         const s = document.createElement('script');
@@ -1756,6 +1780,13 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
         s.onerror = () => reject(new Error(src + ' could not be fetched'));
         document.head.appendChild(s);
     });
+
+    function runTier1() {
+        // Set BEFORE runTests(), so the badge renders neutral rather than green while the node
+        // suites are still outstanding. See the badge protocol in optimizer_tests.js.
+        if (RT !== null) window.TIER2_PENDING = true;
+        runTests?.();
+    }
 
     async function runTier2() {
         try {
@@ -1774,6 +1805,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
             // count reads undefined.
             results.push(Object.assign({ name: 'optimizer_core' },
                 await window.runOptimizerCoreTests({ skipSlow: !ALL })));
+            results.push(Object.assign({ name: 'taxengine' }, window.runTaxEngineTests()));
             results.push(Object.assign({ name: 'taxPaymentPlanner' }, window.runTaxPlannerTests()));
             results.push(Object.assign({ name: 'doclinks' }, window.runDocLinksTests()));
         } catch (e) {
@@ -1786,11 +1818,12 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     }
 
     if (RT !== null) {
+        runTier1();
         runTier2();                     // asked for explicitly: run now, do not wait for idle
     } else if (typeof requestIdleCallback === 'function') {
-        requestIdleCallback(() => runTier2(), { timeout: 3000 });
+        requestIdleCallback(runTier1, { timeout: 3000 });
     } else {
-        setTimeout(runTier2, 0);
+        setTimeout(runTier1, 0);
     }
 })();
 </script>

@@ -1027,6 +1027,42 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
     return { limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit, kind, rateBasis };
 }
 
+/**
+ * P87d. The year's MAGI **on the income definition the active ceiling is written in**, which is the
+ * only quantity an overage against that ceiling may be measured with.
+ *
+ * `yr.tax.MAGI` is the SSA/IRMAA definition - federal AGI plus tax-exempt interest, where AGI
+ * already carries only the TAXABLE share of Social Security, at most 85% and less in the two lower
+ * statutory tiers. ACA MAGI is a different statutory quantity: it adds the whole benefit back,
+ * taxable or not. So for an ACA cap and only for an ACA cap:
+ *
+ *     acaMAGI = MAGI + (totalSS - taxableSS)
+ *
+ * WHY THIS IS A CORRECTNESS FIX AND NOT A REFINEMENT. The SIZING side of the ACA cap has always
+ * been ACA-shaped: `_ssCeilRoom = yr.limit - yr.fixedInc` subtracts the FULL benefit, deliberately,
+ * and P87c kept it that way while changing the other two ceiling kinds. The MEASUREMENT side never
+ * followed - `bracketOverage` judged every kind against `tax.MAGI` - so the two halves of the same
+ * cap were written in different units. The error is one-directional: the overage can only read LOW,
+ * so a breached cap could report clean.
+ *
+ * That is not only a column. `acaBreach` is set from this overage and feeds `totals.acaBreachYears`,
+ * which the Optimizer reads to flag an ACA row UNTENABLE - so an ACA plan that cannot hold its cap
+ * could rank as though it could. Measured over 2,880 live ACA plan-years
+ * (`.test_harnesses/acamagi_harness.js`): 342 years flip clean to breached, the reported breach rate
+ * goes 43.5% -> 55.4%, and **12 of 360 plans report zero breaches while actually breaching**.
+ *
+ * `tax.MAGI` ITSELF IS NOT TOUCHED, on purpose: IRMAA and NIIT read it and their definition is the
+ * current one. This is a second, narrower quantity for the one ceiling that needs it.
+ */
+function ceilingMAGI(yr) {
+    const magi = yr.tax?.MAGI ?? 0;
+    // `isACAStrategy`, not `ceilingKind`, and not `inputs.strategy`: it is already false in a year
+    // the cap has lapsed at Medicare eligibility, which is the same gate acaBreach uses two lines
+    // below its own call site. A lapsed year has no ACA cap and no add-back to make.
+    if (!yr.isACAStrategy) return magi;
+    return magi + Math.max(0, (yr.fixedInc ?? 0) - (yr.tax?.taxableSS ?? 0));
+}
+
 let simulationCount = 0;
 
 // ---- simulate() helper functions ----
@@ -1146,6 +1182,10 @@ function buildSimYearLogRecord(p) {
         '-convTimingShift': p.convTimingShift ?? 0,
         'cashDividends': p.taxableDividends,
         'cashInterest': p.taxableInterest,
+        // P115a. What the cash actually earned this year, and the running untaxed balance carried
+        // into next year's `cashInterest`. Hidden: the pair exists so the true-up is auditable.
+        '-cashInterestEarned': p.cashInterestEarned ?? 0,
+        '-cashInterestCarry': p.cashInterestCarry ?? 0,
         // Taxes
         'FedRate%': p.tax.federalMarginalRate,
         'StateRate%': p.tax.stateMarginalRate,
@@ -1180,6 +1220,14 @@ function buildSimYearLogRecord(p) {
         // residual auditable from a finished run instead of an argument. 0 for every ceiling that
         // is not a federal bracket top.
         '-ceilDedAddBack': p._ceilDedAddBack,
+        // The ordinary TAXABLE income floor the LTCG bracket room was sized against, in a
+        // harvest year. 0 in every other year. Its residual against `-fedTaxableInc` minus
+        // realized gains is the one-pass estimate's error.
+        '-ltcgFloor': p._ltcgFloor ?? 0,
+        // The net dollars the RMD's own month moved: cash yield gained on the proceeds MINUS the
+        // IRA growth given back. Negative whenever the IRA out-earns cash, which is the usual
+        // case and is the real cost of taking the distribution early. 0 unless a mode moves it.
+        '-rmdTimingShift': p.rmdTimingShift ?? 0,
         // Tax-rate creep multipliers actually applied this year (1 = today's statutory rates).
         '-fedRateCreep': p.fedRateCreep,
         '-stateRateCreep': p.stateRateCreep,
@@ -1191,6 +1239,12 @@ function buildSimYearLogRecord(p) {
         '-ssStart2': p.ssStart2,
         '-ssStartSurvivor': p.ssStartSurvivor,
         MAGI: p.tax.MAGI,
+        // P87d. MAGI on the ACA statute's definition - the SSA one above plus the non-taxable share
+        // of the benefit. Equal to `MAGI` for every ceiling that is not a live ACA cap, which is why
+        // it is hidden rather than a column: on all but one strategy it would be a duplicate. It is
+        // the number `BracketOverage` and `acaBreach` are decided on for an ACA plan, so a reader
+        // auditing a breach needs it and cannot reconstruct it from `MAGI` and `SSincome` alone.
+        '-acaMAGI': p.acaMAGI,
         'NominalRate%': p.nominalTaxRate,
         'FedCap': p.tax.fedLimit,
         'StateCap': p.tax.stLimit,
@@ -1280,7 +1334,10 @@ function buildSimYearLogRecord(p) {
         inflows: p.yearInflows,
         'wdRate%': p.wdRate,
         // Phase 12: per-year withdrawal timing
-        timing: (p.useEarly ? 'Early' : 'Late') + '(' + p.timingReason + ')',
+        // Conversion / withdrawal, per year. 'none' when the year converted nothing, which is a
+        // fact about the year rather than about the setting. The required distribution, when there
+        // is one, follows the FIRST of the two.
+        timing: (p.convLabel ?? 'none') + '/' + (p.wdLabel ?? 'Late'),
         // Phase 22: Guyton-Klinger
         gkSpend: p.strategy === 'gk' ? p.spendGoal : null,
         gkAdj:   p.strategy === 'gk' ? (p.gkAdjLabel || '—') : null,
@@ -1384,7 +1441,14 @@ function beginYear(sim, yr) {
     // this goal exists to keep the IRA small enough that its RMDs clear under a bracket, an IRMAA
     // tier or an ACA cap - all of which move on cpiRate. Indexing the goal on a faster clock than
     // the ceilings it is aimed at would make it drift out from under them.
-    yr.iraGoalNominal = inputs.iraBaseGoal * sim.cpiRate;
+    // `?? 0` and it is not defensive noise. An ABSENT iraBaseGoal made this NaN, and NaN then
+    // propagated all the way to `totalNetWealth` on the `bracket` and `fixed` strategies - a whole
+    // run reporting NaN instead of a number, silently, from one missing input. The page always
+    // sends the field, so only a node caller could hit it, which is exactly who does: a harness
+    // building an inputs object by hand. Two of them omit it today and get away with it only
+    // because they set it per-cell as an axis. Absent now means "no goal", which is what every
+    // caller that omits it intends.
+    yr.iraGoalNominal = (inputs.iraBaseGoal ?? 0) * sim.cpiRate;
     sim.fixedWithdrawal = calculateAmortizedWithdrawal(balance.IRA1 + balance.IRA2, yr.iraGoalNominal, amortYears, inputs.growth)
 
     // Phase 12: growthRates moved here (from below withdrawal block) to enable pre-withdrawal growth.
@@ -1397,75 +1461,60 @@ function beginYear(sim, yr) {
     yr.yearInflation = inputs.inflationSequence?.[y] ?? inputs.inflation;
     yr.growthRates = computeYearGrowthRates(inputs, y);
 
-    // Withdrawal timing auto-selection (Phase 12): Early (Jan) for conversion years; Late (Dec) otherwise.
-    // Early: preMonths=1, postMonths=11. Late: preMonths=11, postMonths=1.
-    // Year 0: use strategy flag (bracket or explicit extraConv). Year 1+: prior year's actual conversion amount.
-    // Do NOT use convertExcessToRoth as a trigger - it is hardcoded true in the optimizer and does not guarantee a conversion fires.
-    // Year 0 must be decided from the conversion SCHEDULED for year 0, never from the raw
-    // extraConversionAmount field: the field has two shapes (scalar or per-year array - a
-    // multi-element array coerces to NaN, so `> 0` silently reported "no conversion") and three
-    // suppression flags can zero it (convEndYear, _cfSuppressConversions,
-    // _cfSuppressConversionsFromYear). Reading it through the same accessor applyExtraConversion
-    // uses is what makes a per-year array and the equivalent scalar + convEndYear the same plan.
-    // Years 1+ read the prior year's realized conversion, which was already shape-safe.
-    // 'aca' only implies a conversion while its cap is live: a lapsed ACA year never reaches the
-    // ceiling branch that creates conversion room, so it implies one no more than Proportional
-    // does. Ages are re-derived here rather than read off yr because resolveHousehold has not run
-    // yet - this runs first, and only year 0 consults it. Singles carry birthyear2/die2 = 0
-    // (simulate() normalizes them), which makes alive2 false.
-    const _a1 = sim.currentYear - sim.birthyear1, _a2 = sim.currentYear - sim.birthyear2;
-    const _acaLive = inputs.strategy === 'aca'
-        && !acaCapLapsed(_a1, _a2, _a1 <= inputs.die1, _a2 <= inputs.die2);
-    // A scheduled year-0 CEILING implies a conversion for the same reason a bracket ceiling does:
-    // it creates room above spending. Without this a schedule replaying a bracket family would pick
-    // the opposite year-0 withdrawal MONTH and diverge on timing alone.
-    // It must test for a ceiling and not merely for an entry: a year-0 `iraDraw` implies no
-    // conversion, exactly as fixedpct and fixed imply none, and treating it as one flipped the
-    // year-0 month and left IRA Draw $39,117 and Reduce $72,656 adrift with every year scheduled.
-    const _sched0e = inputs.strategy === 'schedule' ? _schedulePlanFor(inputs, 0) : null;
-    const _sched0 = !!_sched0e && _sched0e.ordTarget !== undefined;
-    const _stratImpliesConversion =
-          ((inputs.strategy === 'bracket' || _acaLive || _sched0) && !_convSuppressedThisYear(inputs, 0))
-       || _extraConvAmountFor(inputs, 0) > 0;
-    const _prevConv    = y > 0 ? (log[y - 1].rothConv ?? 0) : 0;
-    // P28jb research input (no UI, no URL param): `inputs.timingConvThreshold` replaces the bare
-    // 1000. Nobody chose that 1000 - it has been a literal since Phase 12 - and one dollar either
-    // side of it moves a whole year's withdrawal by ten months, then keeps moving it for every year
-    // the flag stays flipped. Same species as P30's [40, 60], and it gets the same treatment: make
-    // it a swept input before asking whether it is load-bearing.
+    // ── WHEN THE MONEY MOVES: one mode, three months ──────────────────────────────────────────
     //
-    // Validated to a SHAPE rather than for truthiness, the discipline gapFillWeights records: a
-    // malformed value must mean "leave today's behavior alone", never "model something else
-    // silently". Finite and >= 0. `?? ` would not do here, because 0 is a legal value.
+    //     mode     RMD   conversion   spending
+    //     early     1        1           1
+    //     split     1        1          11        <- the default
+    //     late     11       11          11
     //
-    // BOTH ENDPOINTS ARE MEANINGFUL, which is what makes a sweep of this a sweep of the policy
-    // rather than of two different policies. At 0 ANY conversion flips the year to Early - and
-    // measured, that is not obviously the intended rule either, because plans do produce sub-dollar
-    // residual conversions and a $0.01 remainder would move a whole year's withdrawal by ten months.
-    // At a threshold above any conversion the plan makes, the flag never flips and years 1+ are
-    // pinned Late - the same plan `forceWithdrawTiming: 'late'` produces, reached through the
-    // trigger instead of around it.
+    // The RMD and the conversion move together because they must: a conversion may not precede the
+    // distribution, so the only way to convert in January is to distribute in January.
     //
-    // WHERE THE CONSTANT BITES IS A PROPERTY OF THE STRATEGY, not of the household (P28jb, measured
-    // 2026-09-04 on one 15-year fixture). Fill Bracket 22% converted in 11 years and the smallest
-    // was $27,365, so 1000 is inert for it at any value below that. Proportional +% converted in 11
-    // years and EVERY one was under $1,000, so the same constant means that plan never flips at all
-    // today and would flip every year at 0. Reduce straddles it. A threshold sweep will therefore
-    // look flat or decisive depending entirely on which strategies are in the grid, which is a trap
-    // P28je has to avoid rather than a result.
-    const _tct = inputs.timingConvThreshold;
-    const _tctOK = Number.isFinite(_tct) && _tct >= 0;
-    yr._useEarly    = y === 0 ? _stratImpliesConversion : (_prevConv > (_tctOK ? _tct : 1000));
-    // Research override (no UI, default off): pin the timing to 'early' or 'late' for every year.
-    // Exists because converting flips this rule, so any A/B of convertExcessToRoth silently compares
-    // a month-1 withdrawal schedule against a month-11 one on top of the tax difference. Pinning it
-    // is the only way to separate "where the surplus lands" from "when the money leaves".
-    if (inputs.forceWithdrawTiming === 'early') yr._useEarly = true;
-    else if (inputs.forceWithdrawTiming === 'late') yr._useEarly = false;
-    const yearTiming   = yr._useEarly ? 'early' : 'late';
-    yr.timingReason = yr._useEarly ? 'Conv'  : 'Spend';
-    const preMonths    = yearTiming === 'early' ? 1 : 11;
+    // WHAT WAS HERE, AND WHY IT IS GONE. The month used to be chosen by a rule that read LAST
+    // year's conversion (`log[y-1].rothConv > 1000`) and moved the SPENDING withdrawal. Two
+    // defects in one line, and they explain each other. It moved the wrong leg - what a converting
+    // year wants early is the CONVERSION, not the spending - and it looked back because it had to:
+    // the spending month must be fixed here, at the top of the year, before anything about the year
+    // is known, so the only conversion figure in reach is last year's. Aim the trigger at the leg
+    // that is decided late and the look-back is unnecessary. Year 0 used a third rule again
+    // (`_stratImpliesConversion`), so the policy was not even consistent with itself.
+    //
+    // Nothing is inferred from the strategy any more, which also retires the pile of special cases
+    // that inference needed: a lapsed ACA cap implies no conversion, a scheduled year-0 CEILING
+    // does but a year-0 `iraDraw` does not, and `extraConversionAmount` has two shapes and three
+    // suppression flags. All of that existed to guess whether a year would convert. The engine now
+    // waits and looks.
+    //
+    // Unknown or absent means SPLIT. A harness or a saved plan that names no mode gets the default,
+    // not a silent third behavior.
+    const _MODE_MONTHS = { early: [1, 1, 1], split: [1, 1, 11], late: [11, 11, 11] };
+    const _modeM = _MODE_MONTHS[inputs.withdrawTiming] || _MODE_MONTHS.split;
+    let preMonths      = _modeM[2];
+    // ── ONE MODE, THREE MONTHS ────────────────────────────────────────────────────────────────
+    // `withdrawTiming` names the whole year's shape rather than one leg of it:
+    //
+    //     mode     RMD   conversion   spending
+    //     early     1        1           1
+    //     split     1        1          11
+    //     late     11       11          11
+    //
+    // Split is the one the two-select arrangement could not express. With a late spending draw the
+    // RMD sat in month 11, and a conversion may not precede the distribution, so asking for a
+    // January conversion was silently a no-op in every RMD year. Giving the distribution its own
+    // month is what makes the mode reachable at all.
+    //
     yr.postMonths   = 12 - preMonths;
+    // THE RMD'S OWN MONTH. It used to be inferred from the spending month, because the required
+    // distribution rode the withdrawal and the two could not disagree. They can now, and Split is
+    // the mode that makes them disagree: distribute and convert in January, spend in November. That
+    // is the only way to reach a January conversion in an RMD year at all.
+    yr.rmdMonth  = _modeM[0];
+    yr.convMonth = _modeM[1];
+    // For the Annual Details column. The conversion half is filled in by growAndSettle, which is
+    // the only place that knows whether the year converted at all.
+    yr._wdLabel   = preMonths === 1 ? 'Early' : 'Late';
+    yr._convLabel = 'none';
 
     // Pre-withdrawal growth: portfolio earns for preMonths before withdrawal exits.
     yr.preGains = applyGrowth(balance, yr.growthRates, preMonths);
@@ -1584,6 +1633,9 @@ function resolveHousehold(sim, yr) {
     yr._overageFromConv = 0; // the part of the above a voluntary conversion is responsible for
     yr.forcedIRA = 0;      // soft-cap break: IRA drawn ABOVE the ceiling to fund mandatory spending
     yr.acaBreach = false;  // strict ACA cap could not fund spending → plan untenable this year
+    yr.acaMAGI = 0;        // P87d: MAGI on the ACA statute's definition (see ceilingMAGI below)
+    yr.rmdTimingShift = 0; // net effect of taking the RMD earlier than the spending draw
+    yr._ltcgFloor = 0;     // the LTCG room's ordinary-taxable floor, set only in a harvest year
 
     // Soft caps (Fill Federal Bracket / IRMAA Tier / IRA Draw %): when spending can't be met
     // within the ceiling and Cash/Brokerage/Roth are exhausted, the 3rd-pass fallback draws
@@ -1719,7 +1771,28 @@ function computeIncome(sim, yr) {
     yr.taxableInc = yr.pension;				// Pensions, W2, RMDs, IRA withdrawals, wdBrokerage
 
     // These will be APPROXIMATE worst case - no Withdrawals have been made.
-    yr.taxableInterest = balance.Cash * inputs.cashYield
+    //
+    // P115a. THE ESTIMATE IS TRUED UP THE FOLLOWING YEAR. Interest is taxed here, at the withdrawal
+    // point, on the balance the cash has at that moment times the full-year yield, because that is
+    // the only figure available before the year's withdrawals are sized. It is wrong in both
+    // directions: cash that leaves during the year is taxed on interest it never earns, and cash
+    // that ARRIVES after this point - a banked surplus, the required distribution Split takes in
+    // January - earns yield this line never sees. Measured on the plan bank before the true-up:
+    // up to 0.34% of lifetime tax over-charged on a household drawing its cash down, up to 1.8%
+    // under-charged on one whose distribution sits in cash for ten months of every converting year,
+    // and up to 39% of the Split-versus-Late margin on the household it biases most.
+    //
+    // growAndSettle knows what the cash actually earned once the year settles, and the difference
+    // is carried into this line next year, so over a plan the interest taxed equals the interest
+    // earned to within the final year's residual. Same-year exactness would need the tax passes to
+    // know the post-withdrawal balance before the withdrawals exist, which is circular; a one-year
+    // carry is the honest shape. Interest is income only, never spendable cash (see the note below
+    // possibleIncome), so the carry moves tax and nothing else. It cannot make taxable interest
+    // negative: a carry larger than the estimate zeroes the line and the unabsorbed remainder rolls
+    // forward again, which is why the carry is recomputed from the ledger rather than reset.
+    const _interestEstimate = balance.Cash * inputs.cashYield;
+    yr._cashInterestCarryIn = sim.cashInterestCarry ?? 0;
+    yr.taxableInterest = Math.max(0, _interestEstimate + yr._cashInterestCarryIn);
     yr.taxableDividends = balance.Brokerage * inputs.dividendRate
 
 
@@ -1785,6 +1858,12 @@ function computeIncome(sim, yr) {
 
     yr.totalRMD = _qcdOut1 + _rmdOut1 + _qcdOut2 + _rmdOut2;    // realized, not merely required
     yr.taxableRMD = _rmdOut1 + _rmdOut2;                        // taxable portion (excludes QCDs)
+    // Per spouse, and split by DESTINATION rather than by tax treatment, because the RMD timing leg
+    // in growAndSettle needs both halves and they do not go to the same place. Every distributed
+    // dollar leaves the IRA and stops earning the IRA's rate; only the non-QCD part reaches the
+    // household and can sit in Cash. A QCD goes to charity and earns the household nothing.
+    yr._iraOut1 = _qcdOut1 + _rmdOut1;   yr._iraOut2 = _qcdOut2 + _rmdOut2;
+    yr._toCash1 = _rmdOut1;              yr._toCash2 = _rmdOut2;
     yr.totalIRAForcedWithdrawals = _qcdOut1 + _rmdOut1 + _qcdOut2 + _rmdOut2; // actual IRA outflow
     yr.taxableInc += yr.taxableRMD;                                       // only non-QCD RMDs are income
     // SPENDABLE income only. Dividends and interest are taxable (they reach calculateTaxes through
@@ -2315,12 +2394,114 @@ function planPrimaryWithdrawals(sim, yr) {
         const _baseOrdinaryInc = yr.taxableInc + yr.fixedInc + yr.taxableInterest + yr.taxableDividends;
         const _cycleTargetRate = inputs.cycleLTCGTarget ?? 0.15;   // nerdknob: 0.15=target 0% bracket (default), 0.20=target 15% bracket
         const _harvestMode = inputs.cycleHarvestMode ?? 'maxbracket';
+        // P87c4. How much room a strategy ceiling still has above an ordinary-income floor, on the
+        // ceiling's OWN income definition.
+        //
+        // `_baseOrdinaryInc` carries the FULL Social Security benefit, and every caller below
+        // compares it against a MAGI ceiling. Federal-bracket and IRMAA ceilings are spent against
+        // `tax.MAGI`, which carries at most 85% of the benefit, so the plain subtraction charges the
+        // ceiling for income it never receives and the harvest stops short - the same units mismatch
+        // P87c fixed in the ordinary sizing line, in the branch that runs INSTEAD of it.
+        //
+        // ACA KEEPS THE FULL BENEFIT, for the same statutory reason it does there: ACA MAGI adds
+        // non-taxable Social Security back, so the whole benefit really does occupy that cap. The
+        // fork is on the ceiling's KIND, which is why computeBracketCeiling's `kind` is read here
+        // rather than `inputs.stratACAMultiple` - a lapsed ACA year is not an ACA ceiling.
+        //
+        // MEASURED BEFORE SHIPPING, `.test_harnesses/harvestceil_harness.js`, 648 cyclic cells. The
+        // guard binds in 339 of them, 116 with the shipped cycleCoexist default, and every one of
+        // those 116 is clean (same delivered spending, both arms funded). Median lifetime tax +$608,
+        // median ending net worth -$5,259, down in 98 of 116, worst -$46,443.
+        // **The cost is a consequence to disclose, not a reason to decline** - the standing P87a
+        // correction. A named ceiling is a contract to FILL; that filling a 22% bracket is often a
+        // worse plan than under-filling it is the Optimizer ranking's job to surface, not a licence
+        // for the engine to under-deliver the strategy that was selected.
+        // `harvestCeilSSBasis: 'full'` restores the old arm and exists so the harness can re-measure.
+        const _ceilRoomAbove = (ceil, ordFloor) => {
+            if ((inputs.harvestCeilSSBasis ?? 'magi') !== 'magi' || ceil.kind === 'aca') {
+                return ceil.limit - ordFloor;
+            }
+            // nonSSIncomeForMAGI answers "what NON-SS income puts MAGI exactly on this limit", so
+            // the floor has to be reduced to its own non-SS part to be comparable. ordFloor always
+            // contains yr.fixedInc exactly once, at both call sites.
+            return nonSSIncomeForMAGI(yr.status, ceil.limit, yr.fixedInc) - (ordFloor - yr.fixedInc);
+        };
         // Harvest sizing as a function of the ordinary-income floor. With ordFloor =
         // _baseOrdinaryInc this is byte-for-byte today's logic; cycleCoexist calls it with the
         // floor raised by the IRA draw.
+        // P87c4's deferred third consumer, now measured and corrected. An LTCG bracket top is a
+        // TAXABLE-income threshold - gains stack on top of ordinary income AFTER the deduction -
+        // and `_baseOrdinaryInc` is neither: it carries the FULL Social Security benefit and has no
+        // deduction subtracted at all. TWO errors, both making the floor look higher than it is, so
+        // the room comes back too small and the harvest stops short of the bracket it was told to
+        // fill. Measured over 4,745 harvest years (`.test_harnesses/ltcgroom_harness.js`): the floor
+        // is overstated in EVERY one, median $59,276 against a 0% bracket about $97k wide, and the
+        // deduction is $50,161 of that - so this is not a copy of the benefit-only fix above.
+        //
+        // The two corrections are ASKED FOR rather than rebuilt. `calculateTaxes` already decides
+        // the taxable share of the benefit and which deduction this household gets (standard or
+        // itemized, the age-65 bumps, the senior deduction after its phase-out), and it is the same
+        // call `P92a` uses for the ceiling's own deduction. Deriving either by hand here would be a
+        // second source of truth free to drift from the one charging the tax.
+        //
+        // `ordFloor`'s COMPOSITION is deliberately untouched - only its BASIS is corrected - so this
+        // cannot silently change which components the harvest counts.
+        //
+        // ASKED AT ZERO GAINS, on purpose, and a second pass was tried and removed. Capital gains do
+        // enter PROVISIONAL income for the Social Security calculation, so this understates the
+        // taxable share slightly; re-asking at the gains pass 1 implied moved 4 harvest years out of
+        // 292 and was not worth its call. The residual that remains is NOT that circularity at all -
+        // it is income the year gains AFTER the harvest is sized (a Roth conversion, a forced draw),
+        // which no estimate made at sizing time could have known. `-ltcgFloor` is logged so that gap
+        // stays auditable rather than assumed.
+        const _ltcgFloor = (ordFloor) => {
+            if ((inputs.ltcgRoomBasis ?? 'taxable') !== 'taxable') return ordFloor;
+            const _ss = yr.fixedInc;
+            const _nonSS = Math.max(0, ordFloor - _ss);
+            const _t = calculateTaxes({
+                filingStatus: yr.status, ages: [yr.age1, yr.age2],
+                birthyears: [sim.birthyear1, sim.birthyear2],
+                totalSS: _ss, IRMAAAnnualCost: 0,
+                earnedIncome: yr.pension + yr.taxableRMD + yr.taxableInterest
+                            + Math.max(0, _nonSS - yr.pension - yr.taxableRMD - yr.taxableInterest - yr.taxableDividends),
+                inflation: sim.cpiRate,
+                pensionIncome: yr.pension, iraIncome: yr.taxableRMD,
+                qualifiedDiv: yr.taxableDividends, capGains: 0, hsaContrib: 0,
+                taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep,
+                stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh,
+                propTax: yr.propTax, taxYear: yr.taxYear
+            });
+            const _untaxedBenefit = Math.max(0, _ss - (_t.taxableSS ?? 0));
+            const _floor = Math.max(0, ordFloor - _untaxedBenefit - (_t.federalStdDeduction ?? 0));
+            // Recorded so the estimate's residual is auditable from a finished run rather than
+            // argued, the same way `-ceilDedAddBack` records P92a's.
+            yr._ltcgFloor = _floor;
+            return _floor;
+        };
         const _sizeHarvest = (ordFloor) => {
             if (_harvestMode === 'spendonly') return yr.additionalSpendNeeded;
-            const _targetRoom = getLTCGBracketRoom(ordFloor, yr.status, _cycleTargetRate, sim.cpiRate);
+            // TWO FLOORS, and they are not interchangeable. `_ltcgOrd` is ordinary TAXABLE income,
+            // which is what an LTCG bracket top bounds. `ordFloor` stays the gross MAGI-shaped
+            // aggregate, which is what the strategy's own ceiling is measured against further down.
+            // Collapsing them into one variable would feed a post-deduction figure to a MAGI ceiling
+            // and undo the correction above.
+            const _ltcgOrd = _ltcgFloor(ordFloor);
+            // The strategy's own ceiling caps the harvest on EVERY path, not only the top-off one.
+            // It used to be applied to the top-off branch alone, so a harvest that fitted inside the
+            // LTCG target bracket was returned without ever being tested against the IRMAA tier or
+            // ACA cap the plan was holding. That hole was unreachable only because the room was too
+            // small to reach a threshold; correcting the floor above made it reachable, and a
+            // coexist harvest year promptly crossed from no tier into IRMAA Tier 1.
+            const _capToCeiling = (grossRoom) => {
+                if (!(inputs.strategy === 'bracket' || yr.isACAStrategy)) return grossRoom;
+                // This branch (isBrokerageYear) runs INSTEAD of the ceiling-computing branch this
+                // year, so compute it fresh rather than reading a stale or undefined `limit`.
+                // yr.isACAStrategy, not inputs.strategy: a lapsed ACA year has no ceiling to
+                // respect, and computeBracketCeiling would still hand back the FPL cap if asked.
+                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack);
+                return Math.min(grossRoom, Math.max(0, _ceilRoomAbove(_ceil, ordFloor)));
+            };
+            const _targetRoom = _capToCeiling(getLTCGBracketRoom(_ltcgOrd, yr.status, _cycleTargetRate, sim.cpiRate));
             const _targetNetRoom = _targetRoom * (1 - yr.capGainsPercentage * sim.capitalGainsRate);
             if (yr.additionalSpendNeeded <= _targetNetRoom) {
                 // Spend fits inside the target bracket - max it out anyway.
@@ -2329,34 +2510,30 @@ function planPrimaryWithdrawals(sim, yr) {
             // Spend forces gains beyond the target bracket. Find which LTCG bracket the
             // forced realization lands in and top off to that bracket's own ceiling.
             const _spendGrossNeeded = yr.additionalSpendNeeded / Math.max(0.01, 1 - yr.capGainsPercentage * sim.capitalGainsRate);
-            const _landedRate = getLTCGBracketTopRate(ordFloor, _spendGrossNeeded, yr.status, sim.cpiRate);
+            const _landedRate = getLTCGBracketTopRate(_ltcgOrd, _spendGrossNeeded, yr.status, sim.cpiRate);
             const _ltcgRates = (TAXData.FEDERAL.CAPITAL_GAINS[yr.status]?.brackets ?? []).map(b => b.r);
             const _nextRate = _ltcgRates.find(r => r > _landedRate);
             let _room = (_nextRate !== undefined)
-                ? getLTCGBracketRoom(ordFloor, yr.status, _nextRate, sim.cpiRate)
+                ? getLTCGBracketRoom(_ltcgOrd, yr.status, _nextRate, sim.cpiRate)
                 : _spendGrossNeeded;   // already in the top LTCG bracket - no higher ceiling to top off to
-            if (inputs.strategy === 'bracket' || yr.isACAStrategy) {
-                // Don't let the LTCG top-off push total realized income past the active
-                // strategy's own ceiling (IRMAA tier / ACA cliff / bracket ceiling). This
-                // branch (isBrokerageYear) runs INSTEAD of the ceiling-computing branch this
-                // year, so compute it fresh here rather than reading a stale/undefined `limit`.
-                // yr.isACAStrategy, not inputs.strategy: a lapsed ACA year has no ceiling to
-                // respect, and computeBracketCeiling would still hand back the FPL cap if asked.
-                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack).limit;
-                _room = Math.min(_room, Math.max(0, _ceil - ordFloor));
-            }
+            _room = _capToCeiling(_room);
             return Math.max(yr.additionalSpendNeeded, _room * (1 - yr.capGainsPercentage * sim.capitalGainsRate));
         };
+
         // cycleCoexist: size the family's IRA draw FIRST (v1 families only), then harvest above it.
         let _coexistIRAwd = 0;
         if ((inputs.cycleCoexist ?? 'off') === 'bracketfill') {
             if (inputs.strategy === 'bracket' || yr.isACAStrategy) {
                 // Same ceiling call and field assignments as the family's own branch below, so a
                 // coexist harvest year looks to downstream passes like the family branch ran.
-                ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit } =
+                // P87c4. `kind` is taken here too. The family branch below sets `yr.ceilingKind` and
+                // a coexist harvest year is meant to look like that branch ran, but this destructure
+                // dropped it - so the one field that says WHICH income definition the ceiling uses
+                // was undefined in exactly the years this block decides a draw.
+                ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit, kind: yr.ceilingKind } =
                     computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack));
                 yr.bracketTarget = yr.limit;
-                let _iraRoom = Math.max(0, yr.limit - _baseOrdinaryInc);
+                let _iraRoom = Math.max(0, _ceilRoomAbove({ limit: yr.limit, kind: yr.ceilingKind }, _baseOrdinaryInc));
                 const _magiShaped = (inputs.stratIRMAATier ?? -1) >= 0 || yr.isACAStrategy;
                 if (_magiShaped) {
                     // Pass 1 of the fixed point: harvest sized at IRAwd=0; its realized LTCG
@@ -2828,7 +3005,8 @@ function fillSpendingGap(sim, yr) {
 
     // Now we have the "real tax"
     yr.totalTax = yr.tax.totalTax + yr.IRMAA;
-    yr.bracketOverage = yr.bracketTarget > 0 ? Math.max(0, yr.tax.MAGI - yr.bracketTarget) : 0;
+    yr.acaMAGI = ceilingMAGI(yr);   // P87d
+    yr.bracketOverage = yr.bracketTarget > 0 ? Math.max(0, yr.acaMAGI - yr.bracketTarget) : 0;
     // Update marginal rates so the third pass grosses up correctly at actual bracket.
     yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
     yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
@@ -3070,7 +3248,8 @@ function resolveResidualAndForcedIRA(sim, yr) {
     // Recompute overage after any 3rd-pass forced IRA draw (soft caps may now exceed the
     // ceiling). For the strict ACA strategy, a MAGI above the FPL cap - whether from a
     // forced draw (blocked) or unavoidable income (RMDs/SS) - flags the plan untenable.
-    yr.bracketOverage = yr.bracketTarget > 0 ? Math.max(0, yr.tax.MAGI - yr.bracketTarget) : 0;
+    yr.acaMAGI = ceilingMAGI(yr);   // P87d
+    yr.bracketOverage = yr.bracketTarget > 0 ? Math.max(0, yr.acaMAGI - yr.bracketTarget) : 0;
     if (yr.isACAStrategy && yr.bracketOverage > 1) yr.acaBreach = true;
     if (yr.acaBreach) totals.acaBreachYears += 1;
     totals.forcedIRATotal += yr.forcedIRA;
@@ -3384,7 +3563,8 @@ function adoptTaxBasis(yr, calc) {
 function recomputeBracketOverage(yr) {
     if (!(yr.bracketTarget > 0)) { yr._overageFromConv = 0; return; }
     const fromSpending = yr.bracketOverage ?? 0;
-    yr.bracketOverage = Math.max(0, (yr.tax?.MAGI ?? 0) - yr.bracketTarget);
+    yr.acaMAGI = ceilingMAGI(yr);   // P87d
+    yr.bracketOverage = Math.max(0, yr.acaMAGI - yr.bracketTarget);
     yr._overageFromConv = Math.max(0, yr.bracketOverage - fromSpending);
 }
 
@@ -3891,16 +4071,44 @@ function growAndSettle(sim, yr) {
     //
     // Before RMD age there is no such rule and the conversion may be moved freely, which is where
     // whatever benefit survives now comes from.
-    const _ct = inputs.conversionTiming;
-    if ((_ct === 'early' || _ct === 'late') && (yr.surplus.Roth1 > 0 || yr.surplus.Roth2 > 0)) {
+    // The conversion's target month comes from the MODE when one is set, and from the standalone
+    // control otherwise. Both express the same thing; the mode simply names it once for the whole
+    // year instead of asking twice.
+    // The conversion's month comes from the mode. A research input may then pull it early.
+    //
+    // `timingConvThreshold` survives the retirement of the automatic rule because the QUESTION it
+    // was aimed at is still open - it was only ever pointed at the wrong leg and the wrong year.
+    // Corrected: it reads THIS year's conversion, and it moves the CONVERSION. That is possible
+    // here and was not possible where it used to live, because by this point in the year the
+    // conversion amount is known. No UI, no URL key; it exists so the policy can be swept.
+    //
+    // Shape-validated, not truthiness-checked: 0 is a legal threshold meaning "any conversion at
+    // all pulls the month early", and a malformed value must leave the mode alone rather than
+    // silently model something else.
+    let _convTarget = yr.convMonth;
+    const _thisConv = (yr.surplus.Roth1 ?? 0) + (yr.surplus.Roth2 ?? 0);
+    const _tct = inputs.timingConvThreshold;
+    if (Number.isFinite(_tct) && _tct >= 0 && _thisConv > _tct) _convTarget = 1;
+    if (_thisConv > 0) {
         const _preMonths = 12 - yr.postMonths;
         const _rmdDue = (yr.totalRMD ?? 0) > 0;
-        // Floored at the RMD month when one is due; free otherwise.
-        const _mc = Math.max(_ct === 'early' ? 1 : 11, _rmdDue ? _preMonths : 0);
+        // Floored at THE RMD'S OWN MONTH when one is due; free otherwise. It was floored at
+        // `_preMonths`, which is the spending month - correct only while the two legs were welded
+        // together, and wrong the moment a mode takes the distribution in January and spends in
+        // November. The rule was always about the distribution, never about the spending.
+        const _mc = Math.max(_convTarget, _rmdDue ? yr.rmdMonth : 0);
         const _months = _preMonths - _mc;
-        if (_rmdDue && _months > 0) {
-            throw new Error('conversionTiming: RMD-year floor failed - a conversion cannot precede the RMD');
+        // The invariant is stated against the same quantity the floor is: a conversion may not sit
+        // earlier in the year than the distribution it cannot precede. Testing `_months > 0` instead
+        // asserted that the conversion may not precede the SPENDING, which is not a rule at all and
+        // which fires on every legitimate Split year.
+        if (_rmdDue && _mc < yr.rmdMonth) {
+            throw new Error('withdrawTiming: RMD-year floor failed - a conversion cannot precede the RMD');
         }
+        // The month the conversion ACTUALLY sat in, after the floor - not the one the mode asked
+        // for. In an RMD year under a late mode those differ, and the column must report what
+        // happened rather than what was requested.
+        yr._convLabel = _mc === 1 ? 'Early' : 'Late';
         if (_months !== 0) {
             let _shifted = 0;
             for (const i of [1, 2]) {
@@ -3908,16 +4116,94 @@ function growAndSettle(sim, yr) {
                 if (X <= 0) continue;
                 const toRoth = X * (yr.growthRates['Roth' + i] ?? 0) * _months / 12;
                 const fromIRA = X * (yr.growthRates['IRA' + i] ?? 0) * _months / 12;
-                // Never drive a drained IRA negative; a balance that cannot give the growth back
-                // simply gives what it has, and the asymmetry is reported rather than hidden.
+                // THE IRA MAY NOT HAVE IT TO GIVE, AND THEN THE ROTH MAY NOT RECEIVE IT. A conversion
+                // is capped at the IRA balance AFTER the pre-withdrawal growth, so a conversion that
+                // drains the IRA carried that growth into the Roth already - it is inside X. Taking
+                // only what the balance can cover was always right; crediting the Roth the full
+                // amount regardless was not. It counted the same ten months of growth twice and
+                // manufactured X * g * 10/12 of wealth at identical tax: $38,156 on a $763k
+                // conversion at 6%, and $631,051 of ending net worth on one bank household asked to
+                // convert everything. Reachable by any "convert it all" candidate, which is exactly
+                // what the conversion searches try. The Roth now receives the same FRACTION the IRA
+                // surrendered. When the IRA's own rate is zero nothing was owed and nothing is
+                // withheld, so the Roth keeps its full credit at its own rate.
                 const take = Math.min(fromIRA, balance['IRA' + i] ?? 0);
-                balance['Roth' + i] = (balance['Roth' + i] ?? 0) + toRoth;
+                const credit = toRoth * (fromIRA > 0 ? take / fromIRA : 1);
+                balance['Roth' + i] = (balance['Roth' + i] ?? 0) + credit;
                 balance['IRA' + i] = (balance['IRA' + i] ?? 0) - take;
-                yr.gains['Roth' + i] = (yr.gains['Roth' + i] ?? 0) + toRoth;
+                yr.gains['Roth' + i] = (yr.gains['Roth' + i] ?? 0) + credit;
                 yr.gains['IRA' + i] = (yr.gains['IRA' + i] ?? 0) - take;
-                _shifted += toRoth;
+                _shifted += credit;
             }
             yr.convTimingShift = _shifted;   // surfaced as the hidden '-convTimingShift' column
+        }
+    }
+
+    // ── The RMD's own month ───────────────────────────────────────────────────────────────────
+    // Sibling of the conversion shift above, and here for the same reason: an after-growth
+    // ARITHMETIC CORRECTION, not a third call to applyGrowth. A genuine third segment would be
+    // measurably wrong, not merely inelegant - `applyGrowth` is simple proportional, so a year cut
+    // into 1/10/1 manufactures `21g^2/144` of growth against `11g^2/144` for both 1/11 and 11/1.
+    // That is about 2.5 bp of the whole balance a year at 6%, and it would land on Split ALONE,
+    // putting a mode-correlated artifact exactly on the Early/Split/Late comparison this control
+    // exists to let a user make. See findings.md, "Splitting a year into more growth segments
+    // MANUFACTURES growth".
+    //
+    // WHAT IS BEING CORRECTED. The distribution is subtracted in resolveHousehold, which runs after
+    // the pre-withdrawal growth call, so the engine has already credited the IRA with `preMonths` of
+    // growth on money that - in a mode taking the RMD early - left in month `rmdMonth`. Two entries:
+    // take back the IRA growth that did not happen, and credit the household the cash yield that
+    // did, for the months the proceeds actually sat there waiting to be spent.
+    //
+    // THE DESTINATION IS THE LOAD-BEARING CHOICE. Cash at the cash yield, never the surplus
+    // destinations at their own rate. Crediting it back at the rate it left at would make an early
+    // RMD cost exactly zero deterministically, and Split would arrive as a free lunch - the same
+    // shape as the "$0 deterministically" claim this phase already had to retract once. An RMD taken
+    // in January to unlock a January conversion really does sit in cash until November, and the
+    // difference between the two rates is what the choice actually costs.
+    //
+    // The amount itself never moves: P84l fixes it off the prior December 31 balance, so it is
+    // month-independent by regulation. Only its growth is relocated.
+    // CONDITIONAL ON THERE BEING A CONVERSION TO UNLOCK, which is the whole reason to move it.
+    // The distribution goes early only so that a conversion may follow it in the same month; a year
+    // that converts nothing gains nothing and simply pays the cost of holding the proceeds in cash.
+    // Measured before this condition existed: the four bank households that convert nothing under
+    // Split - ordered-sequence-texas, single-filer-long-horizon, irmaa-tier-filler and
+    // aca-gap-years-texas-early-ss - each showed zero conversion-shift years and lost between
+    // $43,166 and $737,858 against Late, all of it the early distribution and none of it buying
+    // anything. That is not what "convert early in a year that converts" asks for.
+    const _convertsThisYear = (yr.surplus.Roth1 ?? 0) > 0 || (yr.surplus.Roth2 ?? 0) > 0;
+    const _rmdShiftMonths = _convertsThisYear ? (12 - yr.postMonths) - yr.rmdMonth : 0;
+    if (_rmdShiftMonths > 0) {
+        let _cashBase = 0, _pulled = 0, _owed = 0;
+        for (const i of [1, 2]) {
+            const _out = yr['_iraOut' + i] ?? 0;
+            if (_out > 0) {
+                const _giveBack = _out * (yr.growthRates['IRA' + i] ?? 0) * _rmdShiftMonths / 12;
+                // Same clamp as the conversion leg, and the same rule below it: a drained IRA gives
+                // what it has, and the household is credited only in that proportion.
+                const _take = Math.min(_giveBack, balance['IRA' + i] ?? 0);
+                balance['IRA' + i] = (balance['IRA' + i] ?? 0) - _take;
+                yr.gains['IRA' + i] = (yr.gains['IRA' + i] ?? 0) - _take;
+                _pulled += _take;
+                _owed += _giveBack;
+            }
+            _cashBase += yr['_toCash' + i] ?? 0;
+        }
+        if (_cashBase > 0) {
+            // Cash yield on the same FRACTION of the proceeds the IRA could give the growth back
+            // on. When a conversion drains the IRA in the same year, the growth on the distribution
+            // went to the Roth inside that conversion; crediting Cash for it as well counted it
+            // twice, at identical tax. Nothing owed means nothing withheld.
+            const _frac = _owed > 0 ? _pulled / _owed : 1;
+            const _toCash = _cashBase * (yr.growthRates.Cash ?? 0) * _rmdShiftMonths / 12 * _frac;
+            balance.Cash = (balance.Cash ?? 0) + _toCash;
+            // Into yr.gains as well, or cashG under-reports it - the defect the tax-settlement
+            // credit above records in its own comment.
+            yr.gains.Cash = (yr.gains.Cash ?? 0) + _toCash;
+            yr.rmdTimingShift = _toCash - _pulled;
+        } else {
+            yr.rmdTimingShift = -_pulled;
         }
     }
 
@@ -3933,6 +4219,14 @@ function growAndSettle(sim, yr) {
         yr.gains.Cash += yr.taxableDividends;
         balance.Cash += yr.taxableDividends;
     }
+    // P115a. What the cash ACTUALLY earned this year, against what computeIncome taxed. Every credit
+    // to Cash above arrived through yr.gains.Cash - both growth calls, the required distribution's
+    // own month, the December settlement credit - except the dividends just deposited, which were
+    // already taxed as dividends. The ledger: carry out = carry in + earned - taxed, and the carry
+    // is next year's true-up. Both are logged so a reader can audit the residual rather than argue it.
+    yr._cashInterestEarned = (yr.gains.Cash ?? 0) - (inputs.dividendReinvest ? 0 : yr.taxableDividends);
+    sim.cashInterestCarry = yr._cashInterestCarryIn + yr._cashInterestEarned - yr.taxableInterest;
+    yr._cashInterestCarry = sim.cashInterestCarry;
     // P35f: last point in the year that either brokerage value or basis moves, so the invariant
     // is re-established here before the balances are snapshotted into the log row.
     clampBrokerageBasis(balance);
@@ -4039,9 +4333,10 @@ function logYear(sim, yr) {
         surplus: yr.surplus, totalRMD: yr.totalRMD, qcd1: yr.qcd1, qcd2: yr.qcd2, taxableDividends: yr.taxableDividends, taxableInterest: yr.taxableInterest,
         netWithdrawals: yr.netWithdrawals, rmd1: yr.rmd1, rmd2: yr.rmd2, totalConverted: yr.totalConverted, tax: yr.tax, IRMAA: yr.IRMAA, IRMAATier: yr.IRMAATier, medicareBase: yr.medicareBase, cpiRate: sim.cpiRate,
         taxCarryCredit: yr.taxCarryCredit,
+        cashInterestEarned: yr._cashInterestEarned, cashInterestCarry: yr._cashInterestCarry,
         convTimingShift: yr.convTimingShift,
         iraVolSpend1: yr.iraVolSpend1, iraVolSpend2: yr.iraVolSpend2, iraConvGross1: yr.iraConvGross1, iraConvGross2: yr.iraConvGross2,
-        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, rateBasis: yr.rateBasis, volIRAwd: yr.volIRAwd, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
+        totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, rateBasis: yr.rateBasis, volIRAwd: yr.volIRAwd, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach, acaMAGI: yr.acaMAGI, _ltcgFloor: yr._ltcgFloor, rmdTimingShift: yr.rmdTimingShift,
         balance: balance, nominalTaxRate: sim.nominalTaxRate, totalNetWealth: yr.totalNetWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
         gains: yr.gains, rmd1Pct: yr.rmd1Pct, subCycleLabel: yr.subCycleLabel, convNetValue: null, excessNetValue: null,
         incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,
@@ -4063,7 +4358,7 @@ function logYear(sim, yr) {
         ssStart1: yr['-ssStart1'], ssStart2: yr['-ssStart2'], ssStartSurvivor: yr['-ssStartSurvivor'],
         grossOutflows: yr._grossOutflows, netOutflows: yr._netOutflows,
         yearInflows: yr._yearInflows, wdRate: yr._wdRate,
-        useEarly: yr._useEarly, timingReason: yr.timingReason,
+        convLabel: yr._convLabel, wdLabel: yr._wdLabel,
         strategy: inputs.strategy, spendGoal: sim.spendGoal, gkAdjLabel: sim.gkAdjLabel, inflation: sim.inflation,
         yearInflation: yr.yearInflation, baseReturn: yr.baseReturn, loopMs: loopMs
     }));
@@ -4334,6 +4629,9 @@ function simulate(inputs) {
         // P64a. Property tax is entered in today's dollars, so it compounds from the REAL current
         // year, not the plan's first year - the same base spendGoal's gapYears pre-inflation uses.
         propTaxBaseYear: currentYear - gapYears,
+        // P115a. Cash interest earned but not yet taxed (negative: taxed but not earned), carried
+        // from one year's settlement into the next year's taxable interest. See computeIncome.
+        cashInterestCarry: 0,
     };
 
     for (let y = 0; y < maxYears; y++) {

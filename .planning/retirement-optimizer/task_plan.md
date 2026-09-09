@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-09-07**, v11.1779 in **PR #216** (open, base `main`; #211 superseded by it). Suites **424 / 61 / 22**, `TestTiers.EXPECTED` pinned to match. Four commits: research, `P108e`+`P28jk`+`P113`, planning, Optimizer table.
+**As of 2026-09-09**, v11.17b1 in **PR #217** (open, base `main`). Suites **435 / 27 / 61 / 24** (`optimizer_core`, `taxengine`, `taxPaymentPlanner`, `doclinks`), `TestTiers.EXPECTED` pinned to match. Since the review: the drained-IRA leak fixed, the test tiers restructured, `taxengine.tests.js` split out, `P115a` shipped.
 **Planning files pruned 2026-09-02.** Every completed phase keeps a one-line stub below; the bodies are in `.planning/task_completed.md`. Phases nobody is working on are in `task_parked.md`. Findings that are no longer live - fixed defects, superseded claims, the pre-`Pnn` legacy block - are in `findings_archive.md`, and the rules they earned sit at the top of `findings.md` under "Rules earned the hard way".
 The ID migration table is still below. The Open Task Index and the second recency trail were deleted as stale: **the NOW table here is the only priority list.**
 Citations into `findings.md` are by HEADING, never by line number - about half the old line cites were already dead. Keep it that way.
@@ -12,21 +12,21 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
 | **O0** | P103 | **`a`-`e` DONE, 3 MC modes.** GK spend + bracket-fill draw wins 12/18 mode-cells at 95-100% survival; ordered seqs hit **0%** and are out | `P103c` / ship |
-| **O0** | P87 | Ceiling basis; **`P87c` SHIPPED** v11.16d4, MAGI now lands on the limit | `P87d` |
-| **O1** | P95 | An ACA share link does not round-trip; it loads as Fill Bracket 10% | `P95a` |
 | **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
 | **O0** | P35 | **`P104b3` SHIPPED 09-03 v11.1719: Fixed Split, 4 vectors, NERDKNOB-GATED. Goldens untouched (gate off by default). MC grid deliberately empty** | `P104c` / un-gate |
 | **O1** | P36 | round 2 measures against the `P103a` ceiling, not rank-among-arms | `P36b` |
 | **O1** | P34 | NOT a P103 prerequisite (a-d are node harnesses); still the whole slow-machine story | `P34a` |
 | **O1** | P28j | `jg`/`jh`/`ji`/`jk` SHIPPED. `jf` MEASURED and NOT acted on - the trigger is unchanged, and its removal case was withdrawn | `P28jn` / `P28jo` |
+| **O1** | P115 | **tax-payment attribution** (user, 2026-09-09). `a` SHIPPED v11.17b1: cash interest trued up to what the cash earned. Priority is mine, not the user's | `P115b` |
 
 **Live carry-overs from finished phases** - the rest of what those phases did is in their stubs below:
 - `P85` RE-RUN: converting earlier still wins 353 of 499, but **the RMD claim BROKE** - 124 counterexamples, all bracket strategies at a live IRA Goal. `P72` is still pending.
 - `P56` open call: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
-- `P91` was on `main` too - never a regression from this branch.
-- `P91d` is the one open item left inside a phase marked DONE: the Monte Carlo controls are in neither the saved scenario nor the share URL.
+- `P91` was on `main` too - never a regression from this branch; `P91d` is the one open item left inside that phase: the Monte Carlo controls are in neither the saved scenario nor the share URL.
 
-User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. 2026-08-31: P98 opened and closed - an in-page test read the Limit menu before `DOMContentLoaded` built it. **2026-08-31 CLEANUP (user):** P35 to **O1** (cannot be "ideal" until P75/P36 land), leaving P87 the sole O0; 34 stale boxes closed under phases already shipped; **29 never-started phases moved to `.planning/retirement-optimizer/task_parked.md`** (nothing deleted); P28f/g/h confirmed shipped v11.162B; the 40/60 closed for good in **`P30i`**. **P101 opened** (2026-08-31, user): worked examples served from `examples/` and loadable by name, with notes - O2. **P102 opened and Stage B SHIPPED** (2026-09-01, user): goal-first mode, an ALTERNATIVE nerdknob-gated surface that drives the classic controls and never replaces them; `P30i` closed inside it. **P103 opened, O0** (2026-09-01, user: "reorder as you proposed"): the ceiling then the rules - `P75` and parked `P5` merged into it, `P100` to O1 as SELECTION not RESULT, `P102` Stages C/D deferred behind `P103d`. **`P103a` DONE same day**: oracle re-run on `1b7b366`, median gap 4.35% -> 1.58%, dominant lever flipped to the withdrawal split, `P51d` closed at <=0.013%. **P113 opened and SHIPPED** (2026-09-06, user) v11.1769: saved plans carry notes, a statistics snapshot and the `appVersion` that produced them; Load and Import unified, which fixed an unversioned import that Load would then refuse forever. **P114 opened and SHIPPED** (2026-09-07, user) v11.1779: the Optimizer table drops both Δ columns, gains **Extra Conv**, keeps a pinned compare row across an objective change and hoists it, and `?tab=optimizer` runs the sweep. Full index next.
+User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 2026-08-29: P19 demoted to **O2**; P88 and P89 opened and closed. 2026-08-31: P98 opened and closed - an in-page test read the Limit menu before `DOMContentLoaded` built it. **2026-08-31 CLEANUP (user):** P35 to **O1** (cannot be "ideal" until P75/P36 land), leaving P87 the sole O0; 34 stale boxes closed under phases already shipped; **29 never-started phases moved to `.planning/retirement-optimizer/task_parked.md`** (nothing deleted); P28f/g/h confirmed shipped v11.162B; the 40/60 closed for good in **`P30i`**. **P101 opened** (2026-08-31, user): worked examples served from `examples/` and loadable by name, with notes - O2. **P102 opened and Stage B SHIPPED** (2026-09-01, user): goal-first mode, an ALTERNATIVE nerdknob-gated surface that drives the classic controls and never replaces them; `P30i` closed inside it. **P103 opened, O0** (2026-09-01, user: "reorder as you proposed"): the ceiling then the rules - `P75` and parked `P5` merged into it, `P100` to O1 as SELECTION not RESULT, `P102` Stages C/D deferred behind `P103d`. **`P103a` DONE same day**: oracle re-run on `1b7b366`, median gap 4.35% -> 1.58%, dominant lever flipped to the withdrawal split, `P51d` closed at <=0.013%. **P113 opened and SHIPPED** (2026-09-06, user) v11.1769: saved plans carry notes, a statistics snapshot and the `appVersion` that produced them; Load and Import unified, which fixed an unversioned import that Load would then refuse forever. **P114 opened and SHIPPED** (2026-09-07, user) v11.1779: the Optimizer table drops both Δ columns, gains **Extra Conv**, keeps a pinned compare row across an objective change and hoists it, and `?tab=optimizer` runs the sweep. **P115 opened and `a` SHIPPED** (2026-09-09, user: "Open a phase for tax-payment attribution and fix the Split interest gap") v11.17b1: interest on cash is now trued up the following year to what the cash actually earned; `b` (the December credit shared by tax paid, not by net withdrawal, and never into basis) is open. **P116 opened** (2026-09-09, user: "add that as a new Phase and I'll undertake it later"): the harness and report pruning - 28 harnesses and 16 reports whose decisions have shipped are deleted with their references, the 20 harnesses and 8 reports belonging to open phases are re-run on the current engine. **O2 at my choice**, not the user's, and therefore not in the table above; promote it when it starts. Full index next.
+**P95 CLOSED 2026-09-07** (user: "let's fix P95") v11.177b, and its own diagnosis was wrong: the share link round trip was never broken - 15 of 15 selectable limits survive one - and the real defect was the ACA age gate's fallback, which answered a $84k cap with the $24.8k row at the top of a list sorted by dollars, silently. It now falls to the menu default and the load paths say so.
+**P87 CLOSED 2026-09-08** (user: "Do P87") v11.1790. `P87b` needed no work - the federal deduction add-back shipped under `P92a` and its box was never ticked. `P87d` and `P87c4` were the same defect twice: an income aggregate compared against a ceiling written in a different definition of income, always under-reporting. The ACA cap was SIZED on ACA MAGI and MEASURED against `tax.MAGI` (342 of 2,880 plan-years flip clean to breached; 12 of 360 plans ranked feasible while breaching), and the 15% Social Security error survived in the harvest branch (binds in 339 of 648 cyclic cells). `P87e` is five tests, `P87f` names the income each Limit entry measures. **`getLTCGBracketRoom` CLOSED 2026-09-09** v11.17a7: its floor now reads ordinary taxable income, and fixing it exposed a second defect - the strategy's own MAGI ceiling was enforced on only one of the two harvest paths. **P112a SHIPPED 2026-09-08** (user: "supply a number of reference plans that research harnesses should consider") v11.1791. `plans/` holds 19 named households EXTRACTED from what the harnesses already build, not invented: the `COMMON` block crossed with its five-mix ladder (13 harnesses share it), nine harness bases, and the five `P106` households off the captured fixture. Each carries a **plan card** - `summary` (the only line a user sees), `exercises`, **`cannotShow`**, a MEASURED `viability`, and `origin`. Two guards in `optimizer_core.tests.js`. The user's Notes placeholder no longer asks "what can it not show", which was a fixture question in a user's box. **Nothing loads them into the page yet**, though every file now CAN be: they each declared `PLAN` at global scope, so only one could ever load into a page. Inputs are `applyScenario`-shaped, 49 of 54 keys. **Selective refit DONE same day:** ten harnesses now read a named plan instead of a literal (`ssbasis`, `ssbasis_arms`, `underfill`, `harvestceil`, `acamagi`, `betr`, `brokerage`, `growthcredit_check`, `irmaa_margin`, `ordered_fill`), each proved byte-identical by diffing its own stdout before and after. The thirteen sharing `COMMON` are NOT converted - they cross it with a ladder rather than use it whole, which is `P112c`. **Harness-debt sweep DONE 2026-09-08** (user: "do all 7") v11.1792. `COMMON` is in **24** files, not thirteen, and has DRIFTED into at least four distinct households under one name - that is what `P112c` must fix, and it is why no refit was attempted. Two defects found: the `ssbasis` ACA arms were dead rows for the harness's whole life (wrong multiple AND a claim age after the cap lapses), which overturns `10.1`'s regime split without changing its conclusion; and an ABSENT `iraBaseGoal` produced NaN net worth for a whole run on bracket/fixed, now `?? 0` with a test. `getLTCGBracketRoom` SHIPPED 2026-09-09 (see the P87 line above). `P87a`'s figures re-baselined in all five places that quote them.
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
@@ -250,6 +250,105 @@ earlier still wins 353/499 but the RMD reasoning behind it broke, 124 counterexa
 **Out of scope for the first pass:** a flat $100k/yr conversion is a candidate ARM, not a strategy;
 shaped policies belong in the grid. No product changes.
 
+## P116: prune the harnesses and research reports  *(NEW 2026-09-09, user-raised. O2, priority mine. NOT STARTED)*
+
+**The user's rule, 2026-09-09:** "old records and conclusions from them are a problem not a help."
+This phase applies it. Inventory taken the same day (read-only, every file in `.test_harnesses/`
+and `research/`): 51 harnesses, 24 reports, 1.5 MB tracked. **Every report predates at least one
+of six engine changes** - the Split timing default, the ACA-MAGI measurement, the LTCG floor and
+both-path ceiling, in-year conversion compounding (`P28jg`), the prior-December RMD basis (`P84l`),
+and the cash-interest true-up (`P115a`) - so none of their numbers reproduces today, and they get
+cited anyway: the PR #217 body's "Split ahead 7, behind 1" came from a pre-fix run and is 10 and 5
+now. 16 of the 24 document a decision that has shipped and is pinned by a test or the changelog.
+Eight harnesses are silently wrong: four still set the retired `forceWithdrawTiming`
+(`timingtrigger`, `timinggrid`, `tax_timing`, `unifiedconv`) and four parse the `timing` column with
+`startsWith('Early')`, which now reads the conversion label rather than the withdrawal
+(`convtiming`, `rmdbasis`, `tax_timing`, `timingtrigger`). Ten feed no report; four are not in
+`HARNESSES.md` at all, whose status column stops at the 08-30 changes.
+
+**The rule for each file:** a study whose decision has SHIPPED is deleted with its harness; a study
+for an OPEN phase is kept, re-run on the current engine, and its numbers replaced. Nothing is kept
+as a historical record - the commit messages are the record.
+
+**`P116a` - delete, 28 harnesses and 16 reports.**
+
+| why | harnesses | reports |
+|---|---|---|
+| subject retired | `timingtrigger`, `timinggrid`, `tax_timing`, `unifiedconv` | `WITHDRAWAL_TIMING_TRIGGER`, `CONVERSION_ROUTING` |
+| decision shipped, invariant pinned | `rmdbasis`, `bracketbasis`, `ceilded`, `ssbasis`, `ssbasis_arms`, `underfill`, `irmaa_cpi_risk`, `irmaa_default`, `irmaa_margin`, `irmaa_margin_paths`, `gapfill`, `gapfill_objectives`, `brokerage`, `extraconv_magi`, `convopt_ceiling`, `cpi_index` | `RMD_BASIS`, `BRACKET_CEILING_BASIS`, `IRMAA_FORECAST_ERROR`, `IRMAA_MARGIN_DEFAULT`, `IRMAA_MARGIN_FIXED_CPI`, `IRMAA_MARGIN_MONTE_CARLO`, `GAPFILL_SPLIT`, `GAPFILL_CASCADE_VS_BLEND`, `BROKERAGE_DRAW`, `EXTRA_CONVERSION_MAGI`, `CONVERSION_SEARCH_CEILINGS`, `BRACKET_INDEXATION` |
+| a planned re-measure replaces it | `phased` (`P36b`), `endgame` (re-run from the bank if `P35n` is still open) | `STRATEGY_FAMILY_RANKING`, `ENDGAME_DRAW_ORDER` |
+| no report, question answered or pinned | `stopyear`, `convtiming_mc`, `growthcredit_check`, `betr`, `ordered_fill`, `mix_steering` | |
+
+Per deletion: the file, its rows in `research/README.md` and `research/HARNESSES.md`, and EVERY
+reference - grep first. Measured 2026-09-09: engine and UI comments cite `IRMAA_MARGIN_DEFAULT`
+eight times and `BRACKET_CEILING_BASIS` three, `BROKERAGE_DRAW` and `CONVERSION_ROUTING` twice each;
+`CLAUDE.md`'s research-conventions section names three as examples; old changelog entries link to
+reports and would 404 on the site, so those links become plain text or a commit hash.
+
+**`P116b` - keep and re-run, 20 harnesses and 8 reports**, all for open phases, all re-run on the
+current engine in one commit with the numbers replaced and a "measured on `<commit>`" line at the
+top of each report: the ten oracle harnesses (`oracle`, `oracle_crosscheck`, `schedule_replay`,
+`schedule_oracle`, `gk_drawrule`, `gk_drawrule_mc`, `spend_objective`, `split_expressiveness`,
+`family_equivalence`, `magi_edge_gate`) with `PERFECT_FORESIGHT_ORACLE` (`P103`, the oracle alone
+is six minutes); `split_fine` and `split_mc` with `CONSTANT_SPLIT` (`P104`); `conversion_value`,
+`conversion_value_general`, `conversion_frontier`, `stopyear_stability` and the `p106_canonical`
+fixture with the four `P106` reports; `convtiming` with `CONVERSION_TIMING` (the `P85`
+carry-over); `timingmode` (write its report, or fold its table into `HARNESSES.md`); `taxattrib`
+(`P115`); `which_plan` (a tool); and `OPTIMIZER_RANK_STABILITY` (`P100`, a browser reproduction).
+
+**`P116c` - `HARNESSES.md` rewritten** to the survivors, one row each, with a new column: the engine
+commit each was last run on. The 08-30 verdict table (F1-F5) goes; it describes files that no
+longer exist.
+
+**`P116d` - after PR #217 merges:** delete `acamagi`, `harvestceil` and `ltcgroom`, together with the
+`harvestCeilSSBasis` and `ltcgRoomBasis` research knobs in `optimizer_core.js` that exist only for
+them. `P87` is closed and its tests pin the fixes.
+
+**Not in this phase:** `P112c`, the `COMMON` refit (24 files, at least four households under one
+name). Deleting 28 harnesses shrinks that job; do it after, not inside.
+
+## P115: tax-payment attribution  *(NEW 2026-09-09, user-raised. `a` SHIPPED v11.17b1, `b` and `c` open)*
+
+**The user's concern, verbatim in substance:** Early versus Late must get the growth in Cash and
+Brokerage right AND taxed - an early withdrawal to cash forgoes untaxed IRA growth and earns taxable
+interest instead; the same for money that lands in Brokerage. The tax settlement date (with the
+withdrawal versus December) is a second lever. It was not clear the simulator attributes the assets
+used to pay taxes at all. Measured the same day; three findings, one shipped.
+
+**`P115a` SHIPPED.** Interest was taxed once a year on the pre-withdrawal Cash balance times the
+full-year yield (`computeIncome`, the line its own comment called "APPROXIMATE worst case"). Cash
+that left mid-year was taxed on interest it never earned; cash that arrived after that point - a
+banked surplus, the distribution Split takes in January - earned yield that was never taxed.
+On the bank: up to **0.34% of lifetime tax over-charged** (single-filer-long-horizon, the ACA gap-years
+households, about $1,000 a year) and up to **1.8% under-charged** (ira-heavy-couple, $1,983 a year, 33
+converting years, $37,228 over the plan, 0.46% of ending net worth compounded), which was **39% of that
+household's Split-versus-Late margin**. No verdict flipped. Fix: `growAndSettle` records what the
+cash actually earned (`-cashInterestEarned`) and carries the difference (`-cashInterestCarry`) into
+next year's taxable interest, floored at zero with the remainder rolling forward. Over a plan, taxed
+equals earned to within the final year's residual. Same-year exactness would need the post-withdrawal
+balance before the withdrawals exist; the one-year carry is the honest shape. Two tests, one critical.
+Instrument: `.test_harnesses/taxattrib_harness.js`, every bank household, every mode.
+
+**`P115b` OPEN - the December settlement credit** (`growAndSettle`, the `taxSettlement === 'december'`
+block). Two attribution defects, both in the direction of flattering the option:
+- The credit is shared by each account's **net withdrawal**, not by the **tax each source paid**. An
+  IRA-heavy tax bill on a brokerage-heavy draw credits the growth to the wrong account.
+  `calculateWithdrawals` already reports `IRATax` / `BrokerageTax` per source; share by those.
+- Its Brokerage share is added to **basis**, with a comment calling it "not a gain". It is growth on
+  the deferred tax dollars, so it becomes permanently untaxed. Per year: tax x rate x months/12 x
+  brokerage share x the capital-gains rate. The bank households drain their brokerage before the
+  end, so the harness could not size it; a fixture that keeps its brokerage is needed.
+
+**`P115c` OPEN - Brokerage under Early.** Money that lands in Brokerage after the withdrawal point
+earns appreciation (unrealized, taxed on sale or stepped up at death - right) and dividends that the
+year's `taxableDividends` line, computed from the pre-withdrawal balance, never sees - the same shape
+as `a`, one account over. Apply the same true-up to dividends, and measure it first: the bank's
+dividend rates are small and it may not be worth a column.
+
+What is NOT in scope: the IRA side is right (withdrawn dollars stop earning in the IRA at the month
+they leave; conversion tax is attributed to Cash or to the gross-up), and the Split timing default
+itself, which stands on `timingmode_harness.js` re-run after this fix.
+
 ## P114: the Optimizer table and the Saved Scenarios list  *(NEW 2026-09-07, user-raised, SHIPPED v11.1779)*
 
 Seven changes, all user-reported, all shipped in one pass.
@@ -298,7 +397,11 @@ right-aligned. Measured 585px inside a 625px modal, no sideways scroll.
 - [ ] **P114a - `_dNW`/`_dTax` are now unread by any display path.** Kept as console conveniences and
       commented as such. Decide whether they earn their computation in `recomputeDeltasAgainst` at all,
       or whether `deltaCellHtml` should be the single source. Not urgent; it is four assignments.
-- [ ] **P114b - the ⇌ row set was EMPTY in every household tried**, so `extraConv` was verified by
+- [x] **P114b DONE 2026-09-09 - closed by seeing it work, no code.** `ira-heavy-couple` from the plan
+      bank produces **nine** ⇌ rows, and on Maximize Roth the column renders 50,000 / 50,000 / 25,000 /
+      75,000 / 25,000 / 50,000 / 50,000 across seven of them. The column was correct all along; it had
+      never been given data, which is the exact failure the bank exists to stop.
+- [x] ~~the ⇌ row set was EMPTY in every household tried~~, so `extraConv` was verified by
       injecting `_optConvAmt` rather than by seeing a real one. `convOptRowsAdded: 0` on both the page
       defaults and the canonical household. A household that actually produces ⇌ rows is wanted -
       which is `P112`'s bank - before the column's real-world formatting is trusted.
@@ -412,7 +515,8 @@ acceptable** - it is how the decoder and the fixtures diverge.
 
 ### Items
 
-- [ ] **P112a - seed the bank against the gaps that are open RIGHT NOW**, not a general survey.
+- [x] **P112a DONE v11.1791 - and the user redirected HOW.** The phase said fixtures must be verbatim browser `getInputs()` captures and that hand-written JSON is unacceptable. The user asked instead for the plans the HARNESSES already build to be emitted as standalone `.js`, which is a third thing: extracted, not captured and not hand-written, and it inventories what the studies have actually been running on. Both gaps this item named are filled - `aca-gap-years-texas-early-ss` is the gap-years converter, and 13 of the 19 end with a live IRA so the floored measures have somewhere to go. See `plans/README.md`.
+- [ ] ~~seed the bank against the gaps that are open RIGHT NOW~~, not a general survey.
       `P28jn` needs a **gap-years converter** (retire early sixties, large IRA, modest spend,
       converting hard until 75) and `P28jn`/`P28jo` need a household whose **IRA survives to the
       end** so the reduction measures are not floored. Those two unblock live work; the rest can
@@ -423,7 +527,15 @@ acceptable** - it is how the decoder and the fixtures diverge.
       nothing as a control, a short horizon, and a brokerage-heavy household. **The user knows what
       "reasonable" means for this audience better than a crossed grid does** - that is the whole
       point of the bank, so the list is a proposal, not a plan.
-- [ ] **P112c - retire the copy-pasted `COMMON` block.** Every harness this session carried the same
+- [ ] **P112c - retire the copy-pasted `COMMON` block.** **Scoped by the 2026-09-08 refit, which
+      deliberately stopped at its edge.** The ten harnesses carrying a WHOLE base plan were converted
+      and are done; these thirteen are different in kind, because `COMMON` is never run as a plan - it
+      is crossed with a five-entry balance ladder, three spend rates, two states, two reserve settings
+      and a family list. So the work here is not a swap, it is deciding what the LADDER becomes: five
+      named plans already exist for its rungs (`ira-heavy-couple` and siblings), but each was
+      materialised at one spend rate and one strategy, and the harnesses vary both.
+      `schedule_replay_harness.js` is the smallest case to start on - its base is exactly one rung at
+      6%, differing from `ira-heavy-couple` only by the strategy the plan adds. Every harness this session carried the same
       verbatim `COMMON` and `MIXES` ladder, which fixes ages, state, Social Security, growth and a
       20-year horizon across all of them - `P111a2` exists only because of it. Harnesses should name
       the plans they used. Keep the crossed grid for breadth where breadth is the point; use named
@@ -2225,26 +2337,52 @@ Ordered by payoff per line of code. All three are live defects today, independen
 ## P96: the ACA note told a household past 65 to change something that cannot help  *(2026-08-29, user-reported, DONE v11.16ab)*
 **COMPLETE.** v11.16ab, 2026-08-29. Full body in `.planning/task_completed.md`.
 
-## P95: an ACA share link does not round-trip  *(NEW 2026-08-29, found while verifying P94, O1, NOT A REGRESSION)*
+## P95: an ACA cap that cannot be used is replaced silently  *(2026-08-29, found while verifying P94, DONE v11.177b 2026-09-07)*
 
-`buildShareURL` emits an ACA plan as `?str=bracket&sr=aca400`. Loading that link lands the ceiling
-dropdown on `10`, not `aca400`, so `getInputs().stratACAMultiple` reads **0** and the plan comes up
-as **Fill Bracket 10%** - a different, much tighter strategy than the one shared, with no message.
+**THE ORIGINAL DIAGNOSIS WAS WRONG, and the title above is the corrected one.** As written this
+phase said `buildShareURL` emits `?str=bracket&sr=aca400`, that loading it lands the dropdown on
+`10`, and that `refreshStratRateOptions()` was "the obvious suspect" for rebuilding the list out
+from under `loadFromURL`. The observation was real. Every inference from it was not.
 
-Measured in the browser at v11.16aa, and **pre-existing on `main`**: `git diff main` on the P94
-branch touches no `stratRate` code at all. `loadFromURL` sets the select correctly and something
-after it rebuilds the option list - `refreshStratRateOptions()` is the obvious suspect, since
-`applyScenario` calls it deliberately at `optimizer_ui.js:5429` and has a comment (`:5384`) about
-exactly this failure mode on the SCENARIO path, where it was already found and fixed once.
+**The round trip is not broken and probably never was.** Measured at v11.1779 by loading every
+value the menu offers in its own iframe and reading `stratRate` and `getInputs()` back: **15 of 15
+selectable values survive**, ACA included. The two that move - `IRMAA5` and `37` - are the disabled
+sentinel rows that name a floor rather than a ceiling, and clamping them down one entry is the
+behavior `clampStratRateSelection` exists for. `refreshStratRateOptions` restores the selection
+across its own rebuild correctly.
 
-- [ ] **P95a** - Find what rebuilds the list after `loadFromURL` and reapply the selection the way
-      `applyScenario` does, or capture and restore it around the rebuild. Then check the IRMAA
-      values (`IRMAA0`..`IRMAA4`) the same way - they are rebuilt by the same function and may have
-      the same defect.
-- [ ] **P95b** - A browser-tier test: every value the ceiling dropdown offers survives a share-URL
-      round trip. A per-value loop, not one case, because the defect is per-option-family.
+**What actually happened** is that the repro URL carried no ages, so it ran on the page defaults,
+where both people are on Medicare when the plan starts. `updateACAWarning` disables the ACA rows in
+that case - correctly, there is no premium subsidy for a cap to protect - and then moved the
+selection to `[...sel.options].find(o => !o.disabled)`. **The list is sorted by dollars, so "first
+enabled" is the SMALLEST limit in the menu**: an $84,049 cap was answered with a $24,800 one, three
+times tighter, on taxable income where the request was MAGI, and a target to fill where the request
+was a cap to stay under. `medicareAlready` makes the sidebar warning silent on purpose (`P96`), so
+nothing on the page said any of it.
 
-- **Status:** measured, nothing built. The user has not been asked about priority yet.
+- [x] **P95a DONE** - the fallback is now the menu's own default, read off the option list's
+      `selected` attribute rather than named in the gate, and the substitution is recorded in
+      `ACA_GATE_SWAP` for the two paths that load a plan the user did not choose: `loadFromURL` and
+      `commitScenario`. `reportACAGateSwap()` **appends** to the message box rather than calling
+      `showMessage`, because `reportSummaryDrift` writes the scenario's own "loaded" line into the
+      same single box immediately before it. A sidebar age edit still swaps quietly, per the user's
+      call - the loaders are the only callers who read the record.
+      The IRMAA values were checked the same way and are fine (see the 15 of 15 above).
+- [x] **P95b DONE** - two in-page tests. `everyLimitSurvivesAShareLink` loops every ENABLED option
+      through `buildShareURL` and asserts the emitted `sr` decodes back to an option that exists with
+      exactly that value, with an omitted param accepted only for the default. It moves the ages off
+      the page defaults first, or the ACA family is not in the sample at all - which is the mistake
+      the original repro made. `anUnavailableCapFallsBackToTheDefaultAndSaysSo` pins the gate: the
+      landing spot is the default, is not a federal bracket, names both limits, and clears on read.
+
+- **The user's call, 2026-09-07:** the substitute is **Below IRMAA**, the menu default, over
+  "nearest enabled limit" (12% Fed, $100,800) and over keeping today's `10% Fed`. Both people being
+  on Medicare is exactly the case where the cap has lost its purpose rather than needing a near-miss
+  replacement, and the default is a MAGI ceiling like the entry it replaces where a federal bracket
+  is taxable income (`P87`). Announced on **load paths only**.
+- **What this cost:** one line of fallback, and the evidence to know which line. The lesson is in
+  `findings.md` - a repro URL that omits a parameter is not a smaller test case, it is a different
+  household.
 
 ---
 
@@ -2277,7 +2415,7 @@ live - a real gap, not a plan:
 ## P88: an Extra Roth Conversion never reaches MAGI, so IRMAA never charges it  *(NEW 2026-08-29, user-raised, O0)*
 **COMPLETE.** v11.16a4, 2026-08-29. Full body in `.planning/task_completed.md`.
 
-## P87: the "Limit" dropdown mixes two income bases - IRMAA is MAGI, the federal brackets are not  *(NEW 2026-08-29, user-raised, measure before building)*
+## P87: the "Limit" dropdown mixes THREE income bases  *(2026-08-29, user-raised, DONE v11.1790 2026-09-08)*
 
 **The question, as asked:** the tax-bracket limits in the strategy "Limit" dropdown are income
 thresholds, but the IRMAA limits should be MAGI thresholds - are they?
@@ -2356,7 +2494,7 @@ changelog entry saying saved plans will not reproduce.
       MISMATCH: `iRAbracketRoom` subtracts GROSS income from a POST-deduction threshold and
       `bracketOverage` measures MAGI against it, so a pre-deduction quantity is capped at a
       post-deduction number and nothing in between converts one to the other.
-      **Correcting it costs money in 51 of 74 clean cells, median -$47,092** - but see the user
+      **Correcting it costs money in 51 of 74 clean cells (49 of 71 when re-run 2026-09-08), median -$47,092 then, -$47,549 now** - but see the user
       correction below, because that is a fact about the STRATEGY and NOT a verdict on the fix.
       The sign is set by the BRACKET: 12%
       gains (median +$159,278, best +$1,201,973), 22% loses (-$173,437, worst -$2,523,647), 24%
@@ -2403,7 +2541,13 @@ changelog entry saying saved plans will not reproduce.
 
       Priority verdict: **P87 stays O2**, `P87b` is reclassified from optional optimization to
       correctness fix, and a new `P87g` carries the conversion-sizing gap.
-- [ ] **P87b** - DECIDE the federal fix. **A CORRECTNESS fix, not an optimization** (see the user
+- [x] **P87b DONE - and it needed no work.** The federal deduction add-back SHIPPED under `P92a`
+      (`limit += dedAddBack` in the federal branch, `yr._ceilDedAddBack` computed two-pass in
+      resolveSpendTarget), and the research input `bracketCeilingAddDeduction` this phase's own
+      "Left in the engine" note still lists was removed when it shipped. Nobody ticked the box.
+      **A phase can be finished by another phase; check the code before scheduling the work.**
+      The decision text is kept below for the record - form (i) is what shipped.
+- [x] ~~DECIDE the federal fix.~~ **A CORRECTNESS fix, not an optimization** (see the user
       correction in `P87a`): a named ceiling is a contract to fill, and the engine fills one
       deduction short of it. The measured wealth cost is a CONSEQUENCE TO DISCLOSE, not a reason to
       decline - the changelog entry must say plainly that bracket rows will withdraw and convert
@@ -2442,7 +2586,18 @@ changelog entry saying saved plans will not reproduce.
   - [x] **P87c3** - DONE. SHIP: default on, tests (`P87e` shape), `TestTiers.EXPECTED` reconciled across
         all three suites, changelog entry saying bracket and IRMAA rows draw and convert more and
         saved plans will not reproduce.
-  - [ ] **P87c4** - **NEW, found while shipping `P87c`, NOT fixed.** The SAME full-benefit
+  - [x] **P87c4 DONE v11.1790.** Report section 12, harness `.test_harnesses/harvestceil_harness.js`.
+        `_ceilRoomAbove` forks on the ceiling's KIND, so ACA keeps the full benefit in the harvest
+        branch too. **The guard binds in 339 of 648 cyclic cells**, 116 with the shipped
+        `cycleCoexist` default and all 116 clean: median lifetime tax +$608, median ending net worth
+        -$5,259, down in 98 of 116, worst -$46,443. Same verdict as `P87a`, unchanged.
+        **Still open, deliberately:** `getLTCGBracketRoom(ordFloor, ...)` reads the same aggregate and
+        was NOT corrected. LTCG brackets are TAXABLE-income thresholds, so the right basis there
+        involves the deduction as well as the benefit - two errors pointing the same way, needing
+        their own measurement rather than a copied line.
+        Found on the way: the `cycleCoexist` branch destructured `computeBracketCeiling` without
+        `kind`, so `yr.ceilingKind` was undefined in exactly the years that branch decides a draw.
+  - [x] ~~NEW, found while shipping `P87c`, NOT fixed.~~ The SAME full-benefit
         subtraction survives in the brokerage-harvest branch (`optimizer_core.js`, the
         `isBrokerageYear` arm): `_baseOrdinaryInc` includes `yr.fixedInc`, and it is compared against
         a MAGI ceiling in the LTCG top-off guard. That branch runs INSTEAD of the sizing line, so a
@@ -2452,13 +2607,33 @@ changelog entry saying saved plans will not reproduce.
         harvest cycle, so nothing in section 10 measures it either way.
   - **Cost is a consequence to disclose, not a reason to decline** - the `P87a` user correction
         applies unchanged. A named ceiling is a contract to fill.
-- [ ] **P87d** - ACA overage: either add the non-taxable-SS add-back to a separate `acaMAGI`, or
-      state in the tooltip that the ACA overage reads low. Do not change `tax.MAGI` itself - IRMAA
-      and NIIT read it and their definition is the current one.
-- [ ] **P87e** - Tests: a fixed plan on `22% Fed` lands federal TAXABLE income on the bracket top,
+- [x] **P87d DONE v11.1790 - the add-back, not the tooltip.** Report section 11, harness
+      `.test_harnesses/acamagi_harness.js`. `ceilingMAGI(yr)` at all three sites that decide
+      `bracketOverage`, logged hidden as `-acaMAGI`; `tax.MAGI` untouched, exactly as this item said.
+      Gated on `yr.isACAStrategy`, so a lapsed cap gets no add-back and stays unbreachable.
+      **The measurement is what settled it, and it is bigger than a tooltip could carry:** the cap was
+      SIZED on the ACA definition all along (`_ssCeilRoom = yr.limit - yr.fixedInc`) and MEASURED
+      against the SSA one, so two halves of one cap were in two units - one-directionally, since
+      `acaMAGI >= MAGI` always. Over 2,880 live ACA plan-years: **342 flip clean to breached**, the
+      breach rate goes 43.5% -> 55.4%, and **12 of 360 plans report zero breaches while breaching**.
+      That last figure is not a column - `acaBreach` feeds `totals.acaBreachYears`, which the
+      Optimizer reads to flag a row untenable.
+- [x] **P87e DONE v11.1790.** Five tests, `optimizer_core.tests.js` (429 total). Three for `P87d`
+      (the add-back identity and that it is SCOPED to an ACA cap; that the overage is decided on
+      `acaMAGI`, so a year landed exactly on the cap reads zero rather than the whole untaxed benefit
+      as spare room; that a breach visible only on the add-back is flagged and a lapsed cap still is
+      not) and two for `P87c4` (a harvest year realizes at least as much and still respects its
+      ceiling; an ACA harvest year is byte-identical under both bases). The first two items below were
+      already covered by `P92a`/`P87c` and are still green.
+- [x] ~~Tests: a fixed plan on `22% Fed` lands federal TAXABLE income on the bracket top,~~
       not MAGI; a plan on `IRMAA Tier 1` keeps `tax.MAGI` inside the tier (already covered, keep it
       green); an ACA plan with large SS is measured against the add-back definition.
-- [ ] **P87f** - The dropdown prints `22% Fed  ·  $211,400` and never says WHICH income that is;
+- [x] **P87f DONE v11.1790.** The note under the menu now names the income for all three families:
+      a federal bracket limits TAXABLE income (already did), an IRMAA tier limits MAGI "your total
+      income before your deduction", and an ACA cap limits ACA MAGI, which "counts your whole Social
+      Security benefit, including the part that is not taxed". README updated in two places, one of
+      which was a caveat claiming the ACA/IRMAA MAGI difference was NOT modeled - false as of `P87d`.
+- [x] ~~The dropdown prints `22% Fed  ·  $211,400` and never says WHICH income that is;~~
       the honest answer today is "MAGI, though the number came from a taxable-income table". Label
       it, and say the same in the README's strategy section. **Valuable but not the whole answer** -
       naming the basis helps a reader understand the ceiling; it does not deliver the headroom they
@@ -2492,6 +2667,13 @@ changelog entry saying saved plans will not reproduce.
   ACA is the one entry in the dropdown whose job is to stay UNDER, so its overage reading is the
   number that matters for it.
 - **Depends on:** nothing. P66/P83 already settled the IRMAA indexing and margin.
+- **THE PHASE'S OWN LESSON, and it is not the tax code.** Three separate ceiling families were
+  compared against three different definitions of income by one line of code each, and every one of
+  the three errors ran in the SAME direction - under-reporting or under-filling - so none of them
+  ever announced itself. `P87a` (deduction), `P87c` (Social Security, sizing line), `P87c4` (Social
+  Security, harvest branch), `P87d` (Social Security, ACA measurement). **When a quantity is
+  compared against a threshold, the unit of both sides is a thing to check, not to assume**, and a
+  fix applied to one branch does not reach the branch that runs INSTEAD of it.
 - **Left in the engine by `P87a`:** the research-only input `bracketCeilingAddDeduction`, default
   off and set by no UI (`optimizer_core.js:980`), and two hidden log fields, `-fedTaxableInc` and
   `-fedDeduction`. All three are inert unless the harness arms them.

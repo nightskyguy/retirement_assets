@@ -19,8 +19,9 @@ changes the code around it.
 ## 1. `?nerdknob` — the advanced surface
 
 `?nerdknob` on any Optimizer URL reveals advanced controls: Monte Carlo parameters, the
-Guyton-Klinger guardrail inputs, the 💵 cash-funded sweep dimension, fixed tax indexing, the
-withdrawal-month control, and other diagnostics.
+Guyton-Klinger guardrail inputs, the 💵 cash-funded sweep dimension, the timing control, and
+other diagnostics. (Fixed tax indexing used to be here; it now lives on the Monte Carlo tab, which is
+the only place it can do anything.)
 
 It can also be flipped **at runtime** by a hidden checkbox on the Documentation tab
 (`setNerdKnob` / `applyNerdKnobVisibility`). That flip is deliberately **not** written back to the
@@ -31,23 +32,34 @@ selector** (PF13) and the **ACA Cliff options** (v11.1464).
 
 ### Timing diagnostics behind the plain knob
 
-Two selects that answer "when does the money actually leave?", both defaulting to today's behavior
-and both carried in a shared link:
+Two selects that answer "when does the money actually leave?", both carried in a shared link:
 
 | control | URL key | choices |
 |---|---|---|
-| **Withdrawal month** (`P28jh`) | `fwt` | *Automatic* (the shipped rule: January in any year following one that converted more than $1,000, November otherwise), *Always January*, *Always November* |
-| **Tax paid** (`P108b`) | `txs` | *With the withdrawal* (today), *In December* |
+| **Money moves** | `wt` | *Split* (default: required distribution and conversion in January, spending in November), *Early* (everything January), *Late* (everything November) |
+| **Tax paid** | `txs` | *With the withdrawal* (today), *In December* |
 
 They matter because the whole year's draw leaves at once - the spending money **and** the tax on it -
-so a January draw stops compounding eleven months early. Measured on five households, settling the
-tax in December is worth 0.10%-1.77% of net worth against the automatic rule; most of that is already
-obtainable by choosing *Always November* instead. Income tax only: Medicare premiums are billed
-monthly and are never deferred either way.
+so a January draw stops compounding eleven months early, while a conversion is the opposite: the
+sooner it lands in the Roth the longer it grows there. Split is the only setting that can do both,
+and it is the only one that could not be expressed before the required distribution was given its own
+month. A conversion may not precede the distribution, so "convert in January, spend in November" was
+a silent no-op in every year a distribution was due.
 
-Both are **hidden, not disabled**. A link carrying `fwt=late` or `txs=december` still runs that way
+Measured across ten plan-bank households that convert and reach distribution age: Split is ahead of
+Late in seven and behind in one, and **none of them pays more tax or ends with a larger IRA**. A year
+that converts nothing runs exactly as Late. Settling the tax in December is worth a further
+0.10%-1.77% of net worth. Income tax only: Medicare premiums are billed monthly and are never
+deferred either way.
+
+Both are **hidden, not disabled**. A link carrying `wt=late` or `txs=december` still runs that way
 for a reader without the knob, because the alternative is silently running a different plan than the
-link describes.
+link describes. Links written before the two selects became one still load: `fwt`/`cvt` are folded
+onto the nearest mode, and the substitution is reported rather than made quietly.
+
+**Retired with this control:** the automatic rule that set a year's spending month from the PREVIOUS
+year's conversion, and its `$1,000` trigger. `timingConvThreshold` survives as a URL-only research
+input, corrected to read THIS year's conversion and to move the CONVERSION rather than the spending.
 
 ### The two deeper variants
 
@@ -118,7 +130,7 @@ malformed value must mean *"leave today's behavior alone"*, never *"model someth
 
 | input | replaces / does | phase |
 |---|---|---|
-| `timingConvThreshold` | the bare `1000` that decides whether last year's conversion flips this year's withdrawal to January. `0` and a very large value are both meaningful endpoints. | `P28jb` |
+| `timingConvThreshold` | pulls a year's CONVERSION to January when that year converts more than this. Reads the CURRENT year and never touches the spending month; cannot defeat the rule that a conversion may not precede a required distribution. `0` and a very large value are both meaningful endpoints. | `P28jb` |
 | `gapFillWeights` | the hard-coded `[40, 60]` Brokerage/Cash spending-gap blend. Weights are relative, so `[1,1]` and `[50,50]` are the same split. | `P30a` |
 | `bracketGapOrder` | swaps the first two accounts of the gap-fill cascade. | `P30c` |
 | `schedulePlan` | a per-year policy carrier. Each entry takes exactly one of `ordTarget` (fill to this income ceiling) or `iraDraw` (draw this many dollars), plus optional `convert`, `spend`, `gapFill`. `compileScheduleFromRun()` builds one from a finished run. | `P103b2` |

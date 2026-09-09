@@ -31,7 +31,7 @@ const PLAN = {
             "ANY ranking question. It is here as the control that must be excluded, not as a household to measure on",
         ],
         viability: {
-            funded: "23/33",
+            funded: "26/33",
             fundsEveryYear: false,
             endingIRA: 0,
             peakIRAYear: 0,

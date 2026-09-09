@@ -147,10 +147,10 @@ console.log(`  over-credit at this postMonths: ${money(credit * (grow - 1))}` +
             `  (${(credit * (grow - 1) / Math.max(1, credit) * 100).toFixed(2)}% of the credit)`);
 console.log('\nNOTE: postMonths is 1 under a pinned LATE, which is the SMALLEST this term can be.');
 console.log('An Early year has postMonths 11 and the term is 11x larger. Re-run with');
-console.log("forceWithdrawTiming: 'early' to see it.");
+console.log("withdrawTiming: 'early' to see it.");
 
-const onEarly  = simulate({ ...BASE, forceWithdrawTiming: 'early', taxSettlement: 'december' });
-const offEarly = simulate({ ...BASE, forceWithdrawTiming: 'early' });
+const onEarly  = simulate({ ...BASE, withdrawTiming: 'early', taxSettlement: 'december' });
+const offEarly = simulate({ ...BASE, withdrawTiming: 'early' });
 const e0on = onEarly.log[0], e0off = offEarly.log[0];
 const creditE = e0on['-taxCarryCredit'] ?? 0;
 const growE = 1 + g * 11 / 12;

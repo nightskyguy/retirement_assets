@@ -24,7 +24,7 @@
  * THE CONFOUND, PINNED FIRST. P28ja measured the withdrawal-timing leg as LARGER than the
  * conversion leg in 29 of 54 cells. Any arm that moves conversions between years also moves which
  * years fire `_useEarly`, so an unpinned run measures P28j's defect and reports it as a conversion
- * finding. Every arm here runs forceWithdrawTiming:'late', and every arm is checked for a stray
+ * finding. Every arm here runs withdrawTiming: 'late', and every arm is checked for a stray
  * Early year. If that check trips the run is void, not merely suspect.
  *
  * ARMS. Same lifetime GROSS conversion S, three shapes over an n-year horizon:
@@ -240,7 +240,7 @@ function runArm(cell, shape, k, S) {
         cashYield:    cell.growth === 0 ? 0 : COMMON.cashYield,
         convertExcessToRoth: false, extraConversionAmount: sched,
         iraBaseGoal: cell.goal.value,
-        forceWithdrawTiming: 'late',
+        withdrawTiming: 'late',
     });
     simCount++;
     // Checked on EVERY arm rather than on a sample: if any year came out Early the pin failed and
@@ -272,7 +272,7 @@ function runDefault(cell) {
         ...COMMON, ...cell.s.over, STATEname: cell.st, spendGoal: cell.spend,
         ...cell.f.over, CashReserve: cell.rsv.value, growth: cell.growth,
         iraBaseGoal: cell.goal.value,
-        forceWithdrawTiming: 'late',
+        withdrawTiming: 'late',
     });
     simCount++;
     if (anyEarly(res.log)) timingViolations++;

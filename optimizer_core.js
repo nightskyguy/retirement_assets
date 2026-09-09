@@ -1330,7 +1330,10 @@ function buildSimYearLogRecord(p) {
         inflows: p.yearInflows,
         'wdRate%': p.wdRate,
         // Phase 12: per-year withdrawal timing
-        timing: (p.useEarly ? 'Early' : 'Late') + '(' + p.timingReason + ')',
+        // Conversion / withdrawal, per year. 'none' when the year converted nothing, which is a
+        // fact about the year rather than about the setting. The required distribution, when there
+        // is one, follows the FIRST of the two.
+        timing: (p.convLabel ?? 'none') + '/' + (p.wdLabel ?? 'Late'),
         // Phase 22: Guyton-Klinger
         gkSpend: p.strategy === 'gk' ? p.spendGoal : null,
         gkAdj:   p.strategy === 'gk' ? (p.gkAdjLabel || '—') : null,
@@ -1454,74 +1457,36 @@ function beginYear(sim, yr) {
     yr.yearInflation = inputs.inflationSequence?.[y] ?? inputs.inflation;
     yr.growthRates = computeYearGrowthRates(inputs, y);
 
-    // Withdrawal timing auto-selection (Phase 12): Early (Jan) for conversion years; Late (Dec) otherwise.
-    // Early: preMonths=1, postMonths=11. Late: preMonths=11, postMonths=1.
-    // Year 0: use strategy flag (bracket or explicit extraConv). Year 1+: prior year's actual conversion amount.
-    // Do NOT use convertExcessToRoth as a trigger - it is hardcoded true in the optimizer and does not guarantee a conversion fires.
-    // Year 0 must be decided from the conversion SCHEDULED for year 0, never from the raw
-    // extraConversionAmount field: the field has two shapes (scalar or per-year array - a
-    // multi-element array coerces to NaN, so `> 0` silently reported "no conversion") and three
-    // suppression flags can zero it (convEndYear, _cfSuppressConversions,
-    // _cfSuppressConversionsFromYear). Reading it through the same accessor applyExtraConversion
-    // uses is what makes a per-year array and the equivalent scalar + convEndYear the same plan.
-    // Years 1+ read the prior year's realized conversion, which was already shape-safe.
-    // 'aca' only implies a conversion while its cap is live: a lapsed ACA year never reaches the
-    // ceiling branch that creates conversion room, so it implies one no more than Proportional
-    // does. Ages are re-derived here rather than read off yr because resolveHousehold has not run
-    // yet - this runs first, and only year 0 consults it. Singles carry birthyear2/die2 = 0
-    // (simulate() normalizes them), which makes alive2 false.
-    const _a1 = sim.currentYear - sim.birthyear1, _a2 = sim.currentYear - sim.birthyear2;
-    const _acaLive = inputs.strategy === 'aca'
-        && !acaCapLapsed(_a1, _a2, _a1 <= inputs.die1, _a2 <= inputs.die2);
-    // A scheduled year-0 CEILING implies a conversion for the same reason a bracket ceiling does:
-    // it creates room above spending. Without this a schedule replaying a bracket family would pick
-    // the opposite year-0 withdrawal MONTH and diverge on timing alone.
-    // It must test for a ceiling and not merely for an entry: a year-0 `iraDraw` implies no
-    // conversion, exactly as fixedpct and fixed imply none, and treating it as one flipped the
-    // year-0 month and left IRA Draw $39,117 and Reduce $72,656 adrift with every year scheduled.
-    const _sched0e = inputs.strategy === 'schedule' ? _schedulePlanFor(inputs, 0) : null;
-    const _sched0 = !!_sched0e && _sched0e.ordTarget !== undefined;
-    const _stratImpliesConversion =
-          ((inputs.strategy === 'bracket' || _acaLive || _sched0) && !_convSuppressedThisYear(inputs, 0))
-       || _extraConvAmountFor(inputs, 0) > 0;
-    const _prevConv    = y > 0 ? (log[y - 1].rothConv ?? 0) : 0;
-    // P28jb research input (no UI, no URL param): `inputs.timingConvThreshold` replaces the bare
-    // 1000. Nobody chose that 1000 - it has been a literal since Phase 12 - and one dollar either
-    // side of it moves a whole year's withdrawal by ten months, then keeps moving it for every year
-    // the flag stays flipped. Same species as P30's [40, 60], and it gets the same treatment: make
-    // it a swept input before asking whether it is load-bearing.
+    // ── WHEN THE MONEY MOVES: one mode, three months ──────────────────────────────────────────
     //
-    // Validated to a SHAPE rather than for truthiness, the discipline gapFillWeights records: a
-    // malformed value must mean "leave today's behavior alone", never "model something else
-    // silently". Finite and >= 0. `?? ` would not do here, because 0 is a legal value.
+    //     mode     RMD   conversion   spending
+    //     early     1        1           1
+    //     split     1        1          11        <- the default
+    //     late     11       11          11
     //
-    // BOTH ENDPOINTS ARE MEANINGFUL, which is what makes a sweep of this a sweep of the policy
-    // rather than of two different policies. At 0 ANY conversion flips the year to Early - and
-    // measured, that is not obviously the intended rule either, because plans do produce sub-dollar
-    // residual conversions and a $0.01 remainder would move a whole year's withdrawal by ten months.
-    // At a threshold above any conversion the plan makes, the flag never flips and years 1+ are
-    // pinned Late - the same plan `forceWithdrawTiming: 'late'` produces, reached through the
-    // trigger instead of around it.
+    // The RMD and the conversion move together because they must: a conversion may not precede the
+    // distribution, so the only way to convert in January is to distribute in January.
     //
-    // WHERE THE CONSTANT BITES IS A PROPERTY OF THE STRATEGY, not of the household (P28jb, measured
-    // 2026-09-04 on one 15-year fixture). Fill Bracket 22% converted in 11 years and the smallest
-    // was $27,365, so 1000 is inert for it at any value below that. Proportional +% converted in 11
-    // years and EVERY one was under $1,000, so the same constant means that plan never flips at all
-    // today and would flip every year at 0. Reduce straddles it. A threshold sweep will therefore
-    // look flat or decisive depending entirely on which strategies are in the grid, which is a trap
-    // P28je has to avoid rather than a result.
-    const _tct = inputs.timingConvThreshold;
-    const _tctOK = Number.isFinite(_tct) && _tct >= 0;
-    yr._useEarly    = y === 0 ? _stratImpliesConversion : (_prevConv > (_tctOK ? _tct : 1000));
-    // Research override (no UI, default off): pin the timing to 'early' or 'late' for every year.
-    // Exists because converting flips this rule, so any A/B of convertExcessToRoth silently compares
-    // a month-1 withdrawal schedule against a month-11 one on top of the tax difference. Pinning it
-    // is the only way to separate "where the surplus lands" from "when the money leaves".
-    if (inputs.forceWithdrawTiming === 'early') yr._useEarly = true;
-    else if (inputs.forceWithdrawTiming === 'late') yr._useEarly = false;
-    const yearTiming   = yr._useEarly ? 'early' : 'late';
-    yr.timingReason = yr._useEarly ? 'Conv'  : 'Spend';
-    let preMonths      = yearTiming === 'early' ? 1 : 11;
+    // WHAT WAS HERE, AND WHY IT IS GONE. The month used to be chosen by a rule that read LAST
+    // year's conversion (`log[y-1].rothConv > 1000`) and moved the SPENDING withdrawal. Two
+    // defects in one line, and they explain each other. It moved the wrong leg - what a converting
+    // year wants early is the CONVERSION, not the spending - and it looked back because it had to:
+    // the spending month must be fixed here, at the top of the year, before anything about the year
+    // is known, so the only conversion figure in reach is last year's. Aim the trigger at the leg
+    // that is decided late and the look-back is unnecessary. Year 0 used a third rule again
+    // (`_stratImpliesConversion`), so the policy was not even consistent with itself.
+    //
+    // Nothing is inferred from the strategy any more, which also retires the pile of special cases
+    // that inference needed: a lapsed ACA cap implies no conversion, a scheduled year-0 CEILING
+    // does but a year-0 `iraDraw` does not, and `extraConversionAmount` has two shapes and three
+    // suppression flags. All of that existed to guess whether a year would convert. The engine now
+    // waits and looks.
+    //
+    // Unknown or absent means SPLIT. A harness or a saved plan that names no mode gets the default,
+    // not a silent third behavior.
+    const _MODE_MONTHS = { early: [1, 1, 1], split: [1, 1, 11], late: [11, 11, 11] };
+    const _modeM = _MODE_MONTHS[inputs.withdrawTiming] || _MODE_MONTHS.split;
+    let preMonths      = _modeM[2];
     // ── ONE MODE, THREE MONTHS ────────────────────────────────────────────────────────────────
     // `withdrawTiming` names the whole year's shape rather than one leg of it:
     //
@@ -1535,22 +1500,17 @@ function beginYear(sim, yr) {
     // January conversion was silently a no-op in every RMD year. Giving the distribution its own
     // month is what makes the mode reachable at all.
     //
-    // Anything unrecognised - including absent - leaves the legacy rule above in charge for now, so
-    // this phase changes nothing. That fallback is what the next phase removes.
-    const _MODE_MONTHS = { early: [1, 1, 1], split: [1, 1, 11], late: [11, 11, 11] };
-    const _modeM = _MODE_MONTHS[inputs.withdrawTiming];
-    if (_modeM) preMonths = _modeM[2];
     yr.postMonths   = 12 - preMonths;
-    // THE RMD'S OWN MONTH, named rather than inferred. Today it is always the spending month - the
-    // required distribution rides the withdrawal, which is why `preMonths` has been able to stand in
-    // for it everywhere. That proxy is about to stop being true: the Split mode takes the RMD and the
-    // conversion in January while spending waits until November, and it is the ONLY way to reach a
-    // January conversion in an RMD year, because the conversion may not precede the distribution.
-    //
-    // Introduced first, equal to `preMonths`, so the substitution downstream is provably a no-op
-    // before anything is allowed to move it. A mode is the only thing that separates them.
-    yr.rmdMonth  = _modeM ? _modeM[0] : preMonths;
-    yr.convMonth = _modeM ? _modeM[1] : preMonths;
+    // THE RMD'S OWN MONTH. It used to be inferred from the spending month, because the required
+    // distribution rode the withdrawal and the two could not disagree. They can now, and Split is
+    // the mode that makes them disagree: distribute and convert in January, spend in November. That
+    // is the only way to reach a January conversion in an RMD year at all.
+    yr.rmdMonth  = _modeM[0];
+    yr.convMonth = _modeM[1];
+    // For the Annual Details column. The conversion half is filled in by growAndSettle, which is
+    // the only place that knows whether the year converted at all.
+    yr._wdLabel   = preMonths === 1 ? 'Early' : 'Late';
+    yr._convLabel = 'none';
 
     // Pre-withdrawal growth: portfolio earns for preMonths before withdrawal exits.
     yr.preGains = applyGrowth(balance, yr.growthRates, preMonths);
@@ -4089,11 +4049,22 @@ function growAndSettle(sim, yr) {
     // The conversion's target month comes from the MODE when one is set, and from the standalone
     // control otherwise. Both express the same thing; the mode simply names it once for the whole
     // year instead of asking twice.
-    const _convTarget = inputs.withdrawTiming && yr.convMonth !== undefined
-        ? yr.convMonth
-        : (inputs.conversionTiming === 'early' ? 1
-        :  inputs.conversionTiming === 'late'  ? 11 : null);
-    if (_convTarget !== null && (yr.surplus.Roth1 > 0 || yr.surplus.Roth2 > 0)) {
+    // The conversion's month comes from the mode. A research input may then pull it early.
+    //
+    // `timingConvThreshold` survives the retirement of the automatic rule because the QUESTION it
+    // was aimed at is still open - it was only ever pointed at the wrong leg and the wrong year.
+    // Corrected: it reads THIS year's conversion, and it moves the CONVERSION. That is possible
+    // here and was not possible where it used to live, because by this point in the year the
+    // conversion amount is known. No UI, no URL key; it exists so the policy can be swept.
+    //
+    // Shape-validated, not truthiness-checked: 0 is a legal threshold meaning "any conversion at
+    // all pulls the month early", and a malformed value must leave the mode alone rather than
+    // silently model something else.
+    let _convTarget = yr.convMonth;
+    const _thisConv = (yr.surplus.Roth1 ?? 0) + (yr.surplus.Roth2 ?? 0);
+    const _tct = inputs.timingConvThreshold;
+    if (Number.isFinite(_tct) && _tct >= 0 && _thisConv > _tct) _convTarget = 1;
+    if (_thisConv > 0) {
         const _preMonths = 12 - yr.postMonths;
         const _rmdDue = (yr.totalRMD ?? 0) > 0;
         // Floored at THE RMD'S OWN MONTH when one is due; free otherwise. It was floored at
@@ -4107,8 +4078,12 @@ function growAndSettle(sim, yr) {
         // asserted that the conversion may not precede the SPENDING, which is not a rule at all and
         // which fires on every legitimate Split year.
         if (_rmdDue && _mc < yr.rmdMonth) {
-            throw new Error('conversionTiming: RMD-year floor failed - a conversion cannot precede the RMD');
+            throw new Error('withdrawTiming: RMD-year floor failed - a conversion cannot precede the RMD');
         }
+        // The month the conversion ACTUALLY sat in, after the floor - not the one the mode asked
+        // for. In an RMD year under a late mode those differ, and the column must report what
+        // happened rather than what was requested.
+        yr._convLabel = _mc === 1 ? 'Early' : 'Late';
         if (_months !== 0) {
             let _shifted = 0;
             for (const i of [1, 2]) {
@@ -4333,7 +4308,7 @@ function logYear(sim, yr) {
         ssStart1: yr['-ssStart1'], ssStart2: yr['-ssStart2'], ssStartSurvivor: yr['-ssStartSurvivor'],
         grossOutflows: yr._grossOutflows, netOutflows: yr._netOutflows,
         yearInflows: yr._yearInflows, wdRate: yr._wdRate,
-        useEarly: yr._useEarly, timingReason: yr.timingReason,
+        convLabel: yr._convLabel, wdLabel: yr._wdLabel,
         strategy: inputs.strategy, spendGoal: sim.spendGoal, gkAdjLabel: sim.gkAdjLabel, inflation: sim.inflation,
         yearInflation: yr.yearInflation, baseReturn: yr.baseReturn, loopMs: loopMs
     }));

@@ -85,7 +85,7 @@ console.log('Deterministic answer is exactly $0 (same rate both accounts). Only 
 console.log('build a per-account bank, so only they can differ at all.');
 console.log('-'.repeat(100));
 
-const probe = simulate({ ...BASE, forceWithdrawTiming: 'late', computeOC: false });
+const probe = simulate({ ...BASE, withdrawTiming: 'late', computeOC: false });
 const YEARS = probe.log.length;
 
 // TWO COMPARISONS, both legitimate, answering different questions. An earlier version of this
@@ -113,7 +113,7 @@ for (const mode of ['bootstrap', 'gbm']) {
     const deltas = [], terminals = [], rateGaps = [];
     for (let p = 0; p < NUM_PATHS; p++) {
         const pi = mc.buildPathInputs(banks, p, YEARS, { ...BASE, ...alloc.over }, mode);
-        const inp = { ...BASE, ...alloc.over, forceWithdrawTiming: 'late', computeOC: false,
+        const inp = { ...BASE, ...alloc.over, withdrawTiming: 'late', computeOC: false,
                       returnSequence: pi.returnSequence,
                       returnSequencePerAccount: pi.returnSequencePerAccount,
                       inflationSequence: pi.inflationSequence };

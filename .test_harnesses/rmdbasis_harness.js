@@ -166,8 +166,8 @@ console.log('   ' + pad('plan', 42) + pad('yrs', 6) + pad('max |late-early| divi
     + 'lifetime RMD late');
 const coupling = [];
 for (const c of cells) {
-    const late  = run({ ...c.base, forceWithdrawTiming: 'late' });
-    const early = run({ ...c.base, forceWithdrawTiming: 'early' });
+    const late  = run({ ...c.base, withdrawTiming: 'late' });
+    const early = run({ ...c.base, withdrawTiming: 'early' });
     if (late.rmd <= 0 && early.rmd <= 0) continue;
     const L = ratiosOf(late.log), E = ratiosOf(early.log);
     const n = Math.min(L.length, E.length);
@@ -221,7 +221,7 @@ console.log('   ' + pad('plan', 42) + pad('lifetime RMD', 15) + pad('terminal IR
     + pad('lifetime tax', 15) + 'IRMAA yrs');
 const levels = [];
 for (const c of cells) {
-    const r = run({ ...c.base, forceWithdrawTiming: 'late' });
+    const r = run({ ...c.base, withdrawTiming: 'late' });
     levels.push({ c, r });
 }
 for (const { c, r } of levels.slice(0, 14)) {

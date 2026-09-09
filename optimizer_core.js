@@ -4154,7 +4154,16 @@ function growAndSettle(sim, yr) {
     //
     // The amount itself never moves: P84l fixes it off the prior December 31 balance, so it is
     // month-independent by regulation. Only its growth is relocated.
-    const _rmdShiftMonths = (12 - yr.postMonths) - yr.rmdMonth;
+    // CONDITIONAL ON THERE BEING A CONVERSION TO UNLOCK, which is the whole reason to move it.
+    // The distribution goes early only so that a conversion may follow it in the same month; a year
+    // that converts nothing gains nothing and simply pays the cost of holding the proceeds in cash.
+    // Measured before this condition existed: the four bank households that convert nothing under
+    // Split - ordered-sequence-texas, single-filer-long-horizon, irmaa-tier-filler and
+    // aca-gap-years-texas-early-ss - each showed zero conversion-shift years and lost between
+    // $43,166 and $737,858 against Late, all of it the early distribution and none of it buying
+    // anything. That is not what "convert early in a year that converts" asks for.
+    const _convertsThisYear = (yr.surplus.Roth1 ?? 0) > 0 || (yr.surplus.Roth2 ?? 0) > 0;
+    const _rmdShiftMonths = _convertsThisYear ? (12 - yr.postMonths) - yr.rmdMonth : 0;
     if (_rmdShiftMonths > 0) {
         let _cashBase = 0, _pulled = 0;
         for (const i of [1, 2]) {

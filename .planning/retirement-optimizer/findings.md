@@ -6,6 +6,24 @@ Each line is a defect that already happened, compressed to the rule it produced 
 now enforces it. The narrative behind every one is in `findings_archive.md` under the heading named
 in parentheses. Read this section before adding a guard, a test or an invariant.
 
+- *A check built from the same fields on both sides proves nothing, however exact it looks.* The
+  first attempt to verify the corrected LTCG floor compared it against the year's realized figures
+  using the same log fields to build both - algebraically an identity, so it reported a $0 median
+  error in all 315 years while testing nothing at all. **If a check cannot fail, it is not a check.**
+  ("LTCG floor, 2026-09-09")
+- *An invariant calibrated on broken behavior locks the breakage in.* `P32c` asserted a coexist
+  harvest year's IRMAA tier never exceeds the tier the coexist-OFF arm reaches. That is not a ceiling
+  test - it is a test that coexist stays UNDER-FILLED, and the OFF arm does not even compute a
+  ceiling in a harvest year. It failed the moment the harvest was corrected, on a year whose MAGI was
+  $109,293 against a $136,999 ceiling with zero overage. **Assert the contract, not the current
+  numbers.** ("P32c restated")
+- *A guard that only one code path reaches is a guard nobody has tested.* The strategy's MAGI ceiling
+  was applied on the harvest branch's top-off path only; the path where the harvest fitted inside the
+  target bracket returned unchecked. It was unreachable purely because a separate defect kept the
+  room too small, and it went live the moment that was fixed. ("the half-enforced ceiling")
+- *`require()` cannot see a global-scope collision, so a node suite cannot cover a browser load.* All
+  19 plan files declared `const PLAN` at top level and the bank was green in node while a page could
+  load exactly one of them. The test that catches it reads the SOURCE. ("plan files, IIFE")
 **On tests and invariants**
 
 - *Money must be conserved, not merely accounted for.* A dollar can be recorded correctly in two

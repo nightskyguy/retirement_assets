@@ -4866,3 +4866,62 @@ can be pointed at them. `P112c`.
 Still open from earlier: nothing loads the plans into the page, `P112b` and `P112d`, and the seven
 other harnesses whose recorded numbers predate today's engine but which were not individually
 re-baselined - only the two whose drift was actually demonstrated were.
+
+## Session: 2026-09-09 (worktree next-in-plan-84c7d6) - closing the behavior-changing issues
+
+User set the order: **close what changes behavior first, prune obsolete content after.** The pruning
+pass is queued, not started. Also a standing correction to how I record things: a superseded number
+is DELETED, not parked beside the current one. Keep what was learned - the defect, the miscreated
+harness - and drop the stale data.
+
+v11.17a7. Suites **433 / 61 / 22**, browser badge green at 1048.
+
+**The LTCG bracket room, shipped.** An LTCG bracket top is a TAXABLE-income threshold; the harvest
+branch was passing it a gross aggregate with the full Social Security benefit and no deduction.
+Median overstatement $59,625 against a bracket about $97k wide, every harvest year measured, the
+deduction being $50,161 of it. `_ltcgFloor` asks `calculateTaxes` for the answer rather than
+rebuilding either correction by hand.
+
+**Fixing it exposed a second defect that mattered more.** The strategy's own MAGI ceiling was enforced
+on ONE of the two harvest paths - a harvest that fitted inside the target LTCG bracket was never
+tested against the IRMAA tier or ACA cap the plan was holding. Unreachable only because the room was
+too small to reach a threshold. With the cap applied on both paths the median cost of the whole
+change fell from **-$89,946 to -$201**, and the residual lands exactly where it should: on plans
+whose income ceiling sits high enough that the capital-gains bracket was the real constraint
+(Fed 24% -$88,010, IRMAA Tier 2 -$119,432), and on Proportional, which has no income ceiling at all.
+
+**Two checks I wrote were wrong before one was right, and that is the lesson worth keeping.** The
+first compared the corrected floor against the year's realized figures using the same log fields on
+both sides - an identity, so it "proved" exactness while testing nothing. The second attributed the
+sizing-time residual to the capGains-in-provisional-income circularity; a second pass aimed at that
+moved 4 harvest years out of 292, because the residual is really income the year gains AFTER the
+harvest is sized. Second pass removed, `-ltcgFloor` logged so the gap stays auditable.
+
+**`P32c` restated rather than patched.** It asserted coexist never raises the IRMAA tier above the
+coexist-OFF arm, which is a test that coexist stays under-filled - and the OFF arm computes no
+ceiling in a harvest year, so it was never the right reference. It now asserts the ceiling is not
+BREACHED.
+
+**Every plan file was un-loadable alongside the others.** All 19 declared `const PLAN` at global
+scope, so a page could load exactly one and the rest died silently. Found by trying to run the
+Optimizer against the whole bank. Wrapped in IIFEs, with a test that reads the source because
+`require()` gives each module its own scope and cannot reproduce it.
+
+**`P114b` closed with no code.** `ira-heavy-couple` produces nine ⇌ rows; on Maximize Roth the
+Extra Conv column renders 50,000 / 50,000 / 25,000 / 75,000 / 25,000 / 50,000 / 50,000 across seven
+of them. The column was right all along and had simply never been given data - the exact failure the
+bank exists to stop, closed by the bank on the first household tried.
+
+### What is deliberately NOT done
+
+**The obsolete-content pruning pass**, which the user asked to come after this work. Known targets:
+the "51 of 74 / 49 of 71" pairs I created yesterday (delete the old, keep the defect), section 10.1's
+two-column regime table, and any goal or result that no longer reproduces.
+
+**`P91d`** - Monte Carlo controls are in neither the saved plan nor the share URL. Tractable: the
+parameter set is already enumerated in `_buildSweepHash` (paths, mu, sigma, seed, sim mode, bear
+fraction, the inflation config, scope) plus `_buildMCHash`'s stress count and window. It is a feature
+rather than a fix, so it was not started without the user saying so.
+
+**`P56`** (the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q), **`P103c`**
+(gated, needs a decision), **`P104c`**, **`P100b2`**, **`P112c`**.

@@ -1182,6 +1182,10 @@ function buildSimYearLogRecord(p) {
         '-convTimingShift': p.convTimingShift ?? 0,
         'cashDividends': p.taxableDividends,
         'cashInterest': p.taxableInterest,
+        // P115a. What the cash actually earned this year, and the running untaxed balance carried
+        // into next year's `cashInterest`. Hidden: the pair exists so the true-up is auditable.
+        '-cashInterestEarned': p.cashInterestEarned ?? 0,
+        '-cashInterestCarry': p.cashInterestCarry ?? 0,
         // Taxes
         'FedRate%': p.tax.federalMarginalRate,
         'StateRate%': p.tax.stateMarginalRate,
@@ -1767,7 +1771,28 @@ function computeIncome(sim, yr) {
     yr.taxableInc = yr.pension;				// Pensions, W2, RMDs, IRA withdrawals, wdBrokerage
 
     // These will be APPROXIMATE worst case - no Withdrawals have been made.
-    yr.taxableInterest = balance.Cash * inputs.cashYield
+    //
+    // P115a. THE ESTIMATE IS TRUED UP THE FOLLOWING YEAR. Interest is taxed here, at the withdrawal
+    // point, on the balance the cash has at that moment times the full-year yield, because that is
+    // the only figure available before the year's withdrawals are sized. It is wrong in both
+    // directions: cash that leaves during the year is taxed on interest it never earns, and cash
+    // that ARRIVES after this point - a banked surplus, the required distribution Split takes in
+    // January - earns yield this line never sees. Measured on the plan bank before the true-up:
+    // up to 0.34% of lifetime tax over-charged on a household drawing its cash down, up to 1.8%
+    // under-charged on one whose distribution sits in cash for ten months of every converting year,
+    // and up to 39% of the Split-versus-Late margin on the household it biases most.
+    //
+    // growAndSettle knows what the cash actually earned once the year settles, and the difference
+    // is carried into this line next year, so over a plan the interest taxed equals the interest
+    // earned to within the final year's residual. Same-year exactness would need the tax passes to
+    // know the post-withdrawal balance before the withdrawals exist, which is circular; a one-year
+    // carry is the honest shape. Interest is income only, never spendable cash (see the note below
+    // possibleIncome), so the carry moves tax and nothing else. It cannot make taxable interest
+    // negative: a carry larger than the estimate zeroes the line and the unabsorbed remainder rolls
+    // forward again, which is why the carry is recomputed from the ledger rather than reset.
+    const _interestEstimate = balance.Cash * inputs.cashYield;
+    yr._cashInterestCarryIn = sim.cashInterestCarry ?? 0;
+    yr.taxableInterest = Math.max(0, _interestEstimate + yr._cashInterestCarryIn);
     yr.taxableDividends = balance.Brokerage * inputs.dividendRate
 
 
@@ -4194,6 +4219,14 @@ function growAndSettle(sim, yr) {
         yr.gains.Cash += yr.taxableDividends;
         balance.Cash += yr.taxableDividends;
     }
+    // P115a. What the cash ACTUALLY earned this year, against what computeIncome taxed. Every credit
+    // to Cash above arrived through yr.gains.Cash - both growth calls, the required distribution's
+    // own month, the December settlement credit - except the dividends just deposited, which were
+    // already taxed as dividends. The ledger: carry out = carry in + earned - taxed, and the carry
+    // is next year's true-up. Both are logged so a reader can audit the residual rather than argue it.
+    yr._cashInterestEarned = (yr.gains.Cash ?? 0) - (inputs.dividendReinvest ? 0 : yr.taxableDividends);
+    sim.cashInterestCarry = yr._cashInterestCarryIn + yr._cashInterestEarned - yr.taxableInterest;
+    yr._cashInterestCarry = sim.cashInterestCarry;
     // P35f: last point in the year that either brokerage value or basis moves, so the invariant
     // is re-established here before the balances are snapshotted into the log row.
     clampBrokerageBasis(balance);
@@ -4300,6 +4333,7 @@ function logYear(sim, yr) {
         surplus: yr.surplus, totalRMD: yr.totalRMD, qcd1: yr.qcd1, qcd2: yr.qcd2, taxableDividends: yr.taxableDividends, taxableInterest: yr.taxableInterest,
         netWithdrawals: yr.netWithdrawals, rmd1: yr.rmd1, rmd2: yr.rmd2, totalConverted: yr.totalConverted, tax: yr.tax, IRMAA: yr.IRMAA, IRMAATier: yr.IRMAATier, medicareBase: yr.medicareBase, cpiRate: sim.cpiRate,
         taxCarryCredit: yr.taxCarryCredit,
+        cashInterestEarned: yr._cashInterestEarned, cashInterestCarry: yr._cashInterestCarry,
         convTimingShift: yr.convTimingShift,
         iraVolSpend1: yr.iraVolSpend1, iraVolSpend2: yr.iraVolSpend2, iraConvGross1: yr.iraConvGross1, iraConvGross2: yr.iraConvGross2,
         totalTax: yr.totalTax, capitalGains: yr.capitalGains, bracketTarget: yr.bracketTarget, rateBasis: yr.rateBasis, volIRAwd: yr.volIRAwd, bracketOverage: yr.bracketOverage, overageFromConv: yr._overageFromConv, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach, acaMAGI: yr.acaMAGI, _ltcgFloor: yr._ltcgFloor, rmdTimingShift: yr.rmdTimingShift,
@@ -4595,6 +4629,9 @@ function simulate(inputs) {
         // P64a. Property tax is entered in today's dollars, so it compounds from the REAL current
         // year, not the plan's first year - the same base spendGoal's gapYears pre-inflation uses.
         propTaxBaseYear: currentYear - gapYears,
+        // P115a. Cash interest earned but not yet taxed (negative: taxed but not earned), carried
+        // from one year's settlement into the next year's taxable interest. See computeIncome.
+        cashInterestCarry: 0,
     };
 
     for (let y = 0; y < maxYears; y++) {

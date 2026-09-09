@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.17b0"></a>
+<a id="11.17b1"></a>
 
-## 11.17b0
+## 11.17b1
 
 **One control now decides when your money moves, and the default has changed.**  
 *Behavior change: every plan's numbers move, and a saved plan will not reproduce.*
@@ -79,6 +79,18 @@ benefit. The README says the same.
 
 **A plan asking for an ACA cap nobody in it can use now says so, and loads Below IRMAA** instead of
 the far tighter 10% Fed, naming both limits.
+
+**Interest on cash is now taxed on what the cash actually earned.**  
+*Behavior change: every plan's tax moves a little.*
+
+Interest used to be taxed once a year on the cash balance at the moment of the withdrawal, times a
+full year's yield. Cash you spent during the year was taxed on interest it never earned, and cash
+that arrived after that moment - a surplus you banked, a required distribution taken in January -
+earned interest that was never taxed at all. Each year now checks what the cash actually earned and
+carries the difference into the next year's interest, so over the plan the interest taxed equals the
+interest earned. Plans that draw their cash down pay slightly less tax; plans that bank money early in
+the year pay slightly more. Measured across the reference households the difference is under 2% of
+lifetime tax, and it changes no plan's ranking.
 
 **The page paints sooner.** Its self-check tests now run after the first paint instead of before
 it, and the engine test suites no longer re-run in your browser on every visit; they run on every

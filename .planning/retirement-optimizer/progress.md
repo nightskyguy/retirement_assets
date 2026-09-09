@@ -4925,3 +4925,31 @@ rather than a fix, so it was not started without the user saying so.
 
 **`P56`** (the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q), **`P103c`**
 (gated, needs a decision), **`P104c`**, **`P100b2`**, **`P112c`**.
+
+## Session: 2026-09-09 (worktree retirement-optimizer-phases-414fe1) - PR #217 review, the drain leak, test tiers, P115
+
+A review of PR #217 (user: "several false starts make me wary"), then the fixes it called for.
+
+- **The Split relocation manufactured wealth when a conversion drained the IRA.** A conversion is
+  capped at the balance AFTER pre-withdrawal growth, so "convert everything" carried ten months of
+  growth into the Roth inside the conversion, and the relocation then credited the Roth the same ten
+  months again while the empty IRA gave back nothing: +$38,156 on a $763k conversion at 6%, identical
+  tax; +$631,051 of ending net worth on ira-heavy-couple asked to convert everything. Both legs now
+  credit the fraction the IRA actually surrendered. Three timing guards tagged critical. `1b41f8d`.
+- **Test tiers.** The in-page suite ran before first paint and the node suites re-ran in every
+  visitor's browser at idle (about four seconds here, fifteen on the audience's machines, 1.2 MB of
+  test code). Tier 1 now runs at idle after boot; tier 2 is `?runtests`-only; the tax-engine cases are
+  their own node suite `taxengine.tests.js` (27), which also drives `standalone/IncomeTaxPlanner.html`;
+  the changelog markup check moved to `doclinks.tests.js`. Seven engine-output goldens stripped, the
+  invariants kept. `499f6a1`.
+- **`P115` opened and `a` shipped** (see task_plan). The user asked whether the simulator attributes
+  the assets that pay taxes; measuring the interest side found the Split default had been
+  under-taxing the January distribution's cash yield in every converting year, 39% of one
+  household's mode margin. Trued up the following year now.
+
+### What is deliberately NOT done
+
+**`P115b`** (the December credit by tax share and out of basis) and **`P115c`** (dividends on money
+landing in Brokerage) - opened, not started. **The harness and report pruning** proposed in the review
+(28 harnesses and 16 reports whose decisions have shipped) - a list, not an action, until the user
+says so.

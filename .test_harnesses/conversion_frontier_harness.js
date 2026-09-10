@@ -42,7 +42,6 @@
  */
 'use strict';
 
-const fs = require('fs');
 const path = require('path');
 globalThis.performance = { now: () => 0 };
 globalThis.window = {};
@@ -51,6 +50,7 @@ const R = path.join(__dirname, '..') + path.sep;
 Object.assign(globalThis, require(R + 'taxengine.js'));
 require(R + 'displayhelpers.js');
 const core = require(R + 'optimizer_core.js');
+const PLANS = require(R + 'plans');
 const { simulate, afterTaxWealthOfLogRow } = core;
 
 const HEIRS = 0.24;
@@ -58,13 +58,7 @@ const money = (v) => (v < 0 ? '-' : '') + '$' + Math.round(Math.abs(v)).toLocale
 const pct = (v, d = 2) => (v * 100).toFixed(d) + '%';
 const rule = (c = '─') => console.log(c.repeat(112));
 
-function loadFixture(name) {
-    const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8'));
-    const meta = raw.__meta; delete raw.__meta;
-    for (const k of (meta.undefinedKeys || [])) raw[k] = undefined;
-    return raw;
-}
-const CANON = loadFixture('p106_canonical.json');
+const CANON = { ...PLANS.get('age-gap-ira-heavy-ca').inputs };
 
 // Same five households as P106c, so the two reports can be read side by side.
 const HOUSEHOLDS = [

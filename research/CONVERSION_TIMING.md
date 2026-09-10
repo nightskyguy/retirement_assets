@@ -32,8 +32,8 @@ Harness: [`convtiming_harness.js`](https://github.com/nightskyguy/retirement_ass
 The user's claim: converting earlier beats converting later, because (a) the dollars compound
 tax-free for longer and (b) a smaller IRA grows less, so lifetime RMDs and their consequences shrink.
 
-Nothing in this repo had tested it. `betr_harness.js` asks convert-vs-not; `stopyear_harness.js` and
-`bestConversionStopYear()` ask when to **stop**, and a later stop converts more in total, so a cutoff
+Nothing in this repo had tested it. `betr_harness.js` asks convert-vs-not; `stopyear_harness.js`
+(retired in `P116`) and `bestConversionStopYear()` ask when to **stop**, and a later stop converts more in total, so a cutoff
 sweep confounds timing with amount.
 
 **This is not P28j**, which is the intra-year withdrawal *month* (`optimizer_core.js:1275-1285`); its
@@ -134,7 +134,8 @@ reason, and quoting only the 284 overstates the case.
 
 ## 3. The IRA Goal changes the answer, and the first run had it at zero
 
-The first run inherited `iraBaseGoal: 0` from `gapfill_harness.js`'s `COMMON` without asking whether
+The first run inherited `iraBaseGoal: 0` from the `COMMON` block of `gapfill_harness.js` (retired
+in P116) without asking whether
 it belonged. It did not. **The shipped page default is $750,000** (`retirement_optimizer.html:210`),
 and the page additionally offers a computed suggestion — the IRA balance whose RMDs roughly equal the
 spend goal at a target age (`computeSuggestedIraGoal`, `optimizer_ui.js:665`). Zero is a value
@@ -358,7 +359,7 @@ Five in the first run (section 7 of the superseded version, preserved in `progre
 
 6. **The RMD-basis harness's own R2 was written wrong twice** — first as a lifetime-total comparison,
    which condemns a correct fix, then as a blended two-spouse ratio. Details in
-   [`RMD_BASIS.md`](RMD_BASIS.md) section 4.
+   the retired `RMD_BASIS` report, section 4 (P116; in the repository history).
 7. **`C1` is phrased too weakly to fail when its own subject changes.** It asks whether FRONT beats
    BACK head-to-head, and has HELD in all three runs. But the claim the study exists to test is
    "convert earlier", and the three-way count that actually answers it crossed below a majority in

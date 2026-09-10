@@ -39,7 +39,7 @@ const PLAN = {
             peakIRAYear: 32,
             acaBreachYears: 7
         },
-        origin: "`acamagi_harness.js`, its BASE crossed with its own `SS mid @62` claim-age arm. The BASE alone claims at 67, which is AFTER the cap lapses, so it cannot show the add-back at all - that gap is why this plan exists.",
+        origin: "`acamagi_harness.js` (retired in P116), its BASE crossed with its own `SS mid @62` claim-age arm. The BASE alone claims at 67, which is AFTER the cap lapses, so it cannot show the add-back at all - that gap is why this plan exists.",
     },
     inputs: {
         STATEname: "TX",

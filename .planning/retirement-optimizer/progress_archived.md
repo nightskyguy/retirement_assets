@@ -69,10 +69,10 @@ reordered the study ahead of sweep integration, since it runs in node where ther
 with #142/#143/#144 merged), Priority Order rows 37-39 added, P13 annotated as possibly superseded by
 P35, and the three phase sections appended with "already ruled out" blocks in the P29-P34 house style.
 `findings.md` gained the engine survey. Full 8-PR design lives at
-`C:\Users\starc\.claude\plans\composed-marinating-garden.md`.
+`%USERPROFILE%\.claude\plans\composed-marinating-garden.md`.
 
 **Process failure, repeated from 2026-07-25 and worth a guard.** All three files were first written to
-the **main checkout** (`C:\Users\starc\source\retirement_assets\`) instead of this worktree — the exact
+the **main checkout** (`%USERPROFILE%\source\retirement_assets\`) instead of this worktree — the exact
 mistake the 2026-07-25 entry below already records, and the reason the global CLAUDE.md carries a
 worktree-path rule. It was caught only because `git status` in the worktree came back **empty** after
 three successful-looking edits. Recovered without loss: `git diff` in main confirmed all 432 insertions
@@ -143,7 +143,7 @@ User asked for a README FAQ section, then iteratively for a changelog restructur
 
 **Verification:** `node optimizer_core.test.js` 114/114 throughout (engine layer never touched — the whole design constraint was that `optimizer_core.js` must only ever see `undefined`/number for `CashReserve`, never a string). Browser: fresh-load default is "Off"; "Off"/"OFF"/"off "/blank all produce identical simulation results (`-1` reproduces a separate, pre-existing, out-of-scope blur-clamp-to-`$0` quirk); realistic scenario save/load round-trip preserves "Off"; legacy scenarios with a raw `-1` still parse as Off (cosmetic "$-1" display artifact, also pre-existing); share URL omits the Cash Reserve param when "Off", identical to how it's always omitted blank; changelog shows 5 inline + lazy-loads ~90 more via real XHR (200 OK); no new console errors beyond the 4 pre-existing intentional bad-input test fixtures.
 
-**Process note:** edits were made in the main repo path (`C:\Users\starc\source\retirement_assets\`) rather than this worktree, and had to be synced across by hand after the fact (`cp`) before each browser verification pass — worth an explicit `pwd`/path check at the start of an editing session inside a worktree.
+**Process note:** edits were made in the main repo path (`%USERPROFILE%\source\retirement_assets\`) rather than this worktree, and had to be synced across by hand after the fact (`cp`) before each browser verification pass — worth an explicit `pwd`/path check at the start of an editing session inside a worktree.
 
 Committed + pushed as [PR #129](https://github.com/nightskyguy/retirement_assets/pull/129).
 
@@ -610,7 +610,7 @@ Two small fixes after Phase 36:
 
 ## Session: 2026-06-25 — Phase 36: Soft vs Strict Withdrawal Caps / large-shortfall fix (complete, v11.1090)
 
-User repro: `?sg=160k&str=bracket&sr=22&d1=74&by2=1959&i1=2m&i2=1e5&ro=0&ro2=0` showed a shortfall
+A reported reproduction (a 22% bracket fill, no Roth, a short horizon) showed a shortfall
 starting 2039 growing to ~$75k/yr by 2043 despite a $2M+ IRA. Root cause: `bracket`/`fixedpct`
 capped IRA at the bracket ceiling and only gap-filled Cash→Brokerage→Roth — no IRA fallback — so
 after person 1's death halved the bracket (MFJ→single, `:953`), the abundant IRA was stranded.
@@ -1137,7 +1137,7 @@ User feedback on the baseline-accounting UI:
 
 ## Session: 2026-07-27 (worktree context-e73361) — deferred backlog, PR-A (v11.1391)
 - User asked to plan the items "recently identified"; they turned out to be the five deferred in PR1's appendix (`~/.claude/plans/not-sure-where-it-eventual-gray.md`, pointed to from task_plan.md:52). All five re-verified against current main before planning: none implemented.
-- Approved plan: 4 sequenced PRs. PR-A = MC stress + dead code (cheap, no engine change); PR-B = SS first-year proration + milestones; PR-C = birth-year FRA; PR-D = head-to-head compare. Plan file: `C:\Users\starc\.claude\plans\there-are-several-items-tender-newt.md`. User decision: SS proration ships unconditional and disclosed, no toggle.
+- Approved plan: 4 sequenced PRs. PR-A = MC stress + dead code (cheap, no engine change); PR-B = SS first-year proration + milestones; PR-C = birth-year FRA; PR-D = head-to-head compare. Plan file: `%USERPROFILE%\.claude\plans\there-are-several-items-tender-newt.md`. User decision: SS proration ships unconditional and disclosed, no toggle.
 - **The plan's PR-A design did not survive measurement, which is the point of measuring.** It proposed calling `mcTabActivated()` from `scheduleRecalc`, mirroring the `tab-opt` branch added in PR3. Measured first: the default scenario's MC run is **27.4s** (500 paths x 144 variations = 72,000 sims). An auto-run on every sidebar blur would be half a minute of CPU per edit. Presented the number to the user, who chose the split design: re-run only the stress pass (stressCount x 1 sims), flag the rest.
 - New `cfg.stressOnly` in BOTH `worker.js` and `mc_controller.js`. The controller is the `file://` main-thread mirror of the worker, so anything added to one must be added to the other or the two protocols drift; the stress message shape is now built by a shared helper in each file for the same reason.
 - GOTCHA found while wiring it: `runMCWorker` calibrates `_mcMsPerSim` from every completed run. A stress-only run is ~10 sims, so without a `msg.stressOnly` guard it would poison the time estimate the full run's progress display depends on.

@@ -58,10 +58,10 @@ weeks.
 - **Spend asserted equal**: largest gap across every arm and baseline is **$4** on $7.0M of lifetime
   spending.
 
-Scenario: one hypothetical household, the reference scenario throughout. CA, married, $3.44M across
-two IRAs, $274k Roth, $600k brokerage on $200k basis, $100k cash, $220k spending declining 1%/yr real, strategy `fixed` = **"Reduce IRA in 11
-Years"**, cyclic harvesting on, conversion taxes funded from cash. Inputs are
-`.test_harnesses/fixtures/p106_canonical.json`; harness `.test_harnesses/conversion_value_harness.js`.
+Scenario: `age-gap-ira-heavy-ca` from the plan bank, the reference scenario throughout. CA,
+married, an eight-year age gap, IRA-heavy, spending declining 1%/yr real, strategy `fixed` =
+**"Reduce IRA in 11 Years"**, cyclic harvesting on, conversion taxes funded from cash. Inputs are
+`plans/age-gap-ira-heavy-ca.js`; harness `.test_harnesses/conversion_value_harness.js`.
 
 ---
 

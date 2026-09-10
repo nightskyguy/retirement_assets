@@ -40,7 +40,7 @@ const PLAN = {
             peakIRAYear: 32,
             acaBreachYears: 7
         },
-        origin: "READ BY `acamagi_harness.js`. The Texas bracket-filler moved six years younger and put on a 400% FPL cap.",
+        origin: "READ BY `acamagi_harness.js`, retired in P116. The Texas bracket-filler moved six years younger and put on a 400% FPL cap.",
     },
     inputs: {
         STATEname: "TX",

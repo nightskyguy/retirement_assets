@@ -37,7 +37,7 @@ const PLAN = {
             peakIRAYear: 19,
             acaBreachYears: 0
         },
-        origin: "READ BY `growthcredit_check.js`.",
+        origin: "READ BY `growthcredit_check.js`, retired in P116.",
     },
     inputs: {
         STATEname: "CA",

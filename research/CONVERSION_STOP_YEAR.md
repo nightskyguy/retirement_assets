@@ -59,13 +59,13 @@ text only where the result is theirs.
 
 ## The scenario
 
-One hypothetical household, used as the reference scenario throughout. CA, married, both born
-before 1961, $3.44M across two IRAs, $274k Roth, $600k brokerage on $200k basis, $100k cash, $220k spending declining 1%/yr real, Fixed
-strategy, cyclic gain harvesting on, conversion taxes funded from cash, **no Marginal Heirs Tax Rate
-set**, and a Stop Conversion year of 2032 already applied.
+`age-gap-ira-heavy-ca` from the plan bank, the reference scenario throughout: CA, married, an
+eight-year age gap, IRA-heavy, spending declining 1%/yr real, Fixed strategy, cyclic gain
+harvesting on, conversion taxes funded from cash, **no Marginal Heirs Tax Rate set**, and a Stop
+Conversion year of 2032 already applied. Read `plans/age-gap-ira-heavy-ca.js` for the inputs and
+its card for what the household cannot show.
 
-Inputs are `.test_harnesses/fixtures/p106_canonical.json`, captured as the verbatim output of the
-page's own `getInputs()` rather than re-decoded in node. The live page at v11.171f suggests **2032**
+The harness reads the plan bank directly. The live page at v11.171f suggests **2032**
 with `gainVsFull $375,544` and `gainVsNone $308,733`; the harness reproduces all three exactly.
 
 Harness: `.test_harnesses/stopyear_stability_harness.js`. Plan runs 2026-2050, 26 cutoffs.

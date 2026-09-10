@@ -2,6 +2,52 @@
 
 Session entries from **2026-08-20**. Everything earlier is in `progress_archived.md`, verbatim.
 
+## Session: 2026-09-10 (worktree retirement-optimizer-phases-414fe1) - fixture consolidation, P116 prune, BETR re-measure
+
+v11.17c1. Three asks: verify that spending, taxes and IRMAA actually leave the portfolio; consolidate
+the reference household into the plan bank; and run `P116`.
+
+**1. Spending/tax/IRMAA outflow: VERIFIED, no defect.** Ledger identity
+`end = start + gains + SS + pension - (spend + shortfall) - totalTax(incl IRMAA) - QCD - fee`
+checked on all 19 plan-bank households x 3 timing modes x every year: largest residual under $1.
+Two stale texts fixed: the Annual Details `timing` tooltip and `README.md`'s Limitations item both
+still described the retired auto-select rule (`Early(Conv)`/`Late(Spend)`), which has not existed
+since the timing modes shipped. That is the whole user-visible content of this release.
+
+**2. The plan bank is now the single definition of the reference household.**
+`canonical-conversion-study` is renamed **`age-gap-ira-heavy-ca`** - named for the household rather
+than the study, which is the rule in `CLAUDE.md` the old name broke - and the JSON fixture it was
+built from is retired. The four surviving harnesses that read that fixture now read the bank, each
+proved byte-identical by diffing its own stdout before and after.
+
+A general rule earned here, and it is the reason several notes in these files now read differently:
+**a note explaining that something sensitive was taken out, and naming where it was taken from, is
+itself a pointer to it.** State what a file IS. Do not narrate what it no longer contains, and never
+in a commit message, which is searchable forever and cannot be edited after the fact. Local scenario
+files stay gitignored under the `*.local.json` rule; that rule in `.gitignore` is the guardrail and
+restating it elsewhere only advertises.
+
+Related: 12 machine-specific absolute paths in tracked files replaced with `%USERPROFILE%`, and
+"the user's own plan" in a MEASUREMENT sense rewritten to name the fixture in `task_plan.md`,
+`findings.md`, `progress.md`, `findings_archive.md` and two research reports. The PRODUCT sense of
+that phrase - the sidebar plan as opposed to a swept optimizer row - is correct vocabulary and was
+deliberately left alone everywhere it appears.
+
+**3. `P116a`/`c`/`d` DONE, `b` open.** 28 harnesses and 16 reports deleted, every reference scrubbed
+or annotated `retired in P116`, `HARNESSES.md` rebuilt as one row per survivor with a **last-run-on**
+column so an un-re-run script cannot be quoted as evidence. `P116d` shipped HALF: `ltcgRoomBasis` is
+gone, `harvestCeilSSBasis` STAYS because it is the control arm of two live `P87c4` tests - the phase
+text claimed both knobs existed only for the deleted harnesses and that was wrong.
+
+**4. BETR re-measured across a real mix of households** (user ask), new report
+`research/BETR_RELIABILITY.md`. On the 8 households where the measure is defined it is **overstated
+in all 8**. Two methodological corrections fell out of it, both recorded in the report: `t*` inverts
+its meaning when converting leaves a LARGER IRA (which one household does), and the cash-drag
+control is a no-op on the 5 Cyclic households, so it genuinely ran on only 3.
+
+Suites 435 / 27 / 61 / 24, unchanged; in-page badge green at 967. No test count moved, so
+`TestTiers.EXPECTED` needed no edit.
+
 ## Session: 2026-08-20 (worktree readme-review-updates-c9df11) - plan resync, no code
 
 Planning files had drifted three ways against `main` = `0b4d5b5`; this session only closed the gap.
@@ -817,7 +863,7 @@ and the changelog file changed. Badge green at 681, in-page 296.
 
 ## Session: 2026-08-24 (worktree context-ab498f) — P72 filed, first-year stub. No code.
 
-User asked a direct question: with $1M in Cash today, late August, does the Optimizer accrue
+A direct question was asked: with a large cash balance, late August, does the Optimizer accrue
 September-December in year 1, or a full year?
 
 **Answer, verified in the engine: a full year.** `applyGrowth` (optimizer_core.js:626) is
@@ -2471,7 +2517,7 @@ wrapped two-line paragraph below the table was joined into one. Content identica
 
 ## 2026-08-31 (cont.) - P100 Stage A: reproduced, and it refuted my own hypothesis
 
-**Reproduced exactly on the user's own scenario** (`.test_harnesses/fixtures_rankstability.local.json` (gitignored - real personal data, public repo), saved
+**Reproduced exactly on the reported scenario** (`.test_harnesses/fixtures_rankstability.local.json`, gitignored and not committed, saved
 from their file, not invented): plan at **103rd** under `Roth Conversion Effectiveness`; adopt
 `IRA Draw 9%`; re-run; the IRMAA Tier 2 plan comes back at **20th**. User reported 103 and 22.
 
@@ -2673,7 +2719,7 @@ an optional `tiebreak` array on any objective.
 - **`taxflex` and `earliestbe` untouched** - custom rankers with their own tie handling; a blanket
   re-sort would undo what makes them custom.
 
-**Verified on the user's own scenario, and this is the number that matters.** Run the sweep, adopt
+**Verified on the reported scenario, and this is the number that matters.** Run the sweep, adopt
 `IRA Draw 9%`, run again: **151 of 152 rows are common to both runs and their relative order is
 IDENTICAL - zero positions differ.** Only the current-plan row changes, which it should. Under
 v11.16d4 the same action moved a row from 103rd to 20th. The top of the table now reads: three
@@ -2992,7 +3038,7 @@ documenting the happy case.
 
 **Two user-visible fixes, shipped as v11.16f9.**
 
-1. **Cash could fall with nothing on screen explaining it.** On the user's plan Cash went
+1. **Cash could fall with nothing on screen explaining it.** On the reported household Cash went
    $72,000 -> $16,099 in year one with `CashWD` reading 0, because $56,512 paid conversion tax under
    "Use Cash". The figure existed only as `-extraConvCashTax`, whose leading `-` means no column.
    Added `ttlCashWD` (every dollar that left Cash, in the Withdrawals band beside CashWD) and
@@ -3563,7 +3609,7 @@ in the IRA. Against the first the user's conversions are DOMINANT; against the s
 $49,121. Any conversion claim naming one baseline is under-specified. This is exactly the confound
 `equalize before a bake-off` was written for.
 
-**And the user's own comparison was 92% strategy, not conversions.** Decomposed: conversion leg
+**And the reported comparison was 92% strategy, not conversions.** Decomposed: conversion leg
 dRoth $5,000,390 / dNW -$49,121; strategy leg dRoth $0 / dNW -$532,928. So the conversion decision is
 101.80:1, not the 3.26 the combined pair gave, and costs 2.36% of surplus over need. Their instinct
 to take the trade was right; the price they were weighing was mostly a different decision.
@@ -3898,7 +3944,7 @@ sourced). `spendRule` is separable from `strategy` (`optimizer_core.js:2031`, `P
 "GK or a Fill strategy supplies the spend plan, something else supplies the draw" is a composition
 the engine already supports today.
 
-**The user's verdict on Fixed Split, from their own scenario:** top ten under only 2 of 9 goals
+**The verdict on Fixed Split, from the reported scenario:** top ten under only 2 of 9 goals
 (Maximum Net Wealth, Balanced); no mechanism to grow Roth beyond declining to spend it; GK ranks
 114th once Roth Conversion is added; and **Ordered CIBR beats every Fixed Split variation**.
 Decision: keep it for further testing behind a NAMED sub-knob, flag every piece of logic so it can

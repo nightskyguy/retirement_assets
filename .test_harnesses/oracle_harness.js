@@ -12,7 +12,7 @@
  *
  * WHY --spendchange EXISTS (P103b5c, 2026-09-01, user). Every cell in this study is run at
  * spendChange: 0, a FLAT real spend path, and that is not what a typical plan looks like - the
- * user's own plans decline around 1% a year. "Spend is pinned" (candidates delivering a different
+ * the plan bank's canonical household declines around 1% a year. "Spend is pinned" (candidates delivering a different
  * spend are discarded) is a comparison rule and is real; "spend is flat" was a fixture choice
  * nobody chose deliberately. Opt-in, so a bare run still reproduces the published tables.
  *
@@ -55,7 +55,7 @@
  * Scored at the end of the run.
  */
 
-// ── Bootstrap the engine exactly like brokerage_harness.js / optimizer_core.tests.js ────────
+// ── Bootstrap the engine exactly like optimizer_core.tests.js ───────────────────────────────
 globalThis.performance = { now: () => 0 };
 globalThis.window = {};
 globalThis.document = { getElementById: () => null, addEventListener: () => {} };

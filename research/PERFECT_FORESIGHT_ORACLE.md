@@ -27,9 +27,9 @@ The old tables are kept for the record and are labelled where they are supersede
 whole-horizon asset-utilization optimization is on this engine, **(B)** whether Cyclic leaves money
 on the table in its harvest years, **(C)** whether Proportional's optimality can be proven. Those
 were answered by a three-stage program: **Stage 1** and **Stage 2** are the scans and A/Bs in
-[`BROKERAGE_DRAW.md`](BROKERAGE_DRAW.md) and [`STRATEGY_FAMILY_RANKING.md`](STRATEGY_FAMILY_RANKING.md); **Stage 3** is this
+the retired `BROKERAGE_DRAW` and `STRATEGY_FAMILY_RANKING` reports; **Stage 3** is this
 oracle, allocated as phase P51. So "question A" and "question C" below are the user's, and
-"Stage 1's q3" points into `BROKERAGE_DRAW.md`.
+"Stage 1's q3" points into the retired `BROKERAGE_DRAW` report.
 
 **What "oracle" means here.** A search allowed to CHEAT: it is handed the entire future return path
 (6% growth, 2.5% inflation, every year) before it chooses anything, then picks, year by year, how
@@ -79,7 +79,7 @@ consequences:
    LOWER bound on the true ceiling. **`P51d` now sizes that phrase: at most 0.013% of after-tax
    NW on the conversion axis** (below). The withdrawal-split axis is still un-cross-checked.
 2. The negative gap is itself the attribution: **cyclic's residual edge lives in surplus routing,
-   not in draw order** - consistent with the Q3 surplus-routing confound in [`BROKERAGE_DRAW.md`](BROKERAGE_DRAW.md).
+   not in draw order** - consistent with the Q3 surplus-routing confound in the retired `BROKERAGE_DRAW` report.
    It is now 1 row in 1 cell of 45, down from 2 rows in the 2026-08-10 run. **And `P103b1`, below,
    shows it is a HARNESS artifact: hold surplus routing constant with `--reserve0` and no row beats
    the ceiling at all.** The engine reaches Brokerage three ways; this grid armed none of them.
@@ -920,7 +920,7 @@ reason not to build it first.
 **What no shipped family can express, and this is the surprise.** The winning CONSTANT is a *blend*
 in 4 of 10 cells - `B4C6` in three, `prop` in one - and blends are expressible by no current family.
 Cash-dominant archetypes win 8 of 10 (`Cash` five times, `B4C6`, the [40,60] gap-fill shape, three).
-That agrees independently with `GAPFILL_SPLIT.md`, where `w=0` (all Cash) won 65 of 82 clean cells
+That agrees independently with the retired `GAPFILL_SPLIT` report, where `w=0` (all Cash) won 65 of 82 clean cells
 and 40 won none. **So the account SPLIT field is needed even to express the best CONSTANT** - a far
 smaller build than a per-year search, and the thing to build first.
 
@@ -983,7 +983,7 @@ search; that happened in one cell on the old engine and in five here.
   10 (was 4 of 10). The `Cash` wins were partly the defect: the phantom second draw spilled into
   the IRA and, with Max Conversion on, converted it, so "Cash first" had been carrying an
   involuntary IRA draw that a blend now has to state explicitly. The agreement claimed with
-  `GAPFILL_SPLIT.md`'s `w=0` result is therefore weaker than written above, and `GAPFILL_SPLIT.md`
+  `GAPFILL_SPLIT`'s `w=0` result is therefore weaker than written above, and that report
   itself was measured on the old engine.
 - **The SPLIT field is needed MORE, not less.** Seven of the eight winning constants are blends no
   shipped family can express, and two of them draw IRA, Brokerage and Cash together.

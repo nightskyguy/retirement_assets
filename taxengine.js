@@ -1065,6 +1065,30 @@ TAXData.FEDERAL.CAPITAL_GAINS.CYCLE_TARGET_OPTIONS =
             label: `${Math.round(TAXData.FEDERAL.CAPITAL_GAINS.MFJ.brackets[i].r * 100)}% bracket`
         }));
 
+// Federal Poverty Level. Not an IRS table: HHS publishes these each January, and they are what an
+// ACA premium subsidy is measured against.
+//
+// THE YEAR LAG IS DELIBERATE. An ACA plan year is subsidised against the guideline published the
+// PREVIOUS January, so a plan priced for 2026 coverage uses the 2025 figures. Do not "update" these
+// to the current year to match TAXData.FEDERAL.YEAR - that would overstate every FPL ceiling by a
+// year of indexation. The two tables are on different clocks on purpose.
+//
+// Household size is filing status and nothing else: MFJ is the two-person guideline, SGL the
+// one-person. There are no dependents in this model. Alaska and Hawaii have higher guidelines and
+// are NOT modelled, so an ACA ceiling in those states is too strict - see "Limitations and
+// Restrictions" in README.md.
+//
+// Read by computeBracketCeiling() in optimizer_core.js, and by the Limit menu and the limit ladder
+// in optimizer_ui.js. It used to be a hardcoded literal in the first two of those, kept in step by
+// hand; they had already drifted once, by enough to price a 2026 ceiling $2,354 apart.
+TAXData.FPL = {
+    PLAN_YEAR: 2026,        // the coverage year these serve
+    GUIDELINE_YEAR: 2025,   // the January HHS publication they are taken from
+    MFJ: 20440,             // two-person household, contiguous 48 states and DC
+    SGL: 15060,             // one-person household
+    MULTIPLES: [200, 250, 300, 400],   // the subsidy cliffs the Limit menu offers
+};
+
 // OBBBA provisions — P.L. 119-21, signed July 4, 2025. Update this block if IRS issues amended guidance.
 // calculateTaxes() and IncomeTaxPlanner.html read from here; no values are hardcoded there.
 TAXData.OBBBA = {

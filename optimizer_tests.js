@@ -1802,10 +1802,66 @@ assertEqual(
 			assertEqual(panel.style.display, 'none', 'which is closed until it is asked for');
 			toggleLimitLadder();
 			assertEqual(panel.style.display !== 'none', true, '"Show me" opens it');
-			assertEqual(panel.innerHTML.includes('<svg'), true, 'and it draws the two ladders');
+			assertEqual(panel.innerHTML.includes('<svg'), true, 'and it draws the ladders');
 			const svg = panel.querySelector('svg');
 			assertEqual(/onclick|<a[\s>]|title=/i.test(svg ? svg.outerHTML : ''), false,
 				'the DRAWING is a picture: nothing in it is clickable, hoverable or titled');
+			// Three ladders, each named at the left edge.
+			const rowNames = [...svg.querySelectorAll('text')].map(t => t.textContent);
+			for (const name of ['Federal', 'IRMAA', 'Cap gains'])
+				assertEqual(rowNames.includes(name), true, `the picture names the ${name} ladder`);
+			// The capital-gains row reads as the EFFECTIVE rate, surtax folded in, which is the
+			// whole reason it is one row and not an LTCG row plus a NIIT row.
+			for (const lbl of ['0%', '15%', '18.8%', '23.8%'])
+				assertEqual(rowNames.includes(lbl), true, `capital-gains band ${lbl} is drawn`);
+			// Every vertical line STYLE has a legend entry. Compared by stroke colour, not by count:
+			// the ACA row draws one tick per cap and they share a single entry, so counting lines
+			// would demand four identical swatches. What must not happen is a line style on the
+			// chart that the legend never names.
+			const svgLines = [...svg.querySelectorAll('line')];
+			const strokesOf = ls => [...new Set(ls.map(l => l.getAttribute('stroke')))].sort();
+			const verticals = svgLines.filter(l => +l.getAttribute('y2') - +l.getAttribute('y1') > 5);
+			const swatches = svgLines.filter(l => l.getAttribute('y1') === l.getAttribute('y2')
+			                                   && l.getAttribute('stroke') !== '#999');
+			const unnamed = strokesOf(verticals).filter(s => !strokesOf(swatches).includes(s));
+			assertEqual(verticals.length > 0 && unnamed.length === 0, true,
+				`every line style on the chart is named in the legend (unnamed: ${unnamed.join(', ') || 'none'})`);
+			// The scale sits along the TOP: its rule is above the first row, not under the last.
+			const axisLine = svgLines.find(l => l.getAttribute('stroke') === '#999');
+			const firstRowY = Math.min(...[...svg.querySelectorAll('rect')].map(r => +r.getAttribute('y')));
+			assertEqual(axisLine && +axisLine.getAttribute('y1') < firstRowY, true,
+				'the axis is drawn along the top edge, above every row');
+			// The ACA row is off until asked for, and asking for it must not smuggle a control into
+			// the drawing or leave a line style unnamed.
+			assertEqual(rowNames.includes('ACA'), false, 'the ACA row is off by default');
+			const acaBtn = document.getElementById('limit-ladder-aca');
+			assertEqual(!!acaBtn, true, 'and the control that adds it sits in the chrome, not the drawing');
+			if (acaBtn) {
+				// CLICK it, do not call the handler. The handler rebuilds panel.innerHTML, which
+				// detaches the clicked node before the document-level dismiss listener tests it for
+				// containment - so the panel used to close on its own control. Calling the function
+				// directly never travels that path and never saw it.
+				acaBtn.click();
+				assertEqual(panel.style.display !== 'none', true,
+					'clicking "Show ACA/FPL" does not dismiss the panel');
+				const svg2 = panel.querySelector('svg');
+				const names2 = [...svg2.querySelectorAll('text')].map(t => t.textContent);
+				assertEqual(names2.includes('ACA') && names2.includes('FPL'), true,
+					'"Show ACA/FPL" adds the row, labelled ACA / FPL');
+				assertEqual(/onclick|<a[\s>]|title=/i.test(svg2.outerHTML), false,
+					'and the drawing is still a picture with the row on');
+				const l2 = [...svg2.querySelectorAll('line')];
+				const v2 = l2.filter(l => +l.getAttribute('y2') - +l.getAttribute('y1') > 5);
+				const s2 = l2.filter(l => l.getAttribute('y1') === l.getAttribute('y2')
+				                       && l.getAttribute('stroke') !== '#999');
+				const un2 = strokesOf(v2).filter(s => !strokesOf(s2).includes(s));
+				assertEqual(un2.length, 0, `the ACA row's own line style is in the legend too (unnamed: ${un2.join(', ') || 'none'})`);
+				// And it toggles back off the same way, still without dismissing.
+				document.getElementById('limit-ladder-aca')?.click();
+				assertEqual(panel.style.display !== 'none', true, 'and clicking it again keeps the panel up');
+				assertEqual([...panel.querySelectorAll('svg text')].map(t => t.textContent).includes('ACA'),
+					false, 'with the ACA row gone again');
+			}
 			// It opens away from the link that opened it, so it has to carry its own way out.
 			assertEqual(!!document.getElementById('limit-ladder-close'), true,
 				'and it carries a close control, because the link that opened it is elsewhere');
@@ -1827,6 +1883,57 @@ assertEqual(
 			updateBracketFeedback?.();
 			updateLimitBasisNote?.();
 		}
+	})();
+
+	// ===== The NIIT divider is the one line on the ladder that does not inflate =====
+	// Capital-gains ceilings are CPI-indexed; the NIIT threshold is not. On the picture that means
+	// the 15%/18.8% divider slides LEFT relative to the bands around it as a plan runs forward.
+	//
+	// ASSERT IN DOLLARS, NOT PIXELS. `maxX` scales with cpiAdj too, so a fixed dollar amount lands
+	// on a different x at every factor - reading pixels makes a correct chart look broken, which is
+	// exactly the false alarm this test was written after hitting.
+	(function niitDividerDoesNotInflateOnTheLadder() {
+		if (typeof buildLimitLadderSVG !== 'function' || typeof dropdownDeduction !== 'function') return;
+		const status = 'MFJ';
+		const ded = dropdownDeduction(status);
+		const fedB = TAXData.FEDERAL[status].brackets.filter(b => isFinite(b.l));
+		const irmB = TAXData.IRMAA[status].brackets.filter(b => isFinite(b.l));
+		const L = 62, SPAN = 448;
+
+		// Read the drawn boundaries back off the SVG and convert them to dollars.
+		const readDollars = (cpiAdj) => {
+			const maxX = Math.max(irmB[irmB.length - 1].l * cpiAdj,
+			                      fedB[fedB.length - 1].l * cpiAdj + ded) * 1.08;
+			const host = document.createElement('div');
+			host.innerHTML = buildLimitLadderSVG(status, cpiAdj, 218000);
+			const svg = host.querySelector('svg');
+			if (!svg) return null;
+			const toDollars = px => (px - L) / SPAN * maxX;
+			const cgY = Math.max(...[...svg.querySelectorAll('rect')].map(r => +r.getAttribute('y')));
+			const lefts = [...svg.querySelectorAll('rect')]
+				.filter(r => +r.getAttribute('y') === cgY)
+				.map(r => toDollars(+r.getAttribute('x')));
+			const niitLine = [...svg.querySelectorAll('line')]
+				.find(l => (l.getAttribute('stroke-dasharray') || '') === '3 2');
+			return { lefts, niit: niitLine ? toDollars(+niitLine.getAttribute('x1')) : null };
+		};
+
+		const one = readDollars(1.0), two = readDollars(2.0);
+		if (!one || !two || one.niit === null) return;
+
+		// Tolerance covers the one decimal place the SVG rounds each x to.
+		const near = (a, b) => Math.abs(a - b) < 1000;
+		assertEqual(near(one.niit, TAXData.FEDERAL.NIIT[status]), true,
+			`the divider is drawn at the NIIT threshold (${Math.round(one.niit)})`);
+		assertEqual(near(one.niit, two.niit), true,
+			`and it stays there when CPI doubles (${Math.round(one.niit)} vs ${Math.round(two.niit)})`);
+
+		// The bands around it DO move, otherwise the test above would pass on a frozen chart.
+		const cgTop = TAXData.FEDERAL.CAPITAL_GAINS[status].brackets[0].l;
+		assertEqual(near(one.lefts[1], cgTop + ded), true,
+			'the 0% band ends at its own ceiling plus the deduction');
+		assertEqual(two.lefts[1] - one.lefts[1] > 10000, true,
+			`that ceiling inflates while the divider does not (${Math.round(one.lefts[1])} -> ${Math.round(two.lefts[1])})`);
 	})();
 
 	// ===== The menu's dollars are the engine's dollars =====

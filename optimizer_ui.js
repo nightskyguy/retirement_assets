@@ -7471,9 +7471,16 @@ function updateLimitBasisNote() {
         // A titled header with its own close control. The panel opens AWAY from the link that
         // opened it - it has to, to escape a 245px sidebar - so "click Show me again" is not a
         // discoverable way out of it. Reported as exactly that.
+        // The ACA toggle lives HERE, in the chrome, and not in the graphic. Every ACA cap sits in
+        // the leftmost tenth of the axis, so the row is off by default and worth little to the
+        // nine readers in ten who are past 65 and cannot use one. Putting the control inside the
+        // <svg> would make the drawing a control, which a test forbids and rightly.
         panel.innerHTML =
             `<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">`
           + `<b style="font-size:0.85em;color:#78350f;flex:1;">Where the limits sit</b>`
+          + `<span id="limit-ladder-aca" onclick="toggleLimitLadderACA()" `
+          + `style="cursor:pointer;color:#2980b9;font-size:0.85em;white-space:nowrap;">`
+          + `${showLadderACA ? 'Hide ACA/FPL' : 'Show ACA/FPL'}</span>`
           + `<span id="limit-ladder-close" onclick="toggleLimitLadder()" `
           + `style="cursor:pointer;color:#78350f;font-size:0.85em;">close ✕</span></div>`
           + buildLimitLadderSVG(status, cpiAdj, limit);
@@ -7487,6 +7494,11 @@ document.addEventListener('click', e => {
     if (!panel || panel.style.display === 'none') return;
     if (panel.contains(e.target)) return;
     if (e.target.closest && e.target.closest('#limit-ladder-link')) return;   // the toggle's own job
+    // The ACA toggle is INSIDE the panel, so `panel.contains` ought to have caught it - except that
+    // its handler rebuilds panel.innerHTML before this bubbled listener runs, which detaches the
+    // very node being tested. Containment then reads false and the panel dismisses itself on its
+    // own control. `closest` still resolves on a detached node, which is what makes this work.
+    if (e.target.closest && e.target.closest('#limit-ladder-aca')) return;
     panel.style.display = 'none';
     panel.innerHTML = '';
     if (typeof updateLimitBasisNote === 'function') updateLimitBasisNote();
@@ -7505,6 +7517,15 @@ document.addEventListener('keydown', e => {
 // Placed against the viewport rather than flowed into the sidebar: the sidebar is 245px wide and
 // clips its overflow, so an in-flow panel was either illegible or had to scroll sideways. Same
 // approach as #touch-tooltip in setupSmallScreenUX() - measure the control, clamp to the viewport.
+// Off by default: an ACA cap only exists while somebody in the plan is under 65, and every cap it
+// can offer sits in the leftmost tenth of the axis. Readers who need it ask for it.
+let showLadderACA = false;
+
+function toggleLimitLadderACA() {
+    showLadderACA = !showLadderACA;
+    updateLimitBasisNote();   // redraws the panel in place; the panel is already positioned
+}
+
 function toggleLimitLadder() {
     const panel = document.getElementById('limit-ladder');
     const sel = document.getElementById('stratRate');
@@ -7540,75 +7561,180 @@ function buildLimitLadderSVG(status, cpiAdj, selectedLimit) {
     // drawn as open-ended bands rather than dropped.
     const maxX = Math.max(irmaaBrks[irmaaBrks.length - 1].l * cpiAdj,
                           fedBrks[fedBrks.length - 1].l * cpiAdj + ded) * 1.08;
-    const W = 520, L = 62, R = 10, H = 138;
+
+    // LAYOUT. The scale sits along the TOP edge, not the bottom: the rows below it carry their own
+    // text (the capital-gains band labels, and the ACA row's caption) and an axis underneath them
+    // had nowhere left to go. Everything here is derived from ROW_Y so adding a row is one entry.
+    const W = 520, L = 62, R = 10;
+    const TICK_Y = 22, AXIS_Y = 30, ROW_H = 26, ROW_GAP = 10;
+    const ROW_ORDER = showLadderACA ? ['fed', 'irmaa', 'cg', 'aca'] : ['fed', 'irmaa', 'cg'];
+    const ROW_Y = {};
+    ROW_ORDER.forEach((k, i) => { ROW_Y[k] = AXIS_Y + 10 + i * (ROW_H + ROW_GAP); });
+    const LAST_ROW_BOTTOM = ROW_Y[ROW_ORDER[ROW_ORDER.length - 1]] + ROW_H;
+    const LEG_Y1 = LAST_ROW_BOTTOM + 24, LEG_Y2 = LEG_Y1 + 20;
+    const H = LEG_Y2 + 14;
+    const mid = y => y + ROW_H / 2 + 4;          // text baseline centred in a row
     const x = v => L + Math.max(0, Math.min(1, v / maxX)) * (W - L - R);
     const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
     const money = n => DisplayHelpers.formatDollarShort(n);
 
+    // One place for every stroke, so a legend swatch cannot drift from the line it describes.
+    const STROKE = { limit: '#b45309', plan: '#334155', niit: '#be123c', aca: '#6d28d9' };
+
     const FED = ['#dbeafe', '#bfdbfe', '#93c5fd', '#60a5fa', '#3b82f6', '#2563eb', '#1d4ed8'];
     const IRM = ['#f3f4f6', '#fde68a', '#fcd34d', '#fbbf24', '#f59e0b', '#d97706', '#b45309'];
+    const CG  = ['#f3f4f6', '#ccfbf1', '#5eead4', '#14b8a6'];
     let out = '';
 
-    // Federal band: each bracket drawn where its MAGI equivalent falls, so the two rows line up.
+    // One band on any row. Every row draws through this so the geometry cannot drift between them.
+    const band = (y, from, to, fill, label) => {
+        out += `<rect x="${x(from).toFixed(1)}" y="${y}" width="${Math.max(0, x(to) - x(from)).toFixed(1)}" height="${ROW_H}" fill="${fill}" stroke="#94a3b8"/>`;
+        if (label && x(to) - x(from) > 26) {
+            out += `<text x="${((x(from) + x(to)) / 2).toFixed(1)}" y="${mid(y)}" font-size="12" text-anchor="middle" fill="#1e293b">${esc(label)}</text>`;
+        }
+    };
+
+    // Federal band: each bracket drawn where its MAGI equivalent falls, so the rows line up.
     let prev = 0;
     fedBrks.forEach((b, i) => {
         const top = b.l * cpiAdj + ded;
-        out += `<rect x="${x(prev).toFixed(1)}" y="26" width="${Math.max(0, x(top) - x(prev)).toFixed(1)}" height="26" fill="${FED[i % FED.length]}" stroke="#94a3b8"/>`;
-        if (x(top) - x(prev) > 26) {
-            out += `<text x="${((x(prev) + x(top)) / 2).toFixed(1)}" y="43" font-size="12" text-anchor="middle" fill="#1e293b">${Math.round(b.r * 100)}%</text>`;
-        }
+        band(ROW_Y.fed, prev, top, FED[i % FED.length], Math.round(b.r * 100) + '%');
         prev = top;
     });
-    out += `<rect x="${x(prev).toFixed(1)}" y="26" width="${(W - R - x(prev)).toFixed(1)}" height="26" fill="${FED[fedBrks.length % FED.length]}" stroke="#94a3b8"/>`;
+    band(ROW_Y.fed, prev, maxX, FED[fedBrks.length % FED.length], '');
 
     // IRMAA band. The table's FIRST row is a `-none-` sentinel sitting one dollar below Tier 1's
     // start, not a tier - drawing it as one produced a $1 sliver and shifted every tier number
     // after it by one. So the bands are: 0 to Tier 1's start (no surcharge), then each tier from
     // its own start to the next one's.
-    const irmaaBand = (from, to, fill, label) => {
-        out += `<rect x="${x(from).toFixed(1)}" y="62" width="${Math.max(0, x(to) - x(from)).toFixed(1)}" height="26" fill="${fill}" stroke="#94a3b8"/>`;
-        if (x(to) - x(from) > 26) {
-            out += `<text x="${((x(from) + x(to)) / 2).toFixed(1)}" y="79" font-size="12" text-anchor="middle" fill="#1e293b">${label}</text>`;
-        }
-    };
     const tier1Start = irmaaBrks[1].l * cpiAdj;
-    irmaaBand(0, tier1Start, IRM[0], 'none');
+    band(ROW_Y.irmaa, 0, tier1Start, IRM[0], 'none');
     prev = tier1Start;
     for (let i = 1; i < irmaaBrks.length; i++) {
         const next = i + 1 < irmaaBrks.length ? irmaaBrks[i + 1].l * cpiAdj : null;
         if (next === null) break;
-        irmaaBand(prev, next, IRM[i % IRM.length], 'T' + i);
+        band(ROW_Y.irmaa, prev, next, IRM[i % IRM.length], 'T' + i);
         prev = next;
     }
-    out += `<rect x="${x(prev).toFixed(1)}" y="62" width="${(W - R - x(prev)).toFixed(1)}" height="26" fill="${IRM[irmaaBrks.length % IRM.length]}" stroke="#94a3b8"/>`;
+    band(ROW_Y.irmaa, prev, maxX, IRM[irmaaBrks.length % IRM.length], '');
 
-    // The selected limit, on the axis both rows share.
+    // Capital gains, WITH the NIIT surtax folded in, which is why this is one row and not two.
+    // The NIIT threshold falls INSIDE the 15% band, so it splits that band rather than needing a
+    // ladder of its own, and the row then reads as the effective rate actually charged:
+    // 0 / 15 / 18.8 / 23.8. The 20% band never appears bare - see the derivation in taxengine.js
+    // above the CAPITAL_GAINS table, and TEST CASE 6f which pins it.
+    //
+    // THE ONE BOUNDARY ON THIS CHART THAT IS NOT MULTIPLIED BY cpiAdj is the NIIT threshold. Its
+    // statute does not index it; every other line here inflates. That asymmetry is the whole
+    // reason the split point drifts year to year, and it is why the split cannot be baked into
+    // the bracket table as a fixed row. Do not "make it consistent" - a test pins it.
+    const cgBrks = TAXData.FEDERAL.CAPITAL_GAINS[status]?.brackets ?? [];
+    const niitAt = TAXData.FEDERAL.NIIT[status];
+    const niitRate = TAXData.FEDERAL.NIIT.rate;
+    const cgBands = [];
+    prev = 0;
+    for (const b of cgBrks) {
+        const top = isFinite(b.l) ? b.l * cpiAdj + ded : maxX;
+        // Split across the surtax threshold when it lands inside this bracket.
+        if (niitAt > prev && niitAt < top) {
+            cgBands.push({ from: prev, to: niitAt, rate: b.r });
+            cgBands.push({ from: niitAt, to: top, rate: b.r + niitRate });
+        } else {
+            cgBands.push({ from: prev, to: top, rate: b.r + (prev >= niitAt ? niitRate : 0) });
+        }
+        prev = top;
+    }
+    // 0.188 -> "18.8%", 0.15 -> "15%". One decimal, and no trailing ".0".
+    const ratePct = v => String(Math.round(v * 1000) / 10).replace(/\.0$/, '') + '%';
+    cgBands.forEach((b, i) => band(ROW_Y.cg, b.from, b.to, CG[i % CG.length], ratePct(b.rate)));
+    if (niitAt > 0 && niitAt < maxX) {
+        out += `<line x1="${x(niitAt).toFixed(1)}" y1="${ROW_Y.cg - 6}" x2="${x(niitAt).toFixed(1)}" `
+             + `y2="${ROW_Y.cg + ROW_H + 6}" stroke="${STROKE.niit}" stroke-width="2" stroke-dasharray="3 2"/>`;
+    }
+
+    // ACA FPL caps, off by default. Four ticks and ONE label: at today's figures the 200% and 400%
+    // caps are about 25 units apart on a 448-unit axis, which is enough to see four ticks and
+    // nowhere near enough for four labels. Which one is live is already said by "your limit".
+    //
+    // CONVERTED TO PLAIN MAGI, because an ACA cap is not measured in the same money as everything
+    // else on this axis: it is tested against ACA MAGI, which counts the WHOLE Social Security
+    // benefit while MAGI counts at most 85% of it (ceilingMAGI in optimizer_core.js). Subtracting
+    // the untaxed part puts the cap where a reader's MAGI would actually have to be. With no run
+    // loaded the offset is 0, which is also the right answer for the pre-65 households that can
+    // still use an ACA cap and have not started a benefit.
+    let acaNote = '';
+    if (showLadderACA) {
+        const row = Array.isArray(lastSimulationLog) ? lastSimulationLog[0] : null;
+        const cpiOf = row ? (row['-cpiFactor'] || 1) : 1;
+        // `fixedInc` is the WHOLE benefit and `-taxableSS` the part that reaches AGI, which is the
+        // same pair ceilingMAGI() differences. Not SS1/SS2 - no such log fields exist, and reading
+        // them would have quietly made this offset zero in every plan.
+        const untaxedSS = row ? Math.max(0, (row.fixedInc ?? 0) - (row['-taxableSS'] ?? 0)) / cpiOf : 0;
+        const fplBase = TAXData.FPL?.[status] ?? 0;
+        const mult = TAXData.FPL?.MULTIPLES ?? [];
+        const caps = mult
+            .map(m => Math.max(0, Math.round(fplBase * m / 100 * cpiAdj * (1 + (+document.getElementById('cpi')?.value || 2.8) / 100)) - untaxedSS))
+            .filter(v => v > 0 && v < maxX);
+        if (caps.length) {
+            band(ROW_Y.aca, caps[0], caps[caps.length - 1], '#ede9fe', '');
+            for (const c of caps) {
+                out += `<line x1="${x(c).toFixed(1)}" y1="${ROW_Y.aca}" x2="${x(c).toFixed(1)}" `
+                     + `y2="${ROW_Y.aca + ROW_H}" stroke="${STROKE.aca}" stroke-width="1.5"/>`;
+            }
+            out += `<text x="${(x(caps[caps.length - 1]) + 6).toFixed(1)}" y="${mid(ROW_Y.aca)}" `
+                 + `font-size="11" fill="#4c1d95">${esc(mult.join(' / '))}% FPL, `
+                 + `${esc(money(caps[0]))} to ${esc(money(caps[caps.length - 1]))}</text>`;
+            acaNote = ' ACA caps are shown as the MAGI you would need, with the untaxed part of any'
+                    + ' benefit taken off, because the cap itself is measured against a MAGI that counts'
+                    + ' the whole benefit.';
+        }
+    }
+
+    // The two markers span every row. They carry no inline label any more: with four line styles
+    // on the chart, "your limit" floating above one of them and "this plan $X" below another was
+    // not enough to tell them apart. The legend below names all of them in one place.
+    const MARK_TOP = AXIS_Y + 4, MARK_BOT = LAST_ROW_BOTTOM + 6;
     const selMagi = /^\d+$/.test(String(document.getElementById('stratRate')?.value ?? ''))
         ? selectedLimit + ded : selectedLimit;
-    out += `<line x1="${x(selMagi).toFixed(1)}" y1="20" x2="${x(selMagi).toFixed(1)}" y2="96" stroke="#b45309" stroke-width="2" stroke-dasharray="4 3"/>`;
-    out += `<text x="${x(selMagi).toFixed(1)}" y="16" font-size="11" fill="#b45309" text-anchor="middle">your limit</text>`;
+    out += `<line x1="${x(selMagi).toFixed(1)}" y1="${MARK_TOP}" x2="${x(selMagi).toFixed(1)}" y2="${MARK_BOT}" stroke="${STROKE.limit}" stroke-width="2" stroke-dasharray="4 3"/>`;
 
-    // The plan's own first-year income, when there is a run to read it off.
     const e = Array.isArray(lastSimulationLog) ? lastSimulationLog[0] : null;
     const planMagi = e && e.MAGI > 0 ? e.MAGI / (e['-cpiFactor'] || 1) : null;
     if (planMagi) {
-        out += `<line x1="${x(planMagi).toFixed(1)}" y1="20" x2="${x(planMagi).toFixed(1)}" y2="96" stroke="#334155" stroke-width="1.5"/>`;
-        out += `<text x="${x(planMagi).toFixed(1)}" y="108" font-size="11" fill="#334155" text-anchor="middle">this plan ${esc(money(planMagi))}</text>`;
+        out += `<line x1="${x(planMagi).toFixed(1)}" y1="${MARK_TOP}" x2="${x(planMagi).toFixed(1)}" y2="${MARK_BOT}" stroke="${STROKE.plan}" stroke-width="1.5"/>`;
     }
 
+    // Scale along the TOP edge: ticks above the line, line above the first row.
     const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => f * maxX);
-    let axis = `<line x1="${L}" y1="118" x2="${W - R}" y2="118" stroke="#999"/>`;
-    for (const t of ticks) axis += `<text x="${x(t).toFixed(1)}" y="130" font-size="10" fill="#777" text-anchor="middle">${esc(money(t))}</text>`;
+    let axis = `<line x1="${L}" y1="${AXIS_Y}" x2="${W - R}" y2="${AXIS_Y}" stroke="#999"/>`;
+    for (const t of ticks) axis += `<text x="${x(t).toFixed(1)}" y="${TICK_Y}" font-size="10" fill="#777" text-anchor="middle">${esc(money(t))}</text>`;
+
+    // Legend. Every vertical line drawn above has exactly one entry here; a test counts them.
+    const legend = (lx, ly, stroke, dash, label) =>
+        `<line x1="${lx}" y1="${ly}" x2="${lx + 22}" y2="${ly}" stroke="${stroke}" stroke-width="2"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`
+        + `<text x="${lx + 28}" y="${ly + 4}" font-size="10" fill="#555">${esc(label)}</text>`;
+    let leg = legend(L, LEG_Y1, STROKE.limit, '4 3', 'your limit, the ceiling you picked');
+    leg += legend(L, LEG_Y2, STROKE.plan, '', planMagi ? `this plan, first-year income ${money(planMagi)}` : 'this plan (run one to see it)');
+    leg += legend(300, LEG_Y1, STROKE.niit, '3 2', `NIIT ${money(niitAt)}, is fixed`);
+    if (showLadderACA) leg += legend(300, LEG_Y2, STROKE.aca, '', 'an ACA FPL cap');
+
+    const rowLabel = (k, text) => `<text x="4" y="${mid(ROW_Y[k])}" font-size="11" fill="#444">${text}</text>`;
+    let names = rowLabel('fed', 'Federal') + rowLabel('irmaa', 'IRMAA') + rowLabel('cg', 'Cap gains');
+    // Two lines, because "ACA FPL" does not fit the 58px gutter at 11px.
+    if (showLadderACA) {
+        names += `<text x="4" y="${mid(ROW_Y.aca) - 6}" font-size="11" fill="#444">ACA</text>`
+               + `<text x="4" y="${mid(ROW_Y.aca) + 6}" font-size="11" fill="#444">FPL</text>`;
+    }
 
     return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block" role="img" `
-         + `aria-label="Federal brackets and IRMAA tiers on one total-income axis">`
-         + `<text x="4" y="43" font-size="11" fill="#444">Federal</text>`
-         + `<text x="4" y="79" font-size="11" fill="#444">IRMAA</text>`
-         + out + axis
+         + `aria-label="Federal brackets, IRMAA tiers and capital gains rates on one total-income axis">`
+         + names
+         + axis + out + leg
          + `</svg>`
          + `<div style="font-size:0.72em;color:#78350f;margin-top:2px;padding-left:4px;">`
-         + `Both ladders on one axis of total income. Federal brackets are drawn at their top plus `
-         + `this plan's deduction, which is the income the plan measures against.</div>`;
+         + `All ladders on one axis of total income. Federal brackets and capital-gains rates are `
+         + `drawn at their top plus this plan's deduction, which is the income the plan measures `
+         + `against. Capital-gains bands include the NIIT surtax where it applies.${acaNote}</div>`;
 }
 
 // P95. Set by updateACAWarning() when the age gate takes a selected ACA cap away; read and cleared
@@ -7949,7 +8075,8 @@ function generateStratRateOptions() {
     // removing it. Feasibility cannot be known without simulating, which the dropdown does not do -
     // the Optimizer's ⚠️ row flag is computed from acaBreachYears and is the honest signal.
     //
-    // FPL base (2025): 2-person $20,440; 1-person $15,060. CPI-approx for future years.
+    // The FPL base now lives in TAXData.FPL, which carries the year lag and the Alaska/Hawaii
+    // caveat. It was a literal here AND a second literal in the engine, kept in step by hand.
     //
     // P92e. This used to compound from its own FPL_BASE_YEAR with a `+ 1`, which came to two years
     // where the federal rows took one, so the ACA rows were high by a year on top of the base-year
@@ -7959,7 +8086,7 @@ function generateStratRateOptions() {
     // The trailing `(1 + cpi)` is the engine's, ageing a 2025 FPL figure into the plan's first year,
     // and `cpiAdj` stands in for `cpiRate` at a plan starting this calendar year. Measured against a
     // live run before changing: a 2026 plan targets $84,049 where the menu was offering $86,403.
-    const fplBase = isMFJ ? 20440 : 15060;
+    const fplBase = TAXData.FPL[status];
     const fplCpiAdj = cpiAdj * (1 + cpi);
     const acaEntries = [
         { pct: 200, label: 'ACA 200% FPL' },

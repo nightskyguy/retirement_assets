@@ -44,7 +44,8 @@ conversion as though it always paid the surtax would have made conversions look 
 
 **What moves.** Both changes alter which account a plan spends from, so **ending wealth can move in
 either direction** even where the tax owed falls. Across the sample plans the swing ran from about
-$50,000 down to $230,000 up. Re-run any saved plan.
+$50,000 down to $230,000 up. Those are measurements of the sample plans, not a forecast: your own
+plan may move further, less far, or not at all.
 
 ---
 

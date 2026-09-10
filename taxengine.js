@@ -12,22 +12,29 @@ var TAXData = {
 
 		CAPITAL_GAINS: {
 			YEAR: 2026,
-			REFERENCE: 'none - Claude.ai created it.',
-			NOTE: 'NIIT is not indexed by inflation but must be considered', 
+			REFERENCE: 'https://www.irs.gov/pub/irs-drop/rp-25-32.pdf',  // Rev. Proc. 2025-32 §2.02
+			// These are LTCG bracket ceilings on TAXABLE INCOME, and they are NOT the NIIT
+			// thresholds. The 15%->20% ceilings used to read 250,000 / 200,000, which are the
+			// NIIT MAGI thresholds copied down from the NIIT block above; NIIT is computed
+			// separately in STEP 9 and added on top, so that overcharged every filer between the
+			// real ceiling and the NIIT threshold by 5 points - up to $18,185 a year MFJ - and
+			// reported a 0.20 marginal rate that seeded withdrawal ordering all through
+			// optimizer_core.js. Keep the two sets of numbers apart.
+			NOTE: 'NIIT is a separate 3.8% surtax on top of these rates, not part of them: the 15% band is 18.8% and the 20% band 23.8% for filers over the NIIT MAGI threshold. NIIT thresholds are not inflation-indexed; these bracket ceilings are.',
 			MFJ: {
 				brackets: [
 					{ l: 98900, r: 0.00 },      // 0% cap gains
-					{ l: 250000, r: 0.15 },     // 15% cap gains, may be subject to NIIT
+					{ l: 613700, r: 0.15 },     // 15% cap gains, may be subject to NIIT
 					{ l: Infinity, r: 0.20 }    // 20% (+ likely 3.8% NIIT = 23.8)%
 				]
 			},
 			SGL: {
 				brackets: [
 					{ l: 49450, r: 0.00 },      // 0% cap gains
-					{ l: 200000, r: 0.15 },     // 15% cap gains, may be subject to NIIT
+					{ l: 545500, r: 0.15 },     // 15% cap gains, may be subject to NIIT
 					{ l: Infinity, r: 0.20 }    // 20% (+ 3.8% NIIT = 23.8) %
 				]
-			}			
+			}
 		},
 		MFJ: {
 			std: 32200, 
@@ -1003,6 +1010,37 @@ TAXData.TX = { STATE: 'Texas', ...NO_TAX_SHELL, BasisStepUp: 1.00 };
 TAXData.WA = { STATE: 'Washington', ...NO_TAX_SHELL, BasisStepUp: 1.00 };
 TAXData.WY = { STATE: 'Wyoming', ...NO_TAX_SHELL };
 
+// ─────────────────────────────────────────────────────────────────────────
+// Derived LTCG constants. Both were literal 0.15 scattered across optimizer_core.js,
+// optimizer_ui.js and retirement_optimizer.html; they are computed from the schedule above so
+// the bracket table stays the single source of truth. A future rate change (0/15/20 becoming,
+// say, 0/18/25) moves these with it instead of leaving magic numbers that still parse.
+// Both read the MFJ schedule: the rate LADDER is identical for every filing status - only the
+// dollar thresholds differ - so there is nothing status-specific to pick here.
+// ─────────────────────────────────────────────────────────────────────────
+
+// The middle LTCG rate, used as a fallback wherever a real bracket lookup is impossible:
+// the year-0 seed before any tax has been computed, and log rows written without a rate.
+// A guess either way, but the schedule's own middle rate is the defensible guess.
+TAXData.FEDERAL.CAPITAL_GAINS.DEFAULT_RATE = TAXData.FEDERAL.CAPITAL_GAINS.MFJ.brackets[1].r;
+
+// Default harvest ceiling for Cycle Brokerage, expressed the way getLTCGBracketRoom() reads a
+// `maxRate`: room spans every bracket whose rate is STRICTLY BELOW this value. So the middle
+// rate means "fill the 0% bracket and stop", which is the shipped default.
+TAXData.FEDERAL.CAPITAL_GAINS.CYCLE_TARGET_DEFAULT = TAXData.FEDERAL.CAPITAL_GAINS.MFJ.brackets[1].r;
+
+// Every LTCG rate a Cycle Brokerage target may be set to: each bracket's rate acts as the
+// exclusive ceiling for the bracket beneath it, so the top rate is not a selectable target
+// (there is nothing above it to stop at). Drives the Target menu, which used to hard-code
+// <option value="0.15">/<option value="0.20"> in markup.
+TAXData.FEDERAL.CAPITAL_GAINS.CYCLE_TARGET_OPTIONS =
+    TAXData.FEDERAL.CAPITAL_GAINS.MFJ.brackets
+        .slice(1)
+        .map((b, i) => ({
+            value: b.r,                                                  // the exclusive ceiling
+            label: `${Math.round(TAXData.FEDERAL.CAPITAL_GAINS.MFJ.brackets[i].r * 100)}% bracket`
+        }));
+
 // OBBBA provisions — P.L. 119-21, signed July 4, 2025. Update this block if IRS issues amended guidance.
 // calculateTaxes() and IncomeTaxPlanner.html read from here; no values are hardcoded there.
 TAXData.OBBBA = {
@@ -1560,10 +1598,34 @@ function calculateTaxes(params = {}) {
     // Applies to lesser of net investment income or (MAGI − threshold).
     // ========================================================================
     const niitThreshold = TAXData.FEDERAL.NIIT[status];
-    const niitMagi = federalAGI + taxExemptInterest;
+    // NIIT MAGI is AGI plus only the section 911 foreign-earned-income exclusion (IRC 1411(d)),
+    // which this model does not carry - so here it is plain AGI. Tax-exempt interest is in
+    // NEITHER the MAGI nor the NII, which is the whole reason municipal bonds dodge this surtax.
+    // This used to read `federalAGI + taxExemptInterest`, the IRMAA definition (see IRMAAMagi
+    // below, where the add-back IS correct, per 42 USC 1395r(i)(4)). Provisional income for
+    // Social Security adds it back too (IRC 86(b)(2)(B)). Three MAGI-like quantities, three
+    // different statutes: do not collapse them again.
+    const niitMagi = federalAGI;
     const niitNII = qualifiedDiv + capGains + ordDivInterest;
-    const niitTax = TAXData.FEDERAL.NIIT.rate *
-                    Math.min(niitNII, Math.max(0, niitMagi - niitThreshold));
+    const niitExcess = Math.max(0, niitMagi - niitThreshold);
+    const niitTax = TAXData.FEDERAL.NIIT.rate * Math.min(niitNII, niitExcess);
+
+    // MARGINAL surtax on the NEXT dollar, by income type. The optimizer's withdrawal ordering
+    // needs these: the surtax is real money but it is charged on min(NII, MAGI - threshold), so
+    // it does NOT move at the same rate for every kind of dollar and a flat add-on would be wrong.
+    //
+    //   An INVESTMENT dollar (capital gain, qualified dividend, taxable interest) raises NII and
+    //   MAGI together. Whichever of the two terms is binding therefore rises by one, so the
+    //   surtax applies in full the moment MAGI is over the threshold. No condition beyond that.
+    //
+    //   An ORDINARY dollar (IRA withdrawal, Roth conversion, wages) raises MAGI only. It moves
+    //   the surtax just while the MAGI EXCESS is the binding term; once NII is the smaller of the
+    //   two, more ordinary income widens the excess without touching min() and costs nothing.
+    //
+    // Measured, not assumed - a $100 probe against calculateTaxes() in all four regimes returns
+    // exactly these two rules. The tests are TEST CASE 6d/6e in taxengine.tests.js.
+    const niitMarginalOnInvestment = niitExcess > 0 ? TAXData.FEDERAL.NIIT.rate : 0;
+    const niitMarginalOnOrdinary   = (niitExcess > 0 && niitExcess < niitNII) ? TAXData.FEDERAL.NIIT.rate : 0;
 
     const federalTax = federalOrdinaryTax + federalCapGainsTax + niitTax;
 
@@ -1597,6 +1659,12 @@ function calculateTaxes(params = {}) {
         capitalGainsRate,
         capitalGainsTax: federalCapGainsTax,
         niitTax,
+        // Both are the statutory rate or zero. `capitalGainsRate` and `federalMarginalRate` stay
+        // STATUTORY (they answer "which bracket"); a caller pricing the cost of a dollar adds the
+        // matching one of these to them. See the block above STEP 9's `federalTax` for which is which.
+        niitMarginalOnInvestment,
+        niitMarginalOnOrdinary,
+        niitNII,
         AGI: federalAGI,
         MAGI: IRMAAMagi,
 

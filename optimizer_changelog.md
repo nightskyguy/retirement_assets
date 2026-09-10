@@ -17,6 +17,37 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.17c2"></a>
+
+## 11.17c2
+
+**Two corrections to how gains are taxed, and to which account the tool decides to spend from.**  
+*Behavior change: plans with large gains or high income move, and a saved plan will not reproduce.*
+
+**Long-term capital gains switch to the 20% rate at the right income.** The switch now happens at
+$613,700 of taxable income for a couple filing jointly and $545,500 for a single filer, which is
+what the 2026 federal tables say. It was happening at $250,000 and $200,000, so a plan realizing
+large gains was charged 5 extra points of federal tax on every dollar between those figures: up to
+about $18,000 in a single year for a couple, $17,000 for a single filer.
+
+**The 3.8% surtax on investment income now counts when the tool picks an account to draw from.**
+The surtax was always charged correctly in your totals, so lifetime tax and ending wealth were
+right. What it never did was influence the choice between selling from the brokerage account and
+withdrawing from an IRA, so above roughly $250,000 of income a brokerage sale looked cheaper than
+it is. It no longer does.
+
+The two are not charged alike, and the tool now models that difference rather than adding a flat
+surcharge to everything. A dollar of gain always carries the surtax once you are over the line. A
+dollar taken from an IRA, including a Roth conversion, often does not: it raises the income the
+surtax is measured against without adding to the investment income it is charged on. Treating a
+conversion as though it always paid the surtax would have made conversions look worse than they are.
+
+**What moves.** Both changes alter which account a plan spends from, so **ending wealth can move in
+either direction** even where the tax owed falls. Across the sample plans the swing ran from about
+$50,000 down to $230,000 up. Re-run any saved plan.
+
+---
+
 <a id="11.17b1"></a>
 
 ## 11.17b1

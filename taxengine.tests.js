@@ -445,13 +445,213 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 		assertEqual(result.taxableOrdinaryIncome, 287800, 'Taxable Ordinary Income');
 		assertEqual(result.taxablePreferentialIncome, 450000, 'Taxable Preferential Income');
 		
-		// Capital gains start at position 287,800 (well past 0% and 15% brackets)
-		// All 450,000 falls in 20% bracket: 450,000 @ 20% = 90,000
-		assertEqual(result.capitalGainsTax, 90000, 'Capital Gains Tax');
-		// Entire gain sits in the top 20% CG bracket
+		// Capital gains stack on top of ordinary income, starting at position 287,800:
+		// From 287,800 to 613,700 = 325,900 @ 15% = 48,885
+		// From 613,700 to 737,800 = 124,100 @ 20% = 24,820
+		assertEqual(result.capitalGainsTax, 73705, 'Capital Gains Tax');
+		// The gain ENDS in the 20% bracket, so that is the marginal rate, but it does not start
+		// there: 613,700 is the MFJ 15%->20% ceiling. This assertion read 90,000 while that
+		// ceiling was set to the NIIT threshold and the whole 450,000 was priced at 20%.
 		assertEqual(result.capitalGainsRate, 0.20, 'Capital Gains Rate');
 		// NIIT: MAGI 770k - threshold 250k = 520k; NII = 470k; 3.8% × min(470k, 520k) = 17,860
 		assertEqual(result.niitTax, 17860, 'NIIT Tax');
+	});
+
+	// ============================================================================
+	// TEST CASE 6b: the LTCG 15%->20% ceiling is the bracket ceiling, NOT the NIIT threshold
+	//
+	// Regression guard. The MFJ ceiling shipped as 250,000 and the SGL ceiling as 200,000 - the
+	// NIIT MAGI thresholds, copied out of the wrong block - so gains between the real ceiling and
+	// the NIIT threshold were charged 20% instead of 15%, and the reported marginal rate that
+	// seeds withdrawal ordering in optimizer_core.js flipped to 0.20 hundreds of thousands of
+	// dollars early. Both statuses are pinned because both were wrong, in different amounts.
+	// ============================================================================
+	test('TEST CASE 6b: LTCG 20% starts at the bracket ceiling, not the NIIT threshold', () => {
+
+		// MFJ. Ordinary income parks the gain start well above the NIIT threshold but well below
+		// the real 613,700 ceiling, so the ENTIRE gain must price at 15%.
+		const mfj = calculateTaxes({
+			filingStatus: 'MFJ', ages: [55, 53],
+			earnedIncome: 342200,   // 342,200 - 32,200 std = 310,000 taxable ordinary
+			capGains: 200000,
+			inflation: 1.0, state: 'TESTTAXATION'
+		});
+		assertEqual(mfj.taxableOrdinaryIncome, 310000, 'MFJ taxable ordinary');
+		// 310,000 -> 510,000 is entirely inside the 15% band (ceiling 613,700): 200,000 @ 15%
+		assertEqual(mfj.capitalGainsTax, 30000, 'MFJ cap gains tax, all 15%');
+		assertEqual(mfj.capitalGainsRate, 0.15, 'MFJ marginal LTCG rate is still 15%');
+
+		// SGL. Same shape against the 545,500 ceiling, above the 200,000 NIIT threshold.
+		const sgl = calculateTaxes({
+			filingStatus: 'SGL', ages: [55],
+			earnedIncome: 266100,   // 266,100 - 16,100 std = 250,000 taxable ordinary
+			capGains: 200000,
+			inflation: 1.0, state: 'TESTTAXATION'
+		});
+		assertEqual(sgl.taxableOrdinaryIncome, 250000, 'SGL taxable ordinary');
+		// 250,000 -> 450,000 is entirely inside the 15% band (ceiling 545,500): 200,000 @ 15%
+		assertEqual(sgl.capitalGainsTax, 30000, 'SGL cap gains tax, all 15%');
+		assertEqual(sgl.capitalGainsRate, 0.15, 'SGL marginal LTCG rate is still 15%');
+
+		// And the 20% band does still exist: push the MFJ gain past 613,700 and the top slice bites.
+		const top = calculateTaxes({
+			filingStatus: 'MFJ', ages: [55, 53],
+			earnedIncome: 342200, capGains: 400000,
+			inflation: 1.0, state: 'TESTTAXATION'
+		});
+		// 310,000 -> 613,700 = 303,700 @ 15% = 45,555; 613,700 -> 710,000 = 96,300 @ 20% = 19,260
+		assertEqual(top.capitalGainsTax, 64815, 'MFJ cap gains tax spanning 15% and 20%');
+		assertEqual(top.capitalGainsRate, 0.20, 'MFJ marginal LTCG rate reaches 20%');
+	});
+
+	// ============================================================================
+	// TEST CASE 6c: tax-exempt interest is invisible to NIIT, both in MAGI and in NII
+	//
+	// Regression guard. NIIT MAGI was computed as `federalAGI + taxExemptInterest`, which is the
+	// IRMAA definition (42 USC 1395r(i)(4)) rather than the NIIT one (IRC 1411(d) = AGI plus only
+	// the section 911 exclusion). Municipal interest avoiding this surtax is the entire point of
+	// holding munis, and the old formula charged it. This also pins the two places the add-back IS
+	// correct, so a future "make the MAGIs consistent" edit has to break a test to do it.
+	// ============================================================================
+	test('TEST CASE 6c: tax-exempt interest does not create NIIT', () => {
+
+		const base = { filingStatus: 'MFJ', ages: [55, 53], earnedIncome: 150000,
+		               capGains: 80000, inflation: 1.0, state: 'TESTTAXATION' };
+
+		// AGI 230,000, below the 250,000 NIIT threshold. No surtax.
+		const without = calculateTaxes(base);
+		assertEqual(without.AGI, 230000, 'AGI without muni interest');
+		assertEqual(without.niitTax, 0, 'no NIIT below the threshold');
+
+		// 60,000 of municipal interest is excluded from gross income, so it moves neither AGI nor
+		// the NIIT base. The surtax must stay at zero.
+		const with60k = calculateTaxes({ ...base, taxExemptInterest: 60000 });
+		assertEqual(with60k.AGI, 230000, 'muni interest stays out of AGI');
+		assertEqual(with60k.niitTax, 0, 'muni interest does not drag gains into NIIT');
+
+		// Same check above the threshold: the surtax is driven by AGI and NII alone, so adding
+		// muni interest must not move it by a cent.
+		const highNoMuni = calculateTaxes({ ...base, earnedIncome: 300000 });
+		const highMuni   = calculateTaxes({ ...base, earnedIncome: 300000, taxExemptInterest: 250000 });
+		assertEqual(highMuni.niitTax, highNoMuni.niitTax, 'NIIT is unmoved by muni interest');
+
+		// The two statutes that DO count it are unaffected by this fix. IRMAA MAGI - the `MAGI`
+		// field on the result, which is the IRMAA one - adds it back...
+		assertEqual(with60k.MAGI, without.MAGI + 60000, 'IRMAA MAGI still adds muni back');
+		// ...and so does provisional income for Social Security, which is why 60k of munis makes
+		// a benefit taxable that was not taxable without them.
+		const ssBase = { filingStatus: 'MFJ', ages: [70, 68], earnedIncome: 0, totalSS: 40000,
+		                 inflation: 1.0, state: 'TESTTAXATION' };
+		const ssNoMuni = calculateTaxes(ssBase);
+		const ssMuni   = calculateTaxes({ ...ssBase, taxExemptInterest: 60000 });
+		assertEqual(ssNoMuni.taxableSS, 0, 'SS untaxed on benefits alone');
+		assertEqual(ssMuni.taxableSS > 0, true, 'muni interest still raises provisional income');
+	});
+
+	// ============================================================================
+	// TEST CASE 6d: the marginal NIIT rates are what a probe of calculateTaxes() actually measures
+	//
+	// These two fields seed the optimizer's withdrawal ordering, so they have to equal the real
+	// derivative, not a plausible-looking constant. Rather than restate 0.038, each case MEASURES
+	// d(niitTax)/d(income) by re-running the engine $100 higher and compares that to the declared
+	// field. If the min(NII, MAGI - threshold) logic is ever rewritten, the probe moves with it and
+	// the declared rate does not, and this fails.
+	//
+	// The rule being pinned: an INVESTMENT dollar raises NII and MAGI together, so the surtax
+	// applies in full above the threshold. An ORDINARY dollar raises MAGI only, so it costs nothing
+	// while NII is the smaller of the two terms. A flat add-on to both would be wrong.
+	// ============================================================================
+	test('TEST CASE 6d: declared marginal NIIT equals the measured derivative', () => {
+
+		const STEP = 100;
+		const probe = (base, key) => {
+			const a = calculateTaxes(base);
+			const b = calculateTaxes({ ...base, [key]: (base[key] ?? 0) + STEP });
+			return (b.niitTax - a.niitTax) / STEP;
+		};
+
+		// [label, inputs, expected investment-dollar rate, expected ordinary-dollar rate]
+		// earnedIncome is ordinary and is NOT net investment income; capGains is both.
+		const cases = [
+			['MFJ below threshold',     { filingStatus: 'MFJ', ages: [55, 53], earnedIncome: 100000, capGains:  40000 }, 0,     0    ],
+			// excess 180,000 dwarfs NII 30,000, so NII binds: ordinary income is free.
+			['MFJ above, NII binds',    { filingStatus: 'MFJ', ages: [55, 53], earnedIncome: 400000, capGains:  30000 }, 0.038, 0    ],
+			// NII 400,000 dwarfs excess 250,000, so the excess binds: ordinary income is charged.
+			['MFJ above, excess binds', { filingStatus: 'MFJ', ages: [55, 53], earnedIncome: 100000, capGains: 400000 }, 0.038, 0.038],
+			['SGL below threshold',     { filingStatus: 'SGL', ages: [55],     earnedIncome:  80000, capGains:  40000 }, 0,     0    ],
+			['SGL above, NII binds',    { filingStatus: 'SGL', ages: [55],     earnedIncome: 350000, capGains:  20000 }, 0.038, 0    ],
+			['SGL above, excess binds', { filingStatus: 'SGL', ages: [55],     earnedIncome:  80000, capGains: 350000 }, 0.038, 0.038],
+		];
+
+		for (const [label, inputs, wantInv, wantOrd] of cases) {
+			const base = { ...inputs, inflation: 1.0, state: 'TESTTAXATION' };
+			const r = calculateTaxes(base);
+
+			assertEqual(r.niitMarginalOnInvestment, wantInv, `${label}: declared investment rate`);
+			assertEqual(r.niitMarginalOnOrdinary,   wantOrd, `${label}: declared ordinary rate`);
+
+			// And the declared rates are the measured ones.
+			assertEqual(probe(base, 'capGains'),     wantInv, `${label}: MEASURED investment rate`);
+			assertEqual(probe(base, 'earnedIncome'), wantOrd, `${label}: MEASURED ordinary rate`);
+		}
+	});
+
+	// ============================================================================
+	// TEST CASE 6e: the NIIT threshold is a fixed dollar figure and never inflates
+	//
+	// The single most load-bearing NIIT behavior in a 30-year projection, and nothing pinned it
+	// until now. The engine works in NOMINAL dollars: bracket ceilings are multiplied by the
+	// `inflation` factor because the statute indexes them, and the NIIT threshold is NOT, because
+	// its statute does not. That is what makes the surtax reach steadily further down the income
+	// scale as a plan runs. A refactor that "made the thresholds consistent" would silently delete
+	// most of the surtax from every long plan, and every other NIIT test here would still pass.
+	//
+	// Also covers the two coverage holes beside it: a single filer (the $200,000 threshold was
+	// exercised by no test at all) and an explicit zero below the threshold.
+	// ============================================================================
+	test('TEST CASE 6e: NIIT threshold does not inflate, and SGL/below-threshold are covered', () => {
+
+		// Single filer. The 200,000 threshold, previously untested.
+		// AGI 250,000; excess 50,000; NII 150,000 -> 3.8% x 50,000 = 1,900.
+		const sgl = calculateTaxes({ filingStatus: 'SGL', ages: [70], earnedIncome: 100000,
+		                             capGains: 150000, inflation: 1.0, state: 'TESTTAXATION' });
+		assertEqual(sgl.AGI, 250000, 'SGL AGI');
+		assertEqual(sgl.niitTax, 1900, 'SGL NIIT at the 200,000 threshold');
+
+		// Below the threshold there is no surtax at all, for either status.
+		assertEqual(calculateTaxes({ filingStatus: 'SGL', ages: [70], earnedIncome: 100000,
+		                             capGains: 50000, inflation: 1.0, state: 'TESTTAXATION' }).niitTax,
+		            0, 'SGL below threshold owes no NIIT');
+		assertEqual(calculateTaxes({ filingStatus: 'MFJ', ages: [70, 68], earnedIncome: 100000,
+		                             capGains: 100000, inflation: 1.0, state: 'TESTTAXATION' }).niitTax,
+		            0, 'MFJ below threshold owes no NIIT');
+
+		// Now the invariance. Scale BOTH the income and the inflation factor by the same amount,
+		// which is what a later year of a nominal projection looks like. A threshold that inflated
+		// with everything else would hold the surtax proportional; the real one does not, so the
+		// surtax grows FASTER than the income does.
+		//
+		// The mix is deliberately gain-heavy so that the MAGI excess is the binding term at BOTH
+		// factors. That is what isolates the threshold: if NII binds instead, the surtax just
+		// tracks NII and says nothing about whether the threshold moved.
+		const at = f => calculateTaxes({ filingStatus: 'MFJ', ages: [70, 68],
+		                                 earnedIncome: 50000 * f, capGains: 500000 * f,
+		                                 inflation: f, state: 'TESTTAXATION' });
+		const one = at(1.0), two = at(2.0);
+
+		// Excess is MAGI - 250,000, and 250,000 never moves.
+		//   f=1.0: MAGI   550,000 -> excess 300,000, NII   500,000. Excess binds.
+		//   f=2.0: MAGI 1,100,000 -> excess 850,000, NII 1,000,000. Excess binds.
+		assertEqual(one.niitTax, 0.038 * 300000, 'NIIT at inflation 1.0');
+		assertEqual(two.niitTax, 0.038 * 850000, 'NIIT at inflation 2.0 - threshold held still');
+		// Income doubled; the surtax rose 2.83x. Under an indexed threshold it would be exactly 2x.
+		assertEqual(two.niitTax > 2 * one.niitTax, true,
+		            'an un-indexed threshold makes the surtax grow FASTER than income');
+
+		// The contrast that makes the point: the ordinary bracket the same filer sits in DOES
+		// inflate, so their statutory marginal rate is unchanged by the doubling.
+		assertEqual(one.federalMarginalRate, two.federalMarginalRate,
+		            'bracket ceilings inflate, so the ordinary marginal rate holds');
 	});
 
 	// ============================================================================

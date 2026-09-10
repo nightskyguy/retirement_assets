@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.17b1</title>
+    <title>Retirement Optimizer 11.17c2</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -58,15 +58,15 @@
     .share-panel .share-status { font-family:monospace; font-size:10px; color:#1a7a1a; margin-top:.35rem; min-height:14px; }
 	</style>
 	<base target="_blank">	
-	<script src="taxengine.js?v=1116d7"></script>
-	<script src="optimizer_core.js?v=1117b1"></script>
+	<script src="taxengine.js?v=1117c2"></script>
+	<script src="optimizer_core.js?v=1117c2"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=1117ae"></script>
-	<script src="optimizer_tests.js?v=1117b1"></script>
+	<script src="optimizer_ui.js?v=1117c2"></script>
+	<script src="optimizer_tests.js?v=1117c2"></script>
 </head>
 <body>
 
@@ -286,10 +286,10 @@
 				</label>
 				<span id="cycleLTCGTarget-wrap" style="display:none;margin-left:8px;font-size:0.85em;" title="Cycle Brokerage harvest years always max out this LTCG bracket. If spending needs force gains beyond it, the harvest tops off whichever bracket it lands in instead of stopping at the exact dollar needed - capped by any active bracket/IRMAA-tier/ACA-cliff ceiling.">
 				  Target:
-				  <select id="cycleLTCGTarget" style="font-size:0.95em;">
-					<option value="0.15" selected>0% bracket</option>
-					<option value="0.20">15% bracket</option>
-				  </select>
+				  <!-- Options are built from TAXData.FEDERAL.CAPITAL_GAINS.CYCLE_TARGET_OPTIONS by
+				       generateCycleLTCGTargetOptions() in optimizer_ui.js; the rate ladder used to
+				       be hard-coded here as value="0.15"/value="0.20". Left empty on purpose. -->
+				  <select id="cycleLTCGTarget" style="font-size:0.95em;"></select>
 				</span>
 				<label class="toggle" id="rothGapFill-label" style="margin-top:4px;" title="When a year's spending needs MORE than your strategy itself withdraws, the shortfall is filled from Cash, then Brokerage, then Roth. Turn this on and Roth is taken ahead of Brokerage instead; Cash still comes first either way. Drawing Roth avoids realizing capital gains in the brokerage account, but it spends the account that grows tax-free, so it cuts both ways: across 60 test plans it gained as much as $471,000 and lost as much as $634,000, and it was negative in 26 of them. Nothing about a plan predicts which side it lands on, so the Optimizer runs it both ways and marks the alternative 🅡. The Ordered strategy ignores this - it draws in the account sequence you chose.">
 				  <input type="checkbox" id="rothGapFill">
@@ -1014,6 +1014,15 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="behavior"><b>11.17c2</b>
+					<strong>Two corrections to how gains are taxed, and to which account the tool decides to spend from.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>Long-term capital gains now switch to the 20% rate at $613,700 of taxable income for a couple filing jointly and $545,500 for a single filer, which is what the 2026 federal tables say. It was happening at $250,000 and $200,000, so a plan realizing large gains was charged 5 extra points of federal tax on every dollar between those figures: <strong>up to about $18,000 in a single year</strong>.</li>
+					<li>The 3.8% surtax on investment income now counts when the tool picks an account to draw from. It was always charged correctly in your totals, but it never influenced the choice between selling from the brokerage account and withdrawing from an IRA, so above roughly $250,000 of income a brokerage sale looked cheaper than it is. A conversion is treated differently on purpose: it usually does not pay the surtax, and pretending it did would have made conversions look worse than they are.</li>
+					<li><strong>Ending wealth can move in either direction</strong>, even where the tax owed falls, because both changes alter which account a plan spends from. Across the sample plans the swing ran from about $50,000 down to $230,000 up. Re-run any saved plan.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.17c2" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="behavior"><b>11.17b1</b>
 					<strong>A flaw was identified in the conversion/withdrawal timing and fixed.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1648,6 +1657,9 @@ window.addEventListener('DOMContentLoaded', function () {
     // link's mix can select its option and the in-page suite never reads an empty menu (P98).
     document.getElementById('splitPreset').innerHTML = generateSplitPresetOptions();
     document.getElementById('STATEname').innerHTML = generateStateOptions();
+    // Built from the LTCG rate schedule, before captureDefaults and loadFromURL for the same
+    // reason splitPreset is: a shared link's saved target must find its option already present.
+    document.getElementById('cycleLTCGTarget').innerHTML = generateCycleLTCGTargetOptions();
     updateStateNote();
     // Default Start Age to the user's current real-world age (birth-month aware).
     // If their birthday hasn't passed yet this calendar year, subtract 1.
@@ -1767,7 +1779,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these six are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1117b1';
+    const V = '?v=1117c2';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

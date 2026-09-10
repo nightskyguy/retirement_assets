@@ -1200,7 +1200,9 @@ function buildSimYearLogRecord(p) {
         // is the LTCG/qualified-div tax embedded in FedTax (split out for the Taxation chart);
         // cpiFactor is the cumulative CPI multiplier used to inflate bracket/IRMAA thresholds.
         '-capGainsTax': p.tax.capitalGainsTax,
-        '-capGainsRate': p.tax.capitalGainsRate,
+        // All-in cost rate, surtax included: its only reader is afterTaxWealthOfLogRow, which
+        // values a brokerage balance net of the tax a sale would owe. P117.
+        '-capGainsRate': p.tax.capitalGainsRate + (p.tax.niitMarginalOnInvestment ?? 0),
         '-cpiFactor': p.cpiRate,
         // P87a. The two federal quantities the bracket-ceiling basis question needs, and the
         // only ones of tax's that nothing else re-emitted. A federal bracket top bounds TAXABLE
@@ -2392,7 +2394,9 @@ function planPrimaryWithdrawals(sim, yr) {
         //                     un-zeroes automatically: harvest years regain surplus conversions
         //                     with no second edit.
         const _baseOrdinaryInc = yr.taxableInc + yr.fixedInc + yr.taxableInterest + yr.taxableDividends;
-        const _cycleTargetRate = inputs.cycleLTCGTarget ?? 0.15;   // nerdknob: 0.15=target 0% bracket (default), 0.20=target 15% bracket
+        // nerdknob. The value IS an LTCG rate, read as the exclusive ceiling getLTCGBracketRoom()
+        // wants: the middle rate targets the 0% bracket (default), the top rate the 15% bracket.
+        const _cycleTargetRate = inputs.cycleLTCGTarget ?? TAXData.FEDERAL.CAPITAL_GAINS.CYCLE_TARGET_DEFAULT;
         const _harvestMode = inputs.cycleHarvestMode ?? 'maxbracket';
         // P87c4. How much room a strategy ceiling still has above an ordinary-income floor, on the
         // ceiling's OWN income definition.
@@ -2788,9 +2792,18 @@ function applyPrimaryAndTaxPass1(sim, yr) {
     })
     inspectForErrors(yr.tax)  // See if any numbers look fishy.
 
-    yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
+    // P117. Both seeds carry the 3.8% NIIT surtax on top of the statutory rate, because both are
+    // used ONLY to price the cost of a dollar - which account is cheapest to draw, what a
+    // brokerage sale nets, what terminal wealth is worth after tax. Every consumer of
+    // `sim.capitalGainsRate` is such a site; the two functions that ask "which LTCG bracket am I
+    // in" (getLTCGBracketRoom, getLTCGBracketTopRate) read TAXData directly and are unaffected.
+    // The two surtax terms are NOT the same number: see the derivation above STEP 9 in
+    // taxengine.js. An IRA dollar is ordinary and often escapes the surtax entirely; a brokerage
+    // dollar is investment income and never does once MAGI is over the threshold. Adding one flat
+    // rate to both would have made conversions look more expensive than they are.
+    yr.marginalFedTaxRate = yr.tax.federalMarginalRate + (yr.tax.niitMarginalOnOrdinary ?? 0);
     yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
-    sim.capitalGainsRate = yr.tax.capitalGainsRate;
+    sim.capitalGainsRate = yr.tax.capitalGainsRate + (yr.tax.niitMarginalOnInvestment ?? 0);
 
     //!!! Assume MAGI for prior to years is the same as this year. Should allow this to be entered
 
@@ -3008,7 +3021,7 @@ function fillSpendingGap(sim, yr) {
     yr.acaMAGI = ceilingMAGI(yr);   // P87d
     yr.bracketOverage = yr.bracketTarget > 0 ? Math.max(0, yr.acaMAGI - yr.bracketTarget) : 0;
     // Update marginal rates so the third pass grosses up correctly at actual bracket.
-    yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
+    yr.marginalFedTaxRate = yr.tax.federalMarginalRate + (yr.tax.niitMarginalOnOrdinary ?? 0);  // P117: see the seed block above
     yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
 }
 
@@ -3158,7 +3171,7 @@ function resolveResidualAndForcedIRA(sim, yr) {
                     taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
                 });
                 yr.totalTax = yr.tax.totalTax + yr.IRMAA;
-                yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
+                yr.marginalFedTaxRate = yr.tax.federalMarginalRate + (yr.tax.niitMarginalOnOrdinary ?? 0);  // P117: see the seed block above
                 yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
             }
             if (_it > 0) totals.thirdPassBrokerIters = (totals.thirdPassBrokerIters ?? 0) + _it;
@@ -3224,7 +3237,7 @@ function resolveResidualAndForcedIRA(sim, yr) {
                 taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
             });
             yr.totalTax = yr.tax.totalTax + yr.IRMAA;
-            yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
+            yr.marginalFedTaxRate = yr.tax.federalMarginalRate + (yr.tax.niitMarginalOnOrdinary ?? 0);  // P117: see the seed block above
             yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
         }
     }
@@ -3507,7 +3520,7 @@ function cfRefundIRA(sim, yr, netTarget) {
     yr.totalIncome = Math.max(1, yr.totalIncome - G);
     yr.netIncome -= _netRemoved;
     sim.nominalTaxRate = yr.tax.nominalRate;
-    yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
+    yr.marginalFedTaxRate = yr.tax.federalMarginalRate + (yr.tax.niitMarginalOnOrdinary ?? 0);  // P117: see the seed block above
     yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
     yr.surplus.Total = Math.max(0, yr.surplus.Total - _netRemoved);
 }
@@ -4266,7 +4279,10 @@ function evaluateYearOutcome(sim, yr) {
     yr.yearBETRflag = null;
     if (yr.totalConverted > 0) {
         const _rIRA = yr.growthRates.IRA1 ?? inputs.growth ?? 0.06;
-        const _drag = (inputs.dividendRate ?? 0) * (yr.tax.capitalGainsRate ?? 0.15);
+        // Qualified dividends are net investment income, so the drag they impose carries the
+        // surtax too once MAGI is over the threshold. P117.
+        const _drag = (inputs.dividendRate ?? 0) * ((yr.tax.capitalGainsRate ?? TAXData.FEDERAL.CAPITAL_GAINS.DEFAULT_RATE)
+                                                   + (yr.tax.niitMarginalOnInvestment ?? 0));
         const _rTax = Math.max(0, (inputs.growth ?? _rIRA) - _drag);
         const _rmdAge1 = (inputs.birthyear1 ?? 1960) >= 1960 ? 75 : 73;
         const _yearsToRMD = Math.max(1, _rmdAge1 - yr.age1);
@@ -4527,7 +4543,8 @@ function simulate(inputs) {
     let spendDelta = 1 + inputs.spendChange;
     let spendGoal = inputs.spendGoal * Math.pow(1 + inputs.inflation, gapYears);
     let nominalTaxRate = 0.20; // Just a guess.
-    let capitalGainsRate = 0.15; // A guess.
+    // Year-0 seed, overwritten by the first calculateTaxes() call. The schedule's middle rate.
+    let capitalGainsRate = TAXData.FEDERAL.CAPITAL_GAINS.DEFAULT_RATE;
 
     // Phase 20 (reworked): opportunity cost is now measured with a full counterfactual
     // simulation (see the end of simulate()) instead of per-dollar shadow deltas. During a
@@ -4966,7 +4983,7 @@ function terminalIRARateFromLog(log) {
 function afterTaxWealthOfLogRow(r, futureIRATaxRate) {
     if (futureIRATaxRate == null) return r.totalNetWealth;
     return (r.IRA1 + r.IRA2) * (1 - futureIRATaxRate)
-        + Math.max(0, r.Brokerage - r.Basis) * (1 - (r['-capGainsRate'] ?? 0.15))
+        + Math.max(0, r.Brokerage - r.Basis) * (1 - (r['-capGainsRate'] ?? TAXData.FEDERAL.CAPITAL_GAINS.DEFAULT_RATE))
         + r.Roth + r.Cash + r.Basis;
 }
 
@@ -5399,7 +5416,7 @@ function selectConversionCandidates(rows, maxPool = 12) {
 // brokerage at face. The expression is left intact so it matches afterTaxNetWorth line for line.
 function _afterTaxBuckets(r, rate) {
     const t = (r.totals && r.totals.terminal) || {};
-    const capG = r.totals?.capGainsRate ?? 0.15;
+    const capG = r.totals?.capGainsRate ?? TAXData.FEDERAL.CAPITAL_GAINS.DEFAULT_RATE;
     const preTax  = (t.ira ?? 0) * (1 - (rate ?? 0));
     const roth    = (t.roth ?? 0);
     const taxable = (t.cash ?? 0) + (t.basis ?? 0) + Math.max(0, (t.brokerage ?? 0) - (t.basis ?? 0)) * (1 - capG);

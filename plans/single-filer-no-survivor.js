@@ -33,8 +33,8 @@ const PLAN = {
         viability: {
             funded: "29/29",
             fundsEveryYear: true,
-            endingIRA: 2105170,
-            peakIRAYear: 25,
+            endingIRA: 1895092,
+            peakIRAYear: 0,
             acaBreachYears: 0
         },
         origin: "the canonical fixture with the spouse removed and balances resized. From the household study in `research/CONVERSION_VALUE_HOUSEHOLDS.md`.",

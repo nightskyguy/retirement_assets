@@ -21,18 +21,42 @@ var TAXData = {
 			// reported a 0.20 marginal rate that seeded withdrawal ordering all through
 			// optimizer_core.js. Keep the two sets of numbers apart.
 			NOTE: 'NIIT is a separate 3.8% surtax on top of these rates, not part of them: the 15% band is 18.8% and the 20% band 23.8% for filers over the NIIT MAGI threshold. NIIT thresholds are not inflation-indexed; these bracket ceilings are.',
+			// WHERE NIIT ACTUALLY BITES, and it is not where the old comments here guessed. These
+			// ceilings are TAXABLE income; the NIIT threshold is MAGI, which is bigger by the
+			// deduction. Putting both on a MAGI footing:
+			//
+			//                        20% band opens at    NIIT starts at    gap
+			//   MFJ                       $645,900           $250,000     $395,900
+			//   SGL                       $561,600           $200,000     $361,600
+			//
+			// So the surtax begins roughly $400k of income BEFORE the 20% bracket does, and the
+			// 20% band is therefore ALWAYS 23.8% - never a bare 20%. The band that actually splits
+			// is the 15% one, at about $217,800 of MFJ taxable income (where MAGI reaches
+			// $250,000). Below that it is a true 15%; above it, 18.8%.
+			//
+			// That split point DRIFTS every year, which is why it must never be written into this
+			// table as a bracket line: these ceilings are inflation-indexed and the NIIT threshold
+			// is not. An earlier version of this block carried the 15% ceiling as $250,000/$200,000
+			// - the NIIT thresholds - trying to mark exactly that transition, and so it was both
+			// mis-valued and, being fixed, only ever right in a single year.
+			//
+			// The one regime where a bare 20% becomes reachable is sustained DEFLATION shrinking
+			// these ceilings toward the fixed threshold: the crossover is a cumulative CPI factor
+			// of 0.387 (MFJ) / 0.356 (SGL), which needs about 94 years at optimizer_core.js's
+			// CPI_INDEX_FLOOR of -1%/yr. Not reachable by any plan this tool can build. Pinned by
+			// TEST CASE 6f.
 			MFJ: {
 				brackets: [
-					{ l: 98900, r: 0.00 },      // 0% cap gains
-					{ l: 613700, r: 0.15 },     // 15% cap gains, may be subject to NIIT
-					{ l: Infinity, r: 0.20 }    // 20% (+ likely 3.8% NIIT = 23.8)%
+					{ l: 98900, r: 0.00 },      // 0%, always below the NIIT threshold, so a true 0%
+					{ l: 613700, r: 0.15 },     // 15% up to ~$217,800 taxable, 18.8% above it
+					{ l: Infinity, r: 0.20 }    // 20% + 3.8% NIIT = 23.8%, always
 				]
 			},
 			SGL: {
 				brackets: [
-					{ l: 49450, r: 0.00 },      // 0% cap gains
-					{ l: 545500, r: 0.15 },     // 15% cap gains, may be subject to NIIT
-					{ l: Infinity, r: 0.20 }    // 20% (+ 3.8% NIIT = 23.8) %
+					{ l: 49450, r: 0.00 },      // 0%, always below the NIIT threshold, so a true 0%
+					{ l: 545500, r: 0.15 },     // 15% up to ~$183,900 taxable, 18.8% above it
+					{ l: Infinity, r: 0.20 }    // 20% + 3.8% NIIT = 23.8%, always
 				]
 			}
 		},

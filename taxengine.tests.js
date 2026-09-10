@@ -655,6 +655,87 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 	});
 
 	// ============================================================================
+	// TEST CASE 6f: a bare 20% LTCG rate is unreachable - the 20% band is always 23.8%
+	//
+	// The two boundaries are measured on different bases, which is what hides this. The LTCG
+	// ceilings are TAXABLE income; the NIIT threshold is MAGI, larger by the deduction. On a
+	// common MAGI footing the surtax starts roughly $400k BEFORE the 20% bracket opens, so every
+	// dollar taxed at 20% also owes 3.8%.
+	//
+	// Worth pinning because it is the invariant the old data block got wrong: it carried the 15%
+	// ceiling AS the NIIT threshold, trying to mark where the surtax starts, which both mis-valued
+	// the bracket and baked a drifting boundary into a fixed table. A future edit that moves either
+	// threshold, or that "helpfully" indexes the NIIT one, reopens exactly that gap.
+	//
+	// Nothing here hard-codes the answer: each boundary is found by bisecting the engine.
+	// ============================================================================
+	test('TEST CASE 6f: the 20% LTCG band always carries NIIT, so it is really 23.8%', () => {
+
+		const at = (status, gains, inflation) => calculateTaxes({
+			filingStatus: status, ages: status === 'MFJ' ? [55, 53] : [55],
+			earnedIncome: 0, capGains: gains, inflation, state: 'TESTTAXATION'
+		});
+
+		// Smallest all-gains MAGI whose MARGINAL LTCG rate is the top one, i.e. where the 20%
+		// band opens, expressed as MAGI so it is comparable with the NIIT threshold.
+		const magiWhere20Opens = (status, f) => {
+			let lo = 0, hi = 5000000;
+			for (let i = 0; i < 60; i++) {
+				const mid = (lo + hi) / 2;
+				if (at(status, mid, f).capitalGainsRate === 0.20) hi = mid; else lo = mid;
+			}
+			return hi;
+		};
+
+		// A plan's cumulative CPI factor starts at 1.0 and compounds; optimizer_core.js floors the
+		// yearly rate at -1%, so 60 years of maximum sustained deflation still only reaches 0.547.
+		// This range therefore covers every factor any plan can actually reach, and then some.
+		const REACHABLE_FLOOR = Math.pow(0.99, 60);
+		const factors = [REACHABLE_FLOOR, 0.6, 0.8, 1.0, 1.5, 2.0, 3.0];
+
+		for (const status of ['MFJ', 'SGL']) {
+			const threshold = TAXData.FEDERAL.NIIT[status];
+			for (const f of factors) {
+				const opens = magiWhere20Opens(status, f);
+				assertEqual(opens > threshold, true,
+					`${status} @ inflation ${f.toFixed(3)}: the 20% band must open above the NIIT threshold ` +
+					`(opens at MAGI ${Math.round(opens)}, threshold ${threshold})`);
+			}
+		}
+
+		// And the consequence, swept directly: no combination of ordinary income, gains and
+		// inflation puts a filer in the 20% band without the surtax on the next gain dollar.
+		let in20 = 0;
+		for (const status of ['MFJ', 'SGL']) {
+			for (const f of [REACHABLE_FLOOR, 1.0, 2.0]) {
+				for (let ord = 0; ord <= 900000; ord += 100000) {
+					for (let g = 100000; g <= 1500000; g += 100000) {
+						const r = calculateTaxes({
+							filingStatus: status, ages: status === 'MFJ' ? [55, 53] : [55],
+							earnedIncome: ord, capGains: g, inflation: f, state: 'TESTTAXATION'
+						});
+						if (r.capitalGainsRate !== 0.20) continue;
+						in20++;
+						assertEqual(r.niitMarginalOnInvestment, 0.038,
+							`${status} @ inflation ${f.toFixed(3)}, ord ${ord}, gains ${g}: ` +
+							`a 20% LTCG dollar must also owe NIIT`);
+					}
+				}
+			}
+		}
+		assertEqual(in20 > 100, true, 'the sweep must actually reach the 20% band, not vacuously pass');
+
+		// The 0% band is the mirror image: it always sits BELOW the threshold, so it is a true 0%
+		// and not 3.8%. Same bisection, on the first rate boundary instead of the last.
+		for (const status of ['MFJ', 'SGL']) {
+			const zeroCeiling = TAXData.FEDERAL.CAPITAL_GAINS[status].brackets[0].l;
+			const r = at(status, zeroCeiling, 1.0);   // all gains, sitting at the 0% ceiling
+			assertEqual(r.capitalGainsRate, 0, `${status}: at the 0% ceiling the LTCG rate is 0`);
+			assertEqual(r.niitMarginalOnInvestment, 0, `${status}: and the 0% band owes no NIIT`);
+		}
+	});
+
+	// ============================================================================
 	// TEST CASE 7: Single filer with inflation adjustment
 	// ============================================================================
 	test('TEST CASE 7: Single filer with inflation adjustment', () => {

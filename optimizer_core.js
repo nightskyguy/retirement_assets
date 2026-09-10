@@ -297,7 +297,7 @@ function computeAnnualQCDs(inputs, balance, simYear, qcdLimit, provisionalMAGI, 
         // against, and every other setting lost on the same trade. The asymmetry is structural - a
         // surcharge is a few thousand a year while the MAGI needed to clear a threshold is tens of
         // thousands - so no setting could ever pay for itself here.
-        //   See research/IRMAA_MARGIN_DEFAULT.md.
+        //   Measured in the retired IRMAA_MARGIN_DEFAULT report (P116; in git history).
         const effCpi = cpiRate * irmaaFwdFactor({ ...inputs, irmaaMarginMode: 'none' });
         const tierTarget = getIRMAATierTargetMAGI(provisionalMAGI, status, effCpi, 2);
         // 0 means the household is already clear of every surcharge, so there is nothing to escape
@@ -1010,7 +1010,7 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         // spends the result as a MAGI ceiling. Raising it by the year's deduction puts the two on
         // one basis, so "fill the 22% bracket" fills the 22% bracket instead of stopping one
         // deduction short of it. Measured at $32,200 short in 2026 and $70,876 by 2054 on one plan
-        // (research/BRACKET_CEILING_BASIS.md section 1). `dedAddBack` is computed once a year in
+        // (retired BRACKET_CEILING_BASIS report, section 1). `dedAddBack` is computed once a year in
         // resolveSpendTarget; it is 0 for every ceiling that is not a federal bracket top.
         //
         // Placed HERE, and the position matters: after the rate lookups, which want the statutory
@@ -1048,7 +1048,7 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
  * That is not only a column. `acaBreach` is set from this overage and feeds `totals.acaBreachYears`,
  * which the Optimizer reads to flag an ACA row UNTENABLE - so an ACA plan that cannot hold its cap
  * could rank as though it could. Measured over 2,880 live ACA plan-years
- * (`.test_harnesses/acamagi_harness.js`): 342 years flip clean to breached, the reported breach rate
+ * (`acamagi_harness.js`, retired in P116): 342 years flip clean to breached, the reported breach rate
  * goes 43.5% -> 55.4%, and **12 of 360 plans report zero breaches while actually breaching**.
  *
  * `tax.MAGI` ITSELF IS NOT TOUCHED, on purpose: IRMAA and NIIT read it and their definition is the
@@ -1393,7 +1393,7 @@ function beginYear(sim, yr) {
     // It overstated every RMD by roughly `preMonths/12 x growth`, and, far worse, it made the RMD
     // depend on `preMonths`, which is 1 or 11 depending on whether LAST year converted more than
     // $1,000. Two otherwise identical plans got different RMDs because one of them converted.
-    // Measured before the fix (`.test_harnesses/rmdbasis_harness.js`): 22 of 30 plans had a timing-dependent RMD,
+    // Measured before the fix (`rmdbasis_harness.js`, retired in P116): 22 of 30 plans had a timing-dependent RMD,
     // median 6.21% and max 58.62% -- far above the 5.49% one-year stub, because an inflated RMD
     // forces out more, which shrinks the balance, which re-bases every later RMD.
     //
@@ -1924,7 +1924,7 @@ function resolveSpendTarget(sim, yr) {
     // be known exactly before the ceiling is placed. What the estimate misses is logged beside what
     // was charged (`-ceilDedAddBack` against `-fedDeduction`), so the residual is auditable from a
     // finished run rather than argued. Measured over 3,960 plan-years
-    // (`.test_harnesses/ceilded_harness.js`): median $0, p90 $0, worst $6,000 - one senior
+    // (`ceilded_harness.js`, retired in P116): median $0, p90 $0, worst $6,000 - one senior
     // deduction, in years where the plan never reaches the ceiling so the realized AGI is nowhere
     // near the provisional one - against a median deduction of $47,744.
     //
@@ -2412,7 +2412,7 @@ function planPrimaryWithdrawals(sim, yr) {
         // fork is on the ceiling's KIND, which is why computeBracketCeiling's `kind` is read here
         // rather than `inputs.stratACAMultiple` - a lapsed ACA year is not an ACA ceiling.
         //
-        // MEASURED BEFORE SHIPPING, `.test_harnesses/harvestceil_harness.js`, 648 cyclic cells. The
+        // MEASURED BEFORE SHIPPING, `harvestceil_harness.js` (retired in P116), 648 cyclic cells. The
         // guard binds in 339 of them, 116 with the shipped cycleCoexist default, and every one of
         // those 116 is clean (same delivered spending, both arms funded). Median lifetime tax +$608,
         // median ending net worth -$5,259, down in 98 of 116, worst -$46,443.
@@ -2438,7 +2438,7 @@ function planPrimaryWithdrawals(sim, yr) {
         // and `_baseOrdinaryInc` is neither: it carries the FULL Social Security benefit and has no
         // deduction subtracted at all. TWO errors, both making the floor look higher than it is, so
         // the room comes back too small and the harvest stops short of the bracket it was told to
-        // fill. Measured over 4,745 harvest years (`.test_harnesses/ltcgroom_harness.js`): the floor
+        // fill. Measured over 4,745 harvest years (`ltcgroom_harness.js`, retired in P116): the floor
         // is overstated in EVERY one, median $59,276 against a 0% bracket about $97k wide, and the
         // deduction is $50,161 of that - so this is not a copy of the benefit-only fix above.
         //
@@ -2459,7 +2459,6 @@ function planPrimaryWithdrawals(sim, yr) {
         // which no estimate made at sizing time could have known. `-ltcgFloor` is logged so that gap
         // stays auditable rather than assumed.
         const _ltcgFloor = (ordFloor) => {
-            if ((inputs.ltcgRoomBasis ?? 'taxable') !== 'taxable') return ordFloor;
             const _ss = yr.fixedInc;
             const _nonSS = Math.max(0, ordFloor - _ss);
             const _t = calculateTaxes({
@@ -2662,7 +2661,7 @@ function planPrimaryWithdrawals(sim, yr) {
         // Subtracting the FULL benefit here therefore charges the ceiling for income it never
         // receives, and the plan stops exactly that much short of the limit it was told to fill:
         // measured at `short / SSincome` = 0.150000, min equal to max, worth $168,500 on one $2.8M
-        // Fill Bracket 22% plan (research/BRACKET_CEILING_BASIS.md sections 9 and 10).
+        // Fill Bracket 22% plan (retired BRACKET_CEILING_BASIS report, sections 9 and 10).
         //
         // ACA IS DIFFERENT AND KEEPS THE FULL BENEFIT. ACA MAGI adds non-taxable Social Security
         // back by statute, so the whole benefit really does occupy that cap. This is why the fork is
@@ -2677,7 +2676,7 @@ function planPrimaryWithdrawals(sim, yr) {
         // lower statutory tiers MAGI rises 1.5x or 1.85x as fast as the draw and a flat subtraction
         // leaves that difference unused. Across a 720-cell grid the inversion filled every
         // ceiling-bound year to the dollar while breaching LESS than the full-benefit form did, so
-        // there was no trade to make (research/BRACKET_CEILING_BASIS.md section 10).
+        // there was no trade to make (retired BRACKET_CEILING_BASIS report, section 10).
         const _ssCeilRoom = (yr.ceilingKind === 'aca')
             ? yr.limit - yr.fixedInc
             : nonSSIncomeForMAGI(yr.status, yr.limit, yr.fixedInc);
@@ -2884,7 +2883,8 @@ function fillSpendingGap(sim, yr) {
     // the near-free win the 2026-07-30 run recorded. P32 letting the third pass draw Brokerage is the
     // likely cause: displacing a Brokerage draw IS this mechanism, so changing when Brokerage is
     // drawn changes both the size and the sign. That is why it ships as a swept dimension rather
-    // than a default, and why the harness numbers in CONVERSION_ROUTING.md carry a re-run warning.
+    // than a default, and why the numbers in the retired CONVERSION_ROUTING report carried a re-run
+    // warning. Both the report and its harness were retired in P116 rather than re-run.
     // Validated against the known values rather than tested for truthiness: with `|| null` a typo
     // like 'fillCashThenRother' fell through to the Roth-first branch and silently modelled the
     // OTHER mode. Anything unrecognized now means "leave today's behavior alone".
@@ -3083,7 +3083,7 @@ function resolveResidualAndForcedIRA(sim, yr) {
             // promised and could not pay, against $1,711 of new unfunded spending from allowing it.
             // Every scenario it rescued was an IRMAA Ceiling plan, the case this was
             // pinned on - Brokerage the only money left, and the engine refusing to touch it.
-            // See `research/BROKERAGE_DRAW.md`, section Q2.
+            // See the retired BROKERAGE_DRAW report, section Q2 (P116; in git history).
             // P28 flag: only 'fillRothThenCash' changes the third pass. The pass is already Cash then
             // Roth, which IS the 'fillCashThenRoth' order, so that mode leaves it untouched.
             // Neither carries cap gains, so this only picks which tax-free account drains first.
@@ -3415,7 +3415,7 @@ function routeSurplusAndConvert(sim, yr) {
     // Roth gains X - T - S either way -- so it could only ever re-label, and 630 simulations
     // confirmed it: 0 money fields moved in 90 cells. A view that wants the two legs told
     // separately does not need an engine flag, because `-iraSpend` and `-iraConvGrossTot` are
-    // already in every log row. Reasoning and measurements: research/CONVERSION_ROUTING.md.
+    // already in every log row. Reasoning and measurements: the retired CONVERSION_ROUTING report.
 
     // If there is still a surplus, replace any excess Cash withdrawal.
     yr.surplus.Cash = Math.min(yr.surplus.Total, yr.netWithdrawals.Cash);
@@ -3999,7 +3999,7 @@ function growAndSettle(sim, yr) {
     // P108e. THE CREDIT IS APPLIED AFTER THE POST-WITHDRAWAL GROWTH, and the order is the whole
     // point. It used to run above `applyGrowth`, so the credited dollars earned `postMonths` of
     // growth on top of BEING that growth - an over-credit of `T * r^2 * (postMonths/12)^2`, which is
-    // 0.5% of the credit in a Late year and 5.5% in an Early one (`.test_harnesses/growthcredit_check.js`).
+    // 0.5% of the credit in a Late year and 5.5% in an Early one (`growthcredit_check.js`, retired in P116).
     //
     // The arithmetic the credit is supposed to reproduce: hold `T` in the account through the
     // post-withdrawal growth and pay it on December 31.
@@ -4071,7 +4071,7 @@ function growAndSettle(sim, yr) {
     // `bracket` once the IRA Target binds) a genuinely earlier conversion would have changed the
     // balance the sizing read, and this does not model that. Measured residual against a true
     // three-segment year: the Roth leg is exact and the IRA leg is off by `(10g^2/144)*(X - a*B)`,
-    // about 2 bp of balance at 6% (.test_harnesses/growthcredit_check.js).
+    // about 2 bp of balance at 6% (`growthcredit_check.js`, retired in P116).
     //
     // Unset means today's behavior, bit for bit: the shift is zero when m_c === preMonths.
     // THE RMD IS FIRST MONEY OUT, AND IT CONSTRAINS THIS (user, 2026-09-06). In a year an RMD is
@@ -4443,7 +4443,7 @@ function endYear(sim, yr) {
     // excess at 3 points whatever the path does. Making BOTH terms path-following instead was
     // tried and rejected: it turns a 12% inflation year into ~24% premium growth, which implies
     // 12 points of excess medical cost in that year, and it swung measured IRMAA dollars from
-    // -6.5% to +29% (research/BRACKET_INDEXATION.md).
+    // -6.5% to +29% (retired BRACKET_INDEXATION report; in git history).
     //
     // Written as cpi_t + inputs.inflation because that is the INTENT - index plus a fixed excess.
     // It reduces algebraically to i_t + inputs.cpi, which is the same thing and reads as less.
@@ -6132,7 +6132,7 @@ function lowestBreakEvenHeirsRate(baseInputs, candidates = [], opts = {}) {
 // always a sequence the sweeps score, and vice versa.
 //
 // Four accounts permute 24 ways. These six are the ones that ever came out ahead in the P30d
-// sweep (research/GAPFILL_SPLIT.md sections 10 and 15), ordered by how often each was
+// sweep (retired GAPFILL_SPLIT report, sections 10 and 15), ordered by how often each was
 // the best of all 24 and, on a tie, by how much was at stake when it won. CBRI and CIBR win most
 // and were not offered at all before v11.163F. RIBC and BIRC won nothing anywhere in that grid
 // and are kept because they are the Roth-first and brokerage-first stress tests they were added

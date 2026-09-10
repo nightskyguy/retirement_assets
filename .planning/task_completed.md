@@ -464,7 +464,7 @@ everything added later.
    **The chosen mechanism did not survive contact and the reason is worth keeping.** The plan said
    "a `core.hooksPath` directory committed to the repo", and the repo was believed to have "no hook
    convention yet". Both were wrong: `core.hooksPath` is **already** set, to the absolute path
-   `C:\Users\starc\source\retirement_assets\.git\hooks`, in `.git/config` **and** — because
+   `%USERPROFILE%\source\retirement_assets\.git\hooks`, in `.git/config` **and** — because
    `extensions.worktreeConfig` is on — separately in **every** worktree's `config.worktree`, which
    **outranks** the repo config. `git config core.hooksPath .githooks` would therefore have been
    silently ignored inside every worktree, i.e. a no-op in the place most work happens, while
@@ -756,7 +756,7 @@ Found by the user testing Round 1 on `?mc=1&fcc=1&nerdknob`. Round 1's four PRs 
 - [x] Docs: findings.md investigation writeup, README FAQ entry + Recent Fixes, changelog `data-flag="behavior"`.
 - **Not byte-identical:** the ⇌ row set and suggested amounts change (D). A/B are display-only.
 - **Left open → CLOSED by PR2 above (v11.137f):** the array-vs-`convEndYear` engine divergence. The array path was the wrong one; root cause was the year-0 withdrawal-timing predicate, not the conversion math.
-- **Deferred → ALL CLOSED 2026-07-27** by PR-A/PR-B/PR-C/PR-D above (SS first-year proration + milestones + birth-year FRA, head-to-head strategy compare, MC stress auto-run + "Stress Failure X of Y" tile). The original design notes remain in the plan file appendix at `C:\Users\starc\.claude\plans\not-sure-where-it-eventual-gray.md`; the appendix's dead-code note (`updateProjectedRMDStat`) was actioned in PR-A.
+- **Deferred → ALL CLOSED 2026-07-27** by PR-A/PR-B/PR-C/PR-D above (SS first-year proration + milestones + birth-year FRA, head-to-head strategy compare, MC stress auto-run + "Stress Failure X of Y" tile). The original design notes remain in the plan file appendix at `%USERPROFILE%\.claude\plans\not-sure-where-it-eventual-gray.md`; the appendix's dead-code note (`updateProjectedRMDStat`) was actioned in PR-A.
 
 ---
 
@@ -2481,7 +2481,7 @@ not need to add them; it needs to give them something interesting to say.
 **Why:** The Monte Carlo and Stress tabs report survival rates, median ruin years and percentile
 bands. There is no way to take one bad sequence and walk it through the Annual Details table and the
 Charts next to your own plan. Design and sub-items are in the approved plan at
-`C:/Users/starc/.claude/plans/cryptic-wondering-wren.md`; the load-bearing findings are:
+`%USERPROFILE%/.claude/plans/cryptic-wondering-wren.md`; the load-bearing findings are:
 
 - `runSimulation()` (optimizer_ui.js:675) is already a clean three-step pipeline, and
   `loadMCVariation()` (mc_tab.js:1175) is the precedent for writing an MC row into the main model.
@@ -2495,7 +2495,7 @@ Charts next to your own plan. Design and sub-items are in the approved plan at
   against the user's own plan. Year-by-year scrubbing inside a path is out of scope.
 ### Plan of record 2026-08-25 (fresh worktree `mc-path-replay`, branched at `f29b40a`)
 
-Design is the approved plan at `C:/Users/starc/.claude/plans/cryptic-wondering-wren.md`; the items
+Design is the approved plan at `%USERPROFILE%/.claude/plans/cryptic-wondering-wren.md`; the items
 below are that design re-anchored on the code as it stands AFTER P71 and P74, which moved every
 line the original plan cited. `montecarlo/worker.js` is 42 lines now and holds nothing to extract;
 the engine is `montecarlo/mc_engine.js`.
@@ -5553,8 +5553,8 @@ afterward, because a collapsed `<details>` otherwise prints collapsed. `updateCo
 ### Verification
 
 1. `node taxPaymentPlanner.tests.js` green (expect roughly 42+).
-2. Browser via the launch.json `retirement-optimizer` preview server, on the reported scenario
-   `RetirementTaxPlanner.html?taxYear=2028&federalTax=18286&stateTax=6545&priorYearFedTax=18188&priorYearStateTax=6566&ssIncome=25363&pensionIncome=15000&interest=2783&qualifiedDivs=527&capitalGains=3788&ira1Rmd=0&ira2Rmd=15657&ira1Voluntary=91288&ira2Voluntary=32237&ira1RothConversion=0&ira2RothConversion=0&marginalOrdRate=30.0&bv=99398&bb=41696&cgr=23.0&hi=1&state=CA&portfolioRate=6&hysaGross=3`:
+2. Browser via the launch.json `retirement-optimizer` preview server, on a scenario handed over
+   from the Optimizer:
    four columns A/C/D/Q plus the B-absence note, C starred near 497, Q near 656, consistent with the
    live preview's "YE-IRA wins" toggle. Then append `&ira1RothConversion=40000` and confirm five
    columns with B present. `?runtests` badge green at the updated count.

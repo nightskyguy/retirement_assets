@@ -215,7 +215,7 @@ function applyNerdKnobVisibility() {
     // more: both graduated out of nerdknob once they were finished and tested, so their markup
     // carries no display:none and nothing hides them. Same treatment as convAdvanced-wrap above.
     // IRMAA safety margin below a projected tier threshold - experimental, still being measured
-    // (research/IRMAA_MARGIN_FIXED_CPI.md). The FORWARD PROJECTION it sits on is NOT gated:
+    // (the retired IRMAA_MARGIN_FIXED_CPI report). The FORWARD PROJECTION it sits on is NOT gated:
     // that is a correctness fix and applies to every user. Only the choice of margin is hidden,
     // and hiding it leaves the default (IRMAA_MARGIN_DEFAULT, 'halfcpi') in force, not "no margin".
     // Fixed tax indexing has no line here any more. It moved to the Monte Carlo tab's Advanced
@@ -3365,7 +3365,7 @@ function updateTable(log) {
         'infl%': 'Inflation applied to the spending goal for this year. Fixed at your Inflation input in a normal run; under Monte Carlo each path draws its own, so this column is how you see which years the path got expensive. Note that tax brackets and IRMAA thresholds index at the separate CPI input instead, which is why a high-inflation year can raise spending without widening the brackets that spending is taxed in.',
         'inflCum%': 'How much the price level has risen since the plan started, compounding the infl% column. Divide any nominal dollar figure by 1 + this to read it in current dollars, or flip the Future $ / Current $ switch above the tabs and let every column do it for you.',
         'return%': 'The market return this year before dividends and before any per-account mix is applied: your Growth input in a normal run, or the year drawn from the Monte Carlo path. The balance columns will not move by exactly this much - each account adds its dividend yield and blends its own stock/bond/international split, and Cash earns its own yield instead.',
-        'timing': 'Withdrawal timing auto-selected each year. Early(Conv) = conversion year (withdrawal in 1st quarter, ideally January - maximizes Roth compounding). Late(Spend) = spending-only year (withdrawal in last quarter, ideally December - full portfolio compounds before withdrawal exits, gaining D×r per year).',
+        'timing': 'When money moved this year, shown as conversion/spending. Left of the slash: the month the Roth conversion landed (Early = January, Late = November, none = no conversion this year). Right of the slash: the month the spending withdrawal left, taking its income tax and any IRMAA surcharge with it (Early = January, Late = November). Withdrawn money earns nothing once it leaves. Split, the default, converts early and spends late. A required distribution, when one is due, moves with the conversion, because a conversion may not come before it.',
     };
 
     keys.forEach(key => {

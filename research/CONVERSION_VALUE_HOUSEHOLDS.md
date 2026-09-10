@@ -32,9 +32,8 @@ household.
 | **H3-IRAlight** | NY, married, $3.68M, 27 years, **$700k IRA against $2.6M brokerage** | the IRA-to-taxable ratio, reversed from the canonical |
 | **H4-tight** | CA, married, **$1.62M**, 29 years, little surplus over need | the surplus-over-need axis. The stated rule is that willingness to trade tracks surplus rather than wealth: *"if my assets were smaller, I would be less aggressive"* |
 
-Built by overriding named fields on `.test_harnesses/fixtures/p106_canonical.json`, which is itself
-the verbatim output of the page's own `getInputs()`. Nothing re-decodes a share URL, so every field
-not named above keeps a value the real decoder produced.
+Built by overriding named fields on `age-gap-ira-heavy-ca` in the plan bank, so every field not
+named above keeps that household's value.
 
 All three arms succeed in every household. Spend is equal to within **$5** everywhere.
 

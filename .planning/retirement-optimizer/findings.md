@@ -230,7 +230,7 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
 ## The suggested Stop Conversion year is a MOVING PEAK, and `totalNetWealth` is not a shared basis (2026-09-03, P106a)
 
 Full report `research/CONVERSION_STOP_YEAR.md`; harness
-`.test_harnesses/stopyear_stability_harness.js`. On the user's own plan, the canonical `P106`
+`.test_harnesses/stopyear_stability_harness.js`. On `age-gap-ira-heavy-ca`, the canonical `P106`
 scenario. Four things worth carrying forward.
 
 1. **"Unstable" was right, and neither of the two obvious explanations is what it is.** The search is
@@ -2836,10 +2836,10 @@ The year after recovered on its own, because by then the prior year-end split ha
 right account - which is why one year went missing per death and nothing ever looked broken.
 
 **The death year itself was always right.** `alive1 = age1 <= die1` is inclusive, so the year
-labelled by the user is the FIRST SURVIVOR year, not the year of death. On their plan person 1 dies
+labelled by the reporter is the FIRST SURVIVOR year, not the year of death. On that household person 1 dies
 at 88 in 2048 and the 2048 RMD of $154,412 was taken. 2049 is the year that was wrong.
 
-**Size, on the user's own plan** (browser, v11.1718): 2049 RMD $10,148 -> **$283,315**, which is
+**Size, on the reported household** (browser, v11.1718): 2049 RMD $10,148 -> **$283,315**, which is
 12.821% x ($2,130,705 inherited + $79,151 own). 2050 unchanged in form at $288,077 = 13.699% x
 $2,102,964, prior IRA1 zero, so the added term self-extinguishes and cannot double-count.
 
@@ -2851,7 +2851,7 @@ scratch A/B is reproducible from the two-line diff):
 | single filer | none | 0 differing years | - | same | same | same |
 | GK couple | 2052 | +$242,194 | -$11k..-$14k/yr | **identical** | +$49,329 | -$31,876 |
 | `CAP_BASE` | 2034 | +$78,203 | -$0.5k..-$1.4k/yr | **identical** | -$459 | -$4,579 |
-| user link | 2048 | +$328,848 | -$45,349 | **identical** | +$106,717 | -$41,896 |
+| reported | 2048 | +$328,848 | -$45,349 | **identical** | +$106,717 | -$41,896 |
 
 **Spend is identical to the dollar in every arm.** The fix moves ordinary income and therefore tax
 and ending wealth, never the plan's spending. The small NEGATIVE drift in the years after the

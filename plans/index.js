@@ -21,11 +21,11 @@
 
 const aca_gap_years_texas_early_ss = require('./aca-gap-years-texas-early-ss.js');
 const aca_gap_years_texas = require('./aca-gap-years-texas.js');
+const age_gap_ira_heavy_ca = require('./age-gap-ira-heavy-ca.js');
 const balanced_thirds_couple = require('./balanced-thirds-couple.js');
 const bracket_filler_texas_cyclic = require('./bracket-filler-texas-cyclic.js');
 const bracket_filler_texas = require('./bracket-filler-texas.js');
 const brokerage_heavy_couple = require('./brokerage-heavy-couple.js');
-const canonical_conversion_study = require('./canonical-conversion-study.js');
 const high_spend_large_ira = require('./high-spend-large-ira.js');
 const ira_heavy_couple_overreaching = require('./ira-heavy-couple-overreaching.js');
 const ira_heavy_couple = require('./ira-heavy-couple.js');
@@ -42,11 +42,11 @@ const taxable_heavy_new_york = require('./taxable-heavy-new-york.js');
 const ALL = [
     aca_gap_years_texas_early_ss,
     aca_gap_years_texas,
+    age_gap_ira_heavy_ca,
     balanced_thirds_couple,
     bracket_filler_texas_cyclic,
     bracket_filler_texas,
     brokerage_heavy_couple,
-    canonical_conversion_study,
     high_spend_large_ira,
     ira_heavy_couple_overreaching,
     ira_heavy_couple,

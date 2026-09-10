@@ -2229,7 +2229,7 @@ test('P87d: a year that breaches only on the add-back is flagged, and a lapsed c
 // Cycle Brokerage's harvest year runs INSTEAD of the sizing branch and built its own aggregate with
 // the FULL benefit in it, then compared that against the same MAGI ceiling - so P87c's correction
 // never reached it and a harvest year still stopped short. Measured over 648 cyclic cells
-// (.test_harnesses/harvestceil_harness.js): the guard binds in 339, 116 of them with the shipped
+// (`harvestceil_harness.js`, retired in P116): the guard binds in 339, 116 of them with the shipped
 // cycleCoexist default.
 const HARVEST_CEIL = { ...CEIL_SS, strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1,
                        stratACAMultiple: 0, cyclicEnabled: true, cyclicOrder: 'ira-first',
@@ -4188,7 +4188,7 @@ test('cash-funding: flag off leaves every balance untouched (regression guard)',
 // `federalTax` and `stateTax`. Every income-basis field kept its pre-conversion value, so
 // `yr.tax.MAGI` omitted the conversion -- and that is the figure pushed into `balance.magiHistory`
 // and charged for IRMAA two years later. A household could convert $100,000 a year and never be
-// billed for it. Characterized in `.test_harnesses/extraconv_magi_harness.js`.
+// billed for it. Characterized in `extraconv_magi_harness.js` (retired in P116).
 // MAGI_BASE is on Medicare from year 0 so the lookback has something to charge, and its ordinary
 // MAGI must sit BELOW the first single-filer IRMAA threshold ($108,999) with a $100,000 conversion
 // carrying it over one. A 3% draw on $1.2M is about $36,000, so $0 pays no surcharge and $100,000

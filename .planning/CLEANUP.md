@@ -137,7 +137,7 @@ Run it on each stale `localhost:<port>` origin.
 Pin the preview port instead of trusting `autoPort`, so every session shares one origin:
 
 ```bash
-PORT=8767 python ~/.claude/serve.py --root "C:/Users/starc/source/retirement_assets/.claude/worktrees/context-ab498f"
+PORT=8767 python ~/.claude/serve.py --root "%USERPROFILE%/source/retirement_assets/.claude/worktrees/context-ab498f"
 ```
 
 This also sidesteps the known Windows port-collision gotcha, where two servers appeared to bind 8767

@@ -987,8 +987,8 @@ Feedback:  Bracket 22% allows up to $85k; you want $100k (gap: -$15k)
 
 ## The Break Even diagnostic names a year that is actually ACTIONABLE, not just explanatory (2026-07-21, v11.12fd)
 
-**Scenario** (user-supplied, reproduced and verified in the browser):
-`?sg=220k&sc=-1.000&str=bracket&ny=4&sr=IRMAA2&pw=20.000&iwp=5.000&gkg=20.000&gka=10.000&mc=1&fcc=1&eca=33k&ibg=851132&d1=91&i1=3.3m&i2=240k&ro=240k&bk=1m&bb=2e5&dr=1&c1r=65&c2r=65&cbr=100&ca=1e5&cr=25k&ss1=60k&ss2=29k&psa=65&sfp=100.000&g=8.500&div=1.390&inf=4.200&cpi=2.800&cy=3.000&fitr=33.000`
+**Scenario**: a reported household, reproduced and verified in the browser. `Fill IRMAA Tier 2`,
+a 4-year IRA reduction, an extra annual conversion, an heirs rate of 33%.
 
 Break Even shows `—`; the ⓘ diagnosis reads, verbatim:
 > "Conversions through 2043 would have broken even in 2051. The 2044 conversion ($64,879) is the one that erases the lead for good."

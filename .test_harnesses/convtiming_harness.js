@@ -12,10 +12,11 @@
  * "earlier is better BECAUSE of RMDs" are not the same finding, and only the second one tells P5's
  * greedy schedule what to optimize.
  *
- * NOTHING IN THIS REPO ANSWERED IT. betr_harness.js asks convert-vs-not. stopyear_harness.js and
- * bestConversionStopYear() ask when to STOP -- and a later stop converts MORE in total, so a cutoff
- * sweep confounds timing with amount and cannot answer this. unifiedconv_harness.js and
- * oracle_harness.js ask different questions. RMD appears 1-2 times in twelve `research/*.md` reports.
+ * NOTHING IN THIS REPO ANSWERED IT. betr_harness.js asks convert-vs-not. stopyear_harness.js (since
+ * retired in P116) and bestConversionStopYear() ask when to STOP -- and a later stop converts MORE
+ * in total, so a cutoff sweep confounds timing with amount and cannot answer this.
+ * unifiedconv_harness.js (also retired) and oracle_harness.js ask different questions. RMD appears
+ * 1-2 times in twelve `research/*.md` reports.
  *
  * THIS IS NOT P28j. P28j is the intra-year withdrawal MONTH (preMonths 1 vs 11,
  * optimizer_core.js:1275-1285), whose Early(Conv) / Late(Spend) column names invite exactly this
@@ -76,7 +77,7 @@
  *   C4  N1 and N2 agree on direction.
  */
 
-// -- Bootstrap the engine exactly like gapfill_harness.js / optimizer_core.tests.js -------------
+// -- Bootstrap the engine exactly like optimizer_core.tests.js ---------------------------------
 globalThis.performance = { now: () => 0 };
 globalThis.window = {};
 globalThis.document = { getElementById: () => null, addEventListener: () => {} };
@@ -87,7 +88,8 @@ require('../displayhelpers.js');
 const { simulate, afterTaxNetWorth } = core;
 
 // -- Axes --------------------------------------------------------------------------------------
-// COMMON and SCENARIOS are copied from gapfill_harness.js VERBATIM, not imported: phased_harness.js
+// COMMON and SCENARIOS were copied from gapfill_harness.js (retired in P116) VERBATIM, not
+// imported: phased_harness.js
 // states the rule and it is the right one -- a harness that imports another's fixture silently
 // changes when that one is edited for its own reasons.
 const COMMON = {
@@ -140,8 +142,8 @@ const FAMILIES = [
                                                          stratIRMAATier: -1, stratACAMultiple: 0 } },
 ];
 
-// IRA GOAL. The first run of this harness inherited `iraBaseGoal: 0` from gapfill_harness.js's
-// COMMON without asking whether it belonged, and it did not. **The shipped page default is
+// IRA GOAL. The first run of this harness inherited `iraBaseGoal: 0` from the COMMON block of
+// gapfill_harness.js (retired in P116), without asking whether it belonged, and it did not. **The shipped page default is
 // $750,000** (`retirement_optimizer.html:210`), and the page also offers a computed suggestion --
 // the IRA balance whose RMDs roughly equal the spend goal at a target age (`computeSuggestedIraGoal`,
 // `optimizer_ui.js:665`). Zero is a value essentially no real plan carries.

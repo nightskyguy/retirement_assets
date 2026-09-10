@@ -743,7 +743,7 @@ function getInputs() {
         dividendReinvest: !!valChecked('dividendReinvest'),
         cyclicEnabled: !!valChecked('cyclicEnabled'),
         cyclicOrder:   val('cyclicOrder') ?? 'ira-first',
-        cycleLTCGTarget: +(val('cycleLTCGTarget') ?? 0.15),
+        cycleLTCGTarget: +(val('cycleLTCGTarget') ?? TAXData.FEDERAL.CAPITAL_GAINS.CYCLE_TARGET_DEFAULT),
         irmaaMarginMode: val('irmaaMarginMode') || IRMAA_MARGIN_DEFAULT,
         // P28jh. '' means the shipped auto rule; the engine only reads 'early'/'late', so an
         // empty select must arrive as undefined rather than as a falsy string it would ignore
@@ -7118,6 +7118,26 @@ function generateStateOptions() {
     });
 
     return html;
+}
+
+// Cycle Brokerage's LTCG harvest-target menu, built from the rate schedule instead of the two
+// hard-coded <option value="0.15">/<option value="0.20"> lines this replaced. The option VALUE is
+// an LTCG rate read as an exclusive ceiling (getLTCGBracketRoom spans every bracket strictly below
+// it), so the value is the rate ABOVE the bracket the label names. That is the wire format saved
+// plans and shared links already carry, so it is preserved exactly - only the source of the ladder
+// moves. Changing the rate schedule now rebuilds this menu instead of leaving it silently stale.
+function generateCycleLTCGTargetOptions() {
+    const opts = TAXData.FEDERAL.CAPITAL_GAINS.CYCLE_TARGET_OPTIONS;
+    const dflt = TAXData.FEDERAL.CAPITAL_GAINS.CYCLE_TARGET_DEFAULT;
+    // Two decimals when that is LOSSLESS, so 0.20 stays "0.20" exactly as the old markup wrote it.
+    // A <select> matches an assigned value by STRING: `el.value = '0.20'` against an option whose
+    // value is "0.2" matches nothing and blanks the control silently. Nothing persists this field
+    // today, but any future save/restore that writes the old string would hit that. A rate the
+    // 2-decimal form cannot represent (0.185) keeps its own shortest exact form instead.
+    const wire = r => (+r.toFixed(2) === r) ? r.toFixed(2) : String(r);
+    return '\n' + opts.map(o =>
+        `<option value="${wire(o.value)}"${o.value === dflt ? ' selected' : ''}>${o.label}</option>`
+    ).join('\n') + '\n';
 }
 
 // Base year of the TAXData bracket values. Used to CPI-adjust displayed limits.

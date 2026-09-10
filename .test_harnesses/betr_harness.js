@@ -181,3 +181,122 @@ console.log('    The fixed-strategy lump/annual rows do NOT over-withdraw when n
 console.log('    the conversion decision -- but their no-conversion run still banks forced-RMD surplus to Cash,');
 console.log('    which amplifies the empirical gain. Read the empirical t* as "this simulator rewards conversion');
 console.log('    far below the rate BETR names," not as a clean real-world number.\n');
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// P116, 2026-09-10: THE SAME AUDIT ACROSS A REAL MIX OF HOUSEHOLDS.
+//
+// WHY THIS SECTION EXISTS. Everything above runs on ONE household with six overrides on it, so it
+// measures six variations of a single shape - a single filer, long horizon, big IRA - and cannot
+// tell a property of BETR apart from a property of that household. The published claim ("BETR is
+// unreliable in BOTH directions") is a claim about the METRIC, and a one-household study is not
+// entitled to it.
+//
+// WHAT IS HELD AND WHAT VARIES. Each household runs on ITS OWN inputs, unmodified except for the
+// two conversion switches the comparison needs. No override ladder: the point is the spread of real
+// shapes - state, filing status, horizon, IRA-to-taxable ratio, survivor window.
+//
+// THE VERDICT IS READ OFF THE GAIN CURVE, NOT OFF t*, AND THAT IS A CORRECTION.
+// t* = (C_noconv - C_conv) / (ira_noconv - ira_conv) is only "the rate you must EXCEED" while the
+// denominator is POSITIVE, i.e. while converting SHRANK the terminal IRA. That is the normal case
+// and it is what the header above assumes - but it is not universal: on `age-gap-ira-heavy-ca` the
+// converting run ends with the LARGER IRA, the denominator flips sign, and "exceeds t*" silently
+// becomes "stays below t*". Read naively that household scores t* = 148.8% and looks like a plan
+// that must never convert, while its actual gain is +$1.87M at a 0% heirs rate. So the verdict here
+// is taken from the sign of the gain at each sampled rate, which cannot invert, and t* is printed
+// beside it as a diagnostic with its direction stated.
+//
+// WHO IS EXCLUDED, AND SAID OUT LOUD RATHER THAN DROPPED. BETR is a LEGACY metric: it answers "what
+// future rate on the REMAINING IRA makes this worth it", so it has no finite answer when the IRA is
+// gone at the horizon, and none at all when the plan never converts. Both exclusions are printed
+// with their reason and counted, because a scorer that silently skips households shrinks its sample
+// without saying so (plans/README.md, and the `viable()` note in plans/index.js).
+const HH_RATES = [0, 0.15, 0.24, 0.32];
+const hhRows = [], hhSkipped = [];
+
+for (const plan of PLANS.list()) {
+    const inputs = { ...plan.inputs };
+    let conv;
+    try { conv = simulate({ ...inputs, computeOC: false }); }
+    catch (e) { hhSkipped.push([plan.id, 'threw: ' + e.message]); continue; }
+
+    const converted = conv.log.reduce((s, r) => s + (r.rothConv ?? 0), 0);
+    if (converted < 1) { hhSkipped.push([plan.id, 'converts nothing - BETR is undefined']); continue; }
+    if (!conv.totals.success) { hhSkipped.push([plan.id, 'does not fund every year - not a plan to rank']); continue; }
+
+    const r = analyze(inputs);
+    if (r.tStar === null) { hhSkipped.push([plan.id, 'IRA drained at the horizon - no remaining IRA to tax']); continue; }
+    hhRows.push({ id: plan.id, r, converted, shrank: r.iraNoconv - r.iraConv > 0 });
+}
+
+console.log('\n' + '='.repeat(112));
+console.log('THE SAME AUDIT ACROSS THE PLAN BANK  (P116, one row per household, no overrides)');
+console.log('='.repeat(112) + '\n');
+console.log('household                        | conv$k | codeBETR | CF@RMD | CF@full | converting at 0-32% | tool vs reality');
+console.log('-'.repeat(120));
+
+let over = 0, under = 0, agree = 0;
+for (const h of hhRows) {
+    const { id, r, converted } = h;
+    const wins = r.gains.map(g => g > 0);
+    const allWin = wins.every(Boolean), allLose = wins.every(w => !w);
+    // The tool says "convert only if your future rate exceeds codeBETR". If converting already wins
+    // at every rate in the sampled band INCLUDING rates below codeBETR, the tool named a hurdle the
+    // plan did not have to clear: it is OVERSTATED, and a user following it declines a win.
+    let shape = allWin ? 'wins at every rate' : allLose ? 'loses at every rate' : 'flips inside the band';
+    let verdict;
+    if (allWin && r.codeBETR != null && r.codeBETR > 0.02) { verdict = 'OVERSTATED  (declines a win)'; over++; }
+    else if (allLose && r.codeBETR != null && r.codeBETR < 0.32) { verdict = 'understated (accepts a loss)'; under++; }
+    else { verdict = 'consistent'; agree++; }
+    h.shape = shape; h.verdict = verdict;
+    console.log(
+        id.padEnd(32) + ' | ' + String(Math.round(converted / 1000)).padStart(5) + '  | ' +
+        pct(r.codeBETR) + '  | ' + pct(r.cfRMD) + ' | ' + pct(r.cfFull) + ' | ' +
+        shape.padEnd(19) + ' | ' + verdict);
+}
+
+console.log('\nhouseholds scored: ' + hhRows.length + '   overstated: ' + over
+    + '   understated: ' + under + '   consistent: ' + agree);
+console.log('\nExcluded, with the reason (never silently dropped):');
+for (const [id, why] of hhSkipped) console.log('  ' + id.padEnd(32) + ' ' + why);
+
+console.log('\nAfter-tax gain from converting, by heirs rate (positive = convert wins):');
+console.log('household                        |    @0%   |   @15%   |   @24%   |   @32%   | tool: need > | t* (direction)');
+console.log('-'.repeat(120));
+for (const { id, r, shrank } of hhRows) {
+    const dir = shrank ? 'exceed' : 'stay below';
+    console.log(id.padEnd(32) + ' | ' + r.gains.map(g => k(g).padStart(8)).join(' | ')
+        + ' | ' + pct(r.codeBETR) + '      | ' + tStarStr(r.tStar) + ' (' + dir + ')');
+}
+
+// ── the confound, carried into the household sweep because it decides how far this generalizes ──
+// The caveat above applies to every row here: the no-conversion run banks its surplus - forced RMDs
+// included - into low-yield Cash, and that drag alone makes converting look good. Re-run each scored
+// household with a Cash Reserve set, which reinvests the overflow into the Brokerage instead, and
+// see whether the verdict survives. Any household that flips was measuring the routing, not BETR.
+console.log('\nCash-drag control - the same households with surplus reinvested (CashReserve $200k):');
+console.log('household                        | @0% reserve OFF | @0% reinvested | did the control bite?');
+console.log('-'.repeat(120));
+let held = 0, flipped = 0, noop = 0;
+for (const { id, r } of hhRows) {
+    const plan = PLANS.get(id);
+    const on = empiricalTStar({ ...plan.inputs, CashReserve: 200000 });
+    const offGain = r.gains[0], onGain = on.gainAt0;
+    // A household ALREADY routing its surplus away from Cash cannot be tested this way: Cyclic
+    // sends every surplus dollar to the Brokerage regardless, so the reserve arm IS the same run.
+    // Counting those as "the verdict held" would report a control that never ran - the same
+    // discipline the exclusion list above follows. Detected by the OUTCOME rather than by reading
+    // the flag, so a household whose routing is fixed for some other reason is caught too.
+    const bit = Math.abs(onGain - offGain) > 1;
+    const same = (offGain > 0) === (onGain > 0);
+    let note;
+    if (!bit) { note = 'no-op - surplus already leaves Cash (' + (plan.inputs.cyclicEnabled ? 'Cyclic' : 'reserve set') + ')'; noop++; }
+    else if (same) { note = 'BIT, sign holds (' + Math.round(100 * (1 - onGain / offGain)) + '% smaller)'; held++; }
+    else { note = 'BIT and FLIPS - the routing, not BETR'; flipped++; }
+    console.log(id.padEnd(32) + ' | ' + k(offGain).padStart(15) + ' | ' + k(onGain).padStart(14) + ' | ' + note);
+}
+console.log('\ncontrol bit on ' + (held + flipped) + ' of ' + hhRows.length + ' households: sign held on '
+    + held + ', flipped on ' + flipped + '. It could not run on ' + noop + ' (surplus already reinvested).');
+console.log('Where it bit and held, the SIZE of the gain still fell sharply - so the routing inflates');
+console.log('the magnitude even where it does not decide the sign. On the single household at the top');
+console.log('of this file the same control flips EVERY scenario, which is why one household was never');
+console.log('enough to make a claim about the metric.\n');

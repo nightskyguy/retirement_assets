@@ -17,7 +17,8 @@
  *
  * GRID -- crossed, not hand-picked (P28 round 2 confounded mix with strain; round 4 overturned
  * three conclusions once spend became a controlled axis):
- *   mix (5)      P28's ladder copied VERBATIM from unifiedconv_harness.js:79-106 (copy, do not
+ *   mix (5)      P28's ladder copied VERBATIM from unifiedconv_harness.js:79-106, since retired
+ *                in P116 (copy, do not
  *                import -- the harnesses must not couple)
  *   wealth (3)   x0.5 / x1 / x3 on every account balance
  *   spend (3)    4% / 6% / 8% of total assets
@@ -53,7 +54,7 @@
  * Scored at the end of the run.
  */
 
-// ── Bootstrap the engine exactly like brokerage_harness.js / optimizer_core.tests.js ────────
+// ── Bootstrap the engine exactly like optimizer_core.tests.js ───────────────────────────────
 globalThis.performance = { now: () => 0 };
 globalThis.window = {};
 globalThis.document = { getElementById: () => null, addEventListener: () => {} };
@@ -67,7 +68,7 @@ const {
 
 const money = n => (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString();
 
-// ── Base plan: unifiedconv_harness.js COMMON, copied verbatim ───────────────────────────────
+// ── Base plan: the COMMON block of the retired unifiedconv_harness.js, copied verbatim ──────
 const COMMON = {
     STATEname: 'CA', nYears: 20,
     birthyear1: 1962, birthmonth1: 6, die1: 92,
@@ -85,7 +86,7 @@ const COMMON = {
     qcdHHMax: 0, qcdMode: 'asneeded', computeOC: false,
 };
 
-// P28 mix ladder, copied verbatim from unifiedconv_harness.js:79-106.
+// P28 mix ladder, copied verbatim from unifiedconv_harness.js:79-106 (retired in P116).
 const MIXES = [
     { key: 'defaults',   over: { IRA1: 1000000, IRA2: 400000, Roth: 50000, Roth2: 20000,
                                  Brokerage: 100000, BrokerageBasis: 50000, Cash: 50000 } },

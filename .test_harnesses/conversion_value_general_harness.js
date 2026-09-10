@@ -12,7 +12,7 @@
  * real balances, ages or spend". So each household here is an ordinary retiree household, each
  * varies on a named axis, and the reason for each is written down next to it.
  *
- * HOW THEY ARE BUILT: by overriding named fields on `fixtures/p106_canonical.json`, which is itself
+ * HOW THEY ARE BUILT: by overriding named fields on the plan bank's `age-gap-ira-heavy-ca`, which is
  * the verbatim output of the page's own getInputs(). Nothing re-decodes a share URL, so the
  * drift `fixtures/README.md` warns about cannot occur - every field not named below keeps a value
  * the real decoder produced.
@@ -52,7 +52,6 @@
  */
 'use strict';
 
-const fs = require('fs');
 const path = require('path');
 globalThis.performance = { now: () => 0 };
 globalThis.window = {};
@@ -61,23 +60,17 @@ const R = path.join(__dirname, '..') + path.sep;
 Object.assign(globalThis, require(R + 'taxengine.js'));
 require(R + 'displayhelpers.js');
 const core = require(R + 'optimizer_core.js');
+const PLANS = require(R + 'plans');
 const { simulate, afterTaxWealthOfLogRow } = core;
 
 const HEIRS = 0.24;
 const BAND = [0.12, 0.22, 0.24, 0.32, 0.37];
 const XR_FLOOR = 10000;
 
-function loadFixture(name) {
-    const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8'));
-    const meta = raw.__meta;
-    delete raw.__meta;
-    for (const k of (meta.undefinedKeys || [])) raw[k] = undefined;
-    return raw;
-}
 const money = (v) => (v < 0 ? '-' : '') + '$' + Math.round(Math.abs(v)).toLocaleString('en-US');
 const pct = (v, d = 2) => (v * 100).toFixed(d) + '%';
 const rule = (c = '─') => console.log(c.repeat(112));
-const CANON = loadFixture('p106_canonical.json');
+const CANON = { ...PLANS.get('age-gap-ira-heavy-ca').inputs };
 
 // ── the households ───────────────────────────────────────────────────────────────────────────
 // Each `over` is applied to the canonical fixture. `why` is printed with the results, so no row in

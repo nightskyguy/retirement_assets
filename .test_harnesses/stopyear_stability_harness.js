@@ -12,8 +12,8 @@
  * multi-modal curve; a coupling to some input that moves it much more than expected; or a
  * genuine bug in how the applied year feeds back into the next search.
  *
- * SCENARIO: one hypothetical household, `fixtures/p106_canonical.json`, captured from the page's own
- * getInputs() so no share-URL decoder is re-implemented here. See fixtures/README.md.
+ * SCENARIO: the `age-gap-ira-heavy-ca` household from the plan bank. See plans/README.md, and read
+ * that plan's card before reading a verdict off this harness.
  *
  * ONE THING KNOWN BEFORE RUNNING, from reading the fixture rather than from a result:
  * `futureIRATaxRate` is UNDEFINED on the canonical scenario, so `afterTaxWealthOfLogRow()` returns
@@ -44,7 +44,8 @@
  *       the best one. If A6 is FALSE the suggestion is load-bearing and its instability is a
  *       defect; if TRUE the instability is cosmetic and the fix is presentational.
  *   A7  THE HEIRS RATE MOVES THE ANSWER. The argmax with no heirs rate differs by >= 3 years from
- *       the argmax at 0.24. This CONTRADICTS stopyear_harness.js's header, which states that
+ *       the argmax at 0.24. This CONTRADICTS the header of stopyear_harness.js (retired in P116),
+ *       which states that
  *       futureIRATaxRate "never changes plan mechanics, so it cannot move the optimal stop year."
  *       Mechanics, no. The scored quantity, yes.
  *   A8  NO HEIRS RATE FAVORS STOPPING EARLY. With futureIRATaxRate undefined the argmax falls in
@@ -67,7 +68,6 @@
  */
 'use strict';
 
-const fs = require('fs');
 const path = require('path');
 // Browser shims, same set the other node harnesses install: displayhelpers.js assigns to `window`
 // at load and optimizer_core.js reads `performance.now`.
@@ -78,20 +78,15 @@ const R = path.join(__dirname, '..') + path.sep;
 Object.assign(globalThis, require(R + 'taxengine.js'));
 require(R + 'displayhelpers.js');
 const core = require(R + 'optimizer_core.js');
+const PLANS = require(R + 'plans');
 const { simulate, bestConversionStopYear, afterTaxWealthOfLogRow } = core;
 
 const EMIT_JSON = process.argv.includes('--json');
 
-// ── fixture loading ──────────────────────────────────────────────────────────────────────────
-// JSON cannot hold `undefined`, and the engine distinguishes it from null in at least one place
-// that matters here, so __meta.undefinedKeys is restored rather than trusted to round-trip.
-function loadFixture(name) {
-    const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8'));
-    const meta = raw.__meta;
-    delete raw.__meta;
-    for (const k of (meta.undefinedKeys || [])) raw[k] = undefined;
-    return { inputs: raw, meta };
-}
+// ── the household ────────────────────────────────────────────────────────────────────────────
+// From the plan bank, not a literal copied into this file and not a browser capture. The engine
+// distinguishes `undefined` from null for `futureIRATaxRate`, which a JSON fixture cannot carry;
+// the plan card holds it as a real `undefined`.
 
 const money = (v) => (v < 0 ? '-' : '') + '$' + Math.round(Math.abs(v)).toLocaleString('en-US');
 const pct = (v, d = 3) => (v * 100).toFixed(d) + '%';
@@ -160,12 +155,11 @@ function localMaxima(rows) {
 }
 
 // ── report ───────────────────────────────────────────────────────────────────────────────────
-const { inputs: CANON, meta: META } = loadFixture('p106_canonical.json');
+const CANON = { ...PLANS.get('age-gap-ira-heavy-ca').inputs };
 
 console.log('\nP106a - is the suggested Stop Conversion year stable?');
 rule('═');
-console.log('scenario   : ' + META.capturedFrom.replace(/^[^?]*/, '(canonical) '));
-console.log('captured   : ' + META.title + '  ' + META.capturedUTC);
+console.log('scenario   : plan bank household `age-gap-ira-heavy-ca`');
 console.log('heirs rate : ' + (CANON.futureIRATaxRate === undefined
     ? 'UNDEFINED -> the search scores RAW totalNetWealth, not after-tax wealth'
     : CANON.futureIRATaxRate));
@@ -271,7 +265,7 @@ for (const [label, over] of perturbs) {
 
 // ---- 6. the heirs rate ----------------------------------------------------------------------
 console.log('\n6. THE HEIRS RATE  (a VALUATION knob: it cannot change the plan, only the score)');
-console.log('   Every row below re-scores the SAME simulations. stopyear_harness.js\'s header says');
+console.log('   Every row below re-scores the SAME simulations. The retired stopyear_harness says');
 console.log('   this "cannot move the optimal stop year". Measuring that claim:');
 console.log('\n   heirs rate    best cutoff    score               gap: best vs never-stop');
 const rates = [undefined, 0, 0.10, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37, 0.40];
@@ -487,5 +481,5 @@ for (const [id, claim, held, evidence] of verdicts) {
 rule('═');
 
 if (EMIT_JSON) {
-    console.log('\n' + JSON.stringify({ meta: META, curve, rateRows, verdicts }, null, 2));
+    console.log('\n' + JSON.stringify({ plan: 'age-gap-ira-heavy-ca', curve, rateRows, verdicts }, null, 2));
 }

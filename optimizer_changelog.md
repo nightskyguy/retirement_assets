@@ -17,6 +17,27 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.17c1"></a>
+
+## 11.17c1
+
+**The Annual Details `Timing` column now explains what it actually shows.**
+
+That column reports two months for each year, one for the Roth conversion and one for the spending
+withdrawal. Hovering over it still described a rule the tool no longer uses: it used to pick the
+month for you, moving the whole of the next year's withdrawal into January whenever the previous
+year had converted.
+
+The help text now says what each half of the value means, that a year which converts nothing shows
+`none` on the left, and that the spending withdrawal carries that year's income tax and any Medicare
+surcharge out of the portfolio with it. The `Limitations` section of the README described the same
+retired rule and has been corrected.
+
+**No number changes.** Nothing about how a plan is calculated moved in this release, and a saved
+plan reproduces exactly.
+
+---
+
 <a id="11.17b1"></a>
 
 ## 11.17b1
@@ -1411,11 +1432,10 @@ What was added, and why:
 - **Four engine research inputs**, used only by the offline study harnesses.
 - **Five research studies were run and recorded** (results live beside the harnesses). The
   highlights below will shape future releases:
-  [Brokerage Research](research/BROKERAGE_DRAW.md), 
-  [Proportional Draw Research](research/STRATEGY_FAMILY_RANKING.md)
-  (it's not as optimal as thought), and 
-  ["EndGame" Research](research/ENDGAME_DRAW_ORDER.md) -
-  what is the best strategy once the IRA is under control. 
+  Brokerage Research, Proportional Draw Research
+  (it's not as optimal as thought), and "EndGame" Research -
+  what is the best strategy once the IRA is under control.
+  (Those write-ups were retired in a later release; the runs are in the repository history.) 
 
 ---
 

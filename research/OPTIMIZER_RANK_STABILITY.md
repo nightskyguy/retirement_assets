@@ -1,6 +1,6 @@
 # The Optimizer's "Roth Conversion Effectiveness" rank is not a measurement
 
-*(P100 Stage A, 2026-08-31. Reproduced in the browser on the user's own saved scenario, v11.16d4.)*
+*(P100 Stage A, 2026-08-31. Reproduced in the browser on a reported saved scenario, v11.16d4.)*
 
 A user reported that their plan ranked **103rd** under `Roth Conversion Effectiveness`; that after
 adopting a different strategy from the same table the original plan reappeared at **22nd**; and that
@@ -22,10 +22,16 @@ anything at all.**
 
 ## The scenario
 
-The user's own saved plan, not a fixture invented for this report: TX, `Fill Fed/IRMAA Bracket` at
-**IRMAA Tier 2**, $2.5M + $1.5M IRAs, **$0 Roth**, **$0 Cash**, $200k brokerage on $100k basis, two
-Social Security claims at 67, a $35k non-COLA pension, $130k spend goal declining 1.5%/yr, an IRA
-Goal of $859,723, conversions on and funded from cash, conversions stopping after 2039. Saved locally as `.test_harnesses/fixtures_rankstability.local.json` - **not committed.** It is a real user's saved plan, and this repository is public, so the file is gitignored (`*.local.json`). The scenario is described below in full so the run is reproducible without it.
+A **reported saved plan**, not a fixture invented for this report. Its shape, which is all the
+finding turns on: a no-income-tax state, `Fill Fed/IRMAA Bracket` at **IRMAA Tier 2**, two large
+traditional IRAs, **no Roth** and **no Cash**, a small brokerage account, both Social Security
+claims at the same age, a non-COLA pension, a declining spend goal, a live IRA Goal, and
+conversions on, funded from cash, with a stop year set.
+
+The shape above is what the finding turns on, and it is enough to judge whether the finding
+transfers. Balances and dollar figures are not carried here. Re-running this needs the plan file,
+which is held locally and is not committed (`*.local.json`); `age-gap-ira-heavy-ca` in the plan
+bank is the committed household closest to it.
 
 ## What was measured
 
@@ -64,7 +70,7 @@ swept row (`IRMAA Ceil ✓ ⚠️`).
 
 ## The hypothesis this refutes, including one of the report author's own
 
-`P100` predicted the churn came from **pool membership** changing with the user's plan (H1), that
+`P100` predicted the churn came from **pool membership** changing with the loaded plan (H1), that
 every large jump would be explained by it (H2), and that pinning `futureIRATaxRate` would damp but
 not remove it (H3).
 
@@ -96,7 +102,7 @@ shown in their own group - rather than sorted as though they had lost. That is a
 comparator change, not an engine change, and on this scenario it turns a 136-row ranking into an
 honest 3-row one with 133 rows plainly marked unmeasured.
 
-The user's own instinct - reading net worth, final Roth and break-even off the table and picking a
+The reported instinct - reading net worth, final Roth and break-even off the table and picking a
 plan by hand - was the correct response to a column that could not answer their question.
 
 ---

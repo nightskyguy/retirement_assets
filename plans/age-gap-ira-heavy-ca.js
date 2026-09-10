@@ -1,8 +1,9 @@
 'use strict';
 /**
- * Canonical conversion study household
+ * Age-gap California couple, IRA-heavy
  *
- * The reference household for the conversion studies: California, $3.44M of IRA, spending $220k and declining.
+ * A California couple eight years apart in age with most of their money in traditional IRAs,
+ * spending $220,000 a year and declining.
  *
  * A PLAN CARD, not just a plan. `notes.summary` is the only line a person ever sees - loading this
  * plan writes it into the tool's own Notes box. Everything else in `notes` is for whoever is
@@ -10,6 +11,12 @@
  * "what is this plan" but "what can this plan NOT show".
  *
  * `notes.viability` is MEASURED, by re-running the plan, not asserted. See plans/README.md.
+ *
+ * NAMED FOR THE HOUSEHOLD, and that is the whole reason this file exists under this name. It was
+ * `canonical-conversion-study`, which named the STUDY rather than the household - the same defect
+ * the research-file rule in CLAUDE.md was written for. A reader cannot tell from that name whether
+ * a result generalizes; "eight-year age gap, IRA-heavy, California" says exactly which shape
+ * produced the number. Every reference moved with the rename.
  */
 
 // WRAPPED IN AN IIFE, and it is not style. Each of these files declares `PLAN`, and a classic
@@ -19,18 +26,20 @@
 // Optimizer against every household in the bank.
 (function () {
 const PLAN = {
-    id: "canonical-conversion-study",
-    title: "Canonical conversion study household",
+    id: "age-gap-ira-heavy-ca",
+    title: "Age-gap California couple, IRA-heavy",
     notes: {
-        summary: "The reference household for the conversion studies: California, $3.44M of IRA, spending $220k and declining.",
+        summary: "A California couple eight years apart in age with most of their money in traditional IRAs, spending $220,000 a year and declining.",
         exercises: [
-            "the conversion question as it was actually asked, and the one every conversion report quotes",
+            "the conversion question as the conversion reports ask it - this is the household every CONVERSION_* headline number is measured on",
+            "an age gap wide enough that one spouse is on Medicare while the other is not, and RMDs start eight years apart",
             "a short survivor window (2 years), which is the LOW end of the widow-penalty axis",
             "ending-IRA measures: ends with a live IRA",
         ],
         cannotShow: [
             "the widow penalty at strength - two years is barely a window; see the long-widowhood plan for that",
             "anything that needs an heirs rate: this plan deliberately has none set",
+            "a household that must spend its IRA down - $3.44M against a declining $220k spend leaves a large terminal IRA by construction",
         ],
         viability: {
             funded: "25/25",
@@ -39,7 +48,7 @@ const PLAN = {
             peakIRAYear: 0,
             acaBreachYears: 0
         },
-        origin: "`.test_harnesses/fixtures/p106_canonical.json`, captured verbatim from the page's own `getInputs()` in a browser. The four households below are named overrides on it.",
+        origin: "The reference household for the `P106` conversion studies, and the base the four `CONVERSION_VALUE_HOUSEHOLDS` variants are named overrides on. Renamed from `canonical-conversion-study` on 2026-09-10; the plan bank is now its only definition.",
     },
     inputs: {
         STATEname: "CA",

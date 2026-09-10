@@ -84,8 +84,9 @@ somewhere. They apply to every file in `research/`, and to any new one a harness
 
 ### Name the file for its SUBJECT, never for the phase
 
-`P32_RESULTS.md` and `P28_RESULTS.md` told a reader nothing. They are now `BROKERAGE_DRAW.md` and
-`CONVERSION_ROUTING.md`.
+`P32_RESULTS.md` and `P28_RESULTS.md` told a reader nothing, and were renamed for what they were
+about. Both were later retired, so read `CONVERSION_STOP_YEAR.md` and `PERFECT_FORESIGHT_ORACLE.md`
+for the shape a name should have.
 
 **Treat the phase ID as information the reader does not have.** It may appear inside the file - as a
 parenthetical on the title, and freely in the body where it points at `task_plan.md` - but nothing a

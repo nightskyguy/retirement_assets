@@ -8,9 +8,10 @@
  * only on the sweep's own conversion-optimized rows, so it is both the wrong quantity and an
  * artifact of the search that produced it.
  *
- * SCENARIO: one hypothetical household, `fixtures/p106_canonical.json`, captured from the page's own
- * getInputs(). CA, MFJ, $3.44M across two IRAs, $220k spending declining 1%/yr real, strategy
- * `fixed` = "Reduce IRA in 11 Years", cyclic on, conversion taxes funded from cash.
+ * SCENARIO: the `age-gap-ira-heavy-ca` household from the plan bank. CA, MFJ, $3.44M across two
+ * IRAs, $220k spending declining 1%/yr real, strategy `fixed` = "Reduce IRA in 11 Years",
+ * cyclic on, conversion taxes funded from cash. Read `plans/age-gap-ira-heavy-ca.js` before
+ * reading a verdict off this harness: its card says what the household CANNOT show.
  *
  * ============================================================================================
  * TWO BASELINES, BECAUSE "CONVERSIONS OFF" IS AMBIGUOUS AND THE ANSWER DEPENDS ON WHICH
@@ -61,7 +62,6 @@
  */
 'use strict';
 
-const fs = require('fs');
 const path = require('path');
 globalThis.performance = { now: () => 0 };
 globalThis.window = {};
@@ -70,23 +70,17 @@ const R = path.join(__dirname, '..') + path.sep;
 Object.assign(globalThis, require(R + 'taxengine.js'));
 require(R + 'displayhelpers.js');
 const core = require(R + 'optimizer_core.js');
+const PLANS = require(R + 'plans');
 const { simulate, afterTaxWealthOfLogRow } = core;
 
 const HEIRS = 0.24;
 const BAND = [0.12, 0.22, 0.24, 0.32, 0.37];
 
-function loadFixture(name) {
-    const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8'));
-    const meta = raw.__meta;
-    delete raw.__meta;
-    for (const k of (meta.undefinedKeys || [])) raw[k] = undefined;
-    return { inputs: raw, meta };
-}
 const money = (v) => (v < 0 ? '-' : '') + '$' + Math.round(Math.abs(v)).toLocaleString('en-US');
 const pct = (v, d = 2) => (v * 100).toFixed(d) + '%';
 const rule = (c = '─') => console.log(c.repeat(104));
 
-const { inputs: CANON, meta: META } = loadFixture('p106_canonical.json');
+const CANON = { ...PLANS.get('age-gap-ira-heavy-ca').inputs };
 const STOP_YEAR = CANON.convEndYear;   // held fixed across every arm, per P106a
 
 // ── running one arm ──────────────────────────────────────────────────────────────────────────
@@ -183,7 +177,7 @@ const ARMS = [
 
 console.log('\nP106b - does converting pay, in the terms the study set?');
 rule('═');
-console.log('scenario   : one hypothetical household  (' + META.title + ')');
+console.log('scenario   : plan bank household `age-gap-ira-heavy-ca`');
 console.log('metric     : more Roth for the smallest reduction in net worth, spending held fixed');
 console.log('valuation  : SHARED heirs rate ' + pct(HEIRS, 0) + ', real (year-0) dollars, band '
     + BAND.map(b => pct(b, 0)).join(' / '));
@@ -241,7 +235,7 @@ console.log("   * conversions and lifetime tax are NOMINAL sums over the plan's 
 console.log('     in this table is real year-0 dollars. No ratio in this report mixes the two.');
 
 // ── 3. the original worked example, decomposed ─────────────────────────────────────────────
-console.log('\n3. THE USER\'S OWN COMPARISON, DECOMPOSED  (it moves TWO variables at once)');
+console.log('\n3. THE REPORTED COMPARISON, DECOMPOSED  (it moves TWO variables at once)');
 const cibr = results.find(r => r.arm.key === 'orderedCIBR');
 const red = results.find(r => r.arm.key === 'reduce11');
 const start = cibr.drawOff, end = red.on;

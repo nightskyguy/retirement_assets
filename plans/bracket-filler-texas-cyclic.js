@@ -38,7 +38,7 @@ const PLAN = {
             peakIRAYear: 26,
             acaBreachYears: 0
         },
-        origin: "READ BY `harvestceil_harness.js`. The Texas bracket-filler with the brokerage raised to $900k and Cycle Brokerage on.",
+        origin: "READ BY `harvestceil_harness.js`, retired in P116. The Texas bracket-filler with the brokerage raised to $900k and Cycle Brokerage on.",
     },
     inputs: {
         STATEname: "TX",

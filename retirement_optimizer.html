@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.17b1</title>
+    <title>Retirement Optimizer 11.17c1</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,13 +59,13 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1116d7"></script>
-	<script src="optimizer_core.js?v=1117b1"></script>
+	<script src="optimizer_core.js?v=1117c1"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=1117ae"></script>
+	<script src="optimizer_ui.js?v=1117c1"></script>
 	<script src="optimizer_tests.js?v=1117b1"></script>
 </head>
 <body>
@@ -1014,6 +1014,13 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li><b>11.17c1</b>
+					<strong>The Annual Details <i>Timing</i> column now explains what it actually shows.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>That column reports two months, one for the Roth conversion and one for the spending withdrawal, but hovering over it still described a rule the tool no longer uses - it used to choose the month for you based on whether the previous year had converted. The help now says what each half of the value means, and that the spending withdrawal carries that year's income tax and any Medicare surcharge out with it. The <i>Limitations</i> section of the README described the same retired rule and has been corrected. <strong>No number changes.</strong></li>
+					</ul>
+					<a href="optimizer_changelog.md#11.17c1" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="behavior"><b>11.17b1</b>
 					<strong>A flaw was identified in the conversion/withdrawal timing and fixed.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1767,7 +1774,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these six are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1117b1';
+    const V = '?v=1117c1';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

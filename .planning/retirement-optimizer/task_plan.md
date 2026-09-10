@@ -38,13 +38,13 @@ User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 20
 (1) UNIT ERROR: `run()` deflated net worth but left the Roth balances nominal, so every
 `dRoth / -dNW` exchange rate was inflated by the deflator, about 2x. Fixed via each row's own
 `inflationFactor`; 101.80:1 -> 50.08:1. Directions and all 16 B/C verdicts unchanged.
-(2) FRAMING ERROR: `CONVERSION_VALUE.md` called the user's own two-variable comparison a misreading
+(2) FRAMING ERROR: `CONVERSION_VALUE.md` called the reported two-variable comparison a misreading
 and decomposed it away. **It was not a misreading** - comparing your pick to the best plan on the
 board is the choice a chooser actually makes, and answers a different question from the attribution.
 Both now stand side by side, 12x apart. `P106f` measures the choice. Measurement only - no
 product change, per groundrule 7. Three reports: `research/CONVERSION_STOP_YEAR.md`,
 `research/CONVERSION_VALUE.md`, `research/CONVERSION_VALUE_HOUSEHOLDS.md`.
-**The headline: converting pays on the user's own plan and on every household tested that converts
+**The headline: converting pays on `age-gap-ira-heavy-ca` and on every household tested that converts
 at all, and it is far cheaper than their own arithmetic suggested** - $49,121, not $1,732,907,
 because 92% of what they were weighing was the withdrawal-strategy change rather than the
 conversions. The largest single source of the benefit is the widow penalty, and the canonical
@@ -52,16 +52,14 @@ scenario is nearly the worst case for seeing it.
 Still deliberately NOT in the NOW table: a row there would push the LINE-30 marker down, and the
 user chose to leave the priority unassigned on 2026-09-03.
 
-**Canonical scenario: the user's own plan**, not a fixture. Every headline claim is about it.
-`?sg=220k&sc=-1.000&str=fixed&ny=11&pw=20&iwp=5&gkg=20&gka=10&mc=1&fcc=1&cey=2032&cyc=1`
-`&cyclicOrder=brokerage-first&ibg=1m&i1=3.2m&i2=240k&ro=240k&ro2=34k&bk=6e5&bb=2e5&dr=1`
-`&c1r=65&c2r=65&cbr=100&ca=1e5&ss1=60k&ss2=29k&sfp=77.3&g=6&div=2.02&inf=3&cpi=2.8&cy=3&obj=earliestbe`
-The user's standing objection to the fixture set: the 5-6 households were chosen as knife-edge
-defaults and may not reflect real balances, ages or spend.
+**Canonical scenario: `age-gap-ira-heavy-ca`** in the plan bank. Every headline claim is about it,
+and `plans/age-gap-ira-heavy-ca.js` is the only definition of it - read the card there first.
+The standing objection to the fixture set that this scenario answers: the 5-6 households were
+chosen as knife-edge defaults and may not reflect realistic balances, ages or spend.
 
 ### Groundrules
 
-1. **Primary is the user's scenario.** Generalization is checked on 3-4 deliberately varied
+1. **Primary is `age-gap-ira-heavy-ca`.** Generalization is checked on 3-4 deliberately varied
    households (filing status, state, horizon, IRA-to-taxable ratio), reported SEPARATELY and never
    averaged into the headline.
 2. **Heirs rate fixed** for ranking, with a sensitivity band reported. If the ordering flips between
@@ -74,7 +72,7 @@ defaults and may not reflect real balances, ages or spend.
    deliver the spending plan with margin). Selection stays with the user; the tool's job is to
    eliminate arms nobody would pick and make the surviving trade legible.
 5. **Predictions registered before running** and scored as written, never re-aimed.
-6. **Equalize, and state what each pair differs in.** The user's own comparison moved the withdrawal
+6. **Equalize, and state what each pair differs in.** The reported comparison moved the withdrawal
    strategy AND the conversion behavior at once; both equalized pairs are needed to attribute a gain.
 7. **Deliverable:** one `research/` report named for its subject, a `README.md` row, a findings
    entry. No product change proposed in the same pass as the measurement.
@@ -95,7 +93,7 @@ strategy with conversions off:
 | spend | asserted equal, or reported for GK |
 | widow exposure | **OPEN - the one decision not yet made: survivor-year tax, survivor marginal rate, or both** |
 
-**Worked example, from the user's own numbers (2026-09-03).** Ordered CIBR (no conv) -> Reduce 11yrs
+**Worked example, on `age-gap-ira-heavy-ca` (2026-09-03).** Ordered CIBR (no conv) -> Reduce 11yrs
 with conversions: ΔNW **-$1,732,907**, ΔRoth **+$5,655,337**, ΔTax **-$660,246**, ΔIRA -$3,068,882.
 That is **3.26 Roth dollars per dollar of NW given up**, and the give-up is **15.9%** of NW. The user
 would take that trade. Limiting conversions to after 2033 costs BOTH (-$25,445 NW, -$49,324 Roth):
@@ -147,7 +145,7 @@ rule 4.
       apart in the IRA. Against the first the user's conversions are DOMINANT (+$484,409 NW AND
       +$5,000,390 Roth); against the second they cost $49,121. **Any conversion claim naming one
       baseline is under-specified.**
-      **The user's own comparison was 92% strategy, not conversions.** Decomposed: conversion leg
+      **The reported comparison was 92% strategy, not conversions.** Decomposed: conversion leg
       dRoth $5,000,390 / dNW -$49,121; strategy leg dRoth $0 / dNW -$532,928. So the conversion
       decision alone is **101.80 : 1**, not the 3.26 the combined pair gave, and costs **2.36% of
       surplus over need** ($2,080,465 against a $2,333,535 funding floor).
@@ -250,7 +248,48 @@ earlier still wins 353/499 but the RMD reasoning behind it broke, 124 counterexa
 **Out of scope for the first pass:** a flat $100k/yr conversion is a candidate ARM, not a strategy;
 shaped policies belong in the grid. No product changes.
 
-## P116: prune the harnesses and research reports  *(NEW 2026-09-09, user-raised. O2, priority mine. NOT STARTED)*
+## P116: prune the harnesses and research reports  *(2026-09-09. `a`, `c`, `d` DONE 2026-09-10; `b` OPEN)*
+
+**DONE 2026-09-10 (user: "let's do P116"), v11.17c1.** 28 harnesses and 16 reports deleted, every
+reference scrubbed, `HARNESSES.md` rebuilt as one row per survivor with a **last-run-on** column.
+23 harnesses and 9 reports remain.
+
+**Three user exceptions to the `a` list, all applied:**
+
+1. `phased_harness.js` and `endgame_harness.js` are KEPT ("they will be used again relatively
+   soon"). Their reports `STRATEGY_FAMILY_RANKING` and `ENDGAME_DRAW_ORDER` were deleted as planned:
+   the harness is the tool, the report was the stale conclusion. Their `HARNESSES.md` rows say the
+   report is to be rewritten on the re-run.
+2. `betr_harness.js` is KEPT and was **re-run across a real mix of households**, which is the third
+   ask. New report `research/BETR_RELIABILITY.md`.
+3. Everything else on the `a` list went.
+
+**`P116d`'s premise was WRONG and only half of it shipped.** It said the `harvestCeilSSBasis` and
+`ltcgRoomBasis` knobs "exist only for" the deleted harnesses. `ltcgRoomBasis` did, and is gone.
+`harvestCeilSSBasis` is the **control arm of two live tests** (`optimizer_core.tests.js`, the two
+`P87c4` cases): it is what makes "the corrected basis realizes more" a comparison rather than an
+assertion. Deleting it would have forced both tests to be rewritten weaker, so it STAYS. Removing
+`ltcgRoomBasis` is behavior-neutral by construction (the default branch was the only live one) and
+all four suites are unchanged at 435 / 27 / 61 / 24.
+
+**What `BETR_RELIABILITY` found**, since it changes a published claim: on the 8 plan-bank households
+where the measure is even defined, the displayed Break-Even Tax Rate is **too high in all 8** - it
+names a hurdle of 10.1% to 34.8% while converting already wins at a 0% heirs rate. The horizon
+explains at most 3.1 points. Two corrections came out of writing it: `t*` means "exceed" ONLY while
+converting shrank the terminal IRA, and on `age-gap-ira-heavy-ca` it does not, which inverts that
+household's reading if taken at face value; and the cash-drag control could only RUN on 3 of the 8,
+because the 5 Cyclic households already reinvest their surplus, so counting them as "the verdict
+held" would report a control that never executed. The README's "unreliable in both directions" is
+not what this bank shows - the error here is one-sided.
+
+**`P116b` REMAINS OPEN and is the larger half**: re-run the 20 kept harnesses and 8 kept reports on
+the current engine and replace their numbers. Only 6 harnesses have been executed on `b3cafa3`
+(marked in `HARNESSES.md`); every other row says **not re-run**, and no number from those should be
+quoted until it is.
+
+---
+
+### The original plan, for reference
 
 **The user's rule, 2026-09-09:** "old records and conclusions from them are a problem not a help."
 This phase applies it. Inventory taken the same day (read-only, every file in `.test_harnesses/`
@@ -2134,7 +2173,7 @@ changes **which families win pool seats**, which changes **which rows get a twin
 | **H2** | **REFUTED.** Large jumps are explained by pool membership - they are not. They are explained by POSITION IN A 133-ROW TIE, which is input-array order |
 | **H3** | **NOT FIRED.** The fallback was active (rate 0.12 from `results[0]`) but produced the same rate in both runs, so it cannot be the cause here. Still worth fixing as a fragility (`P100b2`); it is not this defect |
 | **H4** | **CONFIRMED, and not marginally.** >50% dominated was the prediction; measured 61.8% on the loosest metric set and 86.8% on the tightest. 136 successful rows -> a 46-row frontier on the four core metrics |
-| **H5** | **SPLIT: first clause CONFIRMED, second REFUTED.** The user's plan IS non-dominated. But so is the nominal `conveffect` winner (`Ordered ✓ ⇌`) - it was never a bad plan, it just said nothing about the other 133 rows |
+| **H5** | **SPLIT: first clause CONFIRMED, second REFUTED.** The loaded plan IS non-dominated. But so is the nominal `conveffect` winner (`Ordered ✓ ⇌`) - it was never a bad plan, it just said nothing about the other 133 rows |
 
 **H4 and H5 are the ones that decide whether the Pareto work is worth building.** If the frontier is
 80 rows wide, it is not a simplification and this phase stops after Stage C.
@@ -2145,7 +2184,7 @@ Stages are gated. Nothing in a later stage is started before the earlier one rep
 
 #### Stage A - CHARACTERIZE. No code change. Everything else is unverifiable without it.
 
-- [x] **P100a1** - **DONE 2026-08-31.** `.test_harnesses/fixtures_rankstability.local.json` (gitignored - real personal data, public repo). Capture the user's actual scenario as a fixture (`.test_harnesses/fixtures/`), the
+- [x] **P100a1** - **DONE 2026-08-31.** `.test_harnesses/fixtures_rankstability.local.json` (gitignored, not committed). Capture the user's actual scenario as a fixture (`.test_harnesses/fixtures/`), the
       one where their plan sits at 105th. **Ask the user for it; do not invent one.** A reproduction
       on a fabricated scenario proves nothing about the reported behavior.
 - [x] **P100a2** - **DONE 2026-08-31, in the browser on v11.16d4; H1-H3 all REFUTED, and the real cause is simpler and worse. See `research/OPTIMIZER_RANK_STABILITY.md`.** Reproduced 103 -> 20 exactly. **Only 3 of 136 successful rows carry a `_convSavings`; 133 are tied at `-Infinity` and displayed in INPUT-ARRAY ORDER** (verified, not inferred). The pool was byte-identical across both runs and `sharedFutureIRARate` was 0.12 both times, so pool churn - the predicted mechanism - is not what the user saw. The plan moved 103 -> 20 with NOTHING about it re-measured: it had no `_convSavings` either time. Original text: `.test_harnesses/rankstability_harness.js`. Run the sweep, record the pool
@@ -2245,7 +2284,7 @@ Ordered by payoff per line of code. All three are live defects today, independen
         **EXACT ties only. Tolerance bands are NOT built** - that is the remaining half of `b3b`,
         and on the measured scenario it is not the urgent half, because `conveffect`'s 133 rows tie
         EXACTLY. Bands matter for objectives whose leading metric already discriminates.
-  - **Verified on the user's own scenario, not inferred.** 151 of 152 rows are common to a run
+  - **Verified on the reported scenario, not inferred.** 151 of 152 rows are common to a run
         before and after adopting `IRA Draw 9%`, and **their relative order is identical - zero
         positions differ.** Only the current-plan row itself changes, which it should. Under
         v11.16d4 the same action moved a row from 103rd to 20th. Badge 967 (502 in-page + 465 node).
@@ -3622,7 +3661,7 @@ acceptable on the slowest machine that matters.
 # Batch added 2026-08-03: P35-P37
 
 A user design proposal for a **"Phased"** withdrawal strategy, its study, and one deferred phase.
-Full design in the session plan file `C:\Users\starc\.claude\plans\composed-marinating-garden.md`;
+Full design in the session plan file `%USERPROFILE%\.claude\plans\composed-marinating-garden.md`;
 the engine evidence is in `findings.md` under **"P35 engine survey"** (2026-08-03).
 
 **Read the survey first.** It contains ten verified facts, several of which are traps where the
@@ -4067,7 +4106,7 @@ The `*.tests.js` suffix is safe precisely because `_tests.js` does not match it.
 
 ## P46: Tax Payment Planner backlog  *(was TPP-1..5; TPP-3/4/5 shipped and are archived)*
 
-**Sequencing decided 2026-07-29** (plan file `C:\Users\starc\.claude\plans\calm-snacking-newt.md`):
+**Sequencing decided 2026-07-29** (plan file `%USERPROFILE%\.claude\plans\calm-snacking-newt.md`):
 three PRs, cheap and independent first. PR 1 = TPP-3 + TPP-4 + TPP-5, **MERGED as PR #138**
 at v1.13be. PR 2 = TPP-1 (not started). PR 3 = TPP-2 (not started).
 User decisions: TPP-2 output is a **priced menu with no winner named** (keeps the tool clear of
@@ -4105,7 +4144,7 @@ verification surface for everything after it. The two items found while testing 
 ahead of the penalty engine because TPP-1's arithmetic depends on the safe-harbor rule being right,
 and because the `T.NOTE` fix is what makes some of TPP-5's shortened notes visible at all.
 
-Current plan file: `C:\Users\starc\.claude\plans\calm-snacking-newt.md`.
+Current plan file: `%USERPROFILE%\.claude\plans\calm-snacking-newt.md`.
 
 ### TPP-1 — Estimate the penalty when the user is already late
 

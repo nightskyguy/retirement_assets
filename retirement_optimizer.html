@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.17c2</title>
+    <title>Retirement Optimizer 11.17f4</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -58,15 +58,15 @@
     .share-panel .share-status { font-family:monospace; font-size:10px; color:#1a7a1a; margin-top:.35rem; min-height:14px; }
 	</style>
 	<base target="_blank">	
-	<script src="taxengine.js?v=1117c6"></script>
-	<script src="optimizer_core.js?v=1117c6"></script>
+	<script src="taxengine.js?v=1117f4"></script>
+	<script src="optimizer_core.js?v=1117f4"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=1117c6"></script>
-	<script src="optimizer_tests.js?v=1117c6"></script>
+	<script src="optimizer_ui.js?v=1117f4"></script>
+	<script src="optimizer_tests.js?v=1117f4"></script>
 </head>
 <body>
 
@@ -341,7 +341,7 @@
             </label>
         </div>
         <div class="compact-row spouse-field">
-            <label title="Spouse's year of birth. Used to calculate their age, Required Minimum Distribution (RMD) schedule, and when survivor filing status applies."><i>Sp. Birth Year</i><input type="number" id="birthyear2" value="1952" oninput="updateProfileAgeDisplay()"></label>
+            <label title="Spouse's year of birth. Used to calculate their age, Required Minimum Distribution (RMD) schedule, and when survivor filing status applies. Required distributions here always use the IRS Uniform Lifetime Table. If your spouse is more than ten years younger and is the sole beneficiary of the account, the IRS lets you use the Joint Life table instead, which gives a smaller distribution; that table is not modeled, so this tool overstates the required distribution for an age-gapped couple. See Limitations in the README."><i>Sp. Birth Year</i><input type="number" id="birthyear2" value="1952" oninput="updateProfileAgeDisplay()"></label>
             <label title="Spouse's birth month. Used with birth year to determine exact ages for RMDs and Social Security. It also sets how much Social Security they are paid in their claiming year, counting from this month to the end of that year."><i>Mo.</i><select id="birthmonth2" onchange="updateProfileAgeDisplay()"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
             <label class="compact-age" title="The age your spouse is expected to live to. After this age the simulation switches to Single filing status and survivor Social Security rules apply."><i>Sp. Life</i><input type="number" id="die2" value="98"></label>
         </div>
@@ -552,6 +552,23 @@
              felt inflation, and under Monte Carlo the index is the drawn path less this gap.
              Derived rather than entered, so it is shown rather than left to be inferred. -->
         <div id="cpi-spread-info" style="margin-top:-4px;margin-bottom:6px;font-size:0.82em;color:#555;"></div>
+        <!-- Medicare base premiums. The figure has always been computed and shown; what is new is
+             the choice of whether it is money OUT on top of the spend goal. Default keeps the old
+             behavior so no saved plan or shared link moves. Enrolment is per person because a
+             spouse's employer plan, the VA or retiree coverage commonly covers just one of them,
+             and it drives the IRMAA surcharge as well as the premium. -->
+        <div class="row">
+            <div><label title="Medicare Part B and Part D base premiums, about $5,800 a year for a couple at 2026 rates and growing at CPI + Inflation. Inside the spend goal: the premium is assumed to be part of the After-Tax Spend you entered, which is how this tool has always worked. On top of the spend goal: the premium is charged as extra money out, so your spend goal is what you have to live on after paying it. The Medicare income surcharge (IRMAA) is charged either way.">Medicare premiums
+                <select id="medicarePremiumMode">
+                    <option value="in-spend">Inside the spend goal (today)</option>
+                    <option value="added">On top of the spend goal</option>
+                </select></label>
+                <div style="font-size:0.78em;color:#666;margin-top:2px;">Default: inside the spend goal. The surcharge (IRMAA) is charged either way.</div></div>
+            <div><label style="font-size:0.9em;" title="Untick anyone who will not enroll in Medicare at 65 - covered by a spouse's employer plan, the VA, or retiree coverage. An unticked person owes no base premium and no IRMAA surcharge. Both ticked by default.">Enrolled at 65
+                <label class="toggle" style="margin-left:6px;"><input type="checkbox" id="medicareEnroll1" checked> You</label>
+                <label class="toggle" style="margin-left:6px;"><input type="checkbox" id="medicareEnroll2" checked> Spouse</label></label>
+                <div style="font-size:0.78em;color:#666;margin-top:2px;">Both enrolled by default. Unticking also removes that person's surcharge.</div></div>
+        </div>
         <!-- One control names the whole year's shape. It replaced two - a withdrawal month and a
              conversion month - which between them could not express the combination people
              actually want: a conversion may not precede the required distribution, and the
@@ -1014,6 +1031,16 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="behavior"><b>11.17f4</b>
+					<strong>Growth within a year now compounds, so every plan ends with slightly less.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>The Growth rate you enter is a compound annual rate, and a plan year is always split in two because money moves partway through it. Each part got a flat share of the year&rsquo;s return, and two parts came to slightly more than the whole year. <strong>Across the sample plans ending wealth falls between about 0.5% and 7%, and it falls in every one of them.</strong> A plan that ends with very little can fall further in percentage terms. Your inputs have not changed.</li>
+					<li>Medicare premiums can now be charged to your plan. Leave the Part B and Part D premiums inside your spending goal, which is what the tool has always assumed, or put them on top so your goal is what you have left after paying them. Either person can be marked as not enrolling at 65, which drops their premium and their surcharge.</li>
+					<li>Five states carry new capital-gains warnings. Washington taxes brokerage gains above roughly $278,000 a year and that is not modeled here. South Carolina, Wisconsin, North Dakota and Montana tax long-term gains more lightly than this tool does.</li>
+					<li>Six more limitations are now written down in the README: required distributions for an age-gapped couple are overstated, losses are not carried forward, inflation-protected bonds cannot be represented, a plan has one state for life, all dividends are priced at qualified rates, and the ACA subsidy is not modeled, only its income ceiling.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.17f4" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="behavior"><b>11.17c2</b>
 					<strong>Two corrections to how gains are taxed, and to which account the tool decides to spend from.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1786,7 +1813,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these six are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1117c2';
+    const V = '?v=1117f4';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

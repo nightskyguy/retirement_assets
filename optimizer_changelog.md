@@ -17,6 +17,38 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.17f4"></a>
+
+## 11.17f4
+
+**Growth within a year now compounds, so every plan ends with slightly less.**  
+*Behavior change: every saved plan and shared link will show lower ending balances than before.*
+
+**Part-year growth was spread evenly instead of compounded.** The Growth rate you enter is a
+compound annual rate, and a plan year is always split in two, because money moves partway through
+it. Each part got a flat share of the year's return, and two parts came to slightly more than the
+whole year. Across the sample plans ending wealth falls between about 0.5% and 7%, and it falls in every
+one of them. Your inputs have not changed; the tool has stopped crediting growth a compound rate
+does not produce. A plan that ends with very little can fall further in percentage terms.
+
+**Medicare premiums can now be charged to your plan.** Leave the Part B and Part D premiums inside
+your spending goal, which is what the tool has always assumed, or put them on top so your goal is
+what you have left after paying them. About $5,800 a year for a couple at today's rates, rising
+faster than general inflation. Either person can be marked as not enrolling at 65, which drops their
+premium and their surcharge.
+
+**Five states carry new capital-gains warnings.** Washington taxes brokerage gains above roughly
+$278,000 a year and that is not modeled here. South Carolina, Wisconsin, North Dakota and Montana
+tax long-term gains more lightly than this tool does. Each says so beside the state selector.
+
+**Six more limitations are now written down** in the README: required distributions for an
+age-gapped couple are overstated, losses are not carried forward, inflation-protected bonds cannot
+be represented, a plan has one state for life, all dividends are priced at qualified rates, and the
+ACA subsidy is not modeled, only its income ceiling. The README also now gives the real reason
+thirteen states are missing.
+
+---
+
 <a id="11.17c2"></a>
 
 ## 11.17c2

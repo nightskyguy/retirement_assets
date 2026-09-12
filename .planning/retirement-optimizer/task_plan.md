@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-09-09**, v11.17b1 in **PR #217** (open, base `main`). Suites **435 / 27 / 61 / 24** (`optimizer_core`, `taxengine`, `taxPaymentPlanner`, `doclinks`), `TestTiers.EXPECTED` pinned to match. Since the review: the drained-IRA leak fixed, the test tiers restructured, `taxengine.tests.js` split out, `P115a` shipped.
+**As of 2026-09-12**, v11.17f4 on branch `worktrees/planning-with-files-status-8ba49e`, not yet merged to `main`. Suites **442 / 32 / 61 / 24** (`optimizer_core`, `taxengine`, `taxPaymentPlanner`, `doclinks`), `TestTiers.EXPECTED` and `.githooks/README.md` pinned to match; in-page badge green at 1001. **An accuracy review on 2026-09-11 (user: "what errors, inaccuracies or omission are left to fix") shipped four fixes and opened nine phases, `P117`-`P125`, all O3.** Shipped: part-year growth now COMPOUNDS (it was spread evenly, which manufactured growth peaking mid-year and landed on the Early/Split/Late comparison - ending wealth falls in all 19 bank households, 0.48% to 6.73% among the 17 ending above $100k); the December settlement credit no longer inflates brokerage BASIS; Medicare base premiums can be charged as an outflow with per-person enrollment (default off); and capital-gains caveats for WA, SC, WI, ND, MT. Muni/tax-exempt interest and under-59.5 penalties were ruled OUT of scope by the user.
 **Planning files pruned 2026-09-02.** Every completed phase keeps a one-line stub below; the bodies are in `.planning/task_completed.md`. Phases nobody is working on are in `task_parked.md`. Findings that are no longer live - fixed defects, superseded claims, the pre-`Pnn` legacy block - are in `findings_archive.md`, and the rules they earned sit at the top of `findings.md` under "Rules earned the hard way".
 The ID migration table is still below. The Open Task Index and the second recency trail were deleted as stale: **the NOW table here is the only priority list.**
 Citations into `findings.md` are by HEADING, never by line number - about half the old line cites were already dead. Keep it that way.
@@ -247,6 +247,261 @@ earlier still wins 353/499 but the RMD reasoning behind it broke, 124 counterexa
 
 **Out of scope for the first pass:** a flat $100k/yr conversion is a candidate ARM, not a strategy;
 shaped policies belong in the grid. No product changes.
+
+## P117: the RMD table is Uniform Lifetime only, and an age-gapped couple is owed a different one  *(NEW 2026-09-11, user-raised, O3)*
+
+`RMD_TABLE` in `taxengine.js` is the **Uniform Lifetime Table** and nothing else. The IRS requires
+the **Joint Life and Last Survivor Table** instead when the sole beneficiary of the account is a
+spouse **more than ten years younger**, and its divisors are larger, so the required distribution is
+smaller.
+
+**Direction, and why it reaches the tool's headline answer.** Too small a divisor means too large an
+RMD, which means too much forced ordinary income, too much tax, and too much IRMAA - and therefore
+an **overstated case for Roth conversions**, which is the question this tool exists to answer. The
+error is not a rounding one for a household with a wide age gap, and it runs for decades.
+
+**The blocker is not the arithmetic, it is the input that does not exist.** The >10-year rule applies
+only while the spouse is the **sole beneficiary for the entire year**. This tool has no beneficiary
+field. Adding the table without one silently assumes sole-spouse beneficiary for every plan that
+happens to have a wide age gap. That is a design decision to take deliberately, not a consequence to
+discover later.
+
+`age-gap-ira-heavy-ca` is in the plan bank and is the household this is measured on.
+
+### Items
+
+- [x] `P117a` Caveat first, and it can ship alone: the README **Limitations** list and the RMD help
+      text say that only the Uniform Lifetime Table is used, that an age-gapped couple entitled to
+      the Joint Life table has its RMDs **overstated**, and that this in turn overstates the case
+      for converting. **SHIPPED v11.17f4.**
+- [ ] `P117b` Decide the beneficiary question: a checkbox ("spouse is the sole beneficiary"), an
+      automatic assumption, or a nerdknob. Write the decision down before building.
+- [ ] `P117c` Add the Joint Life and Last Survivor divisors. It is a two-dimensional table (owner
+      age x spouse age), unlike the one-dimensional table in place, so `getRMDPercentage` grows a
+      spouse-age argument and every caller has to pass it.
+- [ ] `P117d` Gate: >10 years younger AND sole beneficiary AND both alive. On the first death the
+      IRA merges to the survivor (`optimizer_core.js`, the spousal-inheritance block) and the
+      survivor returns to Uniform Lifetime; check that transition explicitly, it is the easy one to
+      get wrong.
+- [ ] `P117e` MEASURE what it is worth across the age gap, on `age-gap-ira-heavy-ca` and a widened
+      variant. The one number the caveat cannot state today is the size.
+- [ ] `P117f` Tests: the divisor is larger than Uniform Lifetime at a 15-year gap; a 10-year gap is
+      NOT eligible (the rule is *more than* ten); the survivor reverts after the first death.
+
+## P118: state capital gains are taxed at the ordinary rate, and five states are wrong for it  *(NEW 2026-09-11, user-raised, O3. Caveats SHIPPED v11.17f4)*
+
+`calculateTaxes` puts `capGains` into `stateAGI` and takes `stateCapGainsTax` as the difference
+between the ordinary tax with and without it (`taxengine.js`, the state-AGI block). So every state
+taxes a realized gain at its full ordinary rate. Five of the modeled states do not work that way.
+
+| state | actual treatment | direction of the tool's error |
+|---|---|---|
+| South Carolina | 44% deduction on net long-term gains | overstates state tax |
+| Wisconsin | 30% exclusion (60% qualifying farm assets) | overstates state tax |
+| North Dakota | up to a 40% deduction | overstates state tax |
+| Montana | reduced long-term rates below the ordinary top rate | overstates state tax |
+| Washington | **7%** above a ~$278,000 standard deduction (2025, indexed), **9.9%** above $1,000,000; retirement accounts and real estate exempt | **understates** state tax |
+
+Washington is the one that runs the other way, and it is the one this tool treats as a pure no-tax
+state (`NO_TAX_SHELL`). Only realized **Brokerage** gains are reachable by it: IRA, Roth and pension
+withdrawals are exempt by statute, so the exposure is exactly the account this tool harvests from.
+
+**`P118a` is DONE** - all five carry a `NOTE` beside the state selector and a README limitation, as
+of v11.17f4. What remains is modeling, and it is worth knowing the cost before committing to it.
+
+### Items
+
+- [x] `P118a` Caveats in the five `NOTE` fields and the README Limitations list. **SHIPPED v11.17f4.**
+- [ ] `P118b` Decide the data shape. A per-state `capGains` descriptor - `{mode: 'deduction'|'exclusion'|'rate'|'separate', value}` - is the smallest thing that covers all five, and Washington needs a `separate` mode with its own deduction and two-tier rate because it is not an income tax at all.
+- [ ] `P118c` Washington specifically: a separate tax on Brokerage gains only, with the retirement-account and real-estate exemptions honored, and its own standard deduction indexed.
+- [ ] `P118d` Sweep the other 33 modeled states for the same class of divergence before calling this closed. Five were found by reading four; the rest were not checked. **Widen the sweep beyond capital gains:** `P121f` found Colorado's Social Security treatment wrong by the same method, so the audit is "what does this state actually do to a retiree's income", not "what does it do to gains".
+- [ ] `P118e` Tests pinning each of the five against a hand-computed figure, and a guard that a state with no `capGains` descriptor still taxes gains at the ordinary rate.
+
+## P119: local income taxes reach a retiree's investment income and are not modeled  *(NEW 2026-09-11, user-raised, O3)*
+
+Ten modeled states already carry a `NOTE` saying their local income taxes are excluded and that
+total tax is therefore **understated**: Maryland (every county, 2.25-3.3%), Indiana (all 92
+counties), New York City and Yonkers (~3.08-3.88%), Ohio school districts, Portland Metro and
+Multnomah County, Philadelphia's School Income Tax, about two dozen Michigan cities, Iowa school
+surtaxes, Nebraska, Pennsylvania. For a Maryland or Indiana resident this is not a rounding error,
+and it is **documented but not modeled** - the worst of both, because the reader is told it is wrong
+and given no way to correct it.
+
+**The user's proposal, and the right scope:** a flat local rate the user enters, applied to income.
+That fits MD, IN, NYC/Yonkers and the Ohio school districts, which all levy on a broad base.
+
+**It does NOT fit two of them, and the phase must say so rather than pretend:**
+
+- **Portland Metro / Multnomah** are threshold-triggered ($125k single / $200k joint), so a flat
+  rate applied to all income overstates them at low income.
+- **Philadelphia's School Income Tax** reaches dividends and some interest only, never retirement
+  distributions or capital gains, so a flat rate on everything badly overstates it.
+
+A flat rate on the state taxable base, entered by the user with the state's own `NOTE` quoting the
+usual range, is honest and useful. Modeling each jurisdiction is not in scope and should be refused
+explicitly if it comes up.
+
+### Items
+
+- [ ] `P119a` One input: local income tax rate, blank meaning none. Default blank, so no existing plan moves.
+- [ ] `P119b` Apply to the state taxable base, after state deductions and exemptions, before credits. Decide and document whether the local tax is itself deductible anywhere (it rides the SALT cap federally, which the engine already models).
+- [ ] `P119c` Each affected state's `NOTE` names its usual range so the user has a figure to type. The `NOTE` text already carries the numbers; it just has to point at the new input.
+- [ ] `P119d` Say plainly in the README that the flat rate cannot express Portland's threshold or Philadelphia's dividend-only base, and which direction each is wrong in.
+- [ ] `P119e` Tests: blank is inert; a rate on a no-income-tax state still applies (Tennessee has no state tax and local taxes are still possible in principle - decide and pin the answer).
+
+## P120: no estate tax, federal or state, and the state thresholds are reachable  *(NEW 2026-09-11, user-raised, O3)*
+
+Nothing in the engine models an estate tax. The terminal row values the estate and stops.
+
+**Why it matters here specifically, and not only for the very rich.** Oregon's exemption is **$1M**
+and Massachusetts' **$2M**, and **neither is indexed**, against a *nominal* terminal wealth thirty
+years out. The plan bank routinely ends between $2M and $26M. The federal exemption is $15M per
+person and made permanent by OBBBA, so for this audience the STATE tax is the one that binds.
+
+**Massachusetts is a cliff, not a bump,** and that is a shape this engine already knows how to think
+about: crossing $2M taxes the ENTIRE estate, not the excess. It belongs with the ACA and IRMAA
+cliffs, not with a bracket. More to the point for this tool's central question: **a Roth
+conversion shrinks the taxable estate by the tax it pays.** A tool that ignores estate tax
+**understates the case for converting** for a resident of those states, which is the opposite of the
+`P117` error and lands on the same decision.
+
+**Scope that keeps this cheap:** it is a TERMINAL-ROW calculation, not a per-year one. One threshold
+and one rate schedule per state, applied once, at the second death, after the basis step-up that
+already runs there.
+
+### Items
+
+- [ ] `P120a` Federal: $15M per person (OBBBA, permanent), portability between spouses, 40% rate. Re-confirm the figure and its indexing against statute before writing it into `TAXData`; it belongs beside the existing OBBBA constants.
+- [ ] `P120b` State thresholds and schedules for the states that levy one. Oregon and Massachusetts are NOT indexed, which is what makes them bite over a long horizon; record indexed-or-not per state as a field, the way `INFLATION_INDEXED` already is. Record cliff-versus-marginal per state too, or Massachusetts will be modeled wrong.
+- [ ] `P120c` Apply on the terminal row, after the `IRC 1014` step-up, and show it as its own line rather than folding it into tax.
+- [ ] `P120d` Decide what the estate tax does to the comparison metrics (`totalNetWealth`, Break Even, the Optimizer objectives). It is a real reduction in what heirs receive, so it belongs in an after-tax legacy figure, but changing `totalNetWealth` moves every ranking in the tool. Decide before building.
+- [ ] `P120e` MEASURE which bank households would owe anything, in which states. If the answer is "almost none", that is a finding worth writing down and the phase can stop at the caveat.
+
+## P121: thirteen states are unmodeled, and the stated reason is not the whole reason  *(NEW 2026-09-11, user-raised, O3)*
+
+Unmodeled: **AR, DE, HI, KS, LA, MO, NJ, NM, OK, RI, UT, VT, WV.** Thirty-eight states plus DC are
+modeled.
+
+The README says the excluded ones are those with "weirdness (e.g. those that tax social security)".
+That is **not sufficient as a reason** - the engine already has an `SSTaxation` field and Connecticut
+uses it at `0.25` - and it is also **not the whole reason**, which is the correction the user made:
+several of the thirteen carry preferential capital-gains treatment, retirement-account exemptions and
+other structure on top of taxing Social Security. `P118` is the same class of problem inside the
+states that ARE modeled, so the two phases share a data shape and should not invent two.
+
+Two of the thirteen, **Louisiana and New Mexico**, are community-property states, which is a
+`BasisStepUp` question as well as a bracket one - the README already flags that treating them as
+common law would understate their terminal wealth.
+
+### Items
+
+- [x] `P121a` Replace the README's "they tax social security" line with the real reason, state by state. A reader who lives in one of the thirteen currently cannot tell whether their state is hard or merely unfinished. **SHIPPED v11.17f4.**
+- [ ] `P121b` Enumerate what each of the thirteen actually needs: brackets, Social Security treatment, retirement-income exclusions, capital-gains treatment, community property. Expect the `P118` descriptor to cover the gains column.
+- [ ] `P121c` Add them in whatever order the enumeration says is cheapest, not alphabetically. Some may be a bracket table and nothing else.
+- [ ] `P121d` `BasisStepUp: 1.00` for Louisiana and New Mexico when they land, with the community-property note the README already promises.
+- [ ] `P121e` A test that every state in the dropdown has the fields the engine reads, so a half-added state cannot ship.
+- [ ] `P121f` **A MODELED state is wrong too, found while writing `P121a`.** Colorado carries `SSTaxation: 0`, which is right from age 65, where its Social Security subtraction is unlimited. From 55 to 64 the full subtraction applies only below $75,000 AGI single / $95,000 joint and is capped at $20,000 above that, so the engine **understates** Colorado tax for a 55-64 retiree over the limit. Plans here routinely start at 60, so those years are real. Caveated in the `NOTE` as of v11.17f4; the fix needs an age-and-AGI-conditional `SSTaxation`, which no state has today.
+
+## P122: a realized loss is written off instead of netted against a gain  *(NEW 2026-09-11, user-raised, O3)*
+
+`clampBrokerageBasis` (`optimizer_core.js`) enforces `BrokerageBasis <= Brokerage` and writes the
+excess basis down on the spot. Its own comment is accurate about the consequence: the engine models
+no capital-loss carryforward, so a plan that dips and recovers is taxed on the whole recovery. The
+error can only ever **overstate** tax, never understate it.
+
+**The user's scoping, and it is the right one:** the $3,000-a-year ordinary offset and an indefinite
+carryforward are a lot of machinery for a modeled household with no lots. **Netting a realized loss
+against a realized gain within the same year** is the part that is both defensible and cheap, and it
+is where most of the value sits.
+
+**What has to be settled first:** the engine has no realized-loss concept at all. A withdrawal from
+an underwater Brokerage account is currently priced at zero gain, not at a negative one. So this is
+not "add a carryforward" - it is "decide whether a sale below basis realizes a loss", and only then
+what may be done with it.
+
+**Where it bites:** Monte Carlo, where down years are the point. A deterministic run at a positive
+growth rate never reaches this code.
+
+### Items
+
+- [x] `P122a` Caveat: the README Limitations list already covers the absence of a carryforward under the cost-basis item. Make it a limitation in its own right, since it is a separate mechanism, and state the overstates-tax direction. **SHIPPED v11.17f4.**
+- [ ] `P122b` Decide whether a Brokerage sale below basis realizes a loss in this model, and write the decision down. Everything else depends on it.
+- [ ] `P122c` Same-year netting only: a realized loss offsets realized gains in that year, floored at zero net gain. No carry, no ordinary offset.
+- [ ] `P122d` MEASURE in Monte Carlo across the bank. If the effect is inside the noise of a 500-path run, say so and stop.
+- [ ] `P122e` A "no free money" test in the existing family: netting may reduce tax owed but may never increase wealth beyond what the gain itself was worth.
+
+## P123: inflation-protected securities and other asset types the model cannot express  *(NEW 2026-09-11, user-raised, O3)*
+
+The tool holds Brokerage as one balance, one basis and one dividend rate. It cannot say what an asset
+IS.
+
+**TIPS is the case worth building, and it needs no lot tracking** - which is what separates it from
+the lot-selection limit the README already documents and which the user ruled out as high-maintenance.
+The inflation accrual on a Treasury Inflation-Protected Security is **taxed as ordinary income in the
+year it accrues, with no cash paid until maturity**. That is phantom income: a real tax bill against
+money the household cannot spend, and it is the whole reason TIPS are usually held in an IRA. This
+tool cannot represent either the phantom income or the reason.
+
+**Tax-exempt and municipal funds are explicitly OUT of scope** - the user excluded them at the top of
+this review, and the README already carries a full limitation for them.
+
+### Items
+
+- [x] `P123a` Caveat: the README says what the tool cannot express about asset types, naming TIPS phantom income specifically and the direction (a plan holding TIPS in a taxable account has its tax **understated**). **SHIPPED v11.17f4.**
+- [ ] `P123b` Decide whether an asset TYPE is a first-class concept or whether TIPS is a single flag on the Brokerage account. The second is much cheaper and probably sufficient.
+- [ ] `P123c` Model the accrual as ordinary income with no cash flow, so the tax is funded by a withdrawal from somewhere else.
+- [ ] `P123d` MEASURE whether it changes any decision, or only the arithmetic. The interesting output is whether the tool can now show the IRA-versus-taxable placement argument.
+
+## P124: a plan that moves state partway through  *(NEW 2026-09-11, user-raised, O3)*
+
+No relocation year exists. One state applies for the whole plan. Retiring in California and moving to
+Nevada is an ordinary plan and a large tax question, and the tool cannot express it.
+
+**The user's workaround is real and should be documented before it is automated:** run the plan in
+state A, stop it at the move year, and start a second plan in state B from the first one's balances.
+
+**Two things do not survive that handoff, and one of them is silent:**
+
+- `BrokerageBasis` **is** a user input, so it can be carried by hand - but only if the user knows to
+  read the final year's Basis column and retype it. Nobody is told this.
+- `magiHistory` is **not** an input and cannot be carried at all. IRMAA is charged on MAGI from two
+  years earlier, and plan B seeds its history from its own first year, so the survivor plan's first
+  two years get the surcharge wrong with nothing on screen to say so.
+
+### Items
+
+- [x] `P124a` Document the two-plan workflow in the README, including the Basis retype and the two-year IRMAA warning. This is the whole deliverable if nothing else is built. **SHIPPED v11.17f4.**
+- [ ] `P124b` Decide whether a move year is worth a first-class input, given that the workaround exists and that a move changes filing-status-independent things (brackets, Social Security treatment, `BasisStepUp` community property) all at once.
+- [ ] `P124c` If built: a move year and a destination state. The `BasisStepUp` fraction is the subtle one - it is decided by the state of residence **at the death**, not at the move.
+- [ ] `P124d` Carry `magiHistory` across the boundary, or the feature reproduces the workaround's own defect with more confidence behind it.
+
+## P125: two caveats with no build behind them  *(NEW 2026-09-11, user-raised, O3)*
+
+Both were settled during the 2026-09-11 accuracy review as **documentation, not code**. They are
+here so they are not lost; neither should grow an implementation.
+
+**Ordinary dividends are not tracked.** Every Brokerage dividend is passed to the tax engine as
+`qualifiedDiv` (14 call sites in `optimizer_core.js`); `ordDivInterest` is never passed at
+all and defaults to zero, with cash interest correctly riding in through `earnedIncome` instead. So
+all dividend income is priced at long-term capital-gains rates. A household holding bond funds,
+REITs, short-held positions or foreign funds has its tax **understated**. The user's ruling: a
+"fraction of dividends" input is fake precision without a real portfolio behind it, so the fix is to
+**say so**, not to add a slider.
+
+**The ACA subsidy is a constraint, never a dollar.** There is no premium, no premium tax credit and
+no applicable-percentage table anywhere in the repo. The FPL cap is enforced as a hard ceiling and a
+breach is reported untenable. The tool can show what staying under the cap COSTS and not what it
+BUYS. The user's ruling: premiums are state-specific and volatile and should not be modeled. The
+**ceiling stays** - the FPL threshold is federal and uniform, it is what serves pre-Medicare
+retirees, and dropping it would discard the `P87` ACA-MAGI correction. The README already says this
+at the ACA strategy section; it is not in the Limitations list, where a reader looking for what the
+tool cannot do will actually look.
+
+### Items
+
+- [x] `P125a` README Limitations: ordinary dividends are not tracked, all dividend income is priced at long-term capital-gains rates, tax is **understated** for anyone holding bond funds, REITs or foreign funds. **SHIPPED v11.17f4.**
+- [x] `P125b` README Limitations: the ACA subsidy itself is not modeled, only the income ceiling - lift the existing sentence from the ACA strategy section so it appears where limitations are listed. **SHIPPED v11.17f4.**
+- [ ] `P125c` Neither item grows code. If a future session proposes a qualified-dividend fraction or an ACA premium model, this phase is the record that both were considered and declined, and why.
 
 ## P116: prune the harnesses and research reports  *(2026-09-09. `a`, `c`, `d` DONE 2026-09-10; `b` OPEN)*
 

@@ -4999,3 +4999,54 @@ A review of PR #217 (user: "several false starts make me wary"), then the fixes 
 landing in Brokerage) - opened, not started. **The harness and report pruning** proposed in the review
 (28 harnesses and 16 reports whose decisions have shipped, 20 and 8 to re-run) is now **`P116`**, at
 O2 by my choice; the user said "I'll undertake it later". Nothing deleted.
+
+## Session: 2026-09-11 (worktree readme-review-updates-c9df11) - accuracy review, four fixes, nine phases
+
+User asked what errors, inaccuracies and omissions are left that affect projection accuracy, ruling
+muni/tax-exempt interest and under-59.5 penalties OUT of scope. A code read produced thirteen items;
+the user dispositioned each; four were built and the rest opened as `P117`-`P125`, all O3.
+
+**Shipped, v11.17f4.** Suites 442/32/61/24, in-page badge green at 1001.
+
+- **Part-year growth now compounds.** `applyGrowth` used `rate * months/12` while the Growth input
+  is a CAGR. Every plan year is split (`preMonths` is 1 or 11), so two parts came to more than the
+  whole year, an excess peaking MID-year - sitting directly on the Early/Split/Late comparison.
+  Five sites, not one: both `applyGrowth` calls, the IRA-goal drawdown floor, and three after-growth
+  timing corrections (December settlement, conversion month, RMD month) that were all first-order
+  linearizations of the same quantity. Now two helpers, `growthFactor` and `timingShift`. The
+  arithmetic corrections for conversion/RMD month were written that way BECAUSE segmenting
+  manufactured growth; that constraint is gone and the comments saying otherwise were corrected.
+  Measured: ending wealth falls in all 19 bank households, 0.48% to 6.73% among the 17 that end above $100k (a $65k plan fell 15%). Verified on
+  `ira-heavy-couple` to the dollar - predicted 0.520% x $6,172,427 = $32,097 against $32,339
+  observed, the whole drop landing on the IRA because spending is fixed and the IRA is the residual.
+- **`P115b` half-done, and the other half REFUSED.** The December credit no longer adds to
+  `BrokerageBasis`: no shares were bought, so it is appreciation on shares already held, and adding
+  it made that growth permanently untaxed. The task_plan's OTHER `P115b` bullet - share the credit
+  by tax paid per source instead of by draw mix - was NOT implemented. Both readings are defensible
+  (the household deferred paying, so the dollars that stayed invested are the ones it would
+  otherwise have liquidated), nothing measured separates them, and the plan text asserted it without
+  evidence. Documented as a choice in the code instead.
+- **Medicare base premiums can be an outflow.** `medicarePremiumMode: 'added'` charges the computed
+  Part B + D premium on top of the spend goal; `medicareEnroll1`/`2` drop a person's premium AND
+  their IRMAA. Default is today's behavior so nothing moves. **The first attempt was wrong and
+  conservation caught it:** adding to `targetSpend` raised the DRAW without creating an OUTFLOW,
+  because surplus is measured against `sim.spendGoal` in `routeSurplusAndConvert` - a $5,805 premium
+  moved assets by $1,610, exactly the extra tax, and the premium itself was re-banked as surplus.
+  Money has to come out of both places. Critical test pins it.
+- **Capital-gains caveats for five states**, verified against sources before writing: WA taxes
+  brokerage gains 7% above ~$278k and 9.9% above $1M with retirement accounts and real estate
+  exempt (tool UNDERSTATES); SC 44%, WI 30%, ND 40%, MT reduced rates (tool OVERSTATES).
+
+**A trap worth remembering: the node suites did not cover this.** All four went green while eleven
+in-page `applyGrowth` tests in `optimizer_tests.js` failed, because they pinned literals of the old
+proportional arithmetic and node never runs that tier. Only the browser badge showed it. They were
+rewritten to derive the expectation from `Math.pow` inline - deliberately NOT by calling
+`growthFactor`, which would have agreed with itself whatever the engine did.
+
+### What is deliberately NOT done
+
+`P117`-`P125` are open and untouched. Several carry a caveat as item `a` that can ship alone without
+the build behind it, and `P125` is nothing BUT caveats (ordinary dividends are not tracked, the ACA
+subsidy is a constraint and never a dollar) - both settled as documentation, neither to grow code.
+The ACA ceiling STAYS: the user proposed dropping ACA entirely, but the FPL threshold is federal and
+uniform while only the premiums are state-specific, and dropping it would discard the `P87` fix.

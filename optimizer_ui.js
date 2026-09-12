@@ -752,6 +752,13 @@ function getInputs() {
         // P108b. '' is today's behavior (tax leaves with the withdrawal); the engine only
         // acts on 'december', so an empty select must arrive as undefined.
         taxSettlement: val('taxSettlement') || undefined,
+        // Medicare base premiums. 'in-spend' is today's behavior and the engine acts only on
+        // 'added', so an empty or missing select must arrive as undefined rather than as a string
+        // the engine would not recognize. Enrolment defaults to TRUE, so the value sent is the
+        // checkbox state and an absent control reads as enrolled.
+        medicarePremiumMode: (val('medicarePremiumMode') === 'added') ? 'added' : undefined,
+        medicareEnroll1: valChecked('medicareEnroll1') !== false,
+        medicareEnroll2: valChecked('medicareEnroll2') !== false,
         // P28jk. Same convention: '' is today's behavior (the conversion rides the withdrawal
         // month), and the engine acts only on 'early' / 'late'.
         fixedTaxIndexing: !!valChecked('fixedTaxIndexing'),
@@ -5828,6 +5835,7 @@ const OPT_LONG_TO_SHORT = {
     convertExcessToRoth:'mc', fundConversionWithCash:'fcc', extraConversionAmount:'eca', iraBaseGoal:'ibg',
     convEndYear:'cey', convEndMode:'cem', irmaaMarginMode:'imm', fixedTaxIndexing:'fti',
     withdrawTiming:'wt', taxSettlement:'txs',
+    medicarePremiumMode:'mpm', medicareEnroll1:'me1', medicareEnroll2:'me2',
     advisorFeeAmount:'af', advisorFeeMode:'afm', advisorFeeScope:'afs',
     birthyear1:'by1', birthmonth1:'bm1', die1:'d1', startAge:'sa',
     birthyear2:'by2', birthmonth2:'bm2', die2:'d2', hasSpouse:'hs',

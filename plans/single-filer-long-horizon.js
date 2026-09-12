@@ -35,8 +35,8 @@ const PLAN = {
         viability: {
             funded: "30/30",
             fundsEveryYear: true,
-            endingIRA: 2690759,
-            peakIRAYear: 16,
+            endingIRA: 2652982,
+            peakIRAYear: 15,
             acaBreachYears: 0
         },
         origin: "READ BY `betr_harness.js`. Its `nYears: 40` is a cap, not the horizon - the plan funds 30 years and ends at the death age.",

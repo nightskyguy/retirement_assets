@@ -103,6 +103,9 @@ const OPT_DELTA_COLUMNS = core.OPT_DELTA_COLUMNS;
 const OPT_BASELINE_REQUIRES = core.OPT_BASELINE_REQUIRES;
 const OPTIMIZER_OBJECTIVES = core.OPTIMIZER_OBJECTIVES;
 const taxCreepFactor = core.taxCreepFactor;
+const growthFactor = core.growthFactor;
+const applyGrowth = core.applyGrowth;
+const timingShift = core.timingShift;
 const IRMAA_MARGIN_MODES = core.IRMAA_MARGIN_MODES;
 const IRMAA_MARGIN_DEFAULT = core.IRMAA_MARGIN_DEFAULT;
 const irmaaMarginModeOf = core.irmaaMarginModeOf;
@@ -4341,6 +4344,145 @@ test('accounting: withdrawal columns include conversions, decompose correctly, a
 // inconsistent. The defect was on the income statement: the dividend legitimately entered Cash, and
 // separately shrank the withdrawal the plan needed to make. Only an economic or flow invariant sees
 // that, so that is what these assert. A balance reconciliation here would be vacuous.
+// ── P115b: the December settlement credit is a GAIN, so basis does not move ───────────────────
+// The credit is the growth the deferred tax dollars earn by staying invested to year end. It used
+// to be added to `BrokerageBasis` as well as to the balance, on the reasoning that it is "money
+// that was never withdrawn, not a gain" - but no shares were bought, so it is appreciation on
+// shares already held and basis rises only on a purchase. Crediting it made that growth
+// permanently untaxed: it escaped capital gains on every later sale.
+//
+// THE SHAPE OF THE TEST. December settlement changes only the growth credit, never the withdrawal
+// cascade, so in year 0 the two settlement modes make identical purchases and identical sales.
+// Ending BALANCE must therefore differ (by the credit) while ending BASIS must be IDENTICAL.
+// A basis assertion alone would be vacuous - it has to be paired with proof the credit fired.
+test.critical('P115b: the December tax credit raises the brokerage balance but never its basis', () => {
+    const bank = _planBank;
+    if (!bank) return;   // browser tier: the bank is not loaded there
+    // A household that still HOLDS a brokerage account by the year under test. The bank's
+    // brokerage-light plans drain theirs, and a drained account cannot show a basis error at all -
+    // which is the same reason `P115b` could not be sized when it was first written up.
+    const base = { ...bank.get('taxable-heavy-new-york').inputs, withdrawTiming: 'early' };
+    const dec  = simulate({ ...base, taxSettlement: 'december' });
+    const wd   = simulate({ ...base, taxSettlement: 'withdrawal' });
+    const d0 = dec.log[0], w0 = wd.log[0];
+
+    // The credit must actually have fired, or the basis assertion below proves nothing.
+    assert((d0['-taxCarryCredit'] ?? 0) > 0,
+        `test setup: December settlement must produce a credit, got ${d0['-taxCarryCredit']}`);
+    assert(d0.Brokerage > w0.Brokerage,
+        'the deferred tax dollars must leave a larger brokerage balance');
+
+    // Same purchases, same sales, so the same basis. This is the assertion that fails on the defect.
+    assertNear(d0.Basis, w0.Basis,
+        'a growth credit is not a purchase: brokerage basis must not move with it', 0.01);
+    // And the unrealized gain is correspondingly larger, which is the tax that was escaping.
+    assert((d0.Brokerage - d0.Basis) > (w0.Brokerage - w0.Basis),
+        'the credit must sit in the taxable gain, not be sheltered inside basis');
+});
+
+// ── Medicare base premiums as an OUTFLOW, and per-person enrollment ────────────────────────────
+// The Part B + D premium was always computed and never deducted, on the assumption that it lives
+// inside the spend goal - an assumption nothing checked. `medicarePremiumMode: 'added'` charges it.
+const MED_BASE = () => ({
+    ...(_planBank ? _planBank.get('ira-heavy-couple').inputs : {}),
+    nYears: 1, convertExcessToRoth: false, extraConversionAmount: 0,
+    birthyear1: 1955, birthyear2: 1955,       // both already past 65, so the premium is live in year 0
+    growth: 0, dividendRate: 0, cashYield: 0, inflation: 0, cpi: 0,   // isolate the outflow from growth
+});
+const _medAssets = l => (l.IRA1 || 0) + (l.IRA2 || 0) + (l.Roth1 || 0) + (l.Roth2 || 0)
+                      + (l.Brokerage || 0) + (l.Cash || 0);
+
+test('Medicare premiums: the default mode is inert, and names today behavior', () => {
+    if (!_planBank) return;
+    const base = MED_BASE();
+    const absent = simulate({ ...base });
+    const named  = simulate({ ...base, medicarePremiumMode: 'in-spend' });
+    assertNear(absent.finalNW, named.finalNW,
+        "an absent mode must mean 'in-spend' exactly", 0.01);
+    assert((absent.log[0].Medicare ?? 0) > 0,
+        'test setup: the premium must be live, or this proves nothing');
+});
+
+test.critical('Medicare premiums: charging them removes the premium AND the tax on raising it', () => {
+    if (!_planBank) return;
+    // THE INVARIANT THAT CAUGHT THE FIRST ATTEMPT. Raising `targetSpend` alone drew the money, paid
+    // the tax on the draw, and banked the rest straight back as surplus - so a $5,805 premium moved
+    // total assets by $1,610, the extra tax, and the premium never left. Surplus is measured against
+    // the spend goal in routeSurplusAndConvert, so the premium has to come out THERE as well.
+    // Growth is off in this fixture, so the balance sheet has to close to the dollar.
+    const base = MED_BASE();
+    const inSpend = simulate({ ...base });
+    const added   = simulate({ ...base, medicarePremiumMode: 'added' });
+    const a = inSpend.log[0], b = added.log[0];
+
+    const premium = b.Medicare ?? 0;
+    const extraTax = (b.totalTax ?? 0) - (a.totalTax ?? 0);
+    assert(premium > 0, `test setup: the premium must be live, got ${premium}`);
+    assertNear(_medAssets(a) - _medAssets(b), premium + extraTax,
+        'assets must fall by the premium plus the tax on raising it, and by nothing else', 1);
+});
+
+test('Medicare premiums: per-person enrollment drops that person premium and their IRMAA share', () => {
+    if (!_planBank) return;
+    // Not everyone 65+ is enrolled - a spouse's employer plan, the VA, retiree coverage - and in a
+    // couple it is often true of one of them. Enrolment decides the premium and the surcharge
+    // together, so both must follow the flag.
+    const base = { ...MED_BASE(), medicarePremiumMode: 'added' };
+    const both = simulate({ ...base }).log[0];
+    const one  = simulate({ ...base, medicareEnroll2: false }).log[0];
+    const none = simulate({ ...base, medicareEnroll1: false, medicareEnroll2: false }).log[0];
+
+    assertNear(one.Medicare, both.Medicare / 2,
+        'dropping one of two enrolees must halve the premium', 1);
+    assert((none.Medicare ?? 0) === 0, 'nobody enrolled must owe no premium at all');
+    assert((none.IRMAA ?? 0) === 0, 'nobody enrolled must owe no surcharge either');
+});
+
+// ── Part-year growth is MULTIPLICATIVE ────────────────────────────────────────────────────────
+// The Growth input is a CAGR, so a year cut into segments must return exactly what one 12-month
+// call returns. Under the old proportional `applyGrowth` it did not: two segments gave
+// `1 + g + g^2*m*(12-m)/144`, an excess peaking at `B*g^2/4` a year IN THE MIDDLE of the year - and
+// since every plan year here is split at `preMonths`, that artifact sat directly on the
+// Early/Split/Late comparison, handing an interior withdrawal month a win it had not earned.
+//
+// These assert the CONTRACT (`f(a)*f(b) === f(a+b)`), not the dollar figures a particular plan
+// produces, so a later rate or fixture change cannot make them stale.
+test.critical('part-year growth compounds: splitting a year cannot manufacture growth', () => {
+    for (const g of [0.06, 0.09, -0.20, 0]) {
+        for (const m of [1, 3, 6, 11]) {
+            const whole = { X: 1000000 };
+            applyGrowth(whole, { X: g }, 12);
+
+            const split = { X: 1000000 };
+            applyGrowth(split, { X: g }, m);
+            applyGrowth(split, { X: g }, 12 - m);
+
+            assertNear(split.X, whole.X,
+                `g=${g} split at month ${m}: a segmented year must equal an unsegmented one`, 0.01);
+        }
+    }
+});
+
+test('growthFactor: full year is exact, and a wipeout does not return NaN', () => {
+    // months === 12 must return `1 + rate` and not `Math.pow(1 + rate, 1)`: those differ in the last
+    // bit, and every full-year caller has to stay bit-identical.
+    assert(growthFactor(0.06, 12) === 1.06, 'a full year must be exactly 1 + rate');
+    assert(growthFactor(0, 5) === 1, 'a zero rate earns nothing over any span');
+    // A fractional power of a non-positive base is NaN; the balance is wiped instead.
+    assert(growthFactor(-1, 6) === 0, 'a -100% rate must wipe the balance, not return NaN');
+    assert(Number.isFinite(growthFactor(-1.5, 6)), 'a rate worse than -100% must stay finite');
+    // Monotonic in the span, which is what makes `timingShift` change sign with its argument.
+    assert(growthFactor(0.06, 3) < growthFactor(0.06, 9), 'a longer span must earn more');
+});
+
+test('timingShift: reverses sign when the move is later in the year, and is zero at no move', () => {
+    // A conversion LATER than the spending withdrawal passes a negative span, and the shift must
+    // reverse on its own rather than needing a branch at the call site.
+    assert(timingShift(100000, 0.06, 0, 11) === 0, 'no move must shift nothing');
+    assert(timingShift(100000, 0.06, 10, 1) > 0, 'moving earlier must credit');
+    assert(timingShift(100000, 0.06, -10, 1) < 0, 'moving later must debit');
+});
+
 test.critical('no free money: a dividend cannot create wealth (same total return, split two ways)', () => {
     // Identical 8% total return. A takes it all as growth; B takes 6% growth + 2% dividend with DRIP
     // on, so B reinvests every dividend and compounds the same way. The ONLY real difference is that

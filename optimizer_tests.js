@@ -187,97 +187,89 @@ function runTests() {
 	);
 	
 
+	// PART-YEAR GROWTH IS COMPOUNDED, NOT SPREAD EVENLY. These tests exist to cover ARBITRARY
+	// account names, and they used to pin literals of the old proportional arithmetic
+	// (bal * rate * months/12). The expectation is now derived from the contract instead: the
+	// Growth input is a CAGR, so a fraction m/12 of a year earns (1+r)^(m/12) - 1.
+	//
+	// Written out with Math.pow here rather than by calling growthFactor, deliberately. An
+	// expectation built from the function under test agrees with itself whatever it does; this one
+	// fails if the engine ever goes back to spreading the rate evenly.
+	const expGains = (bals, rates, m) => Object.fromEntries(
+		Object.keys(bals).map(k => [k, bals[k] * (Math.pow(1 + rates[k], m / 12) - 1)]));
+	const expBals = (bals, rates, m) => Object.fromEntries(
+		Object.keys(bals).map(k => [k, bals[k] * Math.pow(1 + rates[k], m / 12)]));
+
 	// Test 1: 3 months growth with non-standard account names
 	let balances1 = {TreasuryBonds: 10000, MuniBonds: 5000, Checking: 2000};
 	let rates1 = {TreasuryBonds: 0.08, MuniBonds: 0.08, Checking: 0.04};
+	let start1 = {...balances1};
 	let gains1 = applyGrowth(balances1, rates1, 3);
-	assertEqual(
-		gains1,
-		{TreasuryBonds: 200, MuniBonds: 100, Checking: 20},
-		"applyGrowth: 3 months with custom account names"
-	);
-	assertEqual(
-		balances1,
-		{TreasuryBonds: 10200, MuniBonds: 5100, Checking: 2020},
-		"applyGrowth: balances updated for custom account names"
-	);
+	assertEqual(gains1, expGains(start1, rates1, 3),
+		"applyGrowth: 3 months with custom account names");
+	assertEqual(balances1, expBals(start1, rates1, 3),
+		"applyGrowth: balances updated for custom account names");
 
 	// Test 2: 6 months growth with mixed standard and custom names
 	let balances2 = {IRA1: 10000, CryptoAccount: 5000, RealEstate: 20000};
 	let rates2 = {IRA1: 0.06, CryptoAccount: 0.20, RealEstate: 0.04};
+	let start2 = {...balances2};
 	let gains2 = applyGrowth(balances2, rates2, 6);
-	assertEqual(
-		gains2,
-		{IRA1: 300, CryptoAccount: 500, RealEstate: 400},
-		"applyGrowth: 6 months with mixed standard and custom account names"
-	);
+	assertEqual(gains2, expGains(start2, rates2, 6),
+		"applyGrowth: 6 months with mixed standard and custom account names");
 
 	// Test 3: 1 month growth with unique account name
 	let balances3 = {HighYieldSavings: 12000};
 	let rates3 = {HighYieldSavings: 0.048};
+	let start3 = {...balances3};
 	let gains3 = applyGrowth(balances3, rates3, 1);
-	assertEqual(
-		gains3,
-		{HighYieldSavings: 48},
-		"applyGrowth: 1 month with unique account name"
-	);
+	assertEqual(gains3, expGains(start3, rates3, 1),
+		"applyGrowth: 1 month with unique account name");
 
 	// Test 4: 9 months growth with completely custom names
 	let balances4 = {Portfolio_A: 10000, Portfolio_B: 8000, EmergencyFund: 5000};
 	let rates4 = {Portfolio_A: 0.08, Portfolio_B: 0.08, EmergencyFund: 0.03};
+	let start4 = {...balances4};
 	let gains4 = applyGrowth(balances4, rates4, 9);
-	assertEqual(
-		gains4,
-		{Portfolio_A: 600, Portfolio_B: 480, EmergencyFund: 112.5},
-		"applyGrowth: 9 months with completely custom account names"
-	);
+	assertEqual(gains4, expGains(start4, rates4, 9),
+		"applyGrowth: 9 months with completely custom account names");
 
 	// Test 5: Negative growth with custom account name
 	let balances5 = {HedgeFund: 50000, Commodities: 30000};
 	let rates5 = {HedgeFund: -0.12, Commodities: -0.08};
+	let start5 = {...balances5};
 	let gains5 = applyGrowth(balances5, rates5, 4);
-	assertEqual(
-		gains5,
-		{HedgeFund: -2000, Commodities: -800},
-		"applyGrowth: 4 months negative rate with custom account names"
-	);
-	assertEqual(
-		balances5,
-		{HedgeFund: 48000, Commodities: 29200},
-		"applyGrowth: balances decreased for custom accounts"
-	);
+	assertEqual(gains5, expGains(start5, rates5, 4),
+		"applyGrowth: 4 months negative rate with custom account names");
+	assertEqual(balances5, expBals(start5, rates5, 4),
+		"applyGrowth: balances decreased for custom accounts");
 
-		// Test 6: Combined scenario with custom names - 3 months then 9 months
+		// Test 6: Combined scenario with custom names - 3 months then 9 months.
+		// ALSO THE MULTIPLICATIVE CHECK: 3 months then 9 must equal one 12-month call, because
+		// compounding is exactly multiplicative. Under the old proportional model it did not.
 		let balances6 = {SEP_IRA: 10000, HSA: 5000};
 		let rates6 = {SEP_IRA: 0.12, HSA: 0.05};
+		let start6 = {...balances6};
 		let gainsFirst3 = applyGrowth(balances6, rates6, 3);
+		let mid6 = {...balances6};
 		let gainsLast9 = applyGrowth(balances6, rates6, 9);
 		let totalGains6 = combineGains(gainsFirst3, gainsLast9);
-		assertEqual(
-			gainsFirst3,
-			{SEP_IRA: 300, HSA: 62.5},
-			"applyGrowth: first 3 months with custom account names"
-		);
-		assertEqual(
-			gainsLast9,
-			{SEP_IRA: 927, HSA: 189.84375},
-			"applyGrowth: last 9 months with custom account names"
-		);
-		assertEqual(
-			totalGains6,
-			{SEP_IRA: 1227, HSA: 252.34375},
-			"applyGrowth: combined gains with custom account names"
-		);
+		assertEqual(gainsFirst3, expGains(start6, rates6, 3),
+			"applyGrowth: first 3 months with custom account names");
+		assertEqual(gainsLast9, expGains(mid6, rates6, 9),
+			"applyGrowth: last 9 months with custom account names");
+		assertEqual(totalGains6, expGains(start6, rates6, 12),
+			"applyGrowth: combined gains with custom account names");
+		assertEqual(balances6, expBals(start6, rates6, 12),
+			"applyGrowth: 3 months then 9 lands exactly where one full year does");
 
 		// Test 7: Account names with special characters
 		let balances7 = {"401k_Main": 25000, "529_College": 15000, "IRA-Spouse": 10000};
 		let rates7 = {"401k_Main": 0.10, "529_College": 0.07, "IRA-Spouse": 0.08};
+		let start7 = {...balances7};
 		let gains7 = applyGrowth(balances7, rates7, 6);
-		assertEqual(
-			gains7,
-			{"401k_Main": 1250, "529_College": 525, "IRA-Spouse": 400},
-			"applyGrowth: 6 months with special characters in account names"
-		);
+		assertEqual(gains7, expGains(start7, rates7, 6),
+			"applyGrowth: 6 months with special characters in account names");
 
 
 	
@@ -2886,7 +2878,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 435, taxengine: 32, taxPaymentPlanner: 61, doclinks: 24, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 443, taxengine: 32, taxPaymentPlanner: 61, doclinks: 26, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

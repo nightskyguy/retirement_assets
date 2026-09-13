@@ -736,7 +736,7 @@ var TAXData = {
 		STATE: 'Colorado',
 		BasisStepUp: 0.50,
 		YEAR: 2026,
-		NOTE: 'Retirement income: as of 2026, Colorado removed all dollar caps on the pension/annuity/IRA subtraction for filers 55+ (the prior $20,000 age 55–64 / $24,000 age 65+ caps no longer apply). Fully exempt once at least one spouse is 55 or older.',
+		NOTE: 'Retirement income: as of 2026, Colorado removed all dollar caps on the pension/annuity/IRA subtraction for filers 55+ (the prior $20,000 age 55–64 / $24,000 age 65+ caps no longer apply). Fully exempt once at least one spouse is 55 or older. Social Security: Colorado is treated here as not taxing benefits, which is correct from age 65, where the subtraction is unlimited. From 55 to 64 the full subtraction applies only below $75,000 AGI (single) or $95,000 (joint) and is capped at $20,000 above that, so tax is understated for a Colorado retiree in that age band with income over the limit.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: { mode: 'full', types: ['pension', 'ira'], ageGate: 55 },
 		FLAT_RATE: 0.044,
@@ -866,7 +866,7 @@ var TAXData = {
 		BasisStepUp: 0.50,
 		YEAR: 2026,
 		INFLATION_INDEXED: false,
-		NOTE: 'Retirement income: Montana allows a small income-tested retirement subtraction (being phased out) that this calculator does not apply, so tax may be overstated for lower-income retirees. Separately, the standard deduction (20% of AGI, capped at $10,160 MFJ / $5,080 Single) is approximated using the cap, which may understate tax at lower incomes where the true 20%-of-AGI amount would be smaller than the cap. Bracket thresholds are not inflation-adjusted.',
+		NOTE: 'Retirement income: Montana allows a small income-tested retirement subtraction (being phased out) that this calculator does not apply, so tax may be overstated for lower-income retirees. Separately, the standard deduction (20% of AGI, capped at $10,160 MFJ / $5,080 Single) is approximated using the cap, which may understate tax at lower incomes where the true 20%-of-AGI amount would be smaller than the cap. Bracket thresholds are not inflation-adjusted. Capital gains: this calculator taxes capital gains at the full ordinary state rate. Montana instead taxes long-term capital gains at reduced rates below its ordinary top rate. Tax on a brokerage withdrawal is therefore overstated for this state, and the overstatement grows with the size of the gain realized, so a plan that harvests a large gain in one year is penalized most.',
 		SSTaxation: 0.85,
 		MFJ: {
 			std: 10160,  // MT: 20% of AGI, capped at $10,160 (2024); using cap as approximation
@@ -887,6 +887,7 @@ var TAXData = {
 	// NORTH DAKOTA - HB 1158 rate cuts eff. 2024; brackets NOT inflation-indexed — unchanged through 2026
 	ND: {
 		STATE: 'North Dakota',
+		NOTE: 'Capital gains: this calculator taxes capital gains at the full ordinary state rate. North Dakota instead allows a deduction of up to 40% of capital gains income. Tax on a brokerage withdrawal is therefore overstated for this state, and the overstatement grows with the size of the gain realized, so a plan that harvests a large gain in one year is penalized most.',
 		BasisStepUp: 0.50,
 		YEAR: 2026,
 		INFLATION_INDEXED: false,
@@ -947,7 +948,7 @@ var TAXData = {
 		BasisStepUp: 0.50,
 		YEAR: 2026,
 		INFLATION_INDEXED: false,
-		NOTE: 'Retirement income: South Carolina allows a deduction of up to $10,000 of retirement income (401(k), IRA, or pension) for filers 65+, plus a separate age-based deduction of up to $15,000 (the two are coordinated, not additive). This calculator does not apply either deduction, so tax is overstated for retirees 65 and older.',
+		NOTE: 'Retirement income: South Carolina allows a deduction of up to $10,000 of retirement income (401(k), IRA, or pension) for filers 65+, plus a separate age-based deduction of up to $15,000 (the two are coordinated, not additive). This calculator does not apply either deduction, so tax is overstated for retirees 65 and older. Capital gains: this calculator taxes capital gains at the full ordinary state rate. South Carolina instead allows a 44% deduction on net long-term capital gains. Tax on a brokerage withdrawal is therefore overstated for this state, and the overstatement grows with the size of the gain realized, so a plan that harvests a large gain in one year is penalized most.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 'FEDERAL',  // SC uses federal standard deduction (which IS inflation-adjusted)
@@ -979,7 +980,7 @@ var TAXData = {
 		STATE: 'Wisconsin',
 		BasisStepUp: 1.00,
 		YEAR: 2025,
-		NOTE: 'Retirement income: starting with the 2025 tax year (filed 2026), Wisconsin exempts up to $24,000/person ($48,000 for a married couple) of pension/IRA income for filers 67+, with no income limit. Brackets reflect 2025 values. Standard deduction phases out at higher incomes — base amounts are used here, so results may understate tax for high-income filers.',
+		NOTE: 'Retirement income: starting with the 2025 tax year (filed 2026), Wisconsin exempts up to $24,000/person ($48,000 for a married couple) of pension/IRA income for filers 67+, with no income limit. Brackets reflect 2025 values. Standard deduction phases out at higher incomes; base amounts are used here, so results may understate tax for high-income filers. Capital gains: this calculator taxes capital gains at the full ordinary state rate. Wisconsin instead excludes 30% of net long-term capital gains (60% for qualifying farm assets). Tax on a brokerage withdrawal is therefore overstated for this state, and the overstatement grows with the size of the gain realized, so a plan that harvests a large gain in one year is penalized most.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: { mode: 'cap', types: ['pension', 'ira'], capPerPerson: 24000, ageGate: 67 },
 		MFJ: {
@@ -1031,7 +1032,8 @@ TAXData.NH = { STATE: 'New Hampshire', ...NO_TAX_SHELL,
 TAXData.SD = { STATE: 'South Dakota', ...NO_TAX_SHELL };
 TAXData.TN = { STATE: 'Tennessee', ...NO_TAX_SHELL };
 TAXData.TX = { STATE: 'Texas', ...NO_TAX_SHELL, BasisStepUp: 1.00 };
-TAXData.WA = { STATE: 'Washington', ...NO_TAX_SHELL, BasisStepUp: 1.00 };
+TAXData.WA = { STATE: 'Washington', ...NO_TAX_SHELL, BasisStepUp: 1.00,
+    NOTE: 'Washington levies no income tax, but it DOES tax long-term capital gains: 7% on gain above a standard deduction of about $278,000 (2025, indexed annually), and 9.9% on gain above $1,000,000. Retirement accounts and real estate are exempt, so IRA, Roth and pension withdrawals are unaffected; only realized brokerage gains would be taxed. This calculator does not apply it, so tax is understated for a Washington resident whose brokerage gains in a single year clear that deduction - which a large harvest year can do.' };
 TAXData.WY = { STATE: 'Wyoming', ...NO_TAX_SHELL };
 
 // ─────────────────────────────────────────────────────────────────────────

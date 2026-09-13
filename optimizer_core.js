@@ -261,11 +261,14 @@ function irmaaMarginDollars(inputs, threshold, status, effCpiRate, medicareRate,
 
 // Filers who will be enrolled in Medicare by the time THIS year's MAGI is charged, i.e. who are
 // already past ELIGIBILITY_AGE + LOOKBACK. Deliberately NOT yr.onMedicare: the tier ceiling switches
-// on at 63, when nobody is enrolled yet, so pricing the margin off the current enrolment count would
+// on at 63, when nobody is enrolled yet, so pricing the margin off the current enrollment count would
 // zero it out at exactly the ages the ceiling first bites.
-function onMedicareAtCharge(age1, age2, alive1, alive2) {
+// `enroll1`/`enroll2` default to true so the four-argument form still means "both enrolled", which
+// is what every caller written before per-person enrollment existed meant. A person who is not
+// enrolling owes no surcharge, so the ceiling must not be priced as though they will.
+function onMedicareAtCharge(age1, age2, alive1, alive2, enroll1 = true, enroll2 = true) {
     const gate = TAXData.IRMAA.ELIGIBILITY_AGE + TAXData.IRMAA.LOOKBACK;
-    return (alive1 && age1 >= gate ? 1 : 0) + (alive2 && age2 >= gate ? 1 : 0);
+    return (alive1 && age1 >= gate && enroll1 ? 1 : 0) + (alive2 && age2 >= gate && enroll2 ? 1 : 0);
 }
 
 // Computes QCDs for the simulation year. Returns { qcd1, qcd2, totalQCD }.
@@ -697,22 +700,69 @@ function combineGains(gains1, gains2) {
 
 
 
+/**
+ * Growth factor for a FRACTION of a year, under the rate the inputs declare.
+ *
+ * The Growth input is a CAGR - its own tooltip says so and quotes historical CAGRs - so a part
+ * year earns `(1 + rate)^(months/12)`, not `1 + rate*months/12`. The difference is not cosmetic:
+ * simple proportional growth is not multiplicative, so cutting a year into segments MANUFACTURES
+ * growth. Two segments returned `1 + g + g^2*m*(12-m)/144` where one returned `1 + g`, an excess
+ * peaking at `B*g^2/4` a year - $6,125 on $5M at 7% - and, far worse, peaking in the MIDDLE of the
+ * year. Every plan year here is split (preMonths is 1 or 11), so the artifact landed squarely on
+ * the Early/Split/Late withdrawal-month comparison this engine exists to let a user make: an
+ * interior month won by construction rather than on the merits. See findings.md, "Splitting a year
+ * into more growth segments MANUFACTURES growth".
+ *
+ * Compounding is exactly multiplicative, so `f(a) * f(b) === f(a+b)` and a year may now be cut
+ * into as many segments as the model needs with no excess at all.
+ *
+ * `months === 12` returns `1 + rate` rather than `Math.pow(1 + rate, 1)`: they differ in the last
+ * bit (`(1+0.06)-1` is 0.06000000000000005, not 0.06), and full-year callers must stay exact.
+ * A rate of -100% or worse wipes the balance rather than returning NaN from a fractional power of
+ * a non-positive base.
+ */
+function growthFactor(rate, months) {
+    if (months === 12) return 1 + rate;
+    const base = 1 + rate;
+    return base <= 0 ? 0 : Math.pow(base, months / 12);
+}
+
 /// Now allows specification of the number of months. Defaults to 12.
 function applyGrowth(balances, growthRates, months = 12) {
     const gains = {}
     let gain = 0;
-    const periodRate = months / 12;  // Fraction of year
 
     for (const key in balances) {
         if (key in growthRates) {
-            // Apply proportional growth: balance * (rate * months/12)
-            gain = balances[key] * growthRates[key] * periodRate;
+            // Compound growth for the segment: balance * ((1 + rate)^(months/12) - 1).
+            // The full-year case keeps the original expression so it stays bit-identical.
+            gain = (months === 12)
+                ? balances[key] * growthRates[key]
+                : balances[key] * (growthFactor(growthRates[key], months) - 1);
             gains[key] = gain;
             balances[key] = Math.max(0, balances[key] + gain);
         }
         // If no matching rate, balance remains unchanged
     }
     return gains;  // Return the amounts gained/lost
+}
+
+/**
+ * The three after-growth timing corrections (December tax settlement, conversion month, RMD month)
+ * all move an amount from one part of the year to another AFTER `applyGrowth` has already run for
+ * `postMonths`. Each is the same quantity:
+ *
+ *     shift = amount * (f(shiftMonths) - 1) * f(postMonths)
+ *
+ * the growth the amount earns over `shiftMonths`, itself compounded for the `postMonths` that have
+ * already been applied to the balance it is being added to. Under the old proportional model these
+ * were written `amount * rate * shiftMonths/12`, which is this expression's first-order term.
+ *
+ * `shiftMonths` may be negative - a conversion later in the year than the spending withdrawal -
+ * and the factor is then below 1, so the shift reverses sign on its own.
+ */
+function timingShift(amount, rate, shiftMonths, postMonths) {
+    return amount * (growthFactor(rate, shiftMonths) - 1) * growthFactor(rate, postMonths);
 }
 
 
@@ -956,7 +1006,9 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         const IRMAARelevant = maxAliveAge >= TAXData.IRMAA.ELIGIBILITY_AGE + TAXData.IRMAA.LOOKBACK;
         if (IRMAARelevant) {
             limit = rawThreshold - irmaaMarginDollars(inputs, rawThreshold, status, effCpi, medicareRate,
-                                                      onMedicareAtCharge(age1, age2, alive1, alive2)) - 1;
+                                                      onMedicareAtCharge(age1, age2, alive1, alive2,
+                                                                         inputs.medicareEnroll1 !== false,
+                                                                         inputs.medicareEnroll2 !== false)) - 1;
         } else {
             // Too young for the tier to mean anything yet, so degrade to the federal bracket holding
             // the same dollar figure. No IRMAA cliff is in play here, so no margin either.
@@ -1605,7 +1657,15 @@ function resolveHousehold(sim, yr) {
     // the surcharge - a 61-year-old household pays nothing no matter how large the conversion
     // income.
     const medicareAge = TAXData.IRMAA.ELIGIBILITY_AGE;
-    yr.onMedicare = (yr.alive1 && yr.age1 >= medicareAge ? 1 : 0) + (yr.alive2 && yr.age2 >= medicareAge ? 1 : 0);
+    // PER-PERSON ENROLMENT. Not everyone 65+ is on Medicare: a person may be covered by a spouse's
+    // employer plan, by the VA, or by retiree coverage, and in a couple that is often true of ONE
+    // of them. Age alone therefore cannot decide who pays, and it decides two things at once - the
+    // base premium AND the IRMAA surcharge - so both follow the same flag. Absent means enrolled,
+    // which is what every existing plan and saved URL means.
+    const enroll1 = inputs.medicareEnroll1 !== false;
+    const enroll2 = inputs.medicareEnroll2 !== false;
+    yr.onMedicare = (yr.alive1 && yr.age1 >= medicareAge && enroll1 ? 1 : 0)
+                  + (yr.alive2 && yr.age2 >= medicareAge && enroll2 ? 1 : 0);
     yr.acaLapsed = acaCapLapsed(yr.age1, yr.age2, yr.alive1, yr.alive2);
     const magiLookback = balance.magiHistory[balance.magiHistory.length - 2];
     yr.IRMAA = calcIRMAA(magiLookback, yr.status, sim.cpiRate, sim.medicareRate, yr.onMedicare);
@@ -1613,10 +1673,19 @@ function resolveHousehold(sim, yr) {
     // (the log row used to recompute this AFTER the year's MAGI push, showing the tier a
     // year early).
     yr.IRMAATier = yr.onMedicare > 0 ? getIRMAATier(magiLookback, yr.status, sim.cpiRate) : '-none-';
-    // Base Medicare Part B + Part D premiums (informational - tracked, not deducted from
-    // spendable; assumed to live inside the spend goal). Grows at CPI + Inflation (user inputs),
-    // not CPI alone.
+    // Base Medicare Part B + Part D premiums. Grows at CPI + Inflation (user inputs), not CPI alone.
+    //
+    // WHETHER THIS IS AN OUTFLOW IS A CHOICE, and it did not used to be one. The figure was tracked
+    // and never deducted, on the assumption that it lives inside the spend goal - an assumption
+    // nothing checked and nothing showed the user. A household that entered its spend goal net of
+    // premiums was silently handed about $5,800 a year (2026 rates, a couple), and the gap WIDENS
+    // every year because `medicareRate` compounds at CPI + Inflation while the spend goal tracks
+    // CPI alone. `medicarePremiumMode: 'added'` charges it as real money out instead. The default
+    // stays 'in-spend', so no existing plan, golden or saved URL moves.
+    //
+    // The IRMAA surcharge is NOT part of this: it is already charged, inside `yr.totalTax`.
     yr.medicareBase = yr.onMedicare * (TAXData.IRMAA.standardPartB + TAXData.IRMAA.standardPartD) * 12 * sim.medicareRate;
+    yr.medicareOutflow = (inputs.medicarePremiumMode === 'added') ? yr.medicareBase : 0;
 
     // Calculate the bracket limits based on: stated limit.
     // let tgtBracketLimit = findLimitByRate('FEDERAL',status,inputs.stratRate)
@@ -2020,6 +2089,20 @@ function resolveSpendTarget(sim, yr) {
     const _schedSetSpend = yr._spendOverride != null;
     yr.targetSpend = (yr.isBracketStrategy || yr.isOrderedStrategy || isGKStrategy || _schedSetSpend)
         ? sim.spendGoal : Math.min(sim.spendGoal, yr.goalLimit);
+
+    // Medicare premiums as real money out, when the user asked for it (`medicarePremiumMode`).
+    // ADDED AFTER THE CEILING CAP, deliberately: `goalLimit` exists to hold DISCRETIONARY spending
+    // inside a tax bracket, and a Part B bill is not discretionary. Capping it would model the
+    // household dropping its health coverage to stay in the 22% bracket.
+    //
+    // THIS LINE ALONE IS NOT ENOUGH, and getting that wrong once is why this comment is here.
+    // `targetSpend` sizes what the plan RAISES; `routeSurplusAndConvert` decides what it CONSUMES,
+    // and it measures consumption against `sim.spendGoal`. Adding the premium here and nowhere else
+    // drew the money, paid the tax on the draw, and banked the rest right back as surplus: a $5,805
+    // premium moved total assets by $1,610 - exactly the extra tax - and the premium itself never
+    // left the household. Money has to be taken out of BOTH, or it is not spent at all.
+    yr.targetSpend += yr.medicareOutflow ?? 0;
+
 
     // P38: size the primary draw against income the household can actually SPEND. yr.possibleIncome
     // (:1226) is GROSS - Social Security, pension and the taxable RMD before any tax is paid - so
@@ -2586,13 +2669,13 @@ function planPrimaryWithdrawals(sim, yr) {
         // Withdraw the fixed amount left after RMDs, or whatever is left in IRAs after leaving room.
         // Intra-year growth correction: iraGoalNominal is an END-OF-YEAR target, but the
         // withdrawal happens mid-year and the retained balance still grows for postMonths
-        // afterward (applyGrowth is simple proportional: factor = 1 + rate*postMonths/12).
+        // afterward (factor = (1 + rate)^(postMonths/12), the same one applyGrowth uses).
         // Drawing down to exactly the goal would leave goal*(1+growth) at year end - a
         // systematic ~one-year-of-growth overshoot. Instead draw down to goal/postGrowth so
         // the retained balance lands on the goal at year end; the ×0.99 biases it ~1% under
         // (preferred to overshooting). growthRates.IRA carries the actual per-year return,
         // including the Monte Carlo sequence, so this is correct under variable growth too.
-        const postGrowthIRA = 1 + (yr.growthRates.IRA ?? 0) * (yr.postMonths / 12);
+        const postGrowthIRA = growthFactor(yr.growthRates.IRA ?? 0, yr.postMonths);
         const reduceFloor = (yr.iraGoalNominal / postGrowthIRA) * 0.99;
         const curIRAreduce = Math.max(0, balance.IRA1 + balance.IRA2 - reduceFloor);
         let IRAwd = Math.max(0, Math.min(curIRAreduce, amortized))
@@ -3354,9 +3437,14 @@ function routeSurplusAndConvert(sim, yr) {
     // growAndSettle already credited to Cash would deposit it a second time. yr.totalIncome stays
     // the reported/tax figure; see the note where both are set.
     yr.netIncome = yr.spendableIncome - yr.totalTax;
+    // What the household actually CONSUMES this year. The premium is money out on top of the spend
+    // goal when `medicarePremiumMode` is 'added', and this is the line that makes it leave: surplus
+    // is measured here, so a dollar not subtracted here is a dollar banked. Zero in the default
+    // mode, where the premium is assumed to already sit inside the spend goal.
+    const _consumed = sim.spendGoal + (yr.medicareOutflow ?? 0);
     yr.surplus = {
-        Total: Math.max(0, yr.netIncome - sim.spendGoal), Roth: 0, Cash: 0, Brokerage: 0,
-        Shortfall: Math.min(0, yr.netIncome - sim.spendGoal)
+        Total: Math.max(0, yr.netIncome - _consumed), Roth: 0, Cash: 0, Brokerage: 0,
+        Shortfall: Math.min(0, yr.netIncome - _consumed)
     };
 
     //!!! Remove withdrawals proportionately. RMDs have already been withdrawn.
@@ -3996,24 +4084,28 @@ function growAndSettle(sim, yr) {
     // are billed monthly and are not withheld from a distribution, so they cannot be deferred to
     // December and are deliberately left out of the credit.
     //
-    // Credited to the accounts the draw actually came from, in proportion, each at its own rate: the
-    // tax rode out with those dollars, so it is those balances that were short. A year with no
-    // voluntary withdrawal has nothing to credit and correctly gets nothing.
     // P108e. THE CREDIT IS APPLIED AFTER THE POST-WITHDRAWAL GROWTH, and the order is the whole
     // point. It used to run above `applyGrowth`, so the credited dollars earned `postMonths` of
     // growth on top of BEING that growth - an over-credit of `T * r^2 * (postMonths/12)^2`, which is
     // 0.5% of the credit in a Late year and 5.5% in an Early one (`growthcredit_check.js`, retired in P116).
     //
     // The arithmetic the credit is supposed to reproduce: hold `T` in the account through the
-    // post-withdrawal growth and pay it on December 31.
-    //     December 31 = (bal + T)*(1 + r*post/12) - T = bal*(1 + r*post/12) + T*r*post/12
-    // So the exact credit is `T*r*post/12` added to the ALREADY-GROWN balance. Adding it before the
-    // growth call instead gives `T*(r*post/12)*(1 + r*post/12)`, which is the same term multiplied
-    // by the growth factor a second time.
+    // post-withdrawal growth and pay it on December 31. With `f(m) = (1 + r)^(m/12)`:
+    //     December 31 = (bal + T)*f(post) - T = bal*f(post) + T*(f(post) - 1)
+    // So the exact credit is `T*(f(post) - 1)` added to the ALREADY-GROWN balance - which is what
+    // `timingShift` returns for a shift of `post` months against a zero-month base. It used to read
+    // `T*r*post/12`, the first-order term of the same thing, matching the proportional `applyGrowth`
+    // of the time.
     //
-    // Credited to the accounts the draw actually came from, in proportion, each at its own rate: the
-    // tax rode out with those dollars, so it is those balances that were short. A year with no
-    // voluntary withdrawal has nothing to credit and correctly gets nothing.
+    // WHICH ACCOUNTS GET IT, and why this is a modeling CHOICE rather than a defect. The credit goes
+    // to the accounts the draw came from, in proportion, each at its own rate. The household needed
+    // `spend + tax` in cash and deferred the `tax` part, so the dollars that stayed invested are the
+    // ones it would otherwise have liquidated - the draw mix. The competing reading is that tax is
+    // withheld from the distribution it AROSE on, so an IRA-heavy tax bill on a brokerage-heavy draw
+    // belongs to the IRA. Both are defensible and the two differ only when the draw mix and the tax
+    // mix disagree; nothing measured here separates them, so the draw mix stands as the documented
+    // choice rather than being switched on an assertion. A year with no voluntary withdrawal has
+    // nothing to credit and correctly gets nothing.
 
     // Post-withdrawal growth (Phase 12): remaining postMonths after withdrawal exits portfolio.
     yr.gains = applyGrowth(balance, yr.growthRates, yr.postMonths);
@@ -4025,16 +4117,20 @@ function growAndSettle(sim, yr) {
         const _src = ['IRA1', 'IRA2', 'Brokerage', 'Cash', 'Roth1', 'Roth2'];
         const _drawn = _src.reduce((t, k) => t + Math.max(0, _nw[k] ?? 0), 0);
         if (_incomeTax > 0 && _drawn > 0) {
-            const _frac = yr.postMonths / 12;
             let _credited = 0;
             for (const k of _src) {
                 const share = Math.max(0, _nw[k] ?? 0) / _drawn;
                 if (share <= 0) continue;
-                const g = (yr.growthRates[k] ?? 0) * _frac;
-                const add = _incomeTax * share * g;
+                // Shift of `postMonths` against an already-grown balance, so the base is 0 months.
+                const add = timingShift(_incomeTax * share, yr.growthRates[k] ?? 0, yr.postMonths, 0);
                 balance[k] = (balance[k] ?? 0) + add;
-                // Brokerage basis rises with it: this is money that was never withdrawn, not a gain.
-                if (k === 'Brokerage') balance.BrokerageBasis = (balance.BrokerageBasis ?? 0) + add;
+                // P115b. BASIS DOES NOT MOVE. This used to add the credit to BrokerageBasis as well,
+                // on the reasoning that it is "money that was never withdrawn, not a gain". It is a
+                // gain: no shares were bought, so this is appreciation on shares already held, and
+                // basis rises only on a purchase. Reinvested dividends are the case where basis
+                // genuinely does rise (see the DRIP block below) and this is not that. Adding it made
+                // the growth on the deferred tax dollars permanently untaxed - it escaped capital
+                // gains on every later sale, and it inflated the figure the terminal step-up reads.
                 // The credit IS growth those dollars earned, so it belongs in the gains the display
                 // columns read. Sitting below applyGrowth it is no longer swept up by that call, and
                 // leaving it out would under-report brokerageG / cashG / rothG by exactly the credit.
@@ -4056,8 +4152,12 @@ function growAndSettle(sim, yr) {
     //
     // IMPLEMENTED AS A GROWTH TRANSFER, and the direction is the whole content. Converted dollars
     // that move at month m_c instead of month `preMonths` spend `(preMonths - m_c)` more months in
-    // the Roth and that many fewer in the IRA. Under simple proportional growth that is exactly
-    //     shift_i = X_i * rate_i * (preMonths - m_c) / 12
+    // the Roth and that many fewer in the IRA. With `f(m) = (1 + rate)^(m/12)` that is exactly
+    //     shift_i = X_i * (f_i(preMonths - m_c) - 1) * f_i(postMonths)
+    // the `timingShift` above: the growth earned over the moved months, compounded for the
+    // `postMonths` already applied to the balance it lands on. It used to read
+    // `X_i * rate_i * (preMonths - m_c) / 12`, the first-order term, which matched the proportional
+    // `applyGrowth` of the time.
     // credited to Roth_i at the ROTH's rate and debited from IRA_i at the IRA's rate. Deterministically
     // those rates are equal so the household total is unchanged - but the SPLIT moves, and the
     // December 31 IRA balance is next year's RMD basis (P84l), which is the entire mechanism. Under
@@ -4130,8 +4230,8 @@ function growAndSettle(sim, yr) {
             for (const i of [1, 2]) {
                 const X = yr.surplus['Roth' + i] ?? 0;
                 if (X <= 0) continue;
-                const toRoth = X * (yr.growthRates['Roth' + i] ?? 0) * _months / 12;
-                const fromIRA = X * (yr.growthRates['IRA' + i] ?? 0) * _months / 12;
+                const toRoth = timingShift(X, yr.growthRates['Roth' + i] ?? 0, _months, yr.postMonths);
+                const fromIRA = timingShift(X, yr.growthRates['IRA' + i] ?? 0, _months, yr.postMonths);
                 // THE IRA MAY NOT HAVE IT TO GIVE, AND THEN THE ROTH MAY NOT RECEIVE IT. A conversion
                 // is capped at the IRA balance AFTER the pre-withdrawal growth, so a conversion that
                 // drains the IRA carried that growth into the Roth already - it is inside X. Taking
@@ -4156,13 +4256,17 @@ function growAndSettle(sim, yr) {
     }
 
     // ── The RMD's own month ───────────────────────────────────────────────────────────────────
-    // Sibling of the conversion shift above, and here for the same reason: an after-growth
-    // ARITHMETIC CORRECTION, not a third call to applyGrowth. A genuine third segment would be
-    // measurably wrong, not merely inelegant - `applyGrowth` is simple proportional, so a year cut
-    // into 1/10/1 manufactures `21g^2/144` of growth against `11g^2/144` for both 1/11 and 11/1.
-    // That is about 2.5 bp of the whole balance a year at 6%, and it would land on Split ALONE,
-    // putting a mode-correlated artifact exactly on the Early/Split/Late comparison this control
-    // exists to let a user make. See findings.md, "Splitting a year into more growth segments
+    // Sibling of the conversion shift above, and written the same way: an after-growth ARITHMETIC
+    // CORRECTION rather than a third call to applyGrowth.
+    //
+    // THAT CHOICE USED TO BE FORCED AND NO LONGER IS. While `applyGrowth` was simple proportional a
+    // genuine third segment was measurably wrong, not merely inelegant: a year cut into 1/10/1
+    // manufactured `21g^2/144` of growth against `11g^2/144` for both 1/11 and 11/1, about 2.5 bp of
+    // the whole balance a year at 6%, and it landed on Split ALONE - a mode-correlated artifact
+    // sitting exactly on the Early/Split/Late comparison this control exists to let a user make.
+    // `applyGrowth` now compounds, so `f(a)*f(b) === f(a+b)` and a third segment would manufacture
+    // nothing. The correction stays because it is equivalent and already tested, not because
+    // segmenting is still barred. See findings.md, "Splitting a year into more growth segments
     // MANUFACTURES growth".
     //
     // WHAT IS BEING CORRECTED. The distribution is subtracted in resolveHousehold, which runs after
@@ -4195,7 +4299,7 @@ function growAndSettle(sim, yr) {
         for (const i of [1, 2]) {
             const _out = yr['_iraOut' + i] ?? 0;
             if (_out > 0) {
-                const _giveBack = _out * (yr.growthRates['IRA' + i] ?? 0) * _rmdShiftMonths / 12;
+                const _giveBack = timingShift(_out, yr.growthRates['IRA' + i] ?? 0, _rmdShiftMonths, yr.postMonths);
                 // Same clamp as the conversion leg, and the same rule below it: a drained IRA gives
                 // what it has, and the household is credited only in that proportion.
                 const _take = Math.min(_giveBack, balance['IRA' + i] ?? 0);
@@ -4212,7 +4316,7 @@ function growAndSettle(sim, yr) {
             // went to the Roth inside that conversion; crediting Cash for it as well counted it
             // twice, at identical tax. Nothing owed means nothing withheld.
             const _frac = _owed > 0 ? _pulled / _owed : 1;
-            const _toCash = _cashBase * (yr.growthRates.Cash ?? 0) * _rmdShiftMonths / 12 * _frac;
+            const _toCash = timingShift(_cashBase, yr.growthRates.Cash ?? 0, _rmdShiftMonths, yr.postMonths) * _frac;
             balance.Cash = (balance.Cash ?? 0) + _toCash;
             // Into yr.gains as well, or cashG under-reports it - the defect the tax-settlement
             // credit above records in its own comment.
@@ -5879,8 +5983,28 @@ function rankRowsByObjective(rows, objKey, rate = 0) {
 //
 // `currentYear` is a parameter rather than a `new Date()` call so this stays pure and a test can
 // pin a year. Callers in the app omit it.
+/**
+ * The Retirement Start field takes an AGE or a CALENDAR YEAR, by the same rule Stop conversions after
+ * uses: 1000 or more is a year, anything smaller is an age. Returns the AGE, or 0 when the value is
+ * blank or cannot be resolved - and 0 already means "start this year" to planFirstYear.
+ *
+ * Typing 2025 used to be taken as an age. The plan's first year became birth year + 2025, about 3985,
+ * and simulate() threw on its first balance lookup. A year is arguably the clearer thing to type, so
+ * both are accepted rather than one being refused. A year earlier than the birth year is not a
+ * negative age; it resolves to 0 like any other value that cannot be read.
+ */
+function resolveStartAge(value, by1) {
+    const v = +value;
+    if (!Number.isFinite(v) || v <= 0) return 0;
+    if (v >= 1000) return (+by1 > 0) ? Math.max(0, v - +by1) : 0;
+    return v;
+}
+
+// Resolves its own argument, so a caller holding the raw field value - a year - still gets the right
+// first year. Every consumer of the start goes through here, which is why the fix belongs here.
 function planFirstYear(by1, startAge, currentYear = new Date().getFullYear()) {
-    const computed = startAge > 0 ? by1 + startAge : currentYear;
+    const age = resolveStartAge(startAge, by1);
+    const computed = age > 0 ? by1 + age : currentYear;
     return Math.max(computed, currentYear);
 }
 
@@ -6721,7 +6845,7 @@ function planNameDefaults({ lastPlanName, lastFileName } = {}) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit, growthFactor, applyGrowth, timingShift, resolveStartAge };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -6729,7 +6853,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit, growthFactor, applyGrowth, timingShift, resolveStartAge };
 }
 
 

@@ -306,6 +306,94 @@ test('every changelog version stamp sits in its own <li>', () => {
   }
 });
 
+// ── A .toggle checkbox with no switch is an INVISIBLE control ─────────────────────────────────
+// The stylesheet hides every checkbox inside a `.toggle` label (`display: none`) and draws the
+// `.toggle-switch` sibling in its place. So a `.toggle` label that carries a checkbox but no switch
+// renders its text and NOTHING to click. That is how the Medicare "Enrolled at 65" controls shipped
+// in 11.17f4: two labels reading "You" and "Spouse", no control at all, and a help line telling the
+// user to untick something that was not on the screen. A `<label>` nested inside another `<label>`
+// came with it, and is its own fault: invalid HTML, where a click can activate the OUTER label's
+// control instead of the one under the pointer.
+//
+// Reads the page SOURCE rather than the DOM, deliberately. This has to gate a commit, and the
+// pre-commit hook runs node only; a DOM check here would only ever run in the ?runtests tier, which
+// is exactly where nobody looks before committing.
+test('every .toggle checkbox has a visible switch, and no label is nested in a label', () => {
+  if (!IS_NODE) return;   // node-only by design: see above
+  const src = require('fs').readFileSync(require('path').join(__dirname, 'retirement_optimizer.html'), 'utf8');
+  const lineOf = i => src.slice(0, i).split('\n').length;
+
+  let toggles = 0;
+  const bare = [];
+  const openToggle = /<label\b[^>]*class="[^"]*\btoggle\b[^"]*"[^>]*>/g;
+  let m;
+  while ((m = openToggle.exec(src))) {
+    toggles++;
+    const body = src.slice(m.index + m[0].length, src.indexOf('</label>', m.index));
+    if (/type="checkbox"/.test(body) && !/class="[^"]*\btoggle-switch\b/.test(body)) {
+      bare.push(`${(body.match(/id="([^"]+)"/) || [])[1] || '?'} (line ${lineOf(m.index)})`);
+    }
+  }
+  // A scan that matches nothing would also report no bare toggles, and prove nothing.
+  assert(toggles > 0, 'test setup: no .toggle labels found - the pattern no longer matches the page');
+  assert(bare.length === 0,
+    `a .toggle checkbox with no .toggle-switch renders as text with nothing to click: ${bare.join(', ')}`);
+
+  let depth = 0;
+  const nested = [];
+  for (const t of src.matchAll(/<label\b|<\/label>/g)) {
+    if (t[0] === '</label>') depth--;
+    else if (++depth > 1) nested.push(lineOf(t.index));
+  }
+  assert(nested.length === 0, `<label> nested inside another <label> at line(s) ${nested.join(', ')}`);
+});
+
+// ── A reference to the README or the changelog is a link that opens in a new tab ──────────────────
+// User, 2026-09-13: whenever page text refers to something in README.md or the changelog, it is a live
+// link to that place, and it opens in a new page. Two faults this catches. The words "README" or a
+// changelog filename in visible text with nothing to click ("The README says the same."), which leaves
+// the reader to hunt for the passage. And a link to one of those documents that replaces the tool in the
+// SAME tab, which throws away whatever plan is on the screen.
+//
+// Tooltips (title attributes) cannot hold links and are not scanned; nor are comments or scripts.
+// Reads the page SOURCE so it gates commits in node, the same as the toggle guard above.
+test('every README or changelog reference in the page is a link that opens a new tab', () => {
+  if (!IS_NODE) return;   // node-only by design: see above
+  const raw = require('fs').readFileSync(require('path').join(__dirname, 'retirement_optimizer.html'), 'utf8');
+  const src = raw.replace(/<!--[\s\S]*?-->/g, ' ')
+                 .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+                 .replace(/<style\b[\s\S]*?<\/style>/gi, ' ');
+  const DOC = /(^|\/)(README\.md|optimizer_changelog\.md)([#?]|$)|^https:\/\/tools\.netcitizen\.us\/?$/i;
+
+  let links = 0;
+  let inA = 0;
+  const sameTab = [];
+  const unlinked = [];
+  for (const m of src.matchAll(/<[^>]+>|[^<]+/g)) {
+    const tok = m[0];
+    if (tok[0] === '<') {
+      if (/^<a\b/i.test(tok)) {
+        inA++;
+        const href = (tok.match(/\bhref\s*=\s*"([^"]*)"/i) || [])[1] || '';
+        if (DOC.test(href)) {
+          links++;
+          if (!/\btarget\s*=\s*"_blank"/i.test(tok)) sameTab.push(href);
+        }
+      } else if (/^<\/a\s*>/i.test(tok)) {
+        inA = Math.max(0, inA - 1);
+      }
+    } else if (!inA && /\bREADME\b|changelog\.md/i.test(tok)) {
+      unlinked.push(tok.trim().replace(/\s+/g, ' ').slice(0, 80));
+    }
+  }
+  // A scan that finds no document links at all would pass for the wrong reason.
+  assert(links > 0, 'test setup: no links to README.md or the changelog found - the pattern no longer matches the page');
+  assert(sameTab.length === 0,
+    `a link to README.md or the changelog must open a new tab (target="_blank"): ${sameTab.join(', ')}`);
+  assert(unlinked.length === 0,
+    `README or the changelog is mentioned in page text without a link: ${unlinked.map(t => '"' + t + '"').join('; ')}`);
+});
+
 function runDocLinksTests() {
   passed = 0;
   failed = 0;

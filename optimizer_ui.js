@@ -736,7 +736,9 @@ function getInputs() {
         ...(PROP_TAX_STATE || {}),
         propWithdraw: +val('propWithdraw') / 100.0,
         iraWithdrawPct: +val('iraWithdrawPct') / 100.0,
-        startAge: +val('startAge') || (new Date().getFullYear() - +val('birthyear1')),
+        // Age OR calendar year (1000+), resolved as it is read so every consumer of these inputs sees an
+        // age. startInYear below needs nothing extra: planFirstYear resolves its own argument.
+        startAge: resolveStartAge(val('startAge'), +val('birthyear1')) || (new Date().getFullYear() - +val('birthyear1')),
         // P89: one definition of the plan's first year, shared with the ACA age gate. This block
         // used to carry its own copy of the clamp and the gate carried an unclamped copy.
         startInYear: planFirstYear(+val('birthyear1'), +val('startAge')),
@@ -752,6 +754,13 @@ function getInputs() {
         // P108b. '' is today's behavior (tax leaves with the withdrawal); the engine only
         // acts on 'december', so an empty select must arrive as undefined.
         taxSettlement: val('taxSettlement') || undefined,
+        // Medicare base premiums. 'in-spend' is today's behavior and the engine acts only on
+        // 'added', so an empty or missing select must arrive as undefined rather than as a string
+        // the engine would not recognize. Enrolment defaults to TRUE, so the value sent is the
+        // checkbox state and an absent control reads as enrolled.
+        medicarePremiumMode: (val('medicarePremiumMode') === 'added') ? 'added' : undefined,
+        medicareEnroll1: valChecked('medicareEnroll1') !== false,
+        medicareEnroll2: valChecked('medicareEnroll2') !== false,
         // P28jk. Same convention: '' is today's behavior (the conversion rides the withdrawal
         // month), and the engine acts only on 'early' / 'late'.
         fixedTaxIndexing: !!valChecked('fixedTaxIndexing'),
@@ -789,6 +798,15 @@ function getInputs() {
 // Naming the year turns that from a hidden assumption into an instruction: these are the balances
 // AS OF this year, and forecasting them to it is the reader's job. Reads the same `planFirstYear`
 // the engine's `startInYear` uses (P89), so the label cannot drift from the year actually simulated.
+// The under-60 early-withdrawal note. It used to test the raw field (`+this.value < 60`), so a YEAR
+// such as 2025 never showed it, whatever age that year meant. It reads the resolved age instead.
+function updateStartAgeWarning() {
+    const el = document.getElementById('startAge-warn');
+    if (!el) return;
+    const age = resolveStartAge(val('startAge'), +val('birthyear1'));
+    el.style.display = (age > 0 && age < 60) ? 'block' : 'none';
+}
+
 function updateAssetsYearLabel() {
     const el = document.getElementById('assets-year-label');
     if (!el) return;
@@ -5828,6 +5846,7 @@ const OPT_LONG_TO_SHORT = {
     convertExcessToRoth:'mc', fundConversionWithCash:'fcc', extraConversionAmount:'eca', iraBaseGoal:'ibg',
     convEndYear:'cey', convEndMode:'cem', irmaaMarginMode:'imm', fixedTaxIndexing:'fti',
     withdrawTiming:'wt', taxSettlement:'txs',
+    medicarePremiumMode:'mpm', medicareEnroll1:'me1', medicareEnroll2:'me2',
     advisorFeeAmount:'af', advisorFeeMode:'afm', advisorFeeScope:'afs',
     birthyear1:'by1', birthmonth1:'bm1', die1:'d1', startAge:'sa',
     birthyear2:'by2', birthmonth2:'bm2', die2:'d2', hasSpouse:'hs',
@@ -6295,17 +6314,28 @@ function saveScenario({ alsoExport = false } = {}) {
             summary,
             sourceFile: _lastLoadedFileName,
         };
+        // Saving over an existing name REPLACES that plan. The name now stays in the box after a save
+        // or a load, which makes that one click, so the message says which of the two happened.
+        const replaced = Object.prototype.hasOwnProperty.call(scenarios, scenarioName);
         scenarios[scenarioName] = entry;
 
         localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
         _lastLoadedPlanName = scenarioName;
+        // The report describes the LAST LOAD. After a save it no longer describes the plan on screen.
+        clearLoadReport();
 
         // A plan saved before it was ever run carries no statistics, and saying so is better than a
         // saved plan that silently claims none exist.
         const note = summary ? '' : ' (no statistics recorded - run the plan first)';
-        showMessage(`Scenario "${scenarioName}" saved successfully!${note}`, summary ? 'success' : 'warning');
-        document.getElementById('scenarioName').value = '';
-        if (notesEl) notesEl.value = '';
+        showMessage(replaced
+            ? `Scenario "${scenarioName}" updated - it replaced the earlier save with that name.${note}`
+            : `Scenario "${scenarioName}" saved successfully!${note}`, summary ? 'success' : 'warning');
+        // KEEP the name and notes in their boxes. They used to be cleared here, so saving a plan and then
+        // tweaking it meant retyping the name to save over it. The box shows the name actually used -
+        // including the timestamp a blank name falls back to - so the next save lands on the same plan,
+        // and the name can be edited slightly to save a variant instead.
+        document.getElementById('scenarioName').value = scenarioName;
+        if (notesEl) notesEl.value = notesEl.value.trim();
         if (alsoExport) exportScenario(scenarioName);
     } catch (error) {
         showMessage(`Failed to save scenario: ${error.message}`, 'error');
@@ -6810,6 +6840,54 @@ function commitScenario(entry, name) {
     reportLoadSubstitutions();   // after the drift report, which it appends to rather than replaces
 }
 
+// ── The load report ─────────────────────────────────────────────────────────────────────────
+// What a load changed used to go to the status bar, which hides itself after a few seconds, so a
+// comparison of several figures was gone before it could be read. It now lives in a panel at the top
+// of the Import/Export tab and stays there until the next load or save. Built with textContent
+// throughout: the plan name is the user's own text and must never be parsed as markup.
+function setLoadReport(type, headline, lines = []) {
+    const box = document.getElementById('scenarioLoadReport');
+    if (!box) return;
+    box.textContent = '';
+    const head = document.createElement('div');
+    head.textContent = headline;
+    box.appendChild(head);
+    if (lines.length) {
+        const ul = document.createElement('ul');
+        ul.style.margin = '6px 0 0 18px';
+        ul.style.padding = '0';
+        ul.style.fontWeight = 'normal';
+        for (const t of lines) {
+            const li = document.createElement('li');
+            li.textContent = t;
+            ul.appendChild(li);
+        }
+        box.appendChild(ul);
+    }
+    box.className = `scenario-message ${type}`;
+}
+
+function clearLoadReport() {
+    const box = document.getElementById('scenarioLoadReport');
+    if (!box) return;
+    box.textContent = '';
+    box.className = 'scenario-message';
+}
+
+// One more line on a report already showing - the substitutions a load had to make. Returns false
+// when there is no report to add to, so the caller can fall back to the status bar.
+function appendLoadReportNote(text) {
+    const box = document.getElementById('scenarioLoadReport');
+    if (!box || !text || !box.textContent.trim()) return false;
+    const p = document.createElement('div');
+    p.style.marginTop = '6px';
+    p.style.fontWeight = 'normal';
+    p.textContent = text;
+    box.appendChild(p);
+    if (!box.className.includes('error')) box.className = 'scenario-message warning';
+    return true;
+}
+
 /**
  * Compare what the plan recorded against what it produces now.
  *
@@ -6822,27 +6900,36 @@ function reportSummaryDrift(entry, name) {
     const fresh = currentRunSummary();
     if (!entry.summary || !fresh) {
         showMessage(`Scenario "${name}" loaded.`, 'success');
+        setLoadReport('success', `Loaded "${name}". It has no saved statistics to compare against.`);
         return;
     }
     const diffs = OptimizerCore.diffSummaries(entry.summary, fresh);
     if (diffs.length === 0) {
         showMessage(`Scenario "${name}" loaded, and it reproduces the numbers it was saved with.`, 'success');
+        setLoadReport('success', `Loaded "${name}", and it reproduces the numbers it was saved with.`);
         return;
     }
     const now = appVersionString();
     const then = entry.appVersion;
-    const worst = diffs.slice().sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)).slice(0, 3);
-    const detail = worst.map(d =>
-        `${d.label} ${d.delta > 0 ? 'up' : 'down'} ${_fmtSummaryValue(d.kind, Math.abs(d.delta))}`).join(', ');
+    // Every figure that moved, largest first, with where it was and where it is now. The status bar
+    // could only fit the top three; the panel has room for all of them.
+    const lines = diffs.slice().sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)).map(d =>
+        `${d.label} ${d.delta > 0 ? 'up' : 'down'} ${_fmtSummaryValue(d.kind, Math.abs(d.delta))}` +
+        ` (was ${_fmtSummaryValue(d.kind, d.was)}, now ${_fmtSummaryValue(d.kind, d.now)})`);
+    let type, headline;
     if (then && then !== now) {
-        showMessage(`Scenario "${name}" loaded. It was saved under ${then} and you are on ${now}: ${detail}.`, 'warning');
+        type = 'warning';
+        headline = `Loaded "${name}". It was saved under ${then} and you are on ${now}. What changed:`;
     } else if (then) {
-        showMessage(`Scenario "${name}" loaded, but ${diffs.length} figure(s) differ on the same ` +
-                    `release (${now}): ${detail}. The plan may not have been restored exactly.`, 'error');
+        type = 'error';
+        headline = `Loaded "${name}", but ${diffs.length} figure(s) differ on the same release (${now}). ` +
+                   `The plan may not have been restored exactly:`;
     } else {
-        showMessage(`Scenario "${name}" loaded. It predates release stamping, so this difference ` +
-                    `cannot be attributed: ${detail}.`, 'warning');
+        type = 'warning';
+        headline = `Loaded "${name}". It predates release stamping, so this difference cannot be attributed:`;
     }
+    setLoadReport(type, headline, lines);
+    showMessage(`Scenario "${name}" loaded. ${diffs.length} figure(s) changed - see the Import/Export tab.`, type);
 }
 
 function loadScenarioByName(name) {
@@ -7773,13 +7860,11 @@ function reportLoadSubstitutions() {
     ACA_GATE_SWAP = null;
     TIMING_MODE_SWAP = null;
     if (!msg) return;
-    const box = document.getElementById('popUpMessage');
-    if (box && box.style.display === 'block' && box.textContent.trim()) {
-        box.textContent = `${box.textContent.trim()} ${msg}`;
-        if (!/\berror\b/.test(box.className)) box.className = 'scenario-message warning';
-    } else {
-        showMessage(msg, 'warning');
-    }
+    // Onto the load report when one is up - a saved-plan load always writes it first - so the note
+    // stays with the rest of what the load changed. A share-link load has no report and keeps using
+    // the status bar, as before.
+    if (appendLoadReportNote(msg)) return;
+    showMessage(msg, 'warning');
 }
 
 function updateACAWarning() {

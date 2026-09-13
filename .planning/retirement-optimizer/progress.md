@@ -5050,3 +5050,23 @@ the build behind it, and `P125` is nothing BUT caveats (ordinary dividends are n
 subsidy is a constraint and never a dollar) - both settled as documentation, neither to grow code.
 The ACA ceiling STAYS: the user proposed dropping ACA entirely, but the FPL threshold is federal and
 uniform while only the premiums are state-specific, and dropping it would discard the `P87` fix.
+
+## Session: 2026-09-13 - the Medicare enrollment switches could not be seen
+
+User: "where is the control to untick?" There was none on screen. The page's `.toggle` CSS hides
+every checkbox inside a `.toggle` label and draws a `.toggle-switch` sibling in its place. The
+11.17f4 markup put `class="toggle"` on both labels but left out the switch spans, and nested both
+labels inside a third. Fixed to the page's own pattern (input, `toggle-label`, `toggle-switch`,
+text); the Spouse switch now sits in `.spouse-field`, so a single filer sees it dimmed; the help
+text says "switch off" instead of "untick".
+
+**Why the earlier check missed it:** it confirmed the inputs existed and were checked, never that
+anything was visible. Re-verified through the real click path: clicking the Spouse switch flips
+only `medicareEnroll2`, the You switch only `medicareEnroll1`, `getInputs()` follows both, and the
+single-filer toggle dims the Spouse switch. Both switches measure 44 px, the same as the existing
+Maximize Conversions switch.
+
+**Guard, in node so it gates commits:** `doclinks.tests.js` now requires every `.toggle` checkbox
+to have a `.toggle-switch` and forbids a label nested in a label. Proved against the shipped
+markup: on HEAD it flags `medicareEnroll1` and `medicareEnroll2` at lines 568-569, on the fix it
+passes, and it matched 13 toggle labels in both. doclinks 24 -> 25.

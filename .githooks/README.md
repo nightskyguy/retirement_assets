@@ -15,10 +15,10 @@ Runs the four `node`-only suites and blocks the commit if any of them fails:
 
 | suite | tests | approx |
 |---|---|---|
-| `optimizer_core.tests.js` | 442 | 6.0 s |
+| `optimizer_core.tests.js` | 443 | 6.0 s |
 | `taxengine.tests.js` | 32 | 0.1 s |
 | `taxPaymentPlanner.tests.js` | 61 | 0.5 s |
-| `doclinks.tests.js` | 24 | 0.1 s |
+| `doclinks.tests.js` | 26 | 0.1 s |
 
 About 7 s total. `taxengine.tests.js` is the tax engine's own suite, moved out of the in-page
 `optimizer_tests.js` in 11.17b0; `doclinks.tests.js` also carries the page-markup check (an

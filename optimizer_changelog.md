@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.17f4"></a>
+<a id="11.1807"></a>
 
-## 11.17f4
+## 11.1807
 
 **Growth within a year now compounds, so every plan ends with slightly less.**  
 *Behavior change: every saved plan and shared link will show lower ending balances than before.*
@@ -41,11 +41,20 @@ premium and their surcharge.
 $278,000 a year and that is not modeled here. South Carolina, Wisconsin, North Dakota and Montana
 tax long-term gains more lightly than this tool does. Each says so beside the state selector.
 
-**Six more limitations are now written down** in the README: required distributions for an
+**More limitations are now written down** in the README: required distributions for an
 age-gapped couple are overstated, losses are not carried forward, inflation-protected bonds cannot
-be represented, a plan has one state for life, all dividends are priced at qualified rates, and the
+be represented, all dividends are priced at qualified rates, and the
 ACA subsidy is not modeled, only its income ceiling. The README also now gives the real reason
 thirteen states are missing.
+
+**Saving keeps the plan's name and notes in place.** After you save or load a plan, its name and
+notes stay in the Import/Export boxes, so you can save over it, or change the name slightly to keep a
+variant, without retyping. Saving over an existing name says it replaced that plan. The How to Use
+section also now describes several options it was missing.
+
+**What a loaded plan changed now stays on screen.** When you load a saved plan, the comparison with the
+numbers it was saved with appears on the Import/Export tab and stays there until you load or save
+again. **Retirement Start also accepts a calendar year**, such as 2031, as well as an age.
 
 ---
 

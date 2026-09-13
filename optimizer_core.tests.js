@@ -67,6 +67,7 @@ const diffSummaries = core.diffSummaries;
 const safeExportFilename = core.safeExportFilename;
 const stripFileExtension = core.stripFileExtension;
 const planNameDefaults = core.planNameDefaults;
+const resolveStartAge = core.resolveStartAge;
 const compileScheduleFromRun = core.compileScheduleFromRun;
 const scheduleOptionsForRun = core.scheduleOptionsForRun;
 const ADVISOR_FEE_PCT_MAX = core.ADVISOR_FEE_PCT_MAX;
@@ -8539,6 +8540,30 @@ test('an absent IRA Goal means no goal, not NaN across the whole run', () => {
 // browser reads `window.PlanBank`, which the page does not currently populate (the bank is 19
 // separate script files and the tier-2 loader does not fetch them). If a page ever does load them,
 // these two start running there with no edit. Same shape as `_mcPrng` and `SWEEP_BASES` above.
+// ── Retirement Start takes an AGE or a CALENDAR YEAR ─────────────────────────────────────────────
+// Typing 2025 was taken as an age: the plan's first year became birth year + 2025, about 3985, and
+// simulate() threw on its first balance lookup. 1000 or more is now a year - the same rule the Stop
+// conversions field uses - so the two ways of saying one start produce one plan.
+test.critical('Retirement Start: a calendar year and the matching age name the same first year', () => {
+    assert(resolveStartAge(71, 1960) === 71, 'an age passes through unchanged');
+    assert(resolveStartAge(2031, 1960) === 71, 'a year resolves to the age reached that year');
+    assert(resolveStartAge('2031', 1960) === 71, 'the raw field string resolves too');
+    assert(resolveStartAge('', 1960) === 0 && resolveStartAge(0, 1960) === 0, 'blank means unset');
+    assert(resolveStartAge(2031, 0) === 0, 'a year with no birth year cannot be resolved');
+    assert(resolveStartAge(1950, 1960) === 0, 'a year before birth is not a negative age');
+
+    const pfy = core.planFirstYear;
+    assert(pfy(1960, 2031, 2026) === 2031 && pfy(1960, 71, 2026) === 2031,
+        `year and age must name the same first year, got ${pfy(1960, 2031, 2026)} and ${pfy(1960, 71, 2026)}`);
+    assert(pfy(1960, 2025, 2026) === 2026, 'a year already past clamps to the current year, like a past age');
+
+    // The failure itself: the inputs the page used to build from a typed year must now simulate.
+    if (!_planBank) return;
+    const base = _planBank.get('ira-heavy-couple').inputs;
+    const r = simulate({ ...base, startAge: 2027, startInYear: pfy(base.birthyear1, 2027) });
+    assert(r && r.log && r.log.length > 0, 'a plan whose start was typed as a year must simulate');
+});
+
 const _planBank = IS_NODE ? require('./plans') : (typeof window !== 'undefined' ? window.PlanBank : null);
 
 test("the plan bank: every card's measured viability still reproduces", () => {

@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.17f4</title>
+    <title>Retirement Optimizer 11.1807</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -58,15 +58,15 @@
     .share-panel .share-status { font-family:monospace; font-size:10px; color:#1a7a1a; margin-top:.35rem; min-height:14px; }
 	</style>
 	<base target="_blank">	
-	<script src="taxengine.js?v=1117f4"></script>
-	<script src="optimizer_core.js?v=1117f4"></script>
+	<script src="taxengine.js?v=111807"></script>
+	<script src="optimizer_core.js?v=111807"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=1117f4"></script>
-	<script src="optimizer_tests.js?v=1117f4"></script>
+	<script src="optimizer_ui.js?v=111807"></script>
+	<script src="optimizer_tests.js?v=111807"></script>
 </head>
 <body>
 
@@ -327,9 +327,9 @@
         </div>
         <div class="compact-row" style="font-size:0.82em;color:#555;margin-top:0;padding-top:0;" id="age-display-1"></div>
         <div class="compact-row" style="margin-top:6px;">
-            <label title="The age at which you plan to retire and start drawing assets. Enter all balances and your spend goal in today's dollars - the simulation inflates tax brackets, Social Security Cost-of-Living Adjustments (COLA), and spending forward from this age. Defaults to your current age.">Retirement Start Age
-            <input type="number" id="startAge" min="50" max="100" step="1" placeholder="current age"
-              oninput="document.getElementById('startAge-warn').style.display=(+this.value>0&&+this.value<60)?'block':'none'; updateACAWarning(); updateAssetsYearLabel()"></label>
+            <label title="When you retire and start drawing assets. Enter either your AGE (for example 65) or the CALENDAR YEAR you retire (for example 2031); a number of 1000 or more is read as a year. One start applies to both spouses. Enter all balances and your spend goal in today's dollars - the simulation inflates tax brackets, Social Security Cost-of-Living Adjustments (COLA), and spending forward from that year. Defaults to your current age.">Retirement Start Age or Year
+            <input type="number" id="startAge" min="40" max="2200" step="1" placeholder="age or year"
+              oninput="updateStartAgeWarning(); updateACAWarning(); updateAssetsYearLabel()"></label>
         </div>
         <div id="startAge-warn" style="display:none;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:3px 7px;font-size:0.82em;margin-top:3px;">
           &#9888; Early withdrawal penalties may apply when starting withdrawals before 59&#189; and those are NOT modeled.
@@ -560,14 +560,24 @@
         <div class="row">
             <div><label title="Medicare Part B and Part D base premiums, about $5,800 a year for a couple at 2026 rates and growing at CPI + Inflation. Inside the spend goal: the premium is assumed to be part of the After-Tax Spend you entered, which is how this tool has always worked. On top of the spend goal: the premium is charged as extra money out, so your spend goal is what you have to live on after paying it. The Medicare income surcharge (IRMAA) is charged either way.">Medicare premiums
                 <select id="medicarePremiumMode">
-                    <option value="in-spend">Inside the spend goal (today)</option>
+                    <option value="in-spend">Inside the spend goal</option>
                     <option value="added">On top of the spend goal</option>
                 </select></label>
                 <div style="font-size:0.78em;color:#666;margin-top:2px;">Default: inside the spend goal. The surcharge (IRMAA) is charged either way.</div></div>
-            <div><label style="font-size:0.9em;" title="Untick anyone who will not enroll in Medicare at 65 - covered by a spouse's employer plan, the VA, or retiree coverage. An unticked person owes no base premium and no IRMAA surcharge. Both ticked by default.">Enrolled at 65
-                <label class="toggle" style="margin-left:6px;"><input type="checkbox" id="medicareEnroll1" checked> You</label>
-                <label class="toggle" style="margin-left:6px;"><input type="checkbox" id="medicareEnroll2" checked> Spouse</label></label>
-                <div style="font-size:0.78em;color:#666;margin-top:2px;">Both enrolled by default. Unticking also removes that person's surcharge.</div></div>
+            <div><div style="font-size:0.9em;" title="Switch off anyone who will not enroll in Medicare at 65 - covered by a spouse's employer plan, the VA, or retiree coverage. A person switched off owes no base premium and no IRMAA surcharge. Both are on by default.">Enrolled at 65</div>
+                <label class="toggle" style="font-size:0.9em;" title="Switch off if you will not enroll in Medicare at 65. You then owe no base premium and no IRMAA surcharge.">
+                  <input type="checkbox" id="medicareEnroll1" checked>
+                  <span class="toggle-label"></span>
+                  <span class="toggle-switch"></span>
+                  <span>You</span>
+                </label>
+                <div class="spouse-field"><label class="toggle" style="font-size:0.9em;" title="Switch off if your spouse will not enroll in Medicare at 65. They then owe no base premium and no IRMAA surcharge.">
+                  <input type="checkbox" id="medicareEnroll2" checked>
+                  <span class="toggle-label"></span>
+                  <span class="toggle-switch"></span>
+                  <span><i>Spouse</i></span>
+                </label></div>
+                </div>
         </div>
         <!-- One control names the whole year's shape. It replaced two - a withdrawal month and a
              conversion month - which between them could not express the combination people
@@ -747,8 +757,7 @@
 				</p>
 				<p style="font-size:0.8em;color:#666;margin:8px 0 0;">
 					For more information about Monte Carlo, its strengths and weaknesses, please see the
-					<a href="README.md#monte-carlo-and-chance-of-success-accuracy" target="_blank" rel="noopener">Monte Carlo and Chance of Success</a>
-					section of the README.
+					<a href="README.md#monte-carlo-and-chance-of-success-accuracy" target="_blank" rel="noopener">Monte Carlo and Chance of Success section of the README</a>.
 				</p>
 				</div>
 				</details>
@@ -953,6 +962,9 @@
 		</div>
 
 		<div id="tab-fileio" class="card hidden">
+			<!-- What the last load changed. It used to go to the status bar, which hides itself after a few
+			     seconds; this stays until the next load or save. Filled by setLoadReport() in optimizer_ui.js. -->
+			<div id="scenarioLoadReport" class="scenario-message" style="margin:0 0 10px 0;" aria-live="polite"></div>
 			<div class="scenario-controls">
 				<div class="scenario-row">
 					<input type="text" id="scenarioName" placeholder="Scenario name (optional)" style="flex: 1; margin-right: 10px;">
@@ -999,7 +1011,7 @@
 			</div>
 			<details style="margin-bottom:12px;">
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
-				<p>The most recent releases are summarized here (up to five). Full write-ups of every release live in <STRONG><A HREF="optimizer_changelog.md" target="_blank" rel="noopener">optimizer_changelog.md</A></STRONG>. For what the tool does and how to use it, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
+				<p>The most recent releases are summarized here (up to five). Full write-ups of every release live in <STRONG><A HREF="optimizer_changelog.md" target="_blank" rel="noopener">optimizer_changelog.md</A></STRONG>. For what the tool does and how to use it, consult the <STRONG><A HREF="https://tools.netcitizen.us/" target="_blank" rel="noopener">README.md</A></STRONG>.</p>
 				<!-- VERSION SYNC - read before adding a new entry below:
 				     The number in the NEXT <li><b> you add must also be typed into the <title> tag
 				     in <head> (search the "Version:" comment near the top of the file). The two are
@@ -1031,15 +1043,17 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.17f4</b>
+				<li data-flag="behavior"><b>11.1807</b>
 					<strong>Growth within a year now compounds, so every plan ends with slightly less.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li>The Growth rate you enter is a compound annual rate, and a plan year is always split in two because money moves partway through it. Each part got a flat share of the year&rsquo;s return, and two parts came to slightly more than the whole year. <strong>Across the sample plans ending wealth falls between about 0.5% and 7%, and it falls in every one of them.</strong> A plan that ends with very little can fall further in percentage terms. Your inputs have not changed.</li>
 					<li>Medicare premiums can now be charged to your plan. Leave the Part B and Part D premiums inside your spending goal, which is what the tool has always assumed, or put them on top so your goal is what you have left after paying them. Either person can be marked as not enrolling at 65, which drops their premium and their surcharge.</li>
 					<li>Five states carry new capital-gains warnings. Washington taxes brokerage gains above roughly $278,000 a year and that is not modeled here. South Carolina, Wisconsin, North Dakota and Montana tax long-term gains more lightly than this tool does.</li>
-					<li>Six more limitations are now written down in the README: required distributions for an age-gapped couple are overstated, losses are not carried forward, inflation-protected bonds cannot be represented, a plan has one state for life, all dividends are priced at qualified rates, and the ACA subsidy is not modeled, only its income ceiling.</li>
+					<li>More limitations are now written down in the <a href="README.md#limitations-and-restrictions" target="_blank" rel="noopener">README</a>: required distributions for an age-gapped couple are overstated, losses are not carried forward, inflation-protected bonds cannot be represented, all dividends are priced at qualified rates, and the ACA subsidy is not modeled, only its income ceiling.</li>
+					<li>After you save or load a plan, its name and notes stay in the Import/Export boxes, so you can save over it, or change the name slightly to keep a variant, without retyping. Saving over an existing name says it replaced that plan.</li>
+					<li>When you load a saved plan, what changed since it was saved now appears on the Import/Export tab and stays there until you load or save again, instead of flashing past in the status bar. Retirement Start also accepts a calendar year, such as 2031, as well as an age.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.17f4" target="_blank" rel="noopener">Details</a>
+					<a href="optimizer_changelog.md#11.1807" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="behavior"><b>11.17c2</b>
 					<strong>Two corrections to how gains are taxed, and to which account the tool decides to spend from.</strong>
@@ -1053,7 +1067,7 @@
 				<li><b>11.17c1</b>
 					<strong>The Annual Details <i>Timing</i> column now explains what it actually shows.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>That column reports two months, one for the Roth conversion and one for the spending withdrawal, but hovering over it still described a rule the tool no longer uses - it used to choose the month for you based on whether the previous year had converted. The help now says what each half of the value means, and that the spending withdrawal carries that year's income tax and any Medicare surcharge out with it. The <i>Limitations</i> section of the README described the same retired rule and has been corrected. <strong>No number changes.</strong></li>
+					<li>That column reports two months, one for the Roth conversion and one for the spending withdrawal, but hovering over it still described a rule the tool no longer uses - it used to choose the month for you based on whether the previous year had converted. The help now says what each half of the value means, and that the spending withdrawal carries that year's income tax and any Medicare surcharge out with it. The <i>Limitations</i> section of the <a href="README.md#limitations-and-restrictions" target="_blank" rel="noopener">README</a> described the same retired rule and has been corrected. <strong>No number changes.</strong></li>
 					</ul>
 					<a href="optimizer_changelog.md#11.17c1" target="_blank" rel="noopener">Details</a>
 				</li>
@@ -1072,7 +1086,7 @@
 					</ul>
 					<strong>Each entry in the Limit menu now says which income it measures.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>A federal bracket limits taxable income, an IRMAA tier limits MAGI, and an ACA cap limits an MAGI of its own that counts the whole benefit. The README says the same.</li>
+					<li>A federal bracket limits taxable income, an IRMAA tier limits MAGI, and an ACA cap limits an MAGI of its own that counts the whole benefit. The <a href="README.md#how-does-the-aca-limit-work" target="_blank" rel="noopener">README</a> says the same.</li>
 					</ul>
 					<strong>A plan asking for an ACA cap nobody in it can use now says so.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1270,7 +1284,7 @@
 			</details>
 			<h3>How to Use</h3>
 			<div class="log-entry"><ul>
-				<li><strong>Withdrawal Strategy:</strong> The <em>Withdrawal Strategy</em> box (top of sidebar) controls how the simulation draws from your accounts each year. Set the <i>After-Tax Spend</i> goal (annual after-tax income needed) and <i>Spend Delta</i> (yearly change - default −1% per <A HREF="https://retirementresearcher.com/retirement-spending-smile">historical data</A>). The <i>IRA Goal</i> field (just below the strategy box) sets a floor <strong>in today's dollars</strong>, inflation-adjusted (CPI) to each year so it tracks the inflation-indexed brackets, IRMAA tiers, and ACA cliffs it is meant to manage: most strategies draw from the IRA only until it reaches this (inflating) balance, then shift to other sources. For <em>Reduce IRA in N Years</em> it is the amortization target; for all other strategies it is the minimum balance the optimizer will not draw below.
+				<li><strong>Withdrawal Strategy:</strong> The <em>Withdrawal Strategy</em> box (top of sidebar) controls how the simulation draws from your accounts each year. Set the <i>After-Tax Spend</i> goal (annual after-tax income needed) and <i>Spend Delta</i> (yearly change - default −1% per <A HREF="https://retirementresearcher.com/retirement-spending-smile">historical data</A>). The <i>IRA Goal</i> field (just below the strategy box) sets a floor <strong>in today's dollars</strong>, inflation-adjusted (CPI) to each year so it tracks the inflation-indexed brackets, IRMAA tiers, and ACA cliffs it is meant to manage: most strategies draw from the IRA only until it reaches this (inflating) balance, then shift to other sources. For <em>Reduce IRA in N Years</em> it is the amortization target; for <i>Fill Fed/IRMAA Bracket</i> and <i>IRA Draw %</i> it is a floor the withdrawal will not cross, so it only matters once the balance nears it. <i>Proportional Withdraw</i>, <i>Ordered</i> and <i>Guyton-Klinger</i> do not use it at all, and the field greys out when one of them is selected.
 					<details style="margin-top:8px;">
 					<summary style="font-size:0.88em;color:#555;cursor:pointer;user-select:none;font-weight:600;">Detailed Strategy Discussion…</summary>
 					<div style="margin-top:6px;font-size:0.88em;line-height:1.5;">
@@ -1290,11 +1304,14 @@
 						<li><em>BIRC</em> (Brokerage → IRA → Roth → Cash): clears brokerage before tax-deferred, and spends Cash last.</li>
 					</ul>
 					</p>
+					<p><strong>Guyton-Klinger Guardrails</strong> - lets spending move with the portfolio instead of holding it fixed. Each year the withdrawal rate is checked against two guardrails: if it rises above the upper one, spending is cut; if it drops below the lower one, spending is raised, by the same amount either way. The tool uses a band of &plusmn;20% and an adjustment of 10%; those two settings are hidden in the standard view. The <i>IRA Goal</i> is not used. Because spending varies from year to year, compare this strategy in the Optimizer under <i>Maximum Spending</i> rather than by ending wealth alone.</p>
 					<p><strong>Cycle Brokerage</strong> - a toggle that layers on top of any strategy. When enabled, the simulation alternates between IRA draw years and brokerage harvest years. The cycle length N is recomputed each year as round(IRA&nbsp;÷&nbsp;Brokerage), so the ratio self-corrects as balances evolve. In a harvest year, spending is funded from brokerage capital gains instead of IRA withdrawals, realizing gains at the preferential LTCG rate (often 0% for many retirees) rather than as ordinary income. Advantages: (1)&nbsp;steps up the cost basis each cycle, reducing future LTCG tax; (2)&nbsp;frees the full IRA bracket headroom for Roth conversions in harvest years; (3)&nbsp;lower MAGI in IRA years can keep IRMAA tiers lower. DRIP (dividend reinvestment) is automatically forced on so dividends reinvest into brokerage rather than leaking to Cash as ordinary income. Two orderings are available: <em>IRA-first</em> (🗘 red) runs N IRA years then harvests - better when the brokerage has high unrealized gains (delay harvest to let IRA deplete first); <em>Brokerage-first</em> (🔄) harvests immediately at the start of each cycle - better when brokerage basis is high (low gains) so the tax cost of harvesting is small. The Optimizer and Monte Carlo always evaluate all three variants. Caveats: harvest years raise MAGI, triggering IRMAA surcharges 2 years later and potentially causing ACA cliff loss; with a very high-gains brokerage the strategy can become less effective as effective LTCG rate rises over time.</p>
 				<p><strong>Strategy panel controls</strong> - these sit with your strategy in the sidebar and affect every tab:</p>
 					<ul style="margin:4px 0 8px 16px;">
 						<li><strong>Maximize Conversions</strong> - gets as much into Roth as the plan allows, two ways at once. First, any IRA withdrawal surplus beyond the spend goal is converted to Roth rather than left in Cash. That is a same-dollar move: the money was already withdrawn and taxed on its way out, so this only changes where it lands, and nothing is lost to tax by doing it. Second, it uses available Cash to cover conversion taxes rather than letting those taxes come out of the conversion itself - the standard advice for Roth conversions, and what makes an <em>Extra Annual Roth Conversion $</em> of $20,000 actually deliver $20,000 to the Roth instead of roughly $13,700 (see the field below). It only ever uses Cash you have: when Cash is short it covers what it can, and at $0 Cash it changes nothing. The two switches beneath it, <em>Convert Excess to Roth</em> and <em>Use Cash</em>, split it into its halves so you can run either alone. On by default in the Optimizer (see note below); toggle it on in single-scenario mode to match.</li>
 						<li><strong>Extra Annual Roth Conversion $</strong> - a fixed dollar amount converted from IRA to Roth every year, on top of whatever your strategy and Maximize Conversions already do. Two things to know. (1) The amount you enter is the <em>gross</em> withdrawal from the IRA, and a conversion owes tax on it. Without <em>Use Cash</em>, that tax comes out of the conversion, so less arrives in Roth than you typed - $20,000 entered lands about $13,700 at a 31% marginal rate. With <em>Use Cash</em> on, Cash covers the tax and the full $20,000 lands. Either way, the Roth Conv column in Annual Details shows what actually arrived; the extraConv column (Opp. Cost category) shows the gross. (2) It is capped only by your remaining IRA balance each year - it does <em>not</em> stop at your IRA Goal, because a conversion moves money IRA-to-Roth rather than out of the household, and drawing the IRA down is usually the point. This is the same amount the Optimizer's <em>Optimize Conversions</em> search solves for, and loading a ⇌ row fills it in for you.</li>
+						<li><strong>Stop conversions after</strong> - the last year Roth conversions run. Enter a calendar year (for example 2031) or your age (for example 71); conversions stop the year after. Leave it blank to convert for the whole plan. The choice beside it sets what stops: <i>all conversions</i> stops both your strategy&rsquo;s own bracket filling and the <i>Extra Annual Roth Conversion $</i>, while <i>extra only</i> stops just the Extra Annual Roth Conversion and lets the strategy keep filling brackets. Converting past the point where the tax paid stops earning its keep can leave you worse off than not converting at all.</li>
+						<li><strong>Roth before Brokerage</strong> - when a year&rsquo;s spending needs more than your strategy itself withdraws, the shortfall is filled from Cash, then Brokerage, then Roth. Switch this on to take Roth ahead of Brokerage; Cash still comes first. Drawing Roth avoids realizing capital gains, but it spends the account that grows tax-free, so it helps some plans and hurts others, and nothing about a plan predicts which. The Optimizer runs it both ways and marks the alternative &#x1F161;. <i>Ordered</i> ignores it and draws in the sequence you chose.</li>
 						<li><strong>Cycle Brokerage</strong> - layers cyclic IRA/brokerage alternation on top of any strategy (see <em>Cycle Brokerage</em> above).</li>
 					</ul>
 				<p><strong>Optimizer search options</strong> - these two live at the top of the <em>Optimizer</em> tab rather than the sidebar, because they change only what the Optimizer searches for and have no effect on your single-scenario plan, the charts, or Monte Carlo:</p>
@@ -1326,20 +1343,20 @@
 						<li><strong>Roth Conversion Effectiveness</strong> and <strong>Earliest Break Even</strong> rank by the conversion columns, so they are only meaningful when <i>Optimize Conversions</i> has produced &#8646; rows. Plans without them sort to the bottom.</li>
 					</ul>
 				</li>
-				<li><strong>1. Profile &amp; Ages:</strong> Enter the birth year and month of each person and estimated life expectancy. The current age, RMD start age, and projected first-year RMD amount are shown below each person's birth fields and update live. Use the <i>Include Spouse</i> checkbox to model a single taxpayer - unchecking it hides all spouse fields and excludes the spouse from the simulation. <i>Retirement Start Age</i> is the age at which you stop earning income; the simulation inflates tax brackets, SS COLA, and spending forward to that year automatically.</li>
-				<li><strong>2. Assets at Retirement Age:</strong> Enter the balances you expect to hold <em>in the year the plan starts</em> - the heading names that year. <strong>This tool has no accumulation phase</strong>: it never grows your accounts between today and a later retirement year, so if that year is in the future, forecasting the balances to it is yours to do. Amounts are in that year's dollars. <i>Brokerage Basis</i> is used to calculate capital gains vs. principal. Total all after-tax investment assets into <i>Brokerage</i>, and all cash-like holdings into <i>Cash</i>. The <i>Reinvest Brokerage Dividends</i> checkbox keeps dividends inside the brokerage account (growing both balance and basis); when unchecked, dividends flow to Cash. Should one spouse predecease the other, all IRA assets are inherited by the remaining spouse. Enter Roth balances separately - <i>Your Roth IRA</i> and <i>Spouse Roth IRA</i> are tracked independently throughout the simulation. The collapsible <i>Account Composition</i> subsection records Equity/Bond ratios - informational only in single-scenario mode, but used by Monte Carlo Bootstrap and Stress modes to apply per-account return sequences.</li>
-				<li><strong>3. Annual Income &amp; QCDs:</strong> Input annual Social Security and pension amounts. Set the start ages to see the impact of delaying benefits - the <i>Pension Start Age</i> lets you model a deferred pension that begins after retirement (leave 0 to start at retirement). SS amounts are adjusted annually by the <i>CPI/COLA</i> rate. <i>Survivorship</i> is the percentage of the pension that continues after You pass away. Enable <i>Pension has COLA</i> only if your pension includes a cost-of-living adjustment - most pensions are fixed-dollar. The <i>Charitable Giving (QCD)</i> block at the bottom of this section handles Qualified Charitable Distributions.</li>
-				<li><strong>4. Assumptions:</strong> <i>Dividend Rate</i> and <i>State Taxation</i> are the most-changed inputs - set these first. <i>Social Security Fail</i> models the projected trust fund shortfall year and reduced payout.
+				<li><strong>1. Profile &amp; Ages:</strong> Enter the birth year and month of each person and estimated life expectancy. The current age, RMD start age, and projected first-year RMD amount are shown below each person's birth fields and update live. Use the <i>Include Spouse</i> checkbox to model a single taxpayer - unchecking it hides all spouse fields and excludes the spouse from the simulation. <i>Retirement Start Age</i> is the age at which you stop earning income; the simulation inflates tax brackets, SS COLA, and spending forward to that year automatically. You can enter your age or the calendar year you retire (a number of 1000 or more is read as a year), and it is one start for the household: both spouses begin retirement in the same year.</li>
+				<li><strong>2. Assets at Retirement Age:</strong> Enter the balances you expect to hold <em>in the year the plan starts</em> - the heading names that year. <strong>This tool has no accumulation phase</strong>: it never grows your accounts between today and a later retirement year, so if that year is in the future, forecasting the balances to it is yours to do. Amounts are in that year's dollars. <i>Brokerage Basis</i> is used to calculate capital gains vs. principal. Total all after-tax investment assets into <i>Brokerage</i>, and all cash-like holdings into <i>Cash</i>. The <i>Reinvest Brokerage Dividends</i> checkbox keeps dividends inside the brokerage account (growing both balance and basis); when unchecked, dividends flow to Cash. Should one spouse predecease the other, all IRA assets are inherited by the remaining spouse. Enter Roth balances separately - <i>Your Roth IRA</i> and <i>Spouse Roth IRA</i> are tracked independently throughout the simulation. The collapsible <i>Account Composition</i> subsection records Equity/Bond ratios - informational only in single-scenario mode, but used by Monte Carlo Bootstrap and Stress modes to apply per-account return sequences. <i>Cash Reserve</i> decides where money withdrawn beyond your spending goes, which is mostly forced RMDs. At the default of 0 no cash buffer is kept and all of that surplus is reinvested in Brokerage. A positive amount, in today&rsquo;s dollars and inflation-adjusted, keeps that much in Cash and reinvests only the surplus above it; spending will not draw that buffer down unless every other account is exhausted. Enter <i>Off</i> for the original behavior, where all surplus stays in Cash earning the cash yield. <i>Advisor Fee</i> models an annual advisory or fund fee: a small number is read as a percentage of the billed accounts and a large one as a flat dollar amount that grows with CPI, and adding % or $ says which you meant (20k means 20,000). It is charged at the start of each year against the previous December 31 balances, and money taken from an IRA to pay it is not a taxable distribution. <i>Fee applies to</i> picks which accounts are billed and which pay. It starts at <i>None</i>, so no fee is charged until you choose, and Cash is never billed.</li>
+				<li><strong>3. Annual Income &amp; QCDs:</strong> Input annual Social Security and pension amounts. Set the start ages to see the impact of delaying benefits - the <i>Pension Start Age</i> lets you model a deferred pension that begins after retirement (leave 0 to start at retirement). SS amounts are adjusted annually by the <i>CPI/COLA</i> rate. <i>Survivorship</i> is the percentage of the pension that continues after You pass away. <i>Pension COLA</i> sets how the pension rises each year: <i>No increase</i>, which fits most private pensions; a cap of 1%, 2% or 3% that pays the lesser of the cap and that year&rsquo;s CPI, so a capped pension falls permanently behind in a high-inflation stretch; or <i>Full COLA</i>, which tracks CPI, as federal CSRS and military pensions do. The <i>Charitable Giving (QCD)</i> block at the bottom of this section handles Qualified Charitable Distributions.</li>
+				<li><strong>4. Assumptions:</strong> <i>Dividend Rate</i> and <i>State Taxation</i> are the most-changed inputs - set these first. <i>Dividend Rate</i> is the share of each account paid out as dividends each year, all taxed as qualified dividends; Brokerage dividends go to Cash unless <i>Reinvest Brokerage Dividends</i> is on, and IRA and Roth dividends stay in their own accounts. <i>Social Security Fail</i> is the year a trust fund shortfall is assumed to cut benefits, and <i>SS Net Payout%</i> is the share still paid from then on; set the payout to 100 if you do not expect a cut.
 					<br><br>
 					<strong>Growth rate - nominal, not real.</strong> Enter the <em>nominal</em> (before-inflation) annual return for IRA, Roth, and Brokerage. The tool deducts inflation internally - do <em>not</em> pre-subtract inflation yourself. The real (purchasing-power) growth rate is approximately <code>nominal − inflation</code> (Fisher equation: <code>(1+g)/(1+i)−1</code> precisely). For reference: the S&amp;P 500 has returned roughly 10% nominal (≈7% real) since 1928; a diversified 60/40 portfolio averages 7–9% nominal; a conservative bond-heavy allocation 4–6%. Note that the dividend rate is <em>additive</em> - 5% growth + 1.5% dividends = 6.5% total. Asset balances and RMDs grow at the nominal rate, which is why nominal is the correct input even though real growth is what you feel in purchasing power.
 					<br><br>
 					<strong>Seeing real (inflation-adjusted) values.</strong> All dollar amounts in Annual Details are shown in <em>future nominal dollars</em> by default. Use the <strong>Future $ / Current $</strong> toggle in the tab bar (left of Annual Details / Charts / Optimizer / Monte Carlo) to restate every balance and income figure in today's purchasing power - this is the clearest way to judge whether your plan preserves your standard of living over time.
 					<br><br>
-					<i>Cash Interest</i> is for HYSA and money-market holdings. <i>Inflation</i> drives spending-goal escalation; <i>CPI/COLA</i> drives bracket indexing and SS cost-of-living adjustments (they often differ). Medicare/IRMAA dollar amounts grow at <i>CPI + Inflation</i> combined.</li>
+					<i>Cash Interest</i> is for HYSA and money-market holdings. <i>Inflation</i> drives spending-goal escalation; <i>CPI/COLA</i> drives bracket indexing and SS cost-of-living adjustments (they often differ). Medicare/IRMAA dollar amounts grow at <i>CPI + Inflation</i> combined. <i>Fed Tax Creep %/yr</i> stress-tests future federal tax increases. It raises the federal ordinary-income bracket rates by that percentage a year from <i>Creep Starts</i> onward (leave the start blank for the first plan year), so a 22% bracket becomes about 26.8% after 20 years at 1%. Bracket thresholds keep tracking CPI, and state tax, capital gains, the 3.8% investment-income surtax and IRMAA are not changed. <i>Medicare premiums</i> sets whether the Part B and Part D base premiums are assumed to be inside your After-Tax Spend, the default, or charged on top of it; the IRMAA surcharge is charged either way. The <i>Enrolled at 65</i> switches let you switch off anyone who will not enroll, for example because a spouse&rsquo;s employer plan or the VA covers them, and that person then owes no premium and no surcharge. <i>Marginal Heirs Tax Rate</i> is the combined federal and state rate of whoever inherits your traditional IRA; it drives the Roth conversion break-even and the after-tax legacy figures. Enter 0 if the IRA goes to charity, or leave it blank to use the plan&rsquo;s own computed marginal rate.</li>
 				<li><strong>After Changes...</strong> Changes to any input - balances, rates, ages, strategy switches, or any other value - trigger an immediate recalculation. On the <i>Annual Details</i> table, rows are highlighted yellow when filing status changes to Single; pink/red means the portfolio cannot cover the required draw (a real shortfall - for the strict <i>ACA Cliff</i> strategy this means the plan is untenable at that spend, and for <i>Ordered</i> a small residual can remain because the strategy will not step outside your chosen sequence). The <span onclick="showAnnualColumns('ForcedIRA')" style="cursor:pointer;color:#2980b9;text-decoration:underline;text-decoration-style:dotted;"><code>ForcedIRA</code></span> column shows where spending was funded by drawing extra IRA after Cash, Brokerage and Roth ran out; for the soft <i>Fill Bracket / IRMAA</i> strategies that draw goes above the ceiling and <span onclick="showAnnualColumns('BracketOverage')" style="cursor:pointer;color:#2980b9;text-decoration:underline;text-decoration-style:dotted;"><code>BracketOverage</code></span> shows by how much. The <i>Balances</i> chart has a <i>Both / Mine / Spouse</i> toggle. The <span onclick="goToTab('tab-opt')" style="cursor:pointer;color:#2980b9;text-decoration:underline;text-decoration-style:dotted;"><i>Optimizer</i></span> sweeps all strategy variations and highlights the best result per column. The <span onclick="goToTab('tab-mc')" style="cursor:pointer;color:#2980b9;text-decoration:underline;text-decoration-style:dotted;"><i>Monte Carlo</i></span> tab runs all variations against stochastic return sequences and reports survival rates. Both tabs skip a full rebuild if inputs are unchanged. Use <i>Import/Export</i> to save, load, or delete named scenarios.</li>
 			</ul></div>
 
-			<p>For limitations and features not currently modeled, see the <a href="https://github.com/nightskyguy/retirement_assets" target="_blank">README.md</a>.</p>
+			<p>For limitations and features not currently modeled, see the <a href="README.md#limitations-and-restrictions" target="_blank" rel="noopener">README.md</a>.</p>
 
 			<h4>Where is the Code</h4>
 			<p>You can run this locally (download the *.html and *.js and *.css files from GitHub):
@@ -1813,7 +1830,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these six are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1117f4';
+    const V = '?v=111807';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

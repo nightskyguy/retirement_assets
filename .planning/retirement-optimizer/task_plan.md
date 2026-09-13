@@ -1,9 +1,8 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-09-12**, v11.17f4 on branch `worktrees/planning-with-files-status-8ba49e`, not yet merged to `main`. Suites **442 / 32 / 61 / 24** (`optimizer_core`, `taxengine`, `taxPaymentPlanner`, `doclinks`), `TestTiers.EXPECTED` and `.githooks/README.md` pinned to match; in-page badge green at 1001. **An accuracy review on 2026-09-11 (user: "what errors, inaccuracies or omission are left to fix") shipped four fixes and opened nine phases, `P117`-`P125`, all O3.** Shipped: part-year growth now COMPOUNDS (it was spread evenly, which manufactured growth peaking mid-year and landed on the Early/Split/Late comparison - ending wealth falls in all 19 bank households, 0.48% to 6.73% among the 17 ending above $100k); the December settlement credit no longer inflates brokerage BASIS; Medicare base premiums can be charged as an outflow with per-person enrollment (default off); and capital-gains caveats for WA, SC, WI, ND, MT. Muni/tax-exempt interest and under-59.5 penalties were ruled OUT of scope by the user.
+**As of 2026-09-13**, v11.1807 on branch `worktrees/planning-with-files-status-8ba49e`, not yet merged to `main`. Suites **443 / 32 / 61 / 26** (`optimizer_core`, `taxengine`, `taxPaymentPlanner`, `doclinks`), `TestTiers.EXPECTED` and `.githooks/README.md` pinned to match; in-page badge green at 1004. **An accuracy review on 2026-09-11 (user: "what errors, inaccuracies or omission are left to fix") shipped four fixes and opened nine phases, `P117`-`P125`, all O3.** Shipped: part-year growth now COMPOUNDS (it was spread evenly, which manufactured growth peaking mid-year and landed on the Early/Split/Late comparison - ending wealth falls in all 19 bank households, 0.48% to 6.73% among the 17 ending above $100k); the December settlement credit no longer inflates brokerage BASIS; Medicare base premiums can be charged as an outflow with per-person enrollment (default off); and capital-gains caveats for WA, SC, WI, ND, MT. Muni/tax-exempt interest and under-59.5 penalties were ruled OUT of scope by the user.
 **Planning files pruned 2026-09-02.** Every completed phase keeps a one-line stub below; the bodies are in `.planning/task_completed.md`. Phases nobody is working on are in `task_parked.md`. Findings that are no longer live - fixed defects, superseded claims, the pre-`Pnn` legacy block - are in `findings_archive.md`, and the rules they earned sit at the top of `findings.md` under "Rules earned the hard way".
-The ID migration table is still below. The Open Task Index and the second recency trail were deleted as stale: **the NOW table here is the only priority list.**
-Citations into `findings.md` are by HEADING, never by line number - about half the old line cites were already dead. Keep it that way.
+The ID migration table is still below. The Open Task Index and the second recency trail were deleted as stale: **the NOW table here is the only priority list.** Citations into `findings.md` are by HEADING, never by line number - about half the old line cites were already dead. Keep it that way.
 
 ## NOW — O0 and O1 only
 
@@ -18,6 +17,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P34 | NOT a P103 prerequisite (a-d are node harnesses); still the whole slow-machine story | `P34a` |
 | **O1** | P28j | `jg`/`jh`/`ji`/`jk` SHIPPED. `jf` MEASURED and NOT acted on - the trigger is unchanged, and its removal case was withdrawn | `P28jn` / `P28jo` |
 | **O1** | P115 | **tax-payment attribution** (user, 2026-09-09). `a` SHIPPED v11.17b1: cash interest trued up to what the cash earned. Priority is mine, not the user's | `P115b` |
+| **O1** | P126 | **Guyton-Klinger becomes a spending control** (user, 2026-09-13). The rule is already separable in the engine; a saved GK plan migrates with identical numbers | `P126a` |
 
 **Live carry-overs from finished phases** - the rest of what those phases did is in their stubs below:
 - `P85` RE-RUN: converting earlier still wins 353 of 499, but **the RMD claim BROKE** - 124 counterexamples, all bracket strategies at a live IRA Goal. `P72` is still pending.
@@ -502,6 +502,74 @@ tool cannot do will actually look.
 - [x] `P125a` README Limitations: ordinary dividends are not tracked, all dividend income is priced at long-term capital-gains rates, tax is **understated** for anyone holding bond funds, REITs or foreign funds. **SHIPPED v11.17f4.**
 - [x] `P125b` README Limitations: the ACA subsidy itself is not modeled, only the income ceiling - lift the existing sentence from the ACA strategy section so it appears where limitations are listed. **SHIPPED v11.17f4.**
 - [ ] `P125c` Neither item grows code. If a future session proposes a qualified-dividend fraction or an ACA premium model, this phase is the record that both were considered and declined, and why.
+
+## P126: Guyton-Klinger as a spending control that works with any withdrawal strategy  *(NEW 2026-09-13, user-raised, O1)*
+
+**The user's case, in substance:** Guyton-Klinger is not a withdrawal strategy. It decides how much to
+SPEND each year, not which accounts the money comes from, so it belongs beside the spend goal as a
+"Guardrails" control that any withdrawal strategy can use. A plan saved with the Guyton-Klinger
+strategy should load with the Guardrails control on, and a withdrawal strategy still to be decided.
+
+### Evaluation - sound, and much cheaper than it looks, because the engine already works this way
+
+- **The rule is already separable.** `P103b5b` added `spendRule: 'gk'`, which runs the guardrail
+  adjustment under ANY strategy; `_usesGKSpendRule(inputs)` is `strategy === 'gk' || spendRule === 'gk'`.
+  The Monte Carlo research ran exactly that combination, and it is the O0 finding in the NOW table:
+  guardrail spending over a bracket-fill draw won 12 of 18 mode-cells at 95-100% survival.
+- **`strategy: 'gk'` has no draw of its own.** There is no `'gk'` case in the withdrawal dispatch, so it
+  falls through to the baseline branch, which the engine's own comment records as **bit-identical to
+  Proportional at 0% boost, verified across 15 cells on every log field**. So a saved GK plan can
+  migrate with its numbers unchanged: `{strategy: 'gk'}` becomes
+  `{strategy: 'propwd', propWithdraw: 0, spendRule: 'gk'}`. "A withdrawal strategy to be decided" has
+  a lossless default, which turns the choice from a forced change into a recommendation.
+- **The cost is in the surface, not the engine.** Every place below keys on `strategy === 'gk'` today:
+  - UI: the `gk` option in `#strategy`; the Guard % / Adjust % panel `#ui-gk`, nerdknob-gated today,
+    becomes a visible control beside After-Tax Spend and Spend Delta; share-link keys `gkg`/`gka`
+    exist, and the rule needs its own key.
+  - Optimizer: `buildStrategyFamilies` pushes one Guyton-Klinger family row.
+  - `gkSpendStable` (used by optimizeSpend, optimizeConversionAmount, bestTimeLimitedConversion) checks
+    `overrides.strategy !== 'gk'` and must check the rule.
+  - `IRA_GOAL_BLIND_STRATEGIES` lists `'gk'`; IRA Goal relevance must follow the DRAW strategy.
+  - The `gkSpend` / `gkAdj` log columns appear only when `strategy === 'gk'`.
+  - `scheduleOptionsForRun` picks `gapFill` by `strategy === 'fixed' || 'gk'`; with the rule on
+    `propwd` it would pick `cascade`, so schedule replay has to be checked for migrated plans.
+  - Monte Carlo: `mc_tab.js` branches on `v.strategy === 'gk'`.
+  - Tests: 18 core tests build `strategy: 'gk'` (2 already use `spendRule`); the `sweep_golden`
+    enumerations include the GK family and will change deliberately.
+  - Docs: the How to Use "Guyton-Klinger Guardrails" strategy paragraph, added on this branch, and the
+    Optimize for "Maximum Spending" note both describe GK as a strategy.
+
+### The two decisions this phase exists to take
+
+1. **The Optimizer's shape.** Either apply the user's Guardrails setting to every family row (no extra
+   rows; the table then compares draws under the spending rule the user chose), or sweep fixed spend
+   against guardrails as a dimension (every family twice - the run-time cost `P34` exists to control
+   on the audience's slow machines). The first is the smaller change and matches "a control"; the
+   second is what would reproduce the `P103` finding inside the page.
+2. **The draw a migrated plan is offered.** Proportional 0% reproduces it exactly. Bracket fill is what
+   the research favors. Recommended: migrate losslessly to Proportional 0%, and let the load report on
+   the Import/Export tab say so and suggest trying bracket fill, rather than moving a saved plan's
+   numbers on load.
+
+### Risks worth measuring before shipping
+
+- Guardrails over a non-proportional draw have been measured only in the research Monte Carlo runs
+  (`P103`), never in the deterministic single-plan view a user reads.
+- `gkSpendStable`'s stability floor was tuned against the proportional draw.
+- Spend Delta % and guardrails both move the spend goal; decide whether both may be on at once.
+
+### Items
+
+- [ ] `P126a` Take the two decisions above, and write them down, before any code.
+- [ ] `P126b` Engine and load paths: map `strategy: 'gk'` on every way in (saved plans, imports, share
+      links, harness inputs) to `propwd` 0% + `spendRule: 'gk'`, and key every `strategy === 'gk'` check
+      on the rule instead. Test: each migrated plan reproduces its log bit for bit, on every bank
+      household and in every Monte Carlo mode.
+- [ ] `P126c` UI: a Guardrails control (on/off, Guard %, Adjust %) beside the spend goal, visible to
+      everyone; the strategy option removed; the load report names the substitution.
+- [ ] `P126d` Optimizer and Monte Carlo per `P126a`; goldens regenerated deliberately; run time measured
+      on the slow-machine reference.
+- [ ] `P126e` How to Use, README and changelog: describe Guyton-Klinger as a spending control.
 
 ## P116: prune the harnesses and research reports  *(2026-09-09. `a`, `c`, `d` DONE 2026-09-10; `b` OPEN)*
 

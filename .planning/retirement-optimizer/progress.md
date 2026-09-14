@@ -5070,3 +5070,164 @@ Maximize Conversions switch.
 to have a `.toggle-switch` and forbids a label nested in a label. Proved against the shipped
 markup: on HEAD it flags `medicareEnroll1` and `medicareEnroll2` at lines 568-569, on the fix it
 passes, and it matched 13 toggle labels in both. doclinks 24 -> 25.
+
+## Session: 2026-09-13 (worktree readme-review-updates-c9df11) - `/plan` re-entry, resync, Guardrails decisions
+
+`/plan` invoked with no task. The planning files already exist under `.planning/retirement-optimizer/`, so no
+root-level copies were created. `session-catchup.py` reported nothing unsynced.
+
+**State measured, not assumed.** Branch `worktrees/planning-with-files-3c273e` = `main` = `79379e9` (Merge PR
+#223), tree clean, `<title>` 11.1807. All four suites run: 443 / 32 / 61 / 26, equal to `TestTiers.EXPECTED`
+and `.githooks/README.md`.
+
+**Five drifts closed in `task_plan.md`.** The header still called 11.1807 unmerged. `P115b` was listed open
+although the 09-11 session closed it (basis half shipped, tax-share half declined). `P28jo`'s Split/Early/Late
+modes shipped in `a5d8aa9` (v11.17ae), leaving only Automatic. `P110a` shipped in the same commit and `P110b`
+was resolved by the move. P112 still called `P28jn`/`P28jo` blocked on households that `P112a` had supplied.
+
+**The entry above under-reports `66d1088`.** Besides the Medicare switches it shipped: Retirement Start accepts
+a calendar year (a crash fix), Save keeps the plan name and notes, the load report became a panel on
+Import/Export, the How to Use audit, and the new-tab doc-link guard. Final counts were core 442 -> 443 and
+doclinks 24 -> 26, not 25.
+
+**`P126a` DONE - three decisions, taken by the user** after asking for the options in plain English rather
+than phase IDs:
+1. The Optimizer and Monte Carlo test every strategy both ways, with and without Guardrails. About twice the
+   rows and run time, and rows that spend differently ranked together - both accepted.
+2. A saved Guyton-Klinger plan loads as Proportional 0% with Guardrails on, which gives the same numbers, and
+   the load report suggests trying Fill Bracket.
+3. Guard ±% and Adjust % stay nerd-view only; the switch is visible to everyone.
+
+The planning turn ran close to an hour - three exploration agents, then a design agent - and the user flagged
+it. Both lessons are in memory.
+
+## Session: 2026-09-14 (worktree readme-review-updates-c9df11) - P126 built: Guardrails as a spending control, v11.181f
+
+**Identity before any code.** 20 households x 4 variants run as `strategy: 'gk'` on `79379e9` and as
+`propwd` 0% + `spendRule: 'gk'` on the change - deterministic, both optimizers, every path of four
+Monte Carlo modes: **560 of 560 records identical, no field excluded.** Detail in findings.md under
+"P126 - the stability floor across draws".
+
+**Engine.** The `'gk'` strategy is gone. `simulate()` and each Monte Carlo variation now throw on a
+strategy name the dispatch does not know, instead of silently drawing the baseline. The log columns,
+the stability floor, the IRA Goal list, strategy identity and the replay gap fill key on the rule;
+the suggested-spend menu forces it off; `spendRuleClones` gives every row a 🛡️ twin in both sweeps.
+
+**Page.** A Guardrails switch under Spend Delta on the page's toggle pattern, a sentence stating the
+rule in force for everyone, the band and step behind the nerdknob. Old plans fold in `loadFromURL`,
+`applyScenario` and `commitScenario` and say so in the load report; the uncalled `loadScenario` is
+deleted; share key `gr`.
+
+**Measured.** The floor across draws tripped two of its stop conditions (4 of 17 households; one
+conversion pick worse than converting nothing) - **the user chose to ship as is**, open as `P126f`.
+Run time: the default Optimizer sweep 949 -> 998 ms, a Monte Carlo compare 9.0 -> 15.3 s at 50 paths.
+
+**Browser-verified** on the worktree served with `--root`: the old link `?str=gk&gkg=15&gka=5` loads
+as Proportional 0% with the switch on and every total identical to HEAD to the cent; a plan saved on
+11.1807 imports as "reproduces the numbers it was saved with" plus the substitution note; clicking the
+label text flips the switch and `gr=1`; the switch measures 44 x 24 like Maximize Conversions; the
+Optimizer shows 309 rows, 155 of them 🛡️, with the current plan matched; Monte Carlo My Plan Only
+runs 400 of 400 paths; `?nerdknob` shows the fields; `?runtests=fast` tier 1 passed 454 of 454.
+
+**Tests.** optimizer_core 443 -> 449; MC golden regenerated; Optimizer golden recaptured in the browser.
+Harnesses: three direct arms moved to the rule, six sweep users add an explicit GK arm,
+`family_equivalence_harness.js` deleted - its one claim is now the migration. Not committed.
+
+## Session: 2026-09-14 (continued) - Guardrails sweep reworked, Compare All = the Optimizer's rows, v11.1820
+
+**The user changed decision (1) after seeing the table.** The Guardrails twins dominated the top of the
+Optimizer, so: "Do NOT sweep guardrail on/off" - every row follows the switch, and only the user's own
+plan is run both ways. `spendRuleClones` is gone; `planRuleTwin()` builds the one extra row, which the
+Optimizer adds beside its current-plan row and Monte Carlo's `withCurrentPlan()` appends.
+
+**Compare All was running a different sweep from the Optimizer** - the user spotted Reduce 2/4/6/8. MC
+had its own grid and its own gates. `MC_GRIDS` is deleted; `sweepOptions(base, flags)` is the one options
+builder both call, and a test pins that `buildVariations` adds nothing to the Optimizer's enumeration
+under every page flag. Page defaults: Compare All runs 122 rows plus the twin (was 156), 8.1 -> 6.5 s at
+50 paths in node.
+
+**A shipped defect fell out of it.** "My Plan Only" and the stress pass ran the MATCHING swept row, which
+carries none of the plan's Extra Conversion, stop year or conversion switch. They now run the plan as
+configured, and the matched row only lends its labels; a $20,000 Extra Conversion was seen to reach the
+plan-scope variation.
+
+**Browser-verified.** Switch off: 122 swept rows and exactly one 🛡️ row, "Proportional 20%, Guardrails
+on". Switch on: 155 of 156 Optimizer rows carry the rule, and the twin reads "Guardrails off". Compare
+All's Reduce lengths are 3/7/11/17/23 and its IRA Draw 5-13 odd, 123 variations either way. Suites
+450 / 32 / 61 / 26; badge "All 1020 tests passed". The first `?runtests=fast` load reported 449 expected:
+a cached `optimizer_tests.js` under an unchanged `?v=` token, cleared by a forced refetch - a file changed
+after a page load needs a new token even inside an unreleased stamp, or the browser check reads the old copy.
+
+Goldens: MC regenerated (390 rows), Optimizer recaptured (122 / 154 / 174 / 142). Not committed.
+
+## Session: 2026-09-14 (later) - My Plan Only both ways, Guardrails in savings terms, IRA Goal copy, v11.1821
+
+Four user asks, all built and browser-verified. Not committed.
+
+1. **"The IRA Goal tooltip is wrong. I thought it had been reworded."** It never was: `P107g`
+   (2026-09-05) decided the rewrite and the name `IRA Target`, and neither shipped. The tooltip and the
+   How to Use sentence still said "minimum balance to preserve" and "a floor", the meaning the user
+   rejected. Both now call it the balance to bring the IRA down TO, name what can still take the IRA
+   below it (RMDs, an Extra Conversion, spending the other accounts cannot cover), and say Reduce
+   reaches it in N years. The Reduce help line said "over the remaining simulation years", but
+   `amortYears = nYears - y` and `calculateAmortizedWithdrawal` returns 0 after N years, so that line
+   is fixed too. The rename is still open.
+2. **Guardrails described by savings** (user: "the user doesn't manage or configure the withdrawal
+   rate"). Switch tooltip, the sentence under it, band and step tooltips, How to Use, the Optimizer
+   legend, README and the changelog: the first year sets the safe level (what you spend per dollar
+   saved), and spending is cut when it is more than the band above the safe level for the savings you
+   have. That is the engine's `spend / portfolio > IWR x (1 + g)`, multiplied through.
+3. **My Plan Only runs the plan both ways**, as a two-row table like Compare All.
+   `planScopeVariations()` is the plan as configured, named with its own setting, plus
+   `ruleTwinVariation()` (factored out of `withCurrentPlan`). The stress pass and the teaching demo
+   still run the plan alone. The twin shares the plan's family color, so the chart gives it the first
+   unused one via `_mcTwinIdx`, which also covers a checked twin in Compare All.
+4. **The Compare All parity line left the changelog**: nobody expected the tabs to differ, so it is not
+   news. README's strategy paragraph dropped the same sentence. "Stop year" also left the My Plan Only
+   bullet: `main`'s `buildVariations` never stripped `convEndYear`, so that part nets to zero; the Extra
+   Conversion and the conversion switches really were lost on `main`.
+
+**Verified.** Node suites 450 / 32 / 61 / 26, unchanged. Browser, default plan, Historical, 400 paths:
+switch off gives "📍 Proportional 20%, Guardrails off" 79.0% and "🛡️ Proportional 20%, Guardrails on"
+100.0% in blue and magenta; switch on gives the same two numbers with the rows swapped, in blue and
+teal (without the color fix both would be blue). 800 simulations in 2.2 s; button "My Plan Only
+(1.8 sec)". Compare-scope twin at index 122 of 123. New in-page test `myPlanOnlyRunsThePlanBothWays`,
+12 asserts. `?runtests=fast`: "All 1032 tests passed (466 in-page + 566 node)". Changelog entry trimmed
+from 246 to 170 words. Memory: two feedback files gained today's rules (savings, not rates; parity is
+not news).
+
+## Session: 2026-09-14 (later still) - Current $ and Show as Differences by default, v11.1822
+
+**User: "make Show as Differences the default setting" and "Make Current $ the default instead of
+Future $".**
+
+- **Current $**: `checked` on `#show-current-dollars` in the markup. It sits in the tab bar, outside
+  `SHARE_INPUT_SELECTOR`, so neither `captureDefaults()` nor saved plans record it; only an explicit
+  `cd=` link parameter overrides it. A link without `cd` now opens in Current $, display only, no
+  number changes. The Tax Payment Planner handoff reads the log row, not the cells, so it is unaffected.
+- **Show as Differences**: `OptimizerState.relativeView` defaults to true, and the switch is no longer
+  nerdknob-gated. It had to be ungated: `applyNerdKnobVisibility` forced the mode OFF outside nerd
+  view, and a default-on mode behind a hidden switch leaves a table of differences with no way back
+  (the gate's own comment). The ⚖ compare hint, visible to everyone, already told readers to "Turn on
+  Show as Differences"; it now says the switch is on by default.
+- **A defect from the earlier My Plan Only change, fixed before it shipped:** `updateCurrentDollarsView`
+  still skipped the Monte Carlo survival table in plan scope ("Plan scope never renders the table"), so
+  the new two-row table would have kept its old dollar basis when the switch flipped.
+- How to Use's paragraph on dollar bases now states Current $ as the default. The changelog gains one
+  line (page `<li>` and .md) and was trimmed to hold its length.
+
+**Verified** (fresh load, title 11.1822, not in nerd view): Current $ checked at load, End Wealth
+$469,521 (Future $: $954,440), both directions by clicking the label. Optimizer: switch drawn 44 x 24
+and on, label "Show As Differences (from the ⚓ baseline)"; baseline row 581,606 / 353,842, the current
+plan −112,085 / +45,901, and clicking the label shows 469,521 / 399,743 (baseline plus the
+differences). My Plan Only table follows the switch ($1,059,738 Current $, $2,486,342 Future $). Node
+suites 450 / 32 / 61 / 26; `?runtests=fast` "All 1032 tests passed (466 in-page + 566 node)". Not
+committed.
+
+## Session: 2026-09-14 (PR) - v11.1823, the user's README edits included
+
+User: "I made changes to /README.md include them in the change set. Then create a PR". The edits were in
+this worktree's README.md (modified 11:14; the main checkout's copy untouched): tool verdicts ("In
+Summary" lines), five tax-payment plans, Medicare premium wording, trimmed release notes. md-html-scan
+clean, no conflict markers; included as written. Stamp refreshed to 11.1823 (title, changelog, six
+`?v=` tokens). One commit on `worktrees/planning-with-files-3c273e`, for a PR against `main`.

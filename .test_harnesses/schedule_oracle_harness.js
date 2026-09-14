@@ -50,6 +50,12 @@ const {
     buildStrategyFamilies, OPTIMIZER_GRIDS, bothOnMedicareAtStart,
     compileScheduleFromRun, scheduleOptionsForRun,
 } = core;
+// P126 retired strategy 'gk', so the sweep no longer emits a Guyton-Klinger family. This study adds the
+// arm it always had - Guardrails over Proportional 0% - explicitly, as a base row without clones.
+const GK_ARM = b => ({ family: 'Guyton-Klinger', modifier: null, strategyLabel: 'Guyton-Klinger',
+    paramLabel: `Grd:${Math.round((b.gkGuard ?? 0.20) * 100)} Adj:${Math.round((b.gkAdjPct ?? 0.10) * 100)}`, paramSortVal: 0,
+    overrides: { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', gkGuard: b.gkGuard, gkAdjPct: b.gkAdjPct,
+                 convertExcessToRoth: true, fundConversionWithCash: false } });
 
 const money = n => (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString();
 const argv = process.argv.slice(2);
@@ -109,7 +115,7 @@ function evalArms(cellBase) {
     for (const f of buildStrategyFamilies(cellBase, {
         grids: OPTIMIZER_GRIDS, irmaaFamily: true, acaFamily: !acaDisabled,
         bracketResetsIRMAATier: true, markCashFunding: true,
-        cashClones: cellBase.Cash > 0, offGridLast: true })) {
+        cashClones: cellBase.Cash > 0, offGridLast: true }).concat(GK_ARM(cellBase))) {
         let res; try { res = runSim({ ...cellBase, ...f.overrides }); } catch (e) { continue; }
         const ovY = res.log.filter(e => (e['BracketOverage'] ?? 0) > 0).length;
         const flagged = (f.overrides.strategy === 'bracket' && res.log.length > 0 && ovY / res.log.length > 0.5)

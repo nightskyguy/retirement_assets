@@ -11,7 +11,7 @@
 // Loadable three ways, like prng.js: module.exports for node, window for the page, bare globals
 // under importScripts in the worker.
 //
-// Depends on, and does not own: simulate(), selectionOf() and afterTaxWealthOfLogRow()
+// Depends on, and does not own: simulate(), assertKnownStrategy(), selectionOf() and afterTaxWealthOfLogRow()
 // (optimizer_core.js), computePercentiles() and computeInputFan() (stats.js), and the bank
 // builders in prng.js.
 
@@ -363,6 +363,10 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
         await h.yieldIfDue();
 
         const baseInputs = varsToUse[vi];
+        // A strategy name simulate() does not dispatch throws on every path, and the per-path catch
+        // below scores a throw as ruin - a 0% survival verdict for a plan that never ran. Fail the
+        // job instead.
+        assertKnownStrategy(baseInputs);
 
         // paths[p * years + y] = portfolio balance (0 once ruined, kept at last value after death)
         const paths        = new Float64Array(numPaths * years);

@@ -17,6 +17,33 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1823"></a>
+
+## 11.1823
+
+**Guyton-Klinger is now Guardrails, a switch that works with any withdrawal strategy.**  
+*Plans and links that used Guyton-Klinger load with the same numbers.*
+
+**Guardrails sit under Spend Delta.** Turn them on and spending follows your savings: it is cut when
+your savings fall far enough that your spending is no longer safe, and raised when they grow far
+enough to spend more.
+
+**Saved Guyton-Klinger plans and links load as Proportional Withdraw at 0% with Guardrails on.**
+
+**The Optimizer and Monte Carlo follow your Guardrails setting**, and each adds your own plan with
+the switch the other way round. Monte Carlo's My Plan Only runs your plan both ways.
+
+**Dollar amounts show in today's dollars (Current $) by default**, and **the Optimizer shows each
+column as the difference from the ⚓ baseline**. The Future $ / Current $ toggle and the Show as
+Differences switch turn either off.
+
+**My Plan Only and the Stress Test run your plan exactly as you set it**, including your Extra Annual
+Roth Conversion and your conversion switches.
+
+**The IRA Goal's help** describes it as the balance to bring your IRA down to.
+
+---
+
 <a id="11.1807"></a>
 
 ## 11.1807

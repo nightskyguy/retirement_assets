@@ -46,7 +46,7 @@ if (IS_NODE) {
 
 // Both modes resolve ONE namespace object rather than reaching for bare globals. In the browser
 // that is deliberate: `function` declarations in the engine land on globalThis but its top-level
-// `const`s (MC_GRIDS, OPTIMIZER_GRIDS, RMD_TABLE) do not, so a per-symbol global lookup would
+// `const`s (OPTIMIZER_GRIDS, RMD_TABLE) do not, so a per-symbol global lookup would
 // silently yield undefined for some of them. See the export guards in taxengine.js/optimizer_core.js.
 const taxengine = IS_NODE ? require('./taxengine.js') : window.TaxEngine;
 
@@ -121,7 +121,8 @@ const buildVariations = core.buildVariations;
 const buildStrategyFamilies = core.buildStrategyFamilies;
 const bothOnMedicareAtStart = core.bothOnMedicareAtStart;
 const planFirstYear = core.planFirstYear;
-const MC_GRIDS = core.MC_GRIDS;
+const sweepOptions = core.sweepOptions;
+const planRuleTwin = core.planRuleTwin;
 const OPTIMIZER_GRIDS = core.OPTIMIZER_GRIDS;
 const sameStrategySelection = core.sameStrategySelection;
 const resolveOrderedSeq = core.resolveOrderedSeq;
@@ -1054,7 +1055,7 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
     // count is still 3 - the plan funds the same spending out of a cheaper tax bill, which is the
     // signature of a valuation fix rather than a behavior change in the withdrawal engine.
     const gk = simulate({
-        ...BASE, strategy: 'gk', nYears: 30,
+        ...BASE, strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', nYears: 30,
         birthyear1: 1960, die1: 92, birthyear2: 1962, birthmonth2: 6, die2: 94, hasSpouse: true,
         IRA1: 1500000, IRA2: 500000, Roth: 200000, Roth2: 100000,
         Brokerage: 600000, BrokerageBasis: 300000, Cash: 100000,
@@ -1360,7 +1361,8 @@ test('baseline metric: higher after-tax NW ranks a richer terminal portfolio hig
 
 const GK_BASE = {
     ...BASE,
-    strategy: 'gk',
+    // P126: Guardrails over Proportional 0%, which is the plan the retired gk strategy ran.
+    strategy: 'propwd', propWithdraw: 0, spendRule: 'gk',
     IRA1: 1000000, IRA2: 0, Roth: 0, Roth2: 0,
     Brokerage: 0, BrokerageBasis: 0, Cash: 0,
     spendGoal: 50000, spendChange: 0,
@@ -1406,12 +1408,22 @@ test('GK inflation skip: mild negative return + WR > IWR skips CPI adjustment', 
     assertNear(res.log[1].gkSpend, 50000, 'gkSpend should not be inflated when Inflation Rule fires', 500);
 });
 
-test('GK regression: non-GK strategy has null gkSpend/gkAdj', () => {
-    const res = simulate({ ...GK_BASE, strategy: 'propwd', propWithdraw: 0 });
+test('GK regression: with Guardrails off, gkSpend/gkAdj are null', () => {
+    const res = simulate({ ...GK_BASE, spendRule: '' });
     for (let y = 0; y < 3; y++) {
-        assert(res.log[y].gkSpend === null, `year ${y} gkSpend should be null for non-GK strategy`);
-        assert(res.log[y].gkAdj === null, `year ${y} gkAdj should be null for non-GK strategy`);
+        assert(res.log[y].gkSpend === null, `year ${y} gkSpend should be null with the rule off`);
+        assert(res.log[y].gkAdj === null, `year ${y} gkAdj should be null with the rule off`);
     }
+});
+
+test('P126: Guardrails fill the gkSpend/gkAdj columns under a non-proportional draw too', () => {
+    // The columns used to key on the strategy, so a Fill Bracket plan with the rule on would have hidden
+    // every cut the rule made. A -80% first year trips the upper guardrail under any draw.
+    const returns = Array.from({ length: 30 }, (_, i) => i === 0 ? -0.80 : 0.00);
+    const res = simulate({ ...GK_BASE, strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1,
+                           stratACAMultiple: 0, returnSequence: returns });
+    assert(res.log[0].gkSpend != null, 'gkSpend is filled whenever the rule is on');
+    assert(String(res.log[1].gkAdj).includes('cap'), `the -80% year must cut spending, got ${res.log[1].gkAdj}`);
 });
 
 // ── GK Optimize-Spend stability floor ───────────────────────────────────────────
@@ -1421,7 +1433,7 @@ test('GK regression: non-GK strategy has null gkSpend/gkAdj', () => {
 // spend across the horizon must stay within one guard band (gkGuard) of the initial.
 // Scenario tuned so baseline is stable but the elevated ceiling spend trips the floor.
 const GK_OPT_BASE = {
-    STATEname: 'CA', strategy: 'gk',
+    STATEname: 'CA', strategy: 'propwd', spendRule: 'gk',
     birthyear1: 1952, birthmonth1: 1, die1: 97,
     birthyear2: 0, birthmonth2: 12, die2: 0,
     IRA1: 1500000, IRA2: 0, Roth: 0, Roth2: 0,
@@ -1438,7 +1450,7 @@ const GK_OPT_BASE = {
 
 test('GK optimize-spend: stability floor caps optimized spend below the +50% ceiling', () => {
     const ceiling = GK_OPT_BASE.spendGoal * 1.5;
-    const opt = optimizeSpend({ ...GK_OPT_BASE }, { strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 });
+    const opt = optimizeSpend({ ...GK_OPT_BASE }, { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 });
     assert(opt, 'GK optimizeSpend should find a stable optimized spend (not null)');
     assert(!opt.hitCeiling, 'floor should prevent hitting the +50% ceiling');
     assert(opt.optimizedSpend < ceiling * 0.90,
@@ -1453,10 +1465,10 @@ test('GK optimize-spend: stability floor caps optimized spend below the +50% cei
         `min real spend ${Math.round(minReal)} fell below guard-band floor ${Math.round(initReal * 0.80)}`);
 });
 
-test('GK optimize-spend: floor is GK-specific — propwd reaches a higher spend on same inputs', () => {
-    const gk = optimizeSpend({ ...GK_OPT_BASE }, { strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 });
-    const pw = optimizeSpend({ ...GK_OPT_BASE, strategy: 'propwd', propWithdraw: 0 },
-                             { strategy: 'propwd', propWithdraw: 0 });
+test('GK optimize-spend: the floor comes with the rule — the same draw without Guardrails reaches a higher spend', () => {
+    const gk = optimizeSpend({ ...GK_OPT_BASE }, { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 });
+    const pw = optimizeSpend({ ...GK_OPT_BASE, spendRule: '' },
+                             { strategy: 'propwd', propWithdraw: 0, spendRule: '' });
     assert(gk && pw, 'both strategies should return a result');
     assert(pw.optimizedSpend > gk.optimizedSpend,
         `propwd ${Math.round(pw.optimizedSpend)} should exceed floor-capped GK ${Math.round(gk.optimizedSpend)}`);
@@ -1653,6 +1665,7 @@ if (IS_NODE) {
     globalThis.simulate = core.simulate;
     globalThis.selectionOf = core.selectionOf;
     globalThis.afterTaxWealthOfLogRow = core.afterTaxWealthOfLogRow;
+    globalThis.assertKnownStrategy = core.assertKnownStrategy;
 }
 const _mcEngine = IS_NODE ? require('./montecarlo/mc_engine.js') : window.MCEngine;
 
@@ -2475,8 +2488,8 @@ const _brokStranded = log => log.filter(e => _shortYear(e) && (e.TotalIRA || 0) 
 const _worst = rows => rows.length ? Math.max(...rows.map(e => Math.abs(e.shortfall))) : 0;
 
 // One row per strategy the dispatch in planPrimaryWithdrawals can reach, so a strategy added later
-// is one line here rather than a new test. `__unrecognized__` is not a typo: it exercises the
-// baseline `else` (optimizer_core.js:1451), which is also where `gk` and a lapsed `aca` land.
+// is one line here rather than a new test. An UNSET strategy exercises the baseline `else`, which is
+// also where a lapsed `aca` lands; a name the dispatch does not know throws instead (P126).
 //   iraStranded  — years reporting a shortfall with IRA left. THE DEFECT. Target for all of these
 //                  is 0; the non-zero values are pinned bugs.
 //   worst        — largest single-year unfunded amount among them, so a shrinking count that hides
@@ -2511,8 +2524,8 @@ const FUNDING_ARMS = [
     // help here for exactly that reason - ordered never enters that loop.
     { name: 'ordered CBIR',   over: { strategy: 'ordered',  orderedSeq: 'CBIR' },                           iraStranded:  3, worst: 161.27, convergence: true },
     { name: 'ordered RIBC',   over: { strategy: 'ordered',  orderedSeq: 'RIBC' },                           iraStranded:  2, worst: 58.38, convergence: true },
-    { name: 'gk',             over: { strategy: 'gk',       gkGuard: 0.20, gkAdjPct: 0.10 },                iraStranded:  0, worst:      0 },
-    { name: 'baseline else',  over: { strategy: '__unrecognized__' },                                       iraStranded:  0, worst:      0 },
+    { name: 'guardrails',     over: { strategy: 'propwd',   propWithdraw: 0, stratRate: 0, spendRule: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 }, iraStranded: 0, worst: 0 },
+    { name: 'baseline else',  over: { strategy: undefined },                                                iraStranded:  0, worst:      0 },
     { name: 'aca lapsed',     over: { strategy: 'aca',      stratRate: 0, stratACAMultiple: 400 },          iraStranded:  0, worst:      0 },
 ];
 // Every row above except the two `ordered` ones now reads 0, and each of those zeroes replaced a
@@ -2570,7 +2583,7 @@ test('funding invariant: the fixture actually drains (guards a vacuous green)', 
     // An arm that never empties Cash has to clear a DIFFERENT bar, not be waved through: it must
     // have funded the whole plan, every year, with nothing stranded. Then its zero means "nothing
     // needed stranding", which is a real statement, rather than "the path was never reached".
-    // P38 PR 3 moved two arms into that class - `propwd 10%` and `gk`. Sizing the primary draw net
+    // P38 PR 3 moved two arms into that class - `propwd 10%` and `guardrails`. Sizing the primary draw net
     // of the tax on guaranteed income stopped the under-draw those two were papering over with
     // surplus, so on this fixture they now finish solvent with Cash to spare (min Cash 51,002 and
     // 27,263) instead of scraping Cash to zero. Naming them here instead would rebuild exactly the
@@ -4035,14 +4048,14 @@ test('optimizeConversionAmount: GK sweep rejects a higher-scoring but spend-unst
     // out-scoring $175k, so the setup assertion below (which exists to keep this test meaningful)
     // no longer held. The test is about the stability GATE rejecting a higher-scoring candidate, so
     // it needs a scenario where the unstable one really does score higher.
-    const gkBase = { ...OC_BASE, strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10,
+    const gkBase = { ...OC_BASE, strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', gkGuard: 0.20, gkAdjPct: 0.10,
                      IRA1: 1000000, spendGoal: 80000, growth: 0.05 };
     // THE PAIR IS FOUND, NOT TYPED, and that is the fix for a fixture that has now rotted twice -
     // once under P88b and again under the year-timing modes. What the test needs is a scenario where
     // some LARGER candidate genuinely out-scores the gate's own answer on raw finalNW; which dollar
     // figure does that is an accident of the engine's current numbers, and pinning it guarantees a
     // future re-baseline that teaches nobody anything. Scan for it instead.
-    const gated = optimizeConversionAmount(gkBase, { strategy: 'gk' }, 'finalNW');
+    const gated = optimizeConversionAmount(gkBase, { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk' }, 'finalNW');
     let unconstrained = null, unconstrainedAmt = 0;
     for (let amt = 25000; amt <= 500000; amt += 25000) {
         if (amt <= gated.optConv) continue;
@@ -6004,8 +6017,11 @@ test('sameStrategySelection: matches each family on its own parameter', () => {
         [{ strategy: 'fixedpct', iraWithdrawPct: 0.09 }, { strategy: 'fixedpct', iraWithdrawPct: 0.09 }, true],
         [{ strategy: 'ordered',  orderedSeq: 'RIBC' },   { strategy: 'ordered',  orderedSeq: 'RIBC' },   true],
         [{ strategy: 'ordered',  orderedSeq: 'RIBC' },   { strategy: 'ordered',  orderedSeq: 'CBIR' },   false],
-        [{ strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 }, { strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 }, true],
-        [{ strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 }, { strategy: 'gk', gkGuard: 0.25, gkAdjPct: 0.10 }, false],
+        // P126. Guardrails are identity under every strategy; the band and step only count when on.
+        [{ strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 }, { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 }, true],
+        [{ strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 }, { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', gkGuard: 0.25, gkAdjPct: 0.10 }, false],
+        [{ strategy: 'propwd', propWithdraw: 0, spendRule: 'gk' },  { strategy: 'propwd', propWithdraw: 0 },                  false],
+        [{ strategy: 'propwd', propWithdraw: 0, spendRule: '', gkGuard: 0.20 }, { strategy: 'propwd', propWithdraw: 0, gkGuard: 0.25 }, true],
         [{ strategy: 'propwd', propWithdraw: 0 },        { strategy: 'fixed', nYears: 10 },              false],
         // P104b1. Identity is the NORMALIZED vector; a malformed one is its own identity.
         [{ strategy: 'split', splitWeights: [1, 1, 0, 0] }, { strategy: 'split', splitWeights: [50, 50, 0, 0] }, true],
@@ -6172,7 +6188,7 @@ test('selectionOf: a plan still identifies as itself after a round trip', () => 
         { strategy: 'bracket',  stratRate: 0.24, stratIRMAATier: -1, stratACAMultiple: 0 },
         { strategy: 'bracket',  stratRate: 0, stratIRMAATier: 2, stratACAMultiple: 0 },
         { strategy: 'aca',      stratRate: 0, stratIRMAATier: -1, stratACAMultiple: 250 },
-        { strategy: 'gk',       gkGuard: 0.15, gkAdjPct: 0.05 },
+        { strategy: 'bracket',  stratRate: 0.22, stratIRMAATier: -1, stratACAMultiple: 0, spendRule: 'gk', gkGuard: 0.15, gkAdjPct: 0.05 },
         { strategy: 'ordered',  orderedSeq: 'CIBR' },
         { strategy: 'ordered',  orderedSeq: 'CBRI', cyclicEnabled: true, cyclicOrder: 'brokerage-first' },
         { strategy: 'propwd',   propWithdraw: 0.2, rothGapFill: 'fillCashThenRoth' },
@@ -6189,7 +6205,7 @@ test('selectionOf: a plan still identifies as itself after a round trip', () => 
     // The list is the contract: every field the comparison reads has to be on it.
     for (const f of ['strategy', 'orderedSeq', 'stratIRMAATier', 'stratACAMultiple', 'gkGuard',
                      'gkAdjPct', 'rothGapFill', 'cyclicEnabled', 'cyclicOrder',
-                     'fundConversionWithCash', 'propWithdraw', 'nYears', 'stratRate', 'iraWithdrawPct'])
+                     'fundConversionWithCash', 'propWithdraw', 'nYears', 'stratRate', 'iraWithdrawPct', 'spendRule'])
         assert(STRATEGY_SELECTION_FIELDS.includes(f), `${f} must be carried`);
 });
 
@@ -6270,10 +6286,9 @@ test('P104b3: split weights are RELATIVE - scale does not change the label or th
         assert(splitVectorSortVal(v) < 1000, `sort value must stay small: ${splitVectorSortVal(v)}`);
 });
 
-test('P104b3: the family is OFF by default and absent from the Monte Carlo grid', () => {
-    // Two independent locks, because this is a new strategy behind the nerdknob. MC has no knob, so
-    // its grid must not carry the vectors at all; every other caller has to opt in.
-    assert(MC_GRIDS.split === undefined, 'MC_GRIDS must not carry `split` while the family is gated');
+test('P104b3: the family is OFF by default, in both sweeps', () => {
+    // Every caller has to opt in; the page's flag reaches the Optimizer and Monte Carlo alike through
+    // sweepOptions.
     assert(OPTIMIZER_GRIDS.split === SPLIT_VECTORS, 'the Optimizer grid holds the shipped vectors');
     const base = { ...SWEEP_BASES.onGridCash, strategy: 'propwd', propWithdraw: 0 };
     const off = buildStrategyFamilies(base, { grids: OPTIMIZER_GRIDS });
@@ -6282,9 +6297,12 @@ test('P104b3: the family is OFF by default and absent from the Monte Carlo grid'
     const on = buildStrategyFamilies(base, { grids: OPTIMIZER_GRIDS, splitFamily: true });
     assert(on.filter(r => r.family === 'Fixed Split' && !r.modifier).length === SPLIT_VECTORS.length,
         'one unmodified row per shipped vector when the family is asked for');
-    // And Monte Carlo's own entry point must be unable to produce one whatever it is handed.
+    // Monte Carlo follows the same flag: no Fixed Split row without it, the shipped vectors with it.
     assert(buildVariations(base).every(v => !String(v._strategyFamily || '').includes('Fixed Split')),
-        'buildVariations must not emit a Fixed Split row');
+        'buildVariations emits no Fixed Split row without the flag');
+    assert(buildVariations(base, { splitFeature: true })
+        .filter(v => v.strategy === 'split' && !v.cyclicEnabled && !v.rothGapFill).length === SPLIT_VECTORS.length,
+        'and one plain row per shipped vector with it');
 });
 
 test('P104b3: a gated-off family cannot leak back in through the user\'s own off-grid mix', () => {
@@ -6307,12 +6325,12 @@ test('P104b3: a gated-off family cannot leak back in through the user\'s own off
 });
 
 test('ORDERED_SEQS: every offered sequence is a real permutation and both sweeps use the list', () => {
-    // The sidebar dropdown, MC_GRIDS.ordered and OPTIMIZER_GRIDS.ordered are one list on purpose:
+    // The sidebar dropdown and OPTIMIZER_GRIDS.ordered are one list on purpose:
     // a sequence a user can pick must be a sequence the sweeps score. What this guards is the
     // silent failure - resolveOrderedSeq falls back to CBIR for anything that is not a permutation,
     // so a typo in the list would add a menu entry and a sweep row that both quietly run CBIR.
-    assert(MC_GRIDS.ordered === ORDERED_SEQS && OPTIMIZER_GRIDS.ordered === ORDERED_SEQS,
-        'both grids must reference the shared list, not a copy that can drift');
+    assert(OPTIMIZER_GRIDS.ordered === ORDERED_SEQS,
+        'the grid must reference the shared list, not a copy that can drift');
     assert(new Set(ORDERED_SEQS).size === ORDERED_SEQS.length, 'no duplicate sequences');
     const rates = { capGainsPercentage: 0.5, capitalGainsRate: 0.15, nominalStateTaxAtLimit: 0.09,
                     nominalTaxRate: 0.22, marginalFedTaxRate: 0.22, marginalStateTaxRate: 0.09 };
@@ -6352,7 +6370,7 @@ test('bracketGapOrder: it moves the bracket family and nothing else', () => {
     const untouched = [
         { label: 'Proportional', over: { strategy: 'propwd', propWithdraw: 0.10 } },
         { label: 'Reduce',       over: { strategy: 'fixed', nYears: 20 } },
-        { label: 'Guyton-Klinger', over: { strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 } },
+        { label: 'Proportional with Guardrails', over: { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 } },
         { label: 'Ordered',      over: { strategy: 'ordered', orderedSeq: 'CBIR' } },
     ];
     for (const u of untouched) {
@@ -6371,10 +6389,8 @@ test('buildStrategyFamilies: the 🅡 pass clones every family except Ordered', 
     assert(roths.length > 0, 'the option must add rows');
     assert(roths.every(r => r.overrides.rothGapFill === 'fillCashThenRoth'), 'each clone carries the position');
     // Ordered is the only exclusion, and it is the one fillSpendingGap itself makes: the sequence is
-    // the user's. Guyton-Klinger and Proportional were excluded once on a research note about
-    // comparability and it cost GK its clones, which measurement says is the family that gains most.
+    // the user's. Proportional was excluded once on a research note about comparability; it is not.
     assert(roths.every(r => r.overrides.strategy !== 'ordered'), 'Ordered must not be cloned');
-    assert(roths.some(r => r.overrides.strategy === 'gk'), 'Guyton-Klinger must be cloned');
     assert(roths.some(r => r.overrides.strategy === 'propwd'), 'Proportional must be cloned');
     assert(roths.length === base.filter(r => r.overrides.strategy !== 'ordered').length,
         'and every other base row gets exactly one clone');
@@ -6385,10 +6401,11 @@ test('buildStrategyFamilies: the 🅡 pass clones every family except Ordered', 
         'and with the option off the key is not written at all');
 });
 
-test('sameStrategySelection: finds GK and Ordered users in buildVariations output (the MC regression)', () => {
-    const gkBase = { ...BASE, strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 };
+test('sameStrategySelection: finds Guardrails and Ordered users in buildVariations output (the MC regression)', () => {
+    const gkBase = { ...BASE, strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 };
     const gkIdx = buildVariations(gkBase).findIndex(v => sameStrategySelection(v, gkBase));
-    assert(gkIdx >= 0, 'a Guyton-Klinger user must match a swept variation (previously never did)');
+    assert(gkIdx >= 0, 'a Guardrails user must match a swept variation');
+    assert(buildVariations(gkBase)[gkIdx].spendRule === 'gk', 'and it must be a Guardrails row');
     const ordBase = { ...BASE, strategy: 'ordered', orderedSeq: 'RIBC' };
     const ordIdx = buildVariations(ordBase).findIndex(v => sameStrategySelection(v, ordBase));
     assert(ordIdx >= 0, 'an Ordered user must match a swept variation (previously never did)');
@@ -6409,7 +6426,8 @@ test('plan scope: the sidebar plan resolves to exactly one swept variation', () 
     [
         { ...BASE, strategy: 'propwd', propWithdraw: 0.05 },
         { ...BASE, strategy: 'fixed',  nYears: 20 },
-        { ...BASE, strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 },
+        { ...BASE, strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 },
+        { ...BASE, strategy: 'fixedpct', iraWithdrawPct: 0.05, spendRule: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 },
         { ...BASE, strategy: 'ordered', orderedSeq: 'RIBC' },
     ].forEach(base => {
         const hits = buildVariations(base).filter(v => sameStrategySelection(v, base));
@@ -6445,16 +6463,16 @@ test('offGridParamFor: returns the user parameter only when it is off the grid',
     assert(offGridParamFor({ strategy: 'fixedpct', iraWithdrawPct: 0.09 }, grids)?.paramLabel === '9%', 'IRA draw 9% is off-grid');
     // An IRMAA-ceiling selection is swept as its own family, so it has no off-grid case.
     assert(offGridParamFor({ strategy: 'bracket', stratRate: 0, stratIRMAATier: 2 }, grids) === null, 'IRMAA tier has no grid');
-    assert(offGridParamFor({ strategy: 'gk', gkGuard: 0.2 }, grids) === null, 'GK already sweeps the user guardrails');
 });
 
 test('offGridParamFor: buildVariations gains exactly one non-cyclic row for an off-grid user', () => {
     const onGrid  = { ...BASE, strategy: 'propwd', propWithdraw: 0.10, Cash: 0 };
     const offGrid = { ...onGrid, propWithdraw: 0.07 };
     const a = buildVariations(onGrid).length, b = buildVariations(offGrid).length;
-    // Every non-cyclic row is tripled by the cyclic pass (base + 2 cyclic clones); Cash 0 suppresses
-    // the 💵 clones, so one extra base row means exactly three more variations.
-    assert(b - a === 3, `expected 3 more variations (1 base + 2 cyclic), got ${b - a}`);
+    // One extra base row is tripled by the cyclic pass (base + 2 cyclic clones) and gains a 🅡 clone
+    // when there is Roth to draw; Cash 0 and no nerdknob suppress the 💵 clones.
+    const extra = 3 + ((onGrid.Roth > 0 || onGrid.Roth2 > 0) ? 1 : 0);
+    assert(b - a === extra, `expected ${extra} more variations, got ${b - a}`);
     assert(buildVariations(offGrid).some(v => sameStrategySelection(v, offGrid)),
         'and the off-grid user must now match one of them');
 });
@@ -6497,7 +6515,7 @@ for (const [name, base] of Object.entries(SWEEP_BASES)) {
         const SEL = ['strategy', 'propWithdraw', 'nYears', 'stratRate', 'stratIRMAATier',
                      'stratACAMultiple', 'iraWithdrawPct', 'orderedSeq', 'gkGuard', 'gkAdjPct',
                      'cyclicEnabled', 'cyclicOrder', 'fundConversionWithCash',
-                     'convertExcessToRoth', 'extraConversionAmount'];
+                     'convertExcessToRoth', 'extraConversionAmount', 'spendRule'];
         const actual = rows.map(r => {
             const sel = {};
             for (const k of SEL) if (r[k] !== undefined) sel[k] = r[k];
@@ -6507,21 +6525,49 @@ for (const [name, base] of Object.entries(SWEEP_BASES)) {
     });
 }
 
-test('buildVariations: the declared divergences from the Optimizer sweep are pinned', () => {
-    // These are the differences P35 PR 2 must PRESERVE, not quietly unify. MC caps IRA Draw at 10%
-    // where the Optimizer runs to 20%, and MC sweeps neither the IRMAA-ceiling family nor the ACA
-    // family at all. Nothing pinned any of it, so an extraction sharing one grid between both
-    // sweeps would silently change what Monte Carlo simulates.
-    const rows = buildVariations({ ...BASE, Cash: 0 });
-    const draws = rows.filter(r => r.strategy === 'fixedpct')
-                      .map(r => Math.round(r.iraWithdrawPct * 100))
-                      .filter((v, i, a) => a.indexOf(v) === i)
-                      .sort((a, b) => a - b);
-    assertSameList(draws, [5, 6, 7, 8, 10], 'MC IRA Draw grid');
-    assert(!rows.some(r => (r.stratIRMAATier ?? -1) >= 0),
-        'MC must not sweep the IRMAA-ceiling family (the Optimizer does, tiers 0-4)');
-    assert(!rows.some(r => (r.stratACAMultiple ?? 0) > 0),
-        'MC must not sweep the ACA family (the Optimizer does, for everyone, subject to the age gate)');
+test('Compare All runs exactly the Optimizer\'s rows, not more, not fewer', () => {
+    // User, 2026-09-14. Monte Carlo swept a grid of its own (Reduce 2-15, 20 and 25; IRA Draw 5-8 and 10)
+    // with its own gates, so Compare All ran rows the Optimizer never shows and missed rows it does.
+    // Both now enumerate through buildStrategyFamilies(base, sweepOptions(base, flags)); this pins that
+    // buildVariations adds nothing to that but the variation shape, under every page flag.
+    for (const [name, b] of Object.entries(SWEEP_BASES)) {
+        for (const flags of [{}, { nerdKnobs: true }, { nerdKnobs: true, splitFeature: true }]) {
+            const rows = buildStrategyFamilies(b, sweepOptions(b, flags));
+            const vars = buildVariations(b, flags);
+            assert(vars.length === rows.length,
+                `${name} ${JSON.stringify(flags)}: ${vars.length} variations against ${rows.length} Optimizer rows`);
+            rows.forEach((r, i) => {
+                for (const [k, v] of Object.entries(r.overrides))
+                    assert(JSON.stringify(vars[i][k]) === JSON.stringify(v),
+                        `${name} row ${i} ${k}: variation ${JSON.stringify(vars[i][k])}, Optimizer ${JSON.stringify(v)}`);
+            });
+        }
+    }
+    const reduce = buildVariations({ ...BASE, strategy: 'propwd', propWithdraw: 0.05, Cash: 0 })
+        .filter(v => v.strategy === 'fixed').map(v => v.nYears);
+    assertSameList([...new Set(reduce)].sort((x, y) => x - y), OPTIMIZER_GRIDS.fixed, 'Reduce lengths');
+});
+
+test('P126: sweepOptions gates the page flags, and the rule twin is the plan with the switch flipped', () => {
+    const b = { ...BASE, Cash: 50000, Roth: 100000 };
+    assert(sweepOptions(b).cashClones === false && sweepOptions(b, { nerdKnobs: true }).cashClones === true,
+        'the 💵 clones need the nerdknob');
+    assert(sweepOptions({ ...b, Cash: 0 }, { nerdKnobs: true }).cashClones === false, 'and Cash to spend');
+    assert(sweepOptions(b).rothClones === true && sweepOptions({ ...b, Roth: 0, Roth2: 0 }).rothClones === false,
+        'the 🅡 clones need Roth to draw');
+    assert(sweepOptions(b).splitFamily === false && sweepOptions(b, { splitFeature: true }).splitFamily === true,
+        'Fixed Split follows its own flag');
+    assert(buildStrategyFamilies(b, sweepOptions(b, { nerdKnobs: true, splitFeature: true }))
+        .every(r => r.overrides.spendRule === undefined),
+        'no enumerated row sets the spend rule, so every row follows the switch');
+    const plan = { ...b, strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1, stratACAMultiple: 0 };
+    const on = planRuleTwin(plan);
+    assert(on.spendRule === 'gk' && on.paramLabel === '22%, Guardrails on' && on.strategyLabel.includes('\u{1F6E1}'),
+        `a plan with Guardrails off gets a twin with them on, marked: ${JSON.stringify(on)}`);
+    const off = planRuleTwin({ ...plan, spendRule: 'gk' });
+    assert(off.spendRule === '' && off.paramLabel === '22%, Guardrails off' && !off.strategyLabel.includes('\u{1F6E1}'),
+        `and a plan with them on gets a twin with them off: ${JSON.stringify(off)}`);
+    assert(on.family === 'Fill Bracket' && off.family === 'Fill Bracket', 'the twin keeps the plan\'s family');
 });
 
 // ── P35 PR 1: the Optimizer enumeration golden ────────────────────────────────
@@ -6530,7 +6576,7 @@ test('buildVariations: the declared divergences from the Optimizer sweep are pin
 // yet, and these tests check the recording itself: that it is internally consistent, and that it
 // actually contains the four gates it was captured to cover. A corrupt or half-imported golden
 // would otherwise sit here looking authoritative until PR 2 "proved" an extraction against it.
-const CLONE_PFX = /🗘|🔄|💵|🅡/;
+const CLONE_PFX = /🗘|🔄|💵|🅡|🛡/;
 const optBaseRows = rows => rows.filter(r => !CLONE_PFX.test(r[0]));
 
 for (const [name, g] of Object.entries(OPT_GOLDEN)) {
@@ -6557,6 +6603,8 @@ for (const [name, g] of Object.entries(OPT_GOLDEN)) {
 
     test(`OPT_GOLDEN [${name}]: clone rows carry the modifier their prefix claims`, () => {
         for (const [label, , , ov] of g.rows) {
+            assert((ov.spendRule === 'gk') === label.includes('🛡'),
+                `${label}: the 🛡️ prefix and spendRule 'gk' must go together`);
             if (label.includes('🗘'))
                 assert(ov.cyclicEnabled === true && ov.cyclicOrder === 'ira-first',
                     `${label}: 🗘 must be cyclic ira-first, got ${JSON.stringify(ov.cyclicOrder)}`);
@@ -6603,7 +6651,7 @@ test('OPT_GOLDEN: the four gates are actually exercised by the captured scenario
     assert(a.baseRowCount - n.baseRowCount === 4, 'and they are the only difference from the nerdknob run');
 
     // Cash 0 kills the 💵 clones even with the nerdknob on, and an off-grid IRA Draw adds exactly
-    // one base row — appended last, after Guyton-Klinger, not sorted into its family.
+    // one base row — appended last, after Ordered, not sorted into its family.
     const o = OPT_GOLDEN.nerdknobNoCashOffGrid;
     assert(o.nerdKnobs === true && o.base.Cash === 0, 'the off-grid capture must be nerdknob-on with no Cash');
     assert(!has(o, '💵'), 'Cash 0: the 💵 clones are skipped as bit-identical twins');
@@ -6642,6 +6690,10 @@ for (const [name, g] of Object.entries(OPT_GOLDEN)) {
             rothClones: g.base.Roth > 0 || g.base.Roth2 > 0,
             offGridLast: true,
         });
+        // The page calls the shared builder rather than spelling the options out, so that builder has to
+        // produce exactly the options above for this recording to mean anything about the page.
+        const viaShared = buildStrategyFamilies(g.base, sweepOptions(g.base, { nerdKnobs: nerd, year: 2026 }));
+        assert(JSON.stringify(viaShared) === JSON.stringify(rows), `sweepOptions reproduces the [${name}] options`);
         // Key ORDER inside an overrides object is an artifact of how the old block happened to
         // spread its literals, not a behavior. Normalised on both sides so a faithful extraction
         // is not reported as a failure — and so a real change still is.
@@ -6653,43 +6705,42 @@ for (const [name, g] of Object.entries(OPT_GOLDEN)) {
     });
 }
 
-test('buildStrategyFamilies: the options are what separate the two sweeps, nothing else', () => {
+test('buildStrategyFamilies: every option moves the enumeration it names, and nothing else does', () => {
     // Same base, same call, one option flipped at a time. If a future edit hard-codes a family or
     // a grid instead of reading its option, one of these stops moving.
     const b = { ...BASE, Cash: 50000, strategy: 'propwd', propWithdraw: 0.20 };
     const call = o => buildStrategyFamilies(b, o);
     const plain = rows => rows.filter(r => r.modifier === null);
 
-    const mc  = call({ grids: MC_GRIDS });
-    const opt = call({ grids: OPTIMIZER_GRIDS, irmaaFamily: true });
-    // The Optimizer now has FEWER base rows than MC despite sweeping two extra families: its Reduce
-    // grid is 5 steps against MC's 16, and its IRA Draw grid 5 against MC's 5 but not the same five.
-    // Both counts are pinned so a grid edit has to be deliberate.
-    assert(plain(mc).length === 39 && plain(opt).length === 33,
-        `base rows: MC ${plain(mc).length} (expected 39), Optimizer ${plain(opt).length} (expected 33)`);
+    const bare = call({ grids: OPTIMIZER_GRIDS });
+    const opt  = call({ grids: OPTIMIZER_GRIDS, irmaaFamily: true });
+    // Both counts are pinned so a grid edit has to be deliberate: 5 Proportional, 5 Reduce, 6 Fill
+    // Bracket, 5 IRA Draw and 6 Ordered, plus 5 IRMAA ceilings when that family is asked for.
+    assert(plain(bare).length === 27 && plain(opt).length === 32,
+        `base rows: ${plain(bare).length} (expected 27), with IRMAA ${plain(opt).length} (expected 32)`);
 
-    assert(plain(call({ grids: OPTIMIZER_GRIDS, irmaaFamily: true, acaFamily: true })).length === 37,
+    assert(plain(call({ grids: OPTIMIZER_GRIDS, irmaaFamily: true, acaFamily: true })).length === 36,
         'the ACA family adds 4 rows');
-    assert(call({ grids: MC_GRIDS, cashClones: true }).length === 117 * 4 / 3,
+    assert(call({ grids: OPTIMIZER_GRIDS, cashClones: true }).length === 27 * 4,
         'cashClones clones every un-modified row once more');
-    assert(call({ grids: MC_GRIDS }).every(r => r.overrides.fundConversionWithCash === undefined),
+    assert(call({ grids: OPTIMIZER_GRIDS }).every(r => r.overrides.fundConversionWithCash === undefined),
         'without markCashFunding the key is not written at all');
-    assert(plain(call({ grids: MC_GRIDS, markCashFunding: true }))
+    assert(plain(call({ grids: OPTIMIZER_GRIDS, markCashFunding: true }))
         .every(r => r.overrides.fundConversionWithCash === false),
         'with markCashFunding every un-modified row declares it off');
-    assert(plain(call({ grids: MC_GRIDS })).filter(r => r.family === 'Fill Bracket')
+    assert(plain(call({ grids: OPTIMIZER_GRIDS })).filter(r => r.family === 'Fill Bracket')
         .every(r => r.overrides.stratIRMAATier === undefined),
-        'MC leaves the IRMAA tier alone on a Fill Bracket row — a sidebar tier can leak in');
-    assert(plain(call({ grids: MC_GRIDS, bracketResetsIRMAATier: true })).filter(r => r.family === 'Fill Bracket')
+        'without the reset a sidebar IRMAA tier can leak into a Fill Bracket row');
+    assert(plain(call({ grids: OPTIMIZER_GRIDS, bracketResetsIRMAATier: true })).filter(r => r.family === 'Fill Bracket')
         .every(r => r.overrides.stratIRMAATier === -1),
-        'the Optimizer resets it');
+        'bracketResetsIRMAATier resets it');
 
-    // Where the off-grid row lands, on a base whose parameter is off BOTH grids.
-    const off = { ...b, strategy: 'fixedpct', iraWithdrawPct: 0.09 };
-    const early = plain(buildStrategyFamilies(off, { grids: MC_GRIDS }));
-    const late  = plain(buildStrategyFamilies(off, { grids: MC_GRIDS, offGridLast: true }));
-    assert(early[early.length - 1].family === 'Guyton-Klinger', 'MC ends on Guyton-Klinger');
-    assert(late[late.length - 1].paramLabel === '9%', 'the Optimizer ends on the off-grid row');
+    // Where the off-grid row lands, on a base whose parameter is off the grid.
+    const off = { ...b, strategy: 'fixedpct', iraWithdrawPct: 0.08 };
+    const early = plain(buildStrategyFamilies(off, { grids: OPTIMIZER_GRIDS }));
+    const late  = plain(buildStrategyFamilies(off, { grids: OPTIMIZER_GRIDS, offGridLast: true }));
+    assert(early[early.length - 1].family === 'Ordered', 'without offGridLast the base rows end on Ordered');
+    assert(late[late.length - 1].paramLabel === '8%', 'with it they end on the off-grid row');
     assert(early.length === late.length, 'and it is the same row either way, only moved');
 });
 
@@ -6977,7 +7028,7 @@ test('compare pin: a selection captured from one sweep re-finds its row in the n
 
     // A strategy that is not in the table at all must not match anything, so the pin gets dropped
     // rather than left pointing at a stale row.
-    const absent = { ...pinned, strategy: 'gk', gkGuard: 0.99, gkAdjPct: 0.99 };
+    const absent = { ...pinned, strategy: 'propwd', propWithdraw: 0.37 };
     assert(sweep2.filter(v => sameStrategySelection(v, absent)).length === 0,
         'an absent strategy must match nothing');
 });
@@ -7416,7 +7467,7 @@ test('the worker payload keeps each variation identifiable as a strategy', async
     // anyone else. An end-to-end assertion because the defect lived in the transport, not in either
     // side of it: both halves were correct on their own.
     const ordered = buildVariations({ ...(_p71Base), strategy: 'ordered', orderedSeq: 'CIBR' })
-        .filter(v => v.strategy === 'ordered' && !v.cyclicEnabled && !v.fundConversionWithCash);
+        .filter(v => v.strategy === 'ordered' && !v.cyclicEnabled && !v.fundConversionWithCash && v.spendRule !== 'gk');
     assert(ordered.length === ORDERED_SEQS.length, `expected one row per sequence, got ${ordered.length}`);
     const msg = await _mcEngine.runJob(_p71Cfg('gbm', { variations: ordered, numPaths: 4, years: 12 }));
     assert(msg && !msg.error, `job failed: ${msg && msg.error}`);
@@ -7857,7 +7908,7 @@ test('schedule: carries GK by its spend RULE, and beats it', () => {
     // hindsight artifact, since GK's own dynamics would have reacted to a different draw. The
     // schedule takes GK's spend RULE, re-evaluated each year against its own portfolio, and only the
     // DRAW from the source. That combination is followable, and it wins on both axes.
-    const src = { ...SCHED_BASE, strategy: 'gk' };
+    const src = { ...SCHED_BASE, strategy: 'propwd', propWithdraw: 0, spendRule: 'gk' };
     const opts = scheduleOptionsForRun(src);
     assert(opts.spendRule === 'gk', 'a GK source must hand over its spend rule, not its numbers');
     const a = simulate(src);
@@ -7880,6 +7931,69 @@ test('schedule: GK spend rule is separable from the GK strategy', () => {
     const sameSpend = Math.abs((withRule.totals.spendCurrentDollars ?? 0)
                              - (without.totals.spendCurrentDollars ?? 0)) < 1;
     assert(!sameSpend, 'borrowing the GK spend rule must change the spend path');
+});
+
+// ── P126: Guyton-Klinger is the Guardrails spend rule, not a strategy ────────────────────────
+test('P126: simulate refuses a strategy name it does not dispatch, and names the replacement for gk', () => {
+    const threw = over => { try { simulate({ ...SCHED_BASE, ...over }); return null; } catch (e) { return e.message; } };
+    // GK-FOLD-BEGIN
+    const gkMsg = threw({ strategy: 'gk' });
+    // GK-FOLD-END
+    assert(gkMsg && gkMsg.includes("spendRule: 'gk'"), `the retired name must throw and name the rule, got ${gkMsg}`);
+    assert(threw({ strategy: 'nosuchstrategy' }), 'an unknown name must throw rather than draw the baseline');
+    assert(threw({ strategy: undefined }) === null, 'an unset strategy is the baseline draw and stays legal');
+    for (const s of core.KNOWN_STRATEGIES) {
+        const m = threw({ strategy: s });
+        assert(!m || !/strategy '/.test(m), `${s} is dispatched and must not be refused by name, got ${m}`);
+    }
+});
+
+test('P126: a Guardrails plan on Proportional replays through the baseline gap fill, as the old gk plan did', () => {
+    const src = { ...SCHED_BASE, strategy: 'propwd', propWithdraw: 0, spendRule: 'gk' };
+    const entries = compileScheduleFromRun(simulate(src), src).filter(Boolean);
+    assert(entries.length > 0, 'the rule makes the draw schedulable');
+    assert(entries.every(e => e.gapFill === 'baseline'), 'Proportional fills its gap from the baseline branch');
+});
+
+test('P126: the stability floor follows the rule under any draw, wherever the rule was set', () => {
+    const bracket = { strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1, stratACAMultiple: 0 };
+    const halved = { log: [{ spendGoal: 100, inflationFactor: 1 }, { spendGoal: 50, inflationFactor: 1 }] };
+    assert(core.gkSpendStable(halved, bracket, { ...GK_OPT_BASE }) === false,
+        'rule on the base, draw in the overrides: the floor applies');
+    assert(core.gkSpendStable(halved, { ...bracket, spendRule: '' }, { ...GK_OPT_BASE }) === true,
+        'an override turning the rule off lifts it');
+    assert(core.gkSpendStable(halved, { ...bracket, spendRule: 'gk' }, { ...GK_OPT_BASE, spendRule: '' }) === false,
+        'an override turning the rule on applies it');
+});
+
+test('P126: a Monte Carlo job refuses a retired strategy instead of scoring it as ruin', async () => {
+    // GK-FOLD-BEGIN
+    const variations = [{ ...(_p71Base), strategy: 'gk' }];
+    // GK-FOLD-END
+    let err = null, msg = null;
+    try { msg = await _mcEngine.runJob(_p71Cfg('gbm', { variations, numPaths: 2, years: 5 })); }
+    catch (e) { err = e; }
+    const text = err ? err.message : ((msg && msg.error) || '');
+    assert(/retired/.test(String(text)),
+        `the job must fail naming the retired strategy, got ${err ? 'a throw: ' + err.message : 'survival ' + msg?.variations?.[0]?.survivalRate}`);
+});
+
+test('P126: no code outside the load folds still names the retired strategy', () => {
+    if (!IS_NODE) return;
+    const fs = require('fs'), path = require('path');
+    const js = dir => fs.readdirSync(path.join(__dirname, dir)).filter(f => f.endsWith('.js')).map(f => dir + '/' + f);
+    const files = ['optimizer_core.js', 'optimizer_ui.js', 'sweep_golden.js', 'optimizer_tests.js',
+                   'optimizer_core.tests.js', ...js('montecarlo'), ...js('plans'), ...js('.test_harnesses')];
+    const RETIRED = /strategy['"]?\s*(?::|===|!==|==|!=)\s*['"]gk['"]/;
+    const hits = [];
+    for (const f of files) {
+        const src = fs.readFileSync(path.join(__dirname, f), 'utf8')
+            .replace(/GK-FOLD-BEGIN[\s\S]*?GK-FOLD-END/g, '')   // the load paths that migrate old plans
+            .replace(/\/\*[\s\S]*?\*\//g, '')                    // block comments
+            .replace(/(^|[^:'"\\])\/\/.*$/gm, '$1');              // line comments, never a URL
+        for (const line of src.split('\n')) if (RETIRED.test(line)) hits.push(`${f}: ${line.trim()}`);
+    }
+    assert(hits.length === 0, `the retired strategy is still named in code:\n  ${hits.slice(0, 8).join('\n  ')}`);
 });
 
 test('schedule: a per-year spend applies for that year only', () => {
@@ -8480,7 +8594,6 @@ test('P107: IRA_GOAL_BLIND_STRATEGIES are unmoved by the goal, and the others ar
         propwd: { strategy: 'propwd' },
         ordered: { strategy: 'ordered', orderedSeq: 'CIBR' },
         split: { strategy: 'split', splitWeights: [0, 9, 1, 0] },
-        gk: { strategy: 'gk' },
     };
     for (const key of core.IRA_GOAL_BLIND_STRATEGIES) {
         assert(Object.prototype.hasOwnProperty.call(BLIND, key),
@@ -8488,6 +8601,8 @@ test('P107: IRA_GOAL_BLIND_STRATEGIES are unmoved by the goal, and the others ar
         assert(spread(finals(BLIND[key])) < 0.01,
             `P107: '${key}' is listed as ignoring the IRA Goal but its result moved`);
     }
+    assert(spread(finals({ strategy: 'propwd', spendRule: 'gk' })) < 0.01,
+        'P107: Guardrails change the spend, not whether Proportional reads the IRA Goal');
 
     // The other side. These read the goal, so the field must stay enabled for them.
     for (const [label, over] of [

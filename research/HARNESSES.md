@@ -44,7 +44,7 @@ usefully, what it CANNOT show. A new harness should pick a plan by name rather t
 **The `COMMON` block has NOT been converted, and it is worse than the duplication it looks like.**
 Files declaring a `COMMON` have DRIFTED: several distinct households share that one variable name.
 `endgame_harness.js` is a different household entirely (born 1951/1953, retiring at 75, a $750k IRA
-goal); the `split_*` trio, `gk_drawrule*`, `magi_edge_gate` and `family_equivalence` all run a
+goal); the `split_*` trio, `gk_drawrule*` and `magi_edge_gate` all run a
 declining spend and a zero cash reserve that the others do not. **A reader seeing `COMMON` in two of
 these files is entitled to assume one household and would be wrong.** That is what `P112c` has to
 fix, and deleting twenty-eight scripts has made it a much smaller job.
@@ -68,7 +68,6 @@ fix, and deleting twenty-eight scripts has made it a much smaller job.
 | `magi_edge_gate_harness.js` | node | Do the best plans live on MAGI edges? The gate `P103c` turns on. | [PERFECT_FORESIGHT_ORACLE.md](PERFECT_FORESIGHT_ORACLE.md) | not re-run |
 | `gk_drawrule_harness.js` | node | Which draw rule should run under a Guyton-Klinger spend rule? | [PERFECT_FORESIGHT_ORACLE.md](PERFECT_FORESIGHT_ORACLE.md) | not re-run |
 | `gk_drawrule_mc_harness.js` | node | Does that answer survive uncertainty, over three Monte Carlo models? | [PERFECT_FORESIGHT_ORACLE.md](PERFECT_FORESIGHT_ORACLE.md) | not re-run |
-| `family_equivalence_harness.js` | node | Are two strategy families the same model, or only similar? | [PERFECT_FORESIGHT_ORACLE.md](PERFECT_FORESIGHT_ORACLE.md) | not re-run |
 | `split_fine_harness.js` | node | Was the ten-archetype split menu close enough, or does a fine search beat it? | [CONSTANT_SPLIT.md](CONSTANT_SPLIT.md) | not re-run |
 | `split_mc_harness.js` | node | Does a constant split survive an uncertain future? | [CONSTANT_SPLIT.md](CONSTANT_SPLIT.md) | not re-run |
 | `split_expressiveness_harness.js` | node | How much per-year freedom does a good draw split actually need? | [CONSTANT_SPLIT.md](CONSTANT_SPLIT.md) | not re-run |

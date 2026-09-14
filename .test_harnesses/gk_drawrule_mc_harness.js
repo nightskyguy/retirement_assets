@@ -88,7 +88,8 @@ const CELLS = [
     ['brokheavy @6%',  { IRA1: 700000, IRA2: 300000, Roth: 400000, Roth2: 200000, Brokerage: 2800000, BrokerageBasis: 1200000, Cash: 150000 }, 0.06],
     ['thirds @8%',     { IRA1: 1000000, IRA2: 400000, Roth: 1000000, Roth2: 400000, Brokerage: 1400000, BrokerageBasis: 700000, Cash: 150000 }, 0.08],
 ];
-// P103d's winners, plus the incumbent. `null` overrides = GK decides the draw too.
+// P103d's winners, plus the incumbent. `null` overrides = the incumbent, Guardrails over its own draw
+// (Proportional 0%, which is what strategy 'gk' was until P126 retired it).
 const RULES = [
     ['GK (incumbent)',   null],
     ['Ordered CIBR',     { strategy: 'ordered', orderedSeq: 'CIBR' }],
@@ -126,7 +127,7 @@ for (const [label, over, sr] of CELLS) {
         const pathIn = buildPathInputs(banks, p, YEARS, base, MODE);
         for (const [name, ov] of RULES) {
             const inputs = ov ? { ...base, ...pathIn, ...ov, spendRule: 'gk' }
-                              : { ...base, ...pathIn, strategy: 'gk' };
+                              : { ...base, ...pathIn, strategy: 'propwd', propWithdraw: 0, spendRule: 'gk' };
             let r; SIMS++;
             try { r = simulate(inputs); } catch (e) { continue; }
             const rec = per.get(name);

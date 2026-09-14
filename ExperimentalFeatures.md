@@ -19,7 +19,7 @@ changes the code around it.
 ## 1. `?nerdknob` — the advanced surface
 
 `?nerdknob` on any Optimizer URL reveals advanced controls: Monte Carlo parameters, the
-Guyton-Klinger guardrail inputs, the 💵 cash-funded sweep dimension, the timing control, and
+the Guardrails band and step inputs, the 💵 cash-funded sweep dimension, the timing control, and
 other diagnostics. (Fixed tax indexing used to be here; it now lives on the Monte Carlo tab, which is
 the only place it can do anything.)
 
@@ -70,7 +70,7 @@ the Documentation checkbox cannot reach them.
 | URL | what it unlocks |
 |---|---|
 | `?nerdknob=goal` | **Goal-first mode** (`P102`). An alternative planning surface that drives the classic controls rather than replacing them. Experimental, kept deliberately, and not something to stumble into. |
-| `?nerdknob=split` | **Fixed Split** withdrawal family (`P104b3`), **on probation**. Adds the strategy menu entry, its panel, and its sweep rows. Like Proportional Withdraw, Ordered and Guyton-Klinger, it **never reads the IRA Goal**, so that field greys out when it is selected - a fact that belongs here rather than in the changelog, because a reader without this knob has no way to select the strategy it describes. |
+| `?nerdknob=split` | **Fixed Split** withdrawal family (`P104b3`), **on probation**. Adds the strategy menu entry, its panel, and its sweep rows. Like Proportional Withdraw and Ordered, it **never reads the IRA Goal**, so that field greys out when it is selected - a fact that belongs here rather than in the changelog, because a reader without this knob has no way to select the strategy it describes. |
 
 Both still count as the plain knob for everything else, because `has('nerdknob')` is true for them.
 

@@ -65,6 +65,12 @@ const {
     simulate, afterTaxNetWorth, SPENDABLE_WEIGHT,
     buildStrategyFamilies, OPTIMIZER_GRIDS, rankRowsByObjective, bothOnMedicareAtStart,
 } = core;
+// P126 retired strategy 'gk', so the sweep no longer emits a Guyton-Klinger family. This study adds the
+// arm it always had - Guardrails over Proportional 0% - explicitly, as a base row without clones.
+const GK_ARM = b => ({ family: 'Guyton-Klinger', modifier: null, strategyLabel: 'Guyton-Klinger',
+    paramLabel: `Grd:${Math.round((b.gkGuard ?? 0.20) * 100)} Adj:${Math.round((b.gkAdjPct ?? 0.10) * 100)}`, paramSortVal: 0,
+    overrides: { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', gkGuard: b.gkGuard, gkAdjPct: b.gkAdjPct,
+                 convertExcessToRoth: true, fundConversionWithCash: false } });
 
 const money = n => (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString();
 
@@ -124,7 +130,7 @@ function runCell(cellBase) {
         markCashFunding: true,               // nerdknob configuration, same as the shipped table
         cashClones: cellBase.Cash > 0,
         offGridLast: true,
-    });
+    }).concat(GK_ARM(cellBase));
     const rows = [];
     for (const f of fams) {
         const inputs = { ...cellBase, ...f.overrides, computeOC: true };

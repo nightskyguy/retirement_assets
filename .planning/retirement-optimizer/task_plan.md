@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-09-13**, v11.1807 on branch `worktrees/planning-with-files-status-8ba49e`, not yet merged to `main`. Suites **443 / 32 / 61 / 26** (`optimizer_core`, `taxengine`, `taxPaymentPlanner`, `doclinks`), `TestTiers.EXPECTED` and `.githooks/README.md` pinned to match; in-page badge green at 1004. **An accuracy review on 2026-09-11 (user: "what errors, inaccuracies or omission are left to fix") shipped four fixes and opened nine phases, `P117`-`P125`, all O3.** Shipped: part-year growth now COMPOUNDS (it was spread evenly, which manufactured growth peaking mid-year and landed on the Early/Split/Late comparison - ending wealth falls in all 19 bank households, 0.48% to 6.73% among the 17 ending above $100k); the December settlement credit no longer inflates brokerage BASIS; Medicare base premiums can be charged as an outflow with per-person enrollment (default off); and capital-gains caveats for WA, SC, WI, ND, MT. Muni/tax-exempt interest and under-59.5 penalties were ruled OUT of scope by the user.
+**As of 2026-09-13**, v11.1807, merged to `main` 2026-09-13 as PR #223 (`79379e9`). Suites **443 / 32 / 61 / 26** (`optimizer_core`, `taxengine`, `taxPaymentPlanner`, `doclinks`), `TestTiers.EXPECTED` and `.githooks/README.md` pinned to match; in-page badge green at 1004. **An accuracy review on 2026-09-11 (user: "what errors, inaccuracies or omission are left to fix") shipped four fixes and opened nine phases, `P117`-`P125`, all O3.** Shipped: part-year growth now COMPOUNDS (it was spread evenly, which manufactured growth peaking mid-year and landed on the Early/Split/Late comparison - ending wealth falls in all 19 bank households, 0.48% to 6.73% among the 17 ending above $100k); the December settlement credit no longer inflates brokerage BASIS; Medicare base premiums can be charged as an outflow with per-person enrollment (default off); and capital-gains caveats for WA, SC, WI, ND, MT. Muni/tax-exempt interest and under-59.5 penalties were ruled OUT of scope by the user.
 **Planning files pruned 2026-09-02.** Every completed phase keeps a one-line stub below; the bodies are in `.planning/task_completed.md`. Phases nobody is working on are in `task_parked.md`. Findings that are no longer live - fixed defects, superseded claims, the pre-`Pnn` legacy block - are in `findings_archive.md`, and the rules they earned sit at the top of `findings.md` under "Rules earned the hard way".
 The ID migration table is still below. The Open Task Index and the second recency trail were deleted as stale: **the NOW table here is the only priority list.** Citations into `findings.md` are by HEADING, never by line number - about half the old line cites were already dead. Keep it that way.
 
@@ -15,9 +15,9 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P35 | **`P104b3` SHIPPED 09-03 v11.1719: Fixed Split, 4 vectors, NERDKNOB-GATED. Goldens untouched (gate off by default). MC grid deliberately empty** | `P104c` / un-gate |
 | **O1** | P36 | round 2 measures against the `P103a` ceiling, not rank-among-arms | `P36b` |
 | **O1** | P34 | NOT a P103 prerequisite (a-d are node harnesses); still the whole slow-machine story | `P34a` |
-| **O1** | P28j | `jg`/`jh`/`ji`/`jk` SHIPPED. `jf` MEASURED and NOT acted on - the trigger is unchanged, and its removal case was withdrawn | `P28jn` / `P28jo` |
-| **O1** | P115 | **tax-payment attribution** (user, 2026-09-09). `a` SHIPPED v11.17b1: cash interest trued up to what the cash earned. Priority is mine, not the user's | `P115b` |
-| **O1** | P126 | **Guyton-Klinger becomes a spending control** (user, 2026-09-13). The rule is already separable in the engine; a saved GK plan migrates with identical numbers | `P126a` |
+| **O1** | P28j | `jg`/`jh`/`ji`/`jk` SHIPPED, and `jo`'s Split/Early/Late menu shipped in `a5d8aa9`. `jf` MEASURED and NOT acted on - the trigger is unchanged, and its removal case was withdrawn | `P28jn` / `P28jo` Automatic |
+| **O1** | P115 | **tax-payment attribution** (user, 2026-09-09). `a` SHIPPED v11.17b1: cash interest trued up to what the cash earned; `b` CLOSED v11.17f4. Priority is mine, not the user's | `P115c` |
+| **O1** | P126 | **Guyton-Klinger becomes a spending control** (user, 2026-09-13). BUILT v11.1823, in PR review: rows follow the switch plus the plan's own twin, Compare All = the Optimizer's rows, My Plan Only runs the plan both ways, Guardrails described by savings, old plans keep their numbers (560/560) | `P126f` / commit |
 
 **Live carry-overs from finished phases** - the rest of what those phases did is in their stubs below:
 - `P85` RE-RUN: converting earlier still wins 353 of 499, but **the RMD claim BROKE** - 124 counterexamples, all bracket strategies at a live IRA Goal. `P72` is still pending.
@@ -536,7 +536,7 @@ strategy should load with the Guardrails control on, and a withdrawal strategy s
   - Monte Carlo: `mc_tab.js` branches on `v.strategy === 'gk'`.
   - Tests: 18 core tests build `strategy: 'gk'` (2 already use `spendRule`); the `sweep_golden`
     enumerations include the GK family and will change deliberately.
-  - Docs: the How to Use "Guyton-Klinger Guardrails" strategy paragraph, added on this branch, and the
+  - Docs: the How to Use "Guyton-Klinger Guardrails" strategy paragraph, added in 11.1807, and the
     Optimize for "Maximum Spending" note both describe GK as a strategy.
 
 ### The two decisions this phase exists to take
@@ -560,16 +560,52 @@ strategy should load with the Guardrails control on, and a withdrawal strategy s
 
 ### Items
 
-- [ ] `P126a` Take the two decisions above, and write them down, before any code.
-- [ ] `P126b` Engine and load paths: map `strategy: 'gk'` on every way in (saved plans, imports, share
-      links, harness inputs) to `propwd` 0% + `spendRule: 'gk'`, and key every `strategy === 'gk'` check
-      on the rule instead. Test: each migrated plan reproduces its log bit for bit, on every bank
-      household and in every Monte Carlo mode.
-- [ ] `P126c` UI: a Guardrails control (on/off, Guard %, Adjust %) beside the spend goal, visible to
-      everyone; the strategy option removed; the load report names the substitution.
-- [ ] `P126d` Optimizer and Monte Carlo per `P126a`; goldens regenerated deliberately; run time measured
-      on the slow-machine reference.
-- [ ] `P126e` How to Use, README and changelog: describe Guyton-Klinger as a spending control.
+- [x] `P126a` **DONE 2026-09-13, three user decisions:** (1) REVISED 2026-09-14 after seeing the table:
+      "Do NOT sweep guardrail on/off" - every row follows the switch, and only the user's own plan is run
+      both ways (`planRuleTwin`), in the Optimizer table and in Monte Carlo's Compare All; (2) a saved GK plan loads as Proportional 0% +
+      Guardrails, the same numbers, with the load report suggesting Fill Bracket; (3) Guard % and Adjust %
+      stay nerdknob-only, the switch is visible to everyone. Spend Delta and Guardrails may both be on.
+- [x] `P126b` **DONE.** The engine has no `'gk'` strategy: `_usesGKSpendRule` is the rule alone, and
+      `simulate()` and each Monte Carlo variation throw on a name the dispatch does not know. Identity
+      measured before and after: 20 households x 4 variants, deterministic, `optimizeSpend`,
+      `optimizeConversionAmount` and every path of all four MC modes - **560 of 560 records identical,
+      no field excluded.** Load folds in `loadFromURL`, `applyScenario` and `commitScenario`.
+- [x] `P126c` **DONE and browser-verified**: the Guardrails switch under Spend Delta, a sentence
+      stating the rule in force, the band and step behind the nerdknob, the strategy option removed.
+- [x] `P126d` **REWORKED 2026-09-14 (user).** No row is swept both ways: rows follow the switch, and the
+      Optimizer and `withCurrentPlan()` each add the plan's rule twin. **Compare All now runs exactly the
+      Optimizer's enumeration** (user: "not more, not less") - `MC_GRIDS` deleted, both callers build from
+      `buildStrategyFamilies(base, sweepOptions(base, flags))`, pinned by a parity test under every page
+      flag. "My Plan Only" and the stress pass now run the plan as configured - a matching swept row only
+      lends its labels - which fixes a shipped loss of the Extra Conversion there. Page defaults: Compare
+      All 156 -> 122 variations plus the twin, 8.1 -> 6.5 s at 50 paths in node. MC golden regenerated
+      (390 rows), the Optimizer golden recaptured (122 / 154 / 174 / 142 rows), browser-verified, badge
+      "All 1020 tests passed".
+- [x] `P126e` **DONE.** How to Use, README, ExperimentalFeatures, ARCHITECTURE section 3a and the
+      changelog (11.1823), revised 2026-09-14 for the new sweep, My Plan Only and the savings wording
+      (`P126g`, `P126h`). Not yet committed.
+- [ ] `P126f` **OPEN, known, and shipped as is (user, 2026-09-13: "Ship as it is").** The stability floor
+      was tuned when the rule could only draw Proportional 0%. Measured over 17 viable households x 5
+      draws: under Fill Bracket 24% and Ordered CBIR it rejects the plan's OWN spend in 2 households each
+      (Proportional 0%: none) - the rule cut real spending three times, to 72.9% of year 1 - so those
+      Guardrails rows get no Optimize Spend suggestion. In `ira-heavy-couple` under Fill Bracket 24% it also
+      rejects converting nothing, so `optimizeConversionAmount` picks $25,000/yr, which ends $96,275 poorer
+      and spends $7,445 less than $0. The fix, if taken: keep $0 admissible and floor only the added
+      conversions. Detail under findings.md "P126 - the stability floor across draws".
+- [x] `P126g` **DONE 2026-09-14 (user): My Plan Only runs the plan both ways** - "TWO runs: one with
+      guardrails on, one with guardrails off", shown as a two-row table like Compare All.
+      `planScopeVariations()` is the plan as configured, named with its own setting, plus
+      `ruleTwinVariation()`; the stress pass and the teaching demo still run the plan alone. The twin
+      shares the plan's family color, so the chart gives it the first unused one (`_mcTwinIdx`, which
+      also covers a checked twin in Compare All). Browser, default plan: 79.0% off / 100.0% on, and the
+      two rows swap exactly when the switch flips. In-page test `myPlanOnlyRunsThePlanBothWays`.
+- [x] `P126h` **DONE 2026-09-14 (user): Guardrails described by savings, never a withdrawal rate** - "the
+      user doesn't manage or configure the withdrawal rate". Switch tooltip, the sentence under it, the
+      band and step tooltips, How to Use, the Optimizer legend, README and the changelog: the first year
+      sets the safe level (what you spend per dollar saved), and spending is cut when it is more than the
+      band above the safe level for the savings you have. That is the engine's
+      `spend / portfolio > IWR x (1 + g)` multiplied through by the portfolio. The Compare All parity
+      line left the changelog: nobody expected the two tabs to differ, so it is not news.
 
 ## P116: prune the harnesses and research reports  *(2026-09-09. `a`, `c`, `d` DONE 2026-09-10; `b` OPEN)*
 
@@ -669,7 +705,7 @@ them. `P87` is closed and its tests pin the fixes.
 **Not in this phase:** `P112c`, the `COMMON` refit (24 files, at least four households under one
 name). Deleting 28 harnesses shrinks that job; do it after, not inside.
 
-## P115: tax-payment attribution  *(NEW 2026-09-09, user-raised. `a` SHIPPED v11.17b1, `b` and `c` open)*
+## P115: tax-payment attribution  *(NEW 2026-09-09, user-raised. `a` SHIPPED v11.17b1, `b` CLOSED v11.17f4, `c` open)*
 
 **The user's concern, verbatim in substance:** Early versus Late must get the growth in Cash and
 Brokerage right AND taxed - an early withdrawal to cash forgoes untaxed IRA growth and earns taxable
@@ -691,7 +727,12 @@ equals earned to within the final year's residual. Same-year exactness would nee
 balance before the withdrawals exist; the one-year carry is the honest shape. Two tests, one critical.
 Instrument: `.test_harnesses/taxattrib_harness.js`, every bank household, every mode.
 
-**`P115b` OPEN - the December settlement credit** (`growAndSettle`, the `taxSettlement === 'december'`
+**`P115b` CLOSED 2026-09-11, v11.17f4.** The basis half SHIPPED: the December credit no longer adds to
+`BrokerageBasis`. The tax-share half was DECLINED - sharing the credit by tax paid per source instead of by
+draw mix is one defensible reading, the draw mix is another (the dollars that stayed invested are the ones the
+household would otherwise have liquidated), nothing measured separates them, and the choice is documented in
+the code. The original text follows.
+**`P115b` (as opened) - the December settlement credit** (`growAndSettle`, the `taxSettlement === 'december'`
 block). Two attribution defects, both in the direction of flattering the option:
 - The credit is shared by each account's **net withdrawal**, not by the **tax each source paid**. An
   IRA-heavy tax bill on a brokerage-heavy draw credits the growth to the wrong account.
@@ -905,7 +946,7 @@ acceptable** - it is how the decoder and the fixtures diverge.
 - [ ] **P112d - each report names its plans and says why.** The `research/` convention already
       requires defining every code before use; the same applies to the households a verdict rests on.
 - **Related:** `P101` (serve them to users by name), `P111a2` (what `COMMON` holds fixed),
-  `P28jn`/`P28jo` (the open items blocked on two of these), `P85` (the fixture inherited unread).
+  `P28jn`/`P28jo` (once blocked on two of these; `P112a` supplied both), `P85` (the fixture inherited unread).
 
 
 ## P111: cue the best withdrawal-month / tax-date pair, as the Insights panel's first card  *(NEW 2026-09-06, user-raised)*
@@ -1022,7 +1063,7 @@ whether a plan lasts, which is a stronger result than any wealth delta here and 
   so the card's wording must not hard-code today's three options.
 
 
-## P110: Fixed tax indexing sits on the main sidebar and does nothing there  *(NEW 2026-09-06, user-raised)*
+## P110: Fixed tax indexing sits on the main sidebar and does nothing there  *(NEW 2026-09-06, user-raised. `a` and `b` DONE v11.17ae, `c` open)*
 
 *(user: "Seems the 'Fixed tax indexing' selector belongs on the Monte Carlo tab.")*
 
@@ -1040,11 +1081,13 @@ the tax code does with them. So the intent was always MC; only the placement is 
 
 ### Items
 
-- [ ] **P110a - move it to the Monte Carlo tab**, beside the Fixed Inflation preset it is explicitly
+- [x] **P110a - DONE in `a5d8aa9` (v11.17ae): moved to the Monte Carlo tab's Advanced Parameters, and `fti`
+      still round-trips.** As planned: move it to the Monte Carlo tab, beside the Fixed Inflation preset it is explicitly
       contrasted with. The two are a natural pair and the contrast only reads if they are adjacent:
       one pins the paths, the other pins what the tax code does with whatever the paths produced.
       Keep `fti` as the share key so existing links round-trip, and keep the nerdknob gate.
-- [ ] **P110b - decide what a checked box means on the deterministic run.** Today it silently does
+- [x] **P110b - RESOLVED by the move in `a5d8aa9`, the option this item preferred: the control now exists
+      only where it works.** As opened: decide what a checked box means on the deterministic run. Today it silently does
       nothing, which is the same failure shape as `P107e`'s greyed IRA Goal: a live-looking control
       that cannot affect the result. Options are to grey it outside MC the way
       `IRA_GOAL_BLIND_STRATEGIES` does, or to let the move to the MC tab make the scope self-evident.
@@ -1448,6 +1491,12 @@ median is that same shape of arm.
       Also re-examine the Extra Annual Roth Conversion tooltip (`:254` and `:1199`), which explains at
       length that conversions do NOT stop at the goal. Under a two-sided target that carve-out needs
       re-justifying, not copy-editing.
+      **Copy half DONE 2026-09-14** (user: "The IRA Goal tooltip is wrong. I thought it had been
+      reworded"): the field tooltip and the How to Use sentence now call it the balance to bring the IRA
+      down TO, name what can still take it below (RMDs, an Extra Conversion, spending the other accounts
+      cannot cover) and say Reduce reaches it in N years. The Reduce help line said "over the remaining
+      simulation years"; `amortYears = nYears - y`, so it now says N years. The `P107e` changelog `<li>`
+      stays as history. **Still open: the rename to `IRA Target`, and the Extra Conversion carve-out.**
 - **Related:** `P85`'s broken RMD claim has 124 counterexamples, **all bracket strategies at a live
   IRA Goal** - so the goal is already implicated in a finding that broke. `P104c`'s phased-strategy
   question ("switch once the IRA Goal is reached and held") presumes a goal that binds; on six of
@@ -3616,7 +3665,9 @@ That is now the third time in this repo a research table stopped reproducing aft
       bit-identical, and asking for the month the withdrawal already uses is a no-op. Suites
       421/61/22. No changelog entry - gated, default off, goldens untouched.
 
-- [ ] **P28jo - the timing MENU, as the user specified it** *(user, 2026-09-06)*. One control,
+- [ ] **P28jo - the timing MENU, as the user specified it** *(user, 2026-09-06)*. **Modes 1-3 SHIPPED in
+      `a5d8aa9` (v11.17ae, 2026-09-09)** as the nerdknob "Money moves" control: Split (default), Early,
+      Late. Only mode 4, Automatic, remains, and it has to name its objective first (`P111`). One control,
       "Timing of Voluntary Withdrawals & Conversions", replacing two of the three selects with four
       named modes. *RMDs* is italicised with a "when required" footnote - it tells the reader what
       moves, and a household before RMD age simply has none.

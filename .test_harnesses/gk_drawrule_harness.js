@@ -124,7 +124,8 @@ let scored = 0;
 
 console.log('cell                   GK wealth        best candidate            wealth gain   spend gain');
 for (const cell of cells) {
-    const gk = run({ ...cell.base, strategy: 'gk' });
+    // The incumbent: Guardrails over its own draw, Proportional 0% (P126 retired strategy 'gk').
+    const gk = run({ ...cell.base, strategy: 'propwd', propWithdraw: 0, spendRule: 'gk' });
     const rate = gk?.totals?.futureIRARate ?? 0;
     const g = score(gk, rate);
     if (!g) { console.log(cell.label.padEnd(22) + ' GK infeasible, cell skipped'); continue; }

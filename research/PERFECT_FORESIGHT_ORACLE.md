@@ -715,7 +715,7 @@ order, same per-account rates, same `calculateWithdrawals` call with no explicit
 weights come from the account balances). Neither family is in `yr.isBracketStrategy`, so they take
 the same gap fill as well.
 
-**Measured, not read.** `.test_harnesses/family_equivalence_harness.js` runs `strategy: 'gk'` against
+**Measured, not read.** A harness since retired - P126 turned its one claim into the load migration for old plans - ran `strategy: 'gk'` against
 `strategy: 'propwd', propWithdraw: 0` with `spendRule: 'gk'` on both sides - so the guardrail
 adjustment is identical by construction and the draw is the only thing that can differ - and compares
 every field of every log row plus final net worth to half a cent. **15 of 15 cells bit-identical.**

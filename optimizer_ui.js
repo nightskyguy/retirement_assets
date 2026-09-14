@@ -63,13 +63,15 @@ const GOAL_FIRST = new URLSearchParams(location.search).get('nerdknob') === 'goa
 //     ROTH_GAP_EXCLUDED                     'split'
 //   optimizer_core.js  SWEEP (P104b3, the part on probation):
 //     SPLIT_VECTORS / SPLIT_ACCOUNT_LABELS / splitVectorLabel / splitVectorSortVal
-//     OPTIMIZER_GRIDS.split                 (MC_GRIDS deliberately has none)
+//     OPTIMIZER_GRIDS.split
+//     sweepOptions                          the splitFeature flag -> splitFamily
+//     describeSelection                     case 'split'
 //     buildStrategyFamilies                 the `splitFamily` opt + the family loop + the
 //                                           addOffGrid guard
 //     offGridParamFor                       case 'split'
 //     the three exports
 //   optimizer_ui.js:
-//     SPLIT_FEATURE (this block), splitFamily in the sweep opts, describeSelection case 'split',
+//     SPLIT_FEATURE (this block) and the flag it passes to sweepOptions,
 //     getInputs splitWeights, toggleStrategyUI's #ui-split line, applyNerdKnobVisibility's menu
 //     entry, the loadOptimizerResult adopt branch, the four OPT_LONG_TO_SHORT keys, the
 //     applyScenario array case, and generateSplitPresetOptions / onSplitPresetChange /
@@ -138,8 +140,8 @@ const OptimizerState = {
     // preference, not a property of the goal.
     showAllColumns: false,
     // Relative view: every comparable column reads as a difference from the reference row rather
-    // than as its own value. Nerdknob-gated while it is being lived with.
-    relativeView: false,
+    // than as its own value. On by default, with the switch visible to everyone (user, 2026-09-14).
+    relativeView: true,
     // P100b1: seeded from `?obj=` so a shared link reproduces the goal it was shared under.
     // Read HERE rather than in an init hook because renderOptimizerTable and the anchor baseline
     // pick both read this before any load hook would have run; an unknown or absent key falls back
@@ -258,12 +260,9 @@ function applyNerdKnobVisibility() {
     // 💵 legend - only meaningful once nerdknob is sweeping the cash-funded arm
     const cashFundLegend = document.getElementById('opt-legend-cashfund');
     if (cashFundLegend) cashFundLegend.style.display = NERD_KNOBS ? '' : 'none';
-    // Relative view control - gated while the mode is being lived with. Turning the knob OFF must
-    // also turn the mode off, or a reader who enabled it once would be left reading a table of
-    // differences with no visible way to get back.
-    const relWrap = document.getElementById('opt-relmode-wrap');
-    if (relWrap) relWrap.style.display = NERD_KNOBS ? '' : 'none';
-    if (!NERD_KNOBS) OptimizerState.relativeView = false;
+    // Show as Differences is not gated. It is ON by default for everyone (user, 2026-09-14), and a
+    // default-on mode needs a switch everyone can see, or a reader would be left with a table of
+    // differences and no visible way back to the actual numbers.
     // The ACA Cliff documentation paragraph used to be hidden here. It is now always visible, like
     // every other strategy's paragraph, so there is nothing to toggle - the inline display:none was
     // dropped from the markup rather than being switched off from JS, which keeps it visible even
@@ -780,6 +779,8 @@ function getInputs() {
         qcdMode: valChecked('qcdAlways') ? 'always' : 'asneeded',
         gkGuard:  +val('gkGuard')  / 100 || 0.20,
         gkAdjPct: +val('gkAdjPct') / 100 || 0.10,
+        // Guardrails, the Guyton-Klinger spend rule: a switch beside the spend goal, not a strategy.
+        spendRule: valChecked('spendRule') ? 'gk' : '',
     };
 }
 
@@ -1114,10 +1115,9 @@ function updateCurrentDollarsView() {
         if (typeof renderMCChart === 'function') renderMCChart(_mcResults);
         // P86: the survival table and the plan headline carry dollar figures too (final balance,
         // taxes, spendable) and were never re-rendered here, so they sat on a fixed basis while
-        // the chart above them switched. Plan scope never renders the table (renderMCResults hides
-        // and empties it), so the same gate applies here.
-        if (typeof renderSurvivalTable === 'function' && _mcResults.variations
-            && (typeof _mcScope === 'undefined' || _mcScope !== 'plan')) {
+        // the chart above them switched. Both scopes render the table (My Plan Only shows its two
+        // rows, Guardrails on and off), so both re-render it.
+        if (typeof renderSurvivalTable === 'function' && _mcResults.variations) {
             renderSurvivalTable(_mcResults.variations, _mcResults.numPaths);
         }
         if (typeof renderPlanHeadline === 'function') renderPlanHeadline(_mcResults);
@@ -1160,26 +1160,6 @@ const BASELINE_MARK = '⚓ ';
 // its label is never rewritten, because which row IS the baseline changes with the active objective.
 function isBaselineRow(r) {
     return !!(r && OptimizerState.baseline && r._id === OptimizerState.baseline._id);
-}
-const _IRMAA_TIER_LABELS = ['Below IRMAA', 'Tier 1 ceil', 'Tier 2 ceil', 'Tier 3 ceil', 'Tier 4 ceil'];
-function describeSelection(p) {
-    const pct = v => `${Math.round((v ?? 0) * 100)}%`;
-    switch (p.strategy) {
-        case 'propwd':   return { family: 'Proportional', paramLabel: pct(p.propWithdraw), paramSortVal: Math.round((p.propWithdraw ?? 0) * 100) };
-        case 'fixed':    return { family: 'Reduce', paramLabel: `${p.nYears} yrs`, paramSortVal: p.nYears ?? 0 };
-        case 'fixedpct': return { family: 'IRA Draw', paramLabel: pct(p.iraWithdrawPct), paramSortVal: Math.round((p.iraWithdrawPct ?? 0) * 100) };
-        case 'ordered':  return { family: 'Ordered', paramLabel: p.orderedSeq ?? 'CBIR', paramSortVal: p.orderedSeq ?? 'CBIR' };
-        case 'gk':       return { family: 'Guyton-Klinger', paramLabel: `Grd:${Math.round((p.gkGuard ?? 0.20) * 100)} Adj:${Math.round((p.gkAdjPct ?? 0.10) * 100)}`, paramSortVal: 0 };
-        case 'split':    return { family: 'Fixed Split', paramLabel: splitVectorLabel(p.splitWeights), paramSortVal: splitVectorSortVal(p.splitWeights) };
-        case 'aca':      return { family: 'ACA Cliff', paramLabel: `${p.stratACAMultiple ?? 0}% FPL`, paramSortVal: 50 + (p.stratACAMultiple ?? 0) / 100 };
-        case 'bracket':
-            if ((p.stratACAMultiple ?? 0) > 0)
-                return { family: 'ACA Cliff', paramLabel: `${p.stratACAMultiple}% FPL`, paramSortVal: 50 + p.stratACAMultiple / 100 };
-            if ((p.stratIRMAATier ?? -1) >= 0)
-                return { family: 'IRMAA Ceil', paramLabel: _IRMAA_TIER_LABELS[p.stratIRMAATier] ?? `Tier ${p.stratIRMAATier}`, paramSortVal: p.stratIRMAATier - 0.5 };
-            return { family: 'Fill Bracket', paramLabel: pct(p.stratRate), paramSortVal: p.stratRate ?? 0 };
-        default:         return { family: p.strategy ?? 'Plan', paramLabel: '', paramSortVal: 0 };
-    }
 }
 
 // Handles for a sweep that is queued but has not started yet. Deliberately NOT a boolean "already
@@ -1362,7 +1342,7 @@ function _runOptimizerNow() {
         // The remaining case is not a proxy for anything: when BOTH are past Medicare age at start,
         // yr.acaLapsed is true in every year, the engine runs Proportional 0% throughout, and the
         // row's ACA label describes nothing it did. The sweep already omits the family here
-        // (acaDisabled, below); this still catches a plan loaded from a URL or restored as the
+        // (the age gate in sweepOptions); this still catches a plan loaded from a URL or restored as the
         // CURRENT PLAN row, which bypass that gate.
         const acaBreachYears = res.totals?.acaBreachYears ?? 0;
         const acaNeverApplies = bothOnMedicareAtStart(
@@ -1416,6 +1396,7 @@ function _runOptimizerNow() {
                 stratACAMultiple: inputs.stratACAMultiple ?? 0,
                 iraWithdrawPct: inputs.iraWithdrawPct, orderedSeq: inputs.orderedSeq,
                 gkGuard: inputs.gkGuard, gkAdjPct: inputs.gkAdjPct,
+                spendRule: inputs.spendRule === 'gk' ? 'gk' : '',
                 cyclicEnabled: !!inputs.cyclicEnabled, cyclicOrder: inputs.cyclicOrder ?? 'ira-first',
                 fundConversionWithCash: !!inputs.fundConversionWithCash,
                 rothGapFill: inputs.rothGapFill ?? '',
@@ -1433,40 +1414,11 @@ function _runOptimizerNow() {
         strategyOverridesList.push({ strategyLabel, paramLabel, paramSortVal, overrides, family: _fk, modifier });
     }
 
-    // The enumeration itself lives in optimizer_core.js (buildStrategyFamilies), shared with Monte
-    // Carlo's buildVariations() and - unlike the inline block this replaced - reachable from node,
-    // which is what lets a study measure the sweep without a browser. Every way THIS table's sweep
-    // differs from MC's is an argument below rather than a difference nobody declared.
-    const acaDisabled = bothOnMedicareAtStart(base.birthyear1, base.startAge, !!base.hasSpouse,
-        base.hasSpouse ? (base.birthyear2 || 0) : 0);
-    const families = buildStrategyFamilies(base, {
-        grids: OPTIMIZER_GRIDS,
-        irmaaFamily: true,
-        // ACA cliff arms are swept for everyone now; the age gate is the only thing that removes
-        // them, and it removes them for a reason that is about the plan rather than the audience -
-        // once both people are on Medicare at start an income cap protects nothing.
-        acaFamily: !acaDisabled,
-        // A Fill Bracket row must not inherit a sidebar IRMAA-tier selection; the tiers are swept
-        // as their own family.
-        bracketResetsIRMAATier: true,
-        // Nerdknob sweeps cash funding as its own dimension (the 💵 rows), so the rows it clones
-        // must read false rather than inherit the sidebar, or a user who already has it on gets
-        // two identical arms instead of an A/B.
-        markCashFunding: NERD_KNOBS,
-        cashClones: NERD_KNOBS && base.Cash > 0,
-        // The 🅡 arm is swept for everyone - P28 measured it worth up to +$3.56M and found no
-        // heuristic that predicts when, so the only way to know is to run it. Gated on Roth
-        // because with no Roth to draw the clone is a bit-identical twin, and restricted inside
-        // the builder to every strategy but Ordered, which runs the sequence the user picked.
-        rothClones: (base.Roth > 0 || base.Roth2 > 0),
-        // P104b3. Fixed Split is on probation behind ?nerdknob=split, NOT the plain nerdknob -
-        // see the SPLIT_FEATURE block for why and for the removal manifest. Monte Carlo's sweep
-        // does not get it at all (MC_GRIDS carries no `split`), because MC has no knob to gate it.
-        splitFamily: SPLIT_FEATURE,
-        // The user's own off-grid parameter goes last here, after Guyton-Klinger. MC puts it
-        // straight after IRA Draw. Both orders are pinned by sweep_golden.js.
-        offGridLast: true,
-    });
+    // The enumeration lives in optimizer_core.js, and so do its options: Monte Carlo's Compare All
+    // builds from the same buildStrategyFamilies(base, sweepOptions(...)) call, so both tabs run exactly
+    // the same rows. Every row follows the user's Guardrails switch; the one row run both ways is the
+    // user's own plan, added beside the current-plan row below.
+    const families = buildStrategyFamilies(base, sweepOptions(base, { nerdKnobs: NERD_KNOBS, splitFeature: SPLIT_FEATURE }));
     for (const f of families) {
         addResult(f.strategyLabel, f.paramLabel, f.paramSortVal, f.overrides, false, f.family, f.modifier);
     }
@@ -1573,6 +1525,9 @@ function _runOptimizerNow() {
             stratACAMultiple: userPlan.stratACAMultiple ?? 0,
             iraWithdrawPct: userPlan.iraWithdrawPct, orderedSeq: userPlan.orderedSeq,
             gkGuard: userPlan.gkGuard, gkAdjPct: userPlan.gkAdjPct,
+            // Explicit for the reason rothGapFill is below: the Guardrails sweep writes spendRule ''
+            // onto every fixed-spend row, and this reference row is the user's actual plan.
+            spendRule: userPlan.spendRule === 'gk' ? 'gk' : '',
             cyclicEnabled: !!userPlan.cyclicEnabled, cyclicOrder: userPlan.cyclicOrder ?? 'ira-first',
             convertExcessToRoth: !!userPlan.convertExcessToRoth,
             fundConversionWithCash: !!userPlan.fundConversionWithCash,
@@ -1584,7 +1539,7 @@ function _runOptimizerNow() {
             convEndYear: userPlan.convEndYear, convEndMode: userPlan.convEndMode ?? 'all',
         };
         // Name it the way the swept rows are named, so the pinned row reads as a peer of the table
-        // ("Proportional 7%", "Guyton-Klinger Grd:20 Adj:10") rather than an unlabelled special case.
+        // ("Proportional 7%", "Fill Bracket 22%") rather than an unlabelled special case.
         const _fam = describeSelection(userPlan);
         perfEnter('Your plan');
         addResult(_fam.family, _fam.paramLabel, _fam.paramSortVal, _curOv, false, _fam.family);
@@ -1617,6 +1572,15 @@ function _runOptimizerNow() {
             _match._isCurrentMatch = true;
             _match._strategyLabel = CURRENT_PLAN_MARK + _match._strategyLabel;
         }
+
+        // P126, user 2026-09-14: every row above follows the Guardrails switch, and the ONE row run both
+        // ways is the user's own plan - so this adds it with the switch the other way round. Ranked with
+        // the rest rather than pinned, so the table shows what the switch is worth to this plan. Monte
+        // Carlo's withCurrentPlan() adds the same row, so Compare All runs it too.
+        const _twin = planRuleTwin(userPlan);
+        addResult(_twin.strategyLabel, _twin.paramLabel, _twin.paramSortVal,
+            { ..._curOv, spendRule: _twin.spendRule }, false, _twin.family);
+        results[results.length - 1]._isRuleTwin = true;
     }
 
     // Shared future-IRA rate for after-tax scoring - hoisted above Phase 23 so the conversion
@@ -2673,13 +2637,19 @@ function loadOptimizerResult(id) {
         // 🅡 clones, or a leftover setting follows the next strategy loaded.
         const rgEl = document.getElementById('rothGapFill');
         if (rgEl) rgEl.checked = (result._selection.rothGapFill === 'fillCashThenRoth');
-        if (result._strategy === 'ordered' && result._selection.orderedSeq) {
-            const seqEl = document.getElementById('orderedSeq');
-            if (seqEl) seqEl.value = result._selection.orderedSeq;
-        } else if (result._strategy === 'gk') {
+        // Guardrails, the same way: on for a 🛡️ row, back to off for a fixed-spend one, with the
+        // row's own band and step restored so the rule that runs is the one the table evaluated.
+        const grEl = document.getElementById('spendRule');
+        const grOn = result._selection.spendRule === 'gk';
+        if (grEl) grEl.checked = grOn;
+        if (grOn) {
             const gEl = document.getElementById('gkGuard'), aEl = document.getElementById('gkAdjPct');
             if (gEl && result._selection.gkGuard != null) gEl.value = Math.round(result._selection.gkGuard * 100);
             if (aEl && result._selection.gkAdjPct != null) aEl.value = Math.round(result._selection.gkAdjPct * 100);
+        }
+        if (result._strategy === 'ordered' && result._selection.orderedSeq) {
+            const seqEl = document.getElementById('orderedSeq');
+            if (seqEl) seqEl.value = result._selection.orderedSeq;
         } else if (result._strategy === 'split' && Array.isArray(result._selection.splitWeights)) {
             // Same PF8 class again: without this, clicking "Fixed Split Brok 90 / Cash 10" would set
             // the strategy and leave whatever mix the sidebar already had, so the table would show
@@ -4198,7 +4168,7 @@ function makeChartLegendInteraction(groupSize = 1) {
 //     '—'), carrying a half or full basis step-up glyph per the state's property law.
 //  8. Last death - the final row, always someone's death since the plan ends at one. Labelled the
 //     same way, always a FULL step-up (heirs), and it is the only death marker a single filer gets.
-//  2. Every Guyton-Klinger guardrail spending CUT (gkAdj contains a "cap" adjustment).
+//  2. Every Guardrails spending CUT (gkAdj contains a "cap" adjustment).
 //  3. Every year the IRMAA tier INCREASES over the prior year (e.g. Tier 1→Tier 2), labelled with
 //     the new tier ("IRMAA Tier 2"). Same-or-lower tiers are not marked.
 //  4. Every year net income falls short of the spend goal by more than 10%.
@@ -4253,7 +4223,7 @@ function computeMilestones(log) {
         // 2. GK guardrail cut - gkAdj like "−10%cap" (may be combined with "no-CPI"). Skipped when
         // the same year is already flagged as a shortfall.
         if (!isShort && String(r.gkAdj ?? '').includes('cap')) {
-            ms.push({ x: i, label: 'GK cut', color: '#d35400' });
+            ms.push({ x: i, label: 'Guardrail cut', color: '#d35400' });
         }
         // 3. IRMAA tier increase over the prior year.
         const tier = tierNum(r.IRMAATier);
@@ -5173,7 +5143,7 @@ function setupSmallScreenUX() {
 
 function setupAutoRecalc() {
     const LABELS = {
-        spendGoal: 'Spend Goal', spendChange: 'Spend Δ%', strategy: 'Strategy',
+        spendGoal: 'Spend Goal', spendChange: 'Spend Δ%', strategy: 'Strategy', spendRule: 'Guardrails',
         nYears: 'N Years', stratRate: 'Bracket', propWithdraw: 'Boost%',
         iraBaseGoal: 'IRA Goal', maximizeConversions: 'Max Conversions',
         advisorFeeAmount: 'Advisor Fee', advisorFeeMode: 'Fee Mode', advisorFeeScope: 'Fee Applies To',
@@ -5507,7 +5477,7 @@ function toggleSpouseUI() {
 // own family name, so those callers pass theirs instead of falling back here.
 const OPT_FAMILY_OF_STRATEGY = {
     propwd: 'Proportional', fixed: 'Reduce', fixedpct: 'IRA Draw',
-    aca: 'ACA Cliff', ordered: 'Ordered', gk: 'Guyton-Klinger',
+    aca: 'ACA Cliff', ordered: 'Ordered',
 };
 
 // P88e. An Extra Annual Roth Conversion and a ceiling strategy pull against each other, and until
@@ -5795,6 +5765,46 @@ function updateSplitMixNote() {
         + '. If a year needs more, the rest comes from IRA, then Brokerage, then Cash, then Roth.';
 }
 
+// GK-FOLD-BEGIN
+// P126. Guyton-Klinger stopped being a withdrawal strategy and became the Guardrails switch. A saved
+// plan, an import or a link from before that says strategy 'gk'. Its draw was always Proportional at
+// 0%, so it folds onto exactly that with the switch on, and the numbers do not move. Pure: returns
+// the folded data and the sentence to report, which is empty when nothing was substituted.
+//
+// A plan with no `spendRule` key at all gets '' written, because applyScenario leaves a control
+// alone when the plan has no key for it - a switch left on by the previous plan would otherwise
+// apply, silently, to one that never had it.
+const GK_STRATEGY_NOTE = 'This plan used Guyton-Klinger as its withdrawal strategy. Guyton-Klinger is now '
+    + 'the Guardrails switch beside After-Tax Spend, and it works with any strategy. The plan loaded as '
+    + 'Proportional Withdraw at 0% with Guardrails on, which gives the same numbers. Fill Fed/IRMAA '
+    + 'Bracket with Guardrails on is worth comparing.';
+function foldRetiredGKStrategy(data) {
+    if (!data || typeof data !== 'object') return { data, note: '' };
+    if (data.strategy === 'gk') {
+        return { data: { ...data, strategy: 'propwd', propWithdraw: 0, spendRule: 'gk' }, note: GK_STRATEGY_NOTE };
+    }
+    if (data.spendRule === undefined) return { data: { ...data, spendRule: '' }, note: '' };
+    return { data, note: '' };
+}
+// GK-FOLD-END
+
+// The rule in force, as a sentence everyone can read. The band and the step are nerdknob fields, but
+// what they do to spending is not something a reader should have to hover over to find out. Said in
+// terms of savings, never a withdrawal rate: nobody enters or sees the rate the rule tests (user,
+// 2026-09-14). "More than g% above the safe level for the savings you have" is the engine's test,
+// spend / portfolio > IWR x (1 + g), multiplied through by the portfolio.
+function updateGuardrailsNote() {
+    const el = document.getElementById('guardrails-note');
+    if (!el) return;
+    const on = valChecked('spendRule');
+    el.style.display = on ? '' : 'none';
+    if (!on) return;
+    const g = Math.round(+val('gkGuard') || 20), a = Math.round(+val('gkAdjPct') || 10);
+    el.textContent = `Your first year sets the safe level: what you spend for each dollar saved. After that, `
+        + `spending is cut ${a}% in any year it is more than ${g}% above the safe level for the savings you `
+        + `have, and raised ${a}% when it is more than ${g}% below.`;
+}
+
 function toggleStrategyUI() {
     let m = val('strategy');
     document.getElementById('ui-fixed').classList.toggle('hidden', m !== 'fixed');
@@ -5802,7 +5812,11 @@ function toggleStrategyUI() {
     document.getElementById('ui-propwd').classList.toggle('hidden', m !== 'propwd');
     document.getElementById('ui-fixedpct').classList.toggle('hidden', m !== 'fixedpct');
     document.getElementById('ui-ordered').classList.toggle('hidden', m !== 'ordered');
-    document.getElementById('ui-gk').classList.toggle('hidden', m !== 'gk' || !NERD_KNOBS);
+    // Guardrails is a spend rule, not a strategy, so its fields follow the switch rather than the
+    // menu, and stay behind the nerdknob by the user's choice (2026-09-13). Everyone gets the switch,
+    // and a sentence stating the rule in force while it is on.
+    document.getElementById('ui-gk').classList.toggle('hidden', !valChecked('spendRule') || !NERD_KNOBS);
+    updateGuardrailsNote();
     // Gated on the knob as well as the selection: a share link can carry str=split to someone who
     // has no menu entry for it, and a panel with no way to have been chosen is worse than hidden.
     document.getElementById('ui-split').classList.toggle('hidden', m !== 'split' || !SPLIT_FEATURE);
@@ -5817,7 +5831,7 @@ function toggleStrategyUI() {
         rgLabel.classList.toggle('knob-na', m === 'ordered');
         document.getElementById('rothGapFill').disabled = (m === 'ordered');
     }
-    // P107: four strategies never read the IRA Goal, so no value of it can change their result.
+    // P107: three strategies never read the IRA Goal, so no value of it can change their result.
     // Greyed and disabled rather than hidden, and the VALUE IS NOT CLEARED - switching away and back
     // would otherwise throw the number away, the same reasoning as rothGapFill above. The visible
     // note carries the reason, because a tooltip alone cannot be read on a phone.
@@ -5865,7 +5879,7 @@ const OPT_LONG_TO_SHORT = {
     'show-current-dollars':'cd', optimizeSpend:'opt', includeConvOpt:'copt',
     cyclicEnabled:'cyc',
     qcdHHMax:'qm', qcdAlways:'qa',
-    gkGuard:'gkg', gkAdjPct:'gka',
+    gkGuard:'gkg', gkAdjPct:'gka', spendRule:'gr',
     // P104b3. FOUR keys rather than one packed `sw=0,9,1,0`. buildShareURL and loadFromURL are both
     // driven off the DOM fields themselves, so four plain fields round-trip with no parse step -
     // and a hand-written parse step for a packed value is exactly the shape of the ACA share-link
@@ -6047,6 +6061,17 @@ function loadFromURL() {
         params.delete(_cvtKey);
         if (_note) TIMING_MODE_SWAP = _note;
     }
+    // GK-FOLD-BEGIN
+    // P126. A link written while Guyton-Klinger was a strategy carries str=gk. Its draw was always
+    // Proportional at 0%, so it loads as exactly that with the Guardrails switch on - the same numbers
+    // - and says so. Written as the strings the field loop below expects, `1` being a checked box.
+    if (params.get('strategy') === 'gk') {
+        params.set('strategy', 'propwd');
+        params.set('propWithdraw', '0');
+        params.set('spendRule', '1');
+        GK_STRATEGY_SWAP = GK_STRATEGY_NOTE;
+    }
+    // GK-FOLD-END
     params.forEach((value, key) => {
         const el = document.getElementById(key);
         if (!el) return;
@@ -6348,48 +6373,6 @@ function saveAndExportScenario() {
 }
 
 /**
- * Prompts user to select and load a compatible scenario
- * Filters out incompatible versions before displaying list
- * Shows error if no compatible scenarios exist
- * No parameters
- */
-function loadScenario() {
-    try {
-        const scenarios = getSavedScenarios();
-        const scenarioNames = Object.keys(scenarios);
-
-        if (scenarioNames.length === 0) {
-            showMessage('No saved scenarios found.', 'error');
-            return;
-        }
-
-        const compatibleScenarios = scenarioNames.filter(name =>
-            scenarios[name].version === SCENARIO_VERSION
-        );
-
-        if (compatibleScenarios.length === 0) {
-            showMessage('No compatible scenarios found. All saved scenarios are from an older version.', 'error');
-            return;
-        }
-
-        let selection = prompt('Enter scenario name to load:\n\n' + compatibleScenarios.join('\n'));
-
-        if (selection && scenarios[selection]) {
-            if (scenarios[selection].version !== SCENARIO_VERSION) {
-                showMessage('This scenario is from an incompatible version and cannot be loaded.', 'error');
-                return;
-            }
-            applyScenario(scenarios[selection].data);
-            showMessage(`Scenario "${selection}" loaded successfully!`, 'success');
-        } else if (selection) {
-            showMessage('Scenario not found.', 'error');
-        }
-    } catch (error) {
-        showMessage(`Failed to load scenario: ${error.message}`, 'error');
-    }
-}
-
-/**
  * Applies scenario data to form input fields
  * Handles percentage conversions for specific fields (multiplies by 100 for display)
  * Triggers recalculate() function if it exists
@@ -6402,6 +6385,9 @@ const DOLLAR_INPUT_IDS = new Set([
 ]);
 
 function applyScenario(data) {
+    // P126. Folded here as well as in commitScenario, which reports it, so no caller of this function
+    // can load strategy 'gk' or inherit a Guardrails switch the plan never set.
+    data = foldRetiredGKStrategy(data).data;
     // Legacy: scenarios saved before the rename store maxConversion. Map it to its renamed
     // continuation; fundConversionWithCash stays at its own default (those scenarios predate it,
     // so implying it would silently change their numbers).
@@ -6507,7 +6493,7 @@ function applyScenario(data) {
                 // the highest real ceiling rather than sitting on an option the menu disables.
                 clampStratRateSelection(element);
             } else {
-                if (['convertExcessToRoth', 'fundConversionWithCash', 'dividendReinvest', 'cyclicEnabled', 'fixedTaxIndexing'].includes(key)) {
+                if (['convertExcessToRoth', 'fundConversionWithCash', 'dividendReinvest', 'cyclicEnabled', 'fixedTaxIndexing', 'spendRule'].includes(key)) {
                     element.checked = !!value;
                 } else if (DOLLAR_INPUT_IDS.has(key)) {
                     DisplayHelpers.setDollarValue(key, value);
@@ -6802,6 +6788,12 @@ function cancelImport() {
 function commitScenario(entry, name) {
     ACA_GATE_SWAP = null;      // only this load's own substitutions are this load's to report
     TIMING_MODE_SWAP = null;
+    GK_STRATEGY_SWAP = null;
+    // P126. A plan saved while Guyton-Klinger was a strategy loads on the Guardrails switch, and says
+    // so; a plan with no switch setting at all loads with it off rather than inheriting the sidebar's.
+    const _gkFold = foldRetiredGKStrategy(entry && entry.data);
+    if (entry && _gkFold.data !== entry.data) entry = { ...entry, data: _gkFold.data };
+    if (_gkFold.note) GK_STRATEGY_SWAP = _gkFold.note;
     // A saved plan predating the single timing control carries the two old keys. applyScenario sets
     // elements by id and those ids are gone, so without this the plan would quietly load the new
     // default. Same mapping as the share-link fold in loadFromURL.
@@ -7835,6 +7827,10 @@ let ACA_GATE_SWAP = null;
 // rule that no longer exists, so loading it silently would be the same defect in a new place.
 let TIMING_MODE_SWAP = null;
 
+// And for Guyton-Klinger, which stopped being a strategy (P126): the plan loads on the Guardrails
+// switch with the same numbers, and the note says what was substituted.
+let GK_STRATEGY_SWAP = null;
+
 /**
  * The readable half of a Limit option's label: the name and its own dollar figure, without the
  * cross-ladder parenthetical. "ACA 400% FPL - $84k" out of "ACA 400% FPL  ·  $84k (12% Fed)".
@@ -7846,8 +7842,9 @@ function limitOptionName(opt) {
 }
 
 /**
- * Report anything a load path SUBSTITUTED, once. Two things can be swapped out from under a plan
- * the user did not choose: an ACA cap the age gate forbids, and a timing rule that no longer exists.
+ * Report anything a load path SUBSTITUTED, once. Three things can be swapped out from under a plan
+ * the user did not choose: an ACA cap the age gate forbids, a timing rule that no longer exists, and
+ * Guyton-Klinger as a strategy, which is the Guardrails switch now.
  * Both are silent-by-default failures, so both are said out loud here.
  *
  * APPENDS rather than replaces. There is one message box, and the scenario loaders write their own
@@ -7856,9 +7853,10 @@ function limitOptionName(opt) {
  * milder becomes a warning, because a limit the user did not choose is the more serious of the two.
  */
 function reportLoadSubstitutions() {
-    const msg = [TIMING_MODE_SWAP, ACA_GATE_SWAP].filter(Boolean).join(' ');
+    const msg = [GK_STRATEGY_SWAP, TIMING_MODE_SWAP, ACA_GATE_SWAP].filter(Boolean).join(' ');
     ACA_GATE_SWAP = null;
     TIMING_MODE_SWAP = null;
+    GK_STRATEGY_SWAP = null;
     if (!msg) return;
     // Onto the load report when one is up - a saved-plan load always writes it first - so the note
     // stays with the rest of what the load changed. A share-link load has no report and keeps using

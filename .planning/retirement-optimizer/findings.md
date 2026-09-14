@@ -2951,3 +2951,36 @@ a canonical one drifts, and here it drifted silently for a full phase.**
 Worth checking next time something is added to `STRATEGY_SELECTION_FIELDS`: the MC worker posts a
 summary of each variation back to the page and had the same class of hand-kept list, which the core
 comment says already dropped four fields once.
+
+## P126 - the stability floor across draws  *(2026-09-13)*
+
+**Identity first, before any code.** 20 households (the 19 in `plans/` plus the `gkSpouse` golden base)
+x 4 variants (as-is, Spend Delta -1%, guard .15 / adjust .05, cyclic flipped) were run as
+`strategy: 'gk'` on `79379e9` and as `{ strategy: 'propwd', propWithdraw: 0, spendRule: 'gk' }` on the
+change: deterministic with `computeOC`, `optimizeSpend`, `optimizeConversionAmount`, and every path of
+gbm, aam and bootstrap (50 paths each) and stress. **560 of 560 records identical, no field excluded.**
+On the old engine the two arms already matched on every deterministic and Monte Carlo field except
+`gkSpend`/`gkAdj` (400 of 400); they differed in the two optimizers only because the old floor keyed
+on the strategy name, which is exactly what moved.
+
+**The floor under other draws.** `gkSpendStable` requires the worst real spend to stay within one guard
+band (80%) of year 1. It was tuned when the rule could only draw Proportional 0%. Measured over the 17
+viable households x 5 draws x rule on and off:
+
+| draw, rule on | own spend rejected | $0 conversions where rule-off converts | pick worse than $0 on both | floor-rejected $25k steps |
+|---|---|---|---|---|
+| Proportional 0% | 0 of 17 | 0 of 13 | 0 | 615 of 1589 |
+| Fill Bracket 22% | 1 of 17 | 0 of 14 | 0 | 621 of 1589 |
+| Fill Bracket 24% | 2 of 17 | 1 of 13 | 1 | 676 of 1589 |
+| IRA Draw 5% | 0 of 17 | 0 of 13 | 0 | 599 of 1589 |
+| Ordered CBIR | 2 of 17 | 0 of 16 | 0 | 579 of 1589 |
+
+The rejected households: `brokerage-heavy-couple` and `mixed-portfolio-couple` under Ordered,
+`ira-heavy-couple` and `ordered-sequence-texas` under Fill Bracket 24% - 72.9% to 73.9% of year-1 real
+spend, three 10% cuts - and `ordered-sequence-texas` under Fill Bracket 22% at the 80.0% boundary. Those
+Guardrails rows get no Optimize Spend suggestion, which is the floor doing its job.
+
+**The defect inside it.** In `ira-heavy-couple` under Fill Bracket 24% the floor rejects converting
+NOTHING, so the search can only choose among the stable positive amounts and picks $25,000/yr: $96,275
+less end wealth and $7,445 less spendable than $0. A floor that can reject the do-nothing option can
+force a pick worse than doing nothing. **Shipped as is on the user's call, 2026-09-13; open as `P126f`.**

@@ -78,7 +78,7 @@ const ARMS = [
     ['IRA Draw 5%',        'quantity', { strategy: 'fixedpct', iraWithdrawPct: 0.05 }],
     ['Proportional +10%',  'quantity', { strategy: 'propwd', propWithdraw: 0.10 }],
     ['Ordered CBIR',       'sequence', { strategy: 'ordered', orderedSeq: 'CBIR' }],
-    ['Guyton-Klinger',     'spend',    { strategy: 'gk' }],
+    ['Guyton-Klinger',     'spend',    { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk' }],
     ['Reduce 17 yrs',      'quantity', { strategy: 'fixed', nYears: 17 }],
 ];
 

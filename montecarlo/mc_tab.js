@@ -19,6 +19,9 @@ let _mcBase              = null;      // getInputs() snapshot captured at run ti
 // is not among the swept strategies. Set once per run by renderMCResults; the survival table, the
 // main chart and the plan headline all pin off this one value so they cannot disagree.
 let _mcPinIdx            = -1;
+// Index of the sidebar plan's Guardrails twin (the plan with the switch the other way round), or -1.
+// Set beside _mcPinIdx; the chart gives it a color of its own, since it shares the plan's family.
+let _mcTwinIdx           = -1;
 // Variation indices in the order renderMCChart drew them (pinned plan first). The chart tooltip
 // maps datasetIndex -> variation through this; it must not be re-derived from _mcSelected.
 let _mcDrawOrder         = [];
@@ -386,7 +389,7 @@ function mcTabActivated() {
     // and it only happens until a real run has replaced it.
     if (!mcTimingIsMeasured()) {
         const _b = getInputs();
-        calibrateMCMs({ variations: buildVariations(_b), mu: _mcNum('mc-mu') / 100,
+        calibrateMCMs({ variations: compareVariations(_b), mu: _mcNum('mc-mu') / 100,
                         sigma: _mcNum('mc-sigma') / 100, seed: _mcNum('mc-seed'),
                         years: mcPlanYears(_b) });
     }
@@ -458,14 +461,17 @@ function _buildMCHash() {
 }
 
 // The user-entered path count is PER STRATEGY: a Compare run puts it against every variation
-// buildVariations() produces (~144 on the default scenario), so "400 paths" is ~58,000 simulations.
+// compareVariations() produces (~123 on the default scenario), so "400 paths" is ~58,000 simulations.
 // That multiplier used to appear nowhere in the UI, which made the run look far smaller than it is.
 // With a single variation there is no multiplier to report, so the sentence drops it rather than
-// saying "x 1 strategies".
-function simCountText(numPaths, numVariations, years) {
+// saying "x 1 strategies". My Plan Only's two rows are one plan run both ways, not two strategies.
+function simCountText(numPaths, numVariations, years, planOnly = false) {
     const total = numPaths * numVariations;
     let txt = numVariations === 1
         ? `${numPaths.toLocaleString()} paths, your plan only`
+        : planOnly
+        ? `${numPaths.toLocaleString()} paths × ${numVariations} (your plan with Guardrails on and off) = `
+          + `${total.toLocaleString()} simulations`
         : `${numPaths.toLocaleString()} paths × ${numVariations.toLocaleString()} strategies = `
           + `${total.toLocaleString()} simulations`;
     // Each simulation is a full plan run, year by year, with a tax return in every year. The
@@ -512,46 +518,92 @@ function stressSelectionLabel(stress) {
     return `worst by ${windows[0] ?? mode} year real CAGR`;
 }
 
-// The sidebar's own plan as a one-element variation list. The stress pass has always run exactly
-// this way, which is what makes 'plan' scope cheap to offer: the worker contract does not change,
-// only the length of the array it is handed. -1 means the exact plan is not among the swept rows
-// (every swept row runs with conversions forced on), so fall back to a synthetic entry.
+// The sidebar's own plan as a one-element variation list: what the stress pass and the teaching demo
+// run, and the first of My Plan Only's two rows (planScopeVariations). It runs the plan AS CONFIGURED -
+// its own Extra Conversion, stop year and conversion switch, none of which a swept row carries - and
+// a matching swept row only lends it its labels. With no match it is labeled "Current Plan".
 function planOnlyVariations(variations, base) {
-    const idx = findCurrentStrategyIdx(variations, base);
-    return idx >= 0
-        ? [variations[idx]]
-        : [{ ...base, _label: 'Current Plan', _strategyFamily: '', _paramLabel: '' }];
+    const v = variations[findCurrentStrategyIdx(variations, base)];
+    return [{ ...base,
+              _label:          v ? v._label : 'Current Plan',
+              _strategyFamily: v ? v._strategyFamily : '',
+              _paramLabel:     v ? v._paramLabel : '',
+              _paramSortVal:   v ? v._paramSortVal : undefined }];
 }
 
-// The compare sweep with the sidebar's own plan guaranteed to be in it. buildVariations() covers a
-// GRID, and a plan can sit off it in ways the grid cannot add back: Monte Carlo sweeps no IRMAA
-// ceiling and no ACA cliff at all, offGridParamFor() has no off-grid case for Ordered or
-// Guyton-Klinger, and the Roth-before-Brokerage arm is Optimizer-only. Those plans used to be
-// absent from the run, which left the chart emphasizing whichever strategy won its family instead
-// of the one the user picked. Appended rather than substituted: the ranking is unchanged, it just
-// gains a row that is the plan you came to ask about.
-function withCurrentPlan(variations, base) {
-    if (!base || findCurrentStrategyIdx(variations, base) >= 0) return variations;
-    const d = describeSelection(base);
-    return [...variations, {
+// The sidebar's plan with the Guardrails switch the other way round (P126). Built from the plan
+// itself, so it keeps the plan's Extra Conversion, stop year and conversion switches: the rule is the
+// only difference, which is what makes the pair a measure of the switch.
+function ruleTwinVariation(base) {
+    const tw = planRuleTwin(base);
+    return {
         ...base,
-        _label: `${d.family} ${d.paramLabel}`.trim() + (base.convertExcessToRoth ? ' ✓' : ''),
-        _strategyFamily: d.family,
-        _paramLabel:     d.paramLabel,
-        _paramSortVal:   d.paramSortVal,
-    }];
+        spendRule:       tw.spendRule,
+        _label:          `${tw.strategyLabel} ${tw.paramLabel}`.trim() + (base.convertExcessToRoth ? ' ✓' : ''),
+        _strategyFamily: tw.strategyLabel,
+        _paramLabel:     tw.paramLabel,
+        _paramSortVal:   tw.paramSortVal,
+    };
+}
+
+// My Plan Only's rows (user, 2026-09-14: "TWO runs: one with guardrails on, one with guardrails
+// off"): the plan as set, then its twin. The plan's row names its own setting too - with two rows
+// and nothing else between them, an unlabeled one leaves the reader to infer which it is.
+function planScopeVariations(planVars, base) {
+    const plan = planVars[0];
+    const setting = base.spendRule === 'gk' ? 'Guardrails on' : 'Guardrails off';
+    const head = String(plan._label).replace(/ ✓$/, '').trim();
+    return [
+        { ...plan,
+          _label:      `${head}, ${setting}` + (base.convertExcessToRoth ? ' ✓' : ''),
+          _paramLabel: [plan._paramLabel, setting].filter(Boolean).join(', ') },
+        ruleTwinVariation(base),
+    ];
+}
+
+// Compare All runs the Optimizer's own rows: the same enumeration, built with the same page gates
+// (user, 2026-09-14: "not more, not less").
+function compareVariations(base) {
+    return buildVariations(base, {
+        nerdKnobs:    typeof NERD_KNOBS !== 'undefined' && !!NERD_KNOBS,
+        splitFeature: typeof SPLIT_FEATURE !== 'undefined' && !!SPLIT_FEATURE,
+    });
+}
+
+// The compare sweep with the sidebar's own plan guaranteed to be in it, plus that plan's Guardrails
+// twin. The sweep covers a GRID, and a plan can sit off it in ways the grid cannot add back -
+// offGridParamFor() has no off-grid case for Ordered, and a gated family is absent without its flag -
+// so the plan is appended when no row matches it; before that, the chart emphasized whichever strategy
+// won its family instead of the one the user picked. The twin is always appended: every swept row
+// follows the Guardrails switch, and the user's own plan is the one row run both ways, exactly as the
+// Optimizer table adds it (P126).
+function withCurrentPlan(variations, base) {
+    if (!base) return variations;
+    const out = variations.slice();
+    if (findCurrentStrategyIdx(variations, base) < 0) {
+        const d = describeSelection(base);
+        out.push({
+            ...base,
+            _label: `${d.family} ${d.paramLabel}`.trim() + (base.convertExcessToRoth ? ' ✓' : ''),
+            _strategyFamily: d.family,
+            _paramLabel:     d.paramLabel,
+            _paramSortVal:   d.paramSortVal,
+        });
+    }
+    out.push(ruleTwinVariation(base));
+    return out;
 }
 // --- Run ------------------------------------------------------------------
 
 // 'compare' runs every strategy and ranks them; 'plan' runs only the sidebar's own plan.
 //
 // PLAN is the default. It answers "how did my plan do", which is the question almost everyone
-// arrives with, at about 1/144 of the cost -- roughly 1.5 seconds against 43. Compare was the
+// arrives with, at about 1/60 of the cost: the plan twice, Guardrails on and off. Compare was the
 // default while it was the only thing the tab did, which meant every reader paid for a full
 // strategy ranking on arrival whether or not they wanted one, with no warning of the price.
 let _mcScope = 'plan';
 
-// scope: 'plan' (default, the sidebar plan alone) | 'compare' (every strategy, ~144x more work).
+// scope: 'plan' (default, the sidebar plan with Guardrails on and off) | 'compare' (every strategy, ~60x more work).
 function runMonteCarlo(scope) {
     _mcScope = (scope === 'compare') ? 'compare' : 'plan';
     _lastMCHash = _buildMCHash();
@@ -579,19 +631,21 @@ function runMonteCarlo(scope) {
 
     _mcStartYear = base.startYear ?? 2026;
     _mcBase = base;
-    const allVariations = buildVariations(base);
+    const allVariations = compareVariations(base);
     const years = mcPlanYears(base);
 
     // Stress (folded into Historical) runs against ONLY the current withdrawal strategy/options,
     // not the full multi-strategy sweep — cheaper, and matches what renderStressChart() plots.
     const stressVariations = planOnlyVariations(allVariations, base);
 
-    // In 'plan' scope the main pass runs that same single variation, so the whole run collapses to
-    // numPaths simulations instead of numPaths x ~144.
-    const variations = _mcScope === 'plan' ? stressVariations : withCurrentPlan(allVariations, base);
+    // In 'plan' scope the main pass runs that same plan both ways, Guardrails on and off, so the whole
+    // run is 2 x numPaths simulations instead of numPaths x ~123.
+    const variations = _mcScope === 'plan'
+        ? planScopeVariations(stressVariations, base)
+        : withCurrentPlan(allVariations, base);
 
     // P69: which variation the engine ships replay sequences for - the sidebar's own plan. In plan
-    // scope that is the sole variation; in compare scope withCurrentPlan() guarantees a match
+    // scope that is the first variation; in compare scope withCurrentPlan() guarantees a match
     // exists, but keep the max() so a synthetic fallback row (idx -1) degrades to 0 rather than
     // handing the engine a nonsense index.
     const captureVariationIndex = _mcScope === 'plan'
@@ -612,7 +666,7 @@ function runMonteCarlo(scope) {
     // UI feedback. The count readout is set here, not in renderSurvivalTable, so the cancel bar
     // describes the run in flight rather than whatever the previous run happened to be.
     const _pcBar = document.getElementById('mc-path-count');
-    if (_pcBar) _pcBar.textContent = simCountText(numPaths, variations.length, years);
+    if (_pcBar) _pcBar.textContent = simCountText(numPaths, variations.length, years, _mcScope === 'plan');
     setMCRunning(true);
 
     runMCWorker(
@@ -711,7 +765,7 @@ async function runMCExperiment() {
     const mu     = _mcNum('mc-mu')    / 100;
     const sigma  = _mcNum('mc-sigma') / 100;
     const years  = mcPlanYears(base);
-    const planVar = planOnlyVariations(buildVariations(base), base)[0];
+    const planVar = planOnlyVariations(compareVariations(base), base)[0];
     _mcStartYear = base.startYear ?? 2026;
 
     const rows = [];
@@ -862,7 +916,7 @@ function refreshMCStressOnly() {
     // The stress chart's x-axis needs these, and a nerdknob user can reach a stress result without
     // ever running the full sweep, so they cannot be left to runMonteCarlo() to set.
     _mcStartYear = base.startYear ?? 2026;
-    const stressVariations = planOnlyVariations(buildVariations(base), base);
+    const stressVariations = planOnlyVariations(compareVariations(base), base);
     const years = mcPlanYears(base);
 
     _mcStressRefreshing = true;
@@ -1091,31 +1145,24 @@ function renderMCResults(msg) {
     const planOnly = _mcScope === 'plan';
 
     // Resolve the pinned row FIRST: the survival table renders it on top and the chart draws it
-    // emphasized, so both have to be looking at the same index. In plan scope the sole variation IS
+    // emphasized, so both have to be looking at the same index. In plan scope the first variation IS
     // the plan by construction, including the synthetic fallback that sameStrategySelection would
-    // not recognize, so pin it directly rather than searching for it.
+    // not recognize, so pin it directly rather than searching for it. The Guardrails twin is the one
+    // row whose rule differs from the plan's: second in plan scope, appended last in compare scope.
     _mcPinIdx = planOnly ? 0 : findCurrentStrategyIdx(msg.variations, _mcBase);
-    // A one-row survival table is not a ranking. Hide it and let the headline and chart carry the
-    // result; the table comes back with a Compare run.
-    const tblWrap = document.getElementById('mc-table-wrap');
-    if (planOnly) {
-        if (tblWrap) tblWrap.style.display = 'none';
-        // Also empty it. Rows left over from an earlier Compare run carry variation indices that no
-        // longer exist in this one-element result, and their checkbox handlers would re-render the
-        // chart from those stale indices.
-        const tbody = document.getElementById('mc-table-body');
-        if (tbody) tbody.innerHTML = '';
-    } else {
-        renderSurvivalTable(msg.variations, msg.numPaths);
-    }
+    _mcTwinIdx = planOnly ? 1
+        : (_mcBase ? findCurrentStrategyIdx(msg.variations, { ..._mcBase, spendRule: planRuleTwin(_mcBase).spendRule }) : -1);
+    // Both scopes get the table: My Plan Only's two rows are the plan with Guardrails on and off
+    // (user, 2026-09-14), shown the way Compare All shows its rows.
+    renderSurvivalTable(msg.variations, msg.numPaths);
     renderPlanHeadline(msg);
 
     _mcSelected.clear();
     const currentIdx = _mcPinIdx;
 
     if (planOnly) {
-        // Nothing to choose between.
-        _mcSelected.add(0);
+        // Both rows on the chart: the comparison is the reason the second one exists.
+        msg.variations.forEach((_, i) => _mcSelected.add(i));
         finishMCRender(msg);
         return;
     }
@@ -1157,7 +1204,7 @@ function finishMCRender(msg) {
     const descEl = document.getElementById('mc-chart-desc');
     if (descEl) {
         descEl.textContent = `Shaded areas: outer = p5–p95, inner = p25–p75. Solid line = median (p50). Paths that hit ruin stay at $0.`
-            + (_mcScope === 'plan' ? '' : ` Click a legend item to isolate it; click again to restore all.`);
+            + ` Click a legend item to isolate it; click again to restore all.`;
     }
 
     renderMCChart(msg);
@@ -1426,8 +1473,8 @@ function renderPlanHeadline(msg) {
     const name     = (_stripHtml(v.strategyFamily) + (v.paramLabel ? ' ' + v.paramLabel : '')).trim()
                      || 'your current settings';
     const tip      = 'Chance of success for the plan currently in the sidebar: the share of simulated '
-                   + 'paths in which it never ran out of money. It is the thick line on the chart'
-                   + (_mcScope === 'plan' ? '.' : ', and the row marked 📍 in the table below.');
+                   + 'paths in which it never ran out of money. It is the thick line on the chart, '
+                   + 'and the row marked 📍 in the table below.';
 
     el.innerHTML =
         `<div title="${escapeHtml(tip)}" style="display:flex;align-items:center;gap:12px;background:${band.bg};`
@@ -1437,8 +1484,8 @@ function renderPlanHeadline(msg) {
         + `(📍 ${escapeHtml(name)}): it survives ${survived.toLocaleString()} of ${total.toLocaleString()} paths. `
         + `Median ending balance $${fmt(Math.round(finalBal))}. `
         + `<span style="color:#666;">${modeTxt}.</span></div>`
-        // P69: the replay entry point that works in BOTH scopes - plan scope never renders the
-        // survival table, so the headline is the only place the pinned plan reliably appears. A
+        // P69: the replay entry point, the same in BOTH scopes and above the table, so the captured
+        // paths always have one place to be picked from. A
         // picker rather than a button: the capture spans worst-to-best, and the worst path alone
         // is not the point. stopPropagation on click too - the headline is a fold handle.
         + (mcReplayList().length
@@ -1506,7 +1553,7 @@ function updateMCTimeEstimate() {
 
     const numPaths = _mcNum('mc-num-paths');
     const base     = getInputs();
-    const numVar   = withCurrentPlan(buildVariations(base), base).length;
+    const numVar   = withCurrentPlan(compareVariations(base), base).length;
 
     // Describes the Compare button alone: the path count is per strategy, so without the multiplier
     // the sweep looks ~144x smaller than it is.
@@ -1515,7 +1562,8 @@ function updateMCTimeEstimate() {
     }
 
     const approx = mcTimingIsMeasured() ? '' : 'about ';
-    if (planBtn) planBtn.textContent = `My Plan Only (${approx}${_mcDuration(estimateMCMs(numPaths, 1))})`;
+    // My Plan Only is two variations: the plan with Guardrails on and off.
+    if (planBtn) planBtn.textContent = `My Plan Only (${approx}${_mcDuration(estimateMCMs(numPaths, 2))})`;
     if (cmpBtn)  cmpBtn.textContent  = `Compare All Scenarios (${approx}${_mcDuration(estimateMCMs(numPaths, numVar))})`;
 }
 
@@ -1566,7 +1614,7 @@ function getMCColumns() {
             title: 'Median lifetime taxes paid across all Monte Carlo paths, in the dollars the Future $/Current $ switch selects.',
             getSortValue: v => _mcTaxVal(v) ?? Infinity },
         { key: 'spend', label: 'Total Spendable',
-            title: 'Median lifetime after-tax money actually spent across all Monte Carlo paths, in the dollars the Future $/Current $ switch selects. Strategies that cut spending — e.g. Guyton-Klinger — show a lower figure here.',
+            title: 'Median lifetime after-tax money actually spent across all Monte Carlo paths, in the dollars the Future $/Current $ switch selects. Rows with Guardrails on cut spending after poor years, so they can show a lower figure here.',
             getSortValue: v => _mcSpendVal(v) ?? -Infinity },
     ];
 }
@@ -1695,7 +1743,8 @@ function renderSurvivalTable(variations, numPaths) {
 
     document.getElementById('mc-table-wrap').style.display = '';
     // Paths are per strategy, so the honest size of the run is the product. Both readouts say so.
-    const _pathTxt = simCountText(numPaths, variations.length, _mcResults?.years ?? mcPlanYears(_mcBase));
+    const _pathTxt = simCountText(numPaths, variations.length, _mcResults?.years ?? mcPlanYears(_mcBase),
+                                  _mcScope === 'plan');
     const _pcBar = document.getElementById('mc-path-count');
     const _pcTbl = document.getElementById('mc-path-count-tbl');
     if (_pcBar) _pcBar.textContent = _pathTxt;
@@ -1747,7 +1796,12 @@ function applyMCVariationToSidebar(v) {
     } else if (v.strategy === 'ordered' && v.orderedSeq) {
         const seqEl = document.getElementById('orderedSeq');
         if (seqEl) seqEl.value = v.orderedSeq;
-    } else if (v.strategy === 'gk') {
+    }
+    // Guardrails ride with the row whatever its strategy: on for a 🛡️ row with its own band and
+    // step, back to off otherwise, or a leftover switch follows the next row loaded.
+    const grEl = document.getElementById('spendRule');
+    if (grEl) grEl.checked = (v.spendRule === 'gk');
+    if (v.spendRule === 'gk') {
         const gEl = document.getElementById('gkGuard'), aEl = document.getElementById('gkAdjPct');
         if (gEl && v.gkGuard  != null) gEl.value = Math.round(v.gkGuard  * 100);
         if (aEl && v.gkAdjPct != null) aEl.value = Math.round(v.gkAdjPct * 100);
@@ -1894,8 +1948,9 @@ function _makeLegendClick() {
     };
 }
 
-// P79. Whether to draw the captured paths. Default follows the run's scope: on for a plan-only
-// run, where the chart has one band and the paths are the interesting thing; off for Compare,
+// P79. Whether to draw the captured paths. Default follows the run's scope: on for My Plan Only,
+// where the chart holds just the plan and its Guardrails twin and the paths are the interesting
+// thing; off for Compare,
 // where the reader is comparing strategies and ten more lines is noise. The checkbox overrides it
 // once the reader touches it, and the override lives only as long as the page.
 let _mcTracesPref = null;   // null = follow the scope, true/false = the reader has decided
@@ -1959,6 +2014,9 @@ function renderMCChart(msg) {
     // Blocks must stay contiguous groups of five — the legend and tooltip filters below select the
     // median of each block with `datasetIndex % 5 === 4`.
     let fallbackIdx = 0;
+    // The Guardrails twin is the plan's own strategy, so its family color is the plan's and its bands
+    // would be drawn in the plan's hue. It takes the first color no earlier block has used.
+    const usedColors = new Set();
     const selectedIdxs = Array.from(_mcSelected);
     // Kept on the module so the tooltip can map a dataset index back to its variation. It used to
     // read Array.from(_mcSelected) directly, which is the SET's insertion order and no longer
@@ -1970,7 +2028,11 @@ function renderMCChart(msg) {
         const v    = msg.variations[idx];
         if (!v) return;
         const isPinned = idx === _mcPinIdx;
-        const c    = colorFor(v.strategyFamily, fallbackIdx++);
+        let c      = colorFor(v.strategyFamily, fallbackIdx++);
+        if (idx === _mcTwinIdx && usedColors.has(c.solid)) {
+            c = [...FALLBACK_PALETTE, ...Object.values(FAMILY_COLORS)].find(p => !usedColors.has(p.solid)) ?? c;
+        }
+        usedColors.add(c.solid);
         const base = datasets.length;
         // One `order` for the whole 5-dataset block. Chart.js draws higher order first (behind), so
         // giving only the median a lower order would sink the OTHER strategies' medians beneath the
@@ -2516,9 +2578,9 @@ function setMCRunning(running) {
     } else if (runEst) {
         const numPaths = _mcNum('mc-num-paths');
         const base     = getInputs();
-        // A plan-scope run is one variation, so the estimate has to follow the scope in flight or a
-        // 0.2s run would announce half a minute.
-        const numVar   = _mcScope === 'plan' ? 1 : withCurrentPlan(buildVariations(base), base).length;
+        // A plan-scope run is two variations (Guardrails on and off), so the estimate has to follow
+        // the scope in flight or a 0.4s run would announce half a minute.
+        const numVar   = _mcScope === 'plan' ? 2 : withCurrentPlan(compareVariations(base), base).length;
         runEst.textContent = `May take approximately ${_mcDuration(estimateMCMs(numPaths, numVar))} to complete`;
     }
 }

@@ -4,7 +4,7 @@ Visual reference for `retirement_optimizer.html` and everything it loads. Three 
 
 1. [Module dependency graph](#1-module-dependency-graph) - who loads whom, and the no-DOM boundary
 2. [Runtime data flow](#2-runtime-data-flow) - page load, recalc, render
-3. Feature call-flows - [`simulate()` year pipeline](#3-simulate-per-year-pipeline), [Guyton-Klinger and the schedule carrier](#3a-guyton-klinger-and-the-schedule-carrier), [Optimizer sweep and Optimize Conversions](#4-runoptimizer--optimize-conversions), [Monte Carlo](#5-monte-carlo)
+3. Feature call-flows - [`simulate()` year pipeline](#3-simulate-per-year-pipeline), [Guardrails and the schedule carrier](#3a-guardrails-and-the-schedule-carrier), [Optimizer sweep and Optimize Conversions](#4-runoptimizer--optimize-conversions), [Monte Carlo](#5-monte-carlo)
 
 Plus a [file reference table](#6-file-reference) with the entry points that matter.
 
@@ -164,7 +164,7 @@ flowchart TD
     H -->|alive| FEE["applyAUMFee<br/>advisor fee on the PRIOR Dec 31<br/>balances; never a taxable distribution"]
     FEE --> INC["computeIncome<br/>SS, pension, survivor benefit,<br/>RMD, QCD"]
     INC --> SPT["resolveSpendTarget<br/>spend goal, inflation, spendDelta"]
-    SPT --> PLAN["planPrimaryWithdrawals<br/>strategy dispatch: schedule / bracket+aca<br/>fixedpct / propwd / ordered / fixed<br/>GK has NO branch - falls to baseline<br/>see section 3a"]
+    SPT --> PLAN["planPrimaryWithdrawals<br/>strategy dispatch: schedule / bracket+aca<br/>fixedpct / propwd / ordered / fixed / split<br/>Guardrails is a spend rule, not a branch<br/>see section 3a"]
     PLAN --> P1["applyPrimaryAndTaxPass1<br/>calculateTaxes, calcIRMAA"]
     P1 --> GAP["fillSpendingGap<br/>Cash -> Brokerage -> Roth"]
     GAP --> RESID["resolveResidualAndForcedIRA<br/>third pass, forced IRA draw"]
@@ -191,20 +191,22 @@ tax recompute so the counterfactual pays its own larger RMD and IRMAA bills late
 
 ---
 
-## 3a. Guyton-Klinger, and the schedule carrier
+## 3a. Guardrails, and the schedule carrier
 
-Two diagrams, because the pair is the point: GK's **spend** decision is elaborate and its **draw**
-decision does not exist, and the carrier below is what lets one be kept while the other is replaced.
+Two diagrams, because the pair is the point: Guardrails, the Guyton-Klinger rule, decides the
+**spend** and never the **draw**, so any strategy can draw under it, and the carrier below is what
+lets one be kept while the other is replaced.
 
 ### The spend rule  (`optimizer_core.js`, inside `resolveSpendTarget`)
 
 Runs BEFORE `targetSpend` resolution, so gap fill, surplus routing, the per-year success test and the
 lifetime spend total all read one already-adjusted `sim.spendGoal`. Guarded by `_usesGKSpendRule`,
-which is true for `strategy: 'gk'` OR `spendRule: 'gk'` - that predicate is the whole separation.
+which is true exactly when `spendRule: 'gk'` - the Guardrails switch. `simulate()` throws on the
+retired `strategy: 'gk'` (P126).
 
 ```mermaid
 flowchart TD
-    G{"_usesGKSpendRule(inputs)<br/>strategy 'gk' OR spendRule 'gk'"}
+    G{"_usesGKSpendRule(inputs)<br/>spendRule 'gk'"}
     G -->|no| SKIP["spendGoal untouched<br/>(strategy's own spend path)"]
     G -->|yes| Y0{"y == 0?"}
     Y0 -->|yes| SEED["gkIWR = spendGoal / prevPortfolio<br/>the year-0 rate, LOCKED as reference<br/>never re-baselined"]
@@ -226,10 +228,10 @@ flowchart TD
 Each rail fires **once per year, at a fixed percentage**: a year 50% over the band cuts 10%, not 50%.
 And the band is measured against the **year-0** IWR forever, so it does not drift with the portfolio.
 
-### The draw that isn't there
+### The baseline draw, and why an old Guyton-Klinger plan keeps its numbers
 
-`planPrimaryWithdrawals` dispatches on `inputs.strategy`. There is no `'gk'` case. GK matches none of
-the branches and lands in the baseline `else`:
+`planPrimaryWithdrawals` dispatches on `inputs.strategy`. An unset strategy matches none of the
+branches and lands in the baseline `else`, which is where the retired `strategy: 'gk'` used to land:
 
 ```mermaid
 flowchart LR
@@ -240,22 +242,23 @@ flowchart LR
     D -->|ordered| S5["empty - all in gap fill"]
     D -->|split| S7["fixed account weights<br/>nerdknob-gated grid"]
     D -->|fixed| S6["amortized reduce-to-goal"]
-    D -->|"gk (no case!)"| BASE["BASELINE else<br/>order IRA / Brokerage / Cash<br/>NO weights given"]
+    D -->|"unset"| BASE["BASELINE else<br/>order IRA / Brokerage / Cash<br/>NO weights given"]
     BASE --> CW["calculateWithdrawals<br/>weights derived FROM BALANCES<br/>= strictly pro-rata draw,<br/>sized only to the spending gap"]
     CW --> NB["no ceiling, no bracket,<br/>no MAGI awareness"]
     S4 -.->|"bit-identical, 15/15 cells"| BASE
 ```
 
-**GK's draw IS Proportional +0%** - not similar to it, the same code. The `propwd` branch opens with
-the same three lines as the baseline `else` (same order, same rates, same call), then adds its IRA
-boost; at a 0% boost nothing is added. And neither family is in `yr.isBracketStrategy`, so they share
-the gap fill too. Verified over 15 cells on every field of every log row by
-`.test_harnesses/family_equivalence_harness.js`. In the sweep table, the Guyton-Klinger row and the
-Proportional 0% row differ **only** in the spend rule.
+**The baseline draw IS Proportional +0%** - not similar to it, the same code. The `propwd` branch
+opens with the same three lines as the baseline `else` (same order, same rates, same call), then adds
+its IRA boost; at a 0% boost nothing is added. And neither is in `yr.isBracketStrategy`, so they share
+the gap fill too. That is what let P126 retire `strategy: 'gk'`: a saved plan folds onto
+`{ strategy: 'propwd', propWithdraw: 0, spendRule: 'gk' }` and reproduces bit for bit - measured
+2026-09-13 on 20 households with 4 variants each, across the deterministic run, both optimizers and
+every path of all four Monte Carlo modes, 560 of 560 records identical with no field excluded.
 
-Two consequences worth carrying: `P103d`'s "GK's draw is beaten in 24 of 30 cells" is really a
-statement about the **legacy default draw**, which GK inherits, so it generalizes past GK; and
-`Proportional` was a null arm in that bake-off, since it is the incumbent and can only ever tie.
+One consequence worth carrying: `P103d`'s "GK's draw is beaten in 24 of 30 cells" is a statement
+about this **baseline draw**, so it generalizes past Guardrails; and `Proportional` was a null arm in
+that bake-off, since it was the incumbent and could only ever tie.
 
 ### `split`: the same plumbing with the weights named
 
@@ -275,15 +278,17 @@ A malformed vector never throws: it falls back to balance weights and raises
 link must not.
 
 **Gating.** `SPLIT_VECTORS` (four vectors, selected in `research/CONSTANT_SPLIT.md`) sits in
-`OPTIMIZER_GRIDS` only, and `buildStrategyFamilies` emits the family solely when the caller passes
-`splitFamily: true` - which the Optimizer does behind `NERD_KNOBS`. `MC_GRIDS` carries no `split`
-at all, because Monte Carlo has no knob to gate it with. Removing the gate means adding the vectors
-to `MC_GRIDS`, dropping the `NERD_KNOBS` condition, and regenerating both sweep goldens.
+`OPTIMIZER_GRIDS`, and `buildStrategyFamilies` emits the family solely when `sweepOptions` is handed
+`splitFeature: true` - which the Optimizer and Monte Carlo both pass from `?nerdknob=split`. Removing
+the gate means dropping that condition and regenerating both sweep goldens.
 
-**GK is a spend rule wearing a strategy's clothes.** All of its intelligence is in the adjustment
-above; its draw is the least considered one in the engine. `research/PERFECT_FORESIGHT_ORACLE.md`
-(`P103d`, `P103e`) prices that: keeping the spend rule and replacing the draw is worth +$57k to +$800k
-of median real terminal wealth at 95-100% survival.
+**Guardrails were a spend rule wearing a strategy's clothes until P126.** All of the intelligence is
+in the adjustment above, and the draw the rule used to be stuck with is the least considered one in
+the engine. `research/PERFECT_FORESIGHT_ORACLE.md` (`P103d`, `P103e`) priced that: keeping the spend
+rule and replacing the draw was worth +$57k to +$800k of median real terminal wealth at 95-100%
+survival, measured on an engine that has changed since. In the page every swept row follows the
+Guardrails switch, and the user's own plan is added once more with the switch the other way round
+(`planRuleTwin`), in the Optimizer table and in Monte Carlo's Compare All alike.
 
 ### The carrier: compile a run, replay it under a different draw
 
@@ -292,7 +297,7 @@ flowchart TD
     RUN["a finished run<br/>res.log + srcInputs"] --> C["compileScheduleFromRun(res, srcInputs)"]
     C --> Q{"per log year:<br/>what WAS the decision?"}
     Q -->|"BracketTarget &gt; 0"| CEIL["ordTarget + kind + rateBasis + gapFill<br/>exact for Fill Bracket / IRMAA"]
-    Q -->|"spend-adaptive (GK)"| DRAW["iraDraw = -volIRAwd, gapFill 'baseline'<br/>THE DRAW ONLY"]
+    Q -->|"spend rule on (Guardrails)"| DRAW["iraDraw = -volIRAwd, gapFill of the source draw<br/>THE DRAW ONLY"]
     Q -->|"quantity (fixedpct, fixed)"| QTY["iraDraw = -volIRAwd<br/>emitted even when ZERO"]
     Q -->|otherwise| NUL["null - nothing this schedule can state"]
 
@@ -309,7 +314,7 @@ flowchart TD
     OFB --> PLAN
 
     PLAN --> REP["simulate with strategy 'schedule'"]
-    REP --> RG["spend: the GK block re-runs each year<br/>against THIS plan's own portfolio"]
+    REP --> RG["spend: the Guardrails block re-runs each year<br/>against THIS plan's own portfolio"]
     REP --> RD{"_schedulePlanFor(inputs, y)"}
     RD -->|"iraDraw set"| RQ["IRAwd = clamp(iraDraw, 0, curIRA)"]
     RD -->|"ordTarget set"| RC["rates derived at rateBasis,<br/>fill to ceiling"]
@@ -347,7 +352,8 @@ flowchart TD
         S2["fixed - Reduce IRA in N years, 1..30"]
         S3["bracket - fill fed bracket / IRMAA ceiling / ACA cliff"]
         S4["fixedpct - IRA Draw %"]
-        S5["ordered, Guyton-Klinger"]
+        S5["ordered"]
+        S7["your plan with Guardrails the other way (planRuleTwin)"]
         S6["cyclic brokerage arms"]
     end
     SWEEP -->|one simulate per arm| ROWS["results[] - one row per arm<br/>feasibility flags:<br/>bracket overage, ACA breach,<br/>bothOnMedicareAtStart"]
@@ -447,7 +453,7 @@ size to zero and still makes the draw.
 | `retirement_optimizer.html` | page | tab buttons, inline bootstrap, changelog - 5 newest inline |
 | `optimizer_styles_responsive.css` | page | the page's only stylesheet; its `?v=` token is the one most often forgotten |
 | `taxengine.js` | engine | `TAXData`, `RMD_TABLE`, `calculateTaxes`, `calcIRMAA`, `getIRMAATier`, `calculateProgressive`, `calculateTaxableSocialSecurity`, `getQCDLimit` |
-| `optimizer_core.js` | engine | `simulate`, year steps `beginYear` .. `endYear`, `optimizeSpend`, `optimizeSpendDown`, `optimizeConversionAmount`, `bestTimeLimitedConversion`, `bestConversionStopYear`, `breakEvenHeirsRate`, `lowestBreakEvenHeirsRate`, `selectConversionCandidates`, `baselineScoreOf`, `rankRowsByObjective`, `buildStrategyFamilies` (the strategy enumeration both sweeps share, with `MC_GRIDS` / `OPTIMIZER_GRIDS`), `buildVariations`, `calculateWithdrawals`, `computeBracketCeiling`, `splitPreferLarger` |
+| `optimizer_core.js` | engine | `simulate`, year steps `beginYear` .. `endYear`, `optimizeSpend`, `optimizeSpendDown`, `optimizeConversionAmount`, `bestTimeLimitedConversion`, `bestConversionStopYear`, `breakEvenHeirsRate`, `lowestBreakEvenHeirsRate`, `selectConversionCandidates`, `baselineScoreOf`, `rankRowsByObjective`, `buildStrategyFamilies` (the strategy enumeration both sweeps share, through `sweepOptions` and `OPTIMIZER_GRIDS`), `buildVariations`, `planRuleTwin`, `calculateWithdrawals`, `computeBracketCeiling`, `splitPreferLarger` |
 | `optimizer_ui.js` | UI | `getInputs`, `runSimulation`, `runOptimizer`, `renderOptimizerTable`, `loadOptimizerResult`, `updateTable`, `updateStats`, `updateCharts`, `openTaxPlanner`, `buildShareURL`, `loadFromURL`, `saveScenario`, `applyScenario`, `setOptObjective`, `applyConvStopYear` |
 | `displayhelpers.js` | UI | `DisplayHelpers.setDollarValue`, `parseShorthand`, formatting and tooltip helpers |
 | `optimizer_tests.js` | UI | `runTests` - in-browser console suite |
@@ -574,7 +580,7 @@ loads the same file and does not opt in, so it keeps the original two-state badg
 
 **Trap, seen for real.** The suites resolve the engine through `window.TaxEngine` / `OptimizerCore` /
 `SweepGolden` rather than bare globals, because a classic script puts `function` declarations on
-`globalThis` but leaves top-level `const` (`MC_GRIDS`, `OPTIMIZER_GRIDS`, `RMD_TABLE`) as global
+`globalThis` but leaves top-level `const` (`OPTIMIZER_GRIDS`, `RMD_TABLE`) as global
 *lexical* bindings a property lookup cannot see. Related: the engine writes wall clock into its own
 output (`optimizer_core.js:928`, `:2381`, `:1739`), so the browser runner stubs `performance.now()`
 for the duration of a run and restores it afterwards - without that, six byte-identity tests fail in

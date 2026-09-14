@@ -30,7 +30,7 @@ const { SWEEP_BASES } = require(path.join(here, 'sweep_golden.js'));
 const SEL_KEYS = ['strategy', 'propWithdraw', 'nYears', 'stratRate', 'stratIRMAATier',
                   'stratACAMultiple', 'iraWithdrawPct', 'orderedSeq', 'gkGuard', 'gkAdjPct',
                   'cyclicEnabled', 'cyclicOrder', 'fundConversionWithCash', 'rothGapFill',
-                  'convertExcessToRoth', 'extraConversionAmount'];
+                  'convertExcessToRoth', 'extraConversionAmount', 'spendRule'];
 
 function selectionOf(v) {
     const o = {};

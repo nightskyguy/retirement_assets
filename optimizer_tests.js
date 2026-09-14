@@ -2214,6 +2214,69 @@ assertEqual(
 		}
 	})();
 
+	// ===== P126: Guyton-Klinger is the Guardrails switch, not a strategy =====
+	// A saved plan or import naming the retired strategy folds onto the same plan with the switch on,
+	// and one that predates the switch loads with it OFF rather than inheriting the sidebar's. Pure:
+	// foldRetiredGKStrategy() touches no page state.
+	(function guardrailsFoldIsLossless() {
+		if (typeof foldRetiredGKStrategy !== 'function') return;
+		// GK-FOLD-BEGIN
+		const old = foldRetiredGKStrategy({ strategy: 'gk', propWithdraw: 0.10, gkGuard: 0.15, gkAdjPct: 0.05 });
+		// GK-FOLD-END
+		assertEqual(old.data.strategy, 'propwd', 'the retired strategy loads as Proportional');
+		assertEqual(old.data.propWithdraw, 0, 'at 0% whatever boost the plan carried, because that was the draw it ran');
+		assertEqual(old.data.spendRule, 'gk', 'with Guardrails on');
+		assertEqual(old.data.gkGuard, 0.15, 'keeping its own band');
+		assertEqual(old.note.length > 0, true, 'and the load report says what was substituted');
+		const unset = foldRetiredGKStrategy({ strategy: 'bracket', stratRate: 0.22 });
+		assertEqual(unset.data.spendRule, '', 'a plan from before the switch loads with it off');
+		assertEqual(unset.note, '', 'and reports nothing, because nothing was substituted');
+		const kept = { strategy: 'bracket', stratRate: 0.22, spendRule: 'gk' };
+		assertEqual(foldRetiredGKStrategy(kept).data === kept, true, 'a plan already on the switch passes through untouched');
+	})();
+
+	// ⚠ UNSAFE - MUTATES: the Guardrails switch and its sentence, snapshotted and restored below.
+	(function guardrailsSwitchDrivesTheSpendRule() {
+		if (!unsafeTest('guardrailsSwitchDrivesTheSpendRule')) return;   // writes #spendRule
+		const sw = document.getElementById('spendRule');
+		const note = document.getElementById('guardrails-note');
+		if (!sw || !note) return;
+		const was = sw.checked;
+		try {
+			sw.checked = true;
+			toggleStrategyUI();
+			assertEqual(getInputs().spendRule, 'gk', 'the switch on sends the Guardrails rule');
+			assertEqual(note.style.display, '', 'and the sentence stating the rule is shown');
+			sw.checked = false;
+			toggleStrategyUI();
+			assertEqual(getInputs().spendRule, '', 'off sends no rule');
+			assertEqual(note.style.display, 'none', 'and the sentence is hidden');
+		} finally {
+			sw.checked = was;
+			toggleStrategyUI();
+		}
+	})();
+
+	// ===== My Plan Only: the plan as set, and the same plan with Guardrails the other way round =====
+	// user, 2026-09-14. The two rows may differ in the spend rule and nothing else: the second is a fair
+	// measure of the switch only if it carries the plan's own conversions and stop year.
+	(function myPlanOnlyRunsThePlanBothWays() {
+		if (typeof planScopeVariations !== 'function' || typeof compareVariations !== 'function') return;
+		const plan = { ...getInputs(), extraConversionAmount: 20000, convEndYear: 2035 };
+		['', 'gk'].forEach(rule => {
+			const base = { ...plan, spendRule: rule };
+			const rows = planScopeVariations(planOnlyVariations(compareVariations(base), base), base);
+			const diffs = r => Object.keys(base).filter(k => !Object.is(r[k], base[k])).join(',');
+			const on = rule === 'gk';
+			assertEqual(rows.length, 2, `rule '${rule}': My Plan Only runs two rows`);
+			assertEqual(diffs(rows[0]), '', `rule '${rule}': the first row is the plan exactly as set`);
+			assertEqual(diffs(rows[1]), 'spendRule', `rule '${rule}': the second differs in the Guardrails switch alone`);
+			assertEqual(rows[1].spendRule, on ? '' : 'gk', `rule '${rule}': and has it the other way round`);
+			assertEqual(/Guardrails on$/.test(rows[on ? 0 : 1]._paramLabel), true, `rule '${rule}': the row with Guardrails says so`);
+			assertEqual(/Guardrails off$/.test(rows[on ? 1 : 0]._paramLabel), true, `rule '${rule}': and so does the row without`);
+		});
+	})();
+
 	// ===== Annual Details: one cell per column, in every row =====
 	// The header row and the body rows are built from the same key list but used to apply DIFFERENT
 	// filters to it - the body skipped `inflationFactor` and the header did not. From that column
@@ -2878,7 +2941,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 443, taxengine: 32, taxPaymentPlanner: 61, doclinks: 26, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 450, taxengine: 32, taxPaymentPlanner: 61, doclinks: 26, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

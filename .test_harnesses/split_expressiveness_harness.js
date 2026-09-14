@@ -35,8 +35,8 @@
  * WHY THE BASE IS PROPORTIONAL AND NOT GK. Spend must be identical across arms or a wealth
  * comparison is meaningless, and Guyton-Klinger's spend responds to the portfolio, which the draw
  * changes. Proportional +0% holds spend to the plan's own trajectory, so every rung delivers the
- * same spending and the comparison is pure wealth. Since GK's draw IS Proportional +0% (proved in
- * `family_equivalence_harness.js`), a result about this base is a result about GK's draw too. The
+ * same spending and the comparison is pure wealth. Since GK's draw WAS Proportional +0% (re-proved
+ * when P126 retired the gk strategy), a result about this base is a result about GK's draw too. The
  * harness asserts spend equality rather than assuming it, and prints any cell where it moved.
  *
  * WHAT IS HELD CONSTANT. Conversions are left at the family default and never searched, so the

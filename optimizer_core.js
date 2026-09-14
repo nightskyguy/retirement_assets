@@ -1395,9 +1395,9 @@ function buildSimYearLogRecord(p) {
         // fact about the year rather than about the setting. The required distribution, when there
         // is one, follows the FIRST of the two.
         timing: (p.convLabel ?? 'none') + '/' + (p.wdLabel ?? 'Late'),
-        // Phase 22: Guyton-Klinger
-        gkSpend: p.strategy === 'gk' ? p.spendGoal : null,
-        gkAdj:   p.strategy === 'gk' ? (p.gkAdjLabel || '—') : null,
+        // Guardrails, the Guyton-Klinger spend rule: filled whenever the rule is on, under any strategy.
+        gkSpend: p.spendRule === 'gk' ? p.spendGoal : null,
+        gkAdj:   p.spendRule === 'gk' ? (p.gkAdjLabel || '—') : null,
         // What the year was actually handed: this year's inflation, the compounded inflation the
         // row's nominal dollars carry, and this year's market return. Constant in a deterministic
         // run and different every year under Monte Carlo, which is the point - a replayed path is
@@ -2223,11 +2223,11 @@ function resolveSpendTarget(sim, yr) {
 // through to the gap-fill cascade. That is the Ordered convention, and it is the only reading that
 // does not invent a decision the schedule did not make. A PRESENT but malformed entry throws -- a
 // typo in a research input must not be silently read as a quiet year.
-// P103b5b. True when the Guyton-Klinger spend adjustment governs this run's spend, whether because
-// GK is the strategy or because another strategy borrowed the rule via `spendRule: 'gk'`. Separating
-// the two is what lets a schedule own the DRAW while GK owns the SPEND.
+// P103b5b, P126. True when the Guyton-Klinger spend adjustment - Guardrails - governs this run's
+// spend. It is only ever the rule, `spendRule: 'gk'`, under whatever strategy draws; that separation
+// is what lets any strategy, a schedule included, own the DRAW while the rule owns the SPEND.
 function _usesGKSpendRule(inputs) {
-    return inputs.strategy === 'gk' || inputs.spendRule === 'gk';
+    return inputs.spendRule === 'gk';
 }
 
 function _schedulePlanFor(inputs, y) {
@@ -2308,9 +2308,11 @@ function compileScheduleFromRun(res, srcInputs) {
     // the rule can be followed forward, which is the difference between a hindsight artifact and a
     // policy someone could adopt.
     const spendAdaptive = _usesGKSpendRule(srcInputs);
-    // Which cascade the source family took. `fixed` (Reduce) is the one quantity family that is NOT
-    // in the bracket set, so it fills its gap from the [40,60] default branch instead.
-    const gapFill = (srcInputs.strategy === 'fixed' || srcInputs.strategy === 'gk') ? 'baseline' : 'cascade';
+    // Which cascade the source family took. `fixed` (Reduce) and `propwd` (Proportional) are not in
+    // the bracket set, so they fill the gap from the [40,60] default branch instead. Plain
+    // Proportional compiles to no entry at all; with Guardrails on it emits its draw, and this is
+    // the cascade that draw took.
+    const gapFill = (srcInputs.strategy === 'fixed' || srcInputs.strategy === 'propwd') ? 'baseline' : 'cascade';
     return (res.log || []).map(e => {
         const t = e['BracketTarget'] ?? 0;
         if (t > 0) {
@@ -2350,7 +2352,7 @@ function scheduleOptionsForRun(srcInputs) {
         return { scheduleFallback: 'none', spendRule: 'gk',
                  gkGuard: srcInputs.gkGuard, gkAdjPct: srcInputs.gkAdjPct };
     }
-    // GK fills its gap from the baseline branch, not the bracket cascade, so a schedule carrying it
+    // Proportional fills its gap from the baseline branch, not the bracket cascade, so a schedule carrying it
     // has to say so; `gapFill` on each entry does that, and the fallback matters only for years the
     // compiler emitted nothing for.
     return { scheduleFallback: lapses ? 'baseline' : 'none' };
@@ -4482,7 +4484,7 @@ function logYear(sim, yr) {
         grossOutflows: yr._grossOutflows, netOutflows: yr._netOutflows,
         yearInflows: yr._yearInflows, wdRate: yr._wdRate,
         convLabel: yr._convLabel, wdLabel: yr._wdLabel,
-        strategy: inputs.strategy, spendGoal: sim.spendGoal, gkAdjLabel: sim.gkAdjLabel, inflation: sim.inflation,
+        strategy: inputs.strategy, spendRule: inputs.spendRule, spendGoal: sim.spendGoal, gkAdjLabel: sim.gkAdjLabel, inflation: sim.inflation,
         yearInflation: yr.yearInflation, baseReturn: yr.baseReturn, loopMs: loopMs
     }));
     totals.totalTime += log[log.length - 1].loopMs;
@@ -4600,8 +4602,24 @@ function endYear(sim, yr) {
     if (colaCap !== null) sim.pensionFactor *= (1 + Math.max(0, Math.min(colaCap, cpi_t)));
 }
 
+// The strategy names the withdrawal dispatch recognizes. A name outside this list used to fall
+// through to the proportional baseline without a word, so a retired or misspelled strategy ran a
+// plan nobody chose - `strategy: 'gk'` would now draw Proportional 0% with no guardrails at all.
+// Unset stays legal: it is the baseline draw.
+const KNOWN_STRATEGIES = Object.freeze(['propwd', 'fixed', 'bracket', 'aca', 'fixedpct', 'ordered', 'split', 'schedule']);
+function assertKnownStrategy(inputs) {
+    const s = inputs ? inputs.strategy : undefined;
+    if (s === undefined || s === null || s === '' || KNOWN_STRATEGIES.includes(s)) return;
+    if (s === 'gk') {
+        throw new Error("strategy 'gk' is retired: Guyton-Klinger is the Guardrails spend rule now, "
+            + "and the same plan is { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk' }");
+    }
+    throw new Error(`unknown strategy '${s}'`);
+}
+
 /** SIMULATION ENGINE **/
 function simulate(inputs) {
+    assertKnownStrategy(inputs);
     if (!inputs.hasSpouse) {
         inputs = { ...inputs, birthyear2: 0, die2: 0, IRA2: 0, ss2: 0, Roth2: 0 };
     }
@@ -4694,21 +4712,18 @@ function simulate(inputs) {
      *       Spending shortfall fills from Cash → Brokerage → Roth.
      *       WithdrawalOrder = [IRA first, then gap-fill]
      *
-     *   strategy='gk' - "Guyton-Klinger"
-     *       A SPEND rule and nothing else. There is deliberately NO 'gk' case in
-     *       the withdrawal dispatch, so it falls through to the (else) branch
-     *       below and its draw is bit-identical to propwd at 0% - verified across
-     *       15 cells, every log field, in P103d's follow-up. All of Guyton-Klinger
-     *       is the guardrail spend adjustment in resolveSpendTarget; it inherits
-     *       the legacy default draw. In the sweep table the Guyton-Klinger row and
-     *       the Proportional 0% row therefore differ ONLY in the spend rule.
-     *       WithdrawalOrder = [IRA, Brokerage, Cash] proportionally
+     *   spendRule='gk' - "Guardrails" (Guyton-Klinger). NOT a strategy.
+     *       A SPEND rule layered on whichever strategy above decides the draw:
+     *       the guardrail adjustment in resolveSpendTarget, and nothing else.
+     *       It was once strategy='gk', whose draw was the (else) branch below,
+     *       bit-identical to propwd at 0%; a plan saved that way loads as
+     *       { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk' } with the
+     *       same numbers. simulate() rejects strategy='gk' outright.
      *
-     *   (else / fallback) - legacy proportional baseline
-     *       Same proportional logic as propwd at 0%, retained for backwards
-     *       compatibility. No UI option SELECTS it directly, but strategy='gk'
-     *       reaches it by falling through, which is not a fallback at all - it is
-     *       Guyton-Klinger's actual draw. See the 'gk' entry above.
+     *   (else / fallback) - the proportional baseline
+     *       Same proportional logic as propwd at 0%. No strategy NAME reaches it:
+     *       simulate() throws on a name it does not dispatch, so only an unset
+     *       strategy does.
      *       WithdrawalOrder = [IRA, Brokerage, Cash] proportionally
      *
      *   NOTE - future strategy='baseline' (not yet implemented):
@@ -5190,7 +5205,7 @@ function bestConversionStopYear(inputs, opts) {
 // 'bracket' covers the Fed / IRMAA-tier / ACA-multiple sub-modes, which are parameters on it rather
 // than separate strategies. Pinned by a test; if a strategy starts honoring the goal, remove it here
 // or the field greys out on a control that works.
-const IRA_GOAL_BLIND_STRATEGIES = Object.freeze(['propwd', 'ordered', 'split', 'gk']);
+const IRA_GOAL_BLIND_STRATEGIES = Object.freeze(['propwd', 'ordered', 'split']);
 
 // When ALL strategies fail at baseline, searches downward across every strategy to find
 // the highest spend goal where at least one strategy succeeds.
@@ -5234,15 +5249,18 @@ function optimizeSpendDown(baseInputs, strategyOverridesList) {
     return { optimizedSpend: lo, ...bestEntry };
 }
 
-// Guyton-Klinger self-adjusts spendGoal downward via its guardrails, so a terminal-balance /
+// Guardrails (the Guyton-Klinger spend rule) self-adjust spendGoal downward, so a terminal-balance /
 // totals.success check is trivially satisfied at almost any initial spend (the target just moves
-// to whatever survives). This stability floor rejects runaway initial spends that GK can only hold
+// to whatever survives). This stability floor rejects runaway initial spends the rule can only hold
 // for a year or two before slashing: the worst REAL delivered spend across the horizon must stay
-// within one guard band of the initial real spend. Returns true for non-GK strategies. Shared by
-// BOTH the forward spend search (optimizeSpend) and the reverse no-solution search (optimizeSpendDown)
-// so neither recommends an artificially high GK spend held only via continuous annual cuts.
+// within one guard band of the initial real spend. Keyed on the rule as the run actually had it -
+// base inputs with the overrides on top, the way every caller simulates - so it applies under any
+// draw, and returns true when the rule is off. Shared by the forward spend search (optimizeSpend),
+// the reverse no-solution search (optimizeSpendDown) and the conversion searches, so none of them
+// recommends a spend or a conversion held only via continuous annual cuts.
 function gkSpendStable(res, overrides, baseInputs) {
-    if (!overrides || overrides.strategy !== 'gk') return true;
+    const ran = { ...(baseInputs || {}), ...(overrides || {}) };
+    if (!_usesGKSpendRule(ran)) return true;
     const log = res.log;
     if (!log || !log.length) return true;
     const initialReal = log[0].spendGoal / (log[0].inflationFactor || 1);
@@ -5252,7 +5270,7 @@ function gkSpendStable(res, overrides, baseInputs) {
         const real = rec.spendGoal / (rec.inflationFactor || 1);
         if (real < minReal) minReal = real;
     }
-    const guardBand = overrides.gkGuard ?? baseInputs.gkGuard ?? 0.20;
+    const guardBand = ran.gkGuard ?? 0.20;
     return minReal >= initialReal * (1 - guardBand);
 }
 
@@ -5359,7 +5377,8 @@ function suggestSustainableSpend(baseInputs, opts) {
 }
 
 // The suggested-spend menu: three after-tax goals from conservative to aggressive, all computed
-// against the FIXED reference strategy so they do not move when the user changes strategy.
+// against the FIXED reference strategy with Guardrails off, so they do not move when the user changes
+// strategy or turns Guardrails on.
 //   A Conservative - a horizon-aware Bengen rate on the invested portfolio (research benchmark;
 //     the year-1 portfolio-funded draw is ~this rate of the portfolio). Strategy-independent.
 //   D Middle       - engine-solved to end holding >= 50% of the REAL starting portfolio.
@@ -5367,7 +5386,7 @@ function suggestSustainableSpend(baseInputs, opts) {
 // Returns { horizon, referenceStrategy, options: [{key,label,spend,note}] } - spend may be null if
 // a solve is infeasible - or null if the plan cannot be simulated at all.
 function suggestSpendMenu(baseInputs) {
-    const base  = Object.assign({}, baseInputs, { strategy: SUGGEST_REFERENCE_STRATEGY });
+    const base  = Object.assign({}, baseInputs, { strategy: SUGGEST_REFERENCE_STRATEGY, spendRule: '' });
     const probe = simulate(Object.assign({}, base, { spendGoal: baseInputs.spendGoal || 0, computeOC: false }));
     if (!probe || !probe.log || probe.log.length === 0) return null;
 
@@ -5737,7 +5756,7 @@ const OPT_OBJECTIVE_METRIC_COLUMN = Object.freeze({
 const STRATEGY_SELECTION_FIELDS = Object.freeze([
     'strategy', 'cyclicEnabled', 'cyclicOrder', 'fundConversionWithCash', 'rothGapFill',
     'propWithdraw', 'nYears', 'stratRate', 'stratIRMAATier', 'stratACAMultiple',
-    'iraWithdrawPct', 'orderedSeq', 'gkGuard', 'gkAdjPct', 'splitWeights',
+    'iraWithdrawPct', 'orderedSeq', 'gkGuard', 'gkAdjPct', 'splitWeights', 'spendRule',
 ]);
 function selectionOf(p) {
     const o = {};
@@ -5761,6 +5780,12 @@ function sameStrategySelection(a, b) {
     const rgf = x => (x === 'fillCashThenRoth' || x === 'fillRothThenCash') ? x : '';
     if (rgf(a.rothGapFill) !== rgf(b.rothGapFill)) return false;
     const near = (x, y) => Math.abs((x ?? 0) - (y ?? 0)) < 0.001;
+    // Guardrails are part of the identity under every strategy: the sweep carries each draw with
+    // and without the spend rule, and those are two plans. The band and the step matter only when on.
+    const rule = x => x === 'gk' ? 'gk' : '';
+    if (rule(a.spendRule) !== rule(b.spendRule)) return false;
+    if (rule(a.spendRule) === 'gk'
+        && !(near(a.gkGuard ?? 0.20, b.gkGuard ?? 0.20) && near(a.gkAdjPct ?? 0.10, b.gkAdjPct ?? 0.10))) return false;
     switch (a.strategy) {
         case 'propwd':   return near(a.propWithdraw,   b.propWithdraw);
         case 'fixed':    return a.nYears === b.nYears;
@@ -5772,7 +5797,6 @@ function sameStrategySelection(a, b) {
         case 'aca':      return (a.stratACAMultiple ?? 0) === (b.stratACAMultiple ?? 0);
         case 'fixedpct': return near(a.iraWithdrawPct, b.iraWithdrawPct);
         case 'ordered':  return (a.orderedSeq ?? 'CBIR') === (b.orderedSeq ?? 'CBIR');
-        case 'gk':       return near(a.gkGuard, b.gkGuard) && near(a.gkAdjPct, b.gkAdjPct);
         // P104b1. A split's identity is its NORMALIZED vector: [1, 1, 0, 0] and [50, 50, 0, 0]
         // are one plan. Element-wise, because a scalar compare reads two arrays as never equal and
         // every split row would then fail to match the user's own plan - the bug the field-list
@@ -6051,7 +6075,7 @@ function optimizeConversionAmount(baseInputs, strategyOverrides = {}, metric = '
         // Guyton-Klinger can "afford" almost any conversion amount by continuously slashing
         // future spend via its own guardrails (finalNW rewards the under-spending, not the
         // conversion) -- same runaway-optimization failure mode gkSpendStable already guards
-        // against for optimizeSpend/optimizeSpendDown. No-op for non-GK strategies.
+        // against for optimizeSpend/optimizeSpendDown. No-op when Guardrails are off.
         if (gkSpendStable(res, strategyOverrides, baseInputs)) {
             const s = score(res);
             if (s > bestScore) { bestScore = s; bestConv = c; bestResult = res; }
@@ -6326,34 +6350,23 @@ function splitVectorSortVal(v) {
     return (p[0] * 1e6 + p[1] * 1e4 + p[2] * 1e2 + p[3]) / 1e6;
 }
 
-const MC_GRIDS = {
-    propwd:   [0, 5, 10, 20, 50],
-    fixed:    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25],
-    fixedpct: [5, 6, 7, 8, 10],
-    ordered:  ORDERED_SEQS,
-    // NO `split` here, and the omission is the gate. Fixed Split is nerdknob-only while it is new,
-    // and Monte Carlo has no nerdknob (see buildVariations), so a vector in this grid would be a
-    // row every user sees. When the gate comes off, this grid gains SPLIT_VECTORS and the two
-    // sweeps agree again - until then an Optimizer Fixed Split row has no MC twin on purpose.
-};
+// ONE grid. Monte Carlo's Compare All used to sweep a grid of its own, with its own gates, so it ran
+// rows the Optimizer never shows and missed rows it does (user, 2026-09-14: "Monte Carlo should be
+// checking all the paths the optimizer creates, not more, not less"). Both now enumerate through
+// buildStrategyFamilies(base, sweepOptions(base, flags)).
 const OPTIMIZER_GRIDS = {
     propwd:   [0, 5, 10, 20, 50],
-    // Coarser than MC's 16 steps, and deliberately. Reduce was 80 of the Optimizer's 218 rows -
-    // 37% of the table - for a family whose neighbouring years differ by very little, and every
-    // row is paid for four times over once the 🗘/🔄 and 🅡 clone passes and the no-conversion
-    // baseline have had it. The endpoints are approximately preserved (3 for 2, 23 for 25), and a
-    // user sitting between steps still gets their own value as a row: offGridParamFor adds it.
+    // Five steps rather than sixteen, and deliberately. Reduce was 37% of the table on a 16-step grid,
+    // for a family whose neighbouring years differ by very little, and every row is paid for several
+    // times over once the 🗘/🔄 and 🅡 clone passes and the no-conversion baseline have had it. A user
+    // sitting between steps still gets their own value as a row: offGridParamFor adds it.
     fixed:    [3, 7, 11, 17, 23],
-    // Odd steps, 5 through 13. NOT a superset of MC's [5, 6, 7, 8, 10] any more: the Optimizer no
-    // longer tries 6% or 8%, and MC does not try 9%, 11% or 13%. The two sweeps have always
-    // differed on purpose, but this is the first place where each has a value the other lacks, so
-    // an IRA Draw row in one tab may have no twin in the other. A user above 13% still gets scored:
-    // offGridParamFor adds their own percentage as its own row.
+    // Odd steps, 5 through 13. A user above 13% still gets scored: offGridParamFor adds their own
+    // percentage as its own row.
     fixedpct: [5, 7, 9, 11, 13],
     ordered:  ORDERED_SEQS,
-    // Present here and absent from MC_GRIDS, which is deliberate: this sweep can be gated behind
-    // the nerdknob and that one cannot. Reaching a row still needs `splitFamily: true` from the
-    // caller as well - the grid holds the data, the opt decides whether anyone sees it.
+    // Reaching a row also needs `splitFamily: true` - the grid holds the data, sweepOptions decides
+    // whether anyone sees it.
     split:    SPLIT_VECTORS,
     irmaaTiers:   [0, 1, 2, 3, 4],
     acaMultiples: [200, 250, 300, 400],
@@ -6371,6 +6384,10 @@ const MODIFIER_PREFIX = {
     'cash':            '\u{1F4B5} ',
     'rothgap':         '\u{1F161} ',
 };
+// Marks the one row with Guardrails on that the table has to point out: the user's own plan run with
+// the switch the other way round (planRuleTwin). Plain text, so it serves the HTML label and MC's plain
+// `_label` alike.
+const GUARDRAILS_PREFIX = '\u{1F6E1}️ ';
 
 // Strategies the 🅡 clone pass skips. Two, and both are ones `fillSpendingGap` itself excludes:
 // Ordered runs the account sequence the user chose, so a clone would be a twin; and a split
@@ -6400,34 +6417,34 @@ const ROTH_GAP_EXCLUDED = new Set(['ordered', 'split']);
  * caller can build its own label shape; `strategyLabel` is the prefixed HTML form the Optimizer
  * table uses, supplied because it is the common case.
  *
- * Every divergence between the two sweeps is an explicit option, so a reader can see at each call
- * site exactly what that sweep does and does not cover:
- *   grids            OPTIMIZER_GRIDS or MC_GRIDS
+ * The Optimizer and Monte Carlo pass the SAME options, from sweepOptions(); research harnesses pass
+ * their own. Each option is explicit, so a reader can see exactly what a sweep covers:
+ *   grids            OPTIMIZER_GRIDS
  *   irmaaFamily      sweep the 5 IRMAA ceiling tiers as their own family
- *   acaFamily        sweep the 4 ACA FPL cliffs. The CALLER applies its own gate - the Optimizer
- *                    passes bothOnMedicareAtStart, since an ACA cap is pointless once both are on
- *                    Medicare. MC does not sweep this family at all.
+ *   acaFamily        sweep the 4 ACA FPL cliffs. The caller applies the gate - sweepOptions passes
+ *                    bothOnMedicareAtStart, since an ACA cap is pointless once both are on Medicare
  *   bracketResetsIRMAATier  write stratIRMAATier:-1 onto Fill Bracket rows so a sidebar tier
  *                    selection cannot leak into them
  *   markCashFunding  write fundConversionWithCash:false onto every un-cloned row, so a user who
  *                    already has it on gets an A/B against the 💵 clones rather than two identical
  *                    arms. Only meaningful when cashClones is also on
- *   cashClones       append the 💵 clones. Caller gates on Cash > 0: at $0 Cash the mechanism is a
- *                    hard no-op and the clones would be bit-identical twins, pure wasted runs
+ *   cashClones       append the 💵 clones. Gate on Cash > 0: at $0 Cash the mechanism is a hard no-op
+ *                    and the clones would be bit-identical twins, pure wasted runs
  *   rothClones       append the 🅡 clones - the same strategy with Roth drawn after Cash instead of
- *                    last - for every family except the ones in ROTH_GAP_EXCLUDED. Also writes rothGapFill:''
- *                    onto every un-cloned row, for the reason markCashFunding exists: a user who
- *                    already set the control would otherwise get two identical arms instead of an
- *                    A/B. Caller gates on Roth > 0. Monte Carlo does NOT pass this - it pays
- *                    numPaths x variations, so a dimension is far more expensive there
- *   offGridLast      put the user's own off-grid parameter after Guyton-Klinger (the Optimizer)
- *                    rather than straight after IRA Draw (MC)
+ *                    last - for every family except the ones in ROTH_GAP_EXCLUDED. Also writes
+ *                    rothGapFill:'' onto every un-cloned row, for the reason markCashFunding exists.
+ *                    Gate on Roth > 0
+ *   offGridLast      put the user's own off-grid parameter last among the base rows, after Ordered
+ *                    and Fixed Split, rather than straight after IRA Draw
+ *
+ * No row sets `spendRule`, so every row follows the user's Guardrails switch. The one row run both
+ * ways is the user's own plan, which the callers add from planRuleTwin() (P126, user 2026-09-14).
  *
  * Recorded before this function existed, and pinned against it: sweep_golden.js.
  */
 function buildStrategyFamilies(base, opts = {}) {
     const {
-        grids = MC_GRIDS,
+        grids = OPTIMIZER_GRIDS,
         irmaaFamily = false,
         acaFamily = false,
         bracketResetsIRMAATier = false,
@@ -6514,20 +6531,14 @@ function buildStrategyFamilies(base, opts = {}) {
         push('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, convertExcessToRoth: convOn });
 
     // Fixed Split. Placed after Ordered because it answers the same question - which account funds
-    // the year - and before Guyton-Klinger, which answers a different one. 'split' is in
-    // ROTH_GAP_EXCLUDED, so the Roth-gap clone pass skips it: Roth is already a weight in the
-    // vector, and a Roth-gap clone of a vector that names Roth would be a twin of it.
+    // the year. 'split' is in ROTH_GAP_EXCLUDED, so the Roth-gap clone pass skips it: Roth is
+    // already a weight in the vector, and a Roth-gap clone of a vector that names Roth would be a
+    // twin of it.
     if (splitFamily) {
         for (const v of grids.split || [])
             push('Fixed Split', splitVectorLabel(v), splitVectorSortVal(v),
                 { strategy: 'split', splitWeights: v.slice(), convertExcessToRoth: convOn });
     }
-
-    // Guyton-Klinger - a single row, labelled with the user's own guardrails, e.g. "Grd:20 Adj:10".
-    push('Guyton-Klinger',
-        `Grd:${Math.round((base.gkGuard ?? 0.20) * 100)} Adj:${Math.round((base.gkAdjPct ?? 0.10) * 100)}`,
-        0,
-        { strategy: 'gk', gkGuard: base.gkGuard, gkAdjPct: base.gkAdjPct, convertExcessToRoth: convOn });
 
     if (offGridLast) addOffGrid();
 
@@ -6583,36 +6594,95 @@ function buildStrategyFamilies(base, opts = {}) {
     return rows;
 }
 
-// Build the full variation list (same parameter sweep as the optimizer) without running
-// simulations. Used by both the optimizer and Monte Carlo module.
-// base: result of getInputs() - no DOM access needed after this point.
-function buildVariations(base) {
-    // MC's slice of the shared enumeration. Everything it does NOT do is visible right here:
-    // no IRMAA-ceiling family, no ACA family, no stratIRMAATier reset on the Fill Bracket rows,
-    // and the off-grid row sits straight after IRA Draw rather than last. The 💵 clones are NOT
-    // nerdknob-gated on this side - MC has no nerdknob - but they are still skipped at $0 Cash,
-    // where the mechanism is a hard no-op and the clones would be bit-identical twins (MC runs
-    // numPaths × variations.length trials, so a wasted arm is expensive here).
-    const families = buildStrategyFamilies(base, {
-        grids: MC_GRIDS,
-        cashClones: base.Cash > 0,
-    });
+/**
+ * The options every user-facing sweep hands buildStrategyFamilies. The Optimizer table and Monte Carlo's
+ * Compare All both build from this one call, so they run exactly the same rows. The page-level gates
+ * arrive as flags, because this file never reads the DOM: `nerdKnobs` (?nerdknob) and `splitFeature`
+ * (?nerdknob=split). `year` pins the ACA age gate for tests; the page leaves it to today.
+ */
+function sweepOptions(base, { nerdKnobs = false, splitFeature = false, year } = {}) {
+    const acaDisabled = bothOnMedicareAtStart(base.birthyear1, base.startAge, !!base.hasSpouse,
+        base.hasSpouse ? (base.birthyear2 || 0) : 0, year);
+    return {
+        grids: OPTIMIZER_GRIDS,
+        irmaaFamily: true,
+        // ACA cliff arms are swept for everyone; the age gate is the only thing that removes them, and
+        // it removes them for a reason about the plan rather than the audience - once both people are on
+        // Medicare at start an income cap protects nothing.
+        acaFamily: !acaDisabled,
+        // A Fill Bracket row must not inherit a sidebar IRMAA-tier selection; the tiers are their own family.
+        bracketResetsIRMAATier: true,
+        // The nerdknob sweeps cash funding as its own dimension (the 💵 rows), so the rows it clones must
+        // read false rather than inherit the sidebar, or a user who already has it on gets two identical
+        // arms instead of an A/B.
+        markCashFunding: nerdKnobs,
+        cashClones: nerdKnobs && base.Cash > 0,
+        // The 🅡 arm is swept for everyone - P28 measured it worth up to +$3.56M and found no heuristic
+        // that predicts when. Gated on Roth, because with none to draw the clone is a bit-identical twin.
+        rothClones: (base.Roth > 0 || base.Roth2 > 0),
+        // P104b3. Fixed Split is on probation behind ?nerdknob=split, NOT the plain nerdknob; see
+        // SPLIT_FEATURE in optimizer_ui.js for why, and for the removal manifest.
+        splitFamily: splitFeature,
+        offGridLast: true,
+    };
+}
 
-    // MC's label shape: `_strategyFamily` takes the HTML prefix the builder already applied,
-    // while `_label` needs the PLAIN-text twin - it is read into chart legends and CSV, where
-    // markup would show through.
-    // 'rothgap' is here even though MC does not ask for those clones: the map is keyed by modifier,
-    // and a modifier missing from it would lose its prefix silently rather than fail.
+// A plan's family and parameter as the sweep names them, for rows the enumeration does not produce:
+// the user's own plan, and its Guardrails twin. Pure, and shared by the Optimizer and Monte Carlo.
+function describeSelection(p) {
+    const pct = v => `${Math.round((v ?? 0) * 100)}%`;
+    switch (p.strategy) {
+        case 'propwd':   return { family: 'Proportional', paramLabel: pct(p.propWithdraw), paramSortVal: Math.round((p.propWithdraw ?? 0) * 100) };
+        case 'fixed':    return { family: 'Reduce', paramLabel: `${p.nYears} yrs`, paramSortVal: p.nYears ?? 0 };
+        case 'fixedpct': return { family: 'IRA Draw', paramLabel: pct(p.iraWithdrawPct), paramSortVal: Math.round((p.iraWithdrawPct ?? 0) * 100) };
+        case 'ordered':  return { family: 'Ordered', paramLabel: p.orderedSeq ?? 'CBIR', paramSortVal: p.orderedSeq ?? 'CBIR' };
+        case 'split':    return { family: 'Fixed Split', paramLabel: splitVectorLabel(p.splitWeights), paramSortVal: splitVectorSortVal(p.splitWeights) };
+        case 'aca':      return { family: 'ACA Cliff', paramLabel: `${p.stratACAMultiple ?? 0}% FPL`, paramSortVal: 50 + (p.stratACAMultiple ?? 0) / 100 };
+        case 'bracket':
+            if ((p.stratACAMultiple ?? 0) > 0)
+                return { family: 'ACA Cliff', paramLabel: `${p.stratACAMultiple}% FPL`, paramSortVal: 50 + p.stratACAMultiple / 100 };
+            if ((p.stratIRMAATier ?? -1) >= 0)
+                return { family: 'IRMAA Ceil', paramLabel: IRMAA_TIER_LABELS[p.stratIRMAATier] ?? `Tier ${p.stratIRMAATier}`, paramSortVal: p.stratIRMAATier - 0.5 };
+            return { family: 'Fill Bracket', paramLabel: pct(p.stratRate), paramSortVal: p.stratRate ?? 0 };
+        default:         return { family: p.strategy ?? 'Plan', paramLabel: '', paramSortVal: 0 };
+    }
+}
+
+// P126, user 2026-09-14: "only the current settings get swept both ways". Every swept row follows the
+// Guardrails switch, and this is the one extra row - the user's own plan with the switch the other way
+// round. Returns that row's rule and labels; each caller runs it with the rest of the plan exactly as it
+// runs its own current-plan row, so the Optimizer table and Compare All carry the same extra row.
+function planRuleTwin(plan) {
+    const on = !_usesGKSpendRule(plan);
+    const d = describeSelection(plan);
+    return {
+        spendRule: on ? 'gk' : '',
+        family: d.family,
+        strategyLabel: (on ? GUARDRAILS_PREFIX : '') + d.family,
+        paramLabel: [d.paramLabel, on ? 'Guardrails on' : 'Guardrails off'].filter(Boolean).join(', '),
+        paramSortVal: d.paramSortVal,
+    };
+}
+
+// Monte Carlo's Compare All sweep: the Optimizer's rows, as runnable variations. No simulate() and no
+// DOM; `flags` are the page gates sweepOptions takes.
+function buildVariations(base, flags = {}) {
+    const families = buildStrategyFamilies(base, sweepOptions(base, flags));
+
+    // MC's label shape: `_strategyFamily` takes the HTML prefix the builder already applied, while
+    // `_label` needs the PLAIN-text twin - it is read into chart legends and CSV, where markup would
+    // show through. Keyed by modifier, and a modifier missing from it would lose its prefix silently.
     const PLAIN_PREFIX = { 'ira-first': '\u{1F5D8} ', 'brokerage-first': '\u{1F504} ', 'cash': '\u{1F4B5} ', 'rothgap': '\u{1F161} ' };
 
     return families.map(f => ({
         ...base,
-        // A swept variation must not silently inherit a leftover sidebar value (e.g. from
-        // loading an Optimizer ⇌ row) - no overrides block in the enumeration sets this key.
-        // Non-mutating (unlike runOptimizer()'s equivalent guard): `base` here is the SAME
-        // object reference callers keep as _mcBase / the "Current Plan" stress fallback,
-        // which must keep the real sidebar value.
+        // The fields the Optimizer strips from its own sweep base. No enumerated row sets them, so the
+        // sidebar's values would otherwise ride along into every row: the Extra Conversion (e.g. left
+        // over from loading a ⇌ row) and the conversion stop year. Non-mutating: `base` is the SAME
+        // object callers keep as _mcBase / the "Current Plan" stress fallback, which must keep them.
         extraConversionAmount: 0,
+        convEndYear: undefined,
+        convEndMode: 'all',
         ...f.overrides,
         _label: (f.modifier ? PLAIN_PREFIX[f.modifier] : '')
                 + `${f.family} ${f.paramLabel}${f.overrides.convertExcessToRoth ? ' ✓' : ''}`,
@@ -6845,15 +6915,15 @@ function planNameDefaults({ lastPlanName, lastFileName } = {}) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit, growthFactor, applyGrowth, timingShift, resolveStartAge };
+    module.exports = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, sweepOptions, describeSelection, planRuleTwin, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit, growthFactor, applyGrowth, timingShift, resolveStartAge, gkSpendStable, KNOWN_STRATEGIES, assertKnownStrategy };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
     // uneven and the unevenness is silent: `function simulate` becomes a property of globalThis,
-    // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
+    // while `const OPTIMIZER_GRIDS` is a global LEXICAL binding and is not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit, growthFactor, applyGrowth, timingShift, resolveStartAge };
+    window.OptimizerCore = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, sweepOptions, describeSelection, planRuleTwin, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit, growthFactor, applyGrowth, timingShift, resolveStartAge, gkSpendStable, KNOWN_STRATEGIES, assertKnownStrategy };
 }
 
 

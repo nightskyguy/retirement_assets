@@ -24,23 +24,25 @@ For what the tool does and how to use it, see [README.md](README.md).
 **Guyton-Klinger is now Guardrails, a switch that works with any withdrawal strategy.**  
 *Plans and links that used Guyton-Klinger load with the same numbers.*
 
-**Guardrails sit under Spend Delta.** Turn them on and spending follows your savings: it is cut when
-your savings fall far enough that your spending is no longer safe, and raised when they grow far
-enough to spend more.
+**Guardrails sit under Spend Delta.** Turn guardrails on and spending follows your savings: when
+your savings fall far enough that your spending is no longer safe it cuts your spending. If your assets grow 
+enough to spend more, spending is raised.  Guardrails also follows the spending smile strategy.
 
 **Saved Guyton-Klinger plans and links load as Proportional Withdraw at 0% with Guardrails on.**
 
 **The Optimizer and Monte Carlo follow your Guardrails setting**, and each adds your own plan with
-the switch the other way round. Monte Carlo's My Plan Only runs your plan both ways.
+the guardrails both on and off. Monte Carlo's *My Plan Only* runs your plan both ways and that can turn 
+a risky strategy into a safe one.
 
-**Dollar amounts show in today's dollars (Current $) by default**, and **the Optimizer shows each
+**Dollar amounts now show in today's dollars (Current $) by default**, and **the Optimizer shows each
 column as the difference from the ⚓ baseline**. The Future $ / Current $ toggle and the Show as
 Differences switch turn either off.
 
 **My Plan Only and the Stress Test run your plan exactly as you set it**, including your Extra Annual
-Roth Conversion and your conversion switches.
+Roth Conversion and your conversion switches. Previously it did NOT include the extra conversions so may have made 
+a plan look far better than it is.
 
-**The IRA Goal's help** describes it as the balance to bring your IRA down to.
+**The IRA Goal's help** describes it as the balance to bring your IRA down to. The prior text was misleading.
 
 ---
 

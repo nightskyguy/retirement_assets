@@ -59,6 +59,14 @@
  * prototype, holds the goal at the plan's own shape so raises can only undo prior cuts; what it
  * costs in spending and returns in ending wealth is priced here rather than argued.
  *
+ * AND ONE LAST ONE (printed as section 7; section 8 of the report), asked by the user on
+ * 2026-09-15: "early spending is significantly more valuable than late spending". Every spending
+ * total above adds year 1 and year 30 at par, which silently prices a cut in the blade years the
+ * same as one at 90. Section 7 re-scores the same runs with the year's spending discounted at 0%,
+ * 3% and 5%, and reports where in the plan each rule's effect actually lands. The discount rate is
+ * a PREFERENCE, not a measurement, which is why three of them are reported and none is called the
+ * right one.
+ *
  * HOW THE PROBABILITY IS COMPUTED. `buildBanks` / `buildPathInputs` from montecarlo/mc_engine.js -
  * the same per-path machinery the worker and the main-thread fallback use - then `simulate()` per
  * path, counting `totals.success`. Synthetic GBM at the page's own defaults (mu 7%, sigma 12%), one
@@ -551,6 +559,46 @@ for (const id of PLAN_IDS) {
                 + rpad(money(res.totals.spendCurrentDollars), 21)
                 + rpad(money(res.finalNW), 15));
         });
+    }
+}
+
+// ---- 7. early spending against late spending (report section 8) -------------------------------
+// Per-year real spending reconstructed as (spendGoal + shortfall) / inflationFactor, which sums to
+// totals.spendCurrentDollars to the dollar on every run measured - the engine's own accumulator is
+// the same expression (optimizer_core.js:4386), so this is its per-year decomposition rather than a
+// second definition of delivered spending.
+console.log('\n7. EARLY SPENDING AGAINST LATE SPENDING  (report section 8)');
+console.log('   the same runs, with the year\'s real spending discounted at 0%, 3% and 5%');
+console.log('   a discount rate is a preference, not a measurement: three are shown, none is the right one');
+const DISCOUNTS = [0, 0.03, 0.05];
+function spendProfile(res) {
+    const real = res.log.map(r => (r.spendGoal + (r.shortfall || 0)) / (r.inflationFactor || 1));
+    const total = d => real.reduce((t, v, y) => t + v / Math.pow(1 + d, y), 0);
+    const first10 = real.slice(0, 10).reduce((t, v) => t + v, 0);
+    return { real, totals: DISCOUNTS.map(total), first10, all: total(0) };
+}
+console.log('\n   what the rule costs, and what the ceiling costs, by discount rate');
+console.log(pad('household', 26) + rpad('path', 8) + rpad('comparison', 24)
+    + DISCOUNTS.map(d => rpad('at ' + (d * 100) + '%', 13)).join('') + rpad('first 10 yrs', 16));
+for (const id of PLAN_IDS) {
+    const base = { ...PLANS.get(id).inputs };
+    const years = rowsOf(base) + 3;
+    const inf = new Float64Array(years).fill(base.inflation ?? 0.025);
+    for (const [label, sh] of [['benign', null], ['shock', SHOCK]]) {
+        const ret = new Float64Array(years).fill(base.growth ?? 0.06);
+        if (sh) { ret[1] = sh[0]; ret[2] = sh[1]; }
+        const common = { returnSequence: ret, inflationSequence: inf };
+        const off  = spendProfile(simulate({ ...base, ...common }));
+        const rule = spendProfile(simulate({ ...base, spendRule: 'gk', ...common }));
+        const ceil = spendProfile(simulate({ ...base, spendRule: 'gk', gkShapeCeiling: true, ...common }));
+        const line = (name, a, b) => pad('', 26) + rpad(label, 8) + rpad(name, 24)
+            + DISCOUNTS.map((d, i) => rpad(((a.totals[i] / b.totals[i] - 1) * 100).toFixed(1) + '%', 13)).join('')
+            + rpad(((a.first10 / b.first10 - 1) * 100).toFixed(1) + '%', 16);
+        console.log(pad(id, 26) + rpad(label, 8) + rpad('no rule, real spend', 24)
+            + DISCOUNTS.map((d, i) => rpad(money(off.totals[i]), 13)).join('')
+            + rpad(money(off.first10), 16));
+        console.log(line('the rule vs no rule', rule, off));
+        console.log(line('the ceiling vs not', ceil, rule));
     }
 }
 

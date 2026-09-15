@@ -4,11 +4,13 @@ Whether the guardrail rule published by Derek Tharp and Justin Fitzpatrick - spe
 **probability of success**, adjust when that probability crosses a rail - can be computed on this
 engine, what it costs, and where it disagrees with the Guardrails rule the tool already ships.
 
-Section 6 answers a question the comparison kept raising and the article did not ask: how far the
+Sections 6 to 8 answer questions the comparison kept raising and the article did not ask: how far the
 shipped rule is from **Guyton-Klinger as published**. Four divergences, and the first one - the rate
 it tests - is what makes the hatchet invisible to it. Section 7 answers a second: how the rule
 composes with **Spend Delta**, which turns out to break a filter the Optimizer relies on, and which
-is where the `gkShapeCeiling` prototype came from.
+is where the `gkShapeCeiling` prototype came from. Section 8 re-scores every spending total on the
+page for the fact that **early spending is worth more than late spending**, which moves the rule and
+the ceiling in opposite directions.
 
 Produced by [`.test_harnesses/rbg_harness.js`](../.test_harnesses/rbg_harness.js) on engine
 v11.1823 (`1842270`), 2026-09-15. Every number below is printed by that script; nothing here is
@@ -52,6 +54,7 @@ others; both are used here, unchanged.
 | **the shape** | the plan's own spending path: the year-0 goal carried forward by **Spend Delta** (`spendChange`, the household's planned real drift) and CPI, and by nothing else. What spending would have been with no rule running |
 | **`gkSpendStable`** | the filter the Optimizer's spend and conversion searches apply (`optimizer_core.js:5261`): reject a candidate whose run lets real spending fall more than `gkGuard` below its **year-0** value. Not a rule a household follows - a guard against a search "affording" a spend the rule only reaches by slashing |
 | **`gkShapeCeiling`** | the P127 prototype added by this report: an engine input, default **off**, that holds the rule's goal at the shape. Not wired to the page, the sweep or the Optimizer |
+| **discounted real spend** | the same delivered real spending, with year *y* weighted `1 / (1 + d)^y`. Section 8 reports d = 0%, 3% and 5%, because the rate is a statement of preference and not a measurement. Per-year real spending is `(spendGoal + shortfall) / inflationFactor`, which sums to `totals.spendCurrentDollars` to the dollar - the engine's own accumulator (`optimizer_core.js:4386`) decomposed, not a second definition |
 | **re-plan** | a plan restarted mid-run: `startInYear`/`startYear` moved forward, balances replaced with the ones the realized year produced, real spending unchanged. Ages and horizon follow from the birth years |
 
 ### The households
@@ -395,6 +398,58 @@ filter's baseline is a prerequisite for turning the ceiling on anywhere the Opti
 
 ---
 
+### 8. Early spending is worth more, and every total above prices it at par
+
+Sections 3 and 7 add year 1 and year 33 at the same value. A household does not: a cut at 65 and a
+raise at 92 are not the same event (user, 2026-09-15). Re-scoring the same runs with the year's real
+spending discounted at 0%, 3% and 5% moves the two rules in **opposite directions**, so this is not a
+presentational nicety.
+
+| household | path | comparison | 0% | 3% | 5% | first 10 years |
+|---|---|---|---|---|---|---|
+| `bracket-filler-texas` | benign | the rule vs no rule | +19.6% | +14.0% | +11.0% | **0.0%** |
+| `bracket-filler-texas` | benign | the ceiling vs not | -16.4% | **-12.3%** | **-9.9%** | **0.0%** |
+| `bracket-filler-texas` | shock | the rule vs no rule | -16.7% | **-18.9%** | **-19.8%** | **-21.9%** |
+| `bracket-filler-texas` | shock | the ceiling vs not | -2.3% | -1.5% | -1.1% | 0.0% |
+| `mixed-portfolio-couple` | benign | the rule vs no rule | -12.0% | -10.0% | -8.8% | -3.0% |
+| `mixed-portfolio-couple` | shock | the rule vs no rule | **-3.1%** | **-12.1%** | **-16.1%** | **-27.8%** |
+| `long-widowhood` | benign | the rule vs no rule | +10.3% | +6.7% | +4.9% | 0.0% |
+| `long-widowhood` | benign | the ceiling vs not | -9.3% | -6.3% | -4.6% | 0.0% |
+| `long-widowhood` | shock | the rule vs no rule | -22.1% | -23.1% | -23.3% | -22.4% |
+| `age-gap-ira-heavy-ca` | shock | the rule vs no rule | -27.6% | -27.1% | -26.6% | -25.4% |
+
+**The rule's gains are late and its cuts are early.** On a benign path the rule delivers
+`bracket-filler-texas` 19.6% more lifetime spending and **none of it in the first ten years** - every
+dollar of that gain is a prosperity raise that compounds from the middle of the plan onward, so at a
+3% discount it is worth 14.0% and at 5% it is worth 11.0%. On the shock path the cuts land in the
+blade years and discounting makes them worse, not better: -16.7% becomes -19.8%.
+
+**`mixed-portfolio-couple` is the case to read twice.** On the shock its undiscounted cost is -3.1%,
+which reads as almost free. The same run takes **27.8% out of the first ten years** and -16.1% at a 5%
+discount. A number that says "the rule cost this household 3%" is describing a plan nobody lives:
+the household gets its money back in its eighties.
+
+**The ceiling is the mirror image**, which is the argument for it that section 7 could not make: it
+gives up *late* raises and takes **0.0% out of the first ten years** on every household measured. Its
+headline -16.4% on `bracket-filler-texas` is -9.9% to a household discounting at 5%, and nothing at
+all to one that spends most of what it values before 75.
+
+Three limits on all of this. A discount rate is a **preference**, not a fact, and picking one is the
+household's business - which is why three are reported and none is called correct. Real discounting is
+also not exponential: survival probability falls with age and would steepen every number here, while a
+late-life health shock works the other way. And a fixed discount says nothing about *variability* -
+`age-gap-ira-heavy-ca` loses about 27% at every rate because its cuts are spread evenly, which a
+utility measure with risk aversion would score quite differently from the same loss concentrated in
+two years.
+
+**What it means for the rest of this report.** Every "lifetime real spend" column in sections 3 and 7
+is the 0% column here. On the evidence above it **understates what the shipped rule costs** (its cuts
+cluster early) and **overstates what the ceiling costs** (its givebacks cluster late). Any future
+comparison of spending rules in this repo should carry at least the first-decade share beside the
+total; it is one line of arithmetic and it changed the sign of the argument twice on this page.
+
+---
+
 ## Predictions
 
 Registered before the first run, against a 25% lower rail - the number the second-hand summaries
@@ -425,7 +480,11 @@ Three scopes, smallest first. Only the first is priced by anything in this repor
    holds up under Monte Carlo is not measured here and would need its own harness.
 3. **The hatchet itself.** Nothing is missing: benefit ages and `spendChange` already produce the
    blade and the handle. What is missing is the reporting that would make the shape visible.
-4. **The two things section 7 leaves on the table**, neither of which needs the rails: the
+4. **A spending metric that weights early years** (section 8). The totals this report and the
+   Optimizer's *Maximum Spending* objective use price year 1 and year 33 the same. Carrying the
+   first-decade share, or a discounted total, beside the lifetime figure is arithmetic, not
+   modelling, and it changes which rule looks better.
+5. **The two things section 7 leaves on the table**, neither of which needs the rails: the
    `gkSpendStable` baseline (a one-line change that moves what the Optimizer's searches return) and
    `gkShapeCeiling` (built, tested, default off, and not wired to the page). The first is a
    prerequisite for the second wherever those searches run.

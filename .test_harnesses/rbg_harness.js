@@ -40,14 +40,24 @@
  *   3. THE SHOCK - a fixed -22% / -13% pair in the first two years, the 2000-2002 shape, then the
  *      plan's own growth. What each rule does to real spending, and what it costs over a lifetime.
  *
- * AND ONE THING THAT IS NOT ABOUT THE ARTICLE (section 5). Everything above compares the rails to
- * the rule this tool ships. Section 5 asks a different question that the comparison kept raising:
+ * AND ONE THING THAT IS NOT ABOUT THE ARTICLE (printed as section 5; it is section 6 of the
+ * report). Everything above compares the rails to the rule this tool ships. This one asks a
+ * different question that the comparison kept raising:
  * how far the shipped rule is from Guyton-Klinger AS PUBLISHED (Guyton 2004; Guyton and Klinger,
  * "Decision Rules and Maximum Initial Withdrawal Rates", Journal of Financial Planning, March
  * 2006). Four divergences are measurable from here - the rate the rule tests, the return the
  * inflation freeze reads, the missing suspension of the capital-preservation cut in the last 15
  * years, and the missing 6% cap on the inflation raise - and the first one decides the other
  * report sections, because it is the reason the hatchet is invisible to the rule.
+ *
+ * AND ONE MORE (printed as section 6; section 7 of the report), asked by the user on 2026-09-15:
+ * how the rule COMPOSES with Spend Delta, the planned real drift the household sets. Two things
+ * are measured. `gkSpendStable`
+ * (optimizer_core.js:5261), the filter the Optimizer's spend and conversion searches apply, reads
+ * the finished run's minimum real spendGoal against year 0 - and spendGoal carries the delta, so
+ * the filter cannot tell a planned decline from a rule-driven slash. And `gkShapeCeiling`, the P127
+ * prototype, holds the goal at the plan's own shape so raises can only undo prior cuts; what it
+ * costs in spending and returns in ending wealth is priced here rather than argued.
  *
  * HOW THE PROBABILITY IS COMPUTED. `buildBanks` / `buildPathInputs` from montecarlo/mc_engine.js -
  * the same per-path machinery the worker and the main-thread fallback use - then `simulate()` per
@@ -370,7 +380,7 @@ for (const c of costs) {
 console.log('   one probability estimate = ' + PATHS + ' engine runs; one spend or rail answer = '
     + STEPS + ' estimates; crashes: ' + CRASHES);
 
-// ---- 5. fidelity to Guyton-Klinger as published ----------------------------------------------
+// ---- 5. fidelity to Guyton-Klinger as published (report section 6) ----------------------------
 // Published GK tests PORTFOLIO WITHDRAWALS / PORTFOLIO against the same ratio in year 0. The engine
 // computes that quantity already - `yr._wdRate`, the `wdRate%` column - and the shipped rule does
 // not use it. Both ratios are read off ONE run with the rule OFF, at the plan's own deterministic
@@ -380,7 +390,7 @@ console.log('   one probability estimate = ' + PATHS + ' engine runs; one spend 
 // published ratio leaves the band, on a path where NO adjustment is ever applied. A real published
 // GK run would adjust at that point and move its own ratio afterwards, so the column is the first
 // DIVERGENCE, not a simulation of the published rule.
-console.log('\n5. FIDELITY TO GUYTON-KLINGER AS PUBLISHED');
+console.log('\n5. FIDELITY TO GUYTON-KLINGER AS PUBLISHED  (report section 6)');
 console.log('   the ratio each rule tests, as a multiple of its own year-0 value, band 0.80-1.20');
 console.log(pad('household', 26) + rpad('shipped range', 14) + rpad('outside', 10)
     + rpad('published range', 18) + rpad('outside', 10) + '   ' + 'first divergence');
@@ -472,6 +482,76 @@ for (const id of PLAN_IDS) {
     }
     console.log('\n   the published 6% cap on the inflation raise, which this engine does not apply: '
         + pctS(over / total) + ' of path-years draw inflation above 6%, worst ' + pctS(worst));
+}
+
+// ---- 6. how the rule composes with Spend Delta (report section 7) -----------------------------
+// (a) The filter. gkSpendStable rejects a candidate spend or conversion when the run's minimum real
+// spendGoal falls more than gkGuard below year 0. Run at the plan's own growth with NO shock, so a
+// household that trips it with zero cuts has been rejected for its own planned shape.
+console.log('\n6. HOW THE RULE COMPOSES WITH SPEND DELTA  (report section 7)');
+console.log('   (a) gkSpendStable, the Optimizer\'s search filter, against a planned decline');
+console.log('       flat returns at the plan\'s own growth, so any cut is the rule reacting to nothing');
+console.log(pad('household', 26) + rpad('delta', 8) + rpad('GK cuts', 10)
+    + rpad('min real / year 0', 19) + rpad('gkSpendStable', 15));
+for (const id of PLAN_IDS) {
+    for (const delta of [0, -0.01]) {
+        const base = { ...PLANS.get(id).inputs, spendChange: delta };
+        const years = rowsOf(base) + 3;
+        const flat = new Float64Array(years).fill(base.growth ?? 0.06);
+        const flatInf = new Float64Array(years).fill(base.inflation ?? 0.025);
+        const res = simulate({ ...base, spendRule: 'gk', returnSequence: flat, inflationSequence: flatInf });
+        const real = r => r.spendGoal / (r.inflationFactor || 1);
+        const ratio = Math.min(...res.log.map(real)) / real(res.log[0]);
+        const cuts = res.log.filter(r => (r.gkAdj || '').includes('cap')).length;
+        console.log(pad(id, 26) + rpad((delta * 100).toFixed(0) + '%', 8) + rpad(cuts, 10)
+            + rpad(ratio.toFixed(3), 19) + rpad(core.gkSpendStable(res, { spendRule: 'gk' }, base) ? 'accepted' : 'REJECTED', 15));
+    }
+}
+console.log('   a -1%/year shape alone crosses the 0.80 floor at year '
+    + Math.ceil(Math.log(0.8) / Math.log(0.99)) + ', with no market move and no cut.');
+
+// What the filter does to the search it guards. optimizeSpend drives its binary search on
+// passes(), and passes() fails whenever gkSpendStable does - so a household whose SHAPE breaches
+// the floor can end the search with no answer at all, at any spend level.
+console.log('\n       what that costs the search that uses it (optimizeSpend, the plan\'s own strategy):');
+console.log(pad('household', 26) + rpad('delta', 8) + rpad('Guardrails on', 18) + rpad('Guardrails off', 18));
+for (const id of PLAN_IDS) {
+    for (const delta of [0, -0.01]) {
+        const base = { ...PLANS.get(id).inputs, spendChange: delta };
+        const on  = core.optimizeSpend({ ...base, spendRule: 'gk' }, { spendRule: 'gk' });
+        const off = core.optimizeSpend({ ...base, spendRule: undefined }, {});
+        const show = r => r ? money(r.optimizedSpend ?? r.spend ?? 0) : 'no viable spend';
+        console.log(pad(id, 26) + rpad((delta * 100).toFixed(0) + '%', 8)
+            + rpad(show(on), 18) + rpad(show(off), 18));
+    }
+}
+
+// (b) The prototype. Same households, twice: the rule as shipped, and the rule with its goal held
+// at the plan's own shape. Benign path first (where only the raises differ), then the shock.
+console.log('\n   (b) gkShapeCeiling: what holding the goal at the shape costs and returns');
+console.log(pad('household', 26) + rpad('path', 8) + rpad('peak real/shape', 17)
+    + rpad('clamped yrs', 13) + rpad('lifetime real spend', 21) + rpad('ending wealth', 15));
+for (const id of PLAN_IDS) {
+    const base = { ...PLANS.get(id).inputs };
+    const years = rowsOf(base) + 3;
+    const delta = 1 + (base.spendChange ?? 0);
+    const shapeReal = y => (base.spendGoal ?? 0) * Math.pow(delta, y);
+    for (const [label, seq] of [['benign', null], ['shock', SHOCK]]) {
+        const ret = new Float64Array(years).fill(base.growth ?? 0.06);
+        if (seq) { ret[1] = seq[0]; ret[2] = seq[1]; }
+        const inf = new Float64Array(years).fill(base.inflation ?? 0.025);
+        const runs = [false, true].map(ceil => simulate({ ...base, spendRule: 'gk',
+            gkShapeCeiling: ceil, returnSequence: ret, inflationSequence: inf }));
+        runs.forEach((res, i) => {
+            const peak = Math.max(...res.log.map((r, y) =>
+                (r.spendGoal / (r.inflationFactor || 1)) / shapeReal(y)));
+            const clamped = res.log.filter(r => (r.gkAdj || '').includes('@shape')).length;
+            console.log(pad(i === 0 ? id : '  with the ceiling', 26) + rpad(label, 8)
+                + rpad(peak.toFixed(3), 17) + rpad(clamped, 13)
+                + rpad(money(res.totals.spendCurrentDollars), 21)
+                + rpad(money(res.finalNW), 15));
+        });
+    }
 }
 
 // ---- predictions -----------------------------------------------------------------------------

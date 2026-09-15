@@ -228,6 +228,41 @@ multiples of their own year-0 values against a 0.80-1.20 band:
 | `long-widowhood` | 0.54-1.01 | 16/38 | 0.50-1.27 | 34/38 | **2027 cut** - published 1.27, shipped 0.99 |
 | `age-gap-ira-heavy-ca` | 0.74-1.10 | 3/25 | 0.45-1.24 | 22/25 | **2027 cut** - published 1.24, shipped 1.00 |
 
+**Why the two move apart, in one household's arithmetic.** The rates are not independent - they are
+related by exactly one factor:
+
+    published rate = shipped rate x (portfolio draw / total spending)
+
+and a deferred benefit is a thing that moves that factor. `bracket-filler-texas`, rule off so neither
+rate is being reacted to:
+
+| year | age | portfolio | spend | SS + pension | portfolio draw | draw ÷ spend | shipped rate | published rate |
+|---|---|---|---|---|---|---|---|---|
+| 2026 | 64 | $3,100,000 | $110,000 | $0 | $145,710 | 132% | 3.55% | 4.70% |
+| 2030 | 68 | $3,503,291 | $121,419 | $0 | $166,862 | 137% | 3.47% | 4.76% |
+| 2031 | 69 | $3,611,341 | $124,455 | $16,971 | $154,203 | 124% | 3.45% | 4.27% |
+| 2032 | 70 | $3,740,659 | $127,566 | $40,589 | $135,011 | 106% | 3.41% | **3.61%** |
+| 2033 | 71 | $3,899,518 | $130,755 | $59,434 | $120,710 | 92% | 3.35% | **3.10%** |
+| 2037 | 75 | $4,715,529 | $144,330 | $65,604 | $133,961 | 93% | 3.06% | 2.84% |
+
+Before the benefits the portfolio funds **everything**, and more: the draw is 132-137% of spending,
+because it also funds the tax on its own withdrawal. Once both benefits are running it funds 92%.
+That collapse is the whole divergence - the published rate falls by a third, 4.70% to 3.10%, while
+the shipped rate drifts from 3.55% to 3.35%.
+
+The reason the shipped rate barely moves is worth stating plainly, because it is the intuition the
+numerator breaks: **a benefit does not reduce spending, it changes who pays for it.** The shipped
+rate's numerator is the spending, so the benefit never enters it; the denominator is the portfolio,
+which is only indirectly affected (it is drawn on more gently, so it grows a little faster). The
+published rate's numerator IS the draw, so the benefit lands on it in full, the year it starts.
+
+Which means the adjustment in the normalized table is not a near miss. On this household the
+published rate reads **0.768 of its year-0 value in 2032 and 0.659 in 2033** - through the 0.80
+prosperity trigger - so published GK calls for a 10% raise, twice, on a household where nothing
+unexpected has happened at all: the benefit starting at 70 was in the plan from the first day. That
+is the article's complaint stated as arithmetic rather than as an opinion, and it is what "a rule
+that judges a rate cannot tell a planned change in that rate from an unplanned one" means.
+
 The two ratios disagree about the direction and the timing of the first adjustment on every
 household, and neither is uniformly the earlier one: the published ratio acts in year 2 on two
 households where the shipped rule sits at 0.99 and 1.00, and the shipped rule reaches 3.59 on

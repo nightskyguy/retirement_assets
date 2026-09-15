@@ -432,6 +432,38 @@ for (const id of PLAN_IDS) {
                  : 'never leaves the band'));
 }
 
+// THE SAME DIFFERENCE, WALKED YEAR BY YEAR on one household, because the normalized table above
+// answers "do they disagree" and not "why". The two rates are related by one factor and only one:
+//
+//     published rate = shipped rate x (portfolio draw / total spending)
+//
+// and that factor is what a deferred benefit moves. Before the benefit the portfolio funds all of
+// the spending and the tax on its own withdrawal, so the factor is ABOVE 1; after it, Social
+// Security funds most of the spending and the factor falls hard. Spending itself does not change -
+// a benefit changes who pays for it, not how much is spent - which is why the shipped rate, whose
+// numerator is the spending, barely moves through the same transition.
+console.log('\n   the two rates year by year on ' + PLAN_IDS[0] + ', rule OFF so neither is reacted to:');
+{
+    const base = { ...PLANS.get(PLAN_IDS[0]).inputs };
+    const run = simulate({ ...base });
+    const port0 = ['IRA1','IRA2','Roth','Roth2','Brokerage','Cash']
+        .reduce((t, k) => t + (base[k] || 0), 0);
+    console.log('   ' + pad('year age', 10) + rpad('portfolio', 13) + rpad('spend', 11)
+        + rpad('SS+pension', 12) + rpad('draw', 12) + rpad('draw/spend', 12)
+        + rpad('shipped', 10) + rpad('published', 11));
+    run.log.forEach((row, i) => {
+        if (i > 11) return;
+        const prev = i === 0 ? port0 : run.log[i - 1].portfolioBalance;
+        const published = row['wdRate%'] || 0;
+        const draw = published * prev;
+        console.log('   ' + pad(row.year + '  ' + row.age1, 10) + rpad(money(prev), 13)
+            + rpad(money(row.spendGoal), 11) + rpad(money((row.SSincome || 0) + (row.pension || 0)), 12)
+            + rpad(money(draw), 12) + rpad((draw / row.spendGoal * 100).toFixed(0) + '%', 12)
+            + rpad(((row.spendGoal / prev) * 100).toFixed(2) + '%', 10)
+            + rpad((published * 100).toFixed(2) + '%', 11));
+    });
+}
+
 // The freeze signal. `sim.gkPriorReturn = yr.baseReturn` is the scenario's BASE (equity) return;
 // published GK freezes on the PORTFOLIO's total return. They differ only where the accounts get
 // their own blended sequences, which is the Historical and stress banks, not GBM.

@@ -4,6 +4,10 @@ Whether the guardrail rule published by Derek Tharp and Justin Fitzpatrick - spe
 **probability of success**, adjust when that probability crosses a rail - can be computed on this
 engine, what it costs, and where it disagrees with the Guardrails rule the tool already ships.
 
+Section 6 answers a question the comparison kept raising and the article did not ask: how far the
+shipped rule is from **Guyton-Klinger as published**. Four divergences, and the first one - the rate
+it tests - is what makes the hatchet invisible to it.
+
 Produced by [`.test_harnesses/rbg_harness.js`](../.test_harnesses/rbg_harness.js) on engine
 v11.1823 (`1842270`), 2026-09-15. Every number below is printed by that script; nothing here is
 estimated by hand.
@@ -41,6 +45,8 @@ others; both are used here, unchanged.
 | **at its target** | the rail measured from the spending that rule would have the household on - the target-PoS number, not the plan's own |
 | **at the plan's own spend** | the same rail measured from the spending the household already has, which is what the shipped rule judges. The controlled comparison |
 | **first-year return** | the single market return in year 1 at which a rule first acts, found by bisection. One number that both rules can be asked for |
+| **published GK** | Guyton-Klinger as published - Guyton 2004, and Guyton and Klinger, "Decision Rules and Maximum Initial Withdrawal Rates", *Journal of Financial Planning*, March 2006. Four rules: a portfolio-management rule for where withdrawals come from, an inflation rule that skips the CPI raise after a negative-return year while the current rate is above the initial one, a capital-preservation rule cutting 10% when the rate rises 20% above its initial value (suspended in the final 15 years), and a prosperity rule raising 10% when it falls 20% below |
+| **the published ratio** | the rate published GK tests: **portfolio withdrawals** divided by the portfolio, against that same ratio in year 0. Distinct from the shipped rule's ratio, which divides **total spending** by the portfolio. The engine computes both; `yr._wdRate` (`optimizer_core.js:4447`), the `wdRate%` column, is the published one |
 | **re-plan** | a plan restarted mid-run: `startInYear`/`startYear` moved forward, balances replaced with the ones the realized year produced, real spending unchanged. Ages and horizon follow from the birth years |
 
 ### The households
@@ -92,12 +98,13 @@ every table in this report.
 | `age-gap-ira-heavy-ca` | 25 | 20,200 | 19.9 | 0.99 |
 
 The run count is exact and the seconds are not: seed 42 reproduces every probability in this report
-run for run, while wall clock moved 1.05 to 1.61 ms/run across repeats on the same machine.
+run for run, while wall clock moved **0.99 to 2.15 ms/run across four repeats** on the same machine.
+Plan against the run count, not the clock.
 
 One probability estimate is 200 engine runs; one spending or rail answer is 9 estimates. The harness
 runs about 100 estimates per household because it also measures things a product would not - two
 rail sets, five spending targets, a controlled column. **The four-step recipe itself is 1 estimate
-plus 5 bisections = 46 estimates = 9,200 runs, 11-15 seconds per household** at these speeds, which
+plus 5 bisections = 46 estimates = 9,200 runs, 9-20 seconds per household** at these speeds, which
 is the same order as the Monte Carlo runs the tab already performs (400 paths x ~123 strategies).
 
 ### 2. The shipped rule is BLIND to the hatchet, not tripped by it
@@ -120,7 +127,8 @@ On a path with the market held perfectly still, the ratio's peak in the pre-bene
 So the defect here is not a false alarm during the blade. It is that **the rule's one reference
 number is set in year 0 and never learns anything** - not that the benefit arrived, not that the
 horizon shortened, not that the plan is now funded from a different mix. Everything in section 3
-follows from that.
+follows from that, and section 6 has the reason: the rate it tests is not the rate Guyton-Klinger
+publishes, and the substituted one is the one the hatchet leaves alone.
 
 ### 3. It acts on smaller market moves than either rail, and cuts much harder than the plan's risk calls for
 
@@ -192,6 +200,89 @@ to quote when the question is "what would the rule do".
 
 ---
 
+### 6. The rule this tool ships is not Guyton-Klinger as published
+
+Four divergences, measured. The first one decides sections 2 and 3, because it is the reason the
+hatchet is invisible to the rule.
+
+**a. It tests a different rate.** Published GK compares portfolio withdrawals to the portfolio. The
+shipped rule compares **total spending** to the portfolio (`optimizer_core.js:2061`) - including the
+part Social Security and pensions pay for. The engine computes the published quantity already,
+`yr._wdRate` (`:4447`), and the rule does not use it.
+
+Both ratios, read off one run with the rule off, at the plan's own deterministic growth and CPI, as
+multiples of their own year-0 values against a 0.80-1.20 band:
+
+| household | shipped ratio | years outside | published ratio | years outside | first divergence |
+|---|---|---|---|---|---|
+| `bracket-filler-texas` | 0.43-1.00 | 18/33 | 0.21-1.02 | 27/33 | **2032 raise** - published 0.77, shipped 0.96 |
+| `mixed-portfolio-couple` | 1.00-3.59 | 26/33 | 0.91-2.30 | 15/33 | 2044 cut - published 1.20, shipped 1.57 |
+| `long-widowhood` | 0.54-1.01 | 16/38 | 0.50-1.27 | 34/38 | **2027 cut** - published 1.27, shipped 0.99 |
+| `age-gap-ira-heavy-ca` | 0.74-1.10 | 3/25 | 0.45-1.24 | 22/25 | **2027 cut** - published 1.24, shipped 1.00 |
+
+The two ratios disagree about the direction and the timing of the first adjustment on every
+household, and neither is uniformly the earlier one: the published ratio acts in year 2 on two
+households where the shipped rule sits at 0.99 and 1.00, and the shipped rule reaches 3.59 on
+`mixed-portfolio-couple` where the published ratio has not yet left the band.
+
+That is the article's critique, reproduced: **under the published numerator these households behave
+exactly as the hatchet predicts** - a cut in the blade years on two of them, and a raise on
+`bracket-filler-texas` in 2032, the year both benefits are running. The shipped rule escapes that by
+testing a rate the hatchet does not move, and pays for it with the year-0 anchor of section 2.
+
+*What the last column is not:* the first year the published ratio leaves the band on a path where no
+adjustment is ever applied. A real published-GK run would adjust at that point and move its own ratio
+afterwards, so this is the first **divergence**, not a simulation of the published rule.
+
+**b. The inflation freeze reads the wrong return.** `sim.gkPriorReturn = yr.baseReturn` (`:4508`) is
+the scenario's base (equity) return; published GK freezes on the portfolio's total return. Identical
+where every account gets the base return, and not otherwise:
+
+| mode | equity-negative path-years | sign disagreement with the blended account return |
+|---|---|---|
+| Historical (bootstrap) | 27.1% | **7.7%** |
+| Synthetic (GBM) | 29.9% | 0.0% |
+
+So in Historical mode roughly one year in thirteen freezes the CPI raise on an equity loss the
+portfolio did not actually take. (The blend here is the average of the per-account sequences the
+engine hands the accounts, which is the closest stand-in this harness has for a portfolio return.)
+
+**c. The capital-preservation cut is never suspended.** Published GK stops applying it in the final
+15 years of the plan; this one applies it to the last year. Latent on the paths measured - on the
+-22%/-13% shock, every cut lands early:
+
+| household | plan years | cuts | of those, in the final 15 | raises |
+|---|---|---|---|---|
+| `bracket-filler-texas` | 33 | 3 | 0 | 6 |
+| `mixed-portfolio-couple` | 33 | 5 | 0 | 1 |
+| `long-widowhood` | 38 | 3 | 0 | 4 |
+| `age-gap-ira-heavy-ca` | 25 | 4 | 0 | 3 |
+
+Early clustering is itself a consequence of (a) and of the year-0 anchor, not evidence that the
+suspension would never matter: a 33-year plan spends 15 of those years inside the window published
+GK exempts.
+
+**d. There is no 6% cap on the inflation raise.** Published GK (2006) caps it. Inert on a
+deterministic 2.5% CPI run; under the Monte Carlo inflation model **11.1% of path-years draw
+inflation above 6%**, worst 11.6%.
+
+**Three more things that are not GK, and are not defects.** The portfolio-management rule - where
+withdrawals come from - is deliberately out of scope: the draw belongs to whichever strategy the
+plan selected, documented at `optimizer_core.js:4607` and in the release that made Guardrails a
+switch rather than a strategy. `spendDelta` compounds on the goal every year (`:4507`), which the
+page discloses as "Spend Delta still applies on top". And `gkSpendStable` (`:5261`) rejects plans the
+rule only holds together by slashing - a guard the Optimizer's searches apply, not a rule a retiree
+follows.
+
+**What to do about it is a decision, not a fix.** The in-page copy describes the implemented
+mechanism accurately - "what you spend for each dollar you have saved" - so the overclaim is the
+label, not the explanation. Switching the numerator to `yr._wdRate` would move the numbers of every
+saved plan that has Guardrails on, and on the evidence above it would make the rule act in the blade
+years, which is the behavior the source article was written to argue against. The cheapest honest
+options are to stop calling it Guyton-Klinger, or to say in the help text which rate it tests.
+
+---
+
 ## Predictions
 
 Registered before the first run, against a 25% lower rail - the number the second-hand summaries
@@ -204,7 +295,7 @@ prediction is scored against both of the article's sets rather than re-aimed.
 | `G-P1` | the shipped rule fires in the pre-benefit years on a benign path | **REFUTED**. Closest approach 1.179 against a 1.20 band; it fires on none of the four. Section 2 is what replaced it |
 | `G-P2` | the shipped rule cuts earlier AND deeper than a risk rail, on every household | **PARTLY**, both rail sets. Earlier: yes, all four. Deeper: no - `mixed-portfolio-couple` reverses it |
 | `G-P3` | the shipped trigger is household-independent; the rail moves 20+ points | **REFUTED**, both sets. 3.8 points against 5.3 (A) and 4.3 (B). Section 5 explains why, and where the variation actually lives |
-| `G-P4` | a full guardrail set costs under 30s per household at 200 paths | **REFUTED** as the harness runs it - 32.0s on the longest household - but the harness measures about twice the recipe. The recipe alone is 9,200 runs, 11-15s |
+| `G-P4` | a full guardrail set costs under 30s per household at 200 paths | **REFUTED** as the harness runs it - 32 to 47s on the longest household across repeats - but the harness measures about twice the recipe. The recipe alone is 9,200 runs, 9-20s |
 
 ---
 

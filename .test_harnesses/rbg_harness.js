@@ -40,6 +40,15 @@
  *   3. THE SHOCK - a fixed -22% / -13% pair in the first two years, the 2000-2002 shape, then the
  *      plan's own growth. What each rule does to real spending, and what it costs over a lifetime.
  *
+ * AND ONE THING THAT IS NOT ABOUT THE ARTICLE (section 5). Everything above compares the rails to
+ * the rule this tool ships. Section 5 asks a different question that the comparison kept raising:
+ * how far the shipped rule is from Guyton-Klinger AS PUBLISHED (Guyton 2004; Guyton and Klinger,
+ * "Decision Rules and Maximum Initial Withdrawal Rates", Journal of Financial Planning, March
+ * 2006). Four divergences are measurable from here - the rate the rule tests, the return the
+ * inflation freeze reads, the missing suspension of the capital-preservation cut in the last 15
+ * years, and the missing 6% cap on the inflation raise - and the first one decides the other
+ * report sections, because it is the reason the hatchet is invisible to the rule.
+ *
  * HOW THE PROBABILITY IS COMPUTED. `buildBanks` / `buildPathInputs` from montecarlo/mc_engine.js -
  * the same per-path machinery the worker and the main-thread fallback use - then `simulate()` per
  * path, counting `totals.success`. Synthetic GBM at the page's own defaults (mu 7%, sigma 12%), one
@@ -360,6 +369,110 @@ for (const c of costs) {
 }
 console.log('   one probability estimate = ' + PATHS + ' engine runs; one spend or rail answer = '
     + STEPS + ' estimates; crashes: ' + CRASHES);
+
+// ---- 5. fidelity to Guyton-Klinger as published ----------------------------------------------
+// Published GK tests PORTFOLIO WITHDRAWALS / PORTFOLIO against the same ratio in year 0. The engine
+// computes that quantity already - `yr._wdRate`, the `wdRate%` column - and the shipped rule does
+// not use it. Both ratios are read off ONE run with the rule OFF, at the plan's own deterministic
+// growth and CPI, so the market cannot move either of them and the difference is the numerator.
+//
+// WHAT THIS CANNOT SHOW, and the honest limit of it: the "would have" column is the first year the
+// published ratio leaves the band, on a path where NO adjustment is ever applied. A real published
+// GK run would adjust at that point and move its own ratio afterwards, so the column is the first
+// DIVERGENCE, not a simulation of the published rule.
+console.log('\n5. FIDELITY TO GUYTON-KLINGER AS PUBLISHED');
+console.log('   the ratio each rule tests, as a multiple of its own year-0 value, band 0.80-1.20');
+console.log(pad('household', 26) + rpad('shipped range', 14) + rpad('outside', 10)
+    + rpad('published range', 18) + rpad('outside', 10) + '   ' + 'first divergence');
+const fid = [];
+for (const id of PLAN_IDS) {
+    const base = { ...PLANS.get(id).inputs };
+    const run = simulate({ ...base });
+    const port0 = ['IRA1','IRA2','Roth','Roth2','Brokerage','Cash']
+        .reduce((t, k) => t + (base[k] || 0), 0);
+    const gk0 = (base.spendGoal ?? 0) / port0;
+    const pub0 = run.log[0]['wdRate%'] || 0;
+    let gkLo = Infinity, gkHi = 0, pubLo = Infinity, pubHi = 0, gkOut = 0, pubOut = 0, first = null;
+    run.log.forEach((row, i) => {
+        const prev = i === 0 ? port0 : run.log[i - 1].portfolioBalance;
+        const gk = (row.spendGoal / prev) / gk0;
+        const pub = pub0 > 0 ? (row['wdRate%'] || 0) / pub0 : 1;
+        gkLo = Math.min(gkLo, gk); gkHi = Math.max(gkHi, gk);
+        pubLo = Math.min(pubLo, pub); pubHi = Math.max(pubHi, pub);
+        if (gk > 1.2 || gk < 0.8) gkOut++;
+        if (pub > 1.2 || pub < 0.8) {
+            pubOut++;
+            if (!first) first = { year: row.year, dir: pub > 1.2 ? 'cut' : 'raise', pub, gk };
+        }
+    });
+    fid.push({ id, gkLo, gkHi, pubLo, pubHi, gkOut, pubOut, first, years: run.log.length });
+    console.log(pad(id, 26) + rpad(gkLo.toFixed(2) + '-' + gkHi.toFixed(2), 14)
+        + rpad(gkOut + '/' + run.log.length, 10)
+        + rpad(pubLo.toFixed(2) + '-' + pubHi.toFixed(2), 18)
+        + rpad(pubOut + '/' + run.log.length, 10) + '   '
+        + (first ? `${first.year} ${first.dir} - published ratio ${first.pub.toFixed(2)}, shipped ${first.gk.toFixed(2)}`
+                 : 'never leaves the band'));
+}
+
+// The freeze signal. `sim.gkPriorReturn = yr.baseReturn` is the scenario's BASE (equity) return;
+// published GK freezes on the PORTFOLIO's total return. They differ only where the accounts get
+// their own blended sequences, which is the Historical and stress banks, not GBM.
+console.log('\n   the inflation freeze reads the base (equity) return, not the portfolio return:');
+{
+    const base = { ...PLANS.get(PLAN_IDS[0]).inputs };
+    const years = 40;
+    const cfg = { years, numPaths: PATHS, seed: SEED, baseInputs: base,
+                  mu: MU, sigma: SIGMA, inflationRate: base.inflation ?? 0.025 };
+    for (const mode of ['bootstrap', 'gbm']) {
+        const banks = buildBanks(cfg, mulberry32(SEED), mode);
+        let disagree = 0, total = 0, neg = 0;
+        for (let p = 0; p < banks.numPaths; p++) {
+            const pi = buildPathInputs(banks, p, years, base, mode);
+            const psa = pi.returnSequencePerAccount;
+            for (let y = 0; y < years; y++) {
+                const eq = pi.returnSequence[y];
+                const blend = psa ? (psa.IRA1[y] + psa.Brokerage[y]) / 2 : eq;
+                total++;
+                if (eq < 0) neg++;
+                if ((eq < 0) !== (blend < 0)) disagree++;
+            }
+        }
+        console.log('   ' + pad(mode, 12) + rpad(pctS(neg / total), 8) + ' of path-years are equity-negative; '
+            + rpad(pctS(disagree / total), 8) + ' disagree in sign with the blended account return');
+    }
+}
+
+// The two omissions that are only visible under the right conditions.
+console.log('\n   capital-preservation cuts inside the final 15 years (published GK suspends them there):');
+for (const id of PLAN_IDS) {
+    const base = { ...PLANS.get(id).inputs };
+    const rows = rowsOf(base);
+    const seq = new Float64Array(rows + 3).fill(base.growth ?? 0.06);
+    seq[1] = SHOCK[0]; seq[2] = SHOCK[1];
+    const inf = new Float64Array(rows + 3).fill(base.inflation ?? 0.025);
+    const on = simulate({ ...base, spendRule: 'gk', returnSequence: seq, inflationSequence: inf });
+    const n = on.log.length;
+    const cuts = on.log.map((r, i) => ({ i, a: r.gkAdj || '' })).filter(x => x.a.includes('cap'));
+    const late = cuts.filter(x => x.i >= n - 15).length;
+    const raises = on.log.filter(r => (r.gkAdj || '').includes('pros')).length;
+    console.log('   ' + pad(id, 26) + n + ' years: ' + cuts.length + ' cuts (' + late
+        + ' in the final 15), ' + raises + ' raises');
+}
+{
+    const base = { ...PLANS.get(PLAN_IDS[0]).inputs };
+    const years = 40;
+    const cfg = { years, numPaths: PATHS, seed: SEED, baseInputs: base,
+                  mu: MU, sigma: SIGMA, inflationRate: base.inflation ?? 0.025 };
+    const banks = buildBanks(cfg, mulberry32(SEED), 'gbm');
+    let over = 0, total = 0, worst = 0;
+    for (let p = 0; p < banks.numPaths; p++) {
+        const seq = buildPathInputs(banks, p, years, base, 'gbm').inflationSequence;
+        if (!seq) continue;
+        for (let y = 0; y < years; y++) { total++; worst = Math.max(worst, seq[y]); if (seq[y] > 0.06) over++; }
+    }
+    console.log('\n   the published 6% cap on the inflation raise, which this engine does not apply: '
+        + pctS(over / total) + ' of path-years draw inflation above 6%, worst ' + pctS(worst));
+}
 
 // ---- predictions -----------------------------------------------------------------------------
 const anyFired = benigns.some(b => b.fired);

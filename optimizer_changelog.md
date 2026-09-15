@@ -17,6 +17,27 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1824"></a>
+
+## 11.1824
+
+**The Guardrails switch is now labelled GK-style.**  
+*No plan's numbers change.*
+
+Guardrails follows a Guyton-Klinger-*style* rule rather than the published one, and the label now
+says so. The switch, its help text and the sentence under it are the only things that moved.
+
+What it tests is the part worth knowing: **your whole spending, measured against your savings**. The
+published rule watches what your portfolio withdraws, which is a different number for anyone whose
+Social Security or pension starts later - their portfolio carries the spending early and hands much
+of it back once the benefit arrives, and the two numbers can disagree about whether the first
+adjustment should be a cut or a raise.
+
+The *Limitations and Restrictions* section of the README names all four places this rule departs,
+including two the published version applies and this one does not: it keeps the spending cut in
+force in the last 15 years of a plan, and it applies your full inflation figure rather than capping
+the raise at 6%.
+
 <a id="11.1823"></a>
 
 ## 11.1823

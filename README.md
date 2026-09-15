@@ -544,6 +544,44 @@ I notice that he is releasing a book with Bill Bernstein (a prolific author of f
 
 [Sequence of Inflation Risk](https://retirementoptimizer.com/articles/Sequence%20of%20Inflation.pdf) - another paper by Jim Otar, and something I learned from my own modeling.  
 
+##### Spending rules: Guyton-Klinger and the risk-based guardrails that answer it
+
+Background for the **Guardrails** switch (GK-style, see *Limitations and Restrictions*) and for
+[`research/RISK_BASED_GUARDRAILS.md`](research/RISK_BASED_GUARDRAILS.md). Grouped by who is making
+the claim, because on this subject that matters.
+
+**The published rule.** Neither is free to read; both are *Journal of Financial Planning*.
+
++ Jonathan Guyton, "Decision Rules and Portfolio Management for Retirees: Is the 'Safe' Initial Withdrawal Rate Too Safe?", *JFP*, October 2004 - the original four decision rules.
++ Jonathan Guyton and William Klinger, "Decision Rules and Maximum Initial Withdrawal Rates", *JFP*, March 2006 - the version everyone cites: the 20% band, the 10% adjustment, the inflation freeze after a down year, the 6% cap on the inflation raise, and the suspension of the capital-preservation cut in a plan's last 15 years.
+
+**The risk-based alternative.** Written by Derek Tharp and Justin Fitzpatrick, who are
+lead researcher at Kitces.com and Chief Innovation Officer at Income Lab respectively - disclosed at
+the foot of the articles, and worth keeping in mind, since Income Lab sells the software that
+implements this.
+
++ [The Retirement Distribution "Hatchet": Using Risk-Based Guardrails To Project Sustainable Cash Flows](https://www.kitces.com/blog/risk-based-monte-carlo-probability-of-success-guardrails-retirement-distribution-hatchet/) (Kitces.com, November 2021) - the source article. The hatchet is the shape of a real portfolio draw: heavy before a deferred Social Security benefit starts, then a permanent drop, then a slow decline. Carries the four-step recipe for setting rails.
++ [Using Probability-Of-Success-Driven Guardrails To Manage Safe Retirement Spending](https://www.kitces.com/blog/probability-of-success-driven-guardrails-advantages-monte-carlo-simulations-analysis-communication/) (Kitces.com) - the mechanics, and where the "express the rails as portfolio balances" idea comes from.
++ [Why Guyton-Klinger Guardrails Are Too Risky For Retirees](https://www.kitces.com/blog/guyton-klinger-guardrails-retirement-income-rules-risk-based/) (Kitces.com) - the case against the withdrawal-rate trigger.
++ [Communicating Retirement Income Guardrails To Alleviate Monte Carlo Stress](https://www.kitces.com/blog/retirement-income-guardrails-monte-carlo-client-communication/) (Kitces.com) - the framing argument: households misread a probability of success, and dollar rails are easier to act on.
++ [Risk-Based Guardrails vs Guyton-Klinger](https://incomelaboratory.com/risk-based-vs-guyton-klinger-guardrails/) (Income Lab) - the vendor's own head-to-head, including the 2007-retiree backtest in which the classic rule calls a 28% income cut by the 2009 trough against 3% for the risk-based one.
++ [How are a Plan's Guardrails and Spending Capacity Calculated?](https://help.incomelaboratory.com/methodology/how-are-a-plans-guardrails-and-spending-capacity-calculated) (Income Lab) - the closest thing to a specification, including that the risk is recalculated monthly.
+
+**Independent work.** All of it is about the *classic* rule; I could find no independent, peer-reviewed
+head-to-head of risk-based guardrails against Guyton-Klinger. That gap is the honest answer to "has
+this been tested by anyone who does not sell it".
+
++ Wade Pfau, *JFP* (2015) - assesses Guyton-Klinger by Monte Carlo and finds deep cuts in the median path. Cited second-hand here: both of the pages above lean on it.
++ [The Ultimate Guide to Safe Withdrawal Rates, Part 11: Six Criteria to Grade Withdrawal Rules](https://earlyretirementnow.com/2017/03/15/the-ultimate-guide-to-safe-withdrawal-rates-part-11-criteria/) (Karsten Jeske, Early Retirement Now, 2017) - the most useful thing on this list for judging any of these rules, because it is a framework rather than a verdict.
++ [Derek Tharp: An Alternative Approach to Calculating In-Retirement Withdrawals](https://www.morningstar.com/financial-advisors/derek-tharp-an-alternative-approach-calculating-in-retirement-withdrawals) (Morningstar, The Long View) - an interview, so the claims are unrefereed, but it is the clearest short statement of the idea.
++ [Risk-Based Guardrail Retirement Withdrawal Strategy](https://www.whitecoatinvestor.com/risk-based-guardrail-retirement-withdrawal-strategy/) (White Coat Investor) - a plain-language walk-through from outside the advisory-software world.
++ [Raspberry's Risk-Based Guardrails Calculator](https://www.bogleheads.org/forum/viewtopic.php?t=460815) (Bogleheads forum) - a do-it-yourself implementation, and the thread argues with itself usefully.
+
+**Also relevant, and cited by all of the above:** David Blanchett's *retirement spending smile* -
+real spending falls through most of retirement before turning up for health costs - which is the
+handle of the hatchet and the reason the *Spend Delta* field exists.
+
+
 ### Some of the Things I Learned About Taxation
 
 #### Late Payment Penalties

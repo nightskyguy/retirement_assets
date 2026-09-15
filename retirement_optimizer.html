@@ -1020,7 +1020,7 @@
 			</div>
 			<details style="margin-bottom:12px;">
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
-				<p>The most recent releases are summarized here (up to five). Full write-ups of every release live in <STRONG><A HREF="optimizer_changelog.md" target="_blank" rel="noopener">optimizer_changelog.md</A></STRONG>. For what the tool does and how to use it, consult the <STRONG><A HREF="https://tools.netcitizen.us/" target="_blank" rel="noopener">README.md</A></STRONG>.</p>
+				<p>The most recent releases are summarized here (up to six). Full write-ups of every release live in <STRONG><A HREF="optimizer_changelog.md" target="_blank" rel="noopener">optimizer_changelog.md</A></STRONG>. For what the tool does and how to use it, consult the <STRONG><A HREF="https://tools.netcitizen.us/" target="_blank" rel="noopener">README.md</A></STRONG>.</p>
 				<!-- VERSION SYNC - read before adding a new entry below:
 				     The number in the NEXT <li><b> you add must also be typed into the <title> tag
 				     in <head> (search the "Version:" comment near the top of the file). The two are
@@ -1037,16 +1037,22 @@
 				     self-evident the moment they look at the thing. Both still belong in
 				     optimizer_changelog.md, which is the record rather than the notice.
 
-				     WHERE THE DETAIL LIVES: this list holds a SHORT summary of the five most recent
+				     WHERE THE DETAIL LIVES: this list holds a SHORT summary of the six most recent
 				     releases only. The full write-up of every release, including everything older
-				     than these five, lives in optimizer_changelog.md at the repo root. When you add
+				     than these six, lives in optimizer_changelog.md at the repo root. When you add
 				     a release: write the detailed entry there first, then a two or three sentence
-				     summary here, then drop the sixth-oldest <li> from this list (its detail is
+				     summary here, then drop the seventh-oldest <li> from this list (its detail is
 				     already preserved in the .md, so nothing is lost). Keep the "Details" link.
-				     Five is a CEILING, not a quota. Releases covering one subject are sometimes
+				     Six is a CEILING, not a quota. Releases covering one subject are sometimes
 				     merged into a single entry (both changelogs together, same version number kept),
-				     which leaves fewer than five here until the next few releases refill it. A short
+				     which leaves fewer than six here until the next few releases refill it. A short
 				     list is not a bug - do not pad it by resurrecting merged entries.
+
+				     THE CEILING IS ENFORCED BY NOBODY, so it drifts. It read five while the list
+				     held eighteen (user, 2026-09-15), which is how a "short summary" became most of
+				     the page's text. If you are reading this because the list is long again: the
+				     entries below the sixth are already written up in full in the .md, so removing
+				     them loses nothing - check the anchor is there, then cut.
 
 				     The banner above copies the FIRST <li>'s innerHTML verbatim, so keeping these
 				     entries short is what keeps the banner short. -->
@@ -1128,132 +1134,6 @@
 					</ul>
 					<a href="optimizer_changelog.md#11.17b1" target="_blank" rel="noopener">Details</a>
 				</li>
-				<li data-flag="behavior"><b>11.1779</b>
-					<strong>Optimizer table: a row you pin to compare against now stays pinned and stays visible.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>It survives a change of <i>Optimize for</i> and is held at the top beside the ⚓ baseline and your own plan, instead of being re-ranked off screen while every column is still measured from it. A new <strong>Extra Conv</strong> column shows what a ⇌ row actually converts.</li>
-					</ul>
-					<strong>Saved plans now remember what they are and what they produced.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>Saving takes an optional <i>note</i> and records the plan's key statistics and the release you were on. An <strong>ⓘ</strong> beside each saved name shows all of it before you load anything, and loading a plan tells you when its numbers no longer match.</li>
-					</ul>
-					<strong>Money you convert now grows for the rest of the year it was converted.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li><strong>Every plan that converts will show a higher ending Roth, and most will show higher End Wealth.</strong> A converted amount used to be added to the Roth only after the year's growth had already been applied, so it earned nothing at all in the year you converted it. Surplus you banked to Cash or Brokerage instead did earn that growth, so the same dollar grew or did not purely because of where it landed. It now grows from the point it is converted, for the remainder of the year.</li>
-					<li>Conversions were being undervalued, so anything that weighs them shifts: Break Even arrives sooner, the <i>Marginal Heirs Tax Rate</i> needed to justify a conversion falls, and <i>Optimize Conversions</i> will suggest larger amounts than it used to.</li>
-					</ul>
-					<strong>End Wealth now prices the leftover IRA at your late-life tax rate, not at one year's.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li><strong>Your End Wealth will change, and no other number will.</strong> The figure always subtracted the tax owed on whatever is left in the IRA, but it used the marginal rate of the plan's very last year. A single year is a poor guide: a year with a large brokerage harvest and a year with a large conversion land in very different brackets, and on one test plan two otherwise-similar plans were priced 7.3 points apart for that reason alone. It now uses the average rate across the plan's final years <i>with the same filing status</i>, so a plan ending in widowhood is priced at the widow's rate rather than at a blend that includes married years. Spending, taxes and withdrawals are untouched.</li>
-					<li>A saved plan or a shared link will report a different End Wealth than it did before this release. Where <i>Optimize for</i> ranks plans by wealth, the order can change with it.</li>
-					</ul>
-					<strong>The IRA Goal greys out for the strategies that ignore it.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>Proportional Withdraw, Ordered and Guyton-Klinger never read the <i>IRA Goal</i>, so no value you type there changes their result. The field now greys out and says so when one of those is selected, and your number is kept for when you switch back. <i>Reduce IRA in N Years</i> uses it as a drawdown target; <i>Fill Fed/IRMAA Bracket</i> and <i>IRA Draw</i> use it as a floor, which only bites once the balance is near it.</li>
-					</ul>
-					<strong>The wealth total is now named for what it is.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>The total on the balances chart and in the Annual Details table read <i>TotalWealth</i>, which sounds like a plain sum of your accounts. It is not one: that figure already subtracts the tax that would be owed on the IRA, and the capital-gains tax on brokerage growth above its basis. It now reads <strong>TotalNetWealth</strong> in both places. No number changes.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.1779" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="behavior"><b>11.171f</b>
-					<strong>The required distribution on an inherited IRA is calculated again.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>For the first year after a spouse's death, no RMD was taken on the IRA the survivor took over. <strong>This broke in 11.168c and is fixed</strong>, so a plan with a death inside it distributes and taxes that year correctly. Spending does not move.</li>
-					</ul>
-					<strong>Earliest Break Even breaks ties on the ending Roth balance, and shows the balances it used.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>Under <i>Optimize for</i> &rarr; <i>Earliest Break Even</i>, two plans that break even in the same year are now ordered by the ending Roth balance, and by End Wealth only when that ties as well. Break-even years are whole years and several strategies often cross in the same one, so the row at the top of that goal can differ, and the ⏱ Earliest Break Even marker in the Best table moves with it. No plan's own numbers change.</li>
-					<li>The table under that goal now shows <strong>Final Roth</strong>, the balance that separates two plans tied on the year, and <strong>Final IRA</strong>, the pre-tax balance the conversions were drawn from. Both follow the Current $ / Future $ switch.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.171f" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="behavior"><b>11.1703</b>
-					<strong>Proportional and Guyton-Klinger plans were withdrawing, and converting, money they did not need.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li><strong>Proportional and Guyton-Klinger strategies contained an error that has been corrected.</strong> The error was small, but meaningful: spending is unchanged to the dollar, while ending wealth moves, in most plans upward and in some down. See the Details for more information.</li>
-					<li><strong>Cash Reserve now defaults to 0</strong> - no cash buffer, every dollar of surplus reinvested in your Brokerage - instead of Off, which left all surplus in Cash. Measured across families and account mixes, 0 is never worse than Off and usually better, and every dollar of buffer costs a little. Type Off to keep the original all-cash routing; a positive amount still keeps that much in Cash. A shared link made before this release that did not carry a Cash Reserve now loads as 0.</li>
-					<li><strong>Annual Details shows where Cash and Brokerage money comes from and goes.</strong> <i>CashReserve</i>, under <i>Balances</i> and <i>Cash Δ</i>, is the part of each year's Cash that is the reserve, so you can see the buffer held, topped up, or broken into; it stays hidden when there is no reserve. Under <i>Brokerage Δ</i>, <i>DRIP</i> is the dividends reinvested that year, <i>SurplusBrok</i> is the surplus the Cash Reserve rule routed into Brokerage, and <i>SumBrokIn</i> is the running total of the two: what was put in rather than earned. <i>BrokerageG</i> is the market return plus the reinvested dividends, and its tooltip now says so. Last year's Brokerage, minus Brokerage-, plus BrokerageG, plus SurplusBrok is this year's balance.</li>
-					<li><strong>The Balances chart has a Scale control: linear, log10 or log2.</strong> A log scale spreads out the small balances that sit in the looks-like-zero band under a large one; log10 puts gridlines at 1k, 10k, 100k, log2 at every doubling. A zero balance has no point on a log axis and shows as a gap in that line.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.1703" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="display"><b>11.16fb</b>
-					<strong>Annual Details now accounts for every dollar that leaves Cash.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>When a Roth conversion's tax is paid from Cash, that money left the account with no column to find it in, so the Cash balance could fall with nothing on screen to account for it. <i>Cash WD</i> does not show it, because that column is the draw that funded spending. Two new columns fix it. <strong>ttlCashWD</strong>, beside <i>Cash WD</i> in the Withdrawals band and in <i>Cash Δ</i>, is every dollar that left Cash in the year: last year's Cash minus ttlCashWD, plus interest and growth, is this year's Cash. <strong>ConvTaxCash</strong>, in <i>Cash Δ</i> and <i>Opp. Cost</i>, breaks out the conversion-tax part. Both stay at zero unless <i>Fund conversion taxes from cash</i> is on.</li>
-					<li>In Annual Details a balance column disappeared when that account sat at zero for the whole plan, so a plan holding no Cash showed no Cash column under <i>Balances</i>. A zero balance is a fact about the plan, and a missing column reads as though the tool does not track the account. <strong>Cash, Brokerage, Cost Basis, Total IRA, Roth, Total Wealth and Spendable now keep their columns whatever the balance.</strong> Columns carrying a flow or a rate, such as a tax that is never paid, still hide when every year is zero. The per-person splits stay as they were, because an all-zero <i>Roth 2</i> means there is no second person rather than an empty account.</li>
-					<li>This release also carries <strong>internal structure changes</strong> that do not affect any number your plan produces.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.16fb" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="behavior"><b>11.16d7</b>
-					<strong>A chosen limit is now filled even after Social Security starts.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li><strong>Behavior change - saved plans and shared links will not reproduce their earlier numbers.</strong> Once Social Security began, a plan on a <i>Fill Fed Bracket</i> or <i>IRMAA Tier</i> limit stopped 15% of the yearly benefit short of the limit it was told to fill, and stayed short every year after; on one $2.8M plan at the 22% limit that was $168,500 of room left unused across 17 years. Only the taxable part of a benefit counts toward these limits, at most 85% of it. <strong>These plans now withdraw and convert more in those years</strong>, and which way that lands on End Wealth still depends on the limit, so re-run the Optimizer before treating a new figure as settled. <strong>ACA Cliff plans are unchanged</strong>, because an ACA cap counts the whole benefit either way.</li>
-					<li><strong>Optimizer row ranking is improved</strong>, especially when <i>Optimize for</i> resulted in a small number of matching strategies, as is common in <i>Roth Conversion Effectiveness</i>. Those unmatched were treated as ties and the ranks assigned were meaningless. That meaninglessness led to rank instability. Now all non-matching rows are sorted by secondary criteria.</li>
-					<li>The <i>Optimize for</i> goal now travels with your plan. A shared link or a saved scenario kept every input but not the goal the table was ranked by, so it reopened on <i>Tax Flexibility</i> and showed a different best plan than the one you sent. Links made before this release are unchanged.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.16d7" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="display"><b>11.16d0</b>
-					<strong>The column a note points at is now one click away.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>Where a note names a column in Annual Details, that name is now a link. Clicking it opens Annual Details, turns on the category the column belongs to, scrolls to the column and highlights it for a moment. <strong>The columns you already had stay exactly as you left them</strong>, and nothing about your plan is recalculated or reloaded. If the column is all zeros, Show Zero is turned on so it is still there to read. The same links are in the How To, on the columns and tabs it sends you to.</li>
-					<li><strong>ACA Cliff plans get a new acaBreach column</strong>, marked Yes in each year the cap could not be held alongside the Spend Goal. It is blank on plans not using an ACA cap, and hidden when it is blank throughout. The note under an ACA cap named this column before it existed.</li>
-					<li>The Documentation tab read <strong>Documentation ❌ tests failed</strong> on every load, over one failed test about the Limit menu's 24% entry. <strong>No calculation was affected, and nothing in the menu was wrong.</strong></li>
-					</ul>
-					<a href="optimizer_changelog.md#11.16d0" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="behavior"><b>11.16b0</b>
-					<strong>Fill Fed Bracket now fills the bracket.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li><strong>Behavior change - saved plans and shared links will not reproduce their earlier numbers.</strong> Picking "22%" stopped short of the top of the 22% bracket by that year's whole deduction, about $32,000 in 2026 for a married couple and more each year after. A chosen bracket is now filled to its top, so these plans withdraw and convert more. <strong>Which way that lands depends on the bracket:</strong> across 71 plans funding the same spending either way, terminal net worth rose in 18 and fell in 49 - a 12% limit typically gains about $158,000, a 22% limit typically loses about $200,000. <strong>So a plan on a 22% or 24% limit will usually show a lower End Wealth than before for the same inputs.</strong> Nothing about your plan got worse - the tool was under-filling the bracket you asked for, and the shortfall it left behind happened to be worth keeping. If End Wealth is why you chose that limit, re-run the Optimizer or try a lower limit alongside it before treating the new figure as settled. IRMAA tiers and the ACA cap are unchanged.</li>
-					<li><strong>A limit broken by required distributions no longer tells you to spend less.</strong> The note under a limit now says which of two causes put the plan over it, because they take opposite advice: spending you can lower, against required distributions and Social Security you cannot. Where required income alone exceeds the limit, the note says lowering the Spend Goal will not change it, names the distribution doing it, and points at converting earlier, a QCD, or a higher limit instead.</li>
-					<li><strong>The Limit menu now says where each limit sits on the other ladder.</strong> A federal bracket limits income after your deduction and an IRMAA tier limits it before, so the two dollar amounts were never comparable. Entries now read <em>22% Fed - $211k (IRMAA Tier 1)</em> and <em>IRMAA Tier 1 - $274k (24% Fed)</em>, with a sentence underneath and a <strong>Show me</strong> picture of both ladders on one income axis. <strong>The amounts were also about 2.8% too high</strong> and are now correct - the top of the 22% bracket reads $211,400 again, which is what your plan was using all along.</li>
-					<li><strong>The plan now tells you when your limit could not be kept.</strong> If your Spend Goal cannot be funded underneath the limit you picked, the plan pays for the spending and draws above the ceiling anyway - and said nothing about it. A note under the limit now names how many years could not stay inside it and by how much at worst. The note under Extra Annual Roth Conversion also said "the federal bracket ceiling" whatever you had picked; it now names the ceiling you chose.</li>
-					<li>A saved plan or shared link naming a withdrawal strategy that is no longer in the Strategy menu used to come up with nothing selected and compute as all zeros. It now loads as Proportional Withdraw +% at its default setting, so you get a working plan you can change rather than a blank one.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.16b0" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="behavior"><b>11.16a9</b>
-					<strong>The Stress Test could report on the wrong plan, and Roth conversions now count toward IRMAA.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li><strong>The Stress Test's first result could be computed against the plan you had before the one you loaded</strong>, if that plan finished loading while the pass was still running. On one shared link it read "runs out of money in 8 of the 36 worst historical periods" where the plan actually survives all 40. <strong>If you have read a Stress Test result on a freshly loaded plan, re-check it.</strong> The chart and survival table below it now also raise the "Out of date" banner in that situation instead of appearing current.</li>
-					<li><strong>Behavior change - saved plans and shared links will not reproduce their earlier numbers.</strong> A Roth conversion was always taxed correctly, but it never counted toward the income Medicare reads two years later to set your surcharge, so a plan could convert year after year and never be billed for it. Plans using Extra Annual Roth Conversion will now show higher IRMAA. This reaches every strategy, not only those targeting a bracket or tier.</li>
-					<li>Two places now warn when a conversion goes past a limit you set: a note under Extra Annual Roth Conversion saying how many years it puts you over, and an upward arrow on any Optimizer row whose conversion lands above its own ceiling.</li>
-					<li><strong>Behavior change:</strong> the ACA income-cap notice no longer appears for non-ACA choices, and no longer names a year already past. That year also decides whether ACA rows appear in the Optimizer, so if you are past the Retirement Start Age you typed, ACA rows may now be correctly withheld.</li>
-					<li>Hovering over an income bar on Income &amp; Expenses now shows the actual income with the approximate tax attributed to it, instead of the scaled bar height.</li>
-					<li>The <strong>Assets at Retirement Age</strong> heading now names the year it means, e.g. "Assets at Retirement Age (2035)". <strong>This tool has no accumulation phase</strong> - it never grows your balances between today and a later retirement year, so if your Retirement Start Age is still ahead of you, forecasting the balances to that year is yours to do. No calculation changed.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.16a9" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="display"><b>11.1691</b>
-					<strong>Current $ view now converts running totals correctly.</strong>
-					In Annual Details, the running-total columns (SumTaxes, SumAdvisorFees, and Spendable, renamed SumSpendable) incorrectly discounted the whole column when viewing in Current $. These rows are now correct. The Monte Carlo tab did not change all displayed fields based on current/future, and it now does. In the Summary the <br>All RMDs<br> figure (and its QCD note), the Advisor Fees per-year average, the Optimizer's Conv Tax column, and the dollar amounts in the Break Even explanation follow the switch too; they always showed future dollars. The Break Even suggestion also follows current/future. While we determine where the decrease in performance occured, The Monte Carlo now runs 400 paths rather than 500.
-					<a href="optimizer_changelog.md#11.1691" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="behavior"><b>11.168e</b>
-					<strong>An advisor fee you can model, and required distributions figured the way the tax rules define them.</strong>
-					<ol>
-					<li>A yearly advisor or fund fee. One field takes either a percentage or a flat CPI-indexed dollar amount and tells you which way it read what you typed. Choose which accounts are billed and which pay. Starts at None, so nothing is charged until you pick accounts; switch back to None to compare a plan with and without it. Money taken from an IRA to pay it is not a taxable distribution.</li>
-					<li>Required minimum distributions now come off your December 31 balance, so they are no longer inflated by part of the current year's growth and no longer shift with the month a withdrawal leaves.</li>
-					</ol>
-					<a href="optimizer_changelog.md#11.168e" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="behavior"><b>11.1671</b>
-					<strong>Your Monte Carlo and Stress Test results may now differ from before, because the model behind them is more accurate.</strong>
-					The main projection uses the fixed growth and inflation figures you supply, so the first two changes below show up only in the Monte Carlo, the Stress Test and a Replay, where every path carries its own returns and inflation. That is to say, those runs now account for real-world behavior of Social Security, tax brackets, pensions and the rest.
-					<ol>
-					<li><strong>When reviewing Monte Carlo paths, you can change the inputs</strong> and watch the result. Test whether a change prevents ruin (a Guyton-Klinger strategy often does, though not always gracefully). <i>Exit replay</i> keeps every edit you made. The forward and back arrows run as one loop through every path the run kept, the ten captured Monte Carlo paths and all the stress scenarios, about 46 in total. Those kept paths are also drawn on the survival chart, though picking one out there can be fiddly where several run together; the ▶️ Replay list beside the headline names them.</li>
-					<li>Social Security and a pension no longer shrink during deflation. The two recover differently: Social Security measures each increase from the last one it paid, per 42 U.S.C. §415(i), so it picks up where it left off; a capped pension keeps what it was paid and starts again from there.</li>
-					<li>The Market Return chart gains a real-return line, the market change after inflation. This one shows on every projection, not only a replay, and it sits flat on a plan with fixed assumptions.</li>
-					</ol>
-					<a href="optimizer_changelog.md#11.1671" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li><b>11.1657</b> <strong>Walk one Monte Carlo path through your plan.</strong> Every Monte Carlo run now captures ten of its paths, from the worst outcome to the best, and the Stress Test keeps every scenario. A ▶️ Replay picker beside the survival headline lets you choose any captured path, and each Stress Test row has its own ▶️. The chosen sequence plays through Charts and Annual Details: your own plan and settings, but that path's market returns and inflation applied year by year. The balance chart overlays a dashed "Plan (steady assumptions)" line so you can see where the path pulls away from the plan's expected trajectory, and a new Market chart view shows the year-by-year returns and inflation behind it, with what day-one $10,000 still buys. A banner names what is playing and steps to the previous or next path with ◀ ▶. Exit with the banner's button; editing any input or leaving Charts and Annual Details also returns you to your plan's own projection. Note: taxes and Social Security are not yet adjusted for variable inflation - tax brackets, IRMAA tiers, and the Social Security COLA all still index at the fixed CPI input, so a high-inflation path overstates tax and understates Social Security income. <a href="optimizer_changelog.md#11.1657" target="_blank" rel="noopener">Details</a></li>
-				<li><b>11.1642</b> <strong>Roth can fill a spending shortfall, Ordered offers three more draw orders, and Monte Carlo always runs yours.</strong> A new switch, <i>Roth before Brokerage</i>, sits under Cycle Brokerage. Off by default, which is what the tool has always done: a year needing more than your strategy withdraws fills the gap from Cash, then Brokerage, then Roth. On, Roth is taken ahead of the brokerage account, with Cash still first either way. That avoids realizing capital gains but spends the account that grows tax-free, and it cuts both ways: across 60 test plans it gained as much as $471,000 and lost as much as $634,000, and it was negative in 26 of them. Your numbers do not move until you turn it on, and the <i>Ordered</i> strategy greys it out because it draws in the sequence you chose. The Optimizer sweeps both, so every strategy except <i>Ordered</i> appears a second time in the table marked 🅡, whenever you hold Roth. The <i>Ordered</i> strategy adds three draw sequences - <i>Cash→Brok→Roth→IRA</i>, <i>Cash→IRA→Brok→Roth</i> and <i>Brok→Cash→IRA→Roth</i> - and lists the six with the ones that most often came out ahead in testing first; Cash→Brok→Roth→IRA was the best sequence in more test plans than any of the three previously on offer, and in one plan it was worth $858,000 more than the best of them. <i>Monte Carlo</i> now always runs your own plan and marks it: <i>Compare every strategy</i> could leave it out of the run and emphasize a different one in the chart, which affected the <i>Ordered</i> sequences, <i>Guyton-Klinger</i>, and any plan set to an IRMAA tier or an ACA cliff. Your plan is now always in the table, pinned to the top and drawn in the chart, even when the sweep does not cover that strategy, and clicking a row loads what the row says. Separately, the Optimizer now tries five <i>Reduce IRA</i> lengths (3, 7, 11, 17 and 23 years) instead of sixteen and five <i>IRA Draw</i> percentages (5, 7, 9, 11 and 13%) instead of eight, which makes a run about a third shorter and the table easier to read; your own setting is still scored whichever you pick. <a href="optimizer_changelog.md#11.1642" target="_blank" rel="noopener">Details</a></li>
 				</ul>
 				<script>
 					/* The Version stat reads the number back out of the <title> tag rather than

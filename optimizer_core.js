@@ -2047,10 +2047,16 @@ function resolveSpendTarget(sim, yr) {
         if (y === 0) {
             sim.gkIWR = sim.spendGoal / sim.prevPortfolio;
             sim.gkAdjLabel = '';
+            sim.gkShapeGoal = sim.spendGoal;
         } else {
             const _guard  = inputs.gkGuard  ?? 0.20;
             const _adjP   = inputs.gkAdjPct ?? 0.10;
             const labels  = [];
+            // The shape takes CPI EVERY year, including a year the rule freezes the goal's raise.
+            // It is the path the plan would have followed with the rule off, and the rule's own
+            // reactions are exactly what it must not contain. Spend Delta is applied to it in
+            // endYear, beside the goal's, so the two advance together.
+            if (sim.gkShapeGoal != null) sim.gkShapeGoal *= (1 + yr.yearInflation);
             // Inflation Rule: skip CPI if prior return negative AND already over IWR
             if (sim.gkPriorReturn < 0 && sim.spendGoal / sim.prevPortfolio > sim.gkIWR) {
                 labels.push('no-CPI');
@@ -2065,6 +2071,25 @@ function resolveSpendTarget(sim, yr) {
             } else if (_cwr < sim.gkIWR * (1 - _guard)) {
                 sim.spendGoal *= (1 + _adjP);
                 labels.push(`+${(_adjP * 100).toFixed(0)}%pros`);
+            }
+            // P127 PROTOTYPE, `gkShapeCeiling`, DEFAULT OFF. Holds the goal at the plan's own
+            // spending shape, so the rule can undo its own cuts but never spend above what the
+            // household asked for (user, 2026-09-15: "the spend goal with Delta is the 'would have
+            // spent' ... if GK spending increases would rise above the spend shape, those increases
+            // can be trimmed to the spend shape").
+            //
+            // ONLY THE PROSPERITY RAISE CAN BREACH THE SHAPE, which is why this is a ceiling and not
+            // a band: CPI moves the goal and the shape by the same factor, the freeze moves the goal
+            // DOWN against the shape, and a cut moves it further down. So the clamp fires only after
+            // a raise, and it makes the rule asymmetric on purpose - cuts react to the portfolio,
+            // raises can do no more than walk the goal back up to the plan.
+            //
+            // NOT WIRED TO THE PAGE, the sweep or the Optimizer: turning it on changes the spending
+            // of every plan that has Guardrails on, so it stays an engine input until someone
+            // decides that. `research/RISK_BASED_GUARDRAILS.md` section 7 measures what it costs.
+            if (inputs.gkShapeCeiling && sim.gkShapeGoal != null && sim.spendGoal > sim.gkShapeGoal) {
+                sim.spendGoal = sim.gkShapeGoal;
+                labels.push('@shape');
             }
             sim.gkAdjLabel = labels.join(' ') || '';
         }
@@ -4507,6 +4532,9 @@ function endYear(sim, yr) {
     if (_usesGKSpendRule(inputs)) {
         sim.gkPriorReturn = yr.baseReturn;
         sim.spendGoal = sim.spendGoal * sim.spendDelta;
+        // The shape is the goal's twin under Spend Delta; only CPI is applied elsewhere (the rule
+        // applies it at the start of the next year, and the shape takes it there unconditionally).
+        if (sim.gkShapeGoal != null) sim.gkShapeGoal = sim.gkShapeGoal * sim.spendDelta;
     } else {
         sim.spendGoal = sim.spendGoal * sim.spendDelta * (1 + yr.yearInflation);
     }
@@ -4749,6 +4777,11 @@ function simulate(inputs) {
     let gkIWR = null;
     let gkPriorReturn = 0;
     let gkAdjLabel = '';
+    // P127 prototype. The plan's OWN spending path - year-0 goal, carried forward by Spend Delta
+    // and CPI and by nothing else - kept beside the goal the rule is adjusting. Null until the
+    // rule's first year sets it, and only the rule maintains it, so a run without the rule pays
+    // nothing for it. See the ceiling in resolveSpendTarget for what it is for.
+    let gkShapeGoal = null;
 
     // Sim-level state shared across years (and with the phase functions being split out of
     // this loop). Fields listed after `totals` are reassigned as the simulation advances, so
@@ -4761,7 +4794,7 @@ function simulate(inputs) {
         fixedWithdrawal, spendDelta, spendGoal,
         nominalTaxRate, capitalGainsRate,
         subCycleIRAYears, prevPortfolio,
-        gkIWR, gkPriorReturn, gkAdjLabel,
+        gkIWR, gkPriorReturn, gkAdjLabel, gkShapeGoal,
         // Tax-rate creep: blank/0 start year means the creep begins with the plan's first year.
         // Never advanced - resolveHousehold() derives each year's factor from the calendar year.
         creepStartYear: inputs.taxCreepStartYear > 0 ? inputs.taxCreepStartYear : currentYear,
@@ -5757,6 +5790,7 @@ const STRATEGY_SELECTION_FIELDS = Object.freeze([
     'strategy', 'cyclicEnabled', 'cyclicOrder', 'fundConversionWithCash', 'rothGapFill',
     'propWithdraw', 'nYears', 'stratRate', 'stratIRMAATier', 'stratACAMultiple',
     'iraWithdrawPct', 'orderedSeq', 'gkGuard', 'gkAdjPct', 'splitWeights', 'spendRule',
+    'gkShapeCeiling',
 ]);
 function selectionOf(p) {
     const o = {};
@@ -5786,6 +5820,10 @@ function sameStrategySelection(a, b) {
     if (rule(a.spendRule) !== rule(b.spendRule)) return false;
     if (rule(a.spendRule) === 'gk'
         && !(near(a.gkGuard ?? 0.20, b.gkGuard ?? 0.20) && near(a.gkAdjPct ?? 0.10, b.gkAdjPct ?? 0.10))) return false;
+    // P127. The shape ceiling is part of the identity for the same reason the band is: with it on
+    // the rule delivers different spending. Nothing sets it yet, so every shipped row compares
+    // equal here - this exists so that stops being true safely.
+    if (rule(a.spendRule) === 'gk' && !!a.gkShapeCeiling !== !!b.gkShapeCeiling) return false;
     switch (a.strategy) {
         case 'propwd':   return near(a.propWithdraw,   b.propWithdraw);
         case 'fixed':    return a.nYears === b.nYears;

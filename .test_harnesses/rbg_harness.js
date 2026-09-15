@@ -40,6 +40,33 @@
  *   3. THE SHOCK - a fixed -22% / -13% pair in the first two years, the 2000-2002 shape, then the
  *      plan's own growth. What each rule does to real spending, and what it costs over a lifetime.
  *
+ * AND ONE THING THAT IS NOT ABOUT THE ARTICLE (printed as section 5; it is section 6 of the
+ * report). Everything above compares the rails to the rule this tool ships. This one asks a
+ * different question that the comparison kept raising:
+ * how far the shipped rule is from Guyton-Klinger AS PUBLISHED (Guyton 2004; Guyton and Klinger,
+ * "Decision Rules and Maximum Initial Withdrawal Rates", Journal of Financial Planning, March
+ * 2006). Four divergences are measurable from here - the rate the rule tests, the return the
+ * inflation freeze reads, the missing suspension of the capital-preservation cut in the last 15
+ * years, and the missing 6% cap on the inflation raise - and the first one decides the other
+ * report sections, because it is the reason the hatchet is invisible to the rule.
+ *
+ * AND ONE MORE (printed as section 6; section 7 of the report), asked by the user on 2026-09-15:
+ * how the rule COMPOSES with Spend Delta, the planned real drift the household sets. Two things
+ * are measured. `gkSpendStable`
+ * (optimizer_core.js:5261), the filter the Optimizer's spend and conversion searches apply, reads
+ * the finished run's minimum real spendGoal against year 0 - and spendGoal carries the delta, so
+ * the filter cannot tell a planned decline from a rule-driven slash. And `gkShapeCeiling`, the P127
+ * prototype, holds the goal at the plan's own shape so raises can only undo prior cuts; what it
+ * costs in spending and returns in ending wealth is priced here rather than argued.
+ *
+ * AND ONE LAST ONE (printed as section 7; section 8 of the report), asked by the user on
+ * 2026-09-15: "early spending is significantly more valuable than late spending". Every spending
+ * total above adds year 1 and year 30 at par, which silently prices a cut in the blade years the
+ * same as one at 90. Section 7 re-scores the same runs with the year's spending discounted at 0%,
+ * 3% and 5%, and reports where in the plan each rule's effect actually lands. The discount rate is
+ * a PREFERENCE, not a measurement, which is why three of them are reported and none is called the
+ * right one.
+ *
  * HOW THE PROBABILITY IS COMPUTED. `buildBanks` / `buildPathInputs` from montecarlo/mc_engine.js -
  * the same per-path machinery the worker and the main-thread fallback use - then `simulate()` per
  * path, counting `totals.success`. Synthetic GBM at the page's own defaults (mu 7%, sigma 12%), one
@@ -360,6 +387,252 @@ for (const c of costs) {
 }
 console.log('   one probability estimate = ' + PATHS + ' engine runs; one spend or rail answer = '
     + STEPS + ' estimates; crashes: ' + CRASHES);
+
+// ---- 5. fidelity to Guyton-Klinger as published (report section 6) ----------------------------
+// Published GK tests PORTFOLIO WITHDRAWALS / PORTFOLIO against the same ratio in year 0. The engine
+// computes that quantity already - `yr._wdRate`, the `wdRate%` column - and the shipped rule does
+// not use it. Both ratios are read off ONE run with the rule OFF, at the plan's own deterministic
+// growth and CPI, so the market cannot move either of them and the difference is the numerator.
+//
+// WHAT THIS CANNOT SHOW, and the honest limit of it: the "would have" column is the first year the
+// published ratio leaves the band, on a path where NO adjustment is ever applied. A real published
+// GK run would adjust at that point and move its own ratio afterwards, so the column is the first
+// DIVERGENCE, not a simulation of the published rule.
+console.log('\n5. FIDELITY TO GUYTON-KLINGER AS PUBLISHED  (report section 6)');
+console.log('   the ratio each rule tests, as a multiple of its own year-0 value, band 0.80-1.20');
+console.log(pad('household', 26) + rpad('shipped range', 14) + rpad('outside', 10)
+    + rpad('published range', 18) + rpad('outside', 10) + '   ' + 'first divergence');
+const fid = [];
+for (const id of PLAN_IDS) {
+    const base = { ...PLANS.get(id).inputs };
+    const run = simulate({ ...base });
+    const port0 = ['IRA1','IRA2','Roth','Roth2','Brokerage','Cash']
+        .reduce((t, k) => t + (base[k] || 0), 0);
+    const gk0 = (base.spendGoal ?? 0) / port0;
+    const pub0 = run.log[0]['wdRate%'] || 0;
+    let gkLo = Infinity, gkHi = 0, pubLo = Infinity, pubHi = 0, gkOut = 0, pubOut = 0, first = null;
+    run.log.forEach((row, i) => {
+        const prev = i === 0 ? port0 : run.log[i - 1].portfolioBalance;
+        const gk = (row.spendGoal / prev) / gk0;
+        const pub = pub0 > 0 ? (row['wdRate%'] || 0) / pub0 : 1;
+        gkLo = Math.min(gkLo, gk); gkHi = Math.max(gkHi, gk);
+        pubLo = Math.min(pubLo, pub); pubHi = Math.max(pubHi, pub);
+        if (gk > 1.2 || gk < 0.8) gkOut++;
+        if (pub > 1.2 || pub < 0.8) {
+            pubOut++;
+            if (!first) first = { year: row.year, dir: pub > 1.2 ? 'cut' : 'raise', pub, gk };
+        }
+    });
+    fid.push({ id, gkLo, gkHi, pubLo, pubHi, gkOut, pubOut, first, years: run.log.length });
+    console.log(pad(id, 26) + rpad(gkLo.toFixed(2) + '-' + gkHi.toFixed(2), 14)
+        + rpad(gkOut + '/' + run.log.length, 10)
+        + rpad(pubLo.toFixed(2) + '-' + pubHi.toFixed(2), 18)
+        + rpad(pubOut + '/' + run.log.length, 10) + '   '
+        + (first ? `${first.year} ${first.dir} - published ratio ${first.pub.toFixed(2)}, shipped ${first.gk.toFixed(2)}`
+                 : 'never leaves the band'));
+}
+
+// THE SAME DIFFERENCE, WALKED YEAR BY YEAR on one household, because the normalized table above
+// answers "do they disagree" and not "why". The two rates are related by one factor and only one:
+//
+//     published rate = shipped rate x (portfolio draw / total spending)
+//
+// and that factor is what a deferred benefit moves. Before the benefit the portfolio funds all of
+// the spending and the tax on its own withdrawal, so the factor is ABOVE 1; after it, Social
+// Security funds most of the spending and the factor falls hard. Spending itself does not change -
+// a benefit changes who pays for it, not how much is spent - which is why the shipped rate, whose
+// numerator is the spending, barely moves through the same transition.
+console.log('\n   the two rates year by year on ' + PLAN_IDS[0] + ', rule OFF so neither is reacted to:');
+{
+    const base = { ...PLANS.get(PLAN_IDS[0]).inputs };
+    const run = simulate({ ...base });
+    const port0 = ['IRA1','IRA2','Roth','Roth2','Brokerage','Cash']
+        .reduce((t, k) => t + (base[k] || 0), 0);
+    console.log('   ' + pad('year age', 10) + rpad('portfolio', 13) + rpad('spend', 11)
+        + rpad('SS+pension', 12) + rpad('draw', 12) + rpad('draw/spend', 12)
+        + rpad('shipped', 10) + rpad('published', 11));
+    run.log.forEach((row, i) => {
+        if (i > 11) return;
+        const prev = i === 0 ? port0 : run.log[i - 1].portfolioBalance;
+        const published = row['wdRate%'] || 0;
+        const draw = published * prev;
+        console.log('   ' + pad(row.year + '  ' + row.age1, 10) + rpad(money(prev), 13)
+            + rpad(money(row.spendGoal), 11) + rpad(money((row.SSincome || 0) + (row.pension || 0)), 12)
+            + rpad(money(draw), 12) + rpad((draw / row.spendGoal * 100).toFixed(0) + '%', 12)
+            + rpad(((row.spendGoal / prev) * 100).toFixed(2) + '%', 10)
+            + rpad((published * 100).toFixed(2) + '%', 11));
+    });
+}
+
+// The freeze signal. `sim.gkPriorReturn = yr.baseReturn` is the scenario's BASE (equity) return;
+// published GK freezes on the PORTFOLIO's total return. They differ only where the accounts get
+// their own blended sequences, which is the Historical and stress banks, not GBM.
+console.log('\n   the inflation freeze reads the base (equity) return, not the portfolio return:');
+{
+    const base = { ...PLANS.get(PLAN_IDS[0]).inputs };
+    const years = 40;
+    const cfg = { years, numPaths: PATHS, seed: SEED, baseInputs: base,
+                  mu: MU, sigma: SIGMA, inflationRate: base.inflation ?? 0.025 };
+    for (const mode of ['bootstrap', 'gbm']) {
+        const banks = buildBanks(cfg, mulberry32(SEED), mode);
+        let disagree = 0, total = 0, neg = 0;
+        for (let p = 0; p < banks.numPaths; p++) {
+            const pi = buildPathInputs(banks, p, years, base, mode);
+            const psa = pi.returnSequencePerAccount;
+            for (let y = 0; y < years; y++) {
+                const eq = pi.returnSequence[y];
+                const blend = psa ? (psa.IRA1[y] + psa.Brokerage[y]) / 2 : eq;
+                total++;
+                if (eq < 0) neg++;
+                if ((eq < 0) !== (blend < 0)) disagree++;
+            }
+        }
+        console.log('   ' + pad(mode, 12) + rpad(pctS(neg / total), 8) + ' of path-years are equity-negative; '
+            + rpad(pctS(disagree / total), 8) + ' disagree in sign with the blended account return');
+    }
+}
+
+// The two omissions that are only visible under the right conditions.
+console.log('\n   capital-preservation cuts inside the final 15 years (published GK suspends them there):');
+for (const id of PLAN_IDS) {
+    const base = { ...PLANS.get(id).inputs };
+    const rows = rowsOf(base);
+    const seq = new Float64Array(rows + 3).fill(base.growth ?? 0.06);
+    seq[1] = SHOCK[0]; seq[2] = SHOCK[1];
+    const inf = new Float64Array(rows + 3).fill(base.inflation ?? 0.025);
+    const on = simulate({ ...base, spendRule: 'gk', returnSequence: seq, inflationSequence: inf });
+    const n = on.log.length;
+    const cuts = on.log.map((r, i) => ({ i, a: r.gkAdj || '' })).filter(x => x.a.includes('cap'));
+    const late = cuts.filter(x => x.i >= n - 15).length;
+    const raises = on.log.filter(r => (r.gkAdj || '').includes('pros')).length;
+    console.log('   ' + pad(id, 26) + n + ' years: ' + cuts.length + ' cuts (' + late
+        + ' in the final 15), ' + raises + ' raises');
+}
+{
+    const base = { ...PLANS.get(PLAN_IDS[0]).inputs };
+    const years = 40;
+    const cfg = { years, numPaths: PATHS, seed: SEED, baseInputs: base,
+                  mu: MU, sigma: SIGMA, inflationRate: base.inflation ?? 0.025 };
+    const banks = buildBanks(cfg, mulberry32(SEED), 'gbm');
+    let over = 0, total = 0, worst = 0;
+    for (let p = 0; p < banks.numPaths; p++) {
+        const seq = buildPathInputs(banks, p, years, base, 'gbm').inflationSequence;
+        if (!seq) continue;
+        for (let y = 0; y < years; y++) { total++; worst = Math.max(worst, seq[y]); if (seq[y] > 0.06) over++; }
+    }
+    console.log('\n   the published 6% cap on the inflation raise, which this engine does not apply: '
+        + pctS(over / total) + ' of path-years draw inflation above 6%, worst ' + pctS(worst));
+}
+
+// ---- 6. how the rule composes with Spend Delta (report section 7) -----------------------------
+// (a) The filter. gkSpendStable rejects a candidate spend or conversion when the run's minimum real
+// spendGoal falls more than gkGuard below year 0. Run at the plan's own growth with NO shock, so a
+// household that trips it with zero cuts has been rejected for its own planned shape.
+console.log('\n6. HOW THE RULE COMPOSES WITH SPEND DELTA  (report section 7)');
+console.log('   (a) gkSpendStable, the Optimizer\'s search filter, against a planned decline');
+console.log('       flat returns at the plan\'s own growth, so any cut is the rule reacting to nothing');
+console.log(pad('household', 26) + rpad('delta', 8) + rpad('GK cuts', 10)
+    + rpad('min real / year 0', 19) + rpad('gkSpendStable', 15));
+for (const id of PLAN_IDS) {
+    for (const delta of [0, -0.01]) {
+        const base = { ...PLANS.get(id).inputs, spendChange: delta };
+        const years = rowsOf(base) + 3;
+        const flat = new Float64Array(years).fill(base.growth ?? 0.06);
+        const flatInf = new Float64Array(years).fill(base.inflation ?? 0.025);
+        const res = simulate({ ...base, spendRule: 'gk', returnSequence: flat, inflationSequence: flatInf });
+        const real = r => r.spendGoal / (r.inflationFactor || 1);
+        const ratio = Math.min(...res.log.map(real)) / real(res.log[0]);
+        const cuts = res.log.filter(r => (r.gkAdj || '').includes('cap')).length;
+        console.log(pad(id, 26) + rpad((delta * 100).toFixed(0) + '%', 8) + rpad(cuts, 10)
+            + rpad(ratio.toFixed(3), 19) + rpad(core.gkSpendStable(res, { spendRule: 'gk' }, base) ? 'accepted' : 'REJECTED', 15));
+    }
+}
+console.log('   a -1%/year shape alone crosses the 0.80 floor at year '
+    + Math.ceil(Math.log(0.8) / Math.log(0.99)) + ', with no market move and no cut.');
+
+// What the filter does to the search it guards. optimizeSpend drives its binary search on
+// passes(), and passes() fails whenever gkSpendStable does - so a household whose SHAPE breaches
+// the floor can end the search with no answer at all, at any spend level.
+console.log('\n       what that costs the search that uses it (optimizeSpend, the plan\'s own strategy):');
+console.log(pad('household', 26) + rpad('delta', 8) + rpad('Guardrails on', 18) + rpad('Guardrails off', 18));
+for (const id of PLAN_IDS) {
+    for (const delta of [0, -0.01]) {
+        const base = { ...PLANS.get(id).inputs, spendChange: delta };
+        const on  = core.optimizeSpend({ ...base, spendRule: 'gk' }, { spendRule: 'gk' });
+        const off = core.optimizeSpend({ ...base, spendRule: undefined }, {});
+        const show = r => r ? money(r.optimizedSpend ?? r.spend ?? 0) : 'no viable spend';
+        console.log(pad(id, 26) + rpad((delta * 100).toFixed(0) + '%', 8)
+            + rpad(show(on), 18) + rpad(show(off), 18));
+    }
+}
+
+// (b) The prototype. Same households, twice: the rule as shipped, and the rule with its goal held
+// at the plan's own shape. Benign path first (where only the raises differ), then the shock.
+console.log('\n   (b) gkShapeCeiling: what holding the goal at the shape costs and returns');
+console.log(pad('household', 26) + rpad('path', 8) + rpad('peak real/shape', 17)
+    + rpad('clamped yrs', 13) + rpad('lifetime real spend', 21) + rpad('ending wealth', 15));
+for (const id of PLAN_IDS) {
+    const base = { ...PLANS.get(id).inputs };
+    const years = rowsOf(base) + 3;
+    const delta = 1 + (base.spendChange ?? 0);
+    const shapeReal = y => (base.spendGoal ?? 0) * Math.pow(delta, y);
+    for (const [label, seq] of [['benign', null], ['shock', SHOCK]]) {
+        const ret = new Float64Array(years).fill(base.growth ?? 0.06);
+        if (seq) { ret[1] = seq[0]; ret[2] = seq[1]; }
+        const inf = new Float64Array(years).fill(base.inflation ?? 0.025);
+        const runs = [false, true].map(ceil => simulate({ ...base, spendRule: 'gk',
+            gkShapeCeiling: ceil, returnSequence: ret, inflationSequence: inf }));
+        runs.forEach((res, i) => {
+            const peak = Math.max(...res.log.map((r, y) =>
+                (r.spendGoal / (r.inflationFactor || 1)) / shapeReal(y)));
+            const clamped = res.log.filter(r => (r.gkAdj || '').includes('@shape')).length;
+            console.log(pad(i === 0 ? id : '  with the ceiling', 26) + rpad(label, 8)
+                + rpad(peak.toFixed(3), 17) + rpad(clamped, 13)
+                + rpad(money(res.totals.spendCurrentDollars), 21)
+                + rpad(money(res.finalNW), 15));
+        });
+    }
+}
+
+// ---- 7. early spending against late spending (report section 8) -------------------------------
+// Per-year real spending reconstructed as (spendGoal + shortfall) / inflationFactor, which sums to
+// totals.spendCurrentDollars to the dollar on every run measured - the engine's own accumulator is
+// the same expression (optimizer_core.js:4386), so this is its per-year decomposition rather than a
+// second definition of delivered spending.
+console.log('\n7. EARLY SPENDING AGAINST LATE SPENDING  (report section 8)');
+console.log('   the same runs, with the year\'s real spending discounted at 0%, 3% and 5%');
+console.log('   a discount rate is a preference, not a measurement: three are shown, none is the right one');
+const DISCOUNTS = [0, 0.03, 0.05];
+function spendProfile(res) {
+    const real = res.log.map(r => (r.spendGoal + (r.shortfall || 0)) / (r.inflationFactor || 1));
+    const total = d => real.reduce((t, v, y) => t + v / Math.pow(1 + d, y), 0);
+    const first10 = real.slice(0, 10).reduce((t, v) => t + v, 0);
+    return { real, totals: DISCOUNTS.map(total), first10, all: total(0) };
+}
+console.log('\n   what the rule costs, and what the ceiling costs, by discount rate');
+console.log(pad('household', 26) + rpad('path', 8) + rpad('comparison', 24)
+    + DISCOUNTS.map(d => rpad('at ' + (d * 100) + '%', 13)).join('') + rpad('first 10 yrs', 16));
+for (const id of PLAN_IDS) {
+    const base = { ...PLANS.get(id).inputs };
+    const years = rowsOf(base) + 3;
+    const inf = new Float64Array(years).fill(base.inflation ?? 0.025);
+    for (const [label, sh] of [['benign', null], ['shock', SHOCK]]) {
+        const ret = new Float64Array(years).fill(base.growth ?? 0.06);
+        if (sh) { ret[1] = sh[0]; ret[2] = sh[1]; }
+        const common = { returnSequence: ret, inflationSequence: inf };
+        const off  = spendProfile(simulate({ ...base, ...common }));
+        const rule = spendProfile(simulate({ ...base, spendRule: 'gk', ...common }));
+        const ceil = spendProfile(simulate({ ...base, spendRule: 'gk', gkShapeCeiling: true, ...common }));
+        const line = (name, a, b) => pad('', 26) + rpad(label, 8) + rpad(name, 24)
+            + DISCOUNTS.map((d, i) => rpad(((a.totals[i] / b.totals[i] - 1) * 100).toFixed(1) + '%', 13)).join('')
+            + rpad(((a.first10 / b.first10 - 1) * 100).toFixed(1) + '%', 16);
+        console.log(pad(id, 26) + rpad(label, 8) + rpad('no rule, real spend', 24)
+            + DISCOUNTS.map((d, i) => rpad(money(off.totals[i]), 13)).join('')
+            + rpad(money(off.first10), 16));
+        console.log(line('the rule vs no rule', rule, off));
+        console.log(line('the ceiling vs not', ceil, rule));
+    }
+}
 
 // ---- predictions -----------------------------------------------------------------------------
 const anyFired = benigns.some(b => b.fired);

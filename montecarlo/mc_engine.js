@@ -36,6 +36,19 @@ function _hooksOf(hooks) {
     };
 }
 
+// THE survival test: a year is ruined when its year-end portfolio cannot cover that year's required
+// draw (spending less guaranteed income). The survival rate on the Monte Carlo tab is built from it
+// (runPass below), and so is every probability the risk-based rails solve for (rails_engine.js), so
+// a rail at 90% means what the tab would report as 90%. One definition, not two.
+//
+// It is NOT `totals.success`, which also fails a year whose spending went unfunded. The two were
+// measured to agree on every one of 1,000 paths across five bank households, but they are different
+// statements and this one is the tab's.
+function yearIsRuined(row) {
+    const required = Math.max(0, row.spendGoal - (row.guaranteedIncome ?? 0));
+    return (row.portfolioBalance ?? 0) < required;
+}
+
 // The per-path bundle handed to simulate(): the equity return sequence, the per-account sequences
 // blended from the asset banks, and the inflation sequence. Split out because the Monte Carlo
 // replay (P69) needs to rebuild the exact inputs of one path and must not do it from a second copy
@@ -443,10 +456,9 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
                 const row      = log[y];
                 lastFactor = row.inflationFactor || 1;
                 factors[p * years + y] = lastFactor;
-                const required = Math.max(0, row.spendGoal - (row.guaranteedIncome ?? 0));
                 const balance  = row.portfolioBalance ?? 0;
 
-                if (balance < required) {
+                if (yearIsRuined(row)) {
                     ruined = true;
                     ruinYears[p] = row.year;
                     ruinCount++;
@@ -733,7 +745,7 @@ async function runJob(cfg, hooks) {
 // Same three-host tail as prng.js. Keep the two lists identical: a name missing from one of them
 // fails only in that host, which is exactly the kind of drift this file exists to end.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { runJob, runPass, buildBanks, buildPathInputs, buildStressMsg, selectCapturePaths, sliceBankRowsForPath, pathInputsFromBankRows, CAPTURE_WORST_N, CAPTURE_RANK_PCTS, MC_NO_HOOKS };
+    module.exports = { runJob, runPass, buildBanks, buildPathInputs, buildStressMsg, selectCapturePaths, sliceBankRowsForPath, pathInputsFromBankRows, CAPTURE_WORST_N, CAPTURE_RANK_PCTS, MC_NO_HOOKS, yearIsRuined, _hooksOf };
 } else if (typeof window !== 'undefined') {
-    window.MCEngine = { runJob, runPass, buildBanks, buildPathInputs, buildStressMsg, selectCapturePaths, sliceBankRowsForPath, pathInputsFromBankRows, CAPTURE_WORST_N, CAPTURE_RANK_PCTS, MC_NO_HOOKS };
+    window.MCEngine = { runJob, runPass, buildBanks, buildPathInputs, buildStressMsg, selectCapturePaths, sliceBankRowsForPath, pathInputsFromBankRows, CAPTURE_WORST_N, CAPTURE_RANK_PCTS, MC_NO_HOOKS, yearIsRuined, _hooksOf };
 }

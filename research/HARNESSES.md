@@ -74,7 +74,7 @@ fix, and deleting twenty-eight scripts has made it a much smaller job.
 | `phased_harness.js` | node | Do any strategies never win, and where does each family rank? **Kept for a planned re-measure**; its report was retired with the rest. | *(to be rewritten on re-run)* | not re-run |
 | `endgame_harness.js` | node | What should the tail draw from, once the IRA has reached its target? **Kept for a planned re-measure**; its report was retired with the rest. | *(to be rewritten on re-run)* | not re-run |
 | `taxattrib_harness.js` | node | Which assets pay the tax, and what the settlement date is worth. | *(open, `P115`)* | not re-run |
-| `rbg_harness.js` | node | Can risk-based (probability-of-success) guardrails be computed on this engine, what do they cost, where does the shipped Guardrails rule disagree, how far is that rule from Guyton-Klinger as published, how does it compose with Spend Delta, and what changes when early spending is valued above late? | [RISK_BASED_GUARDRAILS.md](RISK_BASED_GUARDRAILS.md) | `1842270` |
+| `rbg_harness.js` | node | Can risk-based (probability-of-success) guardrails be computed on this engine, what do they cost, where does the shipped Guardrails rule disagree, how far is that rule from Guyton-Klinger as published, how does it compose with Spend Delta, and what changes when early spending is valued above late? Re-plans by resuming the plan (`resumeInputs`), and reads its rail sets from `RAIL_PRESETS`. | [RISK_BASED_GUARDRAILS.md](RISK_BASED_GUARDRAILS.md) | 11.1854 (2026-09-16) |
 | `which_plan.js` | node | A tool, not a study: which household does each harness actually run on? | *(none)* | `b3cafa3` |
 
 ## Running one

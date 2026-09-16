@@ -2663,6 +2663,79 @@ assertEqual(
 		}
 	})();
 
+	// ===== P128: the risk-based rails panel is gated, and nothing in it is a plan input =====
+	(function railsPanelIsGatedAndOwnsNoPlanInput() {
+		const panel = document.getElementById('rails-panel');
+		if (!panel) { console.log('SKIP: rails panel absent'); return; }
+		// One direction only, for the reason goalFirstPanelIsGatedInMarkup gives above.
+		assertEqual(panel.style.display === 'none' || (typeof railsOn === 'function' && railsOn()), true,
+			'P128: the rails panel is never visible without ?nerdknob=rails');
+		// Outside the sidebar, so neither the share link, the saved plan nor the recalc listener sees it.
+		const sidebar = document.querySelector('.sidebar');
+		assertEqual(!!sidebar && sidebar.contains(panel), false, 'P128: the rails panel is not in the sidebar');
+		const controls = [...panel.querySelectorAll('input, select')];
+		assertEqual(controls.length > 0 && controls.every(el => el.dataset.noShare !== undefined), true,
+			'P128: every rails control is data-no-share');
+		assertEqual(controls.some(el => OPT_LONG_TO_SHORT[el.id] !== undefined), false,
+			'P128: no rails control is a share-URL field');
+		const inputs = typeof getInputs === 'function' ? getInputs() : {};
+		assertEqual(Object.keys(inputs).some(k => /^rail/i.test(k)), false,
+			'P128: no rails setting reaches the engine inputs, and so none reaches a saved plan');
+		if (typeof buildShareURL === 'function') {
+			const keys = [...new URL(buildShareURL()).searchParams.keys()];
+			assertEqual(keys.some(k => /rail/i.test(k)), false, 'P128: the share link carries no rails setting');
+		}
+		// Without the knob the log carries no rail columns.
+		if (!(typeof railsOn === 'function' && railsOn()) && Array.isArray(lastSimulationLog) && lastSimulationLog.length) {
+			assertEqual('railLower' in lastSimulationLog[0], false, 'P128: no rail columns without the knob');
+		}
+	})();
+
+	(function railsTooltipNamesWhetherAYearWasSolved() {
+		if (typeof railsTooltipNote !== 'function') { console.log('SKIP: rails tooltip helper absent'); return; }
+		const ds = { _railNote: [null, 'solved', 'interpolated'] };
+		assertEqual(railsTooltipNote({ dataset: ds, dataIndex: 1 }), ' (solved)', 'P128: a solved point says so');
+		assertEqual(railsTooltipNote({ dataset: ds, dataIndex: 2 }), ' (interpolated)', 'P128: and an interpolated one');
+		assertEqual(railsTooltipNote({ dataset: ds, dataIndex: 0 }), '', 'P128: a point with no rail adds nothing');
+		assertEqual(railsTooltipNote({ dataset: {}, dataIndex: 0 }), '', 'P128: nor does any other line');
+	})();
+
+	// The green band sits between each view's raise and cut lines, and only the current solve has one.
+	(function railsBandOnBothViews() {
+		if (typeof railsSeries !== 'function') { console.log('SKIP: rails series builder absent'); return; }
+		const log = [0, 1, 2].map(i => ({ year: 2030 + i, inflationFactor: 1,
+			railLower: 10, railUpper: 20, 'railPoS%': 0.5, railBasis: 'solved',
+			railSpend: 5, railSpendDn: 4, railSpendUp: 6 }));
+		const id = v => v, one = () => 1, rows = i => log[i];
+		for (const kind of ['balance', 'spend']) {
+			const cur = railsSeries(log, one, id, kind, rows, '');
+			const up = cur.findIndex(d => d.fill === '+1');
+			assertEqual(up >= 0 && cur[up].pointRotation === 0 && cur[up + 1]?.pointRotation === 180, true,
+				`P128: the ${kind} band fills from the raise line to the cut line right after it`);
+			assertEqual(cur.filter(d => d.fill).length, 1, `P128: one ${kind} band, not more`);
+			const prev = railsSeries(log, one, id, kind, rows, 'previous');
+			assertEqual(prev.some(d => d.fill), false, `P128: the previous ${kind} rails carry no band`);
+		}
+	})();
+
+	// ===== P127a: the spending ceiling is a plan input behind the knob, off by default =====
+	(function ceilingSwitchIsAPlanInput() {
+		const el = document.getElementById('gkShapeCeiling');
+		if (!el) { console.log('SKIP: ceiling switch absent'); return; }
+		assertEqual(OPT_LONG_TO_SHORT.gkShapeCeiling, 'gsc', 'P127a: the ceiling travels in the share link');
+		assertEqual(typeof getInputs().gkShapeCeiling, 'boolean', 'P127a: getInputs carries the ceiling');
+		const box = document.getElementById('ui-gk');
+		assertEqual(!!box && box.contains(el), true, 'P127a: the switch sits with the band and step, behind the knob');
+		assertEqual(!!document.querySelector('.sidebar')?.contains(el), true,
+			'P127a: inside the sidebar, so a change re-runs the plan');
+		if (typeof OPT_DEFAULTS !== 'undefined' && OPT_DEFAULTS.gkShapeCeiling) {
+			assertEqual(OPT_DEFAULTS.gkShapeCeiling.c, false, 'P127a: off in the page as shipped');
+		}
+		// Drawn like the Guardrails switch beside it, not as a bare checkbox .toggle would hide.
+		assertEqual(!!el.closest('label.toggle') && !!el.parentElement.querySelector('.toggle-switch'), true,
+			'P127a: the switch uses the page\'s toggle markup');
+	})();
+
 	(function goalFirstNeverConvertWritesTheFiveControls() {
 		const sel = document.getElementById('gf-conv-mode');
 		const cxr = document.getElementById('convertExcessToRoth');
@@ -2941,7 +3014,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 453, taxengine: 32, taxPaymentPlanner: 61, doclinks: 26, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 468, taxengine: 32, taxPaymentPlanner: 61, doclinks: 26, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

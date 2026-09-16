@@ -17,6 +17,30 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1857"></a>
+
+## 11.1857
+
+**Guardrails stops cutting near the end of a plan, and follows two more of the published rules.**  
+*Behavior change: a plan with Guardrails on can give different numbers.*
+
+**No cuts in a plan's last 8 years.** Spending is still raised when your savings allow it, but it is
+never cut in the final 8 years. Optimize Spend can suggest more for a Guardrails plan as a result.
+
+**The yearly inflation raise is at most 6%.** In a year inflation runs higher, spending rises by 6%.
+
+**The raise is skipped only after a year your savings as a whole lost money**, cash interest and
+dividends included, not after a year the stock market alone fell.
+
+**With Guardrails on, Optimize Spend reads a declining Spend Delta as your plan, not as a cut.** A
+plan whose spending falls on purpose gets a suggestion again.
+
+**With Guardrails on, Optimize Conversions never suggests a conversion that leaves you worse off
+than converting nothing.**
+
+The README's [*Limitations and Restrictions*](README.md#limitations-and-restrictions) section lists
+the two places the rule still departs from the published one.
+
 <a id="11.1824"></a>
 
 ## 11.1824

@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1824</title>
+    <title>Retirement Optimizer 11.1857</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,14 +59,14 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=111807"></script>
-	<script src="optimizer_core.js?v=111823"></script>
+	<script src="optimizer_core.js?v=111857"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=111823"></script>
-	<script src="optimizer_tests.js?v=111823"></script>
+	<script src="optimizer_ui.js?v=111857"></script>
+	<script src="optimizer_tests.js?v=111857"></script>
 </head>
 <body>
 
@@ -127,7 +127,7 @@
 			     band and the step stay behind the nerdknob (user, 2026-09-13), and the sentence under the
 			     switch states the rule in force, so nothing about it depends on a tooltip. -->
 			<div class="input-group" style="margin-top:2px;">
-				<label class="toggle" title="Guardrails (GK-style): lets your spending follow your savings, under any withdrawal strategy. It is Guyton-Klinger in style, not the published rule - what it measures is your whole spending against your savings, where the published rule watches what your portfolio withdraws. Your first year sets the safe level: what you spend for each dollar saved. When your savings fall far enough that your spending is well above the safe level for what is left, spending is cut. When they grow far enough that it is well below, spending is raised. After a year your investments lose money, the inflation raise is also skipped while spending is above the safe level. Spend Delta still applies on top.">
+				<label class="toggle" title="Guardrails (GK-style): lets your spending follow your savings, under any withdrawal strategy. It is Guyton-Klinger in style, not the published rule - what it measures is your whole spending against your savings, where the published rule watches what your portfolio withdraws. Your first year sets the safe level: what you spend for each dollar saved. When your savings fall far enough that your spending is well above the safe level for what is left, spending is cut. When they grow far enough that it is well below, spending is raised. Spending is never cut in the plan's last 8 years. The yearly inflation raise is at most 6%, and it is skipped after a year your savings as a whole lose money, while spending is above the safe level. Spend Delta still applies on top.">
 				  <input type="checkbox" id="spendRule" onchange="toggleStrategyUI()">
 				  <span class="toggle-label"></span>
 				  <span class="toggle-switch"></span>
@@ -139,6 +139,14 @@
 					<input type="number" id="gkGuard" value="20" min="5" max="40" step="5" oninput="updateGuardrailsNote()"></label>
 					<label title="How much spending is cut or raised when it crosses the band. The same amount either way.">Adj %
 					<input type="number" id="gkAdjPct" value="10" min="5" max="20" step="5" oninput="updateGuardrailsNote()"></label>
+					<!-- P127a. Off by default. It changes the plan's numbers, so unlike the rails panel it
+					     travels in the share link (gsc) and the saved plan. -->
+					<label class="toggle" title="Never above plan: a raise can only bring spending back up to your planned path (your spend goal with Spend Delta and inflation), never above it. Cuts still follow your savings. Costs spending in good markets and leaves more at the end.">
+					  <input type="checkbox" id="gkShapeCeiling" onchange="updateGuardrailsNote()">
+					  <span class="toggle-label"></span>
+					  <span class="toggle-switch"></span>
+					  <span>Never above plan</span>
+					</label>
 				</div>
 			</div>
 		
@@ -1058,6 +1066,15 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="display"><b>11.1857</b>
+					<strong>Guardrails stops cutting in a plan's last 8 years and caps its inflation raise at 6%.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>A plan with Guardrails on can give different numbers, and Optimize Spend can suggest more.</li>
+					<li>The inflation raise is skipped only after a year your savings as a whole lost money.</li>
+					<li>With Guardrails on, Optimize Spend reads a declining Spend Delta as your plan rather than as a cut, and Optimize Conversions never suggests a conversion that leaves you worse off than none.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.1857" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="display"><b>11.1824</b>
 					<strong>The Guardrails switch is now labelled GK-style.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1106,33 +1123,6 @@
 					<li>That column reports two months, one for the Roth conversion and one for the spending withdrawal, but hovering over it still described a rule the tool no longer uses - it used to choose the month for you based on whether the previous year had converted. The help now says what each half of the value means, and that the spending withdrawal carries that year's income tax and any Medicare surcharge out with it. The <i>Limitations</i> section of the <a href="README.md#limitations-and-restrictions" target="_blank" rel="noopener">README</a> described the same retired rule and has been corrected. <strong>No number changes.</strong></li>
 					</ul>
 					<a href="optimizer_changelog.md#11.17c1" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="behavior"><b>11.17b1</b>
-					<strong>A flaw was identified in the conversion/withdrawal timing and fixed.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>The month in which conversions and withdrawals were modeled - as stated in the Annual Details - incorrectly moved the wrong operations and usually ended up costing more taxes, and resulted in less benefit. Now the tool properly moves conversions to January, and keeps withdrawal in November (this is called "Split" mode). There is a not-yet-public control to change that choice as well.</li>
-					</ul>
-					<strong>An ACA cap counts your whole Social Security benefit, and the tool now measures it that way.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>The income an ACA FPL cap is tested against includes part of your benefit that is never taxed. Each year is now checked against that figure, so a year over the cap is reported as one. <strong>More ACA rows are flagged untenable (⚠️), and the Optimizer can rank them differently.</strong> A previous plan may have failed to flag a year where the ACA Cap was breached.</li>
-					</ul>
-					<strong>Cycle Brokerage harvest year now fills the bracket they are aimed at.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>A harvest year was measuring its remaining capital-gains room against the wrong income, counting your whole Social Security benefit and ignoring your deduction, so it stopped short of the 0% or 15% bracket it was intended to fill. It also now respects your chosen income limit on every path. Plans with <i>Cycle Brokerage</i> on realize more gains in a harvest year and will show different lifetime tax and ending wealth. <strong>Where your Limit is what holds the harvest down, nothing changes</strong>; the plans that move are those whose limit sits high enough that the capital-gains bracket was the real constraint.</li>
-					</ul>
-					<strong>Each entry in the Limit menu now says which income it measures.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>A federal bracket limits taxable income, an IRMAA tier limits MAGI, and an ACA cap limits an MAGI of its own that counts the whole benefit. The <a href="README.md#how-does-the-aca-limit-work" target="_blank" rel="noopener">README</a> says the same.</li>
-					</ul>
-					<strong>A plan asking for an ACA cap nobody in it can use now says so.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>The caps are applicable only while someone in the plan is still under 65 when it starts. Opening a link or saved plan that does not support ACA limits now loads the <strong>Below IRMAA</strong> bracket. Previously it silently chose the far tighter <i>10% Fed</i>.</li>
-					</ul>
-					<strong>Interest on cash is now taxed on what the cash actually earned.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li><strong>Every plan's tax moves a little.</strong> Interest was taxed on the cash balance at the moment of the withdrawal times a full year's yield. The net is that cash you spent was taxed on interest it never earned and not interest on cash that arrived later in the year. A required distribution taken in cash in January was not taxed on its interest at all. Each year now checks what the cash actually earned and carries the difference into the next year. Generally the error was small. Now the tool is more likely to over calculate and over tax slightly because it does not know exactly when you spend.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.17b1" target="_blank" rel="noopener">Details</a>
 				</li>
 				</ul>
 				<script>
@@ -1361,6 +1351,35 @@
 		</div>
 
         <div id="tab-chart" class="card">
+            <!-- P128. Risk-based rails, drawn on these two charts. ?nerdknob=rails only (with the knob
+                 on), the way ?nerdknob=goal gates goal-first. Outside .sidebar and every control is
+                 data-no-share, so nothing here reaches the share link or a saved plan: it changes what
+                 is DRAWN, never a number the plan produces. -->
+            <div id="rails-panel" style="display:none;margin:8px 8px 4px 8px;padding:6px 10px;background:#f7f2fb;border:1px solid #dccbeb;border-radius:6px;font-size:0.85em;color:#333;">
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
+                <strong title="Risk-based guardrails: at each solved year, the portfolio value at which your plan's chance of success rises to the raise rail or falls to the cut rail, and the spending that puts it back on target at each.">Risk-based rails</strong>
+                <label title="Target chance of success / raise when it reaches / cut when it falls to. Tight is Derek Tharp's worked example; Normal and Loose are the two sets in Tharp and Fitzpatrick's 'Hatchet' article on Kitces.com.">Preset
+                  <select id="rails-preset" data-no-share onchange="railsSettingsChanged()">
+                    <option value="tight">Tight: 95% target, raise 99%, cut 80%</option>
+                    <option value="normal" selected>Normal: 90% target, raise 99%, cut 70%</option>
+                    <option value="loose">Loose: 80% target, raise 100%, cut 40%</option>
+                  </select>
+                </label>
+                <label title="Years between solved years. Every solved year runs the same number of simulations, so solving every year costs roughly four times what every 5 years does.">Solve every
+                  <input type="number" id="rails-cadence" data-no-share value="5" min="1" max="10" step="1" style="width:46px;" onchange="railsSettingsChanged()"> years</label>
+                <label title="Market paths behind each chance-of-success estimate. More paths make a rail steadier and cost proportionally more time.">Paths
+                  <input type="number" id="rails-paths" data-no-share value="200" min="20" max="2000" step="20" style="width:62px;" onchange="railsSettingsChanged()"></label>
+                <button id="rails-run" class="tog" onclick="runRails()">Run</button>
+                <button id="rails-cancel" class="tog" style="display:none;" onclick="cancelRails()">Cancel</button>
+                <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="Solve again by itself shortly after a change to the plan or to these settings. Switching views and Current $ / Future $ never trigger it.">
+                  <input type="checkbox" id="rails-auto" data-no-share onchange="railsSettingsChanged()"> Auto-run</label>
+                <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="When a new solve finishes, keep drawing the one before it, faded, so the difference between the two is visible.">
+                  <input type="checkbox" id="rails-show-prev" data-no-share checked onchange="railsPreviousToggled()"> Show previous rails</label>
+              </div>
+              <div id="rails-status" style="margin-top:4px;"></div>
+              <div id="rails-timing" style="margin-top:4px;"></div>
+              <div id="rails-note" style="margin-top:4px;font-size:0.92em;color:#555;">Solves start with the first full year and re-run your plan from the end of the year before, with fresh market paths from the Monte Carlo tab's return model. The rails on the Balances chart are in the same terms as TotalNetWealth, at the same year-end; the spending rails are on the Income vs Net view. On both, the band between the cut and raise lines is shaded green. Marked points (triangles for the rails, squares for the target spend) are the years actually solved; the lines between them are interpolated. Guardrails is off inside a solve, so spending holds its planned path. Loose's 100% raise rail means every sampled path survived, so where it lands depends on the number of paths. Nothing here changes your plan, your share link or a saved plan.</div>
+            </div>
             <div style="display:flex;align-items:center;gap:10px;margin:8px 0 2px 8px;">
               <h4 style="margin:0;color:#555;font-size:0.95em;">Balances</h4>
               <span style="display:inline-flex;gap:3px;">
@@ -1542,8 +1561,11 @@
 <script src="montecarlo/stats.js?v=11161f"></script>
 <!-- The Monte Carlo model itself. The worker importScripts() the same file; on file://, where a
      worker cannot load its scripts, mc_controller.js runs it here on the main thread. -->
-<script src="montecarlo/mc_engine.js?v=111823"></script>
-<script src="montecarlo/mc_controller.js?v=11161e"></script>
+<script src="montecarlo/mc_engine.js?v=111857"></script>
+<!-- P128. The risk-based rails solver. Same arrangement as mc_engine.js: the worker imports it too,
+     and on file:// the controller runs it here. -->
+<script src="montecarlo/rails_engine.js?v=111857"></script>
+<script src="montecarlo/mc_controller.js?v=111857"></script>
 <script src="montecarlo/mc_tab.js?v=111823"></script>
 
 <script type="text/javascript">
@@ -1741,7 +1763,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these six are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111823';
+    const V = '?v=111857';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

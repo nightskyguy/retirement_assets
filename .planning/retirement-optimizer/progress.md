@@ -5231,3 +5231,65 @@ this worktree's README.md (modified 11:14; the main checkout's copy untouched): 
 Summary" lines), five tax-payment plans, Medicare premium wording, trimmed release notes. md-html-scan
 clean, no conflict markers; included as written. Stamp refreshed to 11.1823 (title, changelog, six
 `?v=` tokens). One commit on `worktrees/planning-with-files-3c273e`, for a PR against `main`.
+
+## Session: 2026-09-16 (worktree readme-review-updates-c9df11, branch worktrees/risk-based-guardrails-p128-b2cfa3) - P127 + P128, v11.1854
+
+User: "Let's do P128 (Risk Based Guardrails Prototype). But also worth amending the GK-Style rules
+(P127) - ask me which changes to make for P127." Asked; answers recorded in task_plan P127 (8 years,
+not 15; portfolio-return freeze; 6% cap; ceiling as a nerdknob switch; both filter fixes; keep the
+numerator).
+
+- **Engine**: P127 rules and filters; `RAIL_PRESETS`; `portfolioReturnOf`; the resume record
+  (`captureResume` / `resume`, `snapshotResume`, `resumeInputs`, `res.resumeStart`), with the loop's
+  `y` as the plan year and `ySeq` for sequences; `_convEndReached` and the terminal valuation made
+  resume-aware. Resume continuity: 190/190 exact on the bank.
+- **Monte Carlo**: `yearIsRuined` shared by `runPass` and the rails; `rails_engine.js`; the worker
+  dispatches on `cfg.kind`; the controller keeps one worker per kind; the `file://` fallback runs
+  either kind, and rails jobs there supersede each other.
+- **Page**: the rails panel (`?nerdknob=rails`), both charts, Annual Details "Rails" columns, the
+  ceiling switch, Guardrails tooltip and sentence, gkAdj column help.
+- **Second round (user, after seeing it)**: rails off Income & Expenses; ▲/▼/■ markers and legend; the
+  green band; "Portfolio (Jan 1)" dropped for TotalNetWealth-denominated rails on the year-end row; the
+  first solve in the first full year; the previous solve kept, faded. Gave the user the `file://` and
+  localhost URLs.
+- **Research**: the harness's re-plan counted inflation twice (findings). Fixed via resume, harness
+  re-run, `RISK_BASED_GUARDRAILS.md` updated (re-run note, sections 1, 3-7, predictions, shipping
+  list), `research/README.md` and `HARNESSES.md` rows refreshed.
+- **Docs**: README caveat (two departures), changelog 11.1854 (.md + page; the page list dropped
+  11.17b1 to stay at six), ExperimentalFeatures (`?nerdknob=rails`, Never above plan), ARCHITECTURE
+  3a/5a/file table. Title and `?v=` tokens 11.1854.
+- **Tests**: 15 new node tests (7 P127, 8 P128) and 3 in-page blocks; one existing GK test re-aimed at
+  its claim. Suites 468 / 32 / 61 / 26, slow 3; `TestTiers.EXPECTED` and `.githooks/README.md` pinned.
+- **Lesson**: `sed -i` in Git Bash rewrote two CRLF files as LF (memory updated); every changed file
+  recounted clean.
+- **Third request**: "shade the band between the cut/raise rails on the Income vs Net, also". Both
+  views now fill from the raise line to the cut line (Chart.js `$filler` resolved to the cut dataset on
+  each); in-page `railsBandOnBothViews` pins it. `?nerdknob=rails&runtests`: 1074 passed (487 + 587).
+  UI and test tokens 111856; the title stays 11.1854 (no user-visible change outside the knob).
+- **Fourth request (planning only)**: "create a plan to calculate the After-Tax Spend goal based on
+  the outcome of the risk-based guard rail run ... with a single run" -> `P129` written, with three
+  questions for the user. Same message: "Spend at Target is mysterious" (explained; `P129d`) and
+  "Income is WAY above the Spend at Target during Brokerage years" on the user's own plan (a share
+  link pasted in chat; deliberately NOT recorded here, since this repository is public) -
+  measured: the Cycle Brokerage harvest, whose reinvested proceeds the income charts count as
+  spendable (`P130` candidate). Rails on that plan (Normal, every 5, 200 paths, 14.7 s): 99.5% in
+  the first two solved years, 100% after; the 90% spend rises at every solve and clamps at the 4x
+  search limit in the last one.
+
+### Fifth request, 2026-09-16 afternoon
+
+User: "Running 100 paths every 3 years is sufficient - including one extra pass for the After-Tax
+spend calculation that would start in the current year. The RBG logic can offer a 'higher precision'
+button. But before doing any of that, it will be useful to run some heavy testing to see whether it's
+worth the effort ... if the MC synthetic testing invariably produces a number below 100% the 99% and
+100% success rates may need adjustment." Also: move the rails panel BELOW all the charts, make it
+foldable, let it choose the Monte Carlo method; and "are those tasks in contention" (rails auto-run
+vs the Historical stress test running in the background). Then, mid-turn: "can you create a PR while
+running in the background?"
+
+- The P127/P128 work was committed and a PR opened while the heavy test ran. Before pushing, the
+  user's plan URL and its dollar figures were scrubbed from `progress.md` and `task_plan.md` (ratios
+  kept): the repository is public.
+- Heavy test: `.test_harnesses/rails_precision_harness.js` (reach of the 99%/100% rails per method,
+  precision against path count via per-path pools, cadence interpolation error, cost). The user's
+  plan runs through it from a scratch file only (`USER_PLAN=`), never from the repository.

@@ -1174,6 +1174,124 @@ test('Guardrails: the shape ceiling only ever follows a raise, and changes nothi
     }
 });
 
+// ── P127: three published limits the rule adopted (user, 2026-09-16) ────────────────────────────
+// The inflation raise is capped at 6%; the freeze after a losing year reads the PORTFOLIO's return;
+// and there is no cut in the plan's last 8 years (the paper says 15; the user chose 8).
+test('P127: the inflation raise is capped at 6%, and below the cap it is the full inflation', () => {
+    const rows = simulate({ ...CEIL_BASE }).log.length;
+    const run = infl1 => {
+        const seq = new Float64Array(rows + 3).fill(0.05);
+        const inf = new Float64Array(rows + 3).fill(0.025);
+        inf[1] = infl1;
+        return simulate({ ...CEIL_BASE, returnSequence: seq, inflationSequence: inf });
+    };
+    const cap = core.GK_CPI_RAISE_CAP;
+    assert(cap === 0.06, `the published cap is 6%, got ${cap}`);
+    const hot = run(0.09), mild = run(0.059);
+    const delta = 1 + CEIL_BASE.spendChange;
+    for (const [res, rate, label] of [[hot, cap, 'a 9% year'], [mild, 0.059, 'a 5.9% year']]) {
+        const adj = res.log[1].gkAdj || '';
+        // Neither year may also cut or raise, or the goal below would mix two adjustments.
+        assert(!/cap|pros/.test(adj), `${label}: the rule must not also adjust spending, got "${adj}"`);
+        assertNear(res.log[1].gkSpend, res.log[0].gkSpend * delta * (1 + rate), `${label}: the raise`, 0.01);
+    }
+    assert((hot.log[1].gkAdj || '').includes('CPI≤6%'), `the capped year says so, got "${hot.log[1].gkAdj}"`);
+    assert(!(mild.log[1].gkAdj || '').includes('CPI≤'), `an uncapped year says nothing, got "${mild.log[1].gkAdj}"`);
+});
+
+test('P127: the freeze after a losing year reads the portfolio\'s return, not the market\'s', () => {
+    // A year the market lost 1%. The all-invested plan lost money with it and freezes its raise; the
+    // cash-heavy plan earned 5% on most of its savings, made money overall, and does not - even
+    // though its spending sits above the safe level just as the other's does.
+    const one = { ...CEIL_BASE, spendChange: 0, dividendRate: 0, Roth: 0, Roth2: 0,
+                  Brokerage: 0, BrokerageBasis: 0, IRA2: 0 };
+    const rows = simulate({ ...one, IRA1: 2000000, Cash: 0 }).log.length;
+    const seq = new Float64Array(rows + 3).fill(0.05);
+    seq[0] = -0.01;
+    const inf = new Float64Array(rows + 3).fill(0.025);
+    const invested = simulate({ ...one, IRA1: 2000000, Cash: 0, returnSequence: seq, inflationSequence: inf });
+    const cashy = simulate({ ...one, IRA1: 500000, Cash: 1500000, cashYield: 0.05,
+                             returnSequence: seq, inflationSequence: inf });
+    assert(invested.log[0]['return%'] < 0 && cashy.log[0]['return%'] < 0, 'premise: the market lost money in year 0');
+    assert((invested.log[1].gkAdj || '').includes('no-CPI'),
+        `the invested plan lost money and must freeze, got "${invested.log[1].gkAdj}"`);
+    // The freeze's other half held for the cash-heavy plan too: its spending was above the safe level.
+    const r0 = cashy.log[0];
+    const iwr = r0.gkSpend / 2000000;
+    assert(r0.gkSpend / r0.portfolioBalance > iwr, 'premise: the cash-heavy plan is above its safe level');
+    assert(!(cashy.log[1].gkAdj || '').includes('no-CPI'),
+        `the cash-heavy plan made money and must not freeze, got "${cashy.log[1].gkAdj}"`);
+});
+
+test('P127: the portfolio return is the balance-weighted return of the accounts, dividends included', () => {
+    const rates = { IRA1: 0.10, IRA2: 0.10, Roth1: 0.10, Roth2: 0.10, Brokerage: 0.04, Cash: 0.02 };
+    const bal = { IRA1: 100, IRA2: 0, Roth1: 0, Roth2: 0, Brokerage: 100, Cash: 200 };
+    // (100 x 10% + 100 x (4% + 2% dividend) + 200 x 2%) / 400 = 5%
+    assertNear(core.portfolioReturnOf(bal, rates, 0.02), 0.05, 'weighted return', 1e-12);
+    const empty = { IRA1: 0, IRA2: 0, Roth1: 0, Roth2: 0, Brokerage: 0, Cash: 0 };
+    assert(core.portfolioReturnOf(empty, rates, 0.02) === 0.10, 'an empty portfolio reads the market return');
+});
+
+test('P127: no cut in the plan\'s last 8 years, and a year the rule wanted one says so', () => {
+    const over = { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk' };
+    const N = core.GK_NO_CUT_FINAL_YEARS;
+    assert(N === 8, `the user's number is 8, got ${N}`);
+    let sawHeld = false, sawEarlyCut = false;
+    for (const mult of [1.0, 1.2, 1.4, 1.6]) {
+        const log = simulate({ ...GK_OPT_BASE, ...over, spendGoal: GK_OPT_BASE.spendGoal * mult }).log;
+        const n = log.length;
+        log.forEach((r, i) => {
+            const adj = r.gkAdj || '';
+            const cut = /cap/.test(adj);
+            if (i >= n - N) {
+                assert(!cut, `x${mult}: ${r.year} is in the last ${N} years and must not cut, got "${adj}"`);
+                if (adj.includes('no-cut')) sawHeld = true;
+            } else {
+                assert(!adj.includes('no-cut'), `x${mult}: ${r.year} is before the last ${N} years, got "${adj}"`);
+                if (cut) sawEarlyCut = true;
+            }
+        });
+    }
+    assert(sawEarlyCut, 'premise: the rule still cuts earlier in the plan');
+    assert(sawHeld, 'premise: some run wanted a cut in its last years and was held');
+});
+
+test('P127b: the stability floor judges spending against the plan\'s own path, not year 1', () => {
+    // A plan that declines 1% a year on purpose and never cuts: 30 rows of exactly that path.
+    const path = { log: Array.from({ length: 30 }, (_, y) => ({ spendGoal: 100 * Math.pow(0.99, y), inflationFactor: 1 })) };
+    const rule = { spendRule: 'gk', gkGuard: 0.20 };
+    assert(core.gkSpendStable(path, rule, { spendChange: -0.01 }), 'a plan on its own declining path is stable');
+    // Against a flat plan the same rows ARE a slash: 0.99^29 is 74.7% of year 1. This is what the
+    // floor used to say about the declining plan.
+    assert(!core.gkSpendStable(path, rule, { spendChange: 0 }), 'the same rows against a flat plan are a 25% slash');
+    // And a real slash below the declining path is still caught.
+    const slashed = { log: path.log.map((r, y) => y >= 10 ? { ...r, spendGoal: r.spendGoal * 0.75 } : r) };
+    assert(!core.gkSpendStable(slashed, rule, { spendChange: -0.01 }), 'a 25% cut below the path is still rejected');
+});
+
+test('P127b: a Guardrails plan with a declining Spend Delta gets an Optimize Spend answer again', () => {
+    // research/RISK_BASED_GUARDRAILS.md section 7a: at -1%/year this household got NO viable spend
+    // with Guardrails on, where the same plan without them got $271,705.
+    const bank = _planBank;
+    if (!bank) return;   // browser tier: the bank is not loaded there
+    const base = { ...bank.get('mixed-portfolio-couple').inputs, spendChange: -0.01 };
+    const on = optimizeSpend({ ...base, spendRule: 'gk' }, { spendRule: 'gk' });
+    assert(on && on.optimizedSpend > 0, 'a plan on its own declining path must have a viable spend');
+});
+
+test('P127f: converting nothing is always admissible, so the search never ends poorer than $0', () => {
+    // A Guardrails plan the floor rejects as it stands (P126f). The floor used to reject $0 too,
+    // which forced a pick among the positive amounts - $96,275 poorer than $0 on one bank household.
+    const over = { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk' };
+    const base = { ...GK_OPT_BASE, spendGoal: GK_OPT_BASE.spendGoal * 1.5 };
+    const zero = simulate({ ...base, ...over, extraConversionAmount: 0 });
+    assert(!core.gkSpendStable(zero, over, base), 'premise: the floor rejects this plan as it stands');
+    const { optConv, optResult } = optimizeConversionAmount(base, over, 'finalNW');
+    assert(optResult, 'a floor-rejected plan still has an answer, even if it is to convert nothing');
+    assert(optResult.finalNW >= zero.finalNW - 0.01,
+        `the pick ($${optConv}) must not end poorer than converting nothing: ${Math.round(optResult.finalNW)} vs ${Math.round(zero.finalNW)}`);
+});
+
 // ── Baseline accounting (after-tax NW + totalNetWealth fix) ───────────────────────
 const afterTaxNetWorth = core.afterTaxNetWorth;
 
@@ -1518,11 +1636,20 @@ const GK_OPT_BASE = {
 
 test('GK optimize-spend: stability floor caps optimized spend below the +50% ceiling', () => {
     const ceiling = GK_OPT_BASE.spendGoal * 1.5;
-    const opt = optimizeSpend({ ...GK_OPT_BASE }, { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 });
+    const over = { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 };
+    const opt = optimizeSpend({ ...GK_OPT_BASE }, over);
     assert(opt, 'GK optimizeSpend should find a stable optimized spend (not null)');
     assert(!opt.hitCeiling, 'floor should prevent hitting the +50% ceiling');
-    assert(opt.optimizedSpend < ceiling * 0.90,
-        `optimizedSpend ${Math.round(opt.optimizedSpend)} should be materially below ceiling ${ceiling}`);
+    // What caps the search is the floor refusing the ceiling spend itself, so that is what is
+    // asserted. This used to demand the answer land below 90% of the ceiling, which was a margin
+    // and not the claim: when P127 stopped the rule cutting in a plan's last 8 years, the answer
+    // moved from $64,829 to $78,687 - the three late cuts that had dragged the worst year to 59% of
+    // the first no longer happen, and the plan still funds every year and ends with $1.43M.
+    const atCeiling = simulate({ ...GK_OPT_BASE, spendGoal: ceiling });
+    assert(!core.gkSpendStable(atCeiling, over, GK_OPT_BASE),
+        `the ceiling spend ${ceiling} must be one the floor rejects, or nothing here is capping the search`);
+    assert(opt.optimizedSpend < ceiling,
+        `optimizedSpend ${Math.round(opt.optimizedSpend)} should be below ceiling ${ceiling}`);
 
     // Worst real delivered spend must stay within one guard band of the initial real spend.
     const log = opt.result.log;
@@ -8062,6 +8189,204 @@ test('P126: no code outside the load folds still names the retired strategy', ()
         for (const line of src.split('\n')) if (RETIRED.test(line)) hits.push(`${f}: ${line.trim()}`);
     }
     assert(hits.length === 0, `the retired strategy is still named in code:\n  ${hits.slice(0, 8).join('\n  ')}`);
+});
+
+// ── P128: resuming a plan, the rail presets, and the rails solver ────────────────────────────────
+// rails_engine.js reads these as globals, the contract mc_engine.js has; the browser has them already.
+if (IS_NODE) {
+    globalThis.resumeInputs = core.resumeInputs;
+    globalThis.RAIL_PRESETS = core.RAIL_PRESETS;
+}
+const _railsEngine = IS_NODE ? require('./montecarlo/rails_engine.js') : window.RailsEngine;
+
+test('P128: the rail presets are the three published sets, and each target sits between its rails', () => {
+    const P = core.RAIL_PRESETS;
+    const want = { tight: [0.95, 0.99, 0.80], normal: [0.90, 0.99, 0.70], loose: [0.80, 1.00, 0.40] };
+    assert(JSON.stringify(Object.keys(P)) === JSON.stringify(Object.keys(want)), `presets ${Object.keys(P)}`);
+    for (const [k, [t, u, l]] of Object.entries(want)) {
+        assert(P[k].target === t && P[k].upper === u && P[k].lower === l,
+            `${k}: ${P[k].target}/${P[k].upper}/${P[k].lower}, published ${t}/${u}/${l}`);
+        assert(P[k].lower < P[k].target && P[k].target <= P[k].upper, `${k}: the target must sit between the rails`);
+        assert(Object.isFrozen(P[k]) && P[k].key === k && P[k].source, `${k}: frozen, keyed and sourced`);
+    }
+    assert(Object.isFrozen(P), 'the table itself is frozen');
+});
+
+// Every field of every row, compared exactly. A resumed run that is merely CLOSE to the plan would
+// put the rails on a plan that is not the one on screen.
+function _p128SameRows(a, b, label) {
+    assert(a.length === b.length, `${label}: ${b.length} rows, the plan has ${a.length} left`);
+    for (let i = 0; i < a.length; i++) {
+        for (const key of Object.keys(a[i])) {
+            if (key === 'loopMs' || key === '-resume') continue;
+            const x = a[i][key], y = b[i][key];
+            const same = x === y || (Number.isNaN(x) && Number.isNaN(y))
+                || (typeof x === 'object' && JSON.stringify(x) === JSON.stringify(y));
+            assert(same, `${label}: ${a[i].year} ${key} ${JSON.stringify(x)} vs ${JSON.stringify(y)}`);
+        }
+    }
+}
+
+test('P128: a resumed run IS the plan continued - every field of every later row, exactly', () => {
+    // The local fixtures run in both tiers and cover the stateful cases: an N-year amortization, a
+    // brokerage cycle, a conversion stop year, Guardrails with a declining shape and its ceiling.
+    const cases = [
+        ['fixed + cycle', { ...BASE, cyclicEnabled: true, growth: 0.05, inflation: 0.025, cpi: 0.025 }],
+        ['guardrails + ceiling', { ...CEIL_BASE, gkShapeCeiling: true }],
+        ['bracket + stop year', { ...CEIL_BASE, spendRule: '', strategy: 'bracket', stratRate: 0.22,
+                                  stratIRMAATier: -1, stratACAMultiple: 0, convertExcessToRoth: true,
+                                  convEndYear: 2036 }],
+    ];
+    // The bank adds nineteen real households in node, with the rule both ways.
+    if (_planBank) {
+        for (const p of _planBank.list()) {
+            cases.push([p.id, { ...p.inputs, spendRule: '' }], [p.id + ' + guardrails', { ...p.inputs, spendRule: 'gk' }]);
+        }
+    }
+    for (const [name, base] of cases) {
+        const spine = simulate({ ...base, captureResume: true });
+        const n = spine.log.length;
+        // Resuming at the plan's own start is the plan.
+        _p128SameRows(spine.log, simulate(core.resumeInputs(base, spine.resumeStart)).log, `${name} from the start`);
+        for (const k of [1, Math.floor(n / 2), n - 2].filter(k => k >= 1 && k < n)) {
+            const res = simulate(core.resumeInputs(base, spine.log[k - 1]['-resume']));
+            _p128SameRows(spine.log.slice(k), res.log, `${name} resumed at year ${k}`);
+        }
+    }
+});
+
+test('P128: a resumed run reads its market from its own first year, and scaled balances start it there', () => {
+    const base = { ...CEIL_BASE, spendRule: '' };
+    const spine = simulate({ ...base, captureResume: true });
+    const rec = spine.log[4]['-resume'];
+    const seq = new Float64Array(40).fill(0.03);
+    seq[0] = -0.25;
+    const res = simulate({ ...core.resumeInputs(base, rec), returnSequence: seq });
+    assert(res.log[0].year === spine.log[5].year, `resumes in ${spine.log[5].year}, got ${res.log[0].year}`);
+    assert(res.log[0]['return%'] === -0.25, `the first resumed year takes the sequence's first return, got ${res.log[0]['return%']}`);
+    // Doubling every balance doubles the portfolio the resumed year starts from - the rails solver's
+    // whole search runs on this.
+    const b = rec.balance;
+    const start = b.IRA1 + b.IRA2 + b.Roth1 + b.Roth2 + b.Brokerage + b.Cash;
+    const doubled = core.resumeInputs(base, rec, { balanceScale: 2 });
+    const sum = doubled.IRA1 + doubled.IRA2 + doubled.Roth + doubled.Roth2 + doubled.Brokerage + doubled.Cash;
+    assertNear(sum, 2 * start, 'the scaled starting portfolio', 1e-6);
+    assert(doubled.BrokerageBasis === 2 * b.BrokerageBasis, 'the basis scales with the brokerage');
+    const spendOnly = core.resumeInputs(base, rec, { spendGoal: 12345 });
+    assert(spendOnly.resume.sim.spendGoal === 12345 && rec.sim.spendGoal !== 12345,
+        'a replaced goal lands on a copy of the record, never on the record itself');
+});
+
+test('P128: the survival test is ONE helper, and the Monte Carlo run agrees with it path for path', async () => {
+    const cfg = _p71Cfg('gbm', { numPaths: 30 });
+    const msg = await _mcEngine.runJob(cfg);
+    const banks = _mcEngine.buildBanks(cfg, _mcPrng.mulberry32(cfg.seed), 'gbm');
+    const v = cfg.variations[0];
+    let ok = 0;
+    for (let p = 0; p < banks.numPaths; p++) {
+        const r = simulate({ ...v, ..._mcEngine.buildPathInputs(banks, p, cfg.years, v, 'gbm') });
+        // The run only scores the years its banks cover.
+        if (!r.log.slice(0, cfg.years).some(_mcEngine.yearIsRuined)) ok++;
+    }
+    assert(ok / banks.numPaths === msg.variations[0].survivalRate,
+        `recomputed ${ok}/${banks.numPaths}, the run reported ${msg.variations[0].survivalRate}`);
+});
+
+test('P128: the rails solver solves the cadence it was given, brackets the plan, and prices itself', async () => {
+    // A Guardrails plan on purpose: every solve must run it with the rule off and still resume from
+    // the rule's own state.
+    const base = { ...CEIL_BASE };
+    const cadence = 10, paths = 30;
+    const msg = await _railsEngine.runRailsJob({ base, preset: 'normal', cadence, numPaths: paths,
+        simulationMode: 'gbm', seed: 42, mu: 0.07, sigma: 0.12, inflationRate: 0.025 });
+    assert(msg && !msg.error && msg.kind === 'rails', `a rails message, got ${msg && msg.error}`);
+    const n = simulate(base).log.length;
+    const solved = _railsEngine.railsSolvedYears(n, cadence);
+    assert(JSON.stringify(msg.years.map(y => y.k)) === JSON.stringify(solved), `solved ${msg.years.map(y => y.k)}`);
+    assert(msg.ruleOn === true && msg.cadence === cadence && msg.numPaths === paths, 'the message names its settings');
+    const E = _railsEngine.RAILS_ESTIMATES_PER_YEAR;
+    assert(msg.cost.estimates === solved.length * E, `estimates ${msg.cost.estimates}`);
+    assert(msg.cost.runs === solved.length * E * paths, `runs ${msg.cost.runs}`);
+    const P = core.RAIL_PRESETS.normal;
+    const log = simulate(base).log;
+    // The first solve is the first full year, resumed from the end of the plan's first year.
+    assert(solved[0] === 1 && msg.years[0].year === log[1].year && msg.years[0].fromYear === log[0].year,
+        `first solve ${msg.years[0].year} from ${msg.years[0].fromYear}`);
+    for (const y of msg.years) {
+        const at = `${y.year}`;
+        assert(y.pos >= 0 && y.pos <= 1, `${at}: probability ${y.pos}`);
+        assert(y.railLower <= y.railUpper, `${at}: the cut rail must sit below the raise rail`);
+        assert(y.spendAtLower <= y.spendAtUpper, `${at}: cutting must spend less than raising`);
+        // The rails are stated in the plan's own TotalNetWealth at the end of the year before, so
+        // each lies on the side of that wealth that the probability says it must.
+        assert(y.wealth === log[y.k - 1].totalNetWealth, `${at}: wealth ${y.wealth} is not the year-end TotalNetWealth`);
+        assert((y.pos < P.lower) === (y.railLower > y.wealth), `${at}: cut rail ${y.railLower} vs ${y.wealth} at ${y.pos}`);
+        assert((y.pos < P.upper) === (y.railUpper > y.wealth), `${at}: raise rail ${y.railUpper} vs ${y.wealth} at ${y.pos}`);
+        assertNear(y.railUpper, y.wealth * y.upperScale, `${at}: the raise rail is the scale times the wealth`, 1e-6);
+        assert((y.pos >= P.target) === (y.spendTarget >= y.planSpend), `${at}: target spend vs plan spend at ${y.pos}`);
+    }
+    // The projection of the settings that ran reproduces what ran.
+    const pj = _railsEngine.railsProjectMs(msg.cost, n, { cadence, numPaths: paths });
+    assert(pj.runs === msg.cost.runs && pj.solvedYears === solved.length, `projection ${pj.runs} runs`);
+    // And the model it prices time with - every resumed run simulates exactly the years left - is
+    // what the runs actually did. That is what makes a projected cadence 1 trustworthy.
+    assert(msg.cost.crashes === 0 && pj.pathYears === msg.cost.pathYears,
+        `simulated years: projected ${pj.pathYears}, measured ${msg.cost.pathYears}`);
+});
+
+test('P128: TotalNetWealth scales with a scaled resume, which is what lets a rail be stated in it', () => {
+    // The rails are found by scaling every balance and the basis by one factor, and reported as that
+    // factor times the year-end TotalNetWealth. That report is only honest if the after-tax wealth of
+    // the scaled state IS the factor times the wealth - checked here on the valuation itself.
+    const base = { ...CEIL_BASE, spendRule: '' };
+    const spine = simulate({ ...base, captureResume: true });
+    const row = spine.log[5], rec = row['-resume'];
+    for (const s of [0.6, 1.7]) {
+        const x = core.resumeInputs(base, rec, { balanceScale: s });
+        const wealth = (x.IRA1 + x.IRA2) * (1 - rec.sim.nominalTaxRate)
+            + Math.max(0, x.Brokerage - x.BrokerageBasis) * (1 - rec.sim.capitalGainsRate)
+            + x.Roth + x.Roth2 + x.Cash + x.BrokerageBasis;
+        assertNear(wealth, s * row.totalNetWealth, `x${s}: the scaled state's after-tax wealth`, 1e-6);
+    }
+});
+
+test('P128: a cancelled rails job resolves to nothing', async () => {
+    let checks = 0;
+    const msg = await _railsEngine.runRailsJob({ base: { ...CEIL_BASE }, preset: 'tight', cadence: 5, numPaths: 20,
+        simulationMode: 'gbm', seed: 7, mu: 0.07, sigma: 0.12 }, { shouldCancel: () => ++checks > 3 });
+    assert(msg === null, `expected null, got ${msg && msg.kind}`);
+});
+
+test('P128: each solve lands on two rows, and the years between solves are interpolated in today\'s dollars', () => {
+    const f = i => Math.pow(1.03, i);
+    const log = [0, 1, 2, 3, 4, 5, 6, 7].map(i => ({ year: 2030 + i, inflationFactor: f(i) }));
+    // Solves for years 1 and 5, resumed from the ends of years 0 and 4. Wealth rails constant in
+    // today's dollars at the row they sit on, spending constant at its own row, and a probability
+    // rising from 50% to 90%.
+    const solvedAt = (k, pos) => ({ k, year: 2030 + k, fromYear: 2030 + k - 1, pos,
+        wealth: 700 * f(k - 1), railLower: 400 * f(k - 1), railUpper: 900 * f(k - 1),
+        planSpend: 60 * f(k), spendTarget: 50 * f(k), spendAtLower: 40 * f(k), spendAtUpper: 70 * f(k) });
+    const msg = { years: [solvedAt(1, 0.5), solvedAt(5, 0.9)] };
+    const rows = _railsEngine.railsRowFields(msg, log);
+    // Wealth rails and the probability on the row the solve starts from, the year-end they compare with.
+    assert(rows[0].railBasis === 'solved' && rows[4].railBasis === 'solved', 'the solves start from rows 0 and 4');
+    assert(rows[0].railLower === 400 && rows[0].railSpend === undefined, 'row 0: wealth rails, no spending');
+    // Spending on the row of the year it is for.
+    assert(rows[1].railSpend === 50 * f(1) && rows[5].railSpendUp === 70 * f(5), 'rows 1 and 5 carry the solved spending');
+    assert([1, 2, 3].every(i => rows[i].railBasis === 'interp'), 'the rows between are marked interpolated');
+    for (const i of [1, 2, 3]) {
+        assertNear(rows[i].railLower / f(i), 400, `row ${i}: a constant real rail stays constant`, 1e-9);
+        assertNear(rows[i + 1].railSpendUp / f(i + 1), 70, `row ${i + 1}: and so does a constant real spend`, 1e-9);
+    }
+    assertNear(rows[2]['railPoS%'], 0.7, 'the probability interpolates linearly', 1e-12);
+    // Nothing after the last solve: its wealth rails end on row 4 and its spending on row 5.
+    assert(rows[5].railLower === undefined && rows[5].railBasis === undefined, 'no wealth rail after the last solve');
+    assert(rows[6] === null && rows[7] === null, 'and nothing at all beyond its spending');
+    const stale = _railsEngine.railsRowFields(msg, log, { stale: true });
+    assert(stale[0].railBasis === 'solved (stale)' && stale[2].railBasis === 'interp (stale)', 'stale rails say so');
+    // A solve whose two years are not in this log draws nothing.
+    const moved = _railsEngine.railsRowFields({ years: [{ ...solvedAt(1, 0.5), year: 1991, fromYear: 1990 }] }, log);
+    assert(moved.every(r => r === null), 'no rail on a year that was not solved for this log');
 });
 
 test('schedule: a per-year spend applies for that year only', () => {

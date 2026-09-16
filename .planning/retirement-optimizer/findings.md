@@ -2984,3 +2984,41 @@ Guardrails rows get no Optimize Spend suggestion, which is the floor doing its j
 NOTHING, so the search can only choose among the stable positive amounts and picks $25,000/yr: $96,275
 less end wealth and $7,445 less spendable than $0. A floor that can reject the do-nothing option can
 force a pick worse than doing nothing. **Shipped as is on the user's call, 2026-09-13; open as `P126f`.**
+**Fixed 2026-09-16 as `P127f`**: $0 is always admissible, the floor applies to positive amounts only.
+
+## P127/P128 - resume, and a re-plan that counted inflation twice  *(2026-09-16, v11.1854)*
+
+**The research harness's re-plan counted inflation twice.** `rbg_harness.js` re-planned mid-run with
+`spendGoal: spend0 x inflationFactor`, but `simulate()` treats the goal as TODAY's dollars and
+inflates it again by `(1 + inflation)^gapYears`. Measured on `bracket-filler-texas`: the re-planned
+2031 goal was $137,375 against the plan's own $124,455 (+10.4%), and 2036 $175,852 against $140,809
+(+24.9%); exact at year 1, which is where `stateAfterYear` re-planned, and wrong in the shock
+section, which re-planned at years 4-6. Corrected numbers for that table (report section 3):
+82.0 -> 92.0%, 0.0 -> 2.0%, 39.5 -> 55.0%, 41.0 -> 74.0%; two households the rails "cut" are left
+alone at their real spending.
+
+**A re-plan is not a continuation, and now there is one that is.** Hand-built re-plans drifted from
+the plan's own later rows by 0.001% (Fill Bracket), 0.7-2.1% (Proportional) and 3.2-5.6% (Reduce IRA
+in N Years + Cycle Brokerage). Everything cross-year restarted - and the plan-year index `y` itself:
+`nYears - y`, schedule and extra-conversion arrays, the Guardrails anchor at `y === 0`, and
+`_convEndReached`, which added the plan-year index to the RUN's start year, so a run resumed five
+years in believed it was five years later and stopped converting five years early (long-widowhood,
+stop year 2036: $231k converted in 2032 in the plan, $0 in the resumed run). `captureResume` / `resume` (snapshotResume: every `sim` field but five, the MAGI
+history, the balances, and the rows the terminal valuation averages over) now reproduce **190 of 190**
+resumed runs exactly - 19 bank households, rule on and off, five resume points - every field of every
+row, the terminal valuation included once `priorRows` was added.
+
+**Survival definitions agree.** `totals.success` and the Monte Carlo tab's balance-only ruin test
+agreed on 1,000 of 1,000 paths (5 households x 200). The rails use the tab's (`yearIsRuined`, now
+shared with `runPass`).
+
+**P127d moves Optimize Spend.** On the suite's GK fixture (`GK_OPT_BASE`) the answer rose $64,829 ->
+$78,687: its three late cuts, which had dragged the worst year to 59% of the first, are held back in
+the final 8 years, and the plan still funds every year with $1.43M left. The rbg re-run shows the same
+direction on the bank households (report section 7a): Guardrails-on answers now follow the rule-off
+answers under a declining Spend Delta, and exceed them on four of eight rows.
+
+**Rails cost, measured in the page** (default plan, 60 paths, 25-year horizon, worker): cadence 5 =
+13,800 runs, ~3.5 s in the job + 1.3 s worker start; cadence 1 = 66,240 runs, 16 s, projected 18 s
+from the cadence-5 run. Node, `mixed-portfolio-couple`, 200 paths, cadence 5 (7 solves in the first
+build) = 64,400 runs, 23 s, 0.36 ms/run; projection for cadence 1 there: 103 s.

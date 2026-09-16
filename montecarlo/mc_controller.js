@@ -2,15 +2,23 @@
 // Uses a Web Worker on http:// (non-blocking). Falls back to chunked async on file://.
 // Fallback requires prng.js and stats.js to be loaded on the main page first.
 
-let _mcWorker = null;
+// ONE WORKER PER KIND OF JOB (P128). The Monte Carlo sweep and the risk-based rails solve
+// (`cfg.kind === 'rails'`) run side by side: the rails panel re-solves on plan edits, and starting
+// one must never terminate the other. Within a kind a new job still replaces the one in flight,
+// which is what every Monte Carlo caller relies on.
+const _mcWorkers = { mc: null, rails: null };
+function _jobKind(cfg) {
+    return cfg && cfg.kind === 'rails' ? 'rails' : 'mc';
+}
 
-// Launch a Monte Carlo run.
+// Launch a Monte Carlo run, or a rails solve.
 // Calls onProgress(0..1) during the run, onComplete(resultsMsg) when done.
-// cfg: { variations, numPaths, mu, sigma, seed, years }
+// cfg: { variations, numPaths, mu, sigma, seed, years } - or { kind: 'rails', base, preset, ... }
 function runMCWorker(cfg, onProgress, onComplete) {
-    if (_mcWorker) {
-        _mcWorker.terminate();
-        _mcWorker = null;
+    const kind = _jobKind(cfg);
+    if (_mcWorkers[kind]) {
+        _mcWorkers[kind].terminate();
+        _mcWorkers[kind] = null;
     }
 
     if (window.location.protocol === 'file:') {
@@ -23,31 +31,34 @@ function runMCWorker(cfg, onProgress, onComplete) {
     // Wall clock starts BEFORE the worker exists, because worker startup is the fixed term the
     // estimate needs and nothing inside the worker can see it.
     const _wallT0 = performance.now();
-    _mcWorker = new Worker('montecarlo/worker.js?v=' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : Date.now()));
+    const w = new Worker('montecarlo/worker.js?v=' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : Date.now()));
+    _mcWorkers[kind] = w;
 
-    _mcWorker.onmessage = function (e) {
+    w.onmessage = function (e) {
         const msg = e.data;
         if (msg.type === 'progress') {
             onProgress?.(msg.pct);
         } else if (msg.type === 'results') {
-            _mcWorker = null;
+            if (_mcWorkers[kind] === w) _mcWorkers[kind] = null;
             // A stress-only refresh is a handful of sims against a different code path; folding it
             // into the model would drag the fixed term toward a number the run buttons never pay.
-            if (!msg.stressOnly && !msg.error) {
+            // A rails job is a different shape of work altogether and prices itself.
+            if (kind === 'mc' && !msg.stressOnly && !msg.error) {
                 recordMCTiming(performance.now() - _wallT0, msg.totalMs, cfg.numPaths, cfg.variations?.length ?? 1);
             }
+            if (kind === 'rails') msg.wallMs = performance.now() - _wallT0;
             onComplete?.(msg);
         }
     };
 
-    _mcWorker.onerror = function (e) {
+    w.onerror = function (e) {
         console.error('MC Worker error:', e.message, e);
-        _mcWorker = null;
+        if (_mcWorkers[kind] === w) _mcWorkers[kind] = null;
         // If worker fails for any reason (e.g. late-detected security issue), retry on main thread.
         _runMCFallback(cfg, onProgress, onComplete);
     };
 
-    _mcWorker.postMessage(cfg);
+    w.postMessage(cfg);
 }
 
 // _runMCMainThread is async, so anything it throws surfaces as a rejected promise nobody awaits.
@@ -60,22 +71,23 @@ function _runMCFallback(cfg, onProgress, onComplete) {
         .then(() => _runMCMainThread(cfg, onProgress, onComplete))
         .catch((err) => {
             console.error('MC main-thread run failed:', err);
-            onComplete?.({ type: 'results', error: String((err && err.message) || err) });
+            onComplete?.({ type: 'results', kind: cfg && cfg.kind, error: String((err && err.message) || err) });
         });
 }
 
-// True while a worker run is in flight. Callers that want to slip a cheap extra pass in (the
-// stress-only refresh) check this first, because runMCWorker terminates any running worker.
+// True while a Monte Carlo worker run is in flight. Callers that want to slip a cheap extra pass in
+// (the stress-only refresh) check this first, because runMCWorker terminates any running worker of
+// the same kind. A rails solve is a different kind and does not count.
 function _mcWorkerBusy() {
-    return _mcWorker !== null;
+    return _mcWorkers.mc !== null;
 }
 
-function cancelMCWorker() {
-    if (_mcWorker) {
-        _mcWorker.terminate();
-        _mcWorker = null;
+function cancelMCWorker(kind = 'mc') {
+    if (_mcWorkers[kind]) {
+        _mcWorkers[kind].terminate();
+        _mcWorkers[kind] = null;
     }
-    _mcCancelled = true;
+    _mcCancelledKinds[kind] = true;
 }
 
 // ---- Throughput tracking (for time estimates) ------------------------------
@@ -168,10 +180,18 @@ function calibrateMCMs(cfg) {
 // is now a set of hooks: since P71 both paths call the one engine in mc_engine.js, and the only
 // difference between them is that this one has a UI to keep alive and a Cancel button to answer.
 
-let _mcCancelled = false;
+const _mcCancelledKinds = { mc: false, rails: false };
+// Rails jobs on the main thread SUPERSEDE each other, the way a new worker replaces the old one: an
+// auto-run re-solve must not leave the previous solve grinding on underneath it. The Monte Carlo
+// kind keeps its own long-standing behavior here.
+let _railsMainThreadGen = 0;
 
 async function _runMCMainThread(cfg, onProgress, onComplete) {
-    _mcCancelled = false;
+    const kind = _jobKind(cfg);
+    _mcCancelledKinds[kind] = false;
+    const gen = kind === 'rails' ? ++_railsMainThreadGen : 0;
+    const superseded = () => kind === 'rails' && gen !== _railsMainThreadGen;
+    const t0 = performance.now();
 
     // Yield on a TIME budget, not on a loop counter. This used to yield once every 5 variations,
     // which was fine while every run swept ~144 of them but blocks the page solid for a run with a
@@ -180,9 +200,10 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
     // 16ms is one frame, so the progress bar keeps moving and Cancel stays clickable.
     let _lastYield = performance.now();
 
-    const msg = await runJob(cfg, {
-        onProgress:   pct => onProgress?.(pct),
-        shouldCancel: () => _mcCancelled,
+    const job = kind === 'rails' ? runRailsJob : runJob;
+    const msg = await job(cfg, {
+        onProgress:   pct => { if (!superseded()) onProgress?.(pct); },
+        shouldCancel: () => _mcCancelledKinds[kind] || superseded(),
         yieldIfDue:   async () => {
             if (performance.now() - _lastYield < 16) return;
             await new Promise(r => setTimeout(r, 0));
@@ -192,6 +213,12 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
 
     // Cancelled mid-pass. Report nothing, which is what leaves the previous results on screen.
     if (!msg) return;
+
+    if (kind === 'rails') {
+        msg.wallMs = performance.now() - t0;
+        onComplete?.(msg);
+        return;
+    }
 
     // Same model as the worker path. On file:// there is no worker to spawn, so wall and worker time
     // are the same clock and the fixed term learns ~0 -- correct, the run really is cheaper to start.

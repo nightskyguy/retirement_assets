@@ -17,7 +17,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P34 | NOT a P103 prerequisite (a-d are node harnesses); still the whole slow-machine story | `P34a` |
 | **O1** | P28j | `jg`/`jh`/`ji`/`jk` SHIPPED, and `jo`'s Split/Early/Late menu shipped in `a5d8aa9`. `jf` MEASURED and NOT acted on - the trigger is unchanged, and its removal case was withdrawn | `P28jn` / `P28jo` Automatic |
 | **O1** | P115 | **tax-payment attribution** (user, 2026-09-09). `a` SHIPPED v11.17b1: cash interest trued up to what the cash earned; `b` CLOSED v11.17f4. Priority is mine, not the user's | `P115c` |
-| **O1** | P126 | **Guyton-Klinger becomes a spending control** (user, 2026-09-13). BUILT v11.1823, in PR review: rows follow the switch plus the plan's own twin, Compare All = the Optimizer's rows, My Plan Only runs the plan both ways, Guardrails described by savings, old plans keep their numbers (560/560) | `P126f` / commit; then `P128a` |
+| **O1** | P127 + P128 | **BUILT 2026-09-16 v11.1854, NOT COMMITTED** (user: "Let's do P128 ... also worth amending the GK-Style rules"). P127: no cut in the last 8 years, 6% CPI cap, freeze on the portfolio return, the filter judged against the shape, $0 conversion always admissible (`P126f`), ceiling as a nerdknob switch. P128: `?nerdknob=rails`, resume-based solver, both charts, timing + projection. Suites 468/32/61/26. P126 itself shipped in PR #224 | commit / PR |
 
 **Live carry-overs from finished phases** - the rest of what those phases did is in their stubs below:
 - `P85` RE-RUN: converting earlier still wins 353 of 499, but **the RMD claim BROKE** - 124 counterexamples, all bracket strategies at a live IRA Goal. `P72` is still pending.
@@ -607,7 +607,7 @@ strategy should load with the Guardrails control on, and a withdrawal strategy s
       `spend / portfolio > IWR x (1 + g)` multiplied through by the portfolio. The Compare All parity
       line left the changelog: nobody expected the two tabs to differ, so it is not news.
 
-## P127: the spending-shape ceiling on the Guardrails rule  *(2026-09-15, user-raised. BUILT, DEFAULT OFF, NOT WIRED TO THE PAGE)*
+## P127: the spending-shape ceiling on the Guardrails rule  *(2026-09-15, user-raised. a-g BUILT 2026-09-16 v11.1854, not committed)*
 
 Recorded here because the ID is already in shipped code comments (`optimizer_core.js`, the
 `gkShapeCeiling` block in `resolveSpendTarget` and the `sameStrategySelection` note) and in
@@ -624,18 +624,42 @@ shape, so it is a ceiling and not a band. Three tests pin the contract.
 `long-widowhood` 9.3% for 12.7%. On the shock path it takes at most 2.3%, and a household the rule
 never raises is identical to the cent.
 
-- [ ] `P127a` **decide whether it reaches the page**, and as a switch or a default. Turning it on
-      changes the spending of every plan with Guardrails on, so it is a release decision, not a
-      default flip. **Prerequisite:** `P127b`.
-- [ ] `P127b` `gkSpendStable` (`optimizer_core.js:5261`) compares the run's minimum real spend against
+### User decisions, 2026-09-16 (asked in session: "ask me which changes to make for P127")
+
+- **Adopt three published rules**: the inflation-freeze test reads the PORTFOLIO's return, the
+  capital-preservation cut is suspended in the plan's **last 8 years** (the user's number - the
+  paper says 15), and the inflation raise is capped at **6%**.
+- **Do NOT switch the rate the rule tests** to portfolio withdrawals (it would fire on the hatchet).
+- **The ceiling reaches the page as a nerdknob switch, default off.**
+- **Fix both search-filter faults**: judge against the planned path (`P127b`), and keep $0 conversion
+  admissible (`P126f`).
+
+- [x] `P127a` the ceiling as a nerdknob switch (default off) beside Guard % / Adj %, in the share URL
+      and the saved plan (it changes numbers). **Prerequisite:** `P127b`. DONE: `#gkShapeCeiling`
+      "Never above plan", URL key `gsc`, `applyScenario` defaults an absent key to off, the Optimizer
+      row load restores it, the Guardrails sentence names it when on (a link can switch it on for a
+      reader without the knob). Browser-verified: drawn 44 x 24, label click toggles it.
+- [x] `P127b` `gkSpendStable` (`optimizer_core.js:5261`) compares the run's minimum real spend against
       its **year-0** value, and `spendGoal` carries Spend Delta - so the filter cannot tell a planned
       decline from a rule-driven slash. A -1%/year shape breaches the floor by year 23 unaided, and on
       `mixed-portfolio-couple` at -1% `optimizeSpend` returns NO viable spend where the same plan
       without Guardrails returns $271,705. The fix is one line - compare against the shape,
       `spend0 x (1 + spendChange)^y` - but it moves what the Optimizer's spend and conversion searches
-      return, so it is a decision about search behavior, not a repair.
+      return, so it is a decision about search behavior, not a repair. **User: do it.**
+- [x] `P127c` the inflation freeze reads the portfolio's total return (balance-weighted account
+      returns at the start of the year, dividends and cash yield included), not the equity return.
+- [x] `P127d` no capital-preservation cut in the plan's last 8 years (`GK_NO_CUT_FINAL_YEARS`),
+      labelled `no-cut`. **Moves Optimize Spend**: the suite's GK fixture went $64,829 -> $78,687 (its
+      late cuts had been what the floor rejected); that test now asserts the ceiling spend is
+      floor-rejected instead of a 90% margin.
+- [x] `P127e` the inflation raise capped at 6% (`GK_CPI_RAISE_CAP`), labelled `CPI≤6%`; the shape
+      keeps full CPI.
+- [x] `P127f` (= `P126f`) $0 is always an admissible conversion amount; the floor applies to the
+      positive amounts only (`optimizeConversionAmount`, `_conversionHelpsAtRate`).
+- [x] `P127g` README's caveat (now "two places"), the switch tooltip, the sentence under it, the
+      gkAdj column help, the research report (sections 6-7 and the re-run note) and the changelog.
 
-## P128: risk-based guardrails drawn on the live charts  *(NEW 2026-09-16, user-raised, PRIORITY UNASSIGNED)*
+## P128: risk-based guardrails drawn on the live charts  *(2026-09-16, user-raised. a-g BUILT same day v11.1854, not committed)*
 
 **The user's case, in substance:** compute the risk-based (probability-of-success) guardrails against
 the live plan, plot them on the charts, and **report what the computation cost** - "to help me
@@ -692,8 +716,27 @@ on-demand default.
 - **Auto-run is debounced and fires only on plan-material changes** - balances, spend goal, ages,
   growth, inflation, strategy, and the rail settings. Cosmetic toggles never trigger it.
 - **Stale rails stay drawn**, marked as stale, with a separate control to hide them.
+  SUPERSEDED by the second round below: the control is for the PREVIOUS solve.
 - **Annual Details carries the rails**: upper and lower rail, and the calculated spend for each.
 - Nerdknob-gated, on the LIVE chart - not a separate view.
+
+### User decisions, second round, 2026-09-16 (after seeing the first build)
+
+- **No rails on the Income & Expenses view** ("too busy there"). The spending rails stay on Income vs
+  Net.
+- **Rails use their own symbols**, never the circle: raise ▲, cut ▼, target spend ■, in the legend
+  too. **The band between the cut and raise rails is shaded light green** - on Income vs Net as well
+  (user, a third request the same day; pinned by the in-page `railsBandOnBothViews`).
+- **"Portfolio (Jan 1)" confused the user** ("Why isn't it the same thing as TotalNetWealth?"). It was
+  the raw pre-tax start-of-year total the rails were scaled from. Dropped: the wealth rails are now
+  stated in TotalNetWealth terms (exact, because scaling every balance and the basis scales TNW by the
+  same factor) and sit on the year-END row the solve starts from, beside that row's own TNW. The
+  spending answers sit on the solved year's own row.
+- **The first solve is the first full year** (plan year 1, resumed from the end of year 0), then
+  every cadence.
+- **The previous solve persists** after a new one lands, drawn faded, "so that the difference is
+  visual". The checkbox became *Show previous rails*; a stale current solve stays drawn and says so.
+- The user asked where the `file://` copy is, to test locally.
 
 ### Where the code goes
 
@@ -729,21 +772,63 @@ settings **do not enter the share URL, the saved plan, or `selectionOf`/`sameStr
 they change no projected number, only what is drawn. Add the assertion the suite already makes for
 goal-first (`optimizer_tests.js:2643`): not visible without the knob.
 
+### Design refinements found while building, 2026-09-16
+
+- **The harness's re-plan counts inflation twice.** `spendGoal: spend0 * inflationFactor` is then
+  inflated AGAIN by the engine's gap-year pre-compounding (`simulate()`, `gapYears`). Exact at k=1,
+  +10.4% real at year 5, +24.9% at year 10 (`bracket-filler-texas`). Report section 3's second table
+  re-plans at years 4-6, so its probabilities were taken at ~10-15% more real spending than stated.
+- **A re-plan is not a continuation.** Measured deterministic drift from the plan's own later rows:
+  0.001% (bracket), 0.7-2.1% (propwd), 3.2-5.6% (fixed + cyclic). Causes: `nYears - y`, the cyclic
+  counter, the IRMAA MAGI lookback, the year-0 tax-rate seeds, the plan-year index `y` itself (GK
+  anchor, schedule arrays, extra-conversion arrays), the inflation clocks under a replayed path.
+  FIX: `inputs.resume` - a snapshot of every cross-year field, captured per row on request
+  (`captureResume`), which makes a later run CONTINUE the plan. Sequences stay indexed from the
+  resume point. Exact continuity is a test.
+- **Survival = the Monte Carlo tab's rule** (year-end portfolio below that year's required draw),
+  shared through one helper. `totals.success` agreed on 100% of paths on 5 plans x 200 paths.
+- **Rails are measured at the plan's OWN spending.** Guardrails is OFF inside every solve: the rails
+  are the spending rule being evaluated. (The first build compared them with a start-of-year raw
+  portfolio line; the second round replaced that with TotalNetWealth, above.)
+- Extra columns beyond the five planned: `railSpend` (target-probability spend) and `railPoS%` (the
+  plan's probability from that year-end on).
+- **Two worker slots.** `runMCWorker` terminates what is in flight, so a rails auto-run would have
+  killed a Monte Carlo run. The controller now keeps one worker per job kind; verified side by side.
+
 ### Checklist
 
-- [ ] `P128a` move `RAIL_PRESETS` into `optimizer_core.js`, export it, repoint `rbg_harness.js` at it,
-      and confirm the harness reproduces its published numbers unchanged.
-- [ ] `P128b` `montecarlo/rails_engine.js`: `solveRailsAt()` and the cadence loop, with the hooks
-      contract and a returned cost record (runs, estimates, elapsed per phase).
-- [ ] `P128c` worker job type + controller passthrough, with the `file://` fallback exercised.
-- [ ] `P128d` the panel: preset, cadence, paths, Run, auto-run, show-stale, timing readout with the
-      projection line.
-- [ ] `P128e` chart datasets on both charts, solved-year markers, legend show/hide.
-- [ ] `P128f` Annual Details columns and the log merge.
-- [ ] `P128g` tests: the knob gate, the preset table, and the interpolation marker. **Reconcile test
-      counts in `TestTiers.EXPECTED` AND `.githooks/README.md` in the same commit, measured.**
+- [x] `P128a` move `RAIL_PRESETS` into `optimizer_core.js`, export it, repoint `rbg_harness.js` at it,
+      and confirm the harness reproduces its published numbers unchanged. DONE: the repointed harness
+      against the UNCHANGED engine (scratch copy + shim) diffed identical apart from timings.
+- [x] `P128b` `montecarlo/rails_engine.js`: `runRailsJob()` and the cadence loop, with the hooks
+      contract and a returned cost record (runs, estimates, simulated years, elapsed per phase).
+- [x] `P128c` worker job type + controller passthrough, with the `file://` fallback exercised (called
+      directly from the http page: the preview pane shows `file://` as a static `data:` snapshot).
+- [x] `P128d` the panel: preset, cadence, paths, Run (labelled with its projected time), Cancel,
+      auto-run, show-previous, status line, timing readout with the projection grid and the
+      previous-run check.
+- [x] `P128e` chart datasets on the Balances chart and Income vs Net, solved-year markers, legend
+      show/hide, the green band.
+- [x] `P128f` Annual Details columns (a "Rails" band under Spending) and the log merge.
+- [x] `P128g` tests: 7 node (presets, resume continuity over the bank, resume sequencing and scaling,
+      the TNW scaling identity, one survival helper, the solver, cancel, the two-row interpolation)
+      + 3 in-page blocks (knob gate / no plan input, tooltip note, the ceiling switch). Counts
+      reconciled: 468 / 32 / 61 / 26, slow 3.
 
-### Verification
+### Verification results, 2026-09-16
+
+1. Harness identity after `a`: identical (above). After P127 and the re-plan fix it was re-run and
+   `research/RISK_BASED_GUARDRAILS.md` updated; see findings "P127/P128 - resume, and a re-plan that
+   counted inflation twice".
+2. Suites 468 / 32 / 61 / 26.
+3. Knob off at runtime: panel hidden, rail columns and datasets gone; back on, restored.
+4. Default plan, 60 paths: solves 2027/2032/2037/2042/2047; ▲/▼ with the band on Balances, ■/▲/▼ on
+   Income vs Net, none on Income & Expenses; Rails columns under Spending.
+5. Cadence 5 then cadence 1: the Run button read "about 18 s", the run took 16 s ("9% shorter").
+6. Auto-run: two quick balance edits -> ONE solve; Current $ toggled twice -> none. A plan edit marks
+   the rails stale; the next solve keeps them, faded, as the previous rails.
+
+### Verification (the plan, kept for the record; results above)
 
 1. `node .test_harnesses/rbg_harness.js --plans bracket-filler-texas` reproduces its numbers after `a`.
 2. All four suites at their pinned counts.
@@ -755,7 +840,102 @@ goal-first (`optimizer_tests.js:2643`): not visible without the knob.
 6. Auto-run: change a balance - exactly one debounced re-solve; toggle Current $ - none; then confirm
    stale marking and the hide control.
 
-## P116: prune the harnesses and research reports  *(2026-09-09. `a`, `c`, `d` DONE 2026-09-10; `b` OPEN)*
+## P129: set After-Tax Spend from the rails solve  *(2026-09-16, user-raised. PLANNED, not started, PRIORITY UNASSIGNED)*
+
+**The ask:** "create a plan to calculate the 'After-Tax Spend' goal based on the outcome of the
+risk-based guard rail run. It should be able to calculate that with a single run." Asked in the same
+message: "Spend at Target is mysterious. I assume that's what the spending COULD be if the assets are
+above Raise Rail" - it is not; see P129d.
+
+### What it computes
+
+The After-Tax Spend - the `spendGoal` input, in today's dollars - at which the plan, **from its own
+start**, has exactly the preset's target chance of funding every year (95% Tight, 90% Normal, 80%
+Loose). One bisection on a multiplier `m` of the whole spending path, inside the same rails job and
+on the same market paths as the rails. The answer is `m x` the current After-Tax Spend.
+
+### Why from the plan's start, when the rails start at the first full year
+
+The drawn rails start in the first full year (user, 2026-09-16) because a check at the start of a year
+already under way is not something anyone can act on. After-Tax Spend is different: it IS the plan's
+year-0 input, and the typed balances are the balances as of that year (the Assets heading says so,
+P93). Solving from the first full year instead would mean converting a year-1 answer back through
+year 0's own spending - which moves the year-end wealth that answer was measured from. That is a
+fixed point, several runs to settle. From the start it is one bisection.
+
+### Why one run is enough, and exact
+
+- `simulate({ captureResume: true })` already returns `resumeStart`, and a run resumed from it is
+  the plan itself (the continuity test).
+- Scaling that record's year-0 goal by `m` IS setting the input to `m x spendGoal`: the gap-year
+  pre-inflation, Spend Delta and CPI all multiply, and nothing else in the starting state depends on
+  the goal. So the answer needs no conversion, and a test can demand that a fresh run at the answer
+  and the resumed run at `m` are bit-identical.
+- Cost: 1 probability estimate + 9 bisection steps = 10 estimates, full-horizon runs. At 200 paths,
+  2,000 plan runs - about a second on a 25-year plan at the page's measured 20 microseconds per
+  simulated year, plus the worker's start. On top of a cadence-5 rails job it adds 6-8% (its runs are
+  the longest, but there are only 10 estimates against the job's 46 per solved year).
+
+### Checklist
+
+- [ ] `P129a` engine: `runRailsJob` adds `start: { pos, spendMult, spendGoal, clamped, ms }`, solved
+      from `spine.resumeStart` with Guardrails off like every rails solve; the cost record and
+      `railsProjectMs` count it (10 x paths x n simulated years). A **start-only** mode (a cadence
+      choice, or a flag) runs just this solve, for a user who only wants the number.
+- [ ] `P129b` panel: "After-Tax Spend for a 90% chance from 2026: $X (you have $Y)" and a **Use it**
+      button - sets `#spendGoal` through `DisplayHelpers.setDollarValue`, rounded, remembers the
+      prior value for **Restore** the way the After-Tax Spend ⓘ icon does, re-runs the plan. The
+      answer does not depend on the current goal, so its staleness is judged with `spendGoal` left out
+      of the fingerprint: using it does not make it stale, any other plan change does.
+- [ ] `P129c` OPTIONAL: the same number as a "Risk-based" entry in the After-Tax Spend ⓘ menu while a
+      current solve exists. **Decision for the user.**
+- [ ] `P129d` make the spending rails readable:
+      - legend names carry the preset: "Spend for a 90% chance", "Spend if wealth reaches the raise
+        rail", "Spend if wealth falls to the cut rail";
+      - say in the panel note that the raise-rail line can sit BELOW the 90% line when the plan is
+        already past the raise rail. The user's plan, first full year: 99.5% chance, and the 90%
+        spend 1.19x the plan's own with the raise-rail spend at 1.12x (the raise rail is below
+        today's wealth);
+      - a clamped answer (the user's plan, 4 years before it ends: 4x the plan's spend, the search's
+        limit) is marked "at least" and stops the line rather than stretching the axis.
+        **Decision for the user:** stop the line, or keep it with a hollow marker.
+- [ ] `P129e` tests. Node: the answer reaches the target and 1% more does not (same seed); a fresh run
+      at the answer equals the resumed run at `m`, bit for bit; the answer does not move with the
+      current goal beyond one bisection step; the clamp flag; the projection counts the start solve.
+      In-page: Use / Restore round trip; Use disabled while stale for a non-spend change.
+- [ ] `P129f` docs: ExperimentalFeatures rails row, the panel note, ARCHITECTURE 5a.
+
+### Verification
+
+1. On the user's 2026-09-16 plan (shared in chat and deliberately not recorded: this repository is
+   public, and a real private plan never enters it - see the `*.local.json` rule), or on a bank
+   household, apply the answer and solve again: the start
+   solve reports at least the target, and a new answer within one bisection step of the first.
+2. Start-only mode on a 25-year plan at 200 paths: 2,000 plan runs, and the Run label projects it.
+3. Knob off: nothing new anywhere.
+
+### Questions for the user before building
+
+- Guardrails-on plans: the number is for spending that holds its planned path (Guardrails off, like
+  every rails solve). With the rule on, a higher start survives because the rule cuts. Offer it
+  anyway, labelled, or hide it?
+- Rounding: nearest $100 or $1,000.
+- Precision: at 200 paths a 90% estimate carries about +/-2 points of sampling noise, which moves the
+  answer by a few percent with the seed. Suggest 500+ paths for this number (2.5x the time)?
+
+## P130 candidate: the income charts count a harvest's reinvested proceeds as spendable  *(2026-09-16, user observation. NOT STARTED, PRIORITY UNASSIGNED)*
+
+User, on the plan above: "Income is WAY above the Spend at Target during Brokerage years." Measured:
+it is the Cycle Brokerage harvest, not the rails. In each of the plan's three harvest years it sells
+2.2x-2.7x that year's spending of Brokerage, and **53%, 68% and 78% of the sale goes straight back
+into Brokerage** (`SurplusBrok`) - a gain harvest that steps the basis up. Spending stays at the goal.
+But *Income vs Net* shows Total Income at about 3x the goal and Net (Spendable) at 2.5x-2.7x, and
+*Income & Expenses* stacks the same sale into its bars and Net Income line, because both count the
+whole sale. (Ratios, not dollars: the plan is the user's own, and this repository is public.)
+
+Candidate fix: subtract what went back into savings (`SurplusBrok`, and surplus banked to Cash) from
+the spendable lines and bars, so a harvest year reads as the spending it funded. User-visible, so a
+changelog entry. Not a rails change.
 
 **DONE 2026-09-10 (user: "let's do P116"), v11.17c1.** 28 harnesses and 16 reports deleted, every
 reference scrubbed, `HARNESSES.md` rebuilt as one row per survivor with a **last-run-on** column.

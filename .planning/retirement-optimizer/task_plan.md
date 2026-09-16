@@ -860,9 +860,20 @@ want to do more testing with it set to 'autorun' ... are those tasks in contenti
       (reproduced: three quick edits left `_mcStressPending` true with nothing in flight). Fixed in
       `refreshMCStressOnly`'s success path; unsafe in-page test `stressRefreshDisplacedBySuccessIsRun`.
       User-visible, so a changelog line.
-- [ ] `P128k` heavy precision test: `.test_harnesses/rails_precision_harness.js` ->
-      `research/RISK_BASED_RAILS_PRECISION.md`. Decides the defaults the user proposed (100 paths
-      every 3 years) and whether `P129` and a higher-precision button are worth building.
+- [x] `P128k` heavy precision test: `.test_harnesses/rails_precision_harness.js` ->
+      `research/RISK_BASED_RAILS_PRECISION.md` (run 2026-09-16 on 11.1857, 51 min, 16 processes;
+      findings "P128 round 3"). Every rail reachable in every method; "99%"/"100%" drift with the
+      path count (98%/99% at 100 paths; the 100% rail +37-44% at 1,000); everything <= 95% and the
+      start solve move 2-8% at 100 paths, the raise rails 7-27%; every 3 years within ~1%; 12-26 s
+      per household here, 45-162 s on the audience's machines; start solve +3-5%. **Decisions it
+      informs are the user's and are open** (below, and in `P129`).
+- Decisions open after `P128k` (asked 2026-09-16, not yet answered):
+  - defaults 100 paths / every 3 years (supported except for the raise rails);
+  - the raise thresholds: keep and label, correct the count (noisier at 100 paths), solve the raise
+    rail alone with more paths, or lower it (95% moves 7-8% at 100 paths);
+  - Loose's 100%: undefined for a finite sample - 99%, or 99.5% with >= 200 paths;
+  - a per-path solve (same cost, every preset at once) - not measured beyond arithmetic;
+  - which market method the rails default to; auto-run default and whether it is remembered.
 - [x] `P128l` (user, same day, via the side-task chip) the Stress Test refresh skips when nothing it
       reads has changed. `_lastStressHash` = the `_buildMCHash()` of the pass ON SCREEN, recorded
       with its render (a full run records its own on success); `refreshMCStressOnly` compares after

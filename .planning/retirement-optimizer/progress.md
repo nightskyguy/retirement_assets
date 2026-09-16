@@ -5314,4 +5314,14 @@ running in the background?"
     page-writing suites skipped (two of them new).
   - Timing claims deliberately NOT made yet: the heavy test held 16 cores the whole time (a rails
     solve took 28 s instead of the usual few). The contention numbers wait for a quiet machine.
-  - Stamp 11.1858.
+  - Stamp 11.1858. Committed `40e65de`, pushed; PR #227 title and description updated.
+- User: "what decisions are left?" - answered with fourteen, four of them waiting on the heavy test.
+- Heavy test finished (51.2 min). Report `research/RISK_BASED_RAILS_PRECISION.md` written from a
+  bank-only re-print (`--from ... --no-timing`, without `USER_PLAN`), so every committed number can
+  be reproduced without the user's file; the user's plan rows went to chat only. Added to the harness
+  after the run: `--from`, `--no-timing`, section 2c (the path-count correction), and an `engine`
+  field on every task result (the first run's results do not carry it). Smoke-tested with `--quick`
+  (3.0 min) and a `--from` re-print of that run.
+- Contention measured on the page once the machine was quiet (findings "P128 round 3"). The first
+  attempt's main-thread lag of ~1 s was timer throttling in the hidden pane; re-measured with the
+  long-task log.

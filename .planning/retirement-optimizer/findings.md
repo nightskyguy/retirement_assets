@@ -3022,3 +3022,57 @@ answers under a declining Spend Delta, and exceed them on four of eight rows.
 13,800 runs, ~3.5 s in the job + 1.3 s worker start; cadence 1 = 66,240 runs, 16 s, projected 18 s
 from the cadence-5 run. Node, `mixed-portfolio-couple`, 200 paths, cadence 5 (7 solves in the first
 build) = 64,400 runs, 23 s, 0.36 ms/run; projection for cadence 1 there: 103 s.
+
+## P128 round 3 - what runs beside what, two Stress Test staleness bugs, and the heavy test  *(2026-09-16, v11.1858)*
+
+**The rails solve and the Stress Test do not contend, over http.** Measured on the page (default plan,
+Normal, every 3 years, 100 paths, Historical; the browser pane was HIDDEN, so Chrome deferred some
+drawing and a 20 ms interval timer was throttled to about 1 s - the first attempt's "984 ms main-thread
+lag" was that throttling, not blocking; the long-task log is the measure that survives it):
+
+| case | result |
+|---|---|
+| rails alone | 8.8-8.9 s (7.6 s in the worker) |
+| Stress Test refresh alone | 1.30-1.55 s, of which 45-47 ms is work; the rest is starting a worker |
+| My Plan Only (400 paths) alone | 1.73-1.90 s |
+| rails + a refresh 1 s in | rails 8.9-11.3 s, refresh 1.49-1.53 s, one 50 ms task |
+| My Plan Only + rails 0.5 s in | My Plan Only 1.75-1.79 s, rails 9.1-10.8 s, no long task |
+| file://, rails alone | 13.3-16.2 s, no long task (16 ms slices) |
+| file://, rails + a refresh | rails 12.9 s, refresh 36-44 ms (29 ms alone: no worker to start) |
+
+Separate worker slots since P128, so neither cancels nor waits on the other; they share cores only.
+
+**Stress Test bug 1 - P91 drained only after a FAILURE.** `_drainStressPending` ran on the error path
+of `refreshMCStressOnly`'s callback and nowhere on the success path, since 11.16a5. Reproduced: three
+quick edits left `_mcStressPending === true` with nothing in flight. Fixed (success path drains after
+the render).
+
+**Stress Test bug 2 - the `_lastMCHash` early return was wrong both ways.** `mcInputsChanged` returned
+when `_buildMCHash() === _lastMCHash`, which only a FULL run writes. Before any full run: every sidebar
+blur spawned a stress worker, change or not (measured: a blur with no change started one). After
+one: undoing an edit matched the run's hash, so no pass ran - reproduced with the plan back at $140k
+and the tile still reading "36 of 36 fail" from the edit (9 of 36 is right). Fixed with
+`_lastStressHash`, the inputs of the pass ON SCREEN, recorded at its render (a full run records its
+own), checked after both P91 guards. After: 12 fields tabbed, 0 workers; an edit and its undo, one
+worker each, tile right both times, before and after a full run. Left alone by instruction: the "out
+of date" banner is still not cleared when an undo puts the plan back to the swept one.
+
+**Heavy test (`research/RISK_BASED_RAILS_PRECISION.md`), the points a later reader needs:**
+
+- No market path fails at every wealth up to 64x, in any method; at most 0.25% of paths need more
+  than the solver's 4x bracket. The user's worry ("synthetic invariably below 100%") is refuted as
+  stated - but the SAMPLE cannot say what 100% means: from N paths, "99%" lands on the 98.05th
+  percentile at N = 100 and 98.93rd at 1,000; "100%" on 98.98th and 99.93rd, rising without limit.
+- At 100 paths every threshold at or below 95%, the target spend and the start solve move 2%-8% run
+  to run with a bias under 2%; the raise rails move 7%-27%, and the spend at the raise rail inherits
+  that (4%-16%).
+- The corrected count c = q(N + 1) centres 99% at every N but, at N = 100, makes it the worst path
+  (spread 18%-24% against 10%-16% as solved). 99.5% needs N >= 199; 100% can never be corrected.
+- Survival is monotone in wealth and in spending on every one of 10,800 grid checks, which is what
+  makes a PER-PATH solve possible: 14 runs a path gives every wealth rail of every preset at once
+  (1,400 runs at 100 paths against 1,800 for the two rails by PoS bisection). Not built.
+- Cost is the binding constraint: 100 paths every 3 years = 12-26 s per household on the dev box
+  (node, idle), 45-162 s at 3.5-6x slower; the start solve adds 0.6-0.9 s (3%-5%).
+- The harness's child processes read the harness file when they START, so editing it during a run
+  changes every task launched afterwards. It was not edited during the run; the `--from` mode and
+  the engine field were added after it finished.

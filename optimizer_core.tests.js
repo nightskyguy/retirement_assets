@@ -1106,6 +1106,74 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
         `Expected 3 guardrail adjustments, got ${gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length}`);
 });
 
+// ── P127 prototype: the shape ceiling on the Guardrails rule ──────────────────────
+// `gkShapeCeiling` holds the rule's goal at the plan's OWN spending path - year-0 goal carried
+// forward by Spend Delta and CPI - so the rule can undo its own cuts but never spend above what the
+// household asked for. Default OFF, and the three tests below are the contract: the premise it is
+// answering, what it does when on, and what it must never do.
+//
+// ONE FIXTURE for all three, deliberately growth-rich (8%) with a declining shape (-1%/year): the
+// prosperity rule has to fire for any of this to be testable, and the declining shape is the case
+// the ceiling was asked for. `spendChange` also exercises the delta half of the shape, which is
+// carried in endYear rather than in the rule.
+const CEIL_BASE = {
+    ...BASE, strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', nYears: 30,
+    birthyear1: 1960, die1: 92, birthyear2: 1962, birthmonth2: 6, die2: 94, hasSpouse: true,
+    IRA1: 1500000, IRA2: 500000, Roth: 200000, Roth2: 100000,
+    Brokerage: 600000, BrokerageBasis: 300000, Cash: 100000,
+    ss1: 45000, ss1Age: 70, ss2: 25000, ss2Age: 70,
+    spendGoal: 140000, spendChange: -0.01, inflation: 0.025, cpi: 0.025, growth: 0.08,
+    cashYield: 0.02, dividendRate: 0.02,
+};
+// Real spending as a multiple of the shape for that year. The shape in REAL terms is just the
+// year-0 goal compounded by Spend Delta; the price level divides out of both sides.
+const ceilRatios = res => res.log.map((row, y) =>
+    (row.spendGoal / (row.inflationFactor || 1)) / (CEIL_BASE.spendGoal * Math.pow(1 + CEIL_BASE.spendChange, y)));
+
+test('Guardrails: without the ceiling, prosperity raises lift spending above the plan\'s own shape', () => {
+    // The premise the ceiling answers. If this ever stops being true the ceiling is testing nothing,
+    // so it is asserted rather than assumed.
+    const off = simulate({ ...CEIL_BASE });
+    const peak = Math.max(...ceilRatios(off));
+    assert(peak > 1.2, `expected the rule to outrun the shape, peaked at ${peak.toFixed(3)} of it`);
+    assert(off.log.some(r => (r.gkAdj || '').includes('pros')), 'expected at least one prosperity raise');
+    assert(!off.log.some(r => (r.gkAdj || '').includes('@shape')), 'the ceiling must be off by default');
+});
+
+test('Guardrails: the shape ceiling holds spending at the plan\'s own shape, and pays for it in spending', () => {
+    const off = simulate({ ...CEIL_BASE });
+    const on  = simulate({ ...CEIL_BASE, gkShapeCeiling: true });
+    const peak = Math.max(...ceilRatios(on));
+    assert(peak <= 1 + 1e-9, `the goal must never exceed the shape, peaked at ${peak.toFixed(6)}`);
+    assert(on.log.some(r => (r.gkAdj || '').includes('@shape')), 'expected the ceiling to bind and say so');
+    // The trade it makes, and the reason it is a switch rather than a default: less spending, more
+    // left over. Both directions are asserted because either one alone could come from a broken run.
+    assert(on.totals.spendCurrentDollars < off.totals.spendCurrentDollars,
+        `ceiling must lower lifetime real spend: ${Math.round(on.totals.spendCurrentDollars)} vs ${Math.round(off.totals.spendCurrentDollars)}`);
+    assert(on.finalNW > off.finalNW,
+        `ceiling must raise ending wealth: ${Math.round(on.finalNW)} vs ${Math.round(off.finalNW)}`);
+});
+
+test('Guardrails: the shape ceiling only ever follows a raise, and changes nothing before it binds', () => {
+    // A crash in years 2-3, so the rule cuts first and only reaches the shape again on the recovery.
+    // TWO claims, and the second is the one that makes the switch safe to offer: the ceiling cannot
+    // invent a cut, and a plan that never outruns its shape runs identically with it on.
+    const rows = simulate({ ...CEIL_BASE }).log.length;
+    const seq = new Float64Array(rows + 3).fill(0.06);
+    seq[1] = -0.22; seq[2] = -0.13;
+    const inf = new Float64Array(rows + 3).fill(0.025);
+    const off = simulate({ ...CEIL_BASE, returnSequence: seq, inflationSequence: inf });
+    const on  = simulate({ ...CEIL_BASE, gkShapeCeiling: true, returnSequence: seq, inflationSequence: inf });
+    assert(on.log.every(r => !(r.gkAdj || '').includes('@shape') || (r.gkAdj || '').includes('pros')),
+        'a clamped year must always be a year the rule tried to raise');
+    const first = on.log.findIndex(r => (r.gkAdj || '').includes('@shape'));
+    assert(first > 0, 'expected the ceiling to bind somewhere on the recovery');
+    for (let i = 0; i < first; i++) {
+        assert(on.log[i].spendGoal === off.log[i].spendGoal,
+            `year ${on.log[i].year} must be untouched before the ceiling binds: ${on.log[i].spendGoal} vs ${off.log[i].spendGoal}`);
+    }
+});
+
 // ── Baseline accounting (after-tax NW + totalNetWealth fix) ───────────────────────
 const afterTaxNetWorth = core.afterTaxNetWorth;
 

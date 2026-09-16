@@ -5774,8 +5774,8 @@ function updateSplitMixNote() {
 // A plan with no `spendRule` key at all gets '' written, because applyScenario leaves a control
 // alone when the plan has no key for it - a switch left on by the previous plan would otherwise
 // apply, silently, to one that never had it.
-const GK_STRATEGY_NOTE = 'This plan used Guyton-Klinger as its withdrawal strategy. Guyton-Klinger is now '
-    + 'the Guardrails switch beside After-Tax Spend, and it works with any strategy. The plan loaded as '
+const GK_STRATEGY_NOTE = 'This plan used Guyton-Klinger as its withdrawal strategy. That rule is now '
+    + 'the Guardrails switch (GK-style) beside After-Tax Spend, and it works with any strategy. The plan loaded as '
     + 'Proportional Withdraw at 0% with Guardrails on, which gives the same numbers. Fill Fed/IRMAA '
     + 'Bracket with Guardrails on is worth comparing.';
 function foldRetiredGKStrategy(data) {

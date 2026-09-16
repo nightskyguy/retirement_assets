@@ -4,6 +4,14 @@ Whether the guardrail rule published by Derek Tharp and Justin Fitzpatrick - spe
 **probability of success**, adjust when that probability crosses a rail - can be computed on this
 engine, what it costs, and where it disagrees with the Guardrails rule the tool already ships.
 
+Sections 6 to 8 answer questions the comparison kept raising and the article did not ask: how far the
+shipped rule is from **Guyton-Klinger as published**. Four divergences, and the first one - the rate
+it tests - is what makes the hatchet invisible to it. Section 7 answers a second: how the rule
+composes with **Spend Delta**, which turns out to break a filter the Optimizer relies on, and which
+is where the `gkShapeCeiling` prototype came from. Section 8 re-scores every spending total on the
+page for the fact that **early spending is worth more than late spending**, which moves the rule and
+the ceiling in opposite directions.
+
 Produced by [`.test_harnesses/rbg_harness.js`](../.test_harnesses/rbg_harness.js) on engine
 v11.1823 (`1842270`), 2026-09-15. Every number below is printed by that script; nothing here is
 estimated by hand.
@@ -41,6 +49,12 @@ others; both are used here, unchanged.
 | **at its target** | the rail measured from the spending that rule would have the household on - the target-PoS number, not the plan's own |
 | **at the plan's own spend** | the same rail measured from the spending the household already has, which is what the shipped rule judges. The controlled comparison |
 | **first-year return** | the single market return in year 1 at which a rule first acts, found by bisection. One number that both rules can be asked for |
+| **published GK** | Guyton-Klinger as published - Guyton 2004, and Guyton and Klinger, "Decision Rules and Maximum Initial Withdrawal Rates", *Journal of Financial Planning*, March 2006. Four rules: a portfolio-management rule for where withdrawals come from, an inflation rule that skips the CPI raise after a negative-return year while the current rate is above the initial one, a capital-preservation rule cutting 10% when the rate rises 20% above its initial value (suspended in the final 15 years), and a prosperity rule raising 10% when it falls 20% below |
+| **the published ratio** | the rate published GK tests: **portfolio withdrawals** divided by the portfolio, against that same ratio in year 0. Distinct from the shipped rule's ratio, which divides **total spending** by the portfolio. The engine computes both; `yr._wdRate` (`optimizer_core.js:4447`), the `wdRate%` column, is the published one |
+| **the shape** | the plan's own spending path: the year-0 goal carried forward by **Spend Delta** (`spendChange`, the household's planned real drift) and CPI, and by nothing else. What spending would have been with no rule running |
+| **`gkSpendStable`** | the filter the Optimizer's spend and conversion searches apply (`optimizer_core.js:5261`): reject a candidate whose run lets real spending fall more than `gkGuard` below its **year-0** value. Not a rule a household follows - a guard against a search "affording" a spend the rule only reaches by slashing |
+| **`gkShapeCeiling`** | the P127 prototype added by this report: an engine input, default **off**, that holds the rule's goal at the shape. Not wired to the page, the sweep or the Optimizer |
+| **discounted real spend** | the same delivered real spending, with year *y* weighted `1 / (1 + d)^y`. Section 8 reports d = 0%, 3% and 5%, because the rate is a statement of preference and not a measurement. Per-year real spending is `(spendGoal + shortfall) / inflationFactor`, which sums to `totals.spendCurrentDollars` to the dollar - the engine's own accumulator (`optimizer_core.js:4386`) decomposed, not a second definition |
 | **re-plan** | a plan restarted mid-run: `startInYear`/`startYear` moved forward, balances replaced with the ones the realized year produced, real spending unchanged. Ages and horizon follow from the birth years |
 
 ### The households
@@ -92,12 +106,13 @@ every table in this report.
 | `age-gap-ira-heavy-ca` | 25 | 20,200 | 19.9 | 0.99 |
 
 The run count is exact and the seconds are not: seed 42 reproduces every probability in this report
-run for run, while wall clock moved 1.05 to 1.61 ms/run across repeats on the same machine.
+run for run, while wall clock moved **0.99 to 2.15 ms/run across four repeats** on the same machine.
+Plan against the run count, not the clock.
 
 One probability estimate is 200 engine runs; one spending or rail answer is 9 estimates. The harness
 runs about 100 estimates per household because it also measures things a product would not - two
 rail sets, five spending targets, a controlled column. **The four-step recipe itself is 1 estimate
-plus 5 bisections = 46 estimates = 9,200 runs, 11-15 seconds per household** at these speeds, which
+plus 5 bisections = 46 estimates = 9,200 runs, 9-20 seconds per household** at these speeds, which
 is the same order as the Monte Carlo runs the tab already performs (400 paths x ~123 strategies).
 
 ### 2. The shipped rule is BLIND to the hatchet, not tripped by it
@@ -120,7 +135,8 @@ On a path with the market held perfectly still, the ratio's peak in the pre-bene
 So the defect here is not a false alarm during the blade. It is that **the rule's one reference
 number is set in year 0 and never learns anything** - not that the benefit arrived, not that the
 horizon shortened, not that the plan is now funded from a different mix. Everything in section 3
-follows from that.
+follows from that, and section 6 has the reason: the rate it tests is not the rate Guyton-Klinger
+publishes, and the substituted one is the one the hatchet leaves alone.
 
 ### 3. It acts on smaller market moves than either rail, and cuts much harder than the plan's risk calls for
 
@@ -192,6 +208,283 @@ to quote when the question is "what would the rule do".
 
 ---
 
+### 6. The rule this tool ships is not Guyton-Klinger as published
+
+Four divergences, measured. The first one decides sections 2 and 3, because it is the reason the
+hatchet is invisible to the rule.
+
+**a. It tests a different rate.** Published GK compares portfolio withdrawals to the portfolio. The
+shipped rule compares **total spending** to the portfolio (`optimizer_core.js:2061`) - including the
+part Social Security and pensions pay for. The engine computes the published quantity already,
+`yr._wdRate` (`:4447`), and the rule does not use it.
+
+Both ratios, read off one run with the rule off, at the plan's own deterministic growth and CPI, as
+multiples of their own year-0 values against a 0.80-1.20 band:
+
+| household | shipped ratio | years outside | published ratio | years outside | first divergence |
+|---|---|---|---|---|---|
+| `bracket-filler-texas` | 0.43-1.00 | 18/33 | 0.21-1.02 | 27/33 | **2032 raise** - published 0.77, shipped 0.96 |
+| `mixed-portfolio-couple` | 1.00-3.59 | 26/33 | 0.91-2.30 | 15/33 | 2044 cut - published 1.20, shipped 1.57 |
+| `long-widowhood` | 0.54-1.01 | 16/38 | 0.50-1.27 | 34/38 | **2027 cut** - published 1.27, shipped 0.99 |
+| `age-gap-ira-heavy-ca` | 0.74-1.10 | 3/25 | 0.45-1.24 | 22/25 | **2027 cut** - published 1.24, shipped 1.00 |
+
+**Why the two move apart, in one household's arithmetic.** The rates are not independent - they are
+related by exactly one factor:
+
+    published rate = shipped rate x (portfolio draw / total spending)
+
+and a deferred benefit is a thing that moves that factor. `bracket-filler-texas`, rule off so neither
+rate is being reacted to:
+
+| year | age | portfolio | spend | SS + pension | portfolio draw | draw ÷ spend | shipped rate | published rate |
+|---|---|---|---|---|---|---|---|---|
+| 2026 | 64 | $3,100,000 | $110,000 | $0 | $145,710 | 132% | 3.55% | 4.70% |
+| 2030 | 68 | $3,503,291 | $121,419 | $0 | $166,862 | 137% | 3.47% | 4.76% |
+| 2031 | 69 | $3,611,341 | $124,455 | $16,971 | $154,203 | 124% | 3.45% | 4.27% |
+| 2032 | 70 | $3,740,659 | $127,566 | $40,589 | $135,011 | 106% | 3.41% | **3.61%** |
+| 2033 | 71 | $3,899,518 | $130,755 | $59,434 | $120,710 | 92% | 3.35% | **3.10%** |
+| 2037 | 75 | $4,715,529 | $144,330 | $65,604 | $133,961 | 93% | 3.06% | 2.84% |
+
+Before the benefits the portfolio funds **everything**, and more: the draw is 132-137% of spending,
+because it also funds the tax on its own withdrawal. Once both benefits are running it funds 92%.
+That collapse is the whole divergence - the published rate falls by a third, 4.70% to 3.10%, while
+the shipped rate drifts from 3.55% to 3.35%.
+
+The reason the shipped rate barely moves is worth stating plainly, because it is the intuition the
+numerator breaks: **a benefit does not reduce spending, it changes who pays for it.** The shipped
+rate's numerator is the spending, so the benefit never enters it; the denominator is the portfolio,
+which is only indirectly affected (it is drawn on more gently, so it grows a little faster). The
+published rate's numerator IS the draw, so the benefit lands on it in full, the year it starts.
+
+Which means the adjustment in the normalized table is not a near miss. On this household the
+published rate reads **0.768 of its year-0 value in 2032 and 0.659 in 2033** - through the 0.80
+prosperity trigger - so published GK calls for a 10% raise, twice, on a household where nothing
+unexpected has happened at all: the benefit starting at 70 was in the plan from the first day. That
+is the article's complaint stated as arithmetic rather than as an opinion, and it is what "a rule
+that judges a rate cannot tell a planned change in that rate from an unplanned one" means.
+
+The two ratios disagree about the direction and the timing of the first adjustment on every
+household, and neither is uniformly the earlier one: the published ratio acts in year 2 on two
+households where the shipped rule sits at 0.99 and 1.00, and the shipped rule reaches 3.59 on
+`mixed-portfolio-couple` where the published ratio has not yet left the band.
+
+That is the article's critique, reproduced: **under the published numerator these households behave
+exactly as the hatchet predicts** - a cut in the blade years on two of them, and a raise on
+`bracket-filler-texas` in 2032, the year both benefits are running. The shipped rule escapes that by
+testing a rate the hatchet does not move, and pays for it with the year-0 anchor of section 2.
+
+*What the last column is not:* the first year the published ratio leaves the band on a path where no
+adjustment is ever applied. A real published-GK run would adjust at that point and move its own ratio
+afterwards, so this is the first **divergence**, not a simulation of the published rule.
+
+**b. The inflation freeze reads the wrong return.** `sim.gkPriorReturn = yr.baseReturn` (`:4508`) is
+the scenario's base (equity) return; published GK freezes on the portfolio's total return. Identical
+where every account gets the base return, and not otherwise:
+
+| mode | equity-negative path-years | sign disagreement with the blended account return |
+|---|---|---|
+| Historical (bootstrap) | 27.1% | **7.7%** |
+| Synthetic (GBM) | 29.9% | 0.0% |
+
+So in Historical mode roughly one year in thirteen freezes the CPI raise on an equity loss the
+portfolio did not actually take. (The blend here is the average of the per-account sequences the
+engine hands the accounts, which is the closest stand-in this harness has for a portfolio return.)
+
+**c. The capital-preservation cut is never suspended.** Published GK stops applying it in the final
+15 years of the plan; this one applies it to the last year. Latent on the paths measured - on the
+-22%/-13% shock, every cut lands early:
+
+| household | plan years | cuts | of those, in the final 15 | raises |
+|---|---|---|---|---|
+| `bracket-filler-texas` | 33 | 3 | 0 | 6 |
+| `mixed-portfolio-couple` | 33 | 5 | 0 | 1 |
+| `long-widowhood` | 38 | 3 | 0 | 4 |
+| `age-gap-ira-heavy-ca` | 25 | 4 | 0 | 3 |
+
+Early clustering is itself a consequence of (a) and of the year-0 anchor, not evidence that the
+suspension would never matter: a 33-year plan spends 15 of those years inside the window published
+GK exempts.
+
+**d. There is no 6% cap on the inflation raise.** Published GK (2006) caps it. Inert on a
+deterministic 2.5% CPI run; under the Monte Carlo inflation model **11.1% of path-years draw
+inflation above 6%**, worst 11.6%.
+
+**Three more things that are not GK, and are not defects.** The portfolio-management rule - where
+withdrawals come from - is deliberately out of scope: the draw belongs to whichever strategy the
+plan selected, documented at `optimizer_core.js:4607` and in the release that made Guardrails a
+switch rather than a strategy. `spendDelta` compounds on the goal every year (`:4507`), which the
+page discloses as "Spend Delta still applies on top". And `gkSpendStable` (`:5261`) rejects plans the
+rule only holds together by slashing - a guard the Optimizer's searches apply, not a rule a retiree
+follows.
+
+**What to do about it is a decision, not a fix.** The in-page copy describes the implemented
+mechanism accurately - "what you spend for each dollar you have saved" - so the overclaim is the
+label, not the explanation. Switching the numerator to `yr._wdRate` would move the numbers of every
+saved plan that has Guardrails on, and on the evidence above it would make the rule act in the blade
+years, which is the behavior the source article was written to argue against. The cheapest honest
+options are to stop calling it Guyton-Klinger, or to say in the help text which rate it tests.
+
+---
+
+### 7. How the rule composes with Spend Delta
+
+The rule does not run alone. `spendChange` - Spend Delta on the page - shapes the goal the rule is
+adjusting, and the two compose in a way nobody chose: one defect in a filter, and one thing worth
+adding, prototyped here.
+
+#### a. The search filter cannot tell a planned decline from a rule-driven slash
+
+`gkSpendStable` reads the finished run's minimum **real** `spendGoal` against its year-0 value, and
+`spendGoal` carries the delta. So the shape breaches the floor on its own: at -1%/year, real spending
+is below `1 - gkGuard` of year 0 from **year 23**, with no market move and no cut. Measured at each
+household's own growth, so every run below is a plan doing exactly what it planned:
+
+| household | delta | GK cuts | min real ÷ year 0 | `gkSpendStable` |
+|---|---|---|---|---|
+| `bracket-filler-texas` | 0 | 0 | 1.000 | accepted |
+| `bracket-filler-texas` | -1%/yr | 0 | 0.914 | accepted |
+| `mixed-portfolio-couple` | 0 | 2 | 0.810 | accepted |
+| `mixed-portfolio-couple` | -1%/yr | **0** | **0.725** | **REJECTED** |
+| `long-widowhood` | 0 | 0 | 1.000 | accepted |
+| `long-widowhood` | -1%/yr | 0 | 0.878 | accepted |
+| `age-gap-ira-heavy-ca` | 0 | 1 | 0.900 | accepted |
+| `age-gap-ira-heavy-ca` | -1%/yr | 0 | 0.810 | accepted |
+
+One household is rejected for its own planned shape with zero cuts on the path. The other three
+survive for a reason that is no better than the failure: the rule's **prosperity raises** happened to
+offset the decline. That makes the verdict depend on how the portfolio performs, which is not
+something a filter over candidate spending levels should be sensitive to - and it is not
+scale-invariant either. On `mixed-portfolio-couple` at -1%/year the same filter accepts $93,600,
+$140,400 and $187,200 and rejects $234,000 and $280,800: the smaller goals earn raises, the larger
+ones do not.
+
+What it costs the search it guards. `optimizeSpend` drives its binary search on `passes()`, which
+fails whenever this filter does:
+
+| household | delta | Guardrails on | Guardrails off |
+|---|---|---|---|
+| `bracket-filler-texas` | 0 | $188,311 | $195,723 |
+| `bracket-filler-texas` | -1%/yr | $168,652 | $223,760 |
+| `mixed-portfolio-couple` | 0 | $235,371 | $241,541 |
+| `mixed-portfolio-couple` | -1%/yr | **no viable spend** | $271,705 |
+| `long-widowhood` | 0 | $208,887 | $213,281 |
+| `long-widowhood` | -1%/yr | $195,703 | $242,725 |
+| `age-gap-ira-heavy-ca` | 0 | $269,629 | $287,031 |
+| `age-gap-ira-heavy-ca` | -1%/yr | $225,801 | $316,035 |
+
+At a flat shape the two answers sit within 2-4% of each other, which is the filter doing its job. Add
+a declining shape - a plan that is **cheaper**, and whose rule-off answer therefore rises by 10-17% -
+and the Guardrails answer instead falls by 8-16%, or disappears. The gap widens from about 4% to
+25-29% for no reason the household would recognize.
+
+**The fix is one line and it is not applied here:** compare the minimum against the shape,
+`spend0 x (1 + spendChange)^y`, rather than against year 0. It changes which spends and which
+conversion amounts the Optimizer returns, so it is a decision about search behavior rather than a
+defect repair, and it belongs with whoever makes that call.
+
+#### b. `gkShapeCeiling`: the prototype, default off
+
+The rule can spend a household **above** its own plan: a prosperity raise lifts the goal whenever the
+portfolio grows faster than the plan assumed, and nothing stops it. If the shape is read as "what we
+would have spent", those raises are spending the household never asked for. The prototype holds the
+goal at the shape:
+
+- only a prosperity raise can breach the shape, so the clamp is a **ceiling, not a band**: CPI moves
+  goal and shape by the same factor, and the inflation freeze and the capital-preservation cut both
+  move the goal *down* against it;
+- the rule keeps its cuts, so it becomes deliberately asymmetric - **cuts react to the portfolio,
+  raises can do no more than walk the goal back up to the plan**;
+- it is an engine input only. Turning it on changes the spending of every plan with Guardrails on,
+  so it is not wired to the page, the sweep or the Optimizer, and three tests in
+  `optimizer_core.tests.js` pin its contract: the premise (without it, raises outrun the shape), what
+  it does (spending never exceeds the shape, lifetime spend falls, ending wealth rises), and what it
+  must never do (clamp a year the rule did not try to raise, or change anything before it binds).
+
+What it costs and returns, on each household's own deterministic path and on the -22%/-13% shock:
+
+| household | path | peak real ÷ shape | clamped years | lifetime real spend | ending wealth |
+|---|---|---|---|---|---|
+| `bracket-filler-texas` | benign | 1.772 → **1.000** | 18 | $4,340,533 → **$3,630,000** | $14,846,622 → **$17,075,004** |
+| `bracket-filler-texas` | shock | 1.229 → 1.000 | 5 | $3,025,281 → $2,956,046 | $10,230,520 → $10,397,129 |
+| `mixed-portfolio-couple` | benign | 1.000 → 1.000 | 0 | $6,797,700 → $6,797,700 | $6,071,086 → $6,071,086 |
+| `mixed-portfolio-couple` | shock | 1.000 → 1.000 | 0 | $4,779,073 → $4,779,073 | $6,437,720 → $6,437,720 |
+| `long-widowhood` | benign | 1.464 → **1.000** | 16 | $6,285,015 → **$5,700,000** | $18,471,164 → **$20,812,089** |
+| `long-widowhood` | shock | 1.006 → 1.000 | 1 | $4,439,592 → $4,438,683 | $12,597,671 → $12,600,402 |
+| `age-gap-ira-heavy-ca` | benign | 1.100 → 1.000 | 3 | $4,940,308 → $4,887,927 | $8,962,648 → $9,080,064 |
+| `age-gap-ira-heavy-ca` | shock | 1.000 → 1.000 | 0 | $3,539,735 → $3,539,735 | $6,872,188 → $6,872,188 |
+
+Three things to read off it. **The whole effect is in good markets** - on the shock path the ceiling
+takes 2.3% of lifetime spending at most, and on two households nothing at all. **When it binds it
+binds hard**: `bracket-filler-texas` gives up 16.4% of lifetime real spending for 15.0% more ending
+wealth, and `long-widowhood` 9.3% for 12.7%. And **a household the rule never raises never notices
+it**: `mixed-portfolio-couple` is identical to the cent on both paths, which is the same property
+the third test pins.
+
+One side effect worth knowing before this ships. The rule's anchor is still the year-0 ratio, so once
+the portfolio outgrows it the rule tries to raise **every remaining year** and is clamped every time:
+18 of 33 years on `bracket-filler-texas`. The `gkAdj` column reads `+10%pros @shape` for all of them.
+That is honest - the rule wanted more and the plan said no - but it means the ceiling is a permanent
+state rather than an occasional event, and anyone reading the column should know that before it
+reaches the page.
+
+And it composes badly with (a), in the direction you would expect: with the ceiling on, real spending
+can never exceed the shape, so the minimum can only fall further below a year-0 baseline. Fixing the
+filter's baseline is a prerequisite for turning the ceiling on anywhere the Optimizer's searches run.
+
+---
+
+### 8. Early spending is worth more, and every total above prices it at par
+
+Sections 3 and 7 add year 1 and year 33 at the same value. A household does not: a cut at 65 and a
+raise at 92 are not the same event (user, 2026-09-15). Re-scoring the same runs with the year's real
+spending discounted at 0%, 3% and 5% moves the two rules in **opposite directions**, so this is not a
+presentational nicety.
+
+| household | path | comparison | 0% | 3% | 5% | first 10 years |
+|---|---|---|---|---|---|---|
+| `bracket-filler-texas` | benign | the rule vs no rule | +19.6% | +14.0% | +11.0% | **0.0%** |
+| `bracket-filler-texas` | benign | the ceiling vs not | -16.4% | **-12.3%** | **-9.9%** | **0.0%** |
+| `bracket-filler-texas` | shock | the rule vs no rule | -16.7% | **-18.9%** | **-19.8%** | **-21.9%** |
+| `bracket-filler-texas` | shock | the ceiling vs not | -2.3% | -1.5% | -1.1% | 0.0% |
+| `mixed-portfolio-couple` | benign | the rule vs no rule | -12.0% | -10.0% | -8.8% | -3.0% |
+| `mixed-portfolio-couple` | shock | the rule vs no rule | **-3.1%** | **-12.1%** | **-16.1%** | **-27.8%** |
+| `long-widowhood` | benign | the rule vs no rule | +10.3% | +6.7% | +4.9% | 0.0% |
+| `long-widowhood` | benign | the ceiling vs not | -9.3% | -6.3% | -4.6% | 0.0% |
+| `long-widowhood` | shock | the rule vs no rule | -22.1% | -23.1% | -23.3% | -22.4% |
+| `age-gap-ira-heavy-ca` | shock | the rule vs no rule | -27.6% | -27.1% | -26.6% | -25.4% |
+
+**The rule's gains are late and its cuts are early.** On a benign path the rule delivers
+`bracket-filler-texas` 19.6% more lifetime spending and **none of it in the first ten years** - every
+dollar of that gain is a prosperity raise that compounds from the middle of the plan onward, so at a
+3% discount it is worth 14.0% and at 5% it is worth 11.0%. On the shock path the cuts land in the
+blade years and discounting makes them worse, not better: -16.7% becomes -19.8%.
+
+**`mixed-portfolio-couple` is the case to read twice.** On the shock its undiscounted cost is -3.1%,
+which reads as almost free. The same run takes **27.8% out of the first ten years** and -16.1% at a 5%
+discount. A number that says "the rule cost this household 3%" is describing a plan nobody lives:
+the household gets its money back in its eighties.
+
+**The ceiling is the mirror image**, which is the argument for it that section 7 could not make: it
+gives up *late* raises and takes **0.0% out of the first ten years** on every household measured. Its
+headline -16.4% on `bracket-filler-texas` is -9.9% to a household discounting at 5%, and nothing at
+all to one that spends most of what it values before 75.
+
+Three limits on all of this. A discount rate is a **preference**, not a fact, and picking one is the
+household's business - which is why three are reported and none is called correct. Real discounting is
+also not exponential: survival probability falls with age and would steepen every number here, while a
+late-life health shock works the other way. And a fixed discount says nothing about *variability* -
+`age-gap-ira-heavy-ca` loses about 27% at every rate because its cuts are spread evenly, which a
+utility measure with risk aversion would score quite differently from the same loss concentrated in
+two years.
+
+**What it means for the rest of this report.** Every "lifetime real spend" column in sections 3 and 7
+is the 0% column here. On the evidence above it **understates what the shipped rule costs** (its cuts
+cluster early) and **overstates what the ceiling costs** (its givebacks cluster late). Any future
+comparison of spending rules in this repo should carry at least the first-decade share beside the
+total; it is one line of arithmetic and it changed the sign of the argument twice on this page.
+
+---
+
 ## Predictions
 
 Registered before the first run, against a 25% lower rail - the number the second-hand summaries
@@ -204,7 +497,7 @@ prediction is scored against both of the article's sets rather than re-aimed.
 | `G-P1` | the shipped rule fires in the pre-benefit years on a benign path | **REFUTED**. Closest approach 1.179 against a 1.20 band; it fires on none of the four. Section 2 is what replaced it |
 | `G-P2` | the shipped rule cuts earlier AND deeper than a risk rail, on every household | **PARTLY**, both rail sets. Earlier: yes, all four. Deeper: no - `mixed-portfolio-couple` reverses it |
 | `G-P3` | the shipped trigger is household-independent; the rail moves 20+ points | **REFUTED**, both sets. 3.8 points against 5.3 (A) and 4.3 (B). Section 5 explains why, and where the variation actually lives |
-| `G-P4` | a full guardrail set costs under 30s per household at 200 paths | **REFUTED** as the harness runs it - 32.0s on the longest household - but the harness measures about twice the recipe. The recipe alone is 9,200 runs, 11-15s |
+| `G-P4` | a full guardrail set costs under 30s per household at 200 paths | **REFUTED** as the harness runs it - 32 to 47s on the longest household across repeats - but the harness measures about twice the recipe. The recipe alone is 9,200 runs, 9-20s |
 
 ---
 
@@ -222,6 +515,14 @@ Three scopes, smallest first. Only the first is priced by anything in this repor
    holds up under Monte Carlo is not measured here and would need its own harness.
 3. **The hatchet itself.** Nothing is missing: benefit ages and `spendChange` already produce the
    blade and the handle. What is missing is the reporting that would make the shape visible.
+4. **A spending metric that weights early years** (section 8). The totals this report and the
+   Optimizer's *Maximum Spending* objective use price year 1 and year 33 the same. Carrying the
+   first-decade share, or a discounted total, beside the lifetime figure is arithmetic, not
+   modelling, and it changes which rule looks better.
+5. **The two things section 7 leaves on the table**, neither of which needs the rails: the
+   `gkSpendStable` baseline (a one-line change that moves what the Optimizer's searches return) and
+   `gkShapeCeiling` (built, tested, default off, and not wired to the page). The first is a
+   prerequisite for the second wherever those searches run.
 
 ### Open questions this report does not settle
 

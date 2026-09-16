@@ -17,7 +17,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P34 | NOT a P103 prerequisite (a-d are node harnesses); still the whole slow-machine story | `P34a` |
 | **O1** | P28j | `jg`/`jh`/`ji`/`jk` SHIPPED, and `jo`'s Split/Early/Late menu shipped in `a5d8aa9`. `jf` MEASURED and NOT acted on - the trigger is unchanged, and its removal case was withdrawn | `P28jn` / `P28jo` Automatic |
 | **O1** | P115 | **tax-payment attribution** (user, 2026-09-09). `a` SHIPPED v11.17b1: cash interest trued up to what the cash earned; `b` CLOSED v11.17f4. Priority is mine, not the user's | `P115c` |
-| **O1** | P126 | **Guyton-Klinger becomes a spending control** (user, 2026-09-13). BUILT v11.1823, in PR review: rows follow the switch plus the plan's own twin, Compare All = the Optimizer's rows, My Plan Only runs the plan both ways, Guardrails described by savings, old plans keep their numbers (560/560) | `P126f` / commit |
+| **O1** | P126 | **Guyton-Klinger becomes a spending control** (user, 2026-09-13). BUILT v11.1823, in PR review: rows follow the switch plus the plan's own twin, Compare All = the Optimizer's rows, My Plan Only runs the plan both ways, Guardrails described by savings, old plans keep their numbers (560/560) | `P126f` / commit; then `P128a` |
 
 **Live carry-overs from finished phases** - the rest of what those phases did is in their stubs below:
 - `P85` RE-RUN: converting earlier still wins 353 of 499, but **the RMD claim BROKE** - 124 counterexamples, all bracket strategies at a live IRA Goal. `P72` is still pending.
@@ -606,6 +606,154 @@ strategy should load with the Guardrails control on, and a withdrawal strategy s
       band above the safe level for the savings you have. That is the engine's
       `spend / portfolio > IWR x (1 + g)` multiplied through by the portfolio. The Compare All parity
       line left the changelog: nobody expected the two tabs to differ, so it is not news.
+
+## P127: the spending-shape ceiling on the Guardrails rule  *(2026-09-15, user-raised. BUILT, DEFAULT OFF, NOT WIRED TO THE PAGE)*
+
+Recorded here because the ID is already in shipped code comments (`optimizer_core.js`, the
+`gkShapeCeiling` block in `resolveSpendTarget` and the `sameStrategySelection` note) and in
+`research/RISK_BASED_GUARDRAILS.md` section 7. An ID that lives in the code and nowhere in this file
+is the drift this file exists to prevent.
+
+**What it is.** `gkShapeCeiling`, an engine input, default **off**: hold the rule's goal at the plan's
+own spending shape - the year-0 goal carried forward by Spend Delta and CPI - so the rule can undo its
+own cuts but never spend above what the household asked for. Only a prosperity raise can breach the
+shape, so it is a ceiling and not a band. Three tests pin the contract.
+
+**Measured** (report section 7b): where it binds it is expensive - `bracket-filler-texas` gives up
+16.4% of lifetime real spending for 15.0% more ending wealth, 18 of 33 years clamped;
+`long-widowhood` 9.3% for 12.7%. On the shock path it takes at most 2.3%, and a household the rule
+never raises is identical to the cent.
+
+- [ ] `P127a` **decide whether it reaches the page**, and as a switch or a default. Turning it on
+      changes the spending of every plan with Guardrails on, so it is a release decision, not a
+      default flip. **Prerequisite:** `P127b`.
+- [ ] `P127b` `gkSpendStable` (`optimizer_core.js:5261`) compares the run's minimum real spend against
+      its **year-0** value, and `spendGoal` carries Spend Delta - so the filter cannot tell a planned
+      decline from a rule-driven slash. A -1%/year shape breaches the floor by year 23 unaided, and on
+      `mixed-portfolio-couple` at -1% `optimizeSpend` returns NO viable spend where the same plan
+      without Guardrails returns $271,705. The fix is one line - compare against the shape,
+      `spend0 x (1 + spendChange)^y` - but it moves what the Optimizer's spend and conversion searches
+      return, so it is a decision about search behavior, not a repair.
+
+## P128: risk-based guardrails drawn on the live charts  *(NEW 2026-09-16, user-raised, PRIORITY UNASSIGNED)*
+
+**The user's case, in substance:** compute the risk-based (probability-of-success) guardrails against
+the live plan, plot them on the charts, and **report what the computation cost** - "to help me
+determine how slow / fast the change can be made". Nerdknob-gated: a calibration instrument first, a
+product feature second. Planned 2026-09-16; the build is a later session's work.
+
+### Why it is worth building
+
+`research/RISK_BASED_GUARDRAILS.md` section 1 priced ONE point in time at ~9,200 engine runs, 9-20
+seconds, and showed the four-step recipe runs on this engine unchanged. What nobody has measured is
+the thing a user would actually look at: rails move as the horizon shortens, so a PICTURE of them
+costs a solve per plan year. This phase is that measurement, shaped as a usable instrument.
+
+### The three presets - published parameter sets, not tuning choices
+
+Each is target probability of success / raise at / cut at. A triggered adjustment resets spending to
+the target.
+
+| preset | target | raise | cut | source |
+|---|---|---|---|---|
+| **Tight** | 95% | 99% | 80% | Tharp, *Using Probability-Of-Success-Driven Guardrails To Manage Safe Retirement Spending*, Kitces.com. Worked example: $1M portfolio, $6,800/month; cut to $6,500 at ~$800k, raise to $7,100 at ~$1.1M |
+| **Normal** | 90% | 99% | 70% | Tharp & Fitzpatrick, *The Retirement Distribution "Hatchet"*, Kitces.com, 2021-11-24 - its implementation paragraph |
+| **Loose** | 80% | 100% | 40% | The same article's income-risk framing - target risk 20%, raise at 0%, cut at 60% - read as probability of success |
+
+`Normal` and `Loose` are already `RAIL_SETS` in `.test_harnesses/rbg_harness.js`. **Define the table
+once in `optimizer_core.js`, export it, and have the harness read it.** A second copy is the defect
+"One engine, two shells" was written about.
+
+Loose's 100% rail is only reachable as "every sampled path survived", so it is a function of the path
+count. That belongs in the panel copy, not only in a comment.
+
+### What a solve does
+
+At each solved year, re-plan from that year's realized balances - the `stateAfterYear` pattern in
+`.test_harnesses/rbg_harness.js`: move `startInYear`/`startYear` forward, take balances from the log
+row (`IRA1`, `IRA2`, `Roth1`, `Roth2`, `Brokerage`, `Basis`, `Cash`), carry spending forward in
+NOMINAL dollars; ages and horizon follow from the birth years. Then, per preset: (1) bisect spending
+to the target PoS, (2) bisect a scale factor across all accounts up to the raise threshold, (3) the
+same down to the cut threshold, (4) the spending that returns the plan to target AT each rail.
+
+    runs ~= solvedYears x presets x 4 solves x 9 estimates x paths
+
+7 solved years (cadence 5 on a 33-year plan) x 1 preset x 200 paths ~= **50,400 runs**, roughly
+50-110 seconds at the 1.0-2.2 ms/run the report measured. Hence the worker, progress, cancel, and an
+on-demand default.
+
+### User decisions, 2026-09-16 (do not re-litigate these without asking)
+
+- **Both charts.** Balance rails on the balances chart, spending rails on the spending chart.
+- **Cadence 5 by default**, adjustable; interpolate between solved years but make it visible WHICH
+  years were actually computed.
+- **Timing readout = elapsed + breakdown + projection**, so settings that were not run can be judged.
+- **Its own paths control and its own Run button**, plus an auto-run / on-demand mode.
+- **Auto-run is debounced and fires only on plan-material changes** - balances, spend goal, ages,
+  growth, inflation, strategy, and the rail settings. Cosmetic toggles never trigger it.
+- **Stale rails stay drawn**, marked as stale, with a separate control to hide them.
+- **Annual Details carries the rails**: upper and lower rail, and the calculated spend for each.
+- Nerdknob-gated, on the LIVE chart - not a separate view.
+
+### Where the code goes
+
+- **`montecarlo/rails_engine.js`** (new): the solver, in the shape `mc_engine.js` established - dual-mode
+  export, no DOM, same hooks contract (`onProgress`, `shouldCancel`, `yieldIfDue`) so the worker and
+  the `file://` main-thread fallback share one implementation. Calls `buildBanks` / `buildPathInputs`
+  (`montecarlo/mc_engine.js:198`, `:45`) and `simulate()`.
+- **`montecarlo/worker.js` / `mc_controller.js`**: a `kind: 'rails'` job beside the sweep.
+  `runMCWorker(cfg, onProgress, onComplete)` (`mc_controller.js:10`) already terminates what is in
+  flight and already has the fallback - extend it, do not fork it.
+- **`optimizer_ui.js`**: panel wiring, run button, auto/on-demand, timing readout, chart datasets, and
+  the merge. The merge point exists: `lastSimulationLog` is retained (`:1071`) and
+  `updateCurrentDollarsView()` (`:1100`) re-renders table and charts from it, so a finished job writes
+  rail fields onto those rows and calls `updateTable` + `updateCharts`.
+- **`retirement_optimizer.html`**: the panel, hidden unless the knob is on.
+
+### Charts and table
+
+- Datasets follow `updateCharts()` (`optimizer_ui.js:4757`) and the dashed *Spend Goal* line
+  (`:4552`): `mkLine(...)`, `borderDash`, `spanGaps: true`. Rails are balances, so they follow the
+  Current $ / Future $ toggle like every other balance series.
+- **Solved vs interpolated**: per-point `pointRadius` array - markers only at solved years, straight
+  segments between, and the tooltip says which. Series show/hide uses the existing legend pattern.
+- **Annual Details**: `railUpper`, `railLower`, `railSpendUp`, `railSpendDn` in `columnCategories`
+  (`:2712`) under `Spending`, plus `railBasis` carrying `solved`/`interp` - the string-flag shape
+  `acaBreach` (`:2760`) and `betrFlag` (`:2816`) already use. `analyzeColumnContent()` hides all-empty
+  columns, so the columns appear only once a solve has run; no extra gating needed.
+
+### Gating, and what must NOT happen
+
+`?nerdknob=rails` through `applyNerdKnobVisibility()`, matching `?nerdknob=goal` / `=split`. The rail
+settings **do not enter the share URL, the saved plan, or `selectionOf`/`sameStrategySelection`** -
+they change no projected number, only what is drawn. Add the assertion the suite already makes for
+goal-first (`optimizer_tests.js:2643`): not visible without the knob.
+
+### Checklist
+
+- [ ] `P128a` move `RAIL_PRESETS` into `optimizer_core.js`, export it, repoint `rbg_harness.js` at it,
+      and confirm the harness reproduces its published numbers unchanged.
+- [ ] `P128b` `montecarlo/rails_engine.js`: `solveRailsAt()` and the cadence loop, with the hooks
+      contract and a returned cost record (runs, estimates, elapsed per phase).
+- [ ] `P128c` worker job type + controller passthrough, with the `file://` fallback exercised.
+- [ ] `P128d` the panel: preset, cadence, paths, Run, auto-run, show-stale, timing readout with the
+      projection line.
+- [ ] `P128e` chart datasets on both charts, solved-year markers, legend show/hide.
+- [ ] `P128f` Annual Details columns and the log merge.
+- [ ] `P128g` tests: the knob gate, the preset table, and the interpolation marker. **Reconcile test
+      counts in `TestTiers.EXPECTED` AND `.githooks/README.md` in the same commit, measured.**
+
+### Verification
+
+1. `node .test_harnesses/rbg_harness.js --plans bracket-filler-texas` reproduces its numbers after `a`.
+2. All four suites at their pinned counts.
+3. Knob off: nothing in the panel area, charts, Annual Details, share URL or a saved plan.
+4. Knob on: Run draws on both charts; solved years carry markers and interpolated years do not; the
+   new columns fill only where expected; hide/show behaves like the neighbouring series.
+5. **The point of the feature:** run cadence 5, then cadence 1 on the same plan, and check the first
+   run's PROJECTION against the second run's measured elapsed.
+6. Auto-run: change a balance - exactly one debounced re-solve; toggle Current $ - none; then confirm
+   stale marking and the hide control.
 
 ## P116: prune the harnesses and research reports  *(2026-09-09. `a`, `c`, `d` DONE 2026-09-10; `b` OPEN)*
 

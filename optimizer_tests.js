@@ -2689,6 +2689,38 @@ assertEqual(
 		if (!(typeof railsOn === 'function' && railsOn()) && Array.isArray(lastSimulationLog) && lastSimulationLog.length) {
 			assertEqual('railLower' in lastSimulationLog[0], false, 'P128: no rail columns without the knob');
 		}
+		// Below both charts and foldable (user, 2026-09-16), with the fold remembered like the Optimizer's.
+		const tab = document.getElementById('tab-chart');
+		const lastChart = document.getElementById('chartIncomeSources');
+		assertEqual(panel.tagName === 'DETAILS' && !!panel.querySelector(':scope > summary'), true,
+			'P128: the rails panel folds');
+		assertEqual(!!tab && tab.contains(panel) && !!lastChart
+			&& !!(lastChart.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING), true,
+			'P128: the rails panel sits below both charts on the Charts tab');
+		if (typeof FOLD_IDS !== 'undefined') {
+			assertEqual(FOLD_IDS.includes('rails-panel'), true, 'P128: the rails fold is remembered');
+		}
+		// Its own Monte Carlo method: the tab's three, or whatever the tab is set to.
+		const method = document.getElementById('rails-method');
+		const tabMode = document.getElementById('mc-sim-mode');
+		if (method && tabMode && typeof railsModelCfg === 'function') {
+			const offered = [...method.options].map(o => o.value);
+			const tabModes = [...tabMode.options].map(o => o.value);
+			assertEqual(offered[0] === 'tab' && JSON.stringify(offered.slice(1).sort()) === JSON.stringify(tabModes.slice().sort()),
+				true, `P128: the rails offer "same as the tab" and the tab's own methods (${offered})`);
+			const was = method.value;
+			try {
+				for (const m of tabModes) {
+					method.value = m;
+					assertEqual(railsModelCfg(getInputs()).simulationMode, m, `P128: choosing ${m} solves on ${m}`);
+				}
+				method.value = 'tab';
+				assertEqual(railsModelCfg(getInputs()).simulationMode, tabMode.value,
+					'P128: "same as the tab" solves on the tab\'s own method');
+			} finally {
+				method.value = was;
+			}
+		}
 	})();
 
 	(function railsTooltipNamesWhetherAYearWasSolved() {
@@ -2715,6 +2747,165 @@ assertEqual(
 			assertEqual(cur.filter(d => d.fill).length, 1, `P128: one ${kind} band, not more`);
 			const prev = railsSeries(log, one, id, kind, rows, 'previous');
 			assertEqual(prev.some(d => d.fill), false, `P128: the previous ${kind} rails carry no band`);
+		}
+	})();
+
+	// ⚠ UNSAFE - MUTATES: runMCWorker and renderStressChart (both stubbed, restored), #spendGoal's
+	// value (restored; the plan is never re-run with it), the two stress-refresh flags, the stored
+	// Stress Test result and its hash (all restored). Ends by asking for a real refresh.
+	// P91, the half it missed: a refresh displaced by a pass in flight runs when that pass finishes,
+	// after a SUCCESS as well as after an error (2026-09-16: success never drained, so a second quick
+	// edit left the Stress Test on the plan from before it). Since the same day a pass is skipped when
+	// the pass on screen was computed from the same inputs, so the displaced request here is a real
+	// edit - and the two same-input cases pin what the skip must and must not swallow. Results are
+	// stand-ins and the chart is stubbed, so nothing waits on the page's own first pass.
+	(function stressRefreshDisplacedBySuccessIsRun() {
+		if (!unsafeTest('stressRefreshDisplacedBySuccessIsRun')) return;
+		if (typeof refreshMCStressOnly !== 'function' || typeof runMCWorker !== 'function'
+			|| typeof renderStressChart !== 'function' || typeof _mcStress === 'undefined'
+			|| typeof _lastStressHash === 'undefined' || !document.getElementById('spendGoal')) {
+			console.log('SKIP: Monte Carlo tab code absent'); return;
+		}
+		// _mcWorkerBusy too: a real pass the page (or an earlier test) started may still be running,
+		// and its guard would park every request below as pending.
+		const realRun = runMCWorker, realRender = renderStressChart, realBusy = _mcWorkerBusy;
+		const was = { stress: _mcStress, inResults: _mcResults ? _mcResults.stress : undefined,
+		              hash: _lastStressHash, spend: Number(val('spendGoal')) };
+		const ok = { type: 'results', stressOnly: true, stress: { standIn: true }, years: 1 };
+		let calls = [];
+		const fresh = () => {
+			calls = [];
+			_mcStressRefreshing = false;
+			_mcStressPending = false;
+			_lastStressHash = null;
+			DisplayHelpers.setDollarValue('spendGoal', was.spend);
+		};
+		try {
+			runMCWorker = (cfg, onProgress, onComplete) => { calls.push({ cfg, onComplete }); };
+			renderStressChart = () => {};
+			_mcWorkerBusy = () => false;
+
+			fresh();
+			refreshMCStressOnly();   // the pass in flight
+			DisplayHelpers.setDollarValue('spendGoal', was.spend + 1000);
+			refreshMCStressOnly();   // an edit landing while it runs
+			assertEqual(calls.length === 1 && _mcStressPending === true, true,
+				'P91: a refresh asked for during a pass is remembered, not started beside it');
+			calls[0].onComplete(ok);
+			assertEqual(calls.length, 2, 'P91: a successful pass runs the refresh it displaced');
+			assertEqual(_mcStressPending, false, 'P91: and forgets it once it has');
+
+			// The same inputs asked for twice: the pass that lands is the answer to both.
+			fresh();
+			refreshMCStressOnly();
+			refreshMCStressOnly();
+			calls[0].onComplete(ok);
+			assertEqual(calls.length === 1 && _mcStressPending === false, true,
+				'a request for the inputs a successful pass just used starts no second pass');
+
+			// ...unless that pass failed: then the remembered request is the retry.
+			fresh();
+			refreshMCStressOnly();
+			refreshMCStressOnly();
+			calls[0].onComplete({ type: 'results', stressOnly: true, error: 'stand-in failure' });
+			assertEqual(calls.length, 2, 'P91: after a FAILED pass the same inputs are asked for again');
+		} finally {
+			runMCWorker = realRun;
+			renderStressChart = realRender;
+			_mcWorkerBusy = realBusy;
+			DisplayHelpers.setDollarValue('spendGoal', was.spend);
+			_mcStress = was.stress;
+			if (_mcResults) _mcResults.stress = was.inResults;
+			_lastStressHash = was.hash;
+			_mcStressRefreshing = false;   // the stubbed passes will never report
+			_mcStressPending = false;
+			refreshMCStressOnly();
+		}
+	})();
+
+	// ⚠ UNSAFE - MUTATES: #spendGoal (restored) and re-runs the plan through the real blur listener;
+	// stubs runMCWorker, renderStressChart and, for the one debounce timer the blur sets, setTimeout
+	// (all restored); the stress-refresh flags, the stored Stress Test result, its hash, _lastMCHash
+	// and the Monte Carlo stale banner (all restored). Ends by re-running the plan and asking for a
+	// real refresh.
+	// 2026-09-16: a blur that changes nothing starts no Stress Test pass, and one that changes the plan
+	// does. Before, EVERY blur started one (and a worker) until a full Monte Carlo run had happened -
+	// and after one, undoing an edit started none, leaving the Stress Test on the undone plan.
+	(function stressRefreshSkipsAnUnchangedBlur() {
+		if (!unsafeTest('stressRefreshSkipsAnUnchangedBlur')) return;
+		const field = document.getElementById('spendGoal');
+		if (!field || typeof mcInputsChanged !== 'function' || typeof runMCWorker !== 'function'
+			|| typeof renderStressChart !== 'function' || typeof _lastStressHash === 'undefined'
+			|| typeof _buildMCHash !== 'function') {
+			console.log('SKIP: Monte Carlo tab code absent'); return;
+		}
+		const realRun = runMCWorker, realRender = renderStressChart, realTimeout = window.setTimeout;
+		const realBusy = _mcWorkerBusy;   // stubbed for the reason the test above gives
+		const banner = document.getElementById('mc-stale-banner');
+		const was = { stress: _mcStress, inResults: _mcResults ? _mcResults.stress : undefined,
+		              hash: _lastStressHash, mcHash: _lastMCHash, spend: Number(val('spendGoal')),
+		              banner: banner ? banner.style.display : null };
+		const ok = { type: 'results', stressOnly: true, stress: { standIn: true }, years: 1 };
+		const passes = [];
+		// The sidebar debounces its recalc behind one setTimeout. Run that timer now, so the whole
+		// blur - the plan's re-run and the Stress Test's decision - happens inside this test. Only the
+		// first timer is taken; anything the recalc itself schedules goes to the real one.
+		// ?runtests runs this suite while the page is still parsing, before setupAutoRecalc() has
+		// attached the listener, and then nothing takes the timer: the test calls what the recalc
+		// would have called for the Stress Test instead, and says which path it measured.
+		let wired = null;
+		const blur = () => {
+			let taken = false;
+			window.setTimeout = (fn, ms, ...args) => {
+				taken = true;
+				window.setTimeout = realTimeout;
+				fn(...args);
+				return 0;
+			};
+			try { field.dispatchEvent(new Event('blur')); } finally { window.setTimeout = realTimeout; }
+			if (wired === null) wired = taken;
+			if (!taken) mcInputsChanged();
+		};
+		const via = () => (wired ? 'a blur' : 'a recalc (listener not attached yet)');
+		try {
+			runMCWorker = (cfg, onProgress, onComplete) => { if (cfg.stressOnly) passes.push(onComplete); };
+			renderStressChart = () => {};
+			_mcWorkerBusy = () => false;
+			_mcStressRefreshing = false;
+			_mcStressPending = false;
+			_lastStressHash = null;
+			const asFirst = _buildMCHash();
+
+			blur();
+			assertEqual(passes.length, 1, `${via()} with no Stress Test result for this plan starts a pass`);
+			passes[0]?.(ok);
+			blur();
+			assertEqual(passes.length, 1, `${via()} that changes nothing starts no Stress Test pass`);
+			DisplayHelpers.setDollarValue('spendGoal', was.spend + 1000);
+			blur();
+			assertEqual(passes.length, 2, `${via()} that changes the plan starts one`);
+			passes[1]?.(ok);
+			// As if a full Monte Carlo run had used the plan as it first stood, then undo the edit.
+			_lastMCHash = asFirst;
+			DisplayHelpers.setDollarValue('spendGoal', was.spend);
+			blur();
+			assertEqual(passes.length, 3,
+				`undoing that edit after a full run starts a pass for the plan as it was (${via()}): its result is not on screen`);
+		} finally {
+			window.setTimeout = realTimeout;
+			runMCWorker = realRun;
+			renderStressChart = realRender;
+			_mcWorkerBusy = realBusy;
+			DisplayHelpers.setDollarValue('spendGoal', was.spend);
+			_mcStress = was.stress;
+			if (_mcResults) _mcResults.stress = was.inResults;
+			_lastStressHash = was.hash;
+			_lastMCHash = was.mcHash;
+			_mcStressRefreshing = false;   // the stubbed pass never reports
+			_mcStressPending = false;
+			if (banner) banner.style.display = was.banner;
+			runSimulation();
+			refreshMCStressOnly();
 		}
 	})();
 

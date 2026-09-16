@@ -2537,7 +2537,8 @@ function toggleFailedRows() {
 // preference, and one that resets on every page load is not a preference at all. Its own key, not
 // the saved-scenario blob under STORAGE_KEY, because this is not scenario data.
 const FOLD_STORAGE_KEY = 'optimizerChromeFolds';
-const FOLD_IDS = ['opt-fold-legend'];
+// The rails panel below the Charts tab's charts folds the same way, for the same reason.
+const FOLD_IDS = ['opt-fold-legend', 'rails-panel'];
 // Chrome fires a `toggle` event when it PARSES a <details open>, before any of our init code has
 // run. The strip carries `open` in the markup, so that toggle lands first, the inline handler
 // writes "both open" to storage, and restoreFoldState then reads back the value it just
@@ -4847,6 +4848,7 @@ function railsSettings() {
     const [pLo, pHi] = RailsEngine.RAILS_PATHS_RANGE;
     return {
         preset:    document.getElementById('rails-preset')?.value || 'normal',
+        method:    document.getElementById('rails-method')?.value || 'tab',
         cadence:   RailsEngine.railsCadence(num('rails-cadence', 5)),
         paths:     Math.min(pHi, Math.max(pLo, Math.round(num('rails-paths', 200)))),
         auto:      !!document.getElementById('rails-auto')?.checked,
@@ -4854,11 +4856,25 @@ function railsSettings() {
     };
 }
 
-// The return model every probability is measured under: the Monte Carlo tab's own settings, read the
-// way its run reads them, so a rail's percentage is one that tab would report.
+// The Monte Carlo method the panel asks for (user, 2026-09-16: "let me select which of the MC methods
+// to use"): one of the tab's three, or whatever the tab itself is set to.
+const RAILS_METHODS = ['bootstrap', 'gbm', 'aam'];
+function railsTabMethod() {
+    return document.getElementById('mc-sim-mode')?.value ?? 'gbm';
+}
+function railsMethod(s = railsSettings()) {
+    return RAILS_METHODS.includes(s.method) ? s.method : railsTabMethod();
+}
+function railsMethodLabel(mode) {
+    return typeof _mcModeLabel === 'function' ? _mcModeLabel(mode) : String(mode);
+}
+
+// The return model every probability is measured under. Everything but the method is the Monte Carlo
+// tab's own settings, read the way its run reads them, so a rail's percentage is one that tab would
+// report on the same method.
 function railsModelCfg(base) {
     return {
-        simulationMode: document.getElementById('mc-sim-mode')?.value ?? 'gbm',
+        simulationMode: railsMethod(),
         mu: _mcNum('mc-mu') / 100, sigma: _mcNum('mc-sigma') / 100, seed: _mcNum('mc-seed'),
         bearFraction: _mcNum('mc-bear-fraction'),
         inflationRate: base.inflation, ..._mcInflationCfg(),
@@ -5006,7 +5022,20 @@ function railsKnobChanged() {
         clearTimeout(RailsState.debounce);
         RailsState.debounce = null;
     }
+    railsBindModelInputs();
     railsRedraw();
+}
+
+// A solve is measured on the Monte Carlo tab's settings, and editing one of them does not re-run the
+// plan, so nothing else would tell the panel its rails went stale - or, with auto-run on, solve again.
+// Bound once; `change`, not `input`, so a half-typed number starts nothing.
+let _railsModelInputsBound = false;
+function railsBindModelInputs() {
+    if (_railsModelInputsBound || !railsOn() || typeof MC_PARAMS === 'undefined') return;
+    _railsModelInputsBound = true;
+    for (const id of ['mc-sim-mode', ...Object.keys(MC_PARAMS)]) {
+        document.getElementById(id)?.addEventListener('change', () => { if (railsOn()) railsSettingsChanged(); });
+    }
 }
 
 function railsFmtSecs(s) {
@@ -5037,11 +5066,32 @@ function railsRenderPanel() {
         run.textContent = pj?.ms != null ? `Run (about ${railsFmtSecs(pj.ms / 1000)})` : 'Run';
     }
     if (cancel) cancel.style.display = RailsState.running ? '' : 'none';
+    // "Same as the Monte Carlo tab" names what the tab is set to, so the choice is never a guess.
+    const tabOpt = document.querySelector('#rails-method option[value="tab"]');
+    if (tabOpt) tabOpt.textContent = `Same as the Monte Carlo tab: ${railsMethodLabel(railsTabMethod())}`;
     railsRenderStatus();
     railsRenderTiming();
 }
 
+// The folded panel's one line: enough to know, without opening it, whether the rails on the charts
+// are current and where the plan sits against them.
+function railsHeadline() {
+    if (_replayState) return 'hidden during a replay';
+    if (RailsState.running) return `solving, ${Math.round(RailsState.progress * 100)}%`;
+    if (RailsState.error) return 'the solve failed';
+    const r = RailsState.result;
+    if (!r) return 'not solved yet';
+    const y0 = r.years[0];
+    const P = r.preset;
+    const where = !y0 ? 'no full year to solve'
+        : `${(y0.pos * 100).toFixed(1)}% chance from ${y0.year}, `
+          + (y0.pos < P.lower ? 'below the cut rail' : y0.pos >= P.upper ? 'at or above the raise rail' : 'between the rails');
+    return `${railsIsStale() ? 'stale: ' : ''}${P.label}, ${railsMethodLabel(r.simulationMode)}: ${where}`;
+}
+
 function railsRenderStatus() {
+    const headline = document.getElementById('rails-headline');
+    if (headline) headline.textContent = ' - ' + railsHeadline();
     const el = document.getElementById('rails-status');
     if (!el) return;
     if (_replayState) {
@@ -5067,8 +5117,8 @@ function railsRenderStatus() {
             + 'and adds them to Annual Details, under Spending.';
         return;
     }
-    const describe = x => `${x.preset.label}, every ${x.cadence} ${x.cadence === 1 ? 'year' : 'years'}, `
-        + `${x.numPaths} paths, ${x.years.length} solved years`;
+    const describe = x => `${x.preset.label}, ${railsMethodLabel(x.simulationMode)}, `
+        + `every ${x.cadence} ${x.cadence === 1 ? 'year' : 'years'}, ${x.numPaths} paths, ${x.years.length} solved years`;
     const head = railsIsStale()
         ? `Stale: the plan or these settings changed after this solve (${describe(r)}). Run to solve again; `
           + 'this one will stay on the charts, faded, as the previous rails.'

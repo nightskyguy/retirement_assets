@@ -17,7 +17,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P34 | NOT a P103 prerequisite (a-d are node harnesses); still the whole slow-machine story | `P34a` |
 | **O1** | P28j | `jg`/`jh`/`ji`/`jk` SHIPPED, and `jo`'s Split/Early/Late menu shipped in `a5d8aa9`. `jf` MEASURED and NOT acted on - the trigger is unchanged, and its removal case was withdrawn | `P28jn` / `P28jo` Automatic |
 | **O1** | P115 | **tax-payment attribution** (user, 2026-09-09). `a` SHIPPED v11.17b1: cash interest trued up to what the cash earned; `b` CLOSED v11.17f4. Priority is mine, not the user's | `P115c` |
-| **O1** | P127 + P128 | **BUILT 2026-09-16 v11.1854, NOT COMMITTED** (user: "Let's do P128 ... also worth amending the GK-Style rules"). P127: no cut in the last 8 years, 6% CPI cap, freeze on the portfolio return, the filter judged against the shape, $0 conversion always admissible (`P126f`), ceiling as a nerdknob switch. P128: `?nerdknob=rails`, resume-based solver, both charts, timing + projection. Suites 468/32/61/26. P126 itself shipped in PR #224 | commit / PR |
+| **O1** | P127 + P128 | **COMMITTED 2026-09-16 v11.1857 (`2e6fea4`), PR #227 OPEN** (user: "Let's do P128 ... also worth amending the GK-Style rules"). P127: no cut in the last 8 years, 6% CPI cap, freeze on the portfolio return, the filter judged against the shape, $0 conversion always admissible (`P126f`), ceiling as a nerdknob switch. P128: `?nerdknob=rails`, resume-based solver, both charts, timing + projection. Round 3 on the same PR: panel below the charts, folded, own Monte Carlo method; the P91 success-path drain; heavy precision test (`P128k`) gating `P129`. P126 itself shipped in PR #224 | round 3, then merge |
 
 **Live carry-overs from finished phases** - the rest of what those phases did is in their stubs below:
 - `P85` RE-RUN: converting earlier still wins 353 of 499, but **the RMD claim BROKE** - 124 counterexamples, all bracket strategies at a live IRA Goal. `P72` is still pending.
@@ -840,7 +840,50 @@ goal-first (`optimizer_tests.js:2643`): not visible without the knob.
 6. Auto-run: change a balance - exactly one debounced re-solve; toggle Current $ - none; then confirm
    stale marking and the hide control.
 
-## P129: set After-Tax Spend from the rails solve  *(2026-09-16, user-raised. PLANNED, not started, PRIORITY UNASSIGNED)*
+### Round 3, 2026-09-16 afternoon (committed work is `2e6fea4`, PR #227)
+
+User: "The RBG information on the chart tab should be moved to the BOTTOM (below all charts) and
+should be able to be folded. It should also let me select which of the MC methods to use." And: "I
+want to do more testing with it set to 'autorun' ... are those tasks in contention with one another?"
+
+- [x] `P128h` the panel is a `<details class="mc-fold">` below both charts, open by default, fold
+      remembered through `FOLD_IDS`; the summary line carries `railsHeadline()` (solving %, stale,
+      or preset + method + where year 1 sits).
+- [x] `P128i` `#rails-method`: Same as the Monte Carlo tab (default, labelled with the tab's current
+      mode) / Historical / Synthetic GBM / Synthetic AAM. `railsMethod()` resolves it; the fingerprint
+      carries the RESOLVED mode, so "tab" and the mode it points at are the same solve.
+      `railsBindModelInputs()` listens to `#mc-sim-mode` and every `MC_PARAMS` box, because those
+      never re-run the plan and so would never have marked the rails stale.
+- [x] `P128j` contention, measured with auto-run on: see findings "P128 round 3 - what runs beside
+      what". Found on the way, and on `main` since 11.16a5: **P91 drained a displaced Stress Test
+      refresh only after a FAILED pass**; after a successful one the request stayed pending forever
+      (reproduced: three quick edits left `_mcStressPending` true with nothing in flight). Fixed in
+      `refreshMCStressOnly`'s success path; unsafe in-page test `stressRefreshDisplacedBySuccessIsRun`.
+      User-visible, so a changelog line.
+- [ ] `P128k` heavy precision test: `.test_harnesses/rails_precision_harness.js` ->
+      `research/RISK_BASED_RAILS_PRECISION.md`. Decides the defaults the user proposed (100 paths
+      every 3 years) and whether `P129` and a higher-precision button are worth building.
+- [x] `P128l` (user, same day, via the side-task chip) the Stress Test refresh skips when nothing it
+      reads has changed. `_lastStressHash` = the `_buildMCHash()` of the pass ON SCREEN, recorded
+      with its render (a full run records its own on success); `refreshMCStressOnly` compares after
+      both P91 guards, so an in-flight duplicate is decided when its pass lands (skip on success,
+      retry on error). `mcInputsChanged` lost its `_lastMCHash` early return, which was wrong both
+      ways: before any full run every blur spawned a worker (~1.5 s each, measured), and after one,
+      UNDOING an edit started no pass and left the Stress Test on the undone plan (reproduced: plan
+      back at $140k, tile "36 of 36 fail" from the edit). Two unsafe in-page tests (dedupe/retry, and
+      the real blur path with the undo case). Browser: 12 fields tabbed through, 0 workers; an edit
+      and its undo, 1 each, tile correct both times, before and after a full run.
+
+## P129: set After-Tax Spend from the rails solve  *(2026-09-16, user-raised. PLANNED, not started, PRIORITY UNASSIGNED; GATED on `P128k`)*
+
+**User, 2026-09-16 afternoon:** "Running 100 paths every 3 years is sufficient - including one extra
+pass for the After-Tax spend calculation that would start in the current year. The RBG logic can
+offer a 'higher precision' button. But before doing any of that, it will be useful to run some heavy
+testing to see whether it's worth the effort. For example, one issue I worry about is if the MC
+synthetic testing invariably produces a number below 100% the 99% and 100% success rates may need
+adjustment." So: defaults 100 paths / every 3 years, the start solve from the current year as planned
+below, a higher-precision button, and nothing built until the heavy test (`P128k`) says whether it is
+worth it and whether the 99% / 100% raise thresholds survive a finite sample.
 
 **The ask:** "create a plan to calculate the 'After-Tax Spend' goal based on the outcome of the
 risk-based guard rail run. It should be able to calculate that with a single run." Asked in the same
@@ -920,8 +963,8 @@ fixed point, several runs to settle. From the start it is one bisection.
   every rails solve). With the rule on, a higher start survives because the rule cuts. Offer it
   anyway, labelled, or hide it?
 - Rounding: nearest $100 or $1,000.
-- Precision: at 200 paths a 90% estimate carries about +/-2 points of sampling noise, which moves the
-  answer by a few percent with the seed. Suggest 500+ paths for this number (2.5x the time)?
+- ~~Precision~~ ANSWERED 2026-09-16: 100 paths by default, with a "higher precision" button - once
+  `P128k` has priced both.
 
 ## P130 candidate: the income charts count a harvest's reinvested proceeds as spendable  *(2026-09-16, user observation. NOT STARTED, PRIORITY UNASSIGNED)*
 

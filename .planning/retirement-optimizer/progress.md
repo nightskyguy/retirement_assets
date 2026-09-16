@@ -5292,4 +5292,26 @@ running in the background?"
   kept): the repository is public.
 - Heavy test: `.test_harnesses/rails_precision_harness.js` (reach of the 99%/100% rails per method,
   precision against path count via per-path pools, cadence interpolation error, cost). The user's
-  plan runs through it from a scratch file only (`USER_PLAN=`), never from the repository.
+  plan runs through it from a scratch file only (`USER_PLAN=`), never from the repository. 72 tasks
+  in 16 processes, about an hour; results pending at this note.
+- PR #227 (`2e6fea4`, 11.1857). Round 3 on top, all verified in the browser:
+  - `P128h/i`: panel below both charts, a folding `<details>` with a one-line headline, remembered
+    fold; `#rails-method` (tab / Historical / GBM / AAM); MC tab edits mark the rails stale.
+    Functional check: GBM solve, switch to "tab" = stale, explicit Historical = same fingerprint,
+    MC tab mode change = stale, revert = current. On the default plan year 1 reads 95% Historical
+    against 55% Synthetic GBM, so the method choice is not a detail.
+  - `P128j`: the P91 success-path drain. Reproduced first: three quick edits left
+    `_mcStressPending` true with nothing in flight.
+  - `P128l` (the side-task chip, which the user sent to THIS session): the Stress Test refresh skips
+    unchanged inputs; the `_lastMCHash` early return in `mcInputsChanged` removed. Reproduced first:
+    after a full run, an edit and its undo left the tile at "36 of 36 fail" for the $140k plan (9 of
+    36 is right). After: 12 fields tabbed through, 0 workers; edit and undo, 1 worker each, tile
+    right both times, before and after a full run.
+  - Auto-run behavior: auto-run on with a current solve starts nothing; Current $ twice and a view
+    switch start nothing; a blur without a change starts nothing; one edit starts exactly one solve
+    ~1.4 s later; three edits 0.7 s apart replace the running solve once (its worker terminated).
+  - In-page with `?nerdknob=rails&runtests`: 1091 passed (504 + 587). Plain page: 277 passed, 21
+    page-writing suites skipped (two of them new).
+  - Timing claims deliberately NOT made yet: the heavy test held 16 cores the whole time (a rails
+    solve took 28 s instead of the usual few). The contention numbers wait for a quiet machine.
+  - Stamp 11.1858.

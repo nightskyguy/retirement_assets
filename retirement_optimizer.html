@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1857</title>
+    <title>Retirement Optimizer 11.1858</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -65,8 +65,8 @@
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=111857"></script>
-	<script src="optimizer_tests.js?v=111857"></script>
+	<script src="optimizer_ui.js?v=111858"></script>
+	<script src="optimizer_tests.js?v=111858"></script>
 </head>
 <body>
 
@@ -1066,14 +1066,15 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="display"><b>11.1857</b>
+				<li data-flag="display"><b>11.1858</b>
 					<strong>Guardrails stops cutting in a plan's last 8 years and caps its inflation raise at 6%.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li>A plan with Guardrails on can give different numbers, and Optimize Spend can suggest more.</li>
 					<li>The inflation raise is skipped only after a year your savings as a whole lost money.</li>
 					<li>With Guardrails on, Optimize Spend reads a declining Spend Delta as your plan rather than as a cut, and Optimize Conversions never suggests a conversion that leaves you worse off than none.</li>
+					<li>The Stress Test keeps up with your edits. A quick second change, or undoing a change after a Monte Carlo run, could leave it showing a different version of your plan.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.1857" target="_blank" rel="noopener">Details</a>
+					<a href="optimizer_changelog.md#11.1858" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="display"><b>11.1824</b>
 					<strong>The Guardrails switch is now labelled GK-style.</strong>
@@ -1351,35 +1352,6 @@
 		</div>
 
         <div id="tab-chart" class="card">
-            <!-- P128. Risk-based rails, drawn on these two charts. ?nerdknob=rails only (with the knob
-                 on), the way ?nerdknob=goal gates goal-first. Outside .sidebar and every control is
-                 data-no-share, so nothing here reaches the share link or a saved plan: it changes what
-                 is DRAWN, never a number the plan produces. -->
-            <div id="rails-panel" style="display:none;margin:8px 8px 4px 8px;padding:6px 10px;background:#f7f2fb;border:1px solid #dccbeb;border-radius:6px;font-size:0.85em;color:#333;">
-              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
-                <strong title="Risk-based guardrails: at each solved year, the portfolio value at which your plan's chance of success rises to the raise rail or falls to the cut rail, and the spending that puts it back on target at each.">Risk-based rails</strong>
-                <label title="Target chance of success / raise when it reaches / cut when it falls to. Tight is Derek Tharp's worked example; Normal and Loose are the two sets in Tharp and Fitzpatrick's 'Hatchet' article on Kitces.com.">Preset
-                  <select id="rails-preset" data-no-share onchange="railsSettingsChanged()">
-                    <option value="tight">Tight: 95% target, raise 99%, cut 80%</option>
-                    <option value="normal" selected>Normal: 90% target, raise 99%, cut 70%</option>
-                    <option value="loose">Loose: 80% target, raise 100%, cut 40%</option>
-                  </select>
-                </label>
-                <label title="Years between solved years. Every solved year runs the same number of simulations, so solving every year costs roughly four times what every 5 years does.">Solve every
-                  <input type="number" id="rails-cadence" data-no-share value="5" min="1" max="10" step="1" style="width:46px;" onchange="railsSettingsChanged()"> years</label>
-                <label title="Market paths behind each chance-of-success estimate. More paths make a rail steadier and cost proportionally more time.">Paths
-                  <input type="number" id="rails-paths" data-no-share value="200" min="20" max="2000" step="20" style="width:62px;" onchange="railsSettingsChanged()"></label>
-                <button id="rails-run" class="tog" onclick="runRails()">Run</button>
-                <button id="rails-cancel" class="tog" style="display:none;" onclick="cancelRails()">Cancel</button>
-                <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="Solve again by itself shortly after a change to the plan or to these settings. Switching views and Current $ / Future $ never trigger it.">
-                  <input type="checkbox" id="rails-auto" data-no-share onchange="railsSettingsChanged()"> Auto-run</label>
-                <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="When a new solve finishes, keep drawing the one before it, faded, so the difference between the two is visible.">
-                  <input type="checkbox" id="rails-show-prev" data-no-share checked onchange="railsPreviousToggled()"> Show previous rails</label>
-              </div>
-              <div id="rails-status" style="margin-top:4px;"></div>
-              <div id="rails-timing" style="margin-top:4px;"></div>
-              <div id="rails-note" style="margin-top:4px;font-size:0.92em;color:#555;">Solves start with the first full year and re-run your plan from the end of the year before, with fresh market paths from the Monte Carlo tab's return model. The rails on the Balances chart are in the same terms as TotalNetWealth, at the same year-end; the spending rails are on the Income vs Net view. On both, the band between the cut and raise lines is shaded green. Marked points (triangles for the rails, squares for the target spend) are the years actually solved; the lines between them are interpolated. Guardrails is off inside a solve, so spending holds its planned path. Loose's 100% raise rail means every sampled path survived, so where it lands depends on the number of paths. Nothing here changes your plan, your share link or a saved plan.</div>
-            </div>
             <div style="display:flex;align-items:center;gap:10px;margin:8px 0 2px 8px;">
               <h4 style="margin:0;color:#555;font-size:0.95em;">Balances</h4>
               <span style="display:inline-flex;gap:3px;">
@@ -1416,6 +1388,46 @@
             </div>
             <div id="income-aftertax-note" style="font-size:0.78em;font-weight:600;color:#777;margin:2px 0 4px 8px;">Income BARS have been scaled down by the total taxes. Hover over a bar to see the actual income less the approximate attributed tax.</div>
             <canvas id="chartIncomeSources" style="max-height:403px;"></canvas>
+            <!-- P128. Risk-based rails, drawn on the two charts above. ?nerdknob=rails only (with the
+                 knob on), the way ?nerdknob=goal gates goal-first. Below both charts and folded in a
+                 <details> (user, 2026-09-16), so it never pushes a chart down; the fold is
+                 remembered with the Optimizer's (rememberFoldState). The summary line carries a
+                 one-line state, so a folded panel still says whether it is solving or stale. Outside
+                 .sidebar, and every control is data-no-share, so nothing here reaches the share link
+                 or a saved plan: it changes what is DRAWN, never a number the plan produces. -->
+            <details id="rails-panel" class="mc-fold" ontoggle="rememberFoldState()" open style="display:none;margin:12px 8px 4px 8px;padding:6px 10px;background:#f7f2fb;border:1px solid #dccbeb;border-radius:6px;font-size:0.85em;color:#333;">
+              <summary title="Risk-based guardrails: at each solved year, the portfolio value at which your plan's chance of success rises to the raise rail or falls to the cut rail, and the spending that puts it back on target at each. Click to fold or unfold."><span class="mc-fold-chev" style="color:#666;font-size:0.9em;">▸</span> <strong>Risk-based rails</strong> <span id="rails-headline" style="color:#555;"></span></summary>
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:6px;">
+                <label title="Target chance of success / raise when it reaches / cut when it falls to. Tight is Derek Tharp's worked example; Normal and Loose are the two sets in Tharp and Fitzpatrick's 'Hatchet' article on Kitces.com.">Preset
+                  <select id="rails-preset" data-no-share onchange="railsSettingsChanged()">
+                    <option value="tight">Tight: 95% target, raise 99%, cut 80%</option>
+                    <option value="normal" selected>Normal: 90% target, raise 99%, cut 70%</option>
+                    <option value="loose">Loose: 80% target, raise 100%, cut 40%</option>
+                  </select>
+                </label>
+                <label title="Where each solve's market paths come from. Historical samples real 1928–2025 returns and inflation in blocks, and opens a share of its paths with one of history's worst starts (Bear-start % on the Monte Carlo tab, 25% unless changed). The two Synthetic methods draw returns from the Monte Carlo tab's Synthetic Return and Volatility, and inflation from its inflation model. 'Same as the Monte Carlo tab' follows that tab's Simulation Mode, so the rails and the tab describe the same market.">Market paths
+                  <select id="rails-method" data-no-share onchange="railsSettingsChanged()">
+                    <option value="tab" selected>Same as the Monte Carlo tab</option>
+                    <option value="bootstrap">Historical (1928–2025)</option>
+                    <option value="gbm">Synthetic – Lognormal (GBM)</option>
+                    <option value="aam">Synthetic – Arithmetic (AAM)</option>
+                  </select>
+                </label>
+                <label title="Years between solved years. Every solved year runs the same number of simulations, so solving every year costs roughly four times what every 5 years does.">Solve every
+                  <input type="number" id="rails-cadence" data-no-share value="5" min="1" max="10" step="1" style="width:46px;" onchange="railsSettingsChanged()"> years</label>
+                <label title="Market paths behind each chance-of-success estimate. More paths make a rail steadier and cost proportionally more time.">Paths
+                  <input type="number" id="rails-paths" data-no-share value="200" min="20" max="2000" step="20" style="width:62px;" onchange="railsSettingsChanged()"></label>
+                <button id="rails-run" class="tog" onclick="runRails()">Run</button>
+                <button id="rails-cancel" class="tog" style="display:none;" onclick="cancelRails()">Cancel</button>
+                <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="Solve again by itself shortly after a change to the plan or to these settings. Switching views and Current $ / Future $ never trigger it. The solve runs in its own background worker, beside the Monte Carlo tab's and not instead of it.">
+                  <input type="checkbox" id="rails-auto" data-no-share onchange="railsSettingsChanged()"> Auto-run</label>
+                <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="When a new solve finishes, keep drawing the one before it, faded, so the difference between the two is visible.">
+                  <input type="checkbox" id="rails-show-prev" data-no-share checked onchange="railsPreviousToggled()"> Show previous rails</label>
+              </div>
+              <div id="rails-status" style="margin-top:4px;"></div>
+              <div id="rails-timing" style="margin-top:4px;"></div>
+              <div id="rails-note" style="margin-top:4px;font-size:0.92em;color:#555;">Solves start with the first full year and re-run your plan from the end of the year before, on fresh market paths from the method chosen above. The rails on the Balances chart are in the same terms as TotalNetWealth, at the same year-end; the spending rails are on the Income vs Net view. On both, the band between the cut and raise lines is shaded green. Marked points (triangles for the rails, squares for the target spend) are the years actually solved; the lines between them are interpolated. Guardrails is off inside a solve, so spending holds its planned path. Loose's 100% raise rail means every sampled path survived, so where it lands depends on the number of paths. Nothing here changes your plan, your share link or a saved plan.</div>
+            </details>
         </div>
 
         <div id="tab-opt" class="card hidden table-wrap">
@@ -1566,7 +1578,7 @@
      and on file:// the controller runs it here. -->
 <script src="montecarlo/rails_engine.js?v=111857"></script>
 <script src="montecarlo/mc_controller.js?v=111857"></script>
-<script src="montecarlo/mc_tab.js?v=111823"></script>
+<script src="montecarlo/mc_tab.js?v=111858"></script>
 
 <script type="text/javascript">
 function clampIntlInput(intlId, equityPct) {
@@ -1763,7 +1775,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these six are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111857';
+    const V = '?v=111858';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

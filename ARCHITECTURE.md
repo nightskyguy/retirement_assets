@@ -467,9 +467,19 @@ rails solve and a Monte Carlo sweep run side by side rather than one terminating
 `file://` fallback runs it on the page with the same hooks, and a newer rails job supersedes an older
 one there as a new worker does over http.
 
+**What runs beside what.** Over http a sidebar edit starts up to three things, on three threads: the
+plan's own `simulate()` on the page, the Stress Test's refresh (`refreshMCStressOnly`, the `mc` slot,
+400 ms after the edit, and only when `_buildMCHash()` differs from `_lastStressHash`, the inputs of
+the pass on screen) and, with auto-run on, a rails solve (the `rails` slot, 900 ms after the plan has
+re-run, and only when the rails fingerprint moved). A blur that changed nothing starts neither. Neither worker waits for or cancels the other; they share CPU cores and nothing else.
+Within a slot a newer job replaces the one in flight - except the Stress Test, which never interrupts
+a full Monte Carlo run and instead remembers the request (`_mcStressPending`) and runs it when the
+pass in flight finishes. On `file://` all of it shares the page's main thread, interleaved at 16 ms
+yields, so a rails solve there slows the page it is drawn on.
+
 ```mermaid
 flowchart TD
-    PANEL["rails panel on the Charts tab<br/>optimizer_ui.js runRails"] --> CTL["runMCWorker kind 'rails'<br/>its own worker slot"]
+    PANEL["rails panel below the Charts tab's charts<br/>a folding details, optimizer_ui.js runRails"] --> CTL["runMCWorker kind 'rails'<br/>its own worker slot"]
     CTL --> JOB["runRailsJob cfg, hooks"]
     JOB --> SPINE["simulate plan, captureResume<br/>every row carries '-resume'"]
     JOB --> BANKS["buildBanks + buildPathInputs once<br/>CRN across every estimate and year"]
@@ -497,6 +507,11 @@ exactly that factor, so the rails are stated as the year-end TotalNetWealth that
 each rail - on the row they start from, beside that row's own TotalNetWealth. The spending answers
 belong to the solved year and sit on its row. The panel keeps the previous solve and draws it faded,
 and prices other settings from the last run's cost per simulated year (`railsProjectMs`).
+
+**The return model.** The panel picks its own method (`railsMethod`: Historical, either Synthetic, or
+whatever the Monte Carlo tab's Simulation Mode is); every other parameter is read from the Monte Carlo
+tab (`railsModelCfg`). Those tab controls do not re-run the plan, so the panel listens to them itself
+(`railsBindModelInputs`): an edit marks the rails stale and, with auto-run on, solves again.
 
 Nothing in the panel is a plan input: it sits outside `.sidebar`, its controls are `data-no-share`, and
 no field reaches `getInputs()`, the share link, a saved plan or `selectionOf`.

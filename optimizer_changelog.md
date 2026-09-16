@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1857"></a>
+<a id="11.1858"></a>
 
-## 11.1857
+## 11.1858
 
 **Guardrails stops cutting near the end of a plan, and follows two more of the published rules.**  
 *Behavior change: a plan with Guardrails on can give different numbers.*
@@ -37,6 +37,10 @@ plan whose spending falls on purpose gets a suggestion again.
 
 **With Guardrails on, Optimize Conversions never suggests a conversion that leaves you worse off
 than converting nothing.**
+
+**The Stress Test keeps up with your edits.** Two cases could leave it showing a different version of
+your plan until you changed something else: a change made while it was still updating for the one
+before, and, after a Monte Carlo run, a change that put the plan back the way that run had it.
 
 The README's [*Limitations and Restrictions*](README.md#limitations-and-restrictions) section lists
 the two places the rule still departs from the published one.

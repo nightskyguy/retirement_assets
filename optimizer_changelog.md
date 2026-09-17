@@ -24,7 +24,7 @@ For what the tool does and how to use it, see [README.md](README.md).
 **Send feedback from the page.**  
 *No plan's numbers change.*
 
-**The ✉ Feedback button**, next to Share and on the Documentation tab, sends a note to the author.
+**The ✉ Feedback button**, under Share and on the Documentation tab, sends a note to the author.
 
 **You choose what goes with it.** Your settings and any page errors go unless you untick them:
 strategy, tax limit, filing status, state, growth and inflation, never balances, income, spending,

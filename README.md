@@ -185,7 +185,7 @@ My primary motivations for this tool are:
 
 ### Sending Feedback
 
-The **✉ Feedback** button, at the top of the Retirement Optimizer next to **Share** and again on its
+The **✉ Feedback** button, at the top of the Retirement Optimizer under **Share** and again on its
 Documentation tab, sends a note to the author: a problem, a question or an idea.
 
 You decide what goes with your message. Each part has its own box, and **Show exactly what will be

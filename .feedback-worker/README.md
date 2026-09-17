@@ -58,13 +58,29 @@ prefix `[Feedback]` keeps even those out of the way.
 
 You need the Cloudflare account that holds `netcitizen.us`.
 
-1. **Check the destination inbox.** Dashboard, **Email**, **Email Routing**, **Destination
-   addresses**. The inbox the help address forwards to must show **Verified**. A Worker can send only
-   to a verified destination, not to a routing address such as the help address itself.
-2. **Create the Turnstile widget.** Dashboard, **Turnstile**, **Add widget**. Hostnames:
-   `tools.netcitizen.us`, `localhost`, `127.0.0.1`. Mode: **Managed**. Copy both keys.
+**All three pages below belong to the account, not to a domain.** Clicking `netcitizen.us` on the way
+in leads to that domain's own sidebar, which lists DNS, SSL and caching and none of these. Go back to
+the account first. Easier still, use the links below: they land on the right page and fill in the
+account for you. Cloudflare keeps rearranging these menus, so the menu names given here are only what
+they were called on 2026-09-17, while the links go on working. If a login holds more than one
+account, choose the one with `netcitizen.us` every time, including in step 3.
+
+1. **Check the destination inbox.**
+   [Email Routing](https://dash.cloudflare.com/?to=/:account/email-service/routing), then
+   **Destination addresses** (**Compute**, **Email Service**, **Email Routing**). The inbox the help
+   address forwards to must show **Verified**. If it is not listed, add it and open the link in the
+   mail Cloudflare sends to it. A Worker can send only to a verified destination, not to a routing
+   address such as the help address itself.
+
+   Any offer of an **Email Sending** beta on a Workers Paid plan is for sending to *any* address and
+   is not needed here. Sending to a verified address in your own account is free on every plan, with
+   Email Routing alone, which is all this Worker does.
+2. **Create the Turnstile widget.** [Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile),
+   then **Add widget**. Hostnames: `tools.netcitizen.us`, `localhost`, `127.0.0.1`. Mode:
+   **Managed**. Select **Create** and copy both keys.
    - The **site key** is public. Put it in `SITE_KEY` near the top of `feedback.js`.
-   - The **secret key** is not. It goes in step 3 and nowhere else.
+   - The **secret key** is not. It goes in step 3 and nowhere else. If it is ever lost, rotate it on
+     the widget and store the new one the same way.
 3. **Store the three secrets.** From this folder:
 
    ```sh
@@ -75,9 +91,14 @@ You need the Cloudflare account that holds `netcitizen.us`.
    ```
 
    - `FEEDBACK_TO` is the verified inbox from step 1.
-   - `FEEDBACK_FROM` must be an address on a domain with Email Routing turned on, for example
-     `feedback@tools.netcitizen.us`. It does not need a routing rule of its own.
+   - `FEEDBACK_FROM` must be an address on the same domain that has Email Routing turned on, the one
+     the help address uses, for example `feedback@tools.netcitizen.us`. It does not need a routing
+     rule of its own.
    - `TURNSTILE_SECRET` is the secret key from step 2.
+
+   If the first `secret put` reports that no Worker named `tools-feedback` exists and offers to
+   create one, accept. Running step 4 first works equally well: a secret takes effect on its own and
+   does not need another deploy.
 4. **Deploy.**
 
    ```sh
@@ -85,9 +106,10 @@ You need the Cloudflare account that holds `netcitizen.us`.
    ```
 
    The first deploy creates `feedback.netcitizen.us`, with its DNS record and certificate, and the
-   `DailyCounter` Durable Object that keeps the day's count. Wrangler 4.36 or later is needed for the
-   rate-limit binding; `npx` fetches a current one. To change the daily limit, edit `DAILY_LIMIT` in
-   `wrangler.jsonc` and deploy again.
+   `DailyCounter` Durable Object that keeps the day's count. That hostname must not already exist as
+   a CNAME record, because a Worker custom domain cannot be created on one that does. Wrangler 4.36
+   or later is needed for the rate-limit binding; `npx` fetches a current one. To change the daily
+   limit, edit `DAILY_LIMIT` in `wrangler.jsonc` and deploy again.
 
 Publish the page change only after this works. Until then the button reports that sending failed.
 

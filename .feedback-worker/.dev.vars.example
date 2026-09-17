@@ -1,0 +1,8 @@
+# Copy to .dev.vars (git-ignored) for local testing. These values are for local testing only.
+# The secret below is Cloudflare's always-pass Turnstile test secret. The Worker honors it only for
+# requests from a localhost page, so it cannot weaken the live site even if it were deployed.
+FEEDBACK_TO=owner@example.com
+FEEDBACK_FROM=feedback@example.com
+TURNSTILE_SECRET=1x0000000000000000000000000000000AA
+# A small number shows the "full for today" message after a couple of sends.
+# DAILY_LIMIT=2

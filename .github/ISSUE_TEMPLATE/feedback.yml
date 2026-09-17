@@ -1,0 +1,90 @@
+# The public feedback form. The Send feedback box in retirement_optimizer.html links here and fills
+# three fields by their ids - what, version, browser - so keep those ids as they are
+# (feedback.tests.js checks them).
+name: Feedback
+description: A problem, a question or an idea about one of the tools.
+title: "[Feedback] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time.
+
+        **Issues here are public: anyone can read them.** Leave out your own balances, income, spending, ages and birth dates, a share link made from your own plan, and any screenshot that shows them. If a problem needs numbers to show, change them to made-up numbers that still show it, and share a link made from those.
+
+        To send something privately instead, use the **✉ Feedback** button at the top of the [Retirement Optimizer](https://tools.netcitizen.us/retirement_optimizer.html). Only the author reads those.
+
+  - type: dropdown
+    id: tool
+    attributes:
+      label: Which tool?
+      options:
+        - Retirement Optimizer
+        - Retirement Tax Planner
+        - Retirement Projection
+        - Income Tax Planner
+        - Historical Real Returns
+        - IRMAA and Medicare Future Costs
+        - IRMAA and RMDs
+        - After Tax Real Growth
+        - HYSA Real Returns
+        - Something else
+      default: 0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of feedback?
+      options:
+        - Something looks wrong
+        - A question
+        - An idea or a request
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What problem are you finding?
+      description: What you expected, and what happened instead. For a question or an idea, just ask or describe it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to see it
+      description: The tab, the settings you changed, and what you clicked.
+      placeholder: |
+        1. Open the Charts tab
+        2. Set the withdrawal strategy to Ordered
+        3. ...
+
+  - type: input
+    id: link
+    attributes:
+      label: A share link that shows it (optional)
+      description: Made with made-up numbers, never your own. The Share button at the top of the Retirement Optimizer makes one.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The Retirement Optimizer shows it in the Version box at the top of the page.
+      placeholder: "11.1867"
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and device
+      placeholder: Chrome on Windows 11, Safari on an iPhone, ...
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I have left my own balances, income, spending, ages and birth dates out of everything above.
+          required: true

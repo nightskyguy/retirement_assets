@@ -6,10 +6,15 @@
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-  gtag('config', 'G-DJ1KD88H79');
+  // P131. The page address WITHOUT its query. A shared plan link carries the whole plan in the
+  // query, and Google Analytics records the full address with every page view unless told otherwise.
+  gtag('config', 'G-DJ1KD88H79', { page_location: location.origin + location.pathname });
 </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- P131. Requests and links from this page carry only the site's origin as the referrer, never
+         the page address, which after a shared link holds the whole plan in its query. -->
+    <meta name="referrer" content="strict-origin">
     <!-- Version: major.minor where minor = lowercase hex((day-of-year * 24) + hour-of-day) at build time.
          Use lowercase hex - easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
@@ -19,7 +24,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1859</title>
+    <title>Retirement Optimizer 11.1867</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -40,12 +45,15 @@
         };
     </script>
 	<script src="displayhelpers.js?v=1116af"></script>
+	<!-- The Send feedback dialog. NOT deferred: it records page errors from here on, so it has to
+	     load before the scripts below. It builds nothing until FeedbackWidget.open(). -->
+	<script src="feedback.js?v=111867"></script>
 	<!-- Upgrades the .md doc links below to the .html pages GitHub Pages generates from
 	     them. MUST keep `defer`: the changelog script further down copies the newest
 	     entry's HTML into the LATEST CHANGE banner during parse, and this has to sweep
 	     the document after that copy exists. See doclinks.js. -->
 	<script src="doclinks.js?v=1113d0" defer></script>
-	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=1116d0">
+	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=111867">
 	<style>
     .toggle { display: flex !important; }
     .share-panel { display:none; position:fixed; top:60px; right:1.5rem; z-index:800; background:#fff; border:1px solid #27ae60; border-radius:8px; padding:.85rem 1rem; width:min(520px,calc(100vw - 3rem)); box-shadow:0 8px 32px rgba(0,0,0,.2); }
@@ -65,8 +73,8 @@
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=111859x"></script>
-	<script src="optimizer_tests.js?v=111859w"></script>
+	<script src="optimizer_ui.js?v=111867"></script>
+	<script src="optimizer_tests.js?v=111867"></script>
 </head>
 <body>
 
@@ -645,6 +653,7 @@
                         <div class="share-status" id="share-status"></div>
                     </div>
                 </div>
+                <button type="button" onclick="FeedbackWidget.open()" style="font-size:0.8em;padding:4px 8px;width:auto;" title="Send a problem report, a question or an idea to the author. You choose what goes with it.">&#9993; Feedback</button>
             </div>
             <div id="summary-stats"><!-- layout in optimizer_styles_responsive.css: flex row on desktop, 3-col grid on phones -->
 				<div title="Years of life fully funded - portfolio covers spending goal without running out. Red when fewer than expected."><small>Funded Yrs</small><br><strong id="stat-years">0</strong><div id="stat-years-delta" style="font-size:0.75em;min-height:1em;"></div></div>
@@ -1069,6 +1078,18 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="display"><b>11.1867</b>
+					<strong>Send feedback from the page.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>The &#9993; Feedback button, next to Share, sends a note to the author. No plan's numbers change.</li>
+					<li>Your settings and any page errors go with it unless you untick them: strategy, tax limit, filing status, state, growth and inflation, never balances, income, spending, ages or birth dates. Your full plan link and a screenshot go only if you tick them, and <i>Show exactly what will be sent</i> lists everything first.</li>
+					<li>An email address is optional and is only used to reply to you. The <a href="README.md#sending-feedback" target="_blank" rel="noopener">README&rsquo;s <i>Sending Feedback</i></a> section says where a message goes.</li>
+					<li>Prefer GitHub? The same box links to a feedback form for a public GitHub issue.</li>
+					<li>On a phone the page no longer scrolls sideways.</li>
+					<li>Google Analytics no longer receives the numbers in a shared plan link.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.1867" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="display"><b>11.1859</b>
 					<strong>Risk-based guardrails for every plan, and GK-style Guardrails stop cutting in a plan's last 8 years.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1121,13 +1142,6 @@
 					<li><strong>Ending wealth can move in either direction</strong>, even where the tax owed falls, because both changes alter which account a plan spends from.</li>
 					</ul>
 					<a href="optimizer_changelog.md#11.17c2" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li><b>11.17c1</b>
-					<strong>The Annual Details <i>Timing</i> column now explains what it actually shows.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>That column reports two months, one for the Roth conversion and one for the spending withdrawal, but hovering over it still described a rule the tool no longer uses - it used to choose the month for you based on whether the previous year had converted. The help now says what each half of the value means, and that the spending withdrawal carries that year's income tax and any Medicare surcharge out with it. The <i>Limitations</i> section of the <a href="README.md#limitations-and-restrictions" target="_blank" rel="noopener">README</a> described the same retired rule and has been corrected. <strong>No number changes.</strong></li>
-					</ul>
-					<a href="optimizer_changelog.md#11.17c1" target="_blank" rel="noopener">Details</a>
 				</li>
 				</ul>
 				<script>
@@ -1268,7 +1282,12 @@
 			<A HREF="https://github.com/nightskyguy/retirement_assets">github.com/nightskyguy/retirement_assets</A>.
 			Charts require loading remotely: <A HREF="https://cdn.jsdelivr.net/npm/chart.js">cdn.jsdelivr.net/npm/chart.js</A>.</p>
 			<p>You can directly <strong>run</strong> the code from GitHub: <A HREF="https://tools.netcitizen.us/retirement_optimizer.html">tools.netcitizen.us/retirement_optimizer.html</a></p>
-			<p>Page loads are tracked anonymously using Google Analytics and Cloudflare Web Analytics. No personally identifiable information is collected; no account data you enter is ever sent anywhere - it stays entirely in your browser.</p>
+			<p>Page loads are tracked anonymously using Google Analytics and Cloudflare Web Analytics. No personally identifiable information is collected. Nothing you enter leaves your browser unless you send it with <i>Feedback</i>, and then only what you choose.</p>
+
+			<h4>Send Feedback</h4>
+			<p>A problem, a question or an idea can go straight to the author. You choose what goes with it: your settings, your full plan link and a screenshot of the page each have their own box, and <i>Show exactly what will be sent</i> lists everything before it leaves your browser. An email address is optional and is only used to reply to you. The <a href="README.md#sending-feedback" target="_blank" rel="noopener">README&rsquo;s <i>Sending Feedback</i></a> section says where a message goes.</p>
+			<p><button type="button" onclick="FeedbackWidget.open()" style="font-size:0.9em;padding:6px 14px;">&#9993; Send feedback</button></p>
+			<p>Prefer GitHub? <a href="https://github.com/nightskyguy/retirement_assets/issues/new?template=feedback.yml" target="_blank" rel="noopener">Open an issue there</a>. Issues are public, so leave your own numbers out. If a problem needs numbers to show, use made-up ones that still show it.</p>
 
 			<h3>Other Tools</h3>
 			<div class="drawer-content" id="ot-drawer-content"></div>
@@ -1356,7 +1375,7 @@
 		</div>
 
         <div id="tab-chart" class="card">
-            <div style="display:flex;align-items:center;gap:10px;margin:8px 0 2px 8px;">
+            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:8px 0 2px 8px;">
               <h4 style="margin:0;color:#555;font-size:0.95em;">Balances</h4>
               <span style="display:inline-flex;gap:3px;">
                 <button id="chartPerson_both"   class="tog active" onclick="setChartPersonView('both')">Both</button>
@@ -1378,7 +1397,7 @@
             <canvas id="chartAssets" style="max-height:403px;"></canvas>
             <hr>
             <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:8px 0 2px 8px;">
-              <span style="display:inline-flex;gap:3px;">
+              <span style="display:inline-flex;flex-wrap:wrap;gap:3px;max-width:100%;">
                 <button id="chartView_combined" class="tog active" onclick="setIncomeChartView('combined')" title="Income sources, taxes, and spendable income in one stacked view.">Income &amp; Expenses</button>
                 <button id="chartView_tax"      class="tog"        onclick="setIncomeChartView('tax')"      title="Stacked tax by type (Federal, Capital Gains, State, IRMAA) vs Modified Adjusted Gross Income (MAGI) and bracket thresholds on the right axis.">Taxation</button>
                 <button id="chartView_net"      class="tog"        onclick="setIncomeChartView('net')"      title="Total income vs net (spendable) income vs the spend goal. Money a year puts back into Brokerage or Cash after paying for everything is counted as neither.">Income vs Net</button>
@@ -1765,8 +1784,8 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
 // now runs from requestIdleCallback, after boot. Nothing it asserts depends on running first, and
 // the tests that write to live page state stay gated behind ?runtests exactly as before.
 //
-// Tier 2 is the node suites: optimizer_core.tests.js, taxengine.tests.js, taxPaymentPlanner.tests.js
-// and doclinks.tests.js. They are ?runtests-ONLY. The pre-commit hook runs every one of them on
+// Tier 2 is the node suites: optimizer_core.tests.js, taxengine.tests.js, taxPaymentPlanner.tests.js,
+// doclinks.tests.js and feedback.tests.js. They are ?runtests-ONLY. The pre-commit hook runs every one of them on
 // every commit, so re-running them in each visitor's browser verified nothing new and cost about
 // four seconds of main thread on a fast machine - fifteen or more on the audience's - and a
 // megabyte of test code per visit. Without ?runtests the badge reports the in-page result and says
@@ -1777,14 +1796,15 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
 (() => {
     const RT = new URLSearchParams(location.search).get('runtests');
     const ALL = RT !== null && RT !== 'fast';
-    // Bump with the suites, not with the page: these six are fetched by URL, so a stale token
+    // Bump with the suites, not with the page: these seven are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111859t';
+    const V = '?v=111867';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',
-                     'taxengine.tests.js', 'taxPaymentPlanner.tests.js', 'doclinks.tests.js'];
+                     'taxengine.tests.js', 'taxPaymentPlanner.tests.js', 'doclinks.tests.js',
+                     'feedback.tests.js'];
 
     const load = src => new Promise((resolve, reject) => {
         const s = document.createElement('script');
@@ -1821,6 +1841,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
             results.push(Object.assign({ name: 'taxengine' }, window.runTaxEngineTests()));
             results.push(Object.assign({ name: 'taxPaymentPlanner' }, window.runTaxPlannerTests()));
             results.push(Object.assign({ name: 'doclinks' }, window.runDocLinksTests()));
+            results.push(Object.assign({ name: 'feedback' }, await window.runFeedbackTests()));
         } catch (e) {
             // A suite that throws OUTSIDE its own try/catch is a broken suite, not a passing one.
             window.TestTiers.finish(results.concat([{ name: 'runner', passed: 0, failed: 1, skipped: 0 }]));
@@ -1846,6 +1867,21 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
   DisplayHelpers.registerChartDismissal(document.getElementById('mc-chart'));
 
   // Dollar input attachment moved to main DOMContentLoaded handler (before captureDefaults).
+
+  // P131. Send feedback (feedback.js). The share link is read only when the person ticks one of the
+  // two plan boxes, and without the full-link box only OPT_SHARE_PRIVACY.safe keys go.
+  FeedbackWidget.init({
+    tool: 'Retirement Optimizer',
+    getVersion: appVersionString,
+    getPlanUrl: buildShareURL,
+    safeKeys: OPT_SHARE_PRIVACY.safe,
+    keyNames: OPT_SHORT_TO_LONG,
+    // The share link leaves out a state still at its default; the author always needs it.
+    pinnedSettings: () => ({ s: document.getElementById('STATEname').value }),
+    getTab: () => (document.querySelector('.tab-btn.active') || {}).textContent || '',
+    settingsHelp: 'Strategy, tax limit, filing status, state, growth and inflation, plus any error'
+      + ' messages the page logged. Never balances, income, spending, ages or birth dates.',
+  });
 </script>
 <script src="other_tools.js"></script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->

@@ -17,6 +17,32 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1867"></a>
+
+## 11.1867
+
+**Send feedback from the page.**  
+*No plan's numbers change.*
+
+**The ✉ Feedback button**, next to Share and on the Documentation tab, sends a note to the author.
+
+**You choose what goes with it.** Your settings and any page errors go unless you untick them:
+strategy, tax limit, filing status, state, growth and inflation, never balances, income, spending,
+ages or birth dates. Your full plan link and a screenshot of the page go only if you tick them.
+*Show exactly what will be sent* lists everything before it leaves your browser.
+
+**An email address is optional** and is only used to reply to you. The
+[README's *Sending Feedback*](README.md#sending-feedback) section says where a message goes.
+
+**Prefer GitHub?** The same box links to a feedback form for a public GitHub issue, with your message
+filled in and nothing else.
+
+**On a phone the page no longer scrolls sideways.** The Account Composition table, the chart view
+buttons and the Risk-based rails settings now fit the screen.
+
+**Google Analytics no longer receives the numbers in a shared plan link.** It records the page
+address without them.
+
 <a id="11.1859"></a>
 
 ## 11.1859

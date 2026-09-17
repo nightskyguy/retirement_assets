@@ -28,7 +28,7 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 **You choose what goes with it.** Your settings and any page errors go unless you untick them:
 strategy, tax limit, filing status, state, growth and inflation, never balances, income, spending,
-ages or birth dates. Your full plan link and a screenshot of the page go only if you tick them.
+ages or birth dates. Your full plan link and a screenshot of the whole page go only if you tick them.
 *Show exactly what will be sent* lists everything before it leaves your browser.
 
 **An email address is optional** and is used only to reply to you; without one there is no way to answer. The

@@ -196,7 +196,7 @@ sent** prints the whole report before anything leaves your browser.
 | Your message | always | what you type, up to 5,000 characters |
 | Settings and page errors | ticked | your state, your choices and assumptions (strategy, tax limit, filing status, growth, inflation, allocation), the *names* of the other fields you changed, and up to five error messages the page logged, with long numbers masked. Never balances, income, spending, ages or birth dates. |
 | Full plan link | unticked | the same link **Share** makes, which holds your balances, income, spending and ages. Without them, a problem can be hard to reproduce. For privacy you can reproduce and send numbers that are not your private information but that illustrate the problem. |
-| Screenshot | unticked | a picture of what is on your screen behind the dialog, **including your numbers** |
+| Screenshot | unticked | a picture of the whole page behind the dialog, top to bottom rather than only the part on screen, **including your numbers** |
 | Your email | empty | used only to reply to you; without one there is no way to answer, and a reply can take a while |
 | About the page | always | the app version, your browser, the window size and which tab is open |
 

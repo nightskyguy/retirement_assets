@@ -608,6 +608,9 @@ function runMonteCarlo(scope) {
     _mcScope = (scope === 'compare') ? 'compare' : 'plan';
     _lastMCHash = _buildMCHash();
     _lastSweepHash = _buildSweepHash();
+    // What this run's own stress pass is computed from. Kept apart from _lastMCHash, which the mode
+    // selector clears while a run may still be in flight.
+    const runHash = _lastMCHash;
     // runMCWorker terminates whatever is in flight, so a stress-only refresh started moments ago
     // (a sidebar edit is debounced 400ms, which is easily overtaken by a click on Run) will never
     // deliver its callback. Without this the flag stays true forever and every later stress refresh
@@ -676,10 +679,15 @@ function runMonteCarlo(scope) {
         (pct) => updateMCProgress(pct),
         (msg) => {
             setMCRunning(false);
+            // A successful run draws its own stress pass (renderMCResults, below, in this same tick),
+            // so that pass is now the one on screen. Recorded before the drain, so a request that
+            // landed during the run for these same inputs finds nothing to do. An errored run draws
+            // nothing and records nothing.
+            if (!msg.error && msg.stress) _lastStressHash = runHash;
             // P91. A full run computes its own stress pass, so a request that arrived BEFORE this
-            // run started is satisfied by it. One that arrived DURING it is not - the plan moved
-            // after this run read its inputs - and refreshMCStressOnly's own hash-free check will
-            // simply re-run the ~10 sims, which is cheap enough not to be worth distinguishing.
+            // run started is satisfied by it. One that arrived DURING it is not if the plan moved
+            // after this run read its inputs, and refreshMCStressOnly re-runs the ~10 sims for it;
+            // if the plan did not move, the hash just recorded tells it there is nothing to do.
             _drainStressPending();
             // This run just told the timing model what this machine actually costs, so both button
             // labels are restated from it -- including dropping the "about" once anything real has
@@ -874,6 +882,18 @@ function _drainStressPending() {
 // makes it the one Monte Carlo number that is always current, which is why it earns a summary-bar
 // tile visible from every tab.
 let _mcStress = null;
+// The `_buildMCHash()` the Stress Test on screen was computed from: the inputs the last SUCCESSFUL
+// stress pass read when it started, recorded at the moment its result is drawn, so the two can never
+// disagree. A full run records its own, because its stress pass replaces what is drawn. A pass that
+// errors, is cancelled or is terminated draws nothing and records nothing, so the next request for
+// those inputs runs.
+//
+// It is what lets refreshMCStressOnly skip a pass that would redraw the same answer (2026-09-16).
+// Until it existed, the only such check was mcInputsChanged comparing against _lastMCHash, which
+// only a FULL run writes. That was wrong both ways round: before any full run, every sidebar blur
+// started a pass (and a worker) whether or not anything had changed; after one, undoing an edit
+// matched the full run's hash, so no pass ran and the Stress Test kept the undone plan's answer.
+let _lastStressHash = null;
 
 // Called by optimizer_ui.js's scheduleRecalc when an input changes while the MC tab is open.
 // Until this existed the whole tab kept showing the PREVIOUS plan until you clicked away and back.
@@ -883,17 +903,26 @@ let _mcStress = null;
 // labeled: the stress pass is stressCount × 1 sims, so it refreshes silently, and the sweep gets
 // the #mc-stale-banner with a Re-run button.
 function mcInputsChanged() {
-    if (_buildMCHash() === _lastMCHash) return;
     // Only a change the SWEEP would have seen makes the sweep out of date, and _mcResults null means
     // there is nothing on screen to go stale. Editing Stress sequences or Stress window used to raise
     // the banner too, and its Re-run button re-runs everything, so the offer was to spend half a
     // minute on the ~144-strategy sweep to refresh a chart that had already refreshed itself by the
-    // time the banner appeared.
-    if (_mcResults && _buildSweepHash() !== _lastSweepHash) markMCStale(true);
+    // time the banner appeared. (This needed no early return on _lastMCHash, and had one only for the
+    // stress pass below: the two hashes are written together, so a sweep hash that moved means the
+    // whole hash moved too.)
+    //
+    // Both ways (user, 2026-09-16: "clear it"): an edit that is undone puts the plan back to the one
+    // the sweep ran, and the banner goes with it.
+    if (_mcResults) markMCStale(_buildSweepHash() !== _lastSweepHash);
     // No nerd-mode guard here on purpose. Nerd mode controls when the expensive SWEEP runs, and
     // nothing in this function runs it. Marking the sweep out of date and refreshing the ~10-sim
     // stress pass have to happen in both modes, or a nerdknob user silently reads the previous
     // plan's numbers -- which is exactly what the first version of this shipped with.
+    //
+    // Not gated on _lastMCHash any more: whether the stress pass is current is refreshMCStressOnly's
+    // own question, answered against the pass actually on screen (_lastStressHash). Gating it here
+    // skipped the pass whenever the plan matched the last FULL run - including right after an edit
+    // was undone, when the Stress Test was still showing the edited plan.
     refreshMCStressOnly();
 }
 
@@ -911,6 +940,14 @@ function refreshMCStressOnly() {
     if (_mcStressRefreshing) { _mcStressPending = true; return; }
     const simulationMode = document.getElementById('mc-sim-mode')?.value ?? 'gbm';
     if (_mcWorkerBusy()) { _mcStressPending = true; return; }   // never interrupt a full run in flight
+
+    // Nothing it reads has changed since the pass on screen: that pass is the answer, so start no
+    // other. Checked AFTER both guards on purpose. A request made while a pass is running is still
+    // remembered, and decided here once that pass has finished - by which time it has either
+    // recorded this hash (and there is nothing to do) or failed (and this request is the retry P91
+    // promises). Read in the same tick as getInputs() below, so it names exactly what the pass reads.
+    const hash = _buildMCHash();
+    if (hash === _lastStressHash) return;
 
     const base = getInputs();
     // The stress chart's x-axis needs these, and a nerdknob user can reach a stress result without
@@ -952,6 +989,16 @@ function refreshMCStressOnly() {
             _mcStress = msg.stress;
             if (_mcResults) _mcResults.stress = msg.stress;
             renderStressChart(msg.stress);   // calls renderMCStressMetrics, which updates the tile
+            // With the render and never before it, so the hash always names what is drawn. The error
+            // path above returns without it, which is what makes the next request a retry.
+            _lastStressHash = hash;
+            // P91, the half it missed: a SUCCESSFUL pass must go back for the request it displaced
+            // too. Only the error path above drained, so an edit that landed while a pass ran was
+            // remembered and then never run, and the tile kept the plan from before that edit until
+            // something else happened to ask again. Found 2026-09-16 with two quick edits: the flag
+            // sat at pending with nothing in flight. After the render, so the newer pass replaces
+            // what is now on screen rather than racing it.
+            _drainStressPending();
         }
     );
 }

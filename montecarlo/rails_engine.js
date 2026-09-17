@@ -1,0 +1,549 @@
+// Risk-based guardrails, solved along the live plan (P128).
+//
+// WHAT IT ANSWERS. At the start of a plan year: what is the probability the plan funds every
+// remaining year, what spending would put that probability exactly on the target, at what wealth
+// the plan's own spending reaches the raise rail and the cut rail, and what spending returns the
+// plan to target at each of those two levels. That is Tharp and Fitzpatrick's four-step recipe
+// (research/RISK_BASED_GUARDRAILS.md, section 1), asked at a cadence instead of once, so the rails
+// can be drawn over the plan's own lines - for EVERY preset in RAIL_PRESETS (optimizer_core.js) at
+// once, so switching presets on the page redraws without solving again. Plus one answer from the
+// plan's own start: the After-Tax Spend that puts the plan on each preset's target (P129).
+//
+// WHEN. The first solve is at the start of the plan's second year - the first FULL year for a plan
+// that starts this year, which is how the page is used (user, 2026-09-16) - and every `cadence`
+// years after that. Nothing is solved after the last one, so nothing is drawn past it either: an
+// extrapolated rail would be a number nobody computed.
+//
+// IN WHAT UNITS. A solve starting in year S resumes the plan from the end of year S-1, and it finds
+// the rails by scaling every account, and the brokerage basis, by one factor. The after-tax wealth of
+// the plan (`totalNetWealth`) scales by exactly that factor, so each rail is stated as the
+// TotalNetWealth the END of year S-1 would need - the same quantity, at the same moment, as the
+// TotalNetWealth line and column on that row. The spending answers belong to year S itself.
+//
+// HOW A YEAR IS SOLVED (P128n, 2026-09-16: "calculate every rail (and spend threshold?) at the same
+// time"). The plan is run once as configured, recording what each year hands the next
+// (`captureResume`). A solve RESUMES the plan from that record - same plan-year index, clocks and
+// carried state - on fresh market paths from the Monte Carlo engine, and asks each path two
+// questions once: the smallest wealth at which it funds every remaining year with the plan's own
+// spending, and the largest spending it survives at the plan's own wealth. Survival is monotone in
+// both - rails_precision_harness.js made 10,800 path checks and found none out of order - so each
+// path has one threshold for each, found by bisection to within RAILS_RESOLUTION.
+//
+// Every answer is then an ORDER STATISTIC of those thresholds. "The wealth at which q of the paths
+// survive" is the c-th smallest wealth threshold, with c the least count for which c / N >= q - the
+// Monte Carlo tab's own comparison, applied by the tab's own survival test (yearIsRuined,
+// mc_engine.js). So every preset's rails, target spends and chance of success come out of the same
+// two passes. The spend that returns the plan to target at a rail is the same question asked at that
+// rail's wealth: one more pass per DISTINCT rail (Tight and Normal share their 99% raise rail), each
+// path's search bracketed by what the first two passes already know about it.
+//
+// Only paths that could still BE one of the order statistics are refined (refine(), below), so most
+// thresholds stay rough brackets and the answers are exactly the same. On two bank households that
+// cut the runs from 59 a path a solved year to 23, and the eight rails_precision_harness.js times
+// take 20 to 23: under the 46 the earlier one-preset solver spent, for all three presets. The
+// After-Tax Spend answer is counted apart, since it runs on its own paths.
+//
+// The count rule is the solver's own and is NOT corrected for the path count: from 100 paths a 99%
+// rail behaves like a 98% one (research/RISK_BASED_RAILS_PRECISION.md, section 2). A correction
+// would make Loose's 99.5% unanswerable below 199 paths.
+//
+// Guardrails (GK-style) is OFF inside every solve. The rails ARE the spending rule being evaluated,
+// and a probability "at a spending level" means spending that holds its planned path - Spend Delta
+// and inflation - rather than one another rule is adjusting underneath it. A plan with Guardrails on
+// is still resumed from its own adjusted state and spending, which is the plan on screen.
+//
+// WHAT IT COSTS, which is half the reason it exists. How far each path is refined depends on where it
+// sits, so the run count varies with the plan; the job counts what it did, and railsProjectMs()
+// prices other settings from that.
+//
+// One set of paths is drawn per job and reused by every search at every year (common random
+// numbers), so the rails of neighboring years compare on the same market.
+//
+// Loadable three ways, like mc_engine.js. Depends on, and does not own: simulate(), resumeInputs()
+// and RAIL_PRESETS (optimizer_core.js), mulberry32() (prng.js), and buildBanks(), buildPathInputs(),
+// yearIsRuined() and _hooksOf() (mc_engine.js). The page and the worker load all of those as classic
+// scripts first; node requires the Monte Carlo engine here and expects the rest on globalThis, the
+// same contract mc_engine.js has.
+
+const _railsMC = (typeof module !== 'undefined' && module.exports && typeof require === 'function')
+    ? require('./mc_engine.js')
+    : { buildBanks, buildPathInputs, yearIsRuined, _hooksOf };
+
+// Each threshold is found to within 1% of itself - far inside the 3% to 27% a 100-path answer moves
+// from run to run - and the After-Tax Spend answer, which has 400 paths behind it, to within 0.5%.
+const RAILS_RESOLUTION = Math.log(1.01);
+const RAILS_START_RESOLUTION = Math.log(1.005);
+// Search brackets, as multiples of the plan's own spending and of its wealth. An answer beyond one
+// is reported as clamped, and the page ends its line there rather than drawing the bracket's edge.
+const RAILS_SPEND_RANGE = [0.1, 16];
+const RAILS_SCALE_RANGE = [0.05, 16];
+// Market paths longer than the plan, as the research harness draws them.
+const RAILS_EXTRA_YEARS = 3;
+const RAILS_CADENCE_MAX = 10;
+const RAILS_PATHS_RANGE = [20, 2000];
+// The panel's defaults (user, 2026-09-16: "Running 100 paths every 3 years is sufficient").
+const RAILS_DEFAULT_PATHS = 100;
+const RAILS_DEFAULT_CADENCE = 3;
+// Paths behind the After-Tax Spend answer, whatever the panel's path count (user, 2026-09-16:
+// "worth calculating on the first year at 400 paths").
+const RAILS_START_PATHS = 400;
+// The first plan year solved: the first full year of a plan that starts this year.
+const RAILS_FIRST_YEAR = 1;
+
+// Years between solves, as a whole number the job can use.
+function railsCadence(cadence) {
+    return Math.min(RAILS_CADENCE_MAX, Math.max(1, Math.floor(Number(cadence)) || RAILS_DEFAULT_CADENCE));
+}
+
+function railsPaths(paths) {
+    return Math.min(RAILS_PATHS_RANGE[1], Math.max(RAILS_PATHS_RANGE[0], Math.round(Number(paths)) || RAILS_DEFAULT_PATHS));
+}
+
+// The plan-year indexes a job solves: 1, 1 + cadence, 1 + 2 x cadence, ... while inside the plan.
+function railsSolvedYears(n, cadence) {
+    const c = railsCadence(cadence);
+    const out = [];
+    for (let k = RAILS_FIRST_YEAR; k < n; k += c) out.push(k);
+    return out;
+}
+
+// The least count of N paths that must survive for a q answer: c / N >= q, compared exactly the way
+// the Monte Carlo tab compares a survival rate (a floating q x N can land a hair either side).
+function railsCount(N, q) {
+    for (let c = Math.max(0, Math.floor(q * N) - 2); c <= N; c++) {
+        if (c / N >= q) return c;
+    }
+    return N;
+}
+
+// The presets in a fixed order, so every consumer walks them the same way.
+function railsPresetKeys() {
+    return Object.keys(RAIL_PRESETS);
+}
+
+const _RAILS_CANCELLED = Symbol('rails-cancelled');
+
+// One whole rails job. Resolves to the results message, or null if shouldCancel() went true.
+//
+// cfg: { base, cadence, numPaths, simulationMode, seed, mu, sigma, bearFraction, inflationRate,
+//        inflationPersistence, inflationShockSd, inflationReturnCorr, startPaths? }
+// `base` is the plan's simulate() inputs, exactly as the page runs them. `startPaths` exists for the
+// tests; the page always sends the default.
+async function runRailsJob(cfg, hooks) {
+    const h = _railsMC._hooksOf(hooks);
+    const t0 = performance.now();
+    const numPathsWanted = railsPaths(cfg.numPaths);
+    const startPathsWanted = Math.max(1, Math.round(Number(cfg.startPaths)) || RAILS_START_PATHS);
+    const mode = (cfg.simulationMode === 'bootstrap' || cfg.simulationMode === 'aam') ? cfg.simulationMode : 'gbm';
+    const presetKeys = railsPresetKeys();
+
+    // The page's own inputs, minus the two things that would only cost time here: the Break Even
+    // counterfactual and a resume record nobody asked for.
+    const base = { ...cfg.base, computeOC: false, captureResume: false, resume: undefined };
+    const ruleOn = base.spendRule === 'gk';
+    const solveBase = { ...base, spendRule: '' };
+
+    const tSpine = performance.now();
+    const spine = simulate({ ...base, captureResume: true });
+    const spineMs = performance.now() - tSpine;
+    const log = spine.log;
+    const n = log.length;
+    const solved = railsSolvedYears(n, cfg.cadence);
+    const years = n + RAILS_EXTRA_YEARS;
+
+    const tBanks = performance.now();
+    const bankOf = (paths, seedShift) => {
+        const banks = _railsMC.buildBanks({ ...cfg, years, numPaths: paths, baseInputs: solveBase },
+                                          mulberry32((cfg.seed ?? 42) + seedShift), mode);
+        const inputs = new Array(banks.numPaths);
+        for (let p = 0; p < banks.numPaths; p++) inputs[p] = _railsMC.buildPathInputs(banks, p, years, solveBase, mode);
+        return inputs;
+    };
+    const pathInputs = bankOf(numPathsWanted, 0);
+    // Its own paths, and more of them: the same seed, so a 400-path answer's first paths are the
+    // job's own in the synthetic methods (Historical's bear-start quarter differs with the count).
+    const startInputs = bankOf(startPathsWanted, 0);
+    const bankMs = performance.now() - tBanks;
+    const numPaths = pathInputs.length;
+    const startPaths = startInputs.length;
+
+    let runs = 0, pathYears = 0, crashes = 0, sinceYield = 0;
+    // What the whole job is expected to take, for the progress bar only: measured on two bank
+    // households at about 23 runs a path for a solved year and 3 to 6 for a start path.
+    const expectRuns = solved.length * numPaths * 23 + startPaths * 5;
+
+    // Does path `pathIn` fund every remaining year from `inputs`?
+    const survives = async (inputs, pathIn) => {
+        if (++sinceYield >= 16) {
+            sinceYield = 0;
+            await h.yieldIfDue();
+            if (h.shouldCancel()) throw _RAILS_CANCELLED;
+            h.onProgress(Math.min(0.99, runs / expectRuns));
+        }
+        runs++;
+        let r;
+        try { r = simulate({ ...inputs, ...pathIn }); }
+        catch (e) { crashes++; return false; }   // a crashed run is a failed path, as in runPass
+        pathYears += r.log.length;
+        return !r.log.some(_railsMC.yearIsRuined);
+    };
+
+    const [S_LO, S_HI] = RAILS_SCALE_RANGE;
+    const [M_LO, M_HI] = RAILS_SPEND_RANGE;
+
+    // Every answer is an order statistic, and only the paths that could still BE that statistic need
+    // their threshold pinned down. So each path's threshold is a bracket, refined a step at a time and
+    // only while it overlaps the range an answer could still take - most paths stop after a few steps,
+    // far above or below everything asked. Measured on the reference household, that halves the runs
+    // against pinning every path, for the same answers.
+    //
+    // items: [{ lo, hi, loSure, hiSure, test }], test(x) resolving to survival at x. `rise`: survival
+    // rises with x (wealth: lo fails, hi survives; a count c asks for the c-th SMALLEST threshold);
+    // otherwise it falls (spending: lo survives, hi fails; the c-th LARGEST). An end that is not
+    // `sure` is the range's own edge, not yet checked: the path may lie beyond it. A path found beyond
+    // an edge is censored - [0, low edge] or [high edge, Infinity] - and never refined again.
+    // Resolves to a Map from each count to { value, clamped }, clamped '' | 'low' | 'high'.
+    const refine = async (items, counts, rise, range, res) => {
+        const [R_LO, R_HI] = range;
+        const loB = it => it.loSure ? it.lo : 0;
+        const hiB = it => it.hiSure ? it.hi : Infinity;
+        const order = rise ? ((a, b) => a - b) : ((a, b) => b - a);
+        const kth = (vals, c) => vals.slice().sort(order)[c - 1];
+        const answers = new Map();
+        const settle = (c, LB, UB) => {
+            if (LB >= R_HI) answers.set(c, { value: rise ? null : R_HI, clamped: 'high' });
+            else if (UB <= R_LO) answers.set(c, { value: rise ? R_LO : null, clamped: 'low' });
+            else if (LB > 0 && Number.isFinite(UB)) answers.set(c, { value: Math.sqrt(LB * UB), clamped: '' });
+            else answers.set(c, { value: null, clamped: LB > 0 ? 'high' : 'low' });
+        };
+        // One step on one path: halve a wide bracket, or check an unchecked edge. False when there is
+        // nothing left to learn about it.
+        const step = async it => {
+            if (it.lo > 0 && Number.isFinite(it.hi) && Math.log(it.hi / it.lo) > res) {
+                const x = Math.sqrt(it.lo * it.hi);
+                if ((await it.test(x)) === rise) { it.hi = x; it.hiSure = true; }
+                else { it.lo = x; it.loSure = true; }
+                return true;
+            }
+            if (!it.loSure) {
+                // rise: surviving at the bottom edge, or falling: failing there, is below the range.
+                if ((await it.test(R_LO)) === rise) Object.assign(it, { lo: 0, hi: R_LO, loSure: true, hiSure: true });
+                else it.loSure = true;
+                return true;
+            }
+            if (!it.hiSure) {
+                if ((await it.test(R_HI)) === rise) it.hiSure = true;
+                else Object.assign(it, { lo: R_HI, hi: Infinity, loSure: true, hiSure: true });
+                return true;
+            }
+            return false;
+        };
+        for (let round = 0; round < 80; round++) {
+            const lows = items.map(loB), highs = items.map(hiB);
+            const open = [];
+            for (const c of counts) {
+                if (answers.has(c)) continue;
+                if (c <= 0) { answers.set(c, rise ? { value: 0, clamped: 'low' } : { value: null, clamped: 'high' }); continue; }
+                const LB = kth(lows, c), UB = kth(highs, c);
+                if (LB >= R_HI || UB <= R_LO || (LB > 0 && Number.isFinite(UB) && Math.log(UB / LB) <= res)) settle(c, LB, UB);
+                else open.push({ c, LB, UB });
+            }
+            if (!open.length) break;
+            let moved = false;
+            for (const it of items) {
+                if (!open.some(o => loB(it) < o.UB && hiB(it) > o.LB)) continue;
+                if (await step(it)) moved = true;
+            }
+            // Brackets that overlap but cannot narrow further (several paths within the resolution of
+            // one another): the answer is inside them, which is as close as the resolution allows.
+            if (!moved) { for (const o of open) settle(o.c, o.LB, o.UB); break; }
+        }
+        for (const c of counts) if (!answers.has(c)) answers.set(c, { value: null, clamped: 'high' });
+        return answers;
+    };
+    const uniq = xs => [...new Set(xs)];
+
+    const phaseMs = { thresholds: 0, railSpends: 0, start: 0 };
+    const out = [];
+    let start = null;
+    try {
+        for (const k of solved) {
+            // The end of the year before: what the solve starts from, and the row its rails sit on.
+            const prev = log[k - 1];
+            const rec = prev['-resume'];
+            // The spending the plan itself has in year k, as the engine holds it: nominal, before any
+            // Medicare outflow or bracket cap is applied to it. With Guardrails on that is the rule's
+            // own adjusted goal for the year.
+            const planSpend = ruleOn ? log[k].gkSpend : rec.sim.spendGoal;
+            const at = (scale, mult) => resumeInputs(solveBase, rec, { balanceScale: scale, spendGoal: planSpend * mult });
+            const yT0 = performance.now(), yRuns0 = runs, yPY0 = pathYears;
+
+            // Pass 1: each path as planned, which already brackets both of its thresholds by 1.
+            const paths = [];
+            for (let p = 0; p < numPaths; p++) {
+                const pathIn = pathInputs[p];
+                const ok11 = await survives(at(1, 1), pathIn);
+                const w = ok11 ? { lo: S_LO, hi: 1, loSure: false, hiSure: true }
+                               : { lo: 1, hi: S_HI, loSure: true, hiSure: false };
+                const m = ok11 ? { lo: 1, hi: M_HI, loSure: true, hiSure: false }
+                               : { lo: M_LO, hi: 1, loSure: false, hiSure: true };
+                w.test = x => survives(at(x, 1), pathIn);
+                m.test = x => survives(at(1, x), pathIn);
+                paths.push({ p, ok11, w, m });
+            }
+            const pos = paths.filter(x => x.ok11).length / numPaths;
+            const countOf = q => railsCount(numPaths, q);
+            const wealthAns = await refine(paths.map(x => x.w),
+                uniq(presetKeys.flatMap(key => [countOf(RAIL_PRESETS[key].upper), countOf(RAIL_PRESETS[key].lower)])),
+                true, RAILS_SCALE_RANGE, RAILS_RESOLUTION);
+            const spendAns = await refine(paths.map(x => x.m),
+                uniq(presetKeys.map(key => countOf(RAIL_PRESETS[key].target))),
+                false, RAILS_SPEND_RANGE, RAILS_RESOLUTION);
+            const tThresh = performance.now();
+            phaseMs.thresholds += tThresh - yT0;
+
+            // Every preset's rails and target, read off those two.
+            const rails = {};
+            const scales = new Map();   // a distinct rail wealth -> the presets and rails that use it
+            for (const key of presetKeys) {
+                const P = RAIL_PRESETS[key];
+                const upper = wealthAns.get(countOf(P.upper));
+                const lower = wealthAns.get(countOf(P.lower));
+                const target = spendAns.get(countOf(P.target));
+                rails[key] = { upper, lower, target, spendUp: { value: null, clamped: 'rail' }, spendDn: { value: null, clamped: 'rail' } };
+                for (const [which, r] of [['spendUp', upper], ['spendDn', lower]]) {
+                    if (r.clamped) continue;   // a rail at a bracket's edge has no spend worth solving
+                    if (!scales.has(r.value)) scales.set(r.value, []);
+                    scales.get(r.value).push({ key, which, c: countOf(P.target) });
+                }
+            }
+
+            // Pass 2: the spend back on target at each distinct rail, starting from what pass 1 learned.
+            for (const [scale, uses] of scales) {
+                const items = [];
+                for (const x of paths) {
+                    const pathIn = pathInputs[x.p];
+                    // Survival as planned at this wealth, when the wealth bracket already says.
+                    let ok = (x.w.hiSure && scale >= x.w.hi) ? true : (x.w.loSure && scale <= x.w.lo) ? false : null;
+                    if (ok === null) ok = await survives(at(scale, 1), pathIn);
+                    let it;
+                    if (ok) {
+                        it = { lo: 1, loSure: true, hi: M_HI, hiSure: false };
+                        // More wealth survives any spending less wealth did; less wealth fails any
+                        // spending more wealth failed.
+                        if (scale >= 1 && x.m.loSure && x.m.lo > it.lo) it.lo = x.m.lo;
+                        if (scale <= 1 && x.m.hiSure && Number.isFinite(x.m.hi)) { it.hi = x.m.hi; it.hiSure = true; }
+                        if (it.lo >= M_HI) it = { lo: M_HI, hi: Infinity, loSure: true, hiSure: true };
+                    } else {
+                        it = { lo: M_LO, loSure: false, hi: 1, hiSure: true };
+                        if (scale <= 1 && x.m.hiSure && x.m.hi < it.hi) it.hi = x.m.hi;
+                        if (scale >= 1 && x.m.loSure && x.m.lo > 0) { it.lo = x.m.lo; it.loSure = true; }
+                        if (it.hi <= M_LO) it = { lo: 0, hi: M_LO, loSure: true, hiSure: true };
+                    }
+                    it.test = v => survives(at(scale, v), pathIn);
+                    items.push(it);
+                }
+                const ans = await refine(items, uniq(uses.map(u => u.c)), false, RAILS_SPEND_RANGE, RAILS_RESOLUTION);
+                for (const u of uses) rails[u.key][u.which] = ans.get(u.c);
+            }
+            phaseMs.railSpends += performance.now() - tThresh;
+
+            const wealth = prev.totalNetWealth;
+            // A clamped answer is a bound, not a value: its dollar figure is null, so the page ends the
+            // line there. The multiple stays, for the status text ("beyond 16x").
+            const dollars = (r, of) => (r.clamped || r.value == null) ? null : of * r.value;
+            const presets = {};
+            for (const key of presetKeys) {
+                const r = rails[key];
+                presets[key] = {
+                    upperScale: r.upper.value, lowerScale: r.lower.value, targetMult: r.target.value,
+                    railUpper:    dollars(r.upper, wealth),
+                    railLower:    dollars(r.lower, wealth),
+                    spendTarget:  dollars(r.target, planSpend),
+                    spendAtUpper: dollars(r.spendUp, planSpend),
+                    spendAtLower: dollars(r.spendDn, planSpend),
+                    clamped: { upper: r.upper.clamped, lower: r.lower.clamped, target: r.target.clamped,
+                               spendUp: r.spendUp.clamped, spendDn: r.spendDn.clamped },
+                };
+            }
+            out.push({
+                k, year: log[k].year, fromYear: prev.year,
+                wealth, planSpend, pos, presets,
+                ms: performance.now() - yT0,
+                runs: runs - yRuns0,
+                pathYears: pathYears - yPY0,
+            });
+        }
+
+        // The After-Tax Spend that puts the plan on each preset's target, from its own start (P129).
+        // Scaling the start record's goal IS typing the scaled goal (checked on 60 path runs by the
+        // research harness), so the answer is that multiple of the After-Tax Spend on screen.
+        const tStart = performance.now(), sRuns0 = runs, sPY0 = pathYears;
+        const rec0 = spine.resumeStart;
+        const at0 = (scale, mult) => resumeInputs(solveBase, rec0, { balanceScale: scale, spendGoal: rec0.sim.spendGoal * mult });
+        const items0 = [];
+        let ok0 = 0;
+        for (let p = 0; p < startPaths; p++) {
+            const pathIn = startInputs[p];
+            const ok = await survives(at0(1, 1), pathIn);
+            if (ok) ok0++;
+            const it = ok ? { lo: 1, hi: M_HI, loSure: true, hiSure: false }
+                          : { lo: M_LO, hi: 1, loSure: false, hiSure: true };
+            it.test = v => survives(at0(1, v), pathIn);
+            items0.push(it);
+        }
+        const startCount = key => railsCount(startPaths, RAIL_PRESETS[key].target);
+        const ans0 = await refine(items0, uniq(presetKeys.map(startCount)), false, RAILS_SPEND_RANGE, RAILS_START_RESOLUTION);
+        const answers = {};
+        for (const key of presetKeys) {
+            const a = ans0.get(startCount(key));
+            answers[key] = { mult: a.value, clamped: a.clamped,
+                             spendGoal: (a.clamped || a.value == null) ? null : base.spendGoal * a.value };
+        }
+        start = { paths: startPaths, pos: ok0 / startPaths, spendGoal: base.spendGoal, answers,
+                  runs: runs - sRuns0, pathYears: pathYears - sPY0, ms: performance.now() - tStart };
+        phaseMs.start += performance.now() - tStart;
+    } catch (e) {
+        if (e === _RAILS_CANCELLED) return null;
+        throw e;
+    }
+    h.onProgress(1);
+
+    const totalMs = performance.now() - t0;
+    const solveMs = phaseMs.thresholds + phaseMs.railSpends;
+    const solveRuns = runs - start.runs;
+    const solvePY = pathYears - start.pathYears;
+    const presetsOut = {};
+    for (const key of presetKeys) {
+        const P = RAIL_PRESETS[key];
+        presetsOut[key] = { key, label: P.label, target: P.target, upper: P.upper, lower: P.lower };
+    }
+    return {
+        type: 'results', kind: 'rails', version: 2,
+        presets: presetsOut,
+        cadence: railsCadence(cfg.cadence),
+        numPaths, simulationMode: mode, ruleOn,
+        planYears: n, startYear: log[0].year,
+        years: out,
+        start,
+        cost: {
+            totalMs, spineMs, bankMs, solveMs, phaseMs,
+            runs, pathYears, crashes,
+            solveRuns, startRuns: start.runs,
+            msPerRun:      runs > 0 ? (solveMs + phaseMs.start) / runs : null,
+            msPerPathYear: pathYears > 0 ? (solveMs + phaseMs.start) / pathYears : null,
+            bankMsPerPathYear: bankMs / Math.max(1, (numPaths + startPaths) * years),
+            // What a path costs, measured: runs per path per solved year, and per start path.
+            runsPerPathYear: solved.length > 0 ? solveRuns / (numPaths * solved.length) : null,
+            runsPerStartPath: start.runs / startPaths,
+            // Simulated years per solve run, against the years left: how much shorter a solve's runs
+            // are than a full-horizon run. Used to price other cadences.
+            solvePathYears: solvePY,
+        },
+    };
+}
+
+// What a rails job with other settings would cost, priced from one that ran. Engine time scales with
+// the years each run simulates, and a solve for year k simulates the n - k that are left, so the
+// estimate walks the solved years rather than multiplying a flat per-run figure: cadence 1 solves
+// many short-horizon years that a per-run average would overprice. `fixedMs` is whatever the caller
+// measured outside the job (worker startup, the transfer, the redraw).
+//
+// Runs per path are measured, not fixed - a path's searches end sooner when it sits far from every
+// rail - so the run count is exact only for the settings that ran, and close for others. `ms` is null
+// when the run it is priced from measured no time (a host without a real clock).
+function railsProjectMs(cost, n, { cadence, numPaths, fixedMs = 0 } = {}) {
+    if (!cost || !(n > 0) || !(cost.runsPerPathYear >= 0)) return null;
+    const paths = railsPaths(numPaths);
+    const solved = railsSolvedYears(n, cadence);
+    const perPath = cost.runsPerPathYear;
+    let pathYears = 0;
+    for (const k of solved) pathYears += perPath * paths * (n - k);
+    const startRuns = cost.startRuns ?? 0;
+    const startPY = startRuns * n;
+    const bankMs = (cost.bankMsPerPathYear ?? 0) * (paths + RAILS_START_PATHS) * (n + RAILS_EXTRA_YEARS);
+    const runs = perPath * paths * solved.length + startRuns;
+    return {
+        ms: cost.msPerPathYear > 0
+            ? fixedMs + (cost.spineMs ?? 0) + bankMs + (pathYears + startPY) * cost.msPerPathYear
+            : null,
+        runs: Math.round(runs),
+        pathYears: Math.round(pathYears + startPY),
+        solvedYears: solved.length,
+    };
+}
+
+// The rails as Annual Details columns: one object per row of `log`, aligned with it, or null.
+//
+// Each solve lands on TWO rows. Its wealth rails and its probability sit on the row of the year it
+// starts from (`fromYear`), beside that row's own totalNetWealth; its spending answers sit on the
+// row of the year it solves for (`year`), beside that row's own spending. Years between two solves
+// are interpolated in TODAY's dollars (each row's own inflationFactor) and say so; nothing is
+// written after the last solve. `railBasis` describes the wealth rails on its row - the spending on
+// the row below comes from the same solve.
+//
+// A value at a search bracket's edge (clamped) is not a number anyone computed, so it is left out,
+// and so is every interpolated value that would lean on it: its line ENDS there (user, 2026-09-16:
+// "end the line"). The solved row's `railBasis` names what was left out.
+//
+// Every value is NOMINAL, like every other dollar column, so the Current $ toggle treats them alike.
+// `preset` picks which preset's rails to lay out; `stale` marks rails solved for a plan that has
+// since changed.
+const RAIL_FIELDS = ['railLower', 'railUpper', 'railPoS%', 'railSpend', 'railSpendDn', 'railSpendUp', 'railBasis'];
+
+function railsRowFields(msg, log, { stale = false, preset = 'normal' } = {}) {
+    const rows = log.map(() => null);
+    if (!msg || !Array.isArray(msg.years) || !msg.years.length || !log.length) return rows;
+    const infl = i => log[i]?.inflationFactor || 1;
+    const idxOf = new Map(log.map((r, i) => [r.year, i]));
+    // A solve belongs to this log only if both of its rows are in it, one year apart.
+    const pts = msg.years
+        .map(y => ({ ...y, ...(y.presets?.[preset] ?? {}), w: idxOf.get(y.fromYear), s: idxOf.get(y.year) }))
+        .filter(y => y.w != null && y.s === y.w + 1)
+        .sort((a, b) => a.w - b.w);
+    const put = (i, fields) => { rows[i] = { ...(rows[i] ?? {}), ...fields }; };
+    const tag = s => stale ? s + ' (stale)' : s;
+    const num = v => (typeof v === 'number' && Number.isFinite(v)) ? v : null;
+    const real = (p, key, at) => num(p[key]) == null ? null : p[key] / infl(at);
+    const SPEND = [['railSpend', 'spendTarget'], ['railSpendDn', 'spendAtLower'], ['railSpendUp', 'spendAtUpper']];
+    const NAMES = { upper: 'raise rail', lower: 'cut rail', target: 'target spend',
+                    spendUp: 'spend at raise', spendDn: 'spend at cut' };
+    for (let j = 0; j < pts.length; j++) {
+        const a = pts[j], b = pts[j + 1];
+        const ended = Object.entries(a.clamped ?? {}).filter(([, v]) => v).map(([k]) => NAMES[k] ?? k);
+        const basis = 'solved' + (ended.length ? `; ended: ${ended.join(', ')}` : '');
+        put(a.w, { railLower: num(a.railLower), railUpper: num(a.railUpper), 'railPoS%': a.pos,
+                   railBasis: tag(basis) });
+        put(a.s, Object.fromEntries(SPEND.map(([f, key]) => [f, num(a[key])])));
+        if (!b) break;
+        const span = b.w - a.w;
+        for (let d = 1; d < span; d++) {
+            const t = d / span;
+            const wi = a.w + d, si = a.s + d;
+            // Between two solves, and only when both ends were computed.
+            const mix = (key, ai, bi, at) => {
+                const x = real(a, key, ai), y = real(b, key, bi);
+                return x == null || y == null ? null : (x + t * (y - x)) * infl(at);
+            };
+            put(wi, { railLower: mix('railLower', a.w, b.w, wi), railUpper: mix('railUpper', a.w, b.w, wi),
+                      'railPoS%': a.pos + t * (b.pos - a.pos), railBasis: tag('interp') });
+            put(si, Object.fromEntries(SPEND.map(([f, key]) => [f, mix(key, a.s, b.s, si)])));
+        }
+    }
+    return rows;
+}
+
+// Same three-host tail as mc_engine.js. Keep the two lists identical.
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { runRailsJob, railsCadence, railsPaths, railsSolvedYears, railsProjectMs, railsRowFields,
+                       railsCount, railsPresetKeys, RAIL_FIELDS,
+                       RAILS_RESOLUTION, RAILS_START_RESOLUTION, RAILS_SPEND_RANGE, RAILS_SCALE_RANGE,
+                       RAILS_EXTRA_YEARS, RAILS_CADENCE_MAX, RAILS_PATHS_RANGE, RAILS_FIRST_YEAR,
+                       RAILS_DEFAULT_PATHS, RAILS_DEFAULT_CADENCE, RAILS_START_PATHS };
+} else if (typeof window !== 'undefined') {
+    window.RailsEngine = { runRailsJob, railsCadence, railsPaths, railsSolvedYears, railsProjectMs, railsRowFields,
+                           railsCount, railsPresetKeys, RAIL_FIELDS,
+                           RAILS_RESOLUTION, RAILS_START_RESOLUTION, RAILS_SPEND_RANGE, RAILS_SCALE_RANGE,
+                           RAILS_EXTRA_YEARS, RAILS_CADENCE_MAX, RAILS_PATHS_RANGE, RAILS_FIRST_YEAR,
+                           RAILS_DEFAULT_PATHS, RAILS_DEFAULT_CADENCE, RAILS_START_PATHS };
+}

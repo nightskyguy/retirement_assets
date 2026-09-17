@@ -80,8 +80,10 @@
  * needs a probability estimate at every path-year - three to four orders of magnitude more engine
  * runs than anything here - and pricing that is what the cost table at the end is for.
  *
- * ENGINE NOTE. v11.1823 (`1842270`). Probabilities move with the engine, so a number quoted from
- * this harness belongs with that commit and not with an earlier report.
+ * ENGINE NOTE. First run on v11.1823 (`1842270`); re-run on v11.1852 (2026-09-16), after P127
+ * changed the Guardrails rule and P128 replaced this harness's hand-built re-plan with a resumed
+ * run. Probabilities move with the engine, so a number quoted from this harness belongs with the
+ * engine that printed it and not with an earlier report.
  *
  * -- PREDICTIONS, registered before the first run on 2026-09-15 --------------------------------
  * Registered against a 25% lower rail, which is what the second-hand summaries available at the
@@ -131,9 +133,17 @@ const STEPS = 9;                      // bisection steps; 9 puts a spend answer 
 //     paths is part of that answer rather than a detail of it.
 // Both reset spending to the target once a rail is hit, which is the article's own suggestion for
 // the size of the adjustment ("return to an income with the target risk level").
+//
+// READ FROM `RAIL_PRESETS` in optimizer_core.js (P128a), which the page's rails panel reads too:
+// A is its `normal` preset and B its `loose` one. The names are built from the numbers so a label
+// cannot drift from the set it names. B's raise rail is pinned back to the ARTICLE's 100% here: the
+// page's Loose preset raises at 99.5% since 2026-09-16 (a sample cannot state 100%), but this
+// harness measures the article's own rules, and its report quotes them.
+const pctInt = x => Math.round(x * 100);
+const railSet = (tag, p) => ({ ...p, name: `${tag} ${pctInt(p.target)}/${pctInt(p.upper)}/${pctInt(p.lower)}` });
 const RAIL_SETS = [
-    { name: 'A 90/99/70',  target: 0.90, upper: 0.99, lower: 0.70 },
-    { name: 'B 80/100/40', target: 0.80, upper: 1.00, lower: 0.40 },
+    railSet('A', core.RAIL_PRESETS.normal),
+    railSet('B', { ...core.RAIL_PRESETS.loose, upper: 1.00 }),
 ];
 const PRIMARY = RAIL_SETS[0];
 const SPEND_TARGETS = [0.95, 0.90, 0.80, 0.70, 0.40];
@@ -194,21 +204,21 @@ function bisect(lo, hi, below, steps = STEPS) {
     return (lo + hi) / 2;
 }
 
-// The state one year in, after a first-year return of `r`: balances as that year left them, real
-// spending unchanged, horizon and ages shortened by the year that passed.
+// The state one year in, after a first-year return of `r`: the plan RESUMED from the end of that
+// year (optimizer_core.js snapshotResume), with the same spending path, horizon and carried state.
+//
+// P128 (2026-09-16) replaced a hand-built re-plan here: `startInYear` moved forward, balances copied,
+// `spendGoal: spend0 x inflationFactor`. That goal is an input in TODAY's dollars, which the engine
+// inflates again for every year the start lies ahead, so a re-plan k years in spent k years of
+// inflation too much - exact at k = 1, which is the only place this function re-planned, but +10%
+// real by year 5 in the shock section below, which re-planned at years 4-6. The same re-plan also
+// restarted the N-year amortization, the brokerage cycle and the IRMAA history.
 function stateAfterYear(base, rows, r) {
     const seq = new Float64Array(rows + 3).fill(base.growth ?? 0.06);
     seq[0] = r;
     const inf = new Float64Array(rows + 3).fill(base.inflation ?? 0.025);
-    const row = simulate({ ...base, returnSequence: seq, inflationSequence: inf }).log[0];
-    const f = row.inflationFactor || 1;
-    return {
-        inputs: { ...base, startInYear: row.year + 1, startYear: row.year + 1,
-                  IRA1: row.IRA1, IRA2: row.IRA2, Roth: row.Roth1, Roth2: row.Roth2,
-                  Brokerage: row.Brokerage, BrokerageBasis: row.Basis, Cash: row.Cash,
-                  spendGoal: (base.spendGoal ?? 0) * f },
-        portfolio: row.portfolioBalance,
-    };
+    const row = simulate({ ...base, returnSequence: seq, inflationSequence: inf, captureResume: true }).log[0];
+    return { inputs: core.resumeInputs(base, row['-resume']), portfolio: row.portfolioBalance };
 }
 
 // Does the SHIPPED rule act in year 1, given a first-year return of `r`? Read off the `gkAdj`
@@ -286,7 +296,7 @@ for (const id of PLAN_IDS) {
     const seq = new Float64Array(years).fill(base.growth ?? 0.06);
     seq[1] = SHOCK[0]; seq[2] = SHOCK[1];
     const inf = new Float64Array(years).fill(base.inflation ?? 0.025);
-    const off = simulate({ ...base, returnSequence: seq, inflationSequence: inf });
+    const off = simulate({ ...base, returnSequence: seq, inflationSequence: inf, captureResume: true });
     const on  = simulate({ ...base, spendRule: 'gk', returnSequence: seq, inflationSequence: inf });
     const real = row => (row.spendGoal || 0) / (row.inflationFactor || 1);
     // MEASURED AGAINST THE PLAN'S OWN REAL SPENDING PATH, year by year, not against year 0. A
@@ -301,19 +311,21 @@ for (const id of PLAN_IDS) {
     const lastCut = cuts.length ? cuts[cuts.length - 1] : on.log[3];
     const idx = on.log.findIndex(r => r.year === lastCut.year);
     const rowOff = off.log[idx];
-    const fOff = rowOff.inflationFactor || 1;
-    const st = { ...base, startInYear: rowOff.year + 1, startYear: rowOff.year + 1,
-        IRA1: rowOff.IRA1, IRA2: rowOff.IRA2, Roth: rowOff.Roth1, Roth2: rowOff.Roth2,
-        Brokerage: rowOff.Brokerage, BrokerageBasis: rowOff.Basis, Cash: rowOff.Cash,
-        spendGoal: spend0 * fOff };
+    // Resumed from the end of that year (see stateAfterYear for why not a hand-built re-plan). A
+    // resumed run takes its first year's NOMINAL goal from the record, so every spending level below
+    // is set there, and read back in today's dollars by that year's own price level.
+    const rec = rowOff['-resume'];
+    const planSpend = rec.sim.spendGoal;
+    const priceLevel = rec.sim.inflation;
+    const st = core.resumeInputs(base, rec);
     const bShock = banksFor(st, years);
     const pShock = posOf(bShock, st, years, {});
     const actions = RAIL_SETS.map(set => {
         const act = pShock < set.lower ? 'cut' : pShock > set.upper ? 'raise' : 'no change';
-        const spend = act === 'no change' ? spend0 * fOff
-            : bisect(spend0 * fOff * 0.25, spend0 * fOff * 3,
-                     v => posOf(bShock, st, years, { spendGoal: v }) > set.target);
-        return { set: set.name, act, real: spend / fOff };
+        const spend = act === 'no change' ? planSpend
+            : bisect(planSpend * 0.25, planSpend * 3,
+                     v => posOf(bShock, core.resumeInputs(base, rec, { spendGoal: v }), years, {}) > set.target);
+        return { set: set.name, act, real: spend / priceLevel };
     });
     shocks.push({ id, year: rowOff.year, portfolio: rowOff.portfolioBalance, pShock, actions,
         gkTrough: trough, gkTroughRatio: troughRatio, gkBelow: below, gkYears: on.log.length,
@@ -464,10 +476,13 @@ console.log('\n   the two rates year by year on ' + PLAN_IDS[0] + ', rule OFF so
     });
 }
 
-// The freeze signal. `sim.gkPriorReturn = yr.baseReturn` is the scenario's BASE (equity) return;
-// published GK freezes on the PORTFOLIO's total return. They differ only where the accounts get
-// their own blended sequences, which is the Historical and stress banks, not GBM.
-console.log('\n   the inflation freeze reads the base (equity) return, not the portfolio return:');
+// The freeze signal. Published GK freezes on the PORTFOLIO's total return; the engine read the
+// scenario's BASE (equity) return until P127 (2026-09-16) and reads the portfolio's now. What is
+// measured here is how often the two disagree in sign, which is what that change moved. They differ
+// only where the accounts get their own blended sequences, which is the Historical and stress
+// banks, not GBM - leaving aside cash yield and dividends, which this blend does not include.
+console.log('\n   how often the equity return and the blended account return disagree in sign'
+    + ' (the freeze has read the portfolio return since P127):');
 {
     const base = { ...PLANS.get(PLAN_IDS[0]).inputs };
     const years = 40;
@@ -492,8 +507,11 @@ console.log('\n   the inflation freeze reads the base (equity) return, not the p
     }
 }
 
-// The two omissions that are only visible under the right conditions.
-console.log('\n   capital-preservation cuts inside the final 15 years (published GK suspends them there):');
+// The two limits that are only visible under the right conditions. Both were omissions until P127
+// adopted them (2026-09-16): the cut is now suspended in the final GK_NO_CUT_FINAL_YEARS (8, the
+// user's number; the paper says 15), and the inflation raise is capped at 6%.
+console.log(`\n   capital-preservation cuts inside the final 15 years (published GK suspends them there;`
+    + ` the engine suspends them in the final ${core.GK_NO_CUT_FINAL_YEARS}):`);
 for (const id of PLAN_IDS) {
     const base = { ...PLANS.get(id).inputs };
     const rows = rowsOf(base);
@@ -504,9 +522,11 @@ for (const id of PLAN_IDS) {
     const n = on.log.length;
     const cuts = on.log.map((r, i) => ({ i, a: r.gkAdj || '' })).filter(x => x.a.includes('cap'));
     const late = cuts.filter(x => x.i >= n - 15).length;
+    const held = on.log.filter(r => (r.gkAdj || '').includes('no-cut')).length;
     const raises = on.log.filter(r => (r.gkAdj || '').includes('pros')).length;
     console.log('   ' + pad(id, 26) + n + ' years: ' + cuts.length + ' cuts (' + late
-        + ' in the final 15), ' + raises + ' raises');
+        + ' in the final 15), ' + held + ' held back in the final ' + core.GK_NO_CUT_FINAL_YEARS
+        + ', ' + raises + ' raises');
 }
 {
     const base = { ...PLANS.get(PLAN_IDS[0]).inputs };
@@ -520,14 +540,16 @@ for (const id of PLAN_IDS) {
         if (!seq) continue;
         for (let y = 0; y < years; y++) { total++; worst = Math.max(worst, seq[y]); if (seq[y] > 0.06) over++; }
     }
-    console.log('\n   the published 6% cap on the inflation raise, which this engine does not apply: '
+    console.log('\n   the published 6% cap on the inflation raise, applied since P127: '
         + pctS(over / total) + ' of path-years draw inflation above 6%, worst ' + pctS(worst));
 }
 
 // ---- 6. how the rule composes with Spend Delta (report section 7) -----------------------------
-// (a) The filter. gkSpendStable rejects a candidate spend or conversion when the run's minimum real
-// spendGoal falls more than gkGuard below year 0. Run at the plan's own growth with NO shock, so a
-// household that trips it with zero cuts has been rejected for its own planned shape.
+// (a) The filter. gkSpendStable rejects a candidate spend or conversion when the run's real
+// spendGoal falls more than gkGuard below the plan's own path. Until P127b (2026-09-16) that path
+// was year 0 held flat, so a household could be rejected for its own planned decline with zero
+// cuts; these two tables were the evidence, and now show the filter after the fix. Run at the
+// plan's own growth with NO shock.
 console.log('\n6. HOW THE RULE COMPOSES WITH SPEND DELTA  (report section 7)');
 console.log('   (a) gkSpendStable, the Optimizer\'s search filter, against a planned decline');
 console.log('       flat returns at the plan\'s own growth, so any cut is the rule reacting to nothing');

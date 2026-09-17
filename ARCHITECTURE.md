@@ -210,23 +210,38 @@ flowchart TD
     G -->|no| SKIP["spendGoal untouched<br/>(strategy's own spend path)"]
     G -->|yes| Y0{"y == 0?"}
     Y0 -->|yes| SEED["gkIWR = spendGoal / prevPortfolio<br/>the year-0 rate, LOCKED as reference<br/>never re-baselined"]
-    Y0 -->|no| INF{"Inflation rule<br/>priorReturn &lt; 0<br/>AND spendGoal/prevPortfolio &gt; gkIWR ?"}
+    Y0 -->|no| INF{"Inflation rule<br/>last year's PORTFOLIO return &lt; 0<br/>AND spendGoal/prevPortfolio &gt; gkIWR ?"}
     INF -->|yes| NOCPI["skip the CPI raise<br/>label 'no-CPI'"]
-    INF -->|no| CPI["spendGoal *= 1 + yearInflation"]
+    INF -->|no| CPI["spendGoal *= 1 + min(yearInflation, 6%)<br/>label 'CPI≤6%' when capped"]
     NOCPI --> CWR["_cwr = spendGoal / prevPortfolio<br/>recomputed on the POSSIBLY-RAISED goal"]
     CPI --> CWR
     CWR --> BAND{"_cwr vs the band<br/>gkIWR * (1 +/- gkGuard)<br/>guard default 0.20"}
-    BAND -->|above| CAP["Capital preservation<br/>spendGoal *= 1 - gkAdjPct<br/>label '-10%cap'"]
+    BAND -->|above| LATE{"in the plan's final 8 years?<br/>planYears - y &lt;= 8"}
+    LATE -->|yes| NOCUT["no cut<br/>label 'no-cut'"]
+    LATE -->|no| CAP["Capital preservation<br/>spendGoal *= 1 - gkAdjPct<br/>label '-10%cap'"]
     BAND -->|below| PROS["Prosperity<br/>spendGoal *= 1 + gkAdjPct<br/>label '+10%pros'"]
     BAND -->|inside| HOLD["no adjustment"]
+    PROS --> CEIL{"gkShapeCeiling on<br/>AND goal above the shape?"}
+    CEIL -->|yes| CLAMP["goal = shape<br/>label '@shape'"]
+    CEIL -->|no| OUT
+    CLAMP --> OUT
     CAP --> OUT["sim.spendGoal for the year<br/>gkAdjLabel -> the log"]
-    PROS --> OUT
+    NOCUT --> OUT
     HOLD --> OUT
     SEED --> OUT
 ```
 
 Each rail fires **once per year, at a fixed percentage**: a year 50% over the band cuts 10%, not 50%.
 And the band is measured against the **year-0** IWR forever, so it does not drift with the portfolio.
+
+Three of those limits came from the published rule on 2026-09-16 (P127): the freeze reads the
+portfolio's return (`portfolioReturnOf`, computed in `beginYear` only when the rule is on), the raise
+is capped at `GK_CPI_RAISE_CAP`, and no cut lands in the final `GK_NO_CUT_FINAL_YEARS` (the paper
+says 15; the user chose 8). **The shape** is the goal the plan would have with no rule - year 0
+carried by Spend Delta and full CPI - kept beside the goal as `sim.gkShapeGoal`. Only a raise can put
+the goal above it, which is why the ceiling (the nerdknob *Never above plan* switch) is checked after
+a raise and nowhere else. `gkSpendStable`, the filter the Optimizer's searches apply, measures real
+spending against the same shape.
 
 ### The baseline draw, and why an old Guyton-Klinger plan keeps its numbers
 
@@ -444,6 +459,81 @@ retuning the inflation knobs leaves every return draw bit-identical. Any change 
 skips a draw desynchronizes the stream from that year on; this is why Fixed Inflation sets the shock
 size to zero and still makes the draw.
 
+### 5a. Risk-based rails, and resuming a plan  (P128, for everyone since 2026-09-16)
+
+`montecarlo/rails_engine.js` is a second KIND of job for the same shells: `worker.js` dispatches on
+`cfg.kind === 'rails'` to `runRailsJob`, and `mc_controller.js` keeps **one worker per kind**, so a
+rails solve and a Monte Carlo sweep run side by side rather than one terminating the other. The
+`file://` fallback runs it on the page with the same hooks, and a newer rails job supersedes an older
+one there as a new worker does over http.
+
+**What runs beside what.** Over http a sidebar edit starts up to three things, on three threads: the
+plan's own `simulate()` on the page, the Stress Test's refresh (`refreshMCStressOnly`, the `mc` slot,
+400 ms after the edit, and only when `_buildMCHash()` differs from `_lastStressHash`, the inputs of
+the pass on screen) and, with auto-run on, a rails solve (the `rails` slot, 900 ms after the plan has
+re-run, and only when the rails fingerprint moved). A blur that changed nothing starts neither. Neither worker waits for or cancels the other; they share CPU cores and nothing else.
+Within a slot a newer job replaces the one in flight - except the Stress Test, which never interrupts
+a full Monte Carlo run and instead remembers the request (`_mcStressPending`) and runs it when the
+pass in flight finishes. On `file://` all of it shares the page's main thread, interleaved at 16 ms
+yields, so a rails solve there slows the page it is drawn on.
+
+```mermaid
+flowchart TD
+    PANEL["rails panel below the Charts tab's charts<br/>a folding details, optimizer_ui.js runRails"] --> CTL["runMCWorker kind 'rails'<br/>its own worker slot"]
+    CTL --> JOB["runRailsJob cfg, hooks"]
+    JOB --> SPINE["simulate plan, captureResume<br/>every row carries '-resume'"]
+    JOB --> BANKS["buildBanks + buildPathInputs once<br/>CRN across every estimate and year"]
+    SPINE --> YEARS["solved years 1, 1+c, 1+2c ...<br/>the first full year, then every c"]
+    BANKS --> YEARS
+    YEARS --> POS["per path: survival as planned brackets its<br/>wealth threshold and its spending threshold"]
+    POS --> REF["refine(): narrow only the paths that could still be<br/>an order statistic - every preset's rails and target"]
+    REF --> RS["per distinct rail: the spending threshold at that wealth,<br/>bracketed by pass 1, refined the same way"]
+    RS --> EST["each test: resumeInputs(rec, scale, spend)<br/>+ one path, survival = yearIsRuined"]
+    JOB --> START["After-Tax Spend: its own 400 paths from resumeStart,<br/>every preset's target, the same refine()"]
+    EST --> MSG["years[].presets + start + cost record<br/>runs, runs a path a year, ms per phase"]
+    START --> MSG
+    MSG --> MERGE["railsRowFields onto the live log<br/>wealth rails on the year-end row,<br/>spending on the next"]
+    MERGE --> DRAW["Balances chart: wealth rails<br/>Income vs Net: spending rails<br/>triangles; green above the raise rail,<br/>light red below the cut rail, on both<br/>Annual Details: Rails columns"]
+```
+
+**Resume.** `simulate({ captureResume: true })` writes, on every log row, the state the NEXT year
+starts from (`snapshotResume`: every `sim` field but five, the balances, the MAGI history, and the
+rows the terminal valuation averages), plus `res.resumeStart` for the plan's own start.
+`resumeInputs(base, record, { balanceScale, spendGoal })` turns a record into inputs, and a run given
+`resume` continues the plan: its `y` is the PLAN year (so N-year amortization, schedules, the
+Guardrails anchor and per-year arrays keep their meaning), while market and inflation sequences are
+read by `ySeq`, the run's own index from 0. A test resumes every bank household, rule on and off, at
+several years and demands every field of every later row match exactly. The rails solve with
+Guardrails off: the rails are the spending rule under evaluation.
+
+**Every preset at once (P128n).** A survival test on one path is monotone in wealth and in spending
+(10,800 path checks by `rails_precision_harness.js`, none out of order), so every answer is an order
+statistic of per-path thresholds: the rail for q is the c-th smallest wealth threshold, c the least
+count with c / N >= q. `refine()` keeps each threshold as a bracket and narrows only the brackets that
+overlap the range an asked-for statistic could still take, so most paths stop after a few tests. On
+the eight bank households that harness times, that is 20 to 23 runs a path a solved year for all
+three presets, against 46 for one preset by bisecting the share of paths. The preset is therefore NOT in the rails fingerprint: switching
+it redraws. A clamped answer (beyond 16x, or below 0.05x wealth / 0.1x spending) carries no dollars,
+and `railsRowFields` ends its line there. The After-Tax Spend answer is a dollar amount whose
+fingerprint leaves out After-Tax Spend itself, so *Use it* does not make it stale.
+
+**Units and placement.** Scaling every balance and the basis by one factor scales `totalNetWealth` by
+exactly that factor, so the rails are stated as the year-end TotalNetWealth that would put the plan on
+each rail - on the row they start from, beside that row's own TotalNetWealth. The spending answers
+belong to the solved year and sit on its row. The panel keeps the previous solve and can draw it faded
+(*Show previous rails*, off by default), and prices other settings from the last run's cost per simulated year (`railsProjectMs`).
+
+**The return model.** The panel picks its own method (`railsMethod`: Historical, either Synthetic, or
+whatever the Monte Carlo tab's Simulation Mode is); every other parameter is read from the Monte Carlo
+tab (`railsModelCfg`). Those tab controls do not re-run the plan, so the panel listens to them itself
+(`railsBindModelInputs`): an edit marks the rails stale and, with auto-run on, solves again.
+
+Nothing in the panel is a plan input: it sits outside `.sidebar`, its controls are `data-no-share`, and
+no field reaches `getInputs()`, the share link, a saved plan or `selectionOf` - except the After-Tax
+Spend that *Use it* (or the After-Tax Spend ⓘ menu) writes on request, through the same path as the
+sustainable-spend suggestion (`_priorSpendGoal` for Restore). The panel is shown whatever the
+Guardrails (GK-style) switch says; the knob shows only its cadence, path count and timing readout.
+
 ---
 
 ## 6. File reference
@@ -453,16 +543,17 @@ size to zero and still makes the draw.
 | `retirement_optimizer.html` | page | tab buttons, inline bootstrap, changelog - 5 newest inline |
 | `optimizer_styles_responsive.css` | page | the page's only stylesheet; its `?v=` token is the one most often forgotten |
 | `taxengine.js` | engine | `TAXData`, `RMD_TABLE`, `calculateTaxes`, `calcIRMAA`, `getIRMAATier`, `calculateProgressive`, `calculateTaxableSocialSecurity`, `getQCDLimit` |
-| `optimizer_core.js` | engine | `simulate`, year steps `beginYear` .. `endYear`, `optimizeSpend`, `optimizeSpendDown`, `optimizeConversionAmount`, `bestTimeLimitedConversion`, `bestConversionStopYear`, `breakEvenHeirsRate`, `lowestBreakEvenHeirsRate`, `selectConversionCandidates`, `baselineScoreOf`, `rankRowsByObjective`, `buildStrategyFamilies` (the strategy enumeration both sweeps share, through `sweepOptions` and `OPTIMIZER_GRIDS`), `buildVariations`, `planRuleTwin`, `calculateWithdrawals`, `computeBracketCeiling`, `splitPreferLarger` |
+| `optimizer_core.js` | engine | `simulate`, year steps `beginYear` .. `endYear`, `optimizeSpend`, `optimizeSpendDown`, `optimizeConversionAmount`, `bestTimeLimitedConversion`, `bestConversionStopYear`, `breakEvenHeirsRate`, `lowestBreakEvenHeirsRate`, `selectConversionCandidates`, `baselineScoreOf`, `rankRowsByObjective`, `buildStrategyFamilies` (the strategy enumeration both sweeps share, through `sweepOptions` and `OPTIMIZER_GRIDS`), `buildVariations`, `planRuleTwin`, `calculateWithdrawals`, `computeBracketCeiling`, `splitPreferLarger`, `snapshotResume` / `resumeInputs` (continue a plan from any year), `RAIL_PRESETS`, `portfolioReturnOf` |
 | `optimizer_ui.js` | UI | `getInputs`, `runSimulation`, `runOptimizer`, `renderOptimizerTable`, `loadOptimizerResult`, `updateTable`, `updateStats`, `updateCharts`, `openTaxPlanner`, `buildShareURL`, `loadFromURL`, `saveScenario`, `applyScenario`, `setOptObjective`, `applyConvStopYear` |
 | `displayhelpers.js` | UI | `DisplayHelpers.setDollarValue`, `parseShorthand`, formatting and tooltip helpers |
 | `optimizer_tests.js` | UI | `runTests` - in-browser console suite |
 | `other_tools.js` | UI | shared Other Tools widget across all pages |
 | `doclinks.js` | UI | `DocLinks.docHref` - maps `.md` hrefs to the `.html` pages Pages generates |
 | `montecarlo/mc_tab.js` | MC | `initMCTab`, chart rendering, `_mcBase` / `_lastMCHash` |
-| `montecarlo/mc_controller.js` | MC | `runMCWorker`, `cancelMCWorker`, `_runMCMainThread` (file:// fallback - builds hooks, awaits `runJob`), `estimateMCMs` / `recordMCTiming` |
-| `montecarlo/mc_engine.js` | MC | `runJob`, `runPass`, `buildBanks`, `buildPathInputs`, `buildStressMsg` - the model, shared by the worker and the main-thread fallback |
-| `montecarlo/worker.js` | MC | shell only: `onmessage`, throttled progress, error containment |
+| `montecarlo/mc_controller.js` | MC | `runMCWorker` (one worker per job kind), `cancelMCWorker(kind)`, `_runMCMainThread` (file:// fallback - builds hooks, awaits `runJob` or `runRailsJob`), `estimateMCMs` / `recordMCTiming` |
+| `montecarlo/mc_engine.js` | MC | `runJob`, `runPass`, `buildBanks`, `buildPathInputs`, `buildStressMsg`, `yearIsRuined` (the survival test) - the model, shared by the worker and the main-thread fallback |
+| `montecarlo/rails_engine.js` | MC | `runRailsJob`, `railsSolvedYears`, `railsProjectMs`, `railsRowFields` - the risk-based rails solver (P128), same shells and hooks as `mc_engine.js` |
+| `montecarlo/worker.js` | MC | shell only: `onmessage` (dispatches on `cfg.kind`), throttled progress, error containment |
 | `montecarlo/prng.js` | MC | `mulberry32`, `boxMuller`, `bootstrapScenarioBank`, `buildStressBank`, `applyBearStartOverlay`, `drawSyntheticBank`, `syntheticReturnFromBank`, `computeNextInflation`, `correlatedNormal`, `INFLATION_STREAM_XOR` |
 | `montecarlo/stats.js` | MC | `computePercentiles`, `computeInputFan` (dual-mode export since P71d) |
 | `montecarlo/historical_returns.js` | MC | `HISTORICAL_RETURNS` |

@@ -7,7 +7,12 @@
 // scripts so prng.js / core.js etc. never serve a stale cached copy when the worker refreshes.
 const _v = self.location.search || '';
 importScripts('../taxengine.js' + _v, '../optimizer_core.js' + _v, 'prng.js' + _v, 'stats.js' + _v,
-              'historical_returns.js' + _v, 'mc_engine.js' + _v);
+              'historical_returns.js' + _v, 'mc_engine.js' + _v, 'rails_engine.js' + _v);
+
+// P128. Two kinds of job share this shell: the Monte Carlo sweep, and the risk-based rails solve.
+function jobOf(cfg) {
+    return cfg && cfg.kind === 'rails' ? runRailsJob : runJob;
+}
 
 // The engine reports progress inside a variation, every 16 paths, which is far more often than a
 // worker should post: a 10,000-path 144-variation run would be 90,000 messages. Throttle to one
@@ -30,10 +35,11 @@ function _postProgress(pct) {
 // caller already knows how to display. runJob() is async, so the rejection path needs its own catch:
 // a try/catch alone would let a failure after the first await escape as that same error event.
 self.onmessage = function (e) {
-    const fail = err => postMessage({ type: 'results', error: String((err && err.message) || err) });
+    const fail = err => postMessage({ type: 'results', kind: e.data && e.data.kind,
+                                      error: String((err && err.message) || err) });
     try {
         _lastPost = 0;
-        runJob(e.data, { onProgress: _postProgress })
+        jobOf(e.data)(e.data, { onProgress: _postProgress })
             .then(msg => { if (msg) postMessage(msg); })
             .catch(fail);
     } catch (err) {

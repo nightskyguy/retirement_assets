@@ -5231,3 +5231,131 @@ this worktree's README.md (modified 11:14; the main checkout's copy untouched): 
 Summary" lines), five tax-payment plans, Medicare premium wording, trimmed release notes. md-html-scan
 clean, no conflict markers; included as written. Stamp refreshed to 11.1823 (title, changelog, six
 `?v=` tokens). One commit on `worktrees/planning-with-files-3c273e`, for a PR against `main`.
+
+## Session: 2026-09-16 (worktree readme-review-updates-c9df11, branch worktrees/risk-based-guardrails-p128-b2cfa3) - P127 + P128, v11.1854
+
+User: "Let's do P128 (Risk Based Guardrails Prototype). But also worth amending the GK-Style rules
+(P127) - ask me which changes to make for P127." Asked; answers recorded in task_plan P127 (8 years,
+not 15; portfolio-return freeze; 6% cap; ceiling as a nerdknob switch; both filter fixes; keep the
+numerator).
+
+- **Engine**: P127 rules and filters; `RAIL_PRESETS`; `portfolioReturnOf`; the resume record
+  (`captureResume` / `resume`, `snapshotResume`, `resumeInputs`, `res.resumeStart`), with the loop's
+  `y` as the plan year and `ySeq` for sequences; `_convEndReached` and the terminal valuation made
+  resume-aware. Resume continuity: 190/190 exact on the bank.
+- **Monte Carlo**: `yearIsRuined` shared by `runPass` and the rails; `rails_engine.js`; the worker
+  dispatches on `cfg.kind`; the controller keeps one worker per kind; the `file://` fallback runs
+  either kind, and rails jobs there supersede each other.
+- **Page**: the rails panel (`?nerdknob=rails`), both charts, Annual Details "Rails" columns, the
+  ceiling switch, Guardrails tooltip and sentence, gkAdj column help.
+- **Second round (user, after seeing it)**: rails off Income & Expenses; ▲/▼/■ markers and legend; the
+  green band; "Portfolio (Jan 1)" dropped for TotalNetWealth-denominated rails on the year-end row; the
+  first solve in the first full year; the previous solve kept, faded. Gave the user the `file://` and
+  localhost URLs.
+- **Research**: the harness's re-plan counted inflation twice (findings). Fixed via resume, harness
+  re-run, `RISK_BASED_GUARDRAILS.md` updated (re-run note, sections 1, 3-7, predictions, shipping
+  list), `research/README.md` and `HARNESSES.md` rows refreshed.
+- **Docs**: README caveat (two departures), changelog 11.1854 (.md + page; the page list dropped
+  11.17b1 to stay at six), ExperimentalFeatures (`?nerdknob=rails`, Never above plan), ARCHITECTURE
+  3a/5a/file table. Title and `?v=` tokens 11.1854.
+- **Tests**: 15 new node tests (7 P127, 8 P128) and 3 in-page blocks; one existing GK test re-aimed at
+  its claim. Suites 468 / 32 / 61 / 26, slow 3; `TestTiers.EXPECTED` and `.githooks/README.md` pinned.
+- **Lesson**: `sed -i` in Git Bash rewrote two CRLF files as LF (memory updated); every changed file
+  recounted clean.
+- **Third request**: "shade the band between the cut/raise rails on the Income vs Net, also". Both
+  views now fill from the raise line to the cut line (Chart.js `$filler` resolved to the cut dataset on
+  each); in-page `railsBandOnBothViews` pins it. `?nerdknob=rails&runtests`: 1074 passed (487 + 587).
+  UI and test tokens 111856; the title stays 11.1854 (no user-visible change outside the knob).
+- **Fourth request (planning only)**: "create a plan to calculate the After-Tax Spend goal based on
+  the outcome of the risk-based guard rail run ... with a single run" -> `P129` written, with three
+  questions for the user. Same message: "Spend at Target is mysterious" (explained; `P129d`) and
+  "Income is WAY above the Spend at Target during Brokerage years" on the user's own plan (a share
+  link pasted in chat; deliberately NOT recorded here, since this repository is public) -
+  measured: the Cycle Brokerage harvest, whose reinvested proceeds the income charts count as
+  spendable (`P130` candidate). Rails on that plan (Normal, every 5, 200 paths, 14.7 s): 99.5% in
+  the first two solved years, 100% after; the 90% spend rises at every solve and clamps at the 4x
+  search limit in the last one.
+
+### Fifth request, 2026-09-16 afternoon
+
+User: "Running 100 paths every 3 years is sufficient - including one extra pass for the After-Tax
+spend calculation that would start in the current year. The RBG logic can offer a 'higher precision'
+button. But before doing any of that, it will be useful to run some heavy testing to see whether it's
+worth the effort ... if the MC synthetic testing invariably produces a number below 100% the 99% and
+100% success rates may need adjustment." Also: move the rails panel BELOW all the charts, make it
+foldable, let it choose the Monte Carlo method; and "are those tasks in contention" (rails auto-run
+vs the Historical stress test running in the background). Then, mid-turn: "can you create a PR while
+running in the background?"
+
+- The P127/P128 work was committed and a PR opened while the heavy test ran. Before pushing, the
+  user's plan URL and its dollar figures were scrubbed from `progress.md` and `task_plan.md` (ratios
+  kept): the repository is public.
+- Heavy test: `.test_harnesses/rails_precision_harness.js` (reach of the 99%/100% rails per method,
+  precision against path count via per-path pools, cadence interpolation error, cost). The user's
+  plan runs through it from a scratch file only (`USER_PLAN=`), never from the repository. 72 tasks
+  in 16 processes, about an hour; results pending at this note.
+- PR #227 (`2e6fea4`, 11.1857). Round 3 on top, all verified in the browser:
+  - `P128h/i`: panel below both charts, a folding `<details>` with a one-line headline, remembered
+    fold; `#rails-method` (tab / Historical / GBM / AAM); MC tab edits mark the rails stale.
+    Functional check: GBM solve, switch to "tab" = stale, explicit Historical = same fingerprint,
+    MC tab mode change = stale, revert = current. On the default plan year 1 reads 95% Historical
+    against 55% Synthetic GBM, so the method choice is not a detail.
+  - `P128j`: the P91 success-path drain. Reproduced first: three quick edits left
+    `_mcStressPending` true with nothing in flight.
+  - `P128l` (the side-task chip, which the user sent to THIS session): the Stress Test refresh skips
+    unchanged inputs; the `_lastMCHash` early return in `mcInputsChanged` removed. Reproduced first:
+    after a full run, an edit and its undo left the tile at "36 of 36 fail" for the $140k plan (9 of
+    36 is right). After: 12 fields tabbed through, 0 workers; edit and undo, 1 worker each, tile
+    right both times, before and after a full run.
+  - Auto-run behavior: auto-run on with a current solve starts nothing; Current $ twice and a view
+    switch start nothing; a blur without a change starts nothing; one edit starts exactly one solve
+    ~1.4 s later; three edits 0.7 s apart replace the running solve once (its worker terminated).
+  - In-page with `?nerdknob=rails&runtests`: 1091 passed (504 + 587). Plain page: 277 passed, 21
+    page-writing suites skipped (two of them new).
+  - Timing claims deliberately NOT made yet: the heavy test held 16 cores the whole time (a rails
+    solve took 28 s instead of the usual few). The contention numbers wait for a quiet machine.
+  - Stamp 11.1858. Committed `40e65de`, pushed; PR #227 title and description updated.
+- User: "what decisions are left?" - answered with fourteen, four of them waiting on the heavy test.
+- Heavy test finished (51.2 min). Report `research/RISK_BASED_RAILS_PRECISION.md` written from a
+  bank-only re-print (`--from ... --no-timing`, without `USER_PLAN`), so every committed number can
+  be reproduced without the user's file; the user's plan rows went to chat only. Added to the harness
+  after the run: `--from`, `--no-timing`, section 2c (the path-count correction), and an `engine`
+  field on every task result (the first run's results do not carry it). Smoke-tested with `--quick`
+  (3.0 min) and a `--from` re-print of that run.
+- Contention measured on the page once the machine was quiet (findings "P128 round 3"). The first
+  attempt's main-thread lag of ~1 s was timer throttling in the hidden pane; re-measured with the
+  long-task log.
+
+### Round 4, 2026-09-16 evening: the user's decisions, built
+
+The decisions are quoted in task_plan "Round 4". Built, in the order the user will notice them:
+
+- `P128o` the rails panel for everyone; the plain knob keeps only cadence, paths and the timing
+  readout. Auto-run off by default; ticking it solves at once if the rails are not current.
+- `P129` the After-Tax Spend answer: from the plan's start, its own 400 paths, 0.5% steps, $100
+  rounding, every preset at once. Panel line with *Use it* / *Restore*; the After-Tax Spend ⓘ becomes
+  a small menu (sustainable / risk-based / restore) when a current answer exists. Its fingerprint
+  leaves out After-Tax Spend, so *Use it* does not make it stale.
+- `P128m` Monte Carlo opens on Synthetic GBM; the rails' "Same as the Monte Carlo tab" follows it.
+- `P128n` per-path solver (`refine()`), every preset at once, so a preset switch only redraws.
+  Loose raises at 99.5%. Search ceiling 16x. Clamped answers carry no dollars and end their line.
+- `P130` the income charts leave out what a year saved (`SurplusBrok + surplusCash`): Net Income,
+  Total Income, Net (Spendable) and the bars' scale; the tooltip splits ~tax and ~saved. The answer
+  to the user's "11. Explain": a Cycle Brokerage harvest sells far more than the year spends and puts
+  the rest straight back, and the charts counted the whole sale as income.
+- `P128p` the Monte Carlo "out of date" banner clears when an edit is undone.
+- Mid-build (user): `P128q` bands (green above the raise rail, light red below the cut rail; a gray
+  band between was built, then removed as too narrow to notice), `P128r` a shorter panel that
+  points at Income vs Net, `P128s` Show previous rails off by default.
+- "The RBG should be shown independent of the GK-style" is read as: shown whatever the switch says,
+  and every solve runs with GK off (resumed from the plan's own state). Said so to the user.
+- Verified: node 472 / 32 / 61 / 26. In-page `?nerdknob&runtests` 1122 (531 + 591); plain page 291,
+  24 page-writing suites skipped. Browser, default plan: a solve in 7.0 s (GBM); the three bands on
+  both views (then the gray one removed and the two left re-checked); the note's Income vs Net link
+  switches the view; previous rails hidden until ticked, then drawn; Use it / Restore / the ⓘ menu;
+  clamped lines end.
+- Harness on the new solver: `--timing-only` (2.9 min; findings "P128 round 4") and `--quick`
+  (1.8 min). Added: a "page (400 paths)" column for the live After-Tax Spend answer, and the reach
+  table's "need >16x" column (0.00% for every household and method in the first run's pools).
+- Docs: ARCHITECTURE 5a, README, ExperimentalFeatures (a graduation), both research reports,
+  research/README, HARNESSES, and the branch's changelog entry rewritten against `main`.

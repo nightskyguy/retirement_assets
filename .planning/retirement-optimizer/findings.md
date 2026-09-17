@@ -2984,3 +2984,136 @@ Guardrails rows get no Optimize Spend suggestion, which is the floor doing its j
 NOTHING, so the search can only choose among the stable positive amounts and picks $25,000/yr: $96,275
 less end wealth and $7,445 less spendable than $0. A floor that can reject the do-nothing option can
 force a pick worse than doing nothing. **Shipped as is on the user's call, 2026-09-13; open as `P126f`.**
+**Fixed 2026-09-16 as `P127f`**: $0 is always admissible, the floor applies to positive amounts only.
+
+## P127/P128 - resume, and a re-plan that counted inflation twice  *(2026-09-16, v11.1854)*
+
+**The research harness's re-plan counted inflation twice.** `rbg_harness.js` re-planned mid-run with
+`spendGoal: spend0 x inflationFactor`, but `simulate()` treats the goal as TODAY's dollars and
+inflates it again by `(1 + inflation)^gapYears`. Measured on `bracket-filler-texas`: the re-planned
+2031 goal was $137,375 against the plan's own $124,455 (+10.4%), and 2036 $175,852 against $140,809
+(+24.9%); exact at year 1, which is where `stateAfterYear` re-planned, and wrong in the shock
+section, which re-planned at years 4-6. Corrected numbers for that table (report section 3):
+82.0 -> 92.0%, 0.0 -> 2.0%, 39.5 -> 55.0%, 41.0 -> 74.0%; two households the rails "cut" are left
+alone at their real spending.
+
+**A re-plan is not a continuation, and now there is one that is.** Hand-built re-plans drifted from
+the plan's own later rows by 0.001% (Fill Bracket), 0.7-2.1% (Proportional) and 3.2-5.6% (Reduce IRA
+in N Years + Cycle Brokerage). Everything cross-year restarted - and the plan-year index `y` itself:
+`nYears - y`, schedule and extra-conversion arrays, the Guardrails anchor at `y === 0`, and
+`_convEndReached`, which added the plan-year index to the RUN's start year, so a run resumed five
+years in believed it was five years later and stopped converting five years early (long-widowhood,
+stop year 2036: $231k converted in 2032 in the plan, $0 in the resumed run). `captureResume` / `resume` (snapshotResume: every `sim` field but five, the MAGI
+history, the balances, and the rows the terminal valuation averages over) now reproduce **190 of 190**
+resumed runs exactly - 19 bank households, rule on and off, five resume points - every field of every
+row, the terminal valuation included once `priorRows` was added.
+
+**Survival definitions agree.** `totals.success` and the Monte Carlo tab's balance-only ruin test
+agreed on 1,000 of 1,000 paths (5 households x 200). The rails use the tab's (`yearIsRuined`, now
+shared with `runPass`).
+
+**P127d moves Optimize Spend.** On the suite's GK fixture (`GK_OPT_BASE`) the answer rose $64,829 ->
+$78,687: its three late cuts, which had dragged the worst year to 59% of the first, are held back in
+the final 8 years, and the plan still funds every year with $1.43M left. The rbg re-run shows the same
+direction on the bank households (report section 7a): Guardrails-on answers now follow the rule-off
+answers under a declining Spend Delta, and exceed them on four of eight rows.
+
+**Rails cost, measured in the page** (default plan, 60 paths, 25-year horizon, worker): cadence 5 =
+13,800 runs, ~3.5 s in the job + 1.3 s worker start; cadence 1 = 66,240 runs, 16 s, projected 18 s
+from the cadence-5 run. Node, `mixed-portfolio-couple`, 200 paths, cadence 5 (7 solves in the first
+build) = 64,400 runs, 23 s, 0.36 ms/run; projection for cadence 1 there: 103 s.
+
+## P128 round 3 - what runs beside what, two Stress Test staleness bugs, and the heavy test  *(2026-09-16, v11.1858)*
+
+**The rails solve and the Stress Test do not contend, over http.** Measured on the page (default plan,
+Normal, every 3 years, 100 paths, Historical; the browser pane was HIDDEN, so Chrome deferred some
+drawing and a 20 ms interval timer was throttled to about 1 s - the first attempt's "984 ms main-thread
+lag" was that throttling, not blocking; the long-task log is the measure that survives it):
+
+| case | result |
+|---|---|
+| rails alone | 8.8-8.9 s (7.6 s in the worker) |
+| Stress Test refresh alone | 1.30-1.55 s, of which 45-47 ms is work; the rest is starting a worker |
+| My Plan Only (400 paths) alone | 1.73-1.90 s |
+| rails + a refresh 1 s in | rails 8.9-11.3 s, refresh 1.49-1.53 s, one 50 ms task |
+| My Plan Only + rails 0.5 s in | My Plan Only 1.75-1.79 s, rails 9.1-10.8 s, no long task |
+| file://, rails alone | 13.3-16.2 s, no long task (16 ms slices) |
+| file://, rails + a refresh | rails 12.9 s, refresh 36-44 ms (29 ms alone: no worker to start) |
+
+Separate worker slots since P128, so neither cancels nor waits on the other; they share cores only.
+
+**Stress Test bug 1 - P91 drained only after a FAILURE.** `_drainStressPending` ran on the error path
+of `refreshMCStressOnly`'s callback and nowhere on the success path, since 11.16a5. Reproduced: three
+quick edits left `_mcStressPending === true` with nothing in flight. Fixed (success path drains after
+the render).
+
+**Stress Test bug 2 - the `_lastMCHash` early return was wrong both ways.** `mcInputsChanged` returned
+when `_buildMCHash() === _lastMCHash`, which only a FULL run writes. Before any full run: every sidebar
+blur spawned a stress worker, change or not (measured: a blur with no change started one). After
+one: undoing an edit matched the run's hash, so no pass ran - reproduced with the plan back at $140k
+and the tile still reading "36 of 36 fail" from the edit (9 of 36 is right). Fixed with
+`_lastStressHash`, the inputs of the pass ON SCREEN, recorded at its render (a full run records its
+own), checked after both P91 guards. After: 12 fields tabbed, 0 workers; an edit and its undo, one
+worker each, tile right both times, before and after a full run. Left alone by instruction: the "out
+of date" banner is still not cleared when an undo puts the plan back to the swept one.
+
+**Heavy test (`research/RISK_BASED_RAILS_PRECISION.md`), the points a later reader needs:**
+
+- No market path fails at every wealth up to 64x, in any method; at most 0.25% of paths need more
+  than the solver's 4x bracket. The user's worry ("synthetic invariably below 100%") is refuted as
+  stated - but the SAMPLE cannot say what 100% means: from N paths, "99%" lands on the 98.05th
+  percentile at N = 100 and 98.93rd at 1,000; "100%" on 98.98th and 99.93rd, rising without limit.
+- At 100 paths every threshold at or below 95%, the target spend and the start solve move 2%-8% run
+  to run with a bias under 2%; the raise rails move 7%-27%, and the spend at the raise rail inherits
+  that (4%-16%).
+- The corrected count c = q(N + 1) centres 99% at every N but, at N = 100, makes it the worst path
+  (spread 18%-24% against 10%-16% as solved). 99.5% needs N >= 199; 100% can never be corrected.
+- Survival is monotone in wealth and in spending on every one of 10,800 grid checks, which is what
+  makes a PER-PATH solve possible: 14 runs a path gives every wealth rail of every preset at once
+  (1,400 runs at 100 paths against 1,800 for the two rails by PoS bisection). Built in round 4
+  (below).
+- Cost is the binding constraint: 100 paths every 3 years = 12-26 s per household on the dev box
+  (node, idle), 45-162 s at 3.5-6x slower; the start solve adds 0.6-0.9 s (3%-5%).
+- The harness's child processes read the harness file when they START, so editing it during a run
+  changes every task launched afterwards. It was not edited during the run; the `--from` mode and
+  the engine field were added after it finished.
+
+## P128 round 4 - the per-path solver, and what "every preset at once" costs  *(2026-09-16, v11.1859)*
+
+**Refining only the paths that can matter keeps every preset under one preset's old cost.** Each path's
+wealth threshold (at the plan's spending) and spending threshold (at the plan's wealth) is a bracket,
+narrowed only while it overlaps the range an asked-for order statistic can still take. Pinning every
+path to 1% took 59 runs a path a solved year on two bank households; refining took 23. On the eight
+households `rails_precision_harness.js --timing-only` times (node, idle, dev box, Historical, every 3
+years, 100 paths): 20.4-23.1 runs a path a solved year for all three presets, against 46 for the
+one-preset PoS bisection, and 7.0-14.4 s a household including the After-Tax Spend answer, against
+12.2-26.0 s for one preset before. At 3.5-6x slower: 24-86 s. The After-Tax Spend answer (400 paths,
+0.5% steps) is 0.8-1.9 s of it. Repeats of one household: 10.40, 10.28, 10.30 s.
+
+**The projection reads about 10% low at five times the paths.** Priced from the 100-path run, every 3
+years at 500 paths projected 53.13 s and took 59.57 s. Runs a path are measured, not fixed, and the
+cause of the difference was not measured.
+
+**Same answers as a direct search.** `optimizer_core.tests.js` (slow tier) checks every preset's
+rails, targets and rail spends against a 13-step bisection of the share of paths on 20 paths, within
+2.5%, and checks that the After-Tax Spend answer does not depend on the goal it starts from (within
+1.1% at 1.3x the goal).
+
+**Loose's 99.5% is still the worst path at 100 paths.** The count rule's least c with c / N >= 0.995 is
+100 of 100, the same path 100% took. It differs from N = 200 on (c = 199), where it stops climbing
+with N.
+
+**Two guardrails.** GK-style is a spend rule inside the plan; the rails are a reading of the plan. The
+panel shows whatever the switch says, and every solve runs with GK off, resumed from the plan's own
+state - GK-adjusted when the switch is on.
+
+**P130, the income charts.** A Cycle Brokerage harvest year sells far more than it spends and
+reinvests the rest (`SurplusBrok`); Cash Reserve banks surplus to Cash (`surplusCash`). The charts
+counted both as income and as spendable. `savedOf(r)` now leaves them out of Net Income, Total
+Income, Net (Spendable) and the bars' scale; Inflows vs Outflows already netted them (`netOut`).
+
+**Bands.** The raise line fills to `'end'` (green) and the cut line to `'start'` (light red). A gray
+band between them was built and removed the same evening (user: too narrow to notice). It needed a
+helper, since a Chart.js dataset has one fill: a line-less copy of the raise line filled `'+1'`, on
+its own `stack` (sharing the raise line's would stack it on top on a stacked axis), filtered out of
+the legend and the tooltip.

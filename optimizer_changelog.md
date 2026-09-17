@@ -17,6 +17,33 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1859"></a>
+
+## 11.1859
+
+**Risk-based guardrails for every plan, and GK-style Guardrails stop cutting near a plan's end.**
+*Behavior change: a plan with Guardrails on can give different numbers.*
+
+**Risk-based guardrails**, run from the panel below the Charts tab's charts, draw the savings at which
+your spending would be raised or cut. They change nothing in your plan.
+
+**The same run finds the After-Tax Spend for a chosen chance of success.** *Use it*, or the After-Tax
+Spend ⓘ, sets it; *Restore* puts yours back.
+
+**Monte Carlo opens on Synthetic – Lognormal (GBM)**, which gives most plans a lower chance of
+success than Historical.
+
+**Guardrails (GK-style) never cuts in a plan's last 8 years**, raises for inflation by at most 6%,
+and skips a raise only after a year your savings as a whole lost money. With it on, Optimize Spend
+suggests for a plan whose spending falls on purpose, and Optimize Conversions never suggests a
+conversion worse than none.
+
+**The income charts no longer count money a year saves** (put back into Brokerage or Cash) as
+income.
+
+**The Stress Test and Monte Carlo's out-of-date notice keep up with your edits**, including one you
+undo.
+
 <a id="11.1824"></a>
 
 ## 11.1824

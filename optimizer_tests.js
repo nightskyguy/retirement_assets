@@ -2663,6 +2663,438 @@ assertEqual(
 		}
 	})();
 
+	// ===== P128: the risk-based rails panel is gated, and nothing in it is a plan input =====
+	(function railsPanelIsGatedAndOwnsNoPlanInput() {
+		const panel = document.getElementById('rails-panel');
+		if (!panel) { console.log('SKIP: rails panel absent'); return; }
+		// For everyone since 2026-09-16: nothing about the panel waits on a knob any more...
+		assertEqual(typeof railsOn === 'function' && railsOn(), true, 'P128o: the rails panel is on without any knob');
+		// ...except what the solve costs. `?runtests` runs this before boot has shown anything, so the
+		// knob check only applies once the panel has been laid out.
+		if (panel.style.display !== 'none') {
+			for (const id of ['rails-cadence-wrap', 'rails-paths-wrap', 'rails-timing']) {
+				assertEqual(document.getElementById(id)?.style.display === '', !!NERD_KNOBS,
+					`P128o: ${id} shows exactly when the nerdknob is on`);
+			}
+		}
+		const el = id => document.getElementById(id);
+		assertEqual([el('rails-cadence')?.defaultValue, el('rails-paths')?.defaultValue, el('rails-auto')?.defaultChecked,
+			el('rails-show-prev')?.defaultChecked, el('rails-method')?.querySelector('option[selected]')?.value],
+			['3', '100', false, false, 'tab'],
+			'P128o: every 3 years, 100 paths, auto-run off, previous rails hidden, and the Monte Carlo tab\'s own method by default');
+		// The Monte Carlo tab's own default is the lognormal synthetic (user, 2026-09-16).
+		assertEqual(document.querySelector('#mc-sim-mode option[selected]')?.value, 'gbm',
+			'P128m: the Monte Carlo tab opens on Synthetic lognormal');
+		// Outside the sidebar, so neither the share link, the saved plan nor the recalc listener sees it.
+		const sidebar = document.querySelector('.sidebar');
+		assertEqual(!!sidebar && sidebar.contains(panel), false, 'P128: the rails panel is not in the sidebar');
+		const controls = [...panel.querySelectorAll('input, select')];
+		assertEqual(controls.length > 0 && controls.every(el => el.dataset.noShare !== undefined), true,
+			'P128: every rails control is data-no-share');
+		assertEqual(controls.some(el => OPT_LONG_TO_SHORT[el.id] !== undefined), false,
+			'P128: no rails control is a share-URL field');
+		const inputs = typeof getInputs === 'function' ? getInputs() : {};
+		assertEqual(Object.keys(inputs).some(k => /^rail/i.test(k)), false,
+			'P128: no rails setting reaches the engine inputs, and so none reaches a saved plan');
+		if (typeof buildShareURL === 'function') {
+			const keys = [...new URL(buildShareURL()).searchParams.keys()];
+			assertEqual(keys.some(k => /rail/i.test(k)), false, 'P128: the share link carries no rails setting');
+		}
+		// Before any solve the log carries no rail columns.
+		if (typeof RailsState !== 'undefined' && !RailsState.result && Array.isArray(lastSimulationLog) && lastSimulationLog.length) {
+			assertEqual('railLower' in lastSimulationLog[0], false, 'P128: no rail columns before a solve');
+		}
+		// Below both charts and foldable (user, 2026-09-16), with the fold remembered like the Optimizer's.
+		const tab = document.getElementById('tab-chart');
+		const lastChart = document.getElementById('chartIncomeSources');
+		assertEqual(panel.tagName === 'DETAILS' && !!panel.querySelector(':scope > summary'), true,
+			'P128: the rails panel folds');
+		assertEqual(!!tab && tab.contains(panel) && !!lastChart
+			&& !!(lastChart.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING), true,
+			'P128: the rails panel sits below both charts on the Charts tab');
+		if (typeof FOLD_IDS !== 'undefined') {
+			assertEqual(FOLD_IDS.includes('rails-panel'), true, 'P128: the rails fold is remembered');
+		}
+		// Its own Monte Carlo method: the tab's three, or whatever the tab is set to.
+		const method = document.getElementById('rails-method');
+		const tabMode = document.getElementById('mc-sim-mode');
+		if (method && tabMode && typeof railsModelCfg === 'function') {
+			const offered = [...method.options].map(o => o.value);
+			const tabModes = [...tabMode.options].map(o => o.value);
+			assertEqual(offered[0] === 'tab' && JSON.stringify(offered.slice(1).sort()) === JSON.stringify(tabModes.slice().sort()),
+				true, `P128: the rails offer "same as the tab" and the tab's own methods (${offered})`);
+			const was = method.value;
+			try {
+				for (const m of tabModes) {
+					method.value = m;
+					assertEqual(railsModelCfg(getInputs()).simulationMode, m, `P128: choosing ${m} solves on ${m}`);
+				}
+				method.value = 'tab';
+				assertEqual(railsModelCfg(getInputs()).simulationMode, tabMode.value,
+					'P128: "same as the tab" solves on the tab\'s own method');
+			} finally {
+				method.value = was;
+			}
+		}
+	})();
+
+	(function railsTooltipNamesWhetherAYearWasSolved() {
+		if (typeof railsTooltipNote !== 'function') { console.log('SKIP: rails tooltip helper absent'); return; }
+		const ds = { _railNote: [null, 'solved', 'interpolated'] };
+		assertEqual(railsTooltipNote({ dataset: ds, dataIndex: 1 }), ' (solved)', 'P128: a solved point says so');
+		assertEqual(railsTooltipNote({ dataset: ds, dataIndex: 2 }), ' (interpolated)', 'P128: and an interpolated one');
+		assertEqual(railsTooltipNote({ dataset: ds, dataIndex: 0 }), '', 'P128: a point with no rail adds nothing');
+		assertEqual(railsTooltipNote({ dataset: {}, dataIndex: 0 }), '', 'P128: nor does any other line');
+	})();
+
+	// Two bands on each view (user, 2026-09-16): green above the raise line, light red below the cut
+	// line, nothing between them. Only the current solve has them.
+	(function railsBandOnBothViews() {
+		if (typeof railsSeries !== 'function') { console.log('SKIP: rails series builder absent'); return; }
+		const log = [0, 1, 2].map(i => ({ year: 2030 + i, inflationFactor: 1,
+			railLower: 10, railUpper: 20, 'railPoS%': 0.5, railBasis: 'solved',
+			railSpend: 5, railSpendDn: 4, railSpendUp: 6 }));
+		const id = v => v, one = () => 1, rows = i => log[i];
+		for (const kind of ['balance', 'spend']) {
+			const cur = railsSeries(log, one, id, kind, rows, '');
+			const up = cur.findIndex(d => d.fill === 'end');
+			const [raise, cut] = [cur[up], cur[up + 1]];
+			assertEqual(up >= 0 && raise.pointRotation === 0 && cut?.pointRotation === 180 && cut.fill === 'start', true,
+				`P128: ${kind}: green from the raise line up, red from the cut line down`);
+			assertEqual([raise.backgroundColor, cut.backgroundColor], [RAIL_BAND_COLORS.above, RAIL_BAND_COLORS.below],
+				`P128: ${kind}: green above, light red below`);
+			assertEqual(cur.filter(d => d.fill).length, 2, `P128: two ${kind} bands, and nothing between the rails`);
+			const prev = railsSeries(log, one, id, kind, rows, 'previous');
+			assertEqual(prev.some(d => d.fill), false, `P128: the previous ${kind} rails carry no band`);
+		}
+	})();
+
+	// ⚠ UNSAFE - MUTATES: runMCWorker and renderStressChart (both stubbed, restored), #spendGoal's
+	// value (restored; the plan is never re-run with it), the two stress-refresh flags, the stored
+	// Stress Test result and its hash (all restored). Ends by asking for a real refresh.
+	// P91, the half it missed: a refresh displaced by a pass in flight runs when that pass finishes,
+	// after a SUCCESS as well as after an error (2026-09-16: success never drained, so a second quick
+	// edit left the Stress Test on the plan from before it). Since the same day a pass is skipped when
+	// the pass on screen was computed from the same inputs, so the displaced request here is a real
+	// edit - and the two same-input cases pin what the skip must and must not swallow. Results are
+	// stand-ins and the chart is stubbed, so nothing waits on the page's own first pass.
+	(function stressRefreshDisplacedBySuccessIsRun() {
+		if (!unsafeTest('stressRefreshDisplacedBySuccessIsRun')) return;
+		if (typeof refreshMCStressOnly !== 'function' || typeof runMCWorker !== 'function'
+			|| typeof renderStressChart !== 'function' || typeof _mcStress === 'undefined'
+			|| typeof _lastStressHash === 'undefined' || !document.getElementById('spendGoal')) {
+			console.log('SKIP: Monte Carlo tab code absent'); return;
+		}
+		// _mcWorkerBusy too: a real pass the page (or an earlier test) started may still be running,
+		// and its guard would park every request below as pending.
+		const realRun = runMCWorker, realRender = renderStressChart, realBusy = _mcWorkerBusy;
+		const was = { stress: _mcStress, inResults: _mcResults ? _mcResults.stress : undefined,
+		              hash: _lastStressHash, spend: Number(val('spendGoal')) };
+		const ok = { type: 'results', stressOnly: true, stress: { standIn: true }, years: 1 };
+		let calls = [];
+		const fresh = () => {
+			calls = [];
+			_mcStressRefreshing = false;
+			_mcStressPending = false;
+			_lastStressHash = null;
+			DisplayHelpers.setDollarValue('spendGoal', was.spend);
+		};
+		try {
+			runMCWorker = (cfg, onProgress, onComplete) => { calls.push({ cfg, onComplete }); };
+			renderStressChart = () => {};
+			_mcWorkerBusy = () => false;
+
+			fresh();
+			refreshMCStressOnly();   // the pass in flight
+			DisplayHelpers.setDollarValue('spendGoal', was.spend + 1000);
+			refreshMCStressOnly();   // an edit landing while it runs
+			assertEqual(calls.length === 1 && _mcStressPending === true, true,
+				'P91: a refresh asked for during a pass is remembered, not started beside it');
+			calls[0].onComplete(ok);
+			assertEqual(calls.length, 2, 'P91: a successful pass runs the refresh it displaced');
+			assertEqual(_mcStressPending, false, 'P91: and forgets it once it has');
+
+			// The same inputs asked for twice: the pass that lands is the answer to both.
+			fresh();
+			refreshMCStressOnly();
+			refreshMCStressOnly();
+			calls[0].onComplete(ok);
+			assertEqual(calls.length === 1 && _mcStressPending === false, true,
+				'a request for the inputs a successful pass just used starts no second pass');
+
+			// ...unless that pass failed: then the remembered request is the retry.
+			fresh();
+			refreshMCStressOnly();
+			refreshMCStressOnly();
+			calls[0].onComplete({ type: 'results', stressOnly: true, error: 'stand-in failure' });
+			assertEqual(calls.length, 2, 'P91: after a FAILED pass the same inputs are asked for again');
+		} finally {
+			runMCWorker = realRun;
+			renderStressChart = realRender;
+			_mcWorkerBusy = realBusy;
+			DisplayHelpers.setDollarValue('spendGoal', was.spend);
+			_mcStress = was.stress;
+			if (_mcResults) _mcResults.stress = was.inResults;
+			_lastStressHash = was.hash;
+			_mcStressRefreshing = false;   // the stubbed passes will never report
+			_mcStressPending = false;
+			refreshMCStressOnly();
+		}
+	})();
+
+	// ⚠ UNSAFE - MUTATES: #spendGoal (restored) and re-runs the plan through the real blur listener;
+	// stubs runMCWorker, renderStressChart and, for the one debounce timer the blur sets, setTimeout
+	// (all restored); the stress-refresh flags, the stored Stress Test result, its hash, _lastMCHash
+	// and the Monte Carlo stale banner (all restored). Ends by re-running the plan and asking for a
+	// real refresh.
+	// 2026-09-16: a blur that changes nothing starts no Stress Test pass, and one that changes the plan
+	// does. Before, EVERY blur started one (and a worker) until a full Monte Carlo run had happened -
+	// and after one, undoing an edit started none, leaving the Stress Test on the undone plan.
+	(function stressRefreshSkipsAnUnchangedBlur() {
+		if (!unsafeTest('stressRefreshSkipsAnUnchangedBlur')) return;
+		const field = document.getElementById('spendGoal');
+		if (!field || typeof mcInputsChanged !== 'function' || typeof runMCWorker !== 'function'
+			|| typeof renderStressChart !== 'function' || typeof _lastStressHash === 'undefined'
+			|| typeof _buildMCHash !== 'function') {
+			console.log('SKIP: Monte Carlo tab code absent'); return;
+		}
+		const realRun = runMCWorker, realRender = renderStressChart, realTimeout = window.setTimeout;
+		const realBusy = _mcWorkerBusy;   // stubbed for the reason the test above gives
+		const banner = document.getElementById('mc-stale-banner');
+		const was = { stress: _mcStress, inResults: _mcResults ? _mcResults.stress : undefined,
+		              hash: _lastStressHash, mcHash: _lastMCHash, spend: Number(val('spendGoal')),
+		              banner: banner ? banner.style.display : null };
+		const ok = { type: 'results', stressOnly: true, stress: { standIn: true }, years: 1 };
+		const passes = [];
+		// The sidebar debounces its recalc behind one setTimeout. Run that timer now, so the whole
+		// blur - the plan's re-run and the Stress Test's decision - happens inside this test. Only the
+		// first timer is taken; anything the recalc itself schedules goes to the real one.
+		// ?runtests runs this suite while the page is still parsing, before setupAutoRecalc() has
+		// attached the listener, and then nothing takes the timer: the test calls what the recalc
+		// would have called for the Stress Test instead, and says which path it measured.
+		let wired = null;
+		const blur = () => {
+			let taken = false;
+			window.setTimeout = (fn, ms, ...args) => {
+				taken = true;
+				window.setTimeout = realTimeout;
+				fn(...args);
+				return 0;
+			};
+			try { field.dispatchEvent(new Event('blur')); } finally { window.setTimeout = realTimeout; }
+			if (wired === null) wired = taken;
+			if (!taken) mcInputsChanged();
+		};
+		const via = () => (wired ? 'a blur' : 'a recalc (listener not attached yet)');
+		try {
+			runMCWorker = (cfg, onProgress, onComplete) => { if (cfg.stressOnly) passes.push(onComplete); };
+			renderStressChart = () => {};
+			_mcWorkerBusy = () => false;
+			_mcStressRefreshing = false;
+			_mcStressPending = false;
+			_lastStressHash = null;
+			const asFirst = _buildMCHash();
+
+			blur();
+			assertEqual(passes.length, 1, `${via()} with no Stress Test result for this plan starts a pass`);
+			passes[0]?.(ok);
+			blur();
+			assertEqual(passes.length, 1, `${via()} that changes nothing starts no Stress Test pass`);
+			DisplayHelpers.setDollarValue('spendGoal', was.spend + 1000);
+			blur();
+			assertEqual(passes.length, 2, `${via()} that changes the plan starts one`);
+			passes[1]?.(ok);
+			// As if a full Monte Carlo run had used the plan as it first stood, then undo the edit.
+			_lastMCHash = asFirst;
+			DisplayHelpers.setDollarValue('spendGoal', was.spend);
+			blur();
+			assertEqual(passes.length, 3,
+				`undoing that edit after a full run starts a pass for the plan as it was (${via()}): its result is not on screen`);
+		} finally {
+			window.setTimeout = realTimeout;
+			runMCWorker = realRun;
+			renderStressChart = realRender;
+			_mcWorkerBusy = realBusy;
+			DisplayHelpers.setDollarValue('spendGoal', was.spend);
+			_mcStress = was.stress;
+			if (_mcResults) _mcResults.stress = was.inResults;
+			_lastStressHash = was.hash;
+			_lastMCHash = was.mcHash;
+			_mcStressRefreshing = false;   // the stubbed pass never reports
+			_mcStressPending = false;
+			if (banner) banner.style.display = was.banner;
+			runSimulation();
+			refreshMCStressOnly();
+		}
+	})();
+
+	// P128n / P129. Every preset is solved at once, so the preset is no part of what a solve depends on;
+	// and the After-Tax Spend answer is in dollars, so the goal it started from is no part of its own.
+	(function railsPresetSwitchIsARedraw() {
+		const sel = document.getElementById('rails-preset');
+		if (!sel || typeof railsFingerprint !== 'function' || typeof railsStartFingerprint !== 'function') {
+			console.log('SKIP: rails fingerprints absent'); return;
+		}
+		const was = sel.value;
+		try {
+			const fps = ['tight', 'normal', 'loose'].map(v => { sel.value = v; return railsFingerprint(); });
+			assertEqual(new Set(fps).size, 1, 'P128n: switching presets changes nothing a solve depends on');
+		} finally {
+			sel.value = was;
+		}
+		const base = getInputs();
+		const other = { ...base, spendGoal: (base.spendGoal || 0) + 12345 };
+		assertEqual(railsStartFingerprint(other) === railsStartFingerprint(base), true,
+			'P129: the After-Tax Spend answer does not depend on the goal it started from');
+		assertEqual(railsFingerprint(other) === railsFingerprint(base), false, 'P129: the rails themselves do');
+	})();
+
+	// ⚠ UNSAFE - MUTATES: runMCWorker (stubbed, restored), #rails-auto (restored), RailsState
+	// (snapshotted and restored), and the panel's text.
+	// P128o. "'Clicking it on' should cause the build to run" (user, 2026-09-16).
+	(function railsAutoTickSolvesAtOnce() {
+		if (!unsafeTest('railsAutoTickSolvesAtOnce')) return;
+		const auto = document.getElementById('rails-auto');
+		if (!auto || typeof railsAutoToggled !== 'function' || typeof runMCWorker !== 'function') {
+			console.log('SKIP: rails auto-run absent'); return;
+		}
+		const realRun = runMCWorker;
+		const saved = { ...RailsState };
+		const was = auto.checked;
+		const jobs = [];
+		try {
+			runMCWorker = cfg => { if (cfg.kind === 'rails') jobs.push(cfg); };
+			Object.assign(RailsState, { result: null, fingerprint: null, running: false, runFingerprint: null });
+			auto.checked = true;
+			railsAutoToggled();
+			assertEqual(jobs.length, 1, 'P128o: ticking Auto-run starts a solve at once, without the debounce');
+			railsAutoToggled();
+			assertEqual(jobs.length, 1, 'P128o: and never a second solve of a plan already being solved');
+			auto.checked = false;
+			railsAutoToggled();
+			assertEqual(RailsState.debounce, null, 'P128o: unticking it leaves nothing scheduled');
+		} finally {
+			runMCWorker = realRun;
+			railsStopTicker();
+			clearTimeout(RailsState.debounce);
+			Object.assign(RailsState, saved, { debounce: null, ticker: null });
+			auto.checked = was;
+			railsRenderPanel();
+		}
+	})();
+
+	// ⚠ UNSAFE - MUTATES: #spendGoal and the remembered prior goal (both restored), RailsState
+	// (snapshotted and restored), runMCWorker (stubbed, restored), the ⓘ menu, the two stress-refresh
+	// flags, and re-runs the plan.
+	// P129 / P129c. Use it writes the risk-based answer rounded to $100, the ⓘ offers it as a menu, and
+	// Restore puts the goal back.
+	(function railsStartAnswerUseAndRestore() {
+		if (!unsafeTest('railsStartAnswerUseAndRestore')) return;
+		if (typeof railsUseStartSpend !== 'function' || typeof applySuggestSpend !== 'function'
+			|| !document.getElementById('suggest-spend-menu') || !document.getElementById('spendGoal')) {
+			console.log('SKIP: After-Tax Spend answer absent'); return;
+		}
+		const saved = { ...RailsState };
+		const prior = _priorSpendGoal;
+		const goal = Number(val('spendGoal'));
+		const presetEl = document.getElementById('rails-preset');
+		const presetWas = presetEl.value;
+		const realRun = runMCWorker;
+		const menu = document.getElementById('suggest-spend-menu');
+		try {
+			runMCWorker = () => {};   // the Stress Test refresh the plan re-run asks for stays out of it
+			_priorSpendGoal = null;
+			presetEl.value = 'normal';
+			const answer = goal * 1.2345;
+			const fake = {
+				presets: { normal: { key: 'normal', label: 'Normal', target: 0.9, upper: 0.99, lower: 0.7 } },
+				startYear: 2026, years: [], numPaths: 100, cadence: 3, simulationMode: 'gbm',
+				start: { paths: 400, pos: 0.93, spendGoal: goal,
+				         answers: { normal: { mult: 1.2345, spendGoal: answer, clamped: '' } } },
+			};
+			Object.assign(RailsState, { result: fake, previous: null, running: false, fingerprint: 'another plan',
+			                            startFingerprint: railsStartFingerprint() });
+			assertEqual(railsStartIsCurrent(), true, 'P129: an answer solved for this plan is current');
+			railsUseStartSpend();
+			assertEqual(Number(val('spendGoal')), Math.round(answer / 100) * 100, 'P129: Use it writes the answer, rounded to $100');
+			assertEqual(_priorSpendGoal, goal, 'P129: and remembers the goal it replaced');
+			assertEqual(railsStartIsCurrent(), true, 'P129: using the answer does not make it stale');
+			applySuggestSpend();
+			assertEqual(menu.style.display === '' && /90% chance of success/.test(menu.textContent)
+				&& /Restore/.test(menu.textContent), true,
+				'P129c: the ⓘ opens a menu offering the risk-based answer and Restore');
+			applySuggestSpendChoice('restore');
+			assertEqual(Number(val('spendGoal')), goal, 'P129: Restore puts the goal back');
+			assertEqual([_priorSpendGoal, menu.style.display], [null, 'none'], 'P129: and forgets it, and the menu closes');
+		} finally {
+			runMCWorker = realRun;
+			presetEl.value = presetWas;
+			DisplayHelpers.setDollarValue('spendGoal', goal);
+			_priorSpendGoal = prior;
+			Object.assign(RailsState, saved);
+			toggleSuggestSpendMenu(false);
+			_mcStressRefreshing = false;   // the stubbed refresh will never report
+			_mcStressPending = false;
+			runSimulation();
+		}
+	})();
+
+	// ⚠ UNSAFE - MUTATES: redraws both charts from a variant of the plan, and the income view; both
+	// put back from the plan on screen at the end.
+	// P130. "Whatever goes back into Brokerage should NOT be counted as income" (user, 2026-09-16), and
+	// the same for surplus banked to Cash: neither line counts what the year saved.
+	(function incomeChartsDoNotCountSavedMoney() {
+		if (!unsafeTest('incomeChartsDoNotCountSavedMoney')) return;
+		if (typeof updateCharts !== 'function' || typeof setIncomeChartView !== 'function') {
+			console.log('SKIP: income charts absent'); return;
+		}
+		const view = incomeChartView;
+		try {
+			// Cycle Brokerage puts every surplus straight back into Brokerage.
+			const log = simulate({ ...getInputs(), cyclicEnabled: true, CashReserve: 0 }).log;
+			const i = log.findIndex(r => (r.SurplusBrok ?? 0) + (r.surplusCash ?? 0) > 1000);
+			if (i < 0) { console.log('SKIP: no year of the plan saved anything'); return; }
+			const r = log[i];
+			const saved = (r.SurplusBrok ?? 0) + (r.surplusCash ?? 0);
+			const sum = r.SSincome + r.pension + r.RMDwd + (r['-iraSpend'] ?? 0) + r.RothWD + r.CapGains
+				+ r.cashDividends + r.cashInterest + (r.CashWD ?? 0) + Math.max(0, (r['Brokerage-'] ?? 0) - (r.CapGains ?? 0));
+			const adj = document.getElementById('show-current-dollars')?.checked ? 1 / (r.inflationFactor || 1) : 1;
+			incomeChartView = 'combined';
+			updateCharts(log);
+			const net = incomeChart.data.datasets.find(d => d.label === 'Net Income').data[i];
+			assertEqual(Math.round(net), Math.round(Math.max(0, sum - r.totalTax - saved) * adj),
+				'P130: Income & Expenses\' Net Income leaves out what the year saved');
+			incomeChartView = 'net';
+			updateCharts(log);
+			const find = label => incomeChart.data.datasets.find(d => d.label === label).data[i];
+			assertEqual([Math.round(find('Total Income')), Math.round(find('Net (Spendable)'))],
+				[Math.round(Math.max(0, r.totalIncome - saved) * adj), Math.round(Math.max(0, sum - r.totalTax - saved) * adj)],
+				'P130: and so do Income vs Net\'s Total Income and Net (Spendable)');
+		} finally {
+			incomeChartView = view;
+			syncIncomeViewControls();
+			if (lastSimulationLog) updateCharts(lastSimulationLog);
+		}
+	})();
+
+	// ===== P127a: the spending ceiling is a plan input behind the knob, off by default =====
+	(function ceilingSwitchIsAPlanInput() {
+		const el = document.getElementById('gkShapeCeiling');
+		if (!el) { console.log('SKIP: ceiling switch absent'); return; }
+		assertEqual(OPT_LONG_TO_SHORT.gkShapeCeiling, 'gsc', 'P127a: the ceiling travels in the share link');
+		assertEqual(typeof getInputs().gkShapeCeiling, 'boolean', 'P127a: getInputs carries the ceiling');
+		const box = document.getElementById('ui-gk');
+		assertEqual(!!box && box.contains(el), true, 'P127a: the switch sits with the band and step, behind the knob');
+		assertEqual(!!document.querySelector('.sidebar')?.contains(el), true,
+			'P127a: inside the sidebar, so a change re-runs the plan');
+		if (typeof OPT_DEFAULTS !== 'undefined' && OPT_DEFAULTS.gkShapeCeiling) {
+			assertEqual(OPT_DEFAULTS.gkShapeCeiling.c, false, 'P127a: off in the page as shipped');
+		}
+		// Drawn like the Guardrails switch beside it, not as a bare checkbox .toggle would hide.
+		assertEqual(!!el.closest('label.toggle') && !!el.parentElement.querySelector('.toggle-switch'), true,
+			'P127a: the switch uses the page\'s toggle markup');
+	})();
+
 	(function goalFirstNeverConvertWritesTheFiveControls() {
 		const sel = document.getElementById('gf-conv-mode');
 		const cxr = document.getElementById('convertExcessToRoth');
@@ -2941,7 +3373,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 453, taxengine: 32, taxPaymentPlanner: 61, doclinks: 26, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 472, taxengine: 32, taxPaymentPlanner: 61, doclinks: 26, slowInCore: 4 },
 
     checkCounts(results) {
         const drift = [];

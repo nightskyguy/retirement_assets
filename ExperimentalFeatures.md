@@ -18,17 +18,33 @@ changes the code around it.
 
 ## 1. `?nerdknob` — the advanced surface
 
-`?nerdknob` on any Optimizer URL reveals advanced controls: Monte Carlo parameters, the
-the Guardrails band and step inputs, the 💵 cash-funded sweep dimension, the timing control, and
-other diagnostics. (Fixed tax indexing used to be here; it now lives on the Monte Carlo tab, which is
-the only place it can do anything.)
+`?nerdknob` on any Optimizer URL reveals advanced controls: Monte Carlo parameters, the Guardrails
+band and step inputs and its **Never above plan** switch, the 💵 cash-funded sweep dimension, the
+timing control, the risk-based rails panel's *Solve every*, *Paths* and timing readout, and other
+diagnostics. (Fixed tax indexing used to be here; it now lives on the Monte
+Carlo tab, which is the only place it can do anything.)
+
+**Never above plan** (`P127a`, off by default) lets a Guardrails raise bring spending back up to the
+plan's own path - the spend goal carried forward by Spend Delta and inflation - but never above it.
+Cuts still follow the savings. On the research households it gives up 9-16% of lifetime spending
+where the rule would otherwise raise, and changes nothing where it would not
+(`research/RISK_BASED_GUARDRAILS.md` section 7b). It changes the plan's numbers, so unlike the rest
+of this section it travels in a share link (`gsc`) and a saved plan, and a link carrying it stays in
+force for a reader without the knob; the sentence under the Guardrails switch says so when it is on.
 
 It can also be flipped **at runtime** by a hidden checkbox on the Documentation tab
 (`setNerdKnob` / `applyNerdKnobVisibility`). That flip is deliberately **not** written back to the
 URL, so a link you share does not carry your knob state.
 
-Two things have graduated *out* of the knob and must not be put back: the **optimizer objective
-selector** (PF13) and the **ACA Cliff options** (v11.1464).
+Three things have graduated *out* of the knob and must not be put back: the **optimizer objective
+selector** (PF13), the **ACA Cliff options** (v11.1464), and the **risk-based rails panel**, which was
+behind `?nerdknob=rails` until 2026-09-16 (user: "For non-nerdknob users, leave it off and expose
+it"). What
+stays behind the plain knob is only what a solve costs: how often it solves (every 3 years for
+everyone else), how many market paths it uses (100), and the readout of where the time went with a
+projection for other settings. The panel itself - presets, market method, Run, Auto-run, the rails on
+both charts and the After-Tax Spend answer - is for everyone, and nothing in it enters the share
+link, a saved plan or the engine inputs unless *Use it* writes After-Tax Spend.
 
 ### Timing diagnostics behind the plain knob
 
@@ -63,9 +79,11 @@ input, corrected to read THIS year's conversion and to move the CONVERSION rathe
 
 ### The two deeper variants
 
-Both are gated one notch below the plain knob: they respond only to the **literal value**, and plain
-`?nerdknob` does *not* reveal them. Both are also read once at load and never toggled at runtime, so
-the Documentation checkbox cannot reach them.
+Both are gated one notch below the plain knob: they respond only to the **literal value**, and
+plain `?nerdknob` does *not* reveal them. Both are also read once at load, so the Documentation
+checkbox cannot turn them on. Unchecking it does hide goal-first again (it also requires the knob to
+be on); the Fixed Split menu entry ignores it. A link still carrying `?nerdknob=rails` simply counts
+as the plain knob.
 
 | URL | what it unlocks |
 |---|---|

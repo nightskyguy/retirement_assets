@@ -27,9 +27,9 @@
   // ── Settings ─────────────────────────────────────────────────────────────────────────────────
 
   const ENDPOINT = 'https://feedback.netcitizen.us/';
-  // Turnstile site key. Public by design: it names the widget and authorizes nothing. While it is
-  // empty the dialog says sending is not set up, rather than failing at the last step.
-  const SITE_KEY = '';
+  // Turnstile site key. Public by design: it names the widget and authorizes nothing. Left empty
+  // the dialog says sending is not set up, rather than failing at the last step.
+  const SITE_KEY = '0x4AAAAAAE6xgA7I3EIE8i01';
   // ?fbdev, honored only on a page served from localhost: post to `npx wrangler dev` and use
   // Cloudflare's always-pass test key. See .feedback-worker/README.md.
   const DEV_ENDPOINT = 'http://localhost:8787/';

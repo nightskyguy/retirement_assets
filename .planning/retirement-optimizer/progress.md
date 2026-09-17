@@ -5344,13 +5344,14 @@ The decisions are quoted in task_plan "Round 4". Built, in the order the user wi
   to the user's "11. Explain": a Cycle Brokerage harvest sells far more than the year spends and puts
   the rest straight back, and the charts counted the whole sale as income.
 - `P128p` the Monte Carlo "out of date" banner clears when an edit is undone.
-- Mid-build (user): `P128q` gray/red/green bands, `P128r` a shorter panel that points at Income vs
-  Net, `P128s` Show previous rails off by default.
+- Mid-build (user): `P128q` bands (green above the raise rail, light red below the cut rail; a gray
+  band between was built, then removed as too narrow to notice), `P128r` a shorter panel that
+  points at Income vs Net, `P128s` Show previous rails off by default.
 - "The RBG should be shown independent of the GK-style" is read as: shown whatever the switch says,
   and every solve runs with GK off (resumed from the plan's own state). Said so to the user.
 - Verified: node 472 / 32 / 61 / 26. In-page `?nerdknob&runtests` 1122 (531 + 591); plain page 291,
   24 page-writing suites skipped. Browser, default plan: a solve in 7.0 s (GBM); the three bands on
-  both views, the gray one absent from both legends and both tooltips; the note's Income vs Net link
+  both views (then the gray one removed and the two left re-checked); the note's Income vs Net link
   switches the view; previous rails hidden until ticked, then drawn; Use it / Restore / the ⓘ menu;
   clamped lines end.
 - Harness on the new solver: `--timing-only` (2.9 min; findings "P128 round 4") and `--quick`

@@ -5328,8 +5328,8 @@ function railsRenderTiming() {
         + grid;
 }
 
-// The rails as chart lines. 'balance' draws the two wealth rails, with the chart shaded in three
-// bands (railsSeries), against the TotalNetWealth line they are stated in. 'spend' draws the target spend and
+// The rails as chart lines. 'balance' draws the two wealth rails, with the chart shaded above the
+// raise rail and below the cut rail (railsSeries), against the TotalNetWealth line they are stated in. 'spend' draws the target spend and
 // the spend at each rail, and is used on the Income vs Net view only: Income & Expenses is busy
 // enough without them (user, 2026-09-16).
 //
@@ -5340,8 +5340,7 @@ function railsRenderTiming() {
 //
 // The previous solve is drawn first, faded and without the band, so the current one sits on top and
 // the difference between the two is what the eye lands on.
-const RAIL_BAND_COLORS = { above: 'rgba(46,125,50,0.10)', between: 'rgba(120,120,120,0.12)',
-                           below: 'rgba(229,57,53,0.10)' };
+const RAIL_BAND_COLORS = { above: 'rgba(46,125,50,0.10)', below: 'rgba(229,57,53,0.10)' };
 
 function railsChartDatasets(log, adj, pt, kind) {
     if (!railsOn() || !log.length || !('railLower' in log[0])) return [];
@@ -5379,19 +5378,13 @@ function railsSeries(log, adj, pt, kind, fieldsAt, tag) {
             _railNote: log.map((r, i) => fieldsAt(i)?.[key] == null ? null : note(i)),
         };
     };
-    // Three bands on both views (user, 2026-09-16: "if the spending or assets fall between the two,
-    // it means it's on track"): green above the raise line, gray between the rails, light red below
-    // the cut line. A dataset has one fill, so the gray band is a copy of the raise line with no line
-    // or points of its own, filled down to the cut line right after it; `_railBand` keeps it out of
-    // the legend and the tooltip. The previous solve gets no bands, so only one set is ever on screen.
+    // Two bands on both views (user, 2026-09-16): green above the raise line, light red below the cut
+    // line. Between the two - on track - stays clear: a gray band there was too narrow to notice
+    // (user, same day). The previous solve gets no bands, so only one set is ever on screen.
     const bands = (upper, lower) => {
         if (faded) return [upper, lower];
         const shade = (ds, fill, color) => Object.assign(ds, { fill, backgroundColor: color, _keepFillOnHover: true });
-        const between = { ...upper, label: 'On track' + (tag ? ` (${tag})` : ''), data: upper.data.slice(),
-                          stack: `rail-band-${tag}`, borderWidth: 0, pointRadius: 0, pointHoverRadius: 0,
-                          _railSymbol: false, _railNote: null, _railBand: true };
-        return [shade(upper, 'end', RAIL_BAND_COLORS.above), shade(between, '+1', RAIL_BAND_COLORS.between),
-                shade(lower, 'start', RAIL_BAND_COLORS.below)];
+        return [shade(upper, 'end', RAIL_BAND_COLORS.above), shade(lower, 'start', RAIL_BAND_COLORS.below)];
     };
     if (kind === 'balance') {
         const note = i => {
@@ -5416,8 +5409,7 @@ function railsSeries(log, adj, pt, kind, fieldsAt, tag) {
 
 // Legend labels that keep the rails' own symbols. The page's legends force every item to a circle
 // (`pointStyle: 'circle'`), which would put a rail back into the shape it is meant to stand out from.
-// The fill color is the POINT color, since a rail's own backgroundColor is its band's tint. The gray
-// band has no legend entry: it is not a line.
+// The fill color is the POINT color, since a rail's own backgroundColor is its band's tint.
 function railsLegendLabels(labels) {
     return {
         ...labels,
@@ -5431,7 +5423,7 @@ function railsLegendLabels(labels) {
                 it.fillStyle = ds.pointBackgroundColor;
                 it.strokeStyle = ds.pointBackgroundColor;
             }
-            return items.filter(it => !chart.data.datasets[it.datasetIndex]?._railBand);
+            return items;
         },
     };
 }
@@ -5452,8 +5444,6 @@ function updateCharts(log) {
         plugins: {
             tooltip: {
                 itemSort: (a, b) => b.parsed.y - a.parsed.y,
-                // P128: the rails' gray band repeats the raise line's numbers.
-                filter: item => !item.dataset._railBand,
                 callbacks: {
                     title: items => {
                         const r = log[items[0]?.dataIndex];

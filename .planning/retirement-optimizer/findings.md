@@ -3112,7 +3112,8 @@ reinvests the rest (`SurplusBrok`); Cash Reserve banks surplus to Cash (`surplus
 counted both as income and as spendable. `savedOf(r)` now leaves them out of Net Income, Total
 Income, Net (Spendable) and the bars' scale; Inflows vs Outflows already netted them (`netOut`).
 
-**Bands.** A Chart.js dataset has one fill, so three bands take a helper: the raise line fills to
-`'end'` (green), a line-less copy of it fills `'+1'` to the cut line (gray), and the cut line fills to
-`'start'` (light red). The copy needs its own `stack` - sharing the raise line's would stack it on
-top on a stacked axis - and is filtered out of the legend and the tooltip by `_railBand`.
+**Bands.** The raise line fills to `'end'` (green) and the cut line to `'start'` (light red). A gray
+band between them was built and removed the same evening (user: too narrow to notice). It needed a
+helper, since a Chart.js dataset has one fill: a line-less copy of the raise line filled `'+1'`, on
+its own `stack` (sharing the raise line's would stack it on top on a stacked axis), filtered out of
+the legend and the tooltip.

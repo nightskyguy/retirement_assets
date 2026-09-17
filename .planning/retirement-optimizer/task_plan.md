@@ -920,8 +920,8 @@ Please calculate every rail (and spend threshold?) at the same time."
 - [x] `P128p` the Monte Carlo "out of date" banner clears when an edit is undone.
 - [x] `P128q` (user, mid-build) bands: "the band between the cut and raise rail is green, but it
       should be light gray. The band below cut should be light pink/red, above the raise should be
-      green." On both views; the gray band is a line-less copy of the raise line (`_railBand`),
-      kept out of the legend and the tooltip.
+      green." Then: "Remove the gray band. It's not very noticable because it's narrow." So green
+      above the raise line and light red below the cut line, on both views, and nothing between.
 - [x] `P128r` (user, same message) "the Risk-based rails area is too wordy, and doesn't mention that
       Income vs Net contains the spending RBG info": status, start line and note cut to a few
       short lines, the detail moved to tooltips, and the note links to the Income vs Net view.

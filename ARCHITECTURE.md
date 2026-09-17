@@ -493,7 +493,7 @@ flowchart TD
     EST --> MSG["years[].presets + start + cost record<br/>runs, runs a path a year, ms per phase"]
     START --> MSG
     MSG --> MERGE["railsRowFields onto the live log<br/>wealth rails on the year-end row,<br/>spending on the next"]
-    MERGE --> DRAW["Balances chart: wealth rails<br/>Income vs Net: spending rails<br/>triangles; green above, gray between,<br/>light red below, on both<br/>Annual Details: Rails columns"]
+    MERGE --> DRAW["Balances chart: wealth rails<br/>Income vs Net: spending rails<br/>triangles; green above the raise rail,<br/>light red below the cut rail, on both<br/>Annual Details: Rails columns"]
 ```
 
 **Resume.** `simulate({ captureResume: true })` writes, on every log row, the state the NEXT year

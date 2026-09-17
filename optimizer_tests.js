@@ -2747,8 +2747,8 @@ assertEqual(
 		assertEqual(railsTooltipNote({ dataset: {}, dataIndex: 0 }), '', 'P128: nor does any other line');
 	})();
 
-	// Three bands on each view (user, 2026-09-16): green above the raise line, gray between the rails
-	// (on track), light red below the cut line. Only the current solve has them.
+	// Two bands on each view (user, 2026-09-16): green above the raise line, light red below the cut
+	// line, nothing between them. Only the current solve has them.
 	(function railsBandOnBothViews() {
 		if (typeof railsSeries !== 'function') { console.log('SKIP: rails series builder absent'); return; }
 		const log = [0, 1, 2].map(i => ({ year: 2030 + i, inflationFactor: 1,
@@ -2758,19 +2758,14 @@ assertEqual(
 		for (const kind of ['balance', 'spend']) {
 			const cur = railsSeries(log, one, id, kind, rows, '');
 			const up = cur.findIndex(d => d.fill === 'end');
-			const [raise, gray, cut] = [cur[up], cur[up + 1], cur[up + 2]];
-			assertEqual(up >= 0 && raise.pointRotation === 0 && gray?._railBand === true && gray.fill === '+1'
-				&& cut?.pointRotation === 180 && cut.fill === 'start', true,
-				`P128: ${kind}: green above the raise line, gray from it down to the cut line, red below that`);
-			assertEqual([raise, gray, cut].map(d => d.backgroundColor),
-				[RAIL_BAND_COLORS.above, RAIL_BAND_COLORS.between, RAIL_BAND_COLORS.below],
-				`P128: ${kind}: green, gray and light red, in that order`);
-			assertEqual(gray.data.join(), raise.data.join(), `P128: ${kind}: the gray band starts on the raise line`);
-			assertEqual(gray.borderWidth === 0 && gray.pointRadius === 0 && gray.stack !== raise.stack, true,
-				`P128: ${kind}: the gray band draws no line or points and does not stack on the raise line`);
-			assertEqual(cur.filter(d => d.fill).length, 3, `P128: three ${kind} bands, not more`);
+			const [raise, cut] = [cur[up], cur[up + 1]];
+			assertEqual(up >= 0 && raise.pointRotation === 0 && cut?.pointRotation === 180 && cut.fill === 'start', true,
+				`P128: ${kind}: green from the raise line up, red from the cut line down`);
+			assertEqual([raise.backgroundColor, cut.backgroundColor], [RAIL_BAND_COLORS.above, RAIL_BAND_COLORS.below],
+				`P128: ${kind}: green above, light red below`);
+			assertEqual(cur.filter(d => d.fill).length, 2, `P128: two ${kind} bands, and nothing between the rails`);
 			const prev = railsSeries(log, one, id, kind, rows, 'previous');
-			assertEqual(prev.some(d => d.fill || d._railBand), false, `P128: the previous ${kind} rails carry no band`);
+			assertEqual(prev.some(d => d.fill), false, `P128: the previous ${kind} rails carry no band`);
 		}
 	})();
 

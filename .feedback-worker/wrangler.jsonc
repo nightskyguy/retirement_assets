@@ -1,0 +1,39 @@
+// Cloudflare Worker behind the "Send feedback" button. Setup and testing: README.md in this folder.
+// No addresses and no secrets belong in this file: the repo is public. FEEDBACK_TO, FEEDBACK_FROM
+// and TURNSTILE_SECRET are set with `npx wrangler secret put <NAME>`.
+{
+  "name": "tools-feedback",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-01",
+
+  // Serves https://feedback.netcitizen.us/ only. Cloudflare creates the DNS record and the
+  // certificate on the first deploy.
+  "routes": [{ "pattern": "feedback.netcitizen.us", "custom_domain": true }],
+  "workers_dev": false,
+
+  // Sends to verified Email Routing destination addresses only. No destination is pinned here;
+  // the Worker passes FEEDBACK_TO at run time.
+  "send_email": [{ "name": "SEND" }],
+
+  // Three messages a minute from one address. Counted per Cloudflare location, so it is a rough cap.
+  "ratelimits": [{ "name": "RL", "namespace_id": "1001", "simple": { "limit": 3, "period": 60 } }],
+
+  // The day's count, exact: at most DAILY_LIMIT messages a day in total, whoever sends them.
+  // Created on the first deploy. SQLite-backed, which is the kind the Free plan allows. (Newer
+  // Wrangler also accepts an "exports" block for this; a Worker may use one form or the other.)
+  "durable_objects": { "bindings": [{ "name": "COUNTER", "class_name": "DailyCounter" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DailyCounter"] }],
+
+  "vars": {
+    // Comma-separated, exact match against the request's Origin header.
+    "ALLOWED_ORIGINS": "https://tools.netcitizen.us",
+    // "1" also accepts http://localhost:<port> and http://127.0.0.1:<port>, for testing a local
+    // copy of the page. The Turnstile widget must list those hostnames as well.
+    "ALLOW_LOCALHOST": "1",
+    // Most messages a day, in total. A flood ends here; the page then points people to GitHub.
+    "DAILY_LIMIT": "50"
+  },
+
+  // Off: messages contain whatever people choose to send, and nothing here should keep a copy.
+  "observability": { "enabled": false }
+}

@@ -6601,6 +6601,33 @@ const OPT_SHORT_TO_LONG = Object.fromEntries(
     Object.entries(OPT_LONG_TO_SHORT).map(([l, s]) => [s, l])
 );
 
+// P131. Which share-link keys "Send feedback" may include when the person has NOT chosen to send
+// their whole plan (the dialog's "Include my settings" box, feedback.js). SAFE keys are choices and
+// assumptions: strategy, limits, switches, rates, allocation, plus state and whether there is a
+// spouse, which the dialog names. PERSONAL keys describe the person: money, ages and dates, pension
+// terms, Medicare coverage. A key in neither list is withheld as well, so an input added without a
+// decision here stays private - but decide anyway: feedback.tests.js fails until every key in
+// OPT_LONG_TO_SHORT, and every literal key buildShareURL() adds, is in exactly one list.
+const OPT_SHARE_PRIVACY = {
+    safe: [
+        'sc', 'str', 'ny', 'pw', 'sr', 'iwp', 'os', 'rgf', 'mc', 'fcc', 'cem', 'imm', 'fti', 'wt', 'txs',
+        'mpm', 'afm', 'afs', 'hs', 'dr', 'div', 's', 'sfy', 'sfp', 'trc', 'tcy',
+        'g', 'cy', 'inf', 'cpi', 'fitr',
+        'c1r', 'c1x', 'c2r', 'c2x', 'cbr', 'cbx', 'cr1r', 'cr1x', 'cr2r', 'cr2x',
+        'cd', 'opt', 'copt', 'cyc', 'qa', 'gkg', 'gka', 'gr', 'gsc',
+        'swi', 'swb', 'swc', 'swr',
+        'obj', 'ptxm', 'ptxr',
+    ],
+    personal: [
+        'sg', 'eca', 'ibg', 'af', 'qm', 'ptx',                          // spending and dollar targets
+        'i1', 'i2', 'ro', 'ro2', 'bk', 'bb', 'ca', 'cr',                // balances
+        'ss1', 'ss2', 'pa', 'pc', 'sur',                                // income and pension terms
+        'by1', 'bm1', 'd1', 'by2', 'bm2', 'd2', 'sa',                   // ages and dates
+        'ss1a', 'ss2a', 'psa', 'cey',
+        'me1', 'me2',                                                   // Medicare coverage
+    ],
+};
+
 
 // Pristine default snapshot - captured once at init BEFORE loadFromURL mutates any field.
 // Single source of truth for default-omission: buildShareURL omits a param when its current

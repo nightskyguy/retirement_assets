@@ -1,0 +1,6 @@
+# Shown on the "New issue" page next to the feedback form.
+blank_issues_enabled: true
+contact_links:
+  - name: Send feedback privately
+    url: https://tools.netcitizen.us/retirement_optimizer.html
+    about: The ✉ Feedback button at the top of the Retirement Optimizer sends a private message that only the author reads.

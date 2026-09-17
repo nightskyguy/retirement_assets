@@ -34,6 +34,7 @@ A California resident built these with [Google gemini](https://gemini.google.com
   - [High Yield Savings Accounts Real Returns](#high-yield-savings-accounts-real-returns)
   - [Retirement Projection](#retirement-projection)
 - [The Retirement Optimizer](#the-retirement-optimizer)
+  - [Sending Feedback](#sending-feedback)
   - [Features in the Works (and Known Bugs)](#features-in-the-works-and-known-bugs)
     - [Recent Fixes / Improvements](#recent-fixes--improvements)
   - [Why This Tool?](#why-this-tool)
@@ -110,7 +111,7 @@ Or you can directly run the tools from _tools.netcitizen.us_
 
 Here are less ambitious, standalone tools. Each should have a "How to Use" set of instructions, many have a way to generate a URL (called share) to capture your settings so you can either run again without reentering, or share with friends (or Redditors) for advice.
 
-These tools are all being actively developed and improved. Each tool runs standalone in your browser - though most load additional local resources (e.g. they share the same **taxengine.js**). An internet connection is needed to load fonts and the tool for graphing charts. Basic, anonymous page-load analytics are collected (Google Analytics and Cloudflare Web Analytics) solely to understand how often the tools are used and from what general region - no personally identifiable information is collected, stored, or transmitted. General region information helps prioritize which state tax rules to add in future releases. You are welcome to see for yourself by inspecting the [source code](https://github.com/nightskyguy/retirement_assets).
+These tools are all being actively developed and improved. Each tool runs standalone in your browser - though most load additional local resources (e.g. they share the same **taxengine.js**). An internet connection is needed to load fonts and the tool for graphing charts. Basic, anonymous page-load analytics are collected (Google Analytics and Cloudflare Web Analytics) solely to understand how often the tools are used and from what general region - no personally identifiable information is collected, stored, or transmitted, apart from anything you choose to send with the Retirement Optimizer's **Feedback** button (see [Sending Feedback](#sending-feedback)). General region information helps prioritize which state tax rules to add in future releases. You are welcome to see for yourself by inspecting the [source code](https://github.com/nightskyguy/retirement_assets).
 
 ### Historical Real Returns
 **[Historical Real Returns](standalone/RealReturns.html) - Inflation-Adjusted Cumulative Growth of $10,000 (1928–2025)**
@@ -181,6 +182,39 @@ My primary motivations for this tool are:
 
 > [!WARNING]
 > This is a work in progress. It may contain flaws beyond the presumption of the future being similar to the present. Use at your own risk. Consult a CFP and/or tax attorney before you make life-changing decisions.
+
+### Sending Feedback
+
+The **✉ Feedback** button, at the top of the Retirement Optimizer under **Share** and again on its
+Documentation tab, sends a note to the author: a problem, a question or an idea.
+
+You decide what goes with your message. Each part has its own box, and **Show exactly what will be
+sent** prints the whole report before anything leaves your browser.
+
+| part | starts | what it contains |
+|---|---|---|
+| Your message | always | what you type, up to 5,000 characters |
+| Settings and page errors | ticked | your state, your choices and assumptions (strategy, tax limit, filing status, growth, inflation, allocation), the *names* of the other fields you changed, and up to five error messages the page logged, with long numbers masked. Never balances, income, spending, ages or birth dates. |
+| Full plan link | unticked | the same link **Share** makes, which holds your balances, income, spending and ages. Without them, a problem can be hard to reproduce. For privacy you can reproduce and send numbers that are not your private information but that illustrate the problem. |
+| Screenshot | unticked | a picture of the whole page behind the dialog, top to bottom rather than only the part on screen, **including your numbers** |
+| Your email | empty | used only to reply to you; without one there is no way to answer, and a reply can take a while |
+| About the page | always | the app version, your browser, the window size and which tab is open |
+
+**Where it goes.** The report travels over HTTPS to a small Cloudflare service run by the author,
+which checks it and emails it to the author's inbox. The service keeps no copy and writes no logs;
+the email is the only copy. The address it goes to is not in the page. A limited number of messages
+is accepted each day, and once that is used up the dialog says so and points to GitHub.
+
+**Or use GitHub.** The same dialog links to a feedback form for a
+[GitHub issue](https://github.com/nightskyguy/retirement_assets/issues/new?template=feedback.yml), with
+your message, the version and your browser filled in, and nothing else. **Issues are public: anyone
+can read them.** Leave your own numbers out, and if a problem needs numbers to show, use made-up ones
+that still show it.
+
+**The spam check.** Sending uses Cloudflare Turnstile, which usually runs unseen and asks you to click
+only when it is unsure. It needs the online page, so a copy of the tool opened from your own disk
+cannot send feedback. Use [tools.netcitizen.us](https://tools.netcitizen.us/retirement_optimizer.html)
+instead.
 
 ### Features in the Works (and Known Bugs):
 

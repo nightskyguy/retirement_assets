@@ -5359,3 +5359,77 @@ The decisions are quoted in task_plan "Round 4". Built, in the order the user wi
   table's "need >16x" column (0.00% for every household and method in the first run's pools).
 - Docs: ARCHITECTURE 5a, README, ExperimentalFeatures (a graduation), both research reports,
   research/README, HARNESSES, and the branch's changelog entry rewritten against `main`.
+
+## Session: 2026-09-17 (worktree retirement-optimizer-phases-414fe1, branch worktrees/retirement-optimizer-feedback-3ccd60) - P131 Send feedback, v11.1867
+
+User: a feedback mechanism in the Optimizer, full URL optional, screen capture if possible, secure,
+the help address not exposed. Planned in plan mode; four questions answered (Cloudflare Worker,
+automatic capture, plan link unticked with a "hard to reproduce" note, optional reply address), plus
+"consider something that does NOT compromise privacy" - built as the ticked settings-and-errors tier.
+
+- DNS first: `netcitizen.us` is on Cloudflare and the help address runs on Email Routing, so the
+  Worker lives in the same account. Research: `send_email` reaches only VERIFIED destinations, so it
+  mails the inbox the help address forwards to; free on every plan; Turnstile cannot run on `file://`.
+- Built as the phase lists (`P131a`-`e`). Two calls of mine beyond the plan, both in the phase text:
+  no honeypot, no Turnstile off-switch.
+- The Worker's whole request path is `handle(request, env, deps)` in `logic.cjs`, with the mail
+  binding, `fetch` and the clock passed in, so `feedback.tests.js` drives every refusal through it
+  under node. The suite's runner awaits each test for that reason.
+- Found in the build, all fixed: (1) a ` ` escape written through the edit tool landed on disk
+  as the raw line-separator character, which ends a line inside a regex literal - `logic.cjs` would
+  not load; (2) a modal `dialog` ignored Escape in the Browser pane, now handled explicitly;
+  (3) on a 720 px-tall window Send sat below the fold, now a sticky footer; (4) on a phone the new
+  button took the row and squeezed Share to 48 px, now `width:auto`; (5) a long ASCII subject and the
+  multipart boundary broke the 78-character header line, now folded and shortened.
+- Privacy wording checked, not assumed: GA's `collect` request now carries `dl` without the query
+  (probed with a fake shared plan); Cloudflare's beacon already strips query and fragment itself
+  (`cleanLocation` in its own code); the referrer policy is `strict-origin`, which also keeps a shared
+  plan's address out of the README pages' GA referrer.
+- `.feedback-worker/local-server.cjs` runs the same `handle()` under node on :8787 and writes `.eml`
+  files, so `?fbdev` testing needs nothing installed. End to end from the page: preflight 204, POST
+  200, the email has Reply-To, an encoded UTF-8 subject, only `str=ordered` as settings with
+  `spendGoal, IRA1` named, no plan values, and the screenshot byte for byte. Three sends then 429 with
+  the wait message; service down shows the retry message; drafts kept every time. Real HTTP probes:
+  403 origin (foreign and missing), 415, 413, 403 bot, 400 replyTo.
+- Capture (html2canvas-pro 2.4.3, SRI-pinned): Charts 710-740 ms at 1.5x, Annual Details (4,600
+  elements) 554-667 ms at 1x, 83-111 KB. On this dev box; expect roughly 2-4.5 s on the audience's
+  older laptops. Not exercised in the pane: the `file://` notice (the pane serves disk files as static
+  snapshots); its decision is unit-tested.
+- Verified: node 472 / 32 / 61 / 26 / 41, pre-commit hook green, in-page `?runtests` 1159
+  (527 + 632). Pre-existing, not touched: on a 375 px phone the sidebar's allocation inputs push the
+  page to 427 px wide.
+- NOT done, needs the owner: Cloudflare setup (`P131f`) and the live send (`P131g`). `SITE_KEY` in
+  `feedback.js` is empty until then, and the dialog says sending is not set up. Not committed.
+
+## Session: 2026-09-17 (continued) - P131 round 2: six asks, the flood question, v11.1867
+
+User: new placeholder text; a GitHub Issues route with a link and an issue template; "including your
+numbers" in bold; the plan-link note reworded ("Without them ..." plus a sentence on sending made-up
+numbers); fix the 375 px overflow here rather than as a separate task (its chip withdrawn); send the
+state by default. And a question: what stops someone taking the code and flooding the inbox.
+
+- GitHub: `githubIssueUrl()` fills the form's `what`, `version` and `browser` fields by id, never
+  settings, plan link or screenshot, and cuts the message by ENCODED length (one CJK character is nine
+  in a link; cut by characters, a long message made a 13,000-character link). Issue form
+  `.github/ISSUE_TEMPLATE/feedback.yml` (public warning, tool and kind menus, a required privacy box)
+  plus `config.yml` pointing at the private button. No YAML parser on this machine, so the form was
+  checked against GitHub's schema by hand and its ids by a test. It takes effect once on `main`.
+- State: the share link omits a state still at its default, so the report never carried `CA`. The page
+  now pins it (`pinnedSettings`), prepended to the settings; a pinned key must also be marked safe.
+- Overflow at 375 px had four causes, all measured: the global `table { min-width: 600px }` also hit the
+  sidebar's Account Composition table; the Balances header row and the chart-view button group did not
+  wrap; the rails "Market paths" menu is as wide as its longest option. Letting the chart buttons wrap
+  exposed a fifth: the global phone rule stretched every `.tog` button to full width, stacking six bars,
+  so `.tog` now keeps its own width. Every tab measured 375 afterwards, Optimizer and Monte Carlo
+  included; the table, its menus and inputs remain full size.
+- The flood question. Nothing in the page authorizes a send (site key and endpoint are public by
+  design); the secret and the addresses exist only as Worker secrets. Existing guards: a one-time
+  Turnstile token per message, three a minute per address, a fixed recipient. Added: an EXACT daily
+  cap, `DAILY_LIMIT` = 50, counted by a `DailyCounter` Durable Object (Free plan, SQLite-backed, created
+  on deploy, no extra setup step) and consulted only after the bot check. KV was rejected for this: the
+  Free plan allows one write a second to a key and reads can lag, so the cap would overshoot in a
+  burst. The `migrations` form is used; Wrangler's newer `exports` form is noted in the config.
+- Verified: node 472 / 32 / 61 / 26 / 46, hook green, in-page `?runtests` 1164 (527 + 637). Browser:
+  the new texts, the bold, the GitHub link's fields and target, settings `s=CA&str=ordered`; with the
+  local Worker at `DAILY_LIMIT=2` (a launch entry sets it) two sends then "Feedback is full for today"
+  with the draft kept, and the emails carry `s=CA`.

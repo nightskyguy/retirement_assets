@@ -1,0 +1,4 @@
+.dev.vars
+.outbox/
+.wrangler/
+node_modules/

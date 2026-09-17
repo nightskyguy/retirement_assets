@@ -3367,13 +3367,13 @@ window.TestTiers = {
     // page would keep reporting green over a number it no longer understands. Measure, do not guess:
     // run `node <suite>` and use the printed total.
     //
-    // ALL FIVE NUMBERS, NOT JUST THE ONE FOR THE TOOL YOU ARE WORKING ON. This object is the single
+    // ALL SIX NUMBERS, NOT JUST THE ONE FOR THE TOOL YOU ARE WORKING ON. This object is the single
     // pin for every node suite in the repo, and the suites belong to different tools: taxPaymentPlanner
     // covers RetirementTaxPlanner.html, which this page never even loads. On 2026-08-17 a Tax Payment
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
-    // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
+    // the Optimizer - a page it had not touched. Re-run all five suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 472, taxengine: 32, taxPaymentPlanner: 61, doclinks: 26, slowInCore: 4 },
+    EXPECTED: { optimizer_core: 472, taxengine: 32, taxPaymentPlanner: 61, doclinks: 26, feedback: 46, slowInCore: 4 },
 
     checkCounts(results) {
         const drift = [];

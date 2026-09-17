@@ -396,6 +396,13 @@ table {
     min-width: 600px; /* Force horizontal scroll on mobile */
 }
 
+/* P131. Nothing on a 375 px phone may be wider than the screen. The 600 px floor above is for the
+   big data tables, which scroll inside their own wrappers. The sidebar's Account Composition table
+   has no wrapper, so the floor pushed the whole page sideways; it fits without one. */
+.sidebar table {
+    min-width: 0;
+}
+
 th { 
     background: #f8f9fa; 
     position: sticky; 
@@ -462,8 +469,11 @@ th[title] {
 
 /* Small inline toggle buttons (Mine/Spouse/Both, Me/Spouse, All/Fed/State…).
    Intentionally smaller and a different active color from .tab-btn so they
-   are not confused with the main navigation tabs. */
+   are not confused with the main navigation tabs. Their own width on a phone too: the global
+   mobile `button` rule makes every button a full-width bar, and a wrapped row of six chart views
+   became six stacked bars. */
 .tog {
+    width: auto;
     background: #e9ecef;
     color: #444;
     padding: 2px 7px;
@@ -1067,6 +1077,13 @@ table th.empty-column {
 .mc-fold-chev {
     display: inline-block;
     transition: transform 0.15s ease;
+}
+
+/* P131. A select is as wide as its longest option, and "Same as the Monte Carlo tab" is wider than
+   the Risk-based rails panel on a phone, which pushed the whole page sideways. */
+#rails-panel label,
+#rails-panel select {
+    max-width: 100%;
 }
 .mc-fold[open] > summary .mc-fold-chev { transform: rotate(90deg); }
 

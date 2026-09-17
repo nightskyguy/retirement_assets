@@ -3070,9 +3070,49 @@ of date" banner is still not cleared when an undo puts the plan back to the swep
   (spread 18%-24% against 10%-16% as solved). 99.5% needs N >= 199; 100% can never be corrected.
 - Survival is monotone in wealth and in spending on every one of 10,800 grid checks, which is what
   makes a PER-PATH solve possible: 14 runs a path gives every wealth rail of every preset at once
-  (1,400 runs at 100 paths against 1,800 for the two rails by PoS bisection). Not built.
+  (1,400 runs at 100 paths against 1,800 for the two rails by PoS bisection). Built in round 4
+  (below).
 - Cost is the binding constraint: 100 paths every 3 years = 12-26 s per household on the dev box
   (node, idle), 45-162 s at 3.5-6x slower; the start solve adds 0.6-0.9 s (3%-5%).
 - The harness's child processes read the harness file when they START, so editing it during a run
   changes every task launched afterwards. It was not edited during the run; the `--from` mode and
   the engine field were added after it finished.
+
+## P128 round 4 - the per-path solver, and what "every preset at once" costs  *(2026-09-16, v11.1859)*
+
+**Refining only the paths that can matter keeps every preset under one preset's old cost.** Each path's
+wealth threshold (at the plan's spending) and spending threshold (at the plan's wealth) is a bracket,
+narrowed only while it overlaps the range an asked-for order statistic can still take. Pinning every
+path to 1% took 59 runs a path a solved year on two bank households; refining took 23. On the eight
+households `rails_precision_harness.js --timing-only` times (node, idle, dev box, Historical, every 3
+years, 100 paths): 20.4-23.1 runs a path a solved year for all three presets, against 46 for the
+one-preset PoS bisection, and 7.0-14.4 s a household including the After-Tax Spend answer, against
+12.2-26.0 s for one preset before. At 3.5-6x slower: 24-86 s. The After-Tax Spend answer (400 paths,
+0.5% steps) is 0.8-1.9 s of it. Repeats of one household: 10.40, 10.28, 10.30 s.
+
+**The projection reads about 10% low at five times the paths.** Priced from the 100-path run, every 3
+years at 500 paths projected 53.13 s and took 59.57 s. Runs a path are measured, not fixed, and the
+cause of the difference was not measured.
+
+**Same answers as a direct search.** `optimizer_core.tests.js` (slow tier) checks every preset's
+rails, targets and rail spends against a 13-step bisection of the share of paths on 20 paths, within
+2.5%, and checks that the After-Tax Spend answer does not depend on the goal it starts from (within
+1.1% at 1.3x the goal).
+
+**Loose's 99.5% is still the worst path at 100 paths.** The count rule's least c with c / N >= 0.995 is
+100 of 100, the same path 100% took. It differs from N = 200 on (c = 199), where it stops climbing
+with N.
+
+**Two guardrails.** GK-style is a spend rule inside the plan; the rails are a reading of the plan. The
+panel shows whatever the switch says, and every solve runs with GK off, resumed from the plan's own
+state - GK-adjusted when the switch is on.
+
+**P130, the income charts.** A Cycle Brokerage harvest year sells far more than it spends and
+reinvests the rest (`SurplusBrok`); Cash Reserve banks surplus to Cash (`surplusCash`). The charts
+counted both as income and as spendable. `savedOf(r)` now leaves them out of Net Income, Total
+Income, Net (Spendable) and the bars' scale; Inflows vs Outflows already netted them (`netOut`).
+
+**Bands.** A Chart.js dataset has one fill, so three bands take a helper: the raise line fills to
+`'end'` (green), a line-less copy of it fills `'+1'` to the cut line (gray), and the cut line fills to
+`'start'` (light red). The copy needs its own `stack` - sharing the raise line's would stack it on
+top on a stacked axis - and is filtered out of the legend and the tooltip by `_railBand`.

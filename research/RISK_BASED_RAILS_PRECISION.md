@@ -1,6 +1,6 @@
 # Risk-based rails: how precise, how reachable, how costly (P128k)
 
-The risk-based rails panel (`?nerdknob=rails`, [RISK_BASED_GUARDRAILS.md](RISK_BASED_GUARDRAILS.md))
+The risk-based rails panel under the Charts tab's charts ([RISK_BASED_GUARDRAILS.md](RISK_BASED_GUARDRAILS.md))
 solves Tharp and Fitzpatrick's probability-of-success guardrails along a live plan. Before building
 anything more on it - an After-Tax Spend answer from the same run (`P129`), a "higher precision"
 button, 100 paths every 3 years as the default - the user asked for heavy testing, with one worry
@@ -24,6 +24,28 @@ rates may need adjustment."*
    which is 45 seconds to nearly 3 minutes on the ten-year-old laptops the page is written for. The
    After-Tax Spend answer adds 3% to 5% to that.
 
+**What was decided on 2026-09-16, and built in 11.1859** (the numbers below are the first run's
+unless a section says otherwise):
+
+- **100 paths every 3 years stays the default**, and there is no higher-precision button for now.
+- **Loose's raise rail asks for 99.5% instead of 100%** (user: "Use 99.5% instead of 100%"). At the
+  default 100 paths that still takes all 100 paths to survive - the solver's count rule, section 3 -
+  so the answer is the same as before. From 200 paths on it stops climbing and settles toward 99.5%.
+- **Monte Carlo starts on Synth GBM**, and the rails follow the tab's method unless the panel names
+  another (user: "Historical is good, but not pessimistic enough").
+- **The solver was rebuilt per path** - the first open question at the end. It keeps each path's two
+  thresholds as brackets and narrows only the paths that could still decide an answer, so one job
+  answers every preset and switching presets only redraws. It takes 20 to 23 runs a path a solved year
+  for all three presets, where the first run's solver took 46 for Normal alone: 7 to 14 seconds a
+  household instead of 12 to 26 (section 6). A test in `optimizer_core.tests.js` checks its answers
+  against a direct search of the share of paths.
+- **The After-Tax Spend answer is built** (`P129`): from the plan's start, on its own 400 paths, in
+  steps of 0.5%, rounded to $100 (user: "There isn't really enough precision to justify any specific
+  rounding"). It is 0.8 to 1.9 seconds of the job.
+- **The search now reaches 16x**, for wealth and for spending, where it stopped at 4x. No path in any
+  pool needs more (section 1). An answer beyond the search ends its line on the chart instead of
+  drawing the edge.
+
 Produced by [`.test_harnesses/rails_precision_harness.js`](../.test_harnesses/rails_precision_harness.js)
 on engine v11.1857 (unchanged in 11.1858), 2026-09-16: 10.7 million engine runs for the pools plus the
 jobs, 51 minutes on 16 processes. Every number below is printed by that script (`--from` re-prints
@@ -41,9 +63,9 @@ plan; its rows are left out of this report and it changed no conclusion.
 |---|---|
 | **PoS** | probability of success: the share of market paths on which the plan funds every remaining year, by the Monte Carlo tab's own test (`yearIsRuined`: a year is ruined when its year-end portfolio cannot cover that year's spending less guaranteed income) |
 | **solve** | one run of the live rails job (`runRailsJob`, `montecarlo/rails_engine.js`): at each solved year, PoS as planned, the target spend, the raise rail, the cut rail, and the spend back on target at each rail |
-| **raise rail / cut rail** | the wealth at which the plan's own spending reaches the preset's raise PoS (99% for Tight and Normal, 100% for Loose) or falls to its cut PoS (80% / 70% / 40%). Reported here as a multiple of the TotalNetWealth the plan actually has |
+| **raise rail / cut rail** | the wealth at which the plan's own spending reaches the preset's raise PoS (99% for Tight and Normal; 100% for Loose in these runs, 99.5% since) or falls to its cut PoS (80% / 70% / 40%). Reported here as a multiple of the TotalNetWealth the plan actually has |
 | **target spend** | the spending that puts the plan exactly at the preset's target PoS (95% / 90% / 80%), as a multiple of the plan's own spending |
-| **start solve** | the After-Tax Spend answer `P129` proposes: the spending, from the plan's own first year, at which PoS is 90% |
+| **start solve** | the After-Tax Spend answer `P129` proposes: the spending, from the plan's own first year, at which PoS is 90%. Run here at 100 and 500 paths; the page solves it on 400 |
 | **`s` of a path** | the smallest wealth multiple at which that one market path survives, the plan's spending held |
 | **`m` of a path** | the largest spending multiple at which that one market path survives, the plan's wealth held |
 | **pool** | 6,000 market paths for one household and one method, seed 42, each with its `s` and `m` found by a 12-step bisection between 0.05x and 64x (`s`) or 0.02x and 16x (`m`) |
@@ -52,7 +74,7 @@ plan; its rows are left out of this report and it changed no conclusion.
 | **bias** | the mean of the slices' answers over the whole pool's answer, less 1 |
 | **spread** | the standard deviation of the answers over their reference - the pool's answer for slices, the mean for seeds. How far one run's answer typically sits from another's |
 | **lands on** | for a raise rail answered from N paths: the share of the whole pool that needs no more wealth than that answer. Which percentile "99%" actually turned out to mean |
-| **clamped** | an answer the live solve reports at the edge of its search: wealth beyond 4x or below 0.05x, spending beyond 4x or below 0.1x |
+| **clamped** | an answer at the edge of the live solve's search. The first run's solver searched wealth from 0.05x to 4x and spending from 0.1x to 4x; the rebuilt one searches both up to 16x |
 | **as solved / corrected** | the count of surviving paths a q% answer demands: the solver's rule is the least c with c / N >= q; the corrected rule is c = q x (N + 1), capped at N (section 3) |
 | **cadence** | years between solved years; the years between are interpolated in today's dollars |
 | **Historical** | the Monte Carlo tab's block bootstrap of 1928-2025, with 25% of paths opening on one of history's worst starts |
@@ -114,8 +136,9 @@ At the first full year, the wealth each share of paths needs, as a multiple of w
 | `single-filer-long-horizon` | 0.46x / 0.58x | 0.62x / 0.86x | 0.80x / 1.22x | 1.09x / 1.46x |
 | `soft-cap-underfunded` | 1.33x / 1.87x | 1.80x / 3.02x | 2.34x / 4.58x | 3.18x / 5.49x |
 
-**No path, in any method, fails at every wealth up to 64x.** The share that needs more than the live
-solve's 4x bracket is at most 0.25% (`soft-cap-underfunded`, Synth AAM). So the synthetic methods do
+**No path, in any method, fails at every wealth up to 64x.** The share that needs more than the first
+run's 4x bracket is at most 0.25% (`soft-cap-underfunded`, Synth AAM), and no path needs more than
+16x, where the rebuilt solve stops looking. So the synthetic methods do
 not invariably stop below 100%. They report a lower PoS at the plan's own wealth, and they need more
 wealth to reach any rail - 1.46x to 5.58x for every one of 6,000 paths, against 1.09x to 4.62x on
 Historical - but every rail is there to be found.
@@ -150,7 +173,7 @@ of the pool each lands on (all three methods agree to 0.03 points):
 sits, on average, at the 98th percentile of the paths it was drawn from. A 100% answer is decided by
 the worst path, which sits at the 99th. More paths push both toward what was asked - and push 100%
 past 99.9%, without limit. So Loose's 100% raise rail at the default 100 paths is, in practice, a 99%
-rail. Read from the bias row (arithmetic, not a printed number): against a 100-path run of the same
+rail. (Loose now asks for 99.5%, which stops that climb from 200 paths on; see the decisions at the top.) Read from the bias row (arithmetic, not a printed number): against a 100-path run of the same
 plan, a 500-path run puts it 22% to 32% higher and a 1,000-path run 37% to 44% higher, depending on
 the method.
 
@@ -244,7 +267,7 @@ raise-rail column barely improves from every 3 to every 2, which says most of it
 400-path solve's own noise rather than the straight line. The job at cadence 3 was checked to be
 exactly the every-year job's every third year, which is what makes this comparison exact.
 
-Cost, one job at a time on an idle process (Historical):
+Cost of the first run's solver, Normal only, one job at a time on an idle process (Historical):
 
 | household | plan years | solves | runs | every 3, 100 paths | + start solve | every 5, 200 (proj.) | every 3, 500 (proj.) | every 3, 1,000 (proj.) |
 |---|---|---|---|---|---|---|---|---|
@@ -262,12 +285,33 @@ own (`railsProjectMs`), priced from the 100-path run; for 500 paths it said 102.
 107.13 s. **On a machine 3.5 to 6 times slower** - single-core speed is what matters to a browser -
 100 paths every 3 years plus the start solve is **44.9 to 161.6 seconds** (the harness's own
 slower-machine column), and a 500-path run is 3.6 to 13 minutes (arithmetic on the 500-path column).
-Every 3 years at 100 paths is about 20% cheaper than today's default of every 5 at 200.
+Every 3 years at 100 paths is about 20% cheaper than the earlier default of every 5 at 200.
+
+**The rebuilt solver** (11.1859), every preset at once plus the After-Tax Spend answer on its own 400
+paths, same machine, printed by `--timing-only` (which printed the page title as 11.1858: it ran
+before the release was stamped):
+
+| household | plan years | solves | runs | runs a path a year | every 3, 100 paths | of it, After-Tax Spend | every 5, 200 (proj.) | every 3, 500 (proj.) | every 3, 1,000 (proj.) |
+|---|---|---|---|---|---|---|---|---|---|
+| `bracket-filler-texas` | 33 | 11 | 26,269 | 22.1 | 10.28 s | 1,473 ms | 13.1 s | 47.2 s | 93.0 s |
+| `mixed-portfolio-couple` | 33 | 11 | 25,586 | 22.1 | 10.50 s | 938 ms | 13.3 s | 49.4 s | 97.8 s |
+| `long-widowhood` | 38 | 13 | 28,390 | 20.4 | 14.39 s | 1,919 ms | 17.8 s | 65.1 s | 128.5 s |
+| `age-gap-ira-heavy-ca` | 25 | 8 | 18,962 | 21.3 | 7.31 s | 1,339 ms | 9.3 s | 32.0 s | 62.8 s |
+| `modest-balances-little-surplus` | 29 | 10 | 25,264 | 23.1 | 11.41 s | 1,873 ms | 14.1 s | 49.7 s | 97.7 s |
+| `high-spend-large-ira` | 26 | 9 | 22,885 | 23.0 | 10.37 s | 1,796 ms | 13.0 s | 45.6 s | 89.4 s |
+| `single-filer-long-horizon` | 30 | 10 | 24,512 | 22.7 | 10.37 s | 1,368 ms | 13.1 s | 47.1 s | 92.7 s |
+| `soft-cap-underfunded` | 24 | 8 | 17,583 | 20.4 | 6.98 s | 787 ms | 8.8 s | 31.0 s | 61.1 s |
+
+"Runs a path a year" leaves out the After-Tax Spend answer, which the projections add back at its own
+cost. Three runs of the first household took 10.40, 10.28 and 10.30 seconds. For 500 paths the
+projection said 53.13 s and the run took 59.57 s, so read the projected columns as about 10% low.
+**On a machine 3.5 to 6 times slower** the default job is **24.4 to 86.3 seconds** (the harness's own
+column), and a 500-path run is about 2 to 6.5 minutes (arithmetic on the 500-path column).
 
 ### 7. Measured on the page, not by this harness: what runs beside what
 
-Default page plan (25 years), Normal, every 3 years, 100 paths, Historical, over http on the same
-machine, with the browser pane hidden - so Chrome deferred some drawing, which these numbers do not
+The first run's solver on the default page plan (25 years), Normal, every 3 years, 100 paths,
+Historical, over http on the same machine, with the browser pane hidden - so Chrome deferred some drawing, which these numbers do not
 count:
 
 | case | rails | Stress Test refresh | My Plan Only (400 paths) | main-thread tasks over 50 ms |
@@ -287,9 +331,9 @@ page's thread in 16 ms slices, which kept every task under 50 ms but made the so
 
 ---
 
-## What this means for the decisions it was run for
+## What it meant for the decisions it was run for
 
-These are measurements, not decisions; the choices stay with the user.
+These were measurements, not decisions. What the user chose is listed at the top.
 
 - **100 paths every 3 years** is enough for the target spend, the cut rails and the After-Tax Spend
   answer (a few percent run to run), and every 3 years is close enough to solving every year. It is
@@ -306,11 +350,11 @@ These are measurements, not decisions; the choices stay with the user.
 
 ## Open questions this report does not settle
 
-- **A per-path solve.** Finding each path's `s` once costs 14 runs a path, and gives every wealth rail
-  of every preset at once; bisecting PoS costs 9 x N runs per rail. At 100 paths that is 1,400 runs
-  against 1,800 for the two rails. It would not reduce noise - that is set by N - but it would make a
-  preset switch free and allow a smoothed estimate between paths. Not built; not measured beyond this
-  arithmetic.
+- **A per-path solve** was the open question here, and is built (see the top). It did not reduce
+  the noise, which is set by N.
+- **A smoothed estimate between paths.** A weighted mean of the paths around an answer, rather than
+  one path, could steady the raise rails without more paths. The per-path solver narrows only the
+  paths nearest an answer, so it would have to narrow more of them. Not built; not measured.
 - **Mid-plan and late years.** The pools were solved at the first full year (and the start); the job
   and cadence parts cover every year, but the reach and correction tables do not.
 - **Other presets in the job.** Only Normal was run seed after seed; Tight and Loose were measured

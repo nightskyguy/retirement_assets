@@ -82,11 +82,6 @@ const GOAL_FIRST = new URLSearchParams(location.search).get('nerdknob') === 'goa
 //   research/CONSTANT_SPLIT.md + .test_harnesses/split_fine_harness.js, split_mc_harness.js
 const SPLIT_FEATURE = new URLSearchParams(location.search).get('nerdknob') === 'split';
 
-// P128. Risk-based rails drawn on the live charts: the literal ?nerdknob=rails, like goal-first. A
-// calibration instrument (what the solve costs is half of what it shows), not a plan input. See the
-// RISK-BASED RAILS block beside updateCharts.
-const RAILS_FEATURE = new URLSearchParams(location.search).get('nerdknob') === 'rails';
-
 // MONTE_DEMO: the ?montecarlo teaching demo. Lands the reader on the Monte Carlo tab in Synthetic
 // mode with Seed/Paths/Input Distributions exposed and auto-runs the Experiment (see
 // runMCExperiment in mc_tab.js). Deliberately NARROW: unlike NERD_KNOBS it does NOT unlock the
@@ -245,8 +240,8 @@ function applyNerdKnobVisibility() {
     // still hide it (and force-revert it) the way it hides every other gated surface.
     const goalFirstWrap = document.getElementById('goalfirst-panel');
     if (goalFirstWrap) goalFirstWrap.style.display = goalFirstOn() ? '' : 'none';
-    // P128. The risk-based rails panel: ?nerdknob=rails AND the knob on, the same two-notch gate.
-    // Turning the knob off also cancels a solve in flight and takes the rails off the charts.
+    // P128. The risk-based rails panel is for everyone; the knob shows its cadence, path count and
+    // timing readout.
     if (typeof railsKnobChanged === 'function') railsKnobChanged();
     buildGoalFirstObjectiveOptions();
     renderObjectiveBlurb();
@@ -2840,8 +2835,8 @@ const columnCategories = {
     // Phase 22: Guyton-Klinger
     'gkSpend':   ['Summary', 'Income'],
     'gkAdj':     ['Summary', 'Income'],
-    // P128: risk-based rails. Only in a log a rails solve was merged into (?nerdknob=rails), so the
-    // columns exist only then; analyzeColumnContent hides them while they are empty anyway.
+    // P128: risk-based rails. Only in a log a rails solve was merged into, so the columns exist only
+    // after a solve; analyzeColumnContent hides them while they are empty anyway.
     'railLower':   ['Spending'],
     'railUpper':   ['Spending'],
     'railPoS%':    ['Spending'],
@@ -4583,7 +4578,7 @@ function setIncomeChartView(v) {
 // #8 - build the lower chart for the non-default views. `combined` stays inline in updateCharts.
 // Receives the closures it needs (adj, sharedTooltip, mkLine, visibleSum) so it shares the exact
 // dollar-adjustment and tooltip styling of the main charts.
-function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) {
+function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum, savedOf) {
     const labels = log.map(r => r.year);
     const legendLabels = { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 16 };
     const dollarTicks = { callback: v => Math.round(v).toLocaleString() };
@@ -4593,8 +4588,9 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
         incomeChart = new Chart(ctxI, {
             type: 'line',
             data: { labels, datasets: [
-                mkLine('Total Income',    '#2980b9', r => (r.totalIncome ?? 0) * adj(r)),
-                mkLine('Net (Spendable)', '#27ae60', r => (visibleSum(r) - r.totalTax) * adj(r)),
+                // P130. What the year saved is neither income nor spendable here (see savedOf).
+                mkLine('Total Income',    '#2980b9', r => Math.max(0, (r.totalIncome ?? 0) - savedOf(r)) * adj(r)),
+                mkLine('Net (Spendable)', '#27ae60', r => Math.max(0, visibleSum(r) - r.totalTax - savedOf(r)) * adj(r)),
                 { ...mkLine('Spend Goal', '#e67e22', r => (r.spendGoal ?? 0) * adj(r)), borderDash: [6, 4], pointRadius: 0 },
                 // P128. The spending rails live on this view and not on Income & Expenses.
                 ...railsChartDatasets(log, adj, v => v, 'spend'),
@@ -4803,36 +4799,42 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
 }
 
 // ============================================================================
-// P128  RISK-BASED RAILS ON THE LIVE CHARTS  (?nerdknob=rails)
+// P128  RISK-BASED RAILS ON THE LIVE CHARTS
 // ============================================================================
-// A calibration instrument first (user, 2026-09-16: "to help me determine how slow / fast the
-// change can be made"), a feature second. montecarlo/rails_engine.js does the solving, in its own
-// worker slot beside the Monte Carlo sweep; this block owns the panel, the auto-run, the merge into
-// the live log, the two charts' datasets and the timing readout.
+// Tharp and Fitzpatrick's probability-of-success guardrails, solved along the plan on screen and
+// drawn over it. montecarlo/rails_engine.js does the solving, in its own worker slot beside the Monte
+// Carlo sweep, for every preset at once; this block owns the panel, the auto-run, the merge into the
+// live log, the two charts' datasets, the After-Tax Spend answer (P129) and, behind the nerdknob, the
+// cadence, the path count and the timing readout.
 //
-// NOTHING HERE IS A PLAN INPUT. The panel sits outside .sidebar and its controls are data-no-share,
-// so the rails never reach the share link, a saved plan, getInputs() or the strategy identity
-// (selectionOf / sameStrategySelection). They change what is drawn, never a projected number.
+// FOR EVERYONE since 2026-09-16 (user: "For non-nerdknob users, leave it off and expose it"): the
+// panel shows without any knob, auto-run starts off, and anyone without the knob runs the defaults.
 //
-// Gated one notch deeper than the nerdknob, like goal-first: the literal ?nerdknob=rails (RAILS_FEATURE,
-// at the top of this file with the other gates), with the knob still on, so the Documentation-page
-// checkbox can hide it again.
+// NOT the Guardrails switch. The page has two guardrails: Guardrails (GK-style) is a spending rule
+// inside the plan, and these rails are a reading of the plan. They show whatever that switch says,
+// and every solve runs with it off (user, 2026-09-16: "The RBG should be shown independent of the
+// GK-style").
+//
+// NOTHING HERE IS A PLAN INPUT, except the After-Tax Spend that "Use it" writes on request. The panel
+// sits outside .sidebar and its controls are data-no-share, so the rails never reach the share link,
+// a saved plan, getInputs() or the strategy identity (selectionOf / sameStrategySelection).
 function railsOn() {
-    return RAILS_FEATURE && NERD_KNOBS && typeof RailsEngine !== 'undefined';
+    return typeof RailsEngine !== 'undefined';
 }
 
 const RailsState = {
-    result: null,          // the last completed job's results message
-    fingerprint: null,     // what that job solved for (railsFingerprint)
+    result: null,           // the last completed job's results message
+    fingerprint: null,      // what that job solved for (railsFingerprint)
+    startFingerprint: null, // what its After-Tax Spend answer depends on (railsStartFingerprint)
     // The solve before it, KEPT when a new one lands and drawn faded beside it, so a change to the
     // plan or the settings shows up as the difference between two sets of rails (user, 2026-09-16).
     previous: null,
     previousFixedMs: null,
     running: false,
-    runFingerprint: null,  // what the job in flight is solving for
+    runFingerprint: null,   // what the job in flight is solving for
     startedAt: 0,
     progress: 0,
-    fixedMs: null,         // wall time the job could not see: starting the worker, moving results
+    fixedMs: null,          // wall time the job could not see: starting the worker, moving results
     error: null,
     debounce: null,
     ticker: null,
@@ -4840,24 +4842,25 @@ const RailsState = {
 // Long enough to swallow the sidebar's own 400ms recalc debounce and a second quick edit.
 const RAILS_AUTORUN_DEBOUNCE_MS = 900;
 
+// The panel's settings. Without the nerdknob the cadence and path count are the defaults, whatever
+// the hidden boxes still hold from a knob session.
 function railsSettings() {
     const num = (id, d) => {
         const v = Number(document.getElementById(id)?.value);
-        return Number.isFinite(v) && v > 0 ? v : d;
+        return NERD_KNOBS && Number.isFinite(v) && v > 0 ? v : d;
     };
-    const [pLo, pHi] = RailsEngine.RAILS_PATHS_RANGE;
     return {
-        preset:    document.getElementById('rails-preset')?.value || 'normal',
-        method:    document.getElementById('rails-method')?.value || 'tab',
-        cadence:   RailsEngine.railsCadence(num('rails-cadence', 5)),
-        paths:     Math.min(pHi, Math.max(pLo, Math.round(num('rails-paths', 200)))),
-        auto:      !!document.getElementById('rails-auto')?.checked,
-        showPrevious: document.getElementById('rails-show-prev')?.checked !== false,
+        preset:  document.getElementById('rails-preset')?.value || 'normal',
+        method:  document.getElementById('rails-method')?.value || 'tab',
+        cadence: RailsEngine.railsCadence(num('rails-cadence', RailsEngine.RAILS_DEFAULT_CADENCE)),
+        paths:   RailsEngine.railsPaths(num('rails-paths', RailsEngine.RAILS_DEFAULT_PATHS)),
+        auto:    !!document.getElementById('rails-auto')?.checked,
+        showPrevious: !!document.getElementById('rails-show-prev')?.checked,   // off by default (user, 2026-09-16)
     };
 }
 
 // The Monte Carlo method the panel asks for (user, 2026-09-16: "let me select which of the MC methods
-// to use"): one of the tab's three, or whatever the tab itself is set to.
+// to use"): one of the tab's three, or whatever the tab itself is set to - the default.
 const RAILS_METHODS = ['bootstrap', 'gbm', 'aam'];
 function railsTabMethod() {
     return document.getElementById('mc-sim-mode')?.value ?? 'gbm';
@@ -4881,15 +4884,27 @@ function railsModelCfg(base) {
     };
 }
 
-// Everything a solve depends on, and nothing else. A cosmetic toggle cannot move it because it is not
-// in here: Current $ / Future $, the chart views and the person view never reach getInputs().
+// Everything a solve depends on, and nothing else. The preset is not in it: every preset is solved
+// at once, so switching presets only redraws. Nor is anything cosmetic: Current $ / Future $, the
+// chart views and the person view never reach getInputs().
 function railsFingerprint(base = getInputs(), s = railsSettings()) {
-    return JSON.stringify({ base, preset: s.preset, cadence: s.cadence, paths: s.paths,
-                            model: railsModelCfg(base) });
+    return JSON.stringify({ base, cadence: s.cadence, paths: s.paths, model: railsModelCfg(base) });
+}
+
+// What the After-Tax Spend answer depends on: the plan WITHOUT its After-Tax Spend - the answer is in
+// dollars and comes out the same whatever goal it started from - and the market model. Using the
+// answer therefore does not make it stale; any other change does.
+function railsStartFingerprint(base = getInputs()) {
+    const { spendGoal, ...rest } = base;
+    return JSON.stringify({ base: rest, model: railsModelCfg(base) });
 }
 
 function railsIsStale() {
     return !!RailsState.result && RailsState.fingerprint !== railsFingerprint();
+}
+
+function railsStartIsCurrent() {
+    return !!RailsState.result?.start && !_replayState && RailsState.startFingerprint === railsStartFingerprint();
 }
 
 function runRails() {
@@ -4900,15 +4915,16 @@ function runRails() {
     const base = getInputs();
     const s = railsSettings();
     const fingerprint = railsFingerprint(base, s);
+    const startFingerprint = railsStartFingerprint(base);
     Object.assign(RailsState, { running: true, runFingerprint: fingerprint, startedAt: performance.now(),
                                 progress: 0, error: null });
     railsStopTicker();
     RailsState.ticker = setInterval(railsRenderStatus, 250);
     railsRenderPanel();
     runMCWorker(
-        { kind: 'rails', base, preset: s.preset, cadence: s.cadence, numPaths: s.paths, ...railsModelCfg(base) },
+        { kind: 'rails', base, cadence: s.cadence, numPaths: s.paths, ...railsModelCfg(base) },
         pct => { if (RailsState.runFingerprint === fingerprint) RailsState.progress = pct; },
-        msg => railsComplete(msg, fingerprint));
+        msg => railsComplete(msg, fingerprint, startFingerprint));
 }
 
 function cancelRails() {
@@ -4923,9 +4939,9 @@ function railsStopTicker() {
     RailsState.ticker = null;
 }
 
-function railsComplete(msg, fingerprint) {
+function railsComplete(msg, fingerprint, startFingerprint) {
     // A job that a newer one replaced never reports: its worker was terminated. This guard covers the
-    // rest - a cancel, or the knob going off, while it ran.
+    // rest - a cancel while it ran.
     if (fingerprint !== RailsState.runFingerprint) return;
     Object.assign(RailsState, { running: false, runFingerprint: null });
     railsStopTicker();
@@ -4938,10 +4954,11 @@ function railsComplete(msg, fingerprint) {
     // compare what the old run PROJECTED for these settings with what they just took.
     Object.assign(RailsState, {
         previous: RailsState.result, previousFixedMs: RailsState.fixedMs,
-        result: msg, fingerprint, error: null,
+        result: msg, fingerprint, startFingerprint, error: null,
         fixedMs: Math.max(0, (msg.wallMs ?? msg.cost.totalMs) - msg.cost.totalMs),
     });
     railsRedraw({ charts: true });
+    updateSuggestSpendTooltip();
     // The plan may have moved while the job ran; with auto-run on, that is solved in turn.
     railsScheduleAutoRun();
 }
@@ -4957,7 +4974,8 @@ function railsApplyToLog(log) {
     for (const r of log) for (const f of FIELDS) delete r[f];
     // Hidden during a replay: the rails describe the plan, and the log on screen is a replayed path.
     if (!railsOn() || !RailsState.result || _replayState) return had;
-    const rows = RailsEngine.railsRowFields(RailsState.result, log, { stale: railsIsStale() });
+    const rows = RailsEngine.railsRowFields(RailsState.result, log,
+        { stale: railsIsStale(), preset: railsSettings().preset });
     log.forEach((r, i) => {
         const f = rows[i] || {};
         for (const k of FIELDS) r[k] = f[k] ?? null;
@@ -4982,11 +5000,33 @@ function railsPreviousToggled() {
     railsRenderPanel();
 }
 
-// Any panel control. A changed setting makes the rails on screen stale, and with auto-run on it is
-// also a reason to solve again.
+// The preset: every preset was solved, so this only redraws - never stale, never a solve.
+function railsPresetChanged() {
+    railsRedraw({ charts: true });
+    updateSuggestSpendTooltip();
+}
+
+// The method, the cadence or the path count. A changed one makes the rails on screen stale, and with
+// auto-run on it is also a reason to solve again.
 function railsSettingsChanged() {
     railsRedraw();
+    updateSuggestSpendTooltip();
     railsScheduleAutoRun();
+}
+
+// Auto-run. Ticking it on solves at once when what is on screen is not current (user, 2026-09-16:
+// "'Clicking it on' should cause the build to run").
+function railsAutoToggled() {
+    railsRenderPanel();
+    if (!railsSettings().auto) {
+        clearTimeout(RailsState.debounce);
+        RailsState.debounce = null;
+        return;
+    }
+    const fp = railsFingerprint();
+    if (RailsState.result && RailsState.fingerprint === fp) return;
+    if (RailsState.running && RailsState.runFingerprint === fp) return;
+    runRails();
 }
 
 // Called by runSimulation() after every run of the plan.
@@ -5013,14 +5053,14 @@ function railsScheduleAutoRun() {
     }, RAILS_AUTORUN_DEBOUNCE_MS);
 }
 
-// The knob went on or off at runtime (or the page just loaded).
+// Page load, and the nerdknob going on or off. The panel is always there; what the solve costs -
+// cadence, paths, the timing readout - is the knob's.
 function railsKnobChanged() {
     const panel = document.getElementById('rails-panel');
     if (panel) panel.style.display = railsOn() ? '' : 'none';
-    if (!railsOn()) {
-        if (RailsState.running) cancelRails();
-        clearTimeout(RailsState.debounce);
-        RailsState.debounce = null;
+    for (const id of ['rails-cadence-wrap', 'rails-paths-wrap', 'rails-timing']) {
+        const el = document.getElementById(id);
+        if (el) el.style.display = NERD_KNOBS ? '' : 'none';
     }
     railsBindModelInputs();
     railsRedraw();
@@ -5047,6 +5087,14 @@ function railsFmtSecs(s) {
 function railsFmtMs(ms) {
     return ms < 1000 ? Math.round(ms) + ' ms' : railsFmtSecs(ms / 1000);
 }
+function railsMoney(v) {
+    return '$' + Math.round(v).toLocaleString();
+}
+// The After-Tax Spend answer, rounded to $100 (user, 2026-09-16: "Round to 100s. There isn't really
+// enough precision to justify any specific rounding").
+function railsRound100(v) {
+    return Math.round(v / 100) * 100;
+}
 
 // What the settings on screen would take, priced from the last run. Null before any run.
 function railsProjection(s = railsSettings()) {
@@ -5070,6 +5118,7 @@ function railsRenderPanel() {
     const tabOpt = document.querySelector('#rails-method option[value="tab"]');
     if (tabOpt) tabOpt.textContent = `Same as the Monte Carlo tab: ${railsMethodLabel(railsTabMethod())}`;
     railsRenderStatus();
+    railsRenderStart();
     railsRenderTiming();
 }
 
@@ -5082,7 +5131,7 @@ function railsHeadline() {
     const r = RailsState.result;
     if (!r) return 'not solved yet';
     const y0 = r.years[0];
-    const P = r.preset;
+    const P = r.presets[railsSettings().preset];
     const where = !y0 ? 'no full year to solve'
         : `${(y0.pos * 100).toFixed(1)}% chance from ${y0.year}, `
           + (y0.pos < P.lower ? 'below the cut rail' : y0.pos >= P.upper ? 'at or above the raise rail' : 'between the rails');
@@ -5113,19 +5162,19 @@ function railsRenderStatus() {
     }
     const r = RailsState.result;
     if (!r) {
-        el.textContent = 'Not solved yet. Run draws the rails on the Balances chart and the Income vs Net view, '
-            + 'and adds them to Annual Details, under Spending.';
+        el.textContent = 'Not solved yet. Run draws the rails and finds the After-Tax Spend for the preset\'s '
+            + 'chance of success.';
         return;
     }
-    const describe = x => `${x.preset.label}, ${railsMethodLabel(x.simulationMode)}, `
-        + `every ${x.cadence} ${x.cadence === 1 ? 'year' : 'years'}, ${x.numPaths} paths, ${x.years.length} solved years`;
+    const s = railsSettings();
+    const describe = x => `${railsMethodLabel(x.simulationMode)}, every ${x.cadence} ${x.cadence === 1 ? 'year' : 'years'}, `
+        + `${x.numPaths} paths`;
     const head = railsIsStale()
-        ? `Stale: the plan or these settings changed after this solve (${describe(r)}). Run to solve again; `
-          + 'this one will stay on the charts, faded, as the previous rails.'
-        : `Solved for this plan: ${describe(r)}.`;
+        ? `Stale (${describe(r)}): the plan or these settings changed. Run again${s.showPrevious ? '; this solve stays, faded' : ''}.`
+        : `Solved: ${describe(r)}.`;
     const y0 = r.years[0];
     if (!y0) {
-        el.textContent = `${head} The plan is too short to have a full year to solve.`;
+        el.textContent = `${head} The plan has no full year to solve.`;
         return;
     }
     // The first solved year, read the way the article reads it: where the plan sits against the rails,
@@ -5133,44 +5182,120 @@ function railsRenderStatus() {
     const log = lastSimulationLog || [];
     const factorAt = year => log.find(x => x.year === year)?.inflationFactor || 1;
     const cur = document.getElementById('show-current-dollars')?.checked;
-    const money = (v, year) => '$' + Math.round(cur ? v / factorAt(year) : v).toLocaleString();
+    const money = (v, year) => railsMoney(cur ? v / factorAt(year) : v);
     const pct = v => (v * 100).toFixed(1) + '%';
-    const P = r.preset;
+    const P = r.presets[s.preset];
+    const p0 = y0.presets[s.preset];
+    const amount = (v, clamped, year) => v != null ? money(v, year)
+        : clamped === 'high' ? 'beyond the search' : clamped === 'low' ? 'below the search' : 'not solved';
+    const target = amount(p0.spendTarget, p0.clamped.target, y0.year);
     const where = y0.pos < P.lower
-        ? `below the ${pct(P.lower)} cut rail, so the rule says cut ${y0.year} spending to ${money(y0.spendTarget, y0.year)}`
+        ? `below the ${pct(P.lower)} cut rail: cut spending to ${target}`
         : y0.pos >= P.upper
-        ? `at or above the ${pct(P.upper)} raise rail, so the rule says ${y0.year} spending can rise to ${money(y0.spendTarget, y0.year)}`
-        : `between the rails, so the rule leaves ${y0.year} spending at ${money(y0.planSpend, y0.year)}`;
+        ? `at or above the ${pct(P.upper)} raise rail: spending can rise to ${target}`
+        : `between the rails: spending stays ${money(y0.planSpend, y0.year)}`;
     const prev = RailsState.previous;
-    el.textContent = `${head} From the start of ${y0.year}, the first full year, the plan's chance of success `
-        + `is ${pct(y0.pos)}: ${where}. Against TotalNetWealth at the end of ${y0.fromYear} of `
-        + `${money(y0.wealth, y0.fromYear)}, the cut rail is ${money(y0.railLower, y0.fromYear)} and the raise rail `
-        + `${money(y0.railUpper, y0.fromYear)}.`
-        + (prev && railsSettings().showPrevious ? ` The faded rails are the solve before (${describe(prev)}).` : '');
+    el.textContent = `${head} ${y0.year}: ${pct(y0.pos)} chance, ${where}. `
+        + `TotalNetWealth at the end of ${y0.fromYear}: ${money(y0.wealth, y0.fromYear)}; `
+        + `cut rail ${amount(p0.railLower, p0.clamped.lower, y0.fromYear)}, `
+        + `raise rail ${amount(p0.railUpper, p0.clamped.upper, y0.fromYear)}.`
+        + (prev && s.showPrevious ? ` Faded: the solve before (${describe(prev)}).` : '');
+}
+
+// P129. The After-Tax Spend that gives the plan the preset's chance of success, from its own start.
+function railsStartAnswer(s = railsSettings()) {
+    const r = RailsState.result;
+    if (!r?.start) return null;
+    return { ...r.start.answers[s.preset], preset: r.presets[s.preset], paths: r.start.paths,
+             pos: r.start.pos, year: r.startYear, goalAtSolve: r.start.spendGoal };
+}
+
+// "a 90% chance", "an 80% chance", "an 11% chance".
+function railsArticle(n) {
+    return /^(8|11|18)/.test(String(n)) ? 'an' : 'a';
+}
+
+function railsRenderStart() {
+    const el = document.getElementById('rails-start');
+    if (!el) return;
+    const a = railsStartAnswer();
+    if (!a || _replayState) { el.innerHTML = ''; return; }
+    const pct = Math.round(a.preset.target * 100);
+    const mine = Number(val('spendGoal')) || 0;
+    const current = railsStartIsCurrent();
+    const btn = (label, fn, title, enabled = true) =>
+        `<button type="button" class="tog" onclick="${fn}" title="${title}"${enabled ? '' : ' disabled'}>${label}</button>`;
+    let answer;
+    if (a.spendGoal != null) answer = `<strong>${railsMoney(railsRound100(a.spendGoal))}</strong>`;
+    else if (a.clamped === 'high') answer = `<strong>more than ${railsMoney(mine * RailsEngine.RAILS_SPEND_RANGE[1])}</strong>`;
+    else answer = `<strong>less than ${railsMoney(mine * RailsEngine.RAILS_SPEND_RANGE[0])}</strong>`;
+    const usable = current && a.spendGoal != null && railsRound100(a.spendGoal) !== Math.round(mine);
+    const restore = _priorSpendGoal !== null
+        ? ' ' + btn(`Restore ${railsMoney(_priorSpendGoal)}`, 'railsRestoreSpend()', 'Put After-Tax Spend back to what it was before.')
+        : '';
+    // The chance of success belongs to the goal the solve started from, which may no longer be the
+    // goal on screen (after Use it, it is not).
+    const solvedFrom = Math.round(a.goalAtSolve ?? mine);
+    const chance = `${(a.pos * 100).toFixed(0)}%`;
+    const yours = a.spendGoal != null && railsRound100(a.spendGoal) === Math.round(mine)
+        ? `Set; ${railsMoney(solvedFrom)} had ${chance}.`
+        : solvedFrom === Math.round(mine) ? `Yours, ${railsMoney(mine)}, has ${chance}.` : `${railsMoney(solvedFrom)} had ${chance}.`;
+    const how = `${a.preset.label} preset, from ${a.year}, on ${a.paths} market paths`;
+    el.innerHTML = `<span title="${how}">After-Tax Spend for ${railsArticle(pct)} ${pct}% chance: ${answer}.</span> ${yours} `
+        + (current ? '' : '<em>Before your last change; Run to update.</em> ')
+        + btn('Use it', 'railsUseStartSpend()',
+              'Set After-Tax Spend to this amount, rounded to $100, and re-run the plan. Restore puts it back.', usable)
+        + restore;
+}
+
+function railsUseStartSpend() {
+    const a = railsStartAnswer();
+    if (!a || a.spendGoal == null || !railsStartIsCurrent()) return;
+    if (_priorSpendGoal === null) _priorSpendGoal = Number(val('spendGoal')) || 0;
+    DisplayHelpers.setDollarValue('spendGoal', railsRound100(a.spendGoal));
+    railsAfterSpendChange();
+}
+
+function railsRestoreSpend() {
+    if (_priorSpendGoal === null) return;
+    DisplayHelpers.setDollarValue('spendGoal', Math.round(_priorSpendGoal));
+    _priorSpendGoal = null;
+    railsAfterSpendChange();
+}
+
+// After-Tax Spend was written without an input event, so what an edit would have set off is set off
+// here: the plan, the Stress Test, the ⓘ and the bracket note.
+function railsAfterSpendChange() {
+    if (typeof toggleSuggestSpendMenu === 'function') toggleSuggestSpendMenu(false);
+    updateSuggestSpendTooltip();
+    updateBracketFeedback();
+    runSimulation();
+    if (typeof mcInputsChanged === 'function') mcInputsChanged();
 }
 
 // Elapsed, where it went, and what other settings would cost - the readout the phase exists for.
+// Behind the nerdknob, with the cadence and path count it prices.
 function railsRenderTiming() {
     const el = document.getElementById('rails-timing');
     if (!el) return;
     const r = RailsState.result;
-    if (!r) { el.innerHTML = ''; return; }
+    if (!r || !NERD_KNOBS || !r.cost?.phaseMs || !r.start) { el.innerHTML = ''; return; }
     const c = r.cost, ph = c.phaseMs;
     const wall = r.wallMs ?? c.totalMs;
     const s = v => railsFmtSecs(v / 1000);
     const took = `Took ${s(wall)}: ${railsFmtMs(RailsState.fixedMs ?? 0)} starting the worker and returning the `
-        + `results, ${railsFmtMs(c.spineMs)} running the plan, ${railsFmtMs(c.bankMs)} drawing ${r.numPaths} market `
-        + `paths, and ${s(c.solveMs)} solving - chance of success as planned ${s(ph.pos)}, target spend `
-        + `${s(ph.target)}, raise rail ${s(ph.upper)}, cut rail ${s(ph.lower)}, spend at the raise rail `
-        + `${s(ph.spendUp)}, spend at the cut rail ${s(ph.spendDn)}.`;
-    const size = `${r.years.length} solved years x ${RailsEngine.RAILS_ESTIMATES_PER_YEAR} estimates x `
-        + `${r.numPaths} paths = ${c.runs.toLocaleString()} plan runs covering ${c.pathYears.toLocaleString()} `
+        + `results, ${railsFmtMs(c.spineMs)} running the plan, ${railsFmtMs(c.bankMs)} drawing ${r.numPaths} and `
+        + `${r.start.paths} market paths, ${s(ph.thresholds)} finding each path's thresholds, `
+        + `${s(ph.railSpends)} the spending at the rails, and ${s(ph.start)} the After-Tax Spend answer.`;
+    const size = `${r.years.length} solved years x ${r.numPaths} paths, every preset at once: `
+        + `${c.runs.toLocaleString()} plan runs (${(c.runsPerPathYear ?? 0).toFixed(1)} a path a solved year, and `
+        + `${c.startRuns.toLocaleString()} for the After-Tax Spend answer) covering ${c.pathYears.toLocaleString()} `
         + `simulated years: ${c.msPerRun.toFixed(2)} ms a run, ${(c.msPerPathYear * 1000).toFixed(1)} µs a simulated year.`;
     // Projection grid. Priced per simulated year, because a solve late in the plan runs short
     // horizons: a flat per-run price would overcharge frequent solving.
     const n = lastSimulationLog?.length || r.planYears;
     const cur = railsSettings();
-    const cadences = [1, 2, 5, 10], pathsList = [100, 200, 500, 1000];
+    const cadences = [1, 2, 3, 5, 10], pathsList = [100, 200, 500, 1000];
     const cell = (cad, paths) => {
         const pj = RailsEngine.railsProjectMs(c, n, { cadence: cad, numPaths: paths, fixedMs: RailsState.fixedMs ?? 0 });
         const mine = cad === cur.cadence && paths === cur.paths;
@@ -5187,7 +5312,7 @@ function railsRenderTiming() {
     // against what they just did. Only when the two runs priced the same plan length.
     let check = '';
     const prev = RailsState.previous;
-    if (prev && prev.planYears === r.planYears) {
+    if (prev && prev.planYears === r.planYears && prev.cost?.runsPerPathYear != null) {
         const pj = RailsEngine.railsProjectMs(prev.cost, r.planYears,
             { cadence: r.cadence, numPaths: r.numPaths, fixedMs: RailsState.previousFixedMs ?? 0 });
         if (pj?.ms != null && wall > 0) {
@@ -5203,22 +5328,27 @@ function railsRenderTiming() {
         + grid;
 }
 
-// The rails as chart lines. 'balance' draws the two wealth rails, with the band between them shaded
-// light green, against the TotalNetWealth line they are stated in. 'spend' draws the target spend and
+// The rails as chart lines. 'balance' draws the two wealth rails, with the chart shaded in three
+// bands (railsSeries), against the TotalNetWealth line they are stated in. 'spend' draws the target spend and
 // the spend at each rail, and is used on the Income vs Net view only: Income & Expenses is busy
 // enough without them (user, 2026-09-16).
 //
 // Rails never use the circle every other series uses (user, 2026-09-16): a raise is a triangle
 // pointing up, a cut one pointing down, the target a square. Marked points are the solved years, and
-// every point's tooltip says whether its year was solved or interpolated.
+// every point's tooltip says whether its year was solved or interpolated. A clamped answer has no
+// point at all, so its line ends there.
 //
 // The previous solve is drawn first, faded and without the band, so the current one sits on top and
 // the difference between the two is what the eye lands on.
+const RAIL_BAND_COLORS = { above: 'rgba(46,125,50,0.10)', between: 'rgba(120,120,120,0.12)',
+                           below: 'rgba(229,57,53,0.10)' };
+
 function railsChartDatasets(log, adj, pt, kind) {
     if (!railsOn() || !log.length || !('railLower' in log[0])) return [];
+    const s = railsSettings();
     const out = [];
-    if (railsSettings().showPrevious && RailsState.previous) {
-        const prev = RailsEngine.railsRowFields(RailsState.previous, log);
+    if (s.showPrevious && RailsState.previous) {
+        const prev = RailsEngine.railsRowFields(RailsState.previous, log, { preset: s.preset });
         if (prev.some(Boolean)) out.push(...railsSeries(log, adj, pt, kind, i => prev[i], 'previous'));
     }
     out.push(...railsSeries(log, adj, pt, kind, i => log[i], railsIsStale() ? 'stale' : ''));
@@ -5249,37 +5379,45 @@ function railsSeries(log, adj, pt, kind, fieldsAt, tag) {
             _railNote: log.map((r, i) => fieldsAt(i)?.[key] == null ? null : note(i)),
         };
     };
-    // The band, on both views (user, 2026-09-16): filled from the raise line down to the dataset
-    // right after it, which is always its cut line. The previous solve gets no band, so only one
-    // shaded region is ever on screen.
-    const band = upper => {
-        if (faded) return upper;
-        upper.fill = '+1';
-        upper.backgroundColor = 'rgba(46,125,50,0.10)';
-        upper._keepFillOnHover = true;
-        return upper;
+    // Three bands on both views (user, 2026-09-16: "if the spending or assets fall between the two,
+    // it means it's on track"): green above the raise line, gray between the rails, light red below
+    // the cut line. A dataset has one fill, so the gray band is a copy of the raise line with no line
+    // or points of its own, filled down to the cut line right after it; `_railBand` keeps it out of
+    // the legend and the tooltip. The previous solve gets no bands, so only one set is ever on screen.
+    const bands = (upper, lower) => {
+        if (faded) return [upper, lower];
+        const shade = (ds, fill, color) => Object.assign(ds, { fill, backgroundColor: color, _keepFillOnHover: true });
+        const between = { ...upper, label: 'On track' + (tag ? ` (${tag})` : ''), data: upper.data.slice(),
+                          stack: `rail-band-${tag}`, borderWidth: 0, pointRadius: 0, pointHoverRadius: 0,
+                          _railSymbol: false, _railNote: null, _railBand: true };
+        return [shade(upper, 'end', RAIL_BAND_COLORS.above), shade(between, '+1', RAIL_BAND_COLORS.between),
+                shade(lower, 'start', RAIL_BAND_COLORS.below)];
     };
     if (kind === 'balance') {
         const note = i => {
             const p = fieldsAt(i)?.['railPoS%'];
             return noteOf(basisAt(i)) + (p != null ? `, chance of success as planned ${(p * 100).toFixed(1)}%` : '');
         };
-        return [
-            band(mk('Raise rail', '#2e7d32', 'railUpper', 'triangle', 0, i => i, note)),
-            mk('Cut rail', '#c62828', 'railLower', 'triangle', 180, i => i, note),
-        ];
+        return bands(mk('Raise rail', '#2e7d32', 'railUpper', 'triangle', 0, i => i, note),
+                     mk('Cut rail', '#c62828', 'railLower', 'triangle', 180, i => i, note));
     }
+    // Named for what each line IS (P129d): the target line is the spending for the preset's chance,
+    // and the other two are that same spending if wealth sat on a rail - which is why the raise one
+    // can run BELOW the target line when the plan is already past its raise rail.
+    const P = (RailsState.result?.presets ?? {})[railsSettings().preset];
+    const pct = P ? `${Math.round(P.target * 100)}%` : 'target';
     const note = i => noteOf(basisAt(i - 1));
     return [
-        mk('Spend at target', '#6a1b9a', 'railSpend', 'rect', 0, i => i - 1, note),
-        band(mk('Raise spend to', '#2e7d32', 'railSpendUp', 'triangle', 0, i => i - 1, note)),
-        mk('Cut spend to', '#c62828', 'railSpendDn', 'triangle', 180, i => i - 1, note),
+        mk(`Spend for ${pct} chance`, '#6a1b9a', 'railSpend', 'rect', 0, i => i - 1, note),
+        ...bands(mk('Spend at raise rail', '#2e7d32', 'railSpendUp', 'triangle', 0, i => i - 1, note),
+                 mk('Spend at cut rail', '#c62828', 'railSpendDn', 'triangle', 180, i => i - 1, note)),
     ];
 }
 
 // Legend labels that keep the rails' own symbols. The page's legends force every item to a circle
 // (`pointStyle: 'circle'`), which would put a rail back into the shape it is meant to stand out from.
-// The fill color is the POINT color, since the raise rail's own backgroundColor is the band's tint.
+// The fill color is the POINT color, since a rail's own backgroundColor is its band's tint. The gray
+// band has no legend entry: it is not a line.
 function railsLegendLabels(labels) {
     return {
         ...labels,
@@ -5293,7 +5431,7 @@ function railsLegendLabels(labels) {
                 it.fillStyle = ds.pointBackgroundColor;
                 it.strokeStyle = ds.pointBackgroundColor;
             }
-            return items;
+            return items.filter(it => !chart.data.datasets[it.datasetIndex]?._railBand);
         },
     };
 }
@@ -5314,6 +5452,8 @@ function updateCharts(log) {
         plugins: {
             tooltip: {
                 itemSort: (a, b) => b.parsed.y - a.parsed.y,
+                // P128: the rails' gray band repeats the raise line's numbers.
+                filter: item => !item.dataset._railBand,
                 callbacks: {
                     title: items => {
                         const r = log[items[0]?.dataIndex];
@@ -5412,6 +5552,13 @@ function updateCharts(log) {
         + r.RothWD + r.CapGains + r.cashDividends + r.cashInterest
         + (r.CashWD ?? 0) + basisReturn(r);
 
+    // P130. What the year SAVED: surplus reinvested in Brokerage or banked to Cash once spending and
+    // taxes were paid (user, 2026-09-16: "Whatever goes back into Brokerage should NOT be counted as
+    // income"). It arrived inside a withdrawal counted above - a Cycle Brokerage harvest sells far more
+    // than the year spends and puts the rest straight back - and it funded nothing, so it is neither
+    // income nor spendable on these charts. Inflows vs Outflows already nets it out, through netOut.
+    const savedOf = r => Math.max(0, (r.SurplusBrok ?? 0) + (r.surplusCash ?? 0));
+
     // scale = (1 - effectiveTaxRate) on post-refund income. Using r.netIncome is wrong in surplus
     // years because netIncome was computed with pre-refund cash withdrawals; the logged CashWD is
     // post-refund. Deriving scale from (visibleSum - totalTax) / visibleSum stays correct in both.
@@ -5433,7 +5580,7 @@ function updateCharts(log) {
         _taxed: !!taxed,
         data: log.map(r => {
             const vsum = visibleSum(r);
-            const scale = vsum > 0 ? (vsum - r.totalTax) / vsum : 1;
+            const scale = vsum > 0 ? Math.max(0, vsum - r.totalTax - savedOf(r)) / vsum : 1;
             return rawFn(r) * scale * adj(r);
         })
     });
@@ -5443,7 +5590,7 @@ function updateCharts(log) {
     });
 
     if (incomeChartView !== 'combined') {
-        buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum);
+        buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum, savedOf);
         return;
     }
 
@@ -5480,7 +5627,7 @@ function updateCharts(log) {
                 // AFTER the bars so it appears on top. Higher order = drawn first = behind.
                 {
                     label: 'Net Income',
-                    data: log.map(r => (visibleSum(r) - r.totalTax) * adj(r)),
+                    data: log.map(r => Math.max(0, visibleSum(r) - r.totalTax - savedOf(r)) * adj(r)),
                     type: 'line', borderColor: '#27ae60', borderWidth: 2.5,
                     backgroundColor: '#27ae60', pointBackgroundColor: '#27ae60',
                     fill: false, order: 1
@@ -5510,7 +5657,13 @@ function updateCharts(log) {
                             const shown = Math.round(ctx.parsed.y);
                             if (!d._rawInc) return d.label + ': ' + shown.toLocaleString();
                             const rawv = Math.round(d._rawInc[ctx.dataIndex] ?? 0);
-                            const shaved = rawv - shown;
+                            // P130. The bar is shaved by two things: the year's tax and what the year
+                            // saved, each in proportion. The saved share is named separately, so it is
+                            // never read as tax.
+                            const r = log[ctx.dataIndex];
+                            const vsum = r ? visibleSum(r) : 0;
+                            const saved = vsum > 0 ? Math.round(rawv * savedOf(r) / vsum) : 0;
+                            const shaved = rawv - shown - saved;
                             // The attribution is the year's average rate applied proportionally, not
                             // a per-source calculation - $35,000 of Social Security does not really
                             // owe $12,000, and Social Security is taxed on at most 85% of itself in
@@ -5519,8 +5672,11 @@ function updateCharts(log) {
                             // No minus sign before the "~": "- ~3,674" is two operators in a row and
                             // reads as noise. The space and the word "tax" already say it is a
                             // deduction from the figure beside it.
-                            return (d._taxed && shaved > 0)
-                                ? `${d.label}: ${rawv.toLocaleString()}  ~${shaved.toLocaleString()} tax`
+                            const bits = [];
+                            if (d._taxed && shaved > 0) bits.push(`~${shaved.toLocaleString()} tax`);
+                            if (saved > 0) bits.push(`~${saved.toLocaleString()} saved`);
+                            return bits.length
+                                ? `${d.label}: ${rawv.toLocaleString()}  ${bits.join(', ')}`
                                 : `${d.label}: ${rawv.toLocaleString()}`;
                         },
                         title: items => {
@@ -5532,7 +5688,8 @@ function updateCharts(log) {
                                 ? (r.totalTax / r.totalIncome * 100).toFixed(1) + '%'
                                 : '--';
                             const a = adj(r);
-                            const totalFmt = Math.round(r.totalIncome * a).toLocaleString();
+                            const saved = savedOf(r) * a;
+                            const totalFmt = Math.round(Math.max(0, r.totalIncome - savedOf(r)) * a).toLocaleString();
                             const cwd = (r.CashWD ?? 0) * a;
                             const br = basisReturn(r) * a;
                             const parts = [];
@@ -5543,6 +5700,9 @@ function updateCharts(log) {
                                 `Total Income: ${totalFmt}`
                             ];
                             if (parts.length > 0) lines.push(`Untaxed: ${parts.join(' + ')}`);
+                            // P130. Named, so the gap between what was withdrawn and what is counted
+                            // has a reason on screen.
+                            if (saved > 0.5) lines.push(`Saved, not counted: ${Math.round(saved).toLocaleString()} (back into Brokerage or Cash)`);
                             return lines;
                         }
                     },
@@ -7957,26 +8117,82 @@ function refreshSuggestedSpend() {
     updateSuggestSpendTooltip();
 }
 
+// P129c. The risk-based rails' After-Tax Spend answer, when there is one for the plan on screen.
+function _riskSuggestion() {
+    if (typeof railsStartIsCurrent !== 'function' || !railsStartIsCurrent()) return null;
+    const a = railsStartAnswer();
+    return a && a.spendGoal != null ? a : null;
+}
+
 function updateSuggestSpendTooltip() {
     const icon = document.getElementById('suggest-spend-icon');
     if (!icon) return;
     const have = _suggestedSpend && _suggestedSpend.spend > 0;
-    icon.style.display = have ? '' : 'none';
-    if (!have) return;
-    if (_priorSpendGoal !== null) {
+    const risk = _riskSuggestion();
+    icon.style.display = (have || risk) ? '' : 'none';
+    if (!have && !risk) return;
+    const s = _suggestedSpend;
+    const K = (typeof SUGGEST_BUFFER_YEARS !== 'undefined') ? SUGGEST_BUFFER_YEARS : 3;
+    if (risk) {
+        // Two suggestions, so the click opens a menu rather than applying one of them.
+        const parts = [];
+        if (have) parts.push(`sustainable (no market swings): $${Math.round(s.spend).toLocaleString()}`);
+        parts.push(`risk-based (${Math.round(risk.preset.target * 100)}% chance of success, ${risk.preset.label}): `
+            + `$${railsRound100(risk.spendGoal).toLocaleString()}`);
+        if (_priorSpendGoal !== null) parts.push(`restore: $${Math.round(_priorSpendGoal).toLocaleString()}`);
+        icon.title = `Suggested goals - ${parts.join('; ')}. Click to choose.`;
+    } else if (_priorSpendGoal !== null) {
         icon.title = `Restore: $${Math.round(_priorSpendGoal).toLocaleString()}`;
     } else {
-        const s = _suggestedSpend;
-        const K = (typeof SUGGEST_BUFFER_YEARS !== 'undefined') ? SUGGEST_BUFFER_YEARS : 3;
         const hair = (s.haircut != null) ? `, ${Math.round(s.haircut * 100)}% of a naive amortization` : '';
         icon.title = `Suggested goal: $${Math.round(s.spend).toLocaleString()} - the highest after-tax `
             + `spend this plan sustains while still holding ${K}+ years of portfolio-funded spending at `
             + `the end of its ${s.horizon}-year horizon${hair}. Deterministic path - see Monte Carlo `
             + `for return-sequence risk. Click to apply.`;
     }
+    const menu = document.getElementById('suggest-spend-menu');
+    if (menu && menu.style.display !== 'none') toggleSuggestSpendMenu(true);   // keep an open menu current
+}
+
+// The menu the ⓘ opens once a risk-based answer exists (P129c): each suggestion, and Restore.
+function toggleSuggestSpendMenu(show) {
+    const menu = document.getElementById('suggest-spend-menu');
+    if (!menu) return;
+    const open = show ?? menu.style.display === 'none';
+    if (!open) { menu.style.display = 'none'; return; }
+    const s = _suggestedSpend, risk = _riskSuggestion();
+    const btn = (label, which, title) =>
+        `<button type="button" class="tog" style="display:block;margin:2px 0;text-align:left;" title="${title}" onclick="applySuggestSpendChoice('${which}')">${label}</button>`;
+    const items = [];
+    if (s && s.spend > 0) {
+        items.push(btn(`Sustainable: $${Math.round(s.spend).toLocaleString()}`, 'sustainable',
+            'The highest after-tax spend this plan sustains on its own flat growth path.'));
+    }
+    if (risk) {
+        items.push(btn(`${Math.round(risk.preset.target * 100)}% chance of success: $${railsRound100(risk.spendGoal).toLocaleString()}`,
+            'risk', `From the risk-based rails (${risk.preset.label}, ${risk.paths} market paths from ${risk.year}), rounded to $100.`));
+    }
+    if (_priorSpendGoal !== null) {
+        items.push(btn(`Restore: $${Math.round(_priorSpendGoal).toLocaleString()}`, 'restore', 'Put After-Tax Spend back.'));
+    }
+    if (!items.length) { menu.style.display = 'none'; return; }
+    menu.innerHTML = items.join('');
+    menu.style.display = '';
+}
+
+function applySuggestSpendChoice(which) {
+    toggleSuggestSpendMenu(false);
+    if (which === 'restore') { railsRestoreSpend(); return; }
+    if (which === 'risk') { railsUseStartSpend(); return; }
+    if (!_suggestedSpend || !(_suggestedSpend.spend > 0)) return;
+    if (_priorSpendGoal === null) _priorSpendGoal = Number(val('spendGoal')) || 0;
+    DisplayHelpers.setDollarValue('spendGoal', Math.round(_suggestedSpend.spend));
+    railsAfterSpendChange();
 }
 
 function applySuggestSpend() {
+    // Two suggestions to choose between: the ⓘ opens the menu instead of applying one.
+    if (_riskSuggestion()) { toggleSuggestSpendMenu(); return; }
     if (_priorSpendGoal !== null) {
         DisplayHelpers.setDollarValue('spendGoal', Math.round(_priorSpendGoal));
         _priorSpendGoal = null;

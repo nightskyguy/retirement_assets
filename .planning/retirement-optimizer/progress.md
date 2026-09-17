@@ -5325,3 +5325,36 @@ running in the background?"
 - Contention measured on the page once the machine was quiet (findings "P128 round 3"). The first
   attempt's main-thread lag of ~1 s was timer throttling in the hidden pane; re-measured with the
   long-task log.
+
+### Round 4, 2026-09-16 evening: the user's decisions, built
+
+The decisions are quoted in task_plan "Round 4". Built, in the order the user will notice them:
+
+- `P128o` the rails panel for everyone; the plain knob keeps only cadence, paths and the timing
+  readout. Auto-run off by default; ticking it solves at once if the rails are not current.
+- `P129` the After-Tax Spend answer: from the plan's start, its own 400 paths, 0.5% steps, $100
+  rounding, every preset at once. Panel line with *Use it* / *Restore*; the After-Tax Spend ⓘ becomes
+  a small menu (sustainable / risk-based / restore) when a current answer exists. Its fingerprint
+  leaves out After-Tax Spend, so *Use it* does not make it stale.
+- `P128m` Monte Carlo opens on Synthetic GBM; the rails' "Same as the Monte Carlo tab" follows it.
+- `P128n` per-path solver (`refine()`), every preset at once, so a preset switch only redraws.
+  Loose raises at 99.5%. Search ceiling 16x. Clamped answers carry no dollars and end their line.
+- `P130` the income charts leave out what a year saved (`SurplusBrok + surplusCash`): Net Income,
+  Total Income, Net (Spendable) and the bars' scale; the tooltip splits ~tax and ~saved. The answer
+  to the user's "11. Explain": a Cycle Brokerage harvest sells far more than the year spends and puts
+  the rest straight back, and the charts counted the whole sale as income.
+- `P128p` the Monte Carlo "out of date" banner clears when an edit is undone.
+- Mid-build (user): `P128q` gray/red/green bands, `P128r` a shorter panel that points at Income vs
+  Net, `P128s` Show previous rails off by default.
+- "The RBG should be shown independent of the GK-style" is read as: shown whatever the switch says,
+  and every solve runs with GK off (resumed from the plan's own state). Said so to the user.
+- Verified: node 472 / 32 / 61 / 26. In-page `?nerdknob&runtests` 1122 (531 + 591); plain page 291,
+  24 page-writing suites skipped. Browser, default plan: a solve in 7.0 s (GBM); the three bands on
+  both views, the gray one absent from both legends and both tooltips; the note's Income vs Net link
+  switches the view; previous rails hidden until ticked, then drawn; Use it / Restore / the ⓘ menu;
+  clamped lines end.
+- Harness on the new solver: `--timing-only` (2.9 min; findings "P128 round 4") and `--quick`
+  (1.8 min). Added: a "page (400 paths)" column for the live After-Tax Spend answer, and the reach
+  table's "need >16x" column (0.00% for every household and method in the first run's pools).
+- Docs: ARCHITECTURE 5a, README, ExperimentalFeatures (a graduation), both research reports,
+  research/README, HARNESSES, and the branch's changelog entry rewritten against `main`.

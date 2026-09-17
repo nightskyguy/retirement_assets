@@ -2667,9 +2667,24 @@ assertEqual(
 	(function railsPanelIsGatedAndOwnsNoPlanInput() {
 		const panel = document.getElementById('rails-panel');
 		if (!panel) { console.log('SKIP: rails panel absent'); return; }
-		// One direction only, for the reason goalFirstPanelIsGatedInMarkup gives above.
-		assertEqual(panel.style.display === 'none' || (typeof railsOn === 'function' && railsOn()), true,
-			'P128: the rails panel is never visible without ?nerdknob=rails');
+		// For everyone since 2026-09-16: nothing about the panel waits on a knob any more...
+		assertEqual(typeof railsOn === 'function' && railsOn(), true, 'P128o: the rails panel is on without any knob');
+		// ...except what the solve costs. `?runtests` runs this before boot has shown anything, so the
+		// knob check only applies once the panel has been laid out.
+		if (panel.style.display !== 'none') {
+			for (const id of ['rails-cadence-wrap', 'rails-paths-wrap', 'rails-timing']) {
+				assertEqual(document.getElementById(id)?.style.display === '', !!NERD_KNOBS,
+					`P128o: ${id} shows exactly when the nerdknob is on`);
+			}
+		}
+		const el = id => document.getElementById(id);
+		assertEqual([el('rails-cadence')?.defaultValue, el('rails-paths')?.defaultValue, el('rails-auto')?.defaultChecked,
+			el('rails-show-prev')?.defaultChecked, el('rails-method')?.querySelector('option[selected]')?.value],
+			['3', '100', false, false, 'tab'],
+			'P128o: every 3 years, 100 paths, auto-run off, previous rails hidden, and the Monte Carlo tab\'s own method by default');
+		// The Monte Carlo tab's own default is the lognormal synthetic (user, 2026-09-16).
+		assertEqual(document.querySelector('#mc-sim-mode option[selected]')?.value, 'gbm',
+			'P128m: the Monte Carlo tab opens on Synthetic lognormal');
 		// Outside the sidebar, so neither the share link, the saved plan nor the recalc listener sees it.
 		const sidebar = document.querySelector('.sidebar');
 		assertEqual(!!sidebar && sidebar.contains(panel), false, 'P128: the rails panel is not in the sidebar');
@@ -2685,9 +2700,9 @@ assertEqual(
 			const keys = [...new URL(buildShareURL()).searchParams.keys()];
 			assertEqual(keys.some(k => /rail/i.test(k)), false, 'P128: the share link carries no rails setting');
 		}
-		// Without the knob the log carries no rail columns.
-		if (!(typeof railsOn === 'function' && railsOn()) && Array.isArray(lastSimulationLog) && lastSimulationLog.length) {
-			assertEqual('railLower' in lastSimulationLog[0], false, 'P128: no rail columns without the knob');
+		// Before any solve the log carries no rail columns.
+		if (typeof RailsState !== 'undefined' && !RailsState.result && Array.isArray(lastSimulationLog) && lastSimulationLog.length) {
+			assertEqual('railLower' in lastSimulationLog[0], false, 'P128: no rail columns before a solve');
 		}
 		// Below both charts and foldable (user, 2026-09-16), with the fold remembered like the Optimizer's.
 		const tab = document.getElementById('tab-chart');
@@ -2732,7 +2747,8 @@ assertEqual(
 		assertEqual(railsTooltipNote({ dataset: {}, dataIndex: 0 }), '', 'P128: nor does any other line');
 	})();
 
-	// The green band sits between each view's raise and cut lines, and only the current solve has one.
+	// Three bands on each view (user, 2026-09-16): green above the raise line, gray between the rails
+	// (on track), light red below the cut line. Only the current solve has them.
 	(function railsBandOnBothViews() {
 		if (typeof railsSeries !== 'function') { console.log('SKIP: rails series builder absent'); return; }
 		const log = [0, 1, 2].map(i => ({ year: 2030 + i, inflationFactor: 1,
@@ -2741,12 +2757,20 @@ assertEqual(
 		const id = v => v, one = () => 1, rows = i => log[i];
 		for (const kind of ['balance', 'spend']) {
 			const cur = railsSeries(log, one, id, kind, rows, '');
-			const up = cur.findIndex(d => d.fill === '+1');
-			assertEqual(up >= 0 && cur[up].pointRotation === 0 && cur[up + 1]?.pointRotation === 180, true,
-				`P128: the ${kind} band fills from the raise line to the cut line right after it`);
-			assertEqual(cur.filter(d => d.fill).length, 1, `P128: one ${kind} band, not more`);
+			const up = cur.findIndex(d => d.fill === 'end');
+			const [raise, gray, cut] = [cur[up], cur[up + 1], cur[up + 2]];
+			assertEqual(up >= 0 && raise.pointRotation === 0 && gray?._railBand === true && gray.fill === '+1'
+				&& cut?.pointRotation === 180 && cut.fill === 'start', true,
+				`P128: ${kind}: green above the raise line, gray from it down to the cut line, red below that`);
+			assertEqual([raise, gray, cut].map(d => d.backgroundColor),
+				[RAIL_BAND_COLORS.above, RAIL_BAND_COLORS.between, RAIL_BAND_COLORS.below],
+				`P128: ${kind}: green, gray and light red, in that order`);
+			assertEqual(gray.data.join(), raise.data.join(), `P128: ${kind}: the gray band starts on the raise line`);
+			assertEqual(gray.borderWidth === 0 && gray.pointRadius === 0 && gray.stack !== raise.stack, true,
+				`P128: ${kind}: the gray band draws no line or points and does not stack on the raise line`);
+			assertEqual(cur.filter(d => d.fill).length, 3, `P128: three ${kind} bands, not more`);
 			const prev = railsSeries(log, one, id, kind, rows, 'previous');
-			assertEqual(prev.some(d => d.fill), false, `P128: the previous ${kind} rails carry no band`);
+			assertEqual(prev.some(d => d.fill || d._railBand), false, `P128: the previous ${kind} rails carry no band`);
 		}
 	})();
 
@@ -2906,6 +2930,155 @@ assertEqual(
 			if (banner) banner.style.display = was.banner;
 			runSimulation();
 			refreshMCStressOnly();
+		}
+	})();
+
+	// P128n / P129. Every preset is solved at once, so the preset is no part of what a solve depends on;
+	// and the After-Tax Spend answer is in dollars, so the goal it started from is no part of its own.
+	(function railsPresetSwitchIsARedraw() {
+		const sel = document.getElementById('rails-preset');
+		if (!sel || typeof railsFingerprint !== 'function' || typeof railsStartFingerprint !== 'function') {
+			console.log('SKIP: rails fingerprints absent'); return;
+		}
+		const was = sel.value;
+		try {
+			const fps = ['tight', 'normal', 'loose'].map(v => { sel.value = v; return railsFingerprint(); });
+			assertEqual(new Set(fps).size, 1, 'P128n: switching presets changes nothing a solve depends on');
+		} finally {
+			sel.value = was;
+		}
+		const base = getInputs();
+		const other = { ...base, spendGoal: (base.spendGoal || 0) + 12345 };
+		assertEqual(railsStartFingerprint(other) === railsStartFingerprint(base), true,
+			'P129: the After-Tax Spend answer does not depend on the goal it started from');
+		assertEqual(railsFingerprint(other) === railsFingerprint(base), false, 'P129: the rails themselves do');
+	})();
+
+	// ⚠ UNSAFE - MUTATES: runMCWorker (stubbed, restored), #rails-auto (restored), RailsState
+	// (snapshotted and restored), and the panel's text.
+	// P128o. "'Clicking it on' should cause the build to run" (user, 2026-09-16).
+	(function railsAutoTickSolvesAtOnce() {
+		if (!unsafeTest('railsAutoTickSolvesAtOnce')) return;
+		const auto = document.getElementById('rails-auto');
+		if (!auto || typeof railsAutoToggled !== 'function' || typeof runMCWorker !== 'function') {
+			console.log('SKIP: rails auto-run absent'); return;
+		}
+		const realRun = runMCWorker;
+		const saved = { ...RailsState };
+		const was = auto.checked;
+		const jobs = [];
+		try {
+			runMCWorker = cfg => { if (cfg.kind === 'rails') jobs.push(cfg); };
+			Object.assign(RailsState, { result: null, fingerprint: null, running: false, runFingerprint: null });
+			auto.checked = true;
+			railsAutoToggled();
+			assertEqual(jobs.length, 1, 'P128o: ticking Auto-run starts a solve at once, without the debounce');
+			railsAutoToggled();
+			assertEqual(jobs.length, 1, 'P128o: and never a second solve of a plan already being solved');
+			auto.checked = false;
+			railsAutoToggled();
+			assertEqual(RailsState.debounce, null, 'P128o: unticking it leaves nothing scheduled');
+		} finally {
+			runMCWorker = realRun;
+			railsStopTicker();
+			clearTimeout(RailsState.debounce);
+			Object.assign(RailsState, saved, { debounce: null, ticker: null });
+			auto.checked = was;
+			railsRenderPanel();
+		}
+	})();
+
+	// ⚠ UNSAFE - MUTATES: #spendGoal and the remembered prior goal (both restored), RailsState
+	// (snapshotted and restored), runMCWorker (stubbed, restored), the ⓘ menu, the two stress-refresh
+	// flags, and re-runs the plan.
+	// P129 / P129c. Use it writes the risk-based answer rounded to $100, the ⓘ offers it as a menu, and
+	// Restore puts the goal back.
+	(function railsStartAnswerUseAndRestore() {
+		if (!unsafeTest('railsStartAnswerUseAndRestore')) return;
+		if (typeof railsUseStartSpend !== 'function' || typeof applySuggestSpend !== 'function'
+			|| !document.getElementById('suggest-spend-menu') || !document.getElementById('spendGoal')) {
+			console.log('SKIP: After-Tax Spend answer absent'); return;
+		}
+		const saved = { ...RailsState };
+		const prior = _priorSpendGoal;
+		const goal = Number(val('spendGoal'));
+		const presetEl = document.getElementById('rails-preset');
+		const presetWas = presetEl.value;
+		const realRun = runMCWorker;
+		const menu = document.getElementById('suggest-spend-menu');
+		try {
+			runMCWorker = () => {};   // the Stress Test refresh the plan re-run asks for stays out of it
+			_priorSpendGoal = null;
+			presetEl.value = 'normal';
+			const answer = goal * 1.2345;
+			const fake = {
+				presets: { normal: { key: 'normal', label: 'Normal', target: 0.9, upper: 0.99, lower: 0.7 } },
+				startYear: 2026, years: [], numPaths: 100, cadence: 3, simulationMode: 'gbm',
+				start: { paths: 400, pos: 0.93, spendGoal: goal,
+				         answers: { normal: { mult: 1.2345, spendGoal: answer, clamped: '' } } },
+			};
+			Object.assign(RailsState, { result: fake, previous: null, running: false, fingerprint: 'another plan',
+			                            startFingerprint: railsStartFingerprint() });
+			assertEqual(railsStartIsCurrent(), true, 'P129: an answer solved for this plan is current');
+			railsUseStartSpend();
+			assertEqual(Number(val('spendGoal')), Math.round(answer / 100) * 100, 'P129: Use it writes the answer, rounded to $100');
+			assertEqual(_priorSpendGoal, goal, 'P129: and remembers the goal it replaced');
+			assertEqual(railsStartIsCurrent(), true, 'P129: using the answer does not make it stale');
+			applySuggestSpend();
+			assertEqual(menu.style.display === '' && /90% chance of success/.test(menu.textContent)
+				&& /Restore/.test(menu.textContent), true,
+				'P129c: the ⓘ opens a menu offering the risk-based answer and Restore');
+			applySuggestSpendChoice('restore');
+			assertEqual(Number(val('spendGoal')), goal, 'P129: Restore puts the goal back');
+			assertEqual([_priorSpendGoal, menu.style.display], [null, 'none'], 'P129: and forgets it, and the menu closes');
+		} finally {
+			runMCWorker = realRun;
+			presetEl.value = presetWas;
+			DisplayHelpers.setDollarValue('spendGoal', goal);
+			_priorSpendGoal = prior;
+			Object.assign(RailsState, saved);
+			toggleSuggestSpendMenu(false);
+			_mcStressRefreshing = false;   // the stubbed refresh will never report
+			_mcStressPending = false;
+			runSimulation();
+		}
+	})();
+
+	// ⚠ UNSAFE - MUTATES: redraws both charts from a variant of the plan, and the income view; both
+	// put back from the plan on screen at the end.
+	// P130. "Whatever goes back into Brokerage should NOT be counted as income" (user, 2026-09-16), and
+	// the same for surplus banked to Cash: neither line counts what the year saved.
+	(function incomeChartsDoNotCountSavedMoney() {
+		if (!unsafeTest('incomeChartsDoNotCountSavedMoney')) return;
+		if (typeof updateCharts !== 'function' || typeof setIncomeChartView !== 'function') {
+			console.log('SKIP: income charts absent'); return;
+		}
+		const view = incomeChartView;
+		try {
+			// Cycle Brokerage puts every surplus straight back into Brokerage.
+			const log = simulate({ ...getInputs(), cyclicEnabled: true, CashReserve: 0 }).log;
+			const i = log.findIndex(r => (r.SurplusBrok ?? 0) + (r.surplusCash ?? 0) > 1000);
+			if (i < 0) { console.log('SKIP: no year of the plan saved anything'); return; }
+			const r = log[i];
+			const saved = (r.SurplusBrok ?? 0) + (r.surplusCash ?? 0);
+			const sum = r.SSincome + r.pension + r.RMDwd + (r['-iraSpend'] ?? 0) + r.RothWD + r.CapGains
+				+ r.cashDividends + r.cashInterest + (r.CashWD ?? 0) + Math.max(0, (r['Brokerage-'] ?? 0) - (r.CapGains ?? 0));
+			const adj = document.getElementById('show-current-dollars')?.checked ? 1 / (r.inflationFactor || 1) : 1;
+			incomeChartView = 'combined';
+			updateCharts(log);
+			const net = incomeChart.data.datasets.find(d => d.label === 'Net Income').data[i];
+			assertEqual(Math.round(net), Math.round(Math.max(0, sum - r.totalTax - saved) * adj),
+				'P130: Income & Expenses\' Net Income leaves out what the year saved');
+			incomeChartView = 'net';
+			updateCharts(log);
+			const find = label => incomeChart.data.datasets.find(d => d.label === label).data[i];
+			assertEqual([Math.round(find('Total Income')), Math.round(find('Net (Spendable)'))],
+				[Math.round(Math.max(0, r.totalIncome - saved) * adj), Math.round(Math.max(0, sum - r.totalTax - saved) * adj)],
+				'P130: and so do Income vs Net\'s Total Income and Net (Spendable)');
+		} finally {
+			incomeChartView = view;
+			syncIncomeViewControls();
+			if (lastSimulationLog) updateCharts(lastSimulationLog);
 		}
 	})();
 
@@ -3205,7 +3378,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 468, taxengine: 32, taxPaymentPlanner: 61, doclinks: 26, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 472, taxengine: 32, taxPaymentPlanner: 61, doclinks: 26, slowInCore: 4 },
 
     checkCounts(results) {
         const drift = [];

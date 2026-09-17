@@ -5,7 +5,7 @@ and the difference between them matters:
 
 | kind | reached by | who it is for |
 |---|---|---|
-| **knob-gated UI** | `?nerdknob`, and three deeper variants | a curious user, at their own risk |
+| **knob-gated UI** | `?nerdknob`, and two deeper variants | a curious user, at their own risk |
 | **URL-only inputs** | a query parameter, no form field anywhere | a real modelling input that never got a control |
 | **research inputs** | node only, no URL, no UI | harnesses. Not reachable from a browser at all |
 
@@ -20,7 +20,8 @@ changes the code around it.
 
 `?nerdknob` on any Optimizer URL reveals advanced controls: Monte Carlo parameters, the Guardrails
 band and step inputs and its **Never above plan** switch, the 💵 cash-funded sweep dimension, the
-timing control, and other diagnostics. (Fixed tax indexing used to be here; it now lives on the Monte
+timing control, the risk-based rails panel's *Solve every*, *Paths* and timing readout, and other
+diagnostics. (Fixed tax indexing used to be here; it now lives on the Monte
 Carlo tab, which is the only place it can do anything.)
 
 **Never above plan** (`P127a`, off by default) lets a Guardrails raise bring spending back up to the
@@ -35,8 +36,15 @@ It can also be flipped **at runtime** by a hidden checkbox on the Documentation 
 (`setNerdKnob` / `applyNerdKnobVisibility`). That flip is deliberately **not** written back to the
 URL, so a link you share does not carry your knob state.
 
-Two things have graduated *out* of the knob and must not be put back: the **optimizer objective
-selector** (PF13) and the **ACA Cliff options** (v11.1464).
+Three things have graduated *out* of the knob and must not be put back: the **optimizer objective
+selector** (PF13), the **ACA Cliff options** (v11.1464), and the **risk-based rails panel**, which was
+behind `?nerdknob=rails` until 2026-09-16 (user: "For non-nerdknob users, leave it off and expose
+it"). What
+stays behind the plain knob is only what a solve costs: how often it solves (every 3 years for
+everyone else), how many market paths it uses (100), and the readout of where the time went with a
+projection for other settings. The panel itself - presets, market method, Run, Auto-run, the rails on
+both charts and the After-Tax Spend answer - is for everyone, and nothing in it enters the share
+link, a saved plan or the engine inputs unless *Use it* writes After-Tax Spend.
 
 ### Timing diagnostics behind the plain knob
 
@@ -69,20 +77,20 @@ onto the nearest mode, and the substitution is reported rather than made quietly
 year's conversion, and its `$1,000` trigger. `timingConvThreshold` survives as a URL-only research
 input, corrected to read THIS year's conversion and to move the CONVERSION rather than the spending.
 
-### The three deeper variants
+### The two deeper variants
 
-All three are gated one notch below the plain knob: they respond only to the **literal value**, and
-plain `?nerdknob` does *not* reveal them. All three are also read once at load, so the Documentation
-checkbox cannot turn them on. Unchecking it does hide goal-first and the rails panel again (both also
-require the knob to be on); the Fixed Split menu entry ignores it.
+Both are gated one notch below the plain knob: they respond only to the **literal value**, and
+plain `?nerdknob` does *not* reveal them. Both are also read once at load, so the Documentation
+checkbox cannot turn them on. Unchecking it does hide goal-first again (it also requires the knob to
+be on); the Fixed Split menu entry ignores it. A link still carrying `?nerdknob=rails` simply counts
+as the plain knob.
 
 | URL | what it unlocks |
 |---|---|
 | `?nerdknob=goal` | **Goal-first mode** (`P102`). An alternative planning surface that drives the classic controls rather than replacing them. Experimental, kept deliberately, and not something to stumble into. |
 | `?nerdknob=split` | **Fixed Split** withdrawal family (`P104b3`), **on probation**. Adds the strategy menu entry, its panel, and its sweep rows. Like Proportional Withdraw and Ordered, it **never reads the IRA Goal**, so that field greys out when it is selected - a fact that belongs here rather than in the changelog, because a reader without this knob has no way to select the strategy it describes. |
-| `?nerdknob=rails` | **Risk-based rails** (`P128`), a calibration instrument. A folding panel below the Charts tab's two charts solves Tharp and Fitzpatrick's probability-of-success guardrails along the plan: at each solved year (the first full year, then every *N*), the TotalNetWealth at which the plan's own spending reaches the raise rail and the cut rail, on the Balances chart, and the spending that returns the plan to target at each, on the *Income vs Net* view. Both views shade the band between their cut and raise lines. Annual Details gains the same numbers under *Spending*. Presets Tight 95/99/80, Normal 90/99/70, Loose 80/100/40 (target / raise / cut). Its market paths come from any of the Monte Carlo tab's three methods, or from whatever that tab is set to; every other model setting is the tab's. It **reports what it cost** - elapsed, where the time went, and a projection for other cadences and path counts - and keeps the previous solve on the chart, faded, so a change shows up as a difference. The folded panel's one-line summary says whether it is solving, stale or current. Solves run in their own background worker, beside a Monte Carlo run or the Stress Test's refresh rather than instead of them; on `file://` they run on the page. Nothing in the panel enters the share link, a saved plan or the engine inputs. |
 
-All three still count as the plain knob for everything else, because `has('nerdknob')` is true for them.
+Both still count as the plain knob for everything else, because `has('nerdknob')` is true for them.
 
 ---
 

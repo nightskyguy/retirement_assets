@@ -2308,12 +2308,14 @@ function portfolioReturnOf(balance, rates, dividendRate) {
 
 // P128. Risk-based guardrails: three published parameter sets, each a target probability of
 // success, the probability at which spending is raised, and the probability at which it is cut. A
-// triggered adjustment resets spending to what the target allows. Defined ONCE: the rails panel,
-// montecarlo/rails_engine.js and .test_harnesses/rbg_harness.js all read this table, so a preset
-// cannot mean one thing on the chart and another in the research report.
+// triggered adjustment resets spending to what the target allows. Defined ONCE: the rails panel and
+// montecarlo/rails_engine.js read this table.
 //
-// Loose's 100% raise rail is reachable only as "every sampled path survived", so where it lands
-// depends on the number of paths as well as on the plan.
+// Loose raises at 99.5%, not the article's 100% (user, 2026-09-16). "100%" can only mean "every
+// sampled path survived", which climbs without limit as paths are added - a 1,000-path solve put it
+// 37% to 44% above a 100-path one (research/RISK_BASED_RAILS_PRECISION.md, section 2). 99.5% is still
+// the worst of 100 paths, and becomes a real percentile from 200 paths up. The research harness that
+// studies the ARTICLE keeps the article's own 100% (.test_harnesses/rbg_harness.js).
 const RAIL_PRESETS = Object.freeze({
     tight: Object.freeze({
         key: 'tight', label: 'Tight', target: 0.95, upper: 0.99, lower: 0.80,
@@ -2324,8 +2326,8 @@ const RAIL_PRESETS = Object.freeze({
         source: 'Tharp and Fitzpatrick, "The Retirement Distribution \'Hatchet\'", Kitces.com, 2021-11-24 - its implementation recipe',
     }),
     loose: Object.freeze({
-        key: 'loose', label: 'Loose', target: 0.80, upper: 1.00, lower: 0.40,
-        source: 'Tharp and Fitzpatrick, "The Retirement Distribution \'Hatchet\'", Kitces.com, 2021-11-24 - its income-risk framing, read as probability of success',
+        key: 'loose', label: 'Loose', target: 0.80, upper: 0.995, lower: 0.40,
+        source: 'Tharp and Fitzpatrick, "The Retirement Distribution \'Hatchet\'", Kitces.com, 2021-11-24 - its income-risk framing, read as probability of success, with its 0% risk (100%) raise read as 99.5%',
     }),
 });
 

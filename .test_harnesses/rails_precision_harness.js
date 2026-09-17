@@ -4,8 +4,9 @@
  * settings a person would run, can its 99% and 100% raise rails be reached at all, and is an
  * After-Tax Spend answer from the same job (P129) worth building?
  *
- * Run:  node .test_harnesses/rails_precision_harness.js              (everything; about 30 minutes)
- *       node .test_harnesses/rails_precision_harness.js --quick      (a smoke test, about a minute)
+ * Run:  node .test_harnesses/rails_precision_harness.js              (everything; about 50 minutes
+ *                                                                     on 16 processes)
+ *       node .test_harnesses/rails_precision_harness.js --quick      (a smoke test, about 2 minutes)
  *       JOBS=8 node .test_harnesses/rails_precision_harness.js       (child processes at once)
  *       USER_PLAN=plan.json node .test_harnesses/rails_precision_harness.js
  *           adds one household read from a file holding `{ inputs, mc }`: the page's getInputs()
@@ -15,6 +16,8 @@
  *           re-prints every table from a finished run's per-task files (the run names the
  *           directory near its top: "Per-task results: ...") in seconds, without the timing
  *           section, which is measured live. Pass the same USER_PLAN the run had.
+ *       node .test_harnesses/rails_precision_harness.js --timing-only
+ *           runs section 4 alone, on the engine as it is now (a few minutes).
  * Report: research/RISK_BASED_RAILS_PRECISION.md. Every number that report quotes is printed here.
  *
  * WHY (user, 2026-09-16): "Running 100 paths every 3 years is sufficient - including one extra pass
@@ -61,7 +64,7 @@
  * THE MODEL is the page's own, as the rails panel reads it: the Monte Carlo tab's defaults, with
  * mu taken from the plan's Growth (the page copies one into the other), sigma 12%, seed 42,
  * bear-start 25%, and the fitted inflation model. Three methods: Historical (bootstrap, the tab's
- * default), Synthetic lognormal (gbm) and Synthetic arithmetic (aam).
+ * default until 11.1859), Synthetic lognormal (gbm, the default since) and Synthetic arithmetic (aam).
  */
 
 globalThis.window = {};
@@ -90,6 +93,8 @@ const QUICK = process.argv.includes('--quick');
 // instead of running the tasks again. Pass the same USER_PLAN the run had, so the task list lines up.
 const FROM = process.argv.includes('--from') ? process.argv[process.argv.indexOf('--from') + 1] : null;
 const NO_TIMING = process.argv.includes('--no-timing');
+// Only the timing pass, on the engine as it is now: after a solver change, the one part that moves.
+const TIMING_ONLY = process.argv.includes('--timing-only');
 const POOL_PATHS = QUICK ? 400 : 6000;
 const SLICE_SIZES = QUICK ? [50, 100] : [100, 200, 500, 1000];
 const THRESHOLDS = [0.40, 0.70, 0.80, 0.90, 0.95, 0.99, 1.00];
@@ -108,9 +113,12 @@ const JOBS = Number(process.env.JOBS) || Math.max(2, Math.min(16, os.cpus().leng
 const S_RANGE = [0.05, 64];
 const M_RANGE = [0.02, 16];
 const PATH_STEPS = 12;                       // log bisection: ~0.2% on `s`, ~0.2% on `m`
-const LIVE_S_HI = rails.RAILS_SCALE_RANGE[1];   // 4: where the live solve stops looking
-const LIVE_M_HI = rails.RAILS_SPEND_RANGE[1];
-const LIVE_M_LO = rails.RAILS_SPEND_RANGE[0];
+// Where the solver of the first run (11.1857) stopped looking, which the clamp columns measure; the
+// per-path solver of 11.1859 looks to 16x wealth and 16x spending, and the reach table prints that too.
+const LIVE_S_HI = 4;
+const LIVE_M_HI = 4;
+const LIVE_M_LO = 0.1;
+const NEW_S_HI = rails.RAILS_SCALE_RANGE[1];
 const NEVER = 1e9;                           // JSON has no Infinity
 const MONO_GRID = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 8, 16, 32, 64];
 const MONO_PATHS = QUICK ? 30 : 150;
@@ -238,6 +246,15 @@ function whyNever(at, pathIn) {
              worstInflation: inf.length ? Math.max(...inf) : null };
 }
 
+// The Normal preset's answers from a solve, in either message shape: the one-preset solver (runs
+// before 11.1859, which --from can still re-print) put them on the year itself; the per-path solver
+// puts every preset under `presets`.
+function normalOf(y) {
+    const p = y.presets ? y.presets.normal : y;
+    return { upperScale: p.upperScale, lowerScale: p.lowerScale, spendTarget: p.spendTarget,
+             spendAtUpper: p.spendAtUpper, spendAtLower: p.spendAtLower, clamped: p.clamped ?? {} };
+}
+
 // ---- part 1 and 2: the pools ----------------------------------------------------------------
 function midK(n) {
     const half = Math.floor(n / 2);
@@ -294,14 +311,14 @@ function poolTask({ plan, method }) {
 async function cadenceTask({ plan, method }) {
     const h = household(plan);
     const t0 = performance.now();
-    const msg = await rails.runRailsJob({ base: h.inputs, preset: 'normal', cadence: 1,
+    const msg = await rails.runRailsJob({ base: h.inputs, cadence: 1,
                                           ...modelCfg(h, method, 42, CADENCE_PATHS) });
     const log = h.spine.log.map(r => ({ year: r.year, inflationFactor: r.inflationFactor,
                                         totalNetWealth: r.totalNetWealth }));
     let identity = null;
     if (plan === BANK_IDS[0] && method === 'bootstrap') {
         // The claim part 3 rests on: a job at cadence 3 is the cadence-1 job's every-third year.
-        const c3 = await rails.runRailsJob({ base: h.inputs, preset: 'normal', cadence: 3,
+        const c3 = await rails.runRailsJob({ base: h.inputs, cadence: 3,
                                              ...modelCfg(h, method, 42, CADENCE_PATHS) });
         const strip = y => JSON.stringify({ ...y, ms: 0 });
         const want = msg.years.filter(y => (y.k - 1) % 3 === 0);
@@ -330,7 +347,7 @@ function startSolve(h, method, seed, numPaths, target) {
     let lo, hi, movedLo = false, movedHi = false;
     const up = pos0 >= target;
     [lo, hi] = up ? [1, LIVE_M_HI] : [LIVE_M_LO, 1];
-    for (let i = 0; i < rails.RAILS_BISECT_STEPS; i++) {
+    for (let i = 0; i < 9; i++) {
         const mid = (lo + hi) / 2;
         if (pos(mid) >= target) { lo = mid; movedLo = true; } else { hi = mid; movedHi = true; }
     }
@@ -346,14 +363,13 @@ async function seedsTask({ plan, method }) {
     const target = RAIL_PRESETS.normal.target;
     const out = [];
     for (const seed of SEEDS) {
-        const msg = await rails.runRailsJob({ base: h.inputs, preset: 'normal', cadence: SEED_CADENCE,
+        const msg = await rails.runRailsJob({ base: h.inputs, cadence: SEED_CADENCE,
                                               ...modelCfg(h, method, seed, SEED_PATHS) });
         out.push({
             seed,
             years: msg.years.map(y => ({ k: y.k, year: y.year, pos: y.pos, wealth: y.wealth, planSpend: y.planSpend,
-                                         upperScale: y.upperScale, lowerScale: y.lowerScale,
-                                         spendTarget: y.spendTarget, spendAtUpper: y.spendAtUpper,
-                                         spendAtLower: y.spendAtLower, clamped: y.clamped })),
+                                         ...normalOf(y) })),
+            engine400: msg.start ? msg.start.answers.normal : null,
             start: startSolve(h, method, seed, SEED_PATHS, target),
             startHigh: startSolve(h, method, seed, START_PATHS_HIGH, target),
         });
@@ -501,8 +517,8 @@ function table(head, rows) {
 function printReach(pools) {
     console.log('== 1. REACH, at the first full year (pool of ' + POOL_PATHS + ' paths, seed 42) ==');
     console.log('How much of today\'s TotalNetWealth each share of paths needs, the plan\'s own spending held.');
-    console.log('"never" = some path fails even at ' + S_RANGE[1] + 'x. The live solve stops looking at '
-        + LIVE_S_HI + 'x.\n');
+    console.log('"never" = some path fails even at ' + S_RANGE[1] + 'x. The first run\'s solver stopped looking at '
+        + LIVE_S_HI + 'x; the solver since 11.1859 looks to ' + NEW_S_HI + 'x.\n');
     const rows = [];
     for (const r of pools) {
         const pt = r.points.find(x => x.k === 1);
@@ -511,11 +527,12 @@ function printReach(pools) {
         const neverShare = s.filter(x => x >= NEVER).length / s.length;
         rows.push([labelOf(r.plan), METHOD_LABEL[r.method],
             pct(mean(pt.atPlan)), pct(s.filter(x => x > LIVE_S_HI).length / s.length, 2),
+            pct(s.filter(x => x > NEW_S_HI).length / s.length, 2),
             pct(neverShare, 2),
             times(railOf(s, 0.70)), times(railOf(s, 0.90)), times(railOf(s, 0.99)),
             times(quantile(s, 0.999)), times(s[s.length - 1])]);
     }
-    table(['household', 'method', 'PoS now', 'need >4x', 'never', '70% at', '90% at', '99% at', '99.9% at', 'all ' + POOL_PATHS + ' at'], rows);
+    table(['household', 'method', 'PoS now', 'need >4x', 'need >16x', 'never', '70% at', '90% at', '99% at', '99.9% at', 'all ' + POOL_PATHS + ' at'], rows);
 }
 
 function sliceStats(r, pt, N, q, field) {
@@ -745,7 +762,7 @@ function printCadence(cadences) {
                         // whose own solve, or either solve it was interpolated from, hit the edge.
                         const before = solvedC.filter(y => y.year < solveYear).pop();
                         const after = solvedC.find(y => y.year > solveYear);
-                        if ([own, before, after].some(y => y && y.clamped[flag])) { clampedRows++; continue; }
+                        if ([own, before, after].some(y => y && normalOf(y).clamped[flag])) { clampedRows++; continue; }
                         const denom = unit === 'w' ? r.log[i].totalNetWealth : own?.planSpend;
                         if (!(denom > 0)) continue;
                         errs[k].push(Math.abs(b[k] - a[k]) / denom);
@@ -763,7 +780,7 @@ function printCadence(cadences) {
     console.log('-- The same job solved every year, cost --');
     const rows2 = cadences.map(r => [labelOf(r.plan), METHOD_LABEL[r.method], r.n, r.years.length,
         r.cost.runs.toLocaleString('en-US'), (r.cost.solveMs / 1000).toFixed(0) + ' s',
-        (r.cost.msPerRun).toFixed(2), r.years.filter(y => Object.values(y.clamped).some(Boolean)).length]);
+        (r.cost.msPerRun).toFixed(2), r.years.filter(y => Object.values(normalOf(y).clamped).some(Boolean)).length]);
     table(['household', 'method', 'years', 'solves', 'runs', 'solve time (loaded)', 'ms/run', 'solves with a clamp'], rows2);
 }
 
@@ -800,51 +817,56 @@ function printSeeds(seedRuns) {
     table(['household', 'method', 'PoS year 1', ...fields.map(([, l]) => l + ' yr1 (all)'), 'raise clamped'], rows);
 
     console.log('-- After-Tax Spend for a 90% chance, from the plan\'s start (P129 prototype) --');
-    console.log('Mean and spread across seeds, at ' + SEED_PATHS + ' and ' + START_PATHS_HIGH + ' paths; the plan\'s own goal for scale.\n');
+    console.log('Mean and spread across seeds, at ' + SEED_PATHS + ' and ' + START_PATHS_HIGH + ' paths; the plan\'s own goal for scale.');
+    console.log('"Page" is the answer the page itself shows, from the same jobs (its own 400 paths, rounded to $100');
+    console.log('on the page); runs made before 11.1859 did not record it.\n');
     const rows2 = [];
     for (const r of seedRuns) {
         const lo = r.seeds.map(s => s.start), hi = r.seeds.map(s => s.startHigh);
         const g = v => v.map(x => x.spendGoal);
+        const live = r.seeds.map(s => s.engine400?.spendGoal).filter(v => v != null);
         rows2.push([labelOf(r.plan), METHOD_LABEL[r.method], money(r.spendGoal),
             `${pct(mean(lo.map(x => x.pos0)))}`,
             `${money(mean(g(lo)))} +/- ${pct(sd(g(lo)) / mean(g(lo)))}`,
             `${money(Math.min(...g(lo)))}-${money(Math.max(...g(lo)))}`,
             `${money(mean(g(hi)))} +/- ${pct(sd(g(hi)) / mean(g(hi)))}`,
+            live.length ? `${money(mean(live))} +/- ${pct(sd(live) / mean(live))}` : '-',
             `${lo.filter(x => x.clamped).length}/${hi.filter(x => x.clamped).length}`,
             `${Math.round(mean(lo.map(x => x.ms)))} ms / ${lo[0].runs}`]);
     }
     table(['household', 'method', 'plan goal', `PoS at goal (N=${SEED_PATHS})`, `N=${SEED_PATHS} answer`,
-           `N=${SEED_PATHS} range`, `N=${START_PATHS_HIGH} answer`, 'clamped lo/hi', 'cost (loaded), runs'], rows2);
+           `N=${SEED_PATHS} range`, `N=${START_PATHS_HIGH} answer`, 'page (400 paths)', 'clamped lo/hi',
+           'cost (loaded), runs'], rows2);
 }
 
 async function printTiming() {
-    console.log('== 4. COST, measured one job at a time on an otherwise idle process (Historical, the tab\'s default) ==');
-    console.log(`Machine: ${os.cpus()[0].model.trim()}, node ${process.version}. Minimum of ${TIMING_REPEATS} runs where repeated.`);
-    console.log('A browser worker adds its own start-up and transfer, which the panel reports separately.\n');
+    console.log('== 4. COST, measured one job at a time on an otherwise idle process (Historical) ==');
+    console.log(`Machine: ${os.cpus()[0].model.trim()}, node ${process.version}, page ${ENGINE}. Minimum of ${TIMING_REPEATS} runs where repeated.`);
+    console.log('A job solves every preset at once and includes the After-Tax Spend answer on its own 400 paths. A');
+    console.log('browser worker adds its own start-up and transfer, which the panel reports separately.\n');
     // Every household once; the first one repeated, which is what the spread line below reports.
     const rows = [];
     const repeats = [];
     for (const id of HOUSEHOLDS) {
         const h = household(id);
         const reps = id === HOUSEHOLDS[0] ? TIMING_REPEATS : 1;
-        let c3 = null, st = null;
+        let c3 = null;
         for (let i = 0; i < reps; i++) {
-            const msg = await rails.runRailsJob({ base: h.inputs, preset: 'normal', cadence: 3,
-                                                  ...modelCfg(h, 'bootstrap', 42, 100) });
-            const s = startSolve(h, 'bootstrap', 42, 100, RAIL_PRESETS.normal.target);
+            const msg = await rails.runRailsJob({ base: h.inputs, cadence: 3, ...modelCfg(h, 'bootstrap', 42, 100) });
             if (id === HOUSEHOLDS[0]) repeats.push(msg.cost.totalMs);
             if (!c3 || msg.cost.totalMs < c3.cost.totalMs) c3 = msg;
-            if (!st || s.ms < st.ms) st = s;
         }
         const pj = (cadence, paths) => rails.railsProjectMs(c3.cost, h.n, { cadence, numPaths: paths }).ms / 1000;
-        const both = c3.cost.totalMs + st.ms;
+        const start = c3.start ? c3.start.ms : 0;
         rows.push([labelOf(id), h.n, c3.years.length, c3.cost.runs.toLocaleString('en-US'),
-            (c3.cost.totalMs / 1000).toFixed(2) + ' s', `${Math.round(st.ms)} ms`,
+            (c3.cost.runsPerPathYear ?? 0).toFixed(1),
+            (c3.cost.totalMs / 1000).toFixed(2) + ' s', `${Math.round(start)} ms`,
             pj(5, 200).toFixed(1) + ' s', pj(3, 500).toFixed(1) + ' s', pj(3, 1000).toFixed(1) + ' s',
-            `${(both * 3.5 / 1000).toFixed(1)}-${(both * 6 / 1000).toFixed(1)} s`]);
+            `${(c3.cost.totalMs * 3.5 / 1000).toFixed(1)}-${(c3.cost.totalMs * 6 / 1000).toFixed(1)} s`]);
     }
-    table(['household', 'years', 'solves', 'runs (3y/100)', 'every 3, 100 paths', '+ After-Tax Spend',
-           'every 5, 200 (proj.)', 'every 3, 500 (proj.)', 'every 3, 1000 (proj.)', '3y/100 + start, 3.5-6x slower'], rows);
+    table(['household', 'years', 'solves', 'runs (3y/100)', 'runs a path a year', 'every 3, 100 paths',
+           'of it, After-Tax Spend', 'every 5, 200 (proj.)', 'every 3, 500 (proj.)', 'every 3, 1000 (proj.)',
+           'every 3, 100, at 3.5-6x slower'], rows);
     if (repeats.length > 1) {
         console.log(`Repeat spread, ${labelOf(HOUSEHOLDS[0])}, every 3 at 100 paths: `
             + repeats.map(ms => (ms / 1000).toFixed(2) + ' s').join(', ') + '.');
@@ -852,8 +874,8 @@ async function printTiming() {
 
     // The projection is only as good as its check.
     const h = household(HOUSEHOLDS[0]);
-    const c3 = await rails.runRailsJob({ base: h.inputs, preset: 'normal', cadence: 3, ...modelCfg(h, 'bootstrap', 42, 100) });
-    const big = await rails.runRailsJob({ base: h.inputs, preset: 'normal', cadence: 3, ...modelCfg(h, 'bootstrap', 42, QUICK ? 200 : 500) });
+    const c3 = await rails.runRailsJob({ base: h.inputs, cadence: 3, ...modelCfg(h, 'bootstrap', 42, 100) });
+    const big = await rails.runRailsJob({ base: h.inputs, cadence: 3, ...modelCfg(h, 'bootstrap', 42, QUICK ? 200 : 500) });
     const pj = rails.railsProjectMs(c3.cost, h.n, { cadence: 3, numPaths: big.numPaths });
     console.log(`Projection check, ${labelOf(h.id)}: every 3 years at ${big.numPaths} paths projected `
         + `${(pj.ms / 1000).toFixed(2)} s from the 100-path run and took ${(big.cost.totalMs / 1000).toFixed(2)} s.\n`);
@@ -878,6 +900,11 @@ async function printTiming() {
     const t0 = Date.now();
     console.log(`rails_precision_harness${QUICK ? ' (--quick)' : ''}: ${HOUSEHOLDS.length} households, `
         + `pool ${POOL_PATHS} paths, ${JOBS} processes at once. Page on disk: ${ENGINE}.\n`);
+    if (TIMING_ONLY) {
+        await printTiming();
+        console.log(`Done in ${((Date.now() - t0) / 60000).toFixed(1)} min.`);
+        return;
+    }
     const tasks = [];
     for (const plan of HOUSEHOLDS) {
         for (const method of METHODS) tasks.push({ kind: 'pool', plan, method });

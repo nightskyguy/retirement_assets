@@ -910,7 +910,10 @@ function mcInputsChanged() {
     // time the banner appeared. (This needed no early return on _lastMCHash, and had one only for the
     // stress pass below: the two hashes are written together, so a sweep hash that moved means the
     // whole hash moved too.)
-    if (_mcResults && _buildSweepHash() !== _lastSweepHash) markMCStale(true);
+    //
+    // Both ways (user, 2026-09-16: "clear it"): an edit that is undone puts the plan back to the one
+    // the sweep ran, and the banner goes with it.
+    if (_mcResults) markMCStale(_buildSweepHash() !== _lastSweepHash);
     // No nerd-mode guard here on purpose. Nerd mode controls when the expensive SWEEP runs, and
     // nothing in this function runs it. Marking the sweep out of date and refreshing the ~10-sim
     // stress pass have to happen in both modes, or a nerdknob user silently reads the previous

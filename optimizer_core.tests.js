@@ -8201,7 +8201,8 @@ const _railsEngine = IS_NODE ? require('./montecarlo/rails_engine.js') : window.
 
 test('P128: the rail presets are the three published sets, and each target sits between its rails', () => {
     const P = core.RAIL_PRESETS;
-    const want = { tight: [0.95, 0.99, 0.80], normal: [0.90, 0.99, 0.70], loose: [0.80, 1.00, 0.40] };
+    // Loose raises at 99.5% where the article says 100% (user, 2026-09-16): a sample cannot state 100%.
+    const want = { tight: [0.95, 0.99, 0.80], normal: [0.90, 0.99, 0.70], loose: [0.80, 0.995, 0.40] };
     assert(JSON.stringify(Object.keys(P)) === JSON.stringify(Object.keys(want)), `presets ${Object.keys(P)}`);
     for (const [k, [t, u, l]] of Object.entries(want)) {
         assert(P[k].target === t && P[k].upper === u && P[k].lower === l,
@@ -8292,46 +8293,168 @@ test('P128: the survival test is ONE helper, and the Monte Carlo run agrees with
         `recomputed ${ok}/${banks.numPaths}, the run reported ${msg.variations[0].survivalRate}`);
 });
 
-test('P128: the rails solver solves the cadence it was given, brackets the plan, and prices itself', async () => {
+test('P128: the rails solver solves the cadence it was given, every preset at once, and prices itself', async () => {
     // A Guardrails plan on purpose: every solve must run it with the rule off and still resume from
     // the rule's own state.
     const base = { ...CEIL_BASE };
     const cadence = 10, paths = 30;
-    const msg = await _railsEngine.runRailsJob({ base, preset: 'normal', cadence, numPaths: paths,
+    const msg = await _railsEngine.runRailsJob({ base, cadence, numPaths: paths, startPaths: 30,
         simulationMode: 'gbm', seed: 42, mu: 0.07, sigma: 0.12, inflationRate: 0.025 });
-    assert(msg && !msg.error && msg.kind === 'rails', `a rails message, got ${msg && msg.error}`);
-    const n = simulate(base).log.length;
+    assert(msg && !msg.error && msg.kind === 'rails' && msg.version === 2, `a rails message, got ${msg && msg.error}`);
+    const log = simulate(base).log;
+    const n = log.length;
     const solved = _railsEngine.railsSolvedYears(n, cadence);
     assert(JSON.stringify(msg.years.map(y => y.k)) === JSON.stringify(solved), `solved ${msg.years.map(y => y.k)}`);
     assert(msg.ruleOn === true && msg.cadence === cadence && msg.numPaths === paths, 'the message names its settings');
-    const E = _railsEngine.RAILS_ESTIMATES_PER_YEAR;
-    assert(msg.cost.estimates === solved.length * E, `estimates ${msg.cost.estimates}`);
-    assert(msg.cost.runs === solved.length * E * paths, `runs ${msg.cost.runs}`);
-    const P = core.RAIL_PRESETS.normal;
-    const log = simulate(base).log;
+    const keys = Object.keys(core.RAIL_PRESETS);
+    assert(JSON.stringify(Object.keys(msg.presets)) === JSON.stringify(keys), `presets ${Object.keys(msg.presets)}`);
     // The first solve is the first full year, resumed from the end of the plan's first year.
     assert(solved[0] === 1 && msg.years[0].year === log[1].year && msg.years[0].fromYear === log[0].year,
         `first solve ${msg.years[0].year} from ${msg.years[0].fromYear}`);
+    const DOLLARS = [['railUpper', 'upper'], ['railLower', 'lower'], ['spendTarget', 'target'],
+                     ['spendAtUpper', 'spendUp'], ['spendAtLower', 'spendDn']];
     for (const y of msg.years) {
-        const at = `${y.year}`;
-        assert(y.pos >= 0 && y.pos <= 1, `${at}: probability ${y.pos}`);
-        assert(y.railLower <= y.railUpper, `${at}: the cut rail must sit below the raise rail`);
-        assert(y.spendAtLower <= y.spendAtUpper, `${at}: cutting must spend less than raising`);
+        assert(y.pos >= 0 && y.pos <= 1, `${y.year}: probability ${y.pos}`);
         // The rails are stated in the plan's own TotalNetWealth at the end of the year before, so
         // each lies on the side of that wealth that the probability says it must.
-        assert(y.wealth === log[y.k - 1].totalNetWealth, `${at}: wealth ${y.wealth} is not the year-end TotalNetWealth`);
-        assert((y.pos < P.lower) === (y.railLower > y.wealth), `${at}: cut rail ${y.railLower} vs ${y.wealth} at ${y.pos}`);
-        assert((y.pos < P.upper) === (y.railUpper > y.wealth), `${at}: raise rail ${y.railUpper} vs ${y.wealth} at ${y.pos}`);
-        assertNear(y.railUpper, y.wealth * y.upperScale, `${at}: the raise rail is the scale times the wealth`, 1e-6);
-        assert((y.pos >= P.target) === (y.spendTarget >= y.planSpend), `${at}: target spend vs plan spend at ${y.pos}`);
+        assert(y.wealth === log[y.k - 1].totalNetWealth, `${y.year}: wealth ${y.wealth} is not the year-end TotalNetWealth`);
+        for (const key of keys) {
+            const P = core.RAIL_PRESETS[key], p = y.presets[key], at = `${y.year} ${key}`;
+            // A clamped answer is a bound: it carries no dollars, so its line ends.
+            for (const [f, c] of DOLLARS) {
+                if (p.clamped[c]) assert(p[f] === null, `${at}: clamped ${c} still carries ${p[f]}`);
+            }
+            if (p.railLower != null && p.railUpper != null) assert(p.railLower <= p.railUpper, `${at}: cut rail above raise rail`);
+            if (p.spendAtLower != null && p.spendAtUpper != null) {
+                assert(p.spendAtLower <= p.spendAtUpper, `${at}: cutting must spend less than raising`);
+            }
+            if (p.railLower != null) assert((y.pos < P.lower) === (p.railLower > y.wealth), `${at}: cut rail ${p.railLower} vs ${y.wealth} at ${y.pos}`);
+            if (p.railUpper != null) {
+                assert((y.pos < P.upper) === (p.railUpper > y.wealth), `${at}: raise rail ${p.railUpper} vs ${y.wealth} at ${y.pos}`);
+                assertNear(p.railUpper, y.wealth * p.upperScale, `${at}: the raise rail is the scale times the wealth`, 1e-6);
+            }
+            if (p.spendTarget != null) assert((y.pos >= P.target) === (p.spendTarget >= y.planSpend), `${at}: target spend vs plan spend at ${y.pos}`);
+        }
+        // Tight and Normal both raise at 99%: one rail, found once.
+        assert(y.presets.tight.upperScale === y.presets.normal.upperScale, `${y.year}: the shared 99% rail differs`);
     }
-    // The projection of the settings that ran reproduces what ran.
+    // The projection of the settings that ran reproduces the runs, and the simulated years closely:
+    // a path's searches end sooner or later depending on where it sits.
     const pj = _railsEngine.railsProjectMs(msg.cost, n, { cadence, numPaths: paths });
-    assert(pj.runs === msg.cost.runs && pj.solvedYears === solved.length, `projection ${pj.runs} runs`);
-    // And the model it prices time with - every resumed run simulates exactly the years left - is
-    // what the runs actually did. That is what makes a projected cadence 1 trustworthy.
-    assert(msg.cost.crashes === 0 && pj.pathYears === msg.cost.pathYears,
+    assert(pj.runs === msg.cost.runs && pj.solvedYears === solved.length, `projection ${pj.runs} runs, ran ${msg.cost.runs}`);
+    assert(msg.cost.crashes === 0 && Math.abs(pj.pathYears / msg.cost.pathYears - 1) < 0.25,
         `simulated years: projected ${pj.pathYears}, measured ${msg.cost.pathYears}`);
+    assert(msg.start && msg.start.paths === 30 && msg.cost.startRuns === msg.start.runs, 'the start answer is costed');
+});
+
+test('P128n: the count a q answer demands is the Monte Carlo tab\'s own comparison', () => {
+    const c = _railsEngine.railsCount;
+    assert(c(100, 0.9) === 90 && c(100, 0.99) === 99 && c(100, 0.995) === 100 && c(100, 0.7) === 70,
+        `100 paths: ${[0.9, 0.99, 0.995, 0.7].map(q => c(100, q))}`);
+    assert(c(200, 0.995) === 199 && c(30, 0.9) === 27 && c(24, 0.9) === 22 && c(10, 0) === 0,
+        `${c(200, 0.995)} ${c(30, 0.9)} ${c(24, 0.9)} ${c(10, 0)}`);
+    for (const N of [20, 24, 30, 100, 400]) {
+        for (const q of [0.4, 0.7, 0.8, 0.9, 0.95, 0.99, 0.995]) {
+            const k = c(N, q);
+            assert(k / N >= q && (k === 0 || (k - 1) / N < q), `N ${N}, q ${q}: ${k}`);
+        }
+    }
+});
+
+// The whole point of the per-path solver: its answers ARE the crossings a direct search over the share
+// of surviving paths finds, on the same paths. Slow: about fifteen direct searches.
+test.slow('P128n: every preset\'s rails, targets and rail spends match a direct search on the same paths', async () => {
+    const base = { ...CEIL_BASE, spendRule: '' };
+    const cfg = { base, cadence: 10, numPaths: 20, startPaths: 20, simulationMode: 'gbm', seed: 7,
+                  mu: 0.07, sigma: 0.12, inflationRate: 0.025 };
+    const msg = await _railsEngine.runRailsJob(cfg);
+    const y = msg.years[0];
+    const spine = simulate({ ...base, computeOC: false, captureResume: true });
+    const rec = spine.log[y.k - 1]['-resume'];
+    const solveBase = { ...base, computeOC: false, captureResume: false, resume: undefined, spendRule: '' };
+    const years = spine.log.length + _railsEngine.RAILS_EXTRA_YEARS;
+    const banks = _mcEngine.buildBanks({ ...cfg, years, baseInputs: solveBase }, _mcPrng.mulberry32(cfg.seed), 'gbm');
+    const paths = Array.from({ length: banks.numPaths }, (_, p) => _mcEngine.buildPathInputs(banks, p, years, solveBase, 'gbm'));
+    const at = (s, m) => core.resumeInputs(solveBase, rec, { balanceScale: s, spendGoal: y.planSpend * m });
+    const share = (s, m) => paths.filter(pi => !simulate({ ...at(s, m), ...pi }).log.some(_mcEngine.yearIsRuined)).length / paths.length;
+    // The crossing to 0.2%: the smallest wealth, or the largest spending, that meets q.
+    const cross = (lo, hi, meets, rising) => {
+        for (let i = 0; i < 13; i++) {
+            const x = Math.sqrt(lo * hi);
+            if (meets(x) === rising) hi = x; else lo = x;
+        }
+        return Math.sqrt(lo * hi);
+    };
+    const [S_LO, S_HI] = _railsEngine.RAILS_SCALE_RANGE;
+    const [M_LO, M_HI] = _railsEngine.RAILS_SPEND_RANGE;
+    const near = (got, want, what) => assertNear(got / want, 1, what, 0.025);
+    let checked = 0;
+    for (const key of Object.keys(core.RAIL_PRESETS)) {
+        const P = core.RAIL_PRESETS[key], p = y.presets[key];
+        if (!p.clamped.upper) { near(p.upperScale, cross(S_LO, S_HI, s => share(s, 1) >= P.upper, true), `${key} raise rail`); checked++; }
+        if (!p.clamped.lower) { near(p.lowerScale, cross(S_LO, S_HI, s => share(s, 1) >= P.lower, true), `${key} cut rail`); checked++; }
+        if (!p.clamped.target) { near(p.targetMult, cross(M_LO, M_HI, m => share(1, m) >= P.target, false), `${key} target`); checked++; }
+        if (!p.clamped.spendUp) {
+            near(p.spendAtUpper / y.planSpend, cross(M_LO, M_HI, m => share(p.upperScale, m) >= P.target, false), `${key} spend at raise`);
+            checked++;
+        }
+        if (!p.clamped.spendDn) {
+            near(p.spendAtLower / y.planSpend, cross(M_LO, M_HI, m => share(p.lowerScale, m) >= P.target, false), `${key} spend at cut`);
+            checked++;
+        }
+    }
+    assert(checked >= 12, `only ${checked} of 15 answers were unclamped enough to check`);
+});
+
+// P129. The After-Tax Spend that gives the plan each preset's chance, from its own start.
+test('P129: the After-Tax Spend answer meets its target, a little more does not, and it ignores the goal it started from', async () => {
+    const base = { ...CEIL_BASE, spendRule: '' };
+    const cfg = { base, cadence: 10, numPaths: 20, startPaths: 40, simulationMode: 'gbm', seed: 11,
+                  mu: 0.07, sigma: 0.12, inflationRate: 0.025 };
+    const msg = await _railsEngine.runRailsJob(cfg);
+    const a = msg.start.answers.normal;
+    assert(a && !a.clamped && a.spendGoal > 0 && msg.start.paths === 40, `answer ${JSON.stringify(a)}`);
+    assertNear(a.spendGoal, base.spendGoal * a.mult, 'the answer is its multiple of the goal on screen', 1e-9);
+    // Typed in as the goal, on the same 40 paths.
+    const years = simulate(base).log.length + _railsEngine.RAILS_EXTRA_YEARS;
+    const solveBase = { ...base, computeOC: false, captureResume: false, resume: undefined, spendRule: '' };
+    const banks = _mcEngine.buildBanks({ ...cfg, years, numPaths: 40, baseInputs: solveBase }, _mcPrng.mulberry32(cfg.seed), 'gbm');
+    const share = goal => {
+        let ok = 0;
+        for (let p = 0; p < banks.numPaths; p++) {
+            const r = simulate({ ...solveBase, spendGoal: goal, ..._mcEngine.buildPathInputs(banks, p, years, solveBase, 'gbm') });
+            if (!r.log.some(_mcEngine.yearIsRuined)) ok++;
+        }
+        return ok / banks.numPaths;
+    };
+    const P = core.RAIL_PRESETS.normal;
+    assert(share(a.spendGoal * 0.99) >= P.target, `1% under the answer: ${share(a.spendGoal * 0.99)}`);
+    assert(share(a.spendGoal * 1.01) < P.target, `1% over the answer: ${share(a.spendGoal * 1.01)}`);
+    // The same plan with a different goal gives the same dollars (within the 0.5% the search resolves).
+    const again = await _railsEngine.runRailsJob({ ...cfg, base: { ...base, spendGoal: base.spendGoal * 1.3 } });
+    assertNear(again.start.answers.normal.spendGoal / a.spendGoal, 1, 'the answer does not move with the starting goal', 0.011);
+});
+
+test('P128n: a clamped answer ends its line, and says so on its row', () => {
+    const f = i => Math.pow(1.03, i);
+    const log = [0, 1, 2, 3, 4, 5, 6, 7].map(i => ({ year: 2030 + i, inflationFactor: f(i) }));
+    const none = { upper: '', lower: '', target: '', spendUp: '', spendDn: '' };
+    const solve = (k, over) => ({ k, year: 2030 + k, fromYear: 2029 + k, pos: 0.8, wealth: 700 * f(k - 1),
+        planSpend: 60 * f(k), presets: { normal: { railLower: 400 * f(k - 1), railUpper: 900 * f(k - 1),
+        spendTarget: 50 * f(k), spendAtLower: 40 * f(k), spendAtUpper: 70 * f(k), clamped: { ...none }, ...over } } });
+    // The raise rail of the second solve is beyond the search.
+    const msg = { years: [solve(1, {}), solve(5, { railUpper: null, spendAtUpper: null,
+                                                  clamped: { ...none, upper: 'high', spendUp: 'rail' } })] };
+    const rows = _railsEngine.railsRowFields(msg, log, { preset: 'normal' });
+    assert(rows[4].railUpper === null && rows[4].railLower > 0, 'the clamped rail has no value; the other rail does');
+    assert([1, 2, 3].every(i => rows[i].railUpper === null && rows[i].railLower > 0),
+        'nothing is interpolated toward a clamped answer');
+    assert(rows[0].railUpper === 900, 'the solve before it is untouched');
+    assert(/ended: raise rail, spend at raise/.test(rows[4].railBasis), `basis ${rows[4].railBasis}`);
+    assert(rows[5].railSpendUp === null && rows[5].railSpend > 0, 'its spend line ends too');
+    // Another preset asked of a message without it lays out nothing numeric.
+    const tight = _railsEngine.railsRowFields(msg, log, { preset: 'tight' });
+    assert(tight[0].railUpper === null && tight[0].railBasis === 'solved', 'an absent preset has no values');
 });
 
 test('P128: TotalNetWealth scales with a scaled resume, which is what lets a rail be stated in it', () => {
@@ -8352,7 +8475,7 @@ test('P128: TotalNetWealth scales with a scaled resume, which is what lets a rai
 
 test('P128: a cancelled rails job resolves to nothing', async () => {
     let checks = 0;
-    const msg = await _railsEngine.runRailsJob({ base: { ...CEIL_BASE }, preset: 'tight', cadence: 5, numPaths: 20,
+    const msg = await _railsEngine.runRailsJob({ base: { ...CEIL_BASE }, cadence: 5, numPaths: 20, startPaths: 20,
         simulationMode: 'gbm', seed: 7, mu: 0.07, sigma: 0.12 }, { shouldCancel: () => ++checks > 3 });
     assert(msg === null, `expected null, got ${msg && msg.kind}`);
 });
@@ -8364,10 +8487,11 @@ test('P128: each solve lands on two rows, and the years between solves are inter
     // today's dollars at the row they sit on, spending constant at its own row, and a probability
     // rising from 50% to 90%.
     const solvedAt = (k, pos) => ({ k, year: 2030 + k, fromYear: 2030 + k - 1, pos,
-        wealth: 700 * f(k - 1), railLower: 400 * f(k - 1), railUpper: 900 * f(k - 1),
-        planSpend: 60 * f(k), spendTarget: 50 * f(k), spendAtLower: 40 * f(k), spendAtUpper: 70 * f(k) });
+        wealth: 700 * f(k - 1), planSpend: 60 * f(k),
+        presets: { normal: { railLower: 400 * f(k - 1), railUpper: 900 * f(k - 1),
+                             spendTarget: 50 * f(k), spendAtLower: 40 * f(k), spendAtUpper: 70 * f(k) } } });
     const msg = { years: [solvedAt(1, 0.5), solvedAt(5, 0.9)] };
-    const rows = _railsEngine.railsRowFields(msg, log);
+    const rows = _railsEngine.railsRowFields(msg, log, { preset: 'normal' });
     // Wealth rails and the probability on the row the solve starts from, the year-end they compare with.
     assert(rows[0].railBasis === 'solved' && rows[4].railBasis === 'solved', 'the solves start from rows 0 and 4');
     assert(rows[0].railLower === 400 && rows[0].railSpend === undefined, 'row 0: wealth rails, no spending');

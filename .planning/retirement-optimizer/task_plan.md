@@ -17,7 +17,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P34 | NOT a P103 prerequisite (a-d are node harnesses); still the whole slow-machine story | `P34a` |
 | **O1** | P28j | `jg`/`jh`/`ji`/`jk` SHIPPED, and `jo`'s Split/Early/Late menu shipped in `a5d8aa9`. `jf` MEASURED and NOT acted on - the trigger is unchanged, and its removal case was withdrawn | `P28jn` / `P28jo` Automatic |
 | **O1** | P115 | **tax-payment attribution** (user, 2026-09-09). `a` SHIPPED v11.17b1: cash interest trued up to what the cash earned; `b` CLOSED v11.17f4. Priority is mine, not the user's | `P115c` |
-| **O1** | P127 + P128 | **COMMITTED 2026-09-16 v11.1857 (`2e6fea4`), PR #227 OPEN** (user: "Let's do P128 ... also worth amending the GK-Style rules"). P127: no cut in the last 8 years, 6% CPI cap, freeze on the portfolio return, the filter judged against the shape, $0 conversion always admissible (`P126f`), ceiling as a nerdknob switch. P128: `?nerdknob=rails`, resume-based solver, both charts, timing + projection. Round 3 on the same PR: panel below the charts, folded, own Monte Carlo method; the P91 success-path drain; heavy precision test (`P128k`) gating `P129`. P126 itself shipped in PR #224 | round 3, then merge |
+| **O1** | P127 + P128 | **PR #227 OPEN; round 4 committed 2026-09-16 v11.1859** (user: "Let's do P128 ... also worth amending the GK-Style rules"). P127: no cut in the last 8 years, 6% CPI cap, freeze on the portfolio return, the filter judged against the shape, $0 conversion always admissible (`P126f`), ceiling as a nerdknob switch. P128: `?nerdknob=rails`, resume-based solver, both charts, timing + projection. Round 3 on the same PR: panel below the charts, folded, own Monte Carlo method; the P91 success-path drain; heavy precision test (`P128k`) gating `P129`. Round 4, the user's decisions: Monte Carlo on Synthetic GBM, a per-path solver answering every preset at once, the panel for everyone, the After-Tax Spend answer (`P129`), income charts that leave out saved money (`P130`), gray/red/green bands. P126 itself shipped in PR #224 | user review, then merge |
 
 **Live carry-overs from finished phases** - the rest of what those phases did is in their stubs below:
 - `P85` RE-RUN: converting earlier still wins 353 of 499, but **the RMD claim BROKE** - 124 counterexamples, all bracket strategies at a live IRA Goal. `P72` is still pending.
@@ -885,7 +885,51 @@ want to do more testing with it set to 'autorun' ... are those tasks in contenti
       the real blur path with the undo case). Browser: 12 fields tabbed through, 0 workers; an edit
       and its undo, 1 each, tile correct both times, before and after a full run.
 
-## P129: set After-Tax Spend from the rails solve  *(2026-09-16, user-raised. PLANNED, not started, PRIORITY UNASSIGNED; GATED on `P128k`)*
+### Round 4, 2026-09-16 evening: the user's decisions after `P128k`, and the build
+
+User, answering the fourteen open decisions and the five after the heavy test:
+"The default MC method should be GBM. Historical is good, but not pessimistic enough. The default for
+Market Paths in RBG should remain 'Same as MC'. 3. Yes: build the after-tax spend suggestion.
+4. no higher precision for now ... 5. ... we have TWO guardrails: GK-Style, and Risk Based. The RBG
+should be shown independent of the GK-style. 6. [round to $100] 7. Yes. 8. end the line 9. GBM
+10. For non-nerdknob users, leave it off and expose it. 'Clicking it on' should cause the build to
+run. 11. Explain. Whatever goes back into Brokerage should NOT be counted as income. 12. clear it.
+13. my plan is in the age-gap-ira-heavy (close enough, anyway). Use 99.5% instead of 100% ...
+After Tax spend answer is worth calculating on the first year at 400 paths. Round to 100s ...
+Please calculate every rail (and spend threshold?) at the same time."
+
+- [x] `P128m` Monte Carlo tab default method -> Synthetic GBM (was Historical). User-visible:
+      changelog. The rails' "Same as the Monte Carlo tab" stays their default, so they follow.
+- [x] `P128n` per-path solver: each path's wealth threshold at the plan's spending and spending
+      threshold at the plan's wealth, found once; every preset's rails, target spends and chance of
+      success read off them; the spend at every distinct rail found the same way at that rail. A
+      preset switch redraws without solving. Loose raises at 99.5% (the article's 100% cannot be
+      stated by a sample). Defaults 100 paths, every 3 years. Clamped answers end their line.
+      Built with selective refinement (`refine()`): 20-23 runs a path a solved year for all three
+      presets on eight bank households, against 46 for one preset before; 7-14 s a household
+      (findings "P128 round 4"). Search ceiling 16x for wealth and spending.
+- [x] `P128o` the rails panel for everyone (the `?nerdknob=rails` gate goes), auto-run off by
+      default; ticking auto-run solves at once. Cadence, paths and the timing readout stay behind
+      the plain knob. Shown whatever the Guardrails (GK-style) switch says.
+- [x] `P129` build (below): from the plan's start, 400 paths, every preset's target, rounded to $100;
+      a panel line with Use it / Restore; an entry in the After-Tax Spend ⓘ, which becomes a small
+      menu when a risk-based answer exists. No higher-precision button.
+- [x] `P130` build (below): the income charts count what the year SAVED - reinvested in Brokerage
+      or banked to Cash after spending and taxes - as neither income nor spendable. The Inflows vs
+      Outflows view already nets it out (`netOut`).
+- [x] `P128p` the Monte Carlo "out of date" banner clears when an edit is undone.
+- [x] `P128q` (user, mid-build) bands: "the band between the cut and raise rail is green, but it
+      should be light gray. The band below cut should be light pink/red, above the raise should be
+      green." On both views; the gray band is a line-less copy of the raise line (`_railBand`),
+      kept out of the legend and the tooltip.
+- [x] `P128r` (user, same message) "the Risk-based rails area is too wordy, and doesn't mention that
+      Income vs Net contains the spending RBG info": status, start line and note cut to a few
+      short lines, the detail moved to tooltips, and the note links to the Income vs Net view.
+- [x] `P128s` (user) "Turn of[f] 'Show Prior Rails' by default."
+- Not changed: the solver's count rule (no path-count correction) - 99.5% cannot be corrected at
+  100 paths, and the user did not ask for it. `age-gap-ira-heavy-ca` stands in for the user's plan.
+
+## P129: set After-Tax Spend from the rails solve  *(2026-09-16, user-raised. BUILT in round 4, v11.1859: 400 paths, $100 rounding, ⓘ entry, shown whatever GK says)*
 
 **User, 2026-09-16 afternoon:** "Running 100 paths every 3 years is sufficient - including one extra
 pass for the After-Tax spend calculation that would start in the current year. The RBG logic can
@@ -977,7 +1021,7 @@ fixed point, several runs to settle. From the start it is one bisection.
 - ~~Precision~~ ANSWERED 2026-09-16: 100 paths by default, with a "higher precision" button - once
   `P128k` has priced both.
 
-## P130 candidate: the income charts count a harvest's reinvested proceeds as spendable  *(2026-09-16, user observation. NOT STARTED, PRIORITY UNASSIGNED)*
+## P130: the income charts count a harvest's reinvested proceeds as spendable  *(2026-09-16, user observation. BUILT in round 4, v11.1859 - user: "Whatever goes back into Brokerage should NOT be counted as income")*
 
 User, on the plan above: "Income is WAY above the Spend at Target during Brokerage years." Measured:
 it is the Cycle Brokerage harvest, not the rails. In each of the plan's three harvest years it sells

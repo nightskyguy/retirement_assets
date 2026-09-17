@@ -553,11 +553,13 @@ Three scopes, smallest first. Only the first is priced by anything in this repor
 1. **A guardrail readout.** Target-PoS spending, the two rail balances, and the adjusted spending at
    each rail, for the plan as it is. Every piece exists; the work is a panel, a worker call and a
    progress bar, on the pattern the Monte Carlo tab already uses. ~9,200 engine runs per plan.
-   **Built as P128 (2026-09-16), behind `?nerdknob=rails`**: solved at a cadence along the whole plan
-   rather than once, drawn on the live charts, and reporting its own cost with a projection for
-   other settings. Measured in the page rather than by this harness, on its default plan at 60
-   paths: every 5 years, 13,800 runs in 5 seconds; every year, 66,240 runs in 16 seconds, against
-   18 projected from the first.
+   **Built as P128 (2026-09-16), and on the page for everyone since the same day**: solved at a
+   cadence along the whole plan rather than once, drawn on the live charts, and reporting its own
+   cost with a projection for other settings. The first solver, measured in the page rather than by
+   this harness on its default plan at 60 paths: every 5 years, 13,800 runs in 5 seconds; every
+   year, 66,240 runs in 16 seconds, against 18 projected from the first.
+   [RISK_BASED_RAILS_PRECISION.md](RISK_BASED_RAILS_PRECISION.md) times the per-path solver that
+   replaced it.
 2. **A `spendRule: 'rbg'` beside `'gk'`.** A simulated run that follows the rails year by year. The
    rails cannot be re-solved inside every path-year - that is 200 estimates x 30 years x 200 paths -
    so it needs the article's own device: solve the rails once as *balances*, compare the running

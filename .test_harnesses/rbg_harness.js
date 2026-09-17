@@ -136,12 +136,14 @@ const STEPS = 9;                      // bisection steps; 9 puts a spend answer 
 //
 // READ FROM `RAIL_PRESETS` in optimizer_core.js (P128a), which the page's rails panel reads too:
 // A is its `normal` preset and B its `loose` one. The names are built from the numbers so a label
-// cannot drift from the set it names.
+// cannot drift from the set it names. B's raise rail is pinned back to the ARTICLE's 100% here: the
+// page's Loose preset raises at 99.5% since 2026-09-16 (a sample cannot state 100%), but this
+// harness measures the article's own rules, and its report quotes them.
 const pctInt = x => Math.round(x * 100);
 const railSet = (tag, p) => ({ ...p, name: `${tag} ${pctInt(p.target)}/${pctInt(p.upper)}/${pctInt(p.lower)}` });
 const RAIL_SETS = [
     railSet('A', core.RAIL_PRESETS.normal),
-    railSet('B', core.RAIL_PRESETS.loose),
+    railSet('B', { ...core.RAIL_PRESETS.loose, upper: 1.00 }),
 ];
 const PRIMARY = RAIL_SETS[0];
 const SPEND_TARGETS = [0.95, 0.90, 0.80, 0.70, 0.40];

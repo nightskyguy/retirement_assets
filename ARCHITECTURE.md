@@ -459,7 +459,7 @@ retuning the inflation knobs leaves every return draw bit-identical. Any change 
 skips a draw desynchronizes the stream from that year on; this is why Fixed Inflation sets the shock
 size to zero and still makes the draw.
 
-### 5a. Risk-based rails, and resuming a plan  (P128, `?nerdknob=rails`)
+### 5a. Risk-based rails, and resuming a plan  (P128, for everyone since 2026-09-16)
 
 `montecarlo/rails_engine.js` is a second KIND of job for the same shells: `worker.js` dispatches on
 `cfg.kind === 'rails'` to `runRailsJob`, and `mc_controller.js` keeps **one worker per kind**, so a
@@ -485,11 +485,15 @@ flowchart TD
     JOB --> BANKS["buildBanks + buildPathInputs once<br/>CRN across every estimate and year"]
     SPINE --> YEARS["solved years 1, 1+c, 1+2c ...<br/>the first full year, then every c"]
     BANKS --> YEARS
-    YEARS --> POS["46 estimates per year:<br/>probability as planned, then 5 bisections<br/>target spend, raise rail, cut rail,<br/>spend at each rail"]
-    POS --> EST["each estimate: resumeInputs(rec, scale, spend)<br/>x paths, survival = yearIsRuined"]
-    EST --> MSG["years[] + cost record<br/>runs, simulated years, ms per phase"]
+    YEARS --> POS["per path: survival as planned brackets its<br/>wealth threshold and its spending threshold"]
+    POS --> REF["refine(): narrow only the paths that could still be<br/>an order statistic - every preset's rails and target"]
+    REF --> RS["per distinct rail: the spending threshold at that wealth,<br/>bracketed by pass 1, refined the same way"]
+    RS --> EST["each test: resumeInputs(rec, scale, spend)<br/>+ one path, survival = yearIsRuined"]
+    JOB --> START["After-Tax Spend: its own 400 paths from resumeStart,<br/>every preset's target, the same refine()"]
+    EST --> MSG["years[].presets + start + cost record<br/>runs, runs a path a year, ms per phase"]
+    START --> MSG
     MSG --> MERGE["railsRowFields onto the live log<br/>wealth rails on the year-end row,<br/>spending on the next"]
-    MERGE --> DRAW["Balances chart: wealth rails<br/>Income vs Net: spending rails<br/>triangles, green band on both<br/>Annual Details: Rails columns"]
+    MERGE --> DRAW["Balances chart: wealth rails<br/>Income vs Net: spending rails<br/>triangles; green above, gray between,<br/>light red below, on both<br/>Annual Details: Rails columns"]
 ```
 
 **Resume.** `simulate({ captureResume: true })` writes, on every log row, the state the NEXT year
@@ -502,11 +506,22 @@ read by `ySeq`, the run's own index from 0. A test resumes every bank household,
 several years and demands every field of every later row match exactly. The rails solve with
 Guardrails off: the rails are the spending rule under evaluation.
 
+**Every preset at once (P128n).** A survival test on one path is monotone in wealth and in spending
+(10,800 path checks by `rails_precision_harness.js`, none out of order), so every answer is an order
+statistic of per-path thresholds: the rail for q is the c-th smallest wealth threshold, c the least
+count with c / N >= q. `refine()` keeps each threshold as a bracket and narrows only the brackets that
+overlap the range an asked-for statistic could still take, so most paths stop after a few tests. On
+the eight bank households that harness times, that is 20 to 23 runs a path a solved year for all
+three presets, against 46 for one preset by bisecting the share of paths. The preset is therefore NOT in the rails fingerprint: switching
+it redraws. A clamped answer (beyond 16x, or below 0.05x wealth / 0.1x spending) carries no dollars,
+and `railsRowFields` ends its line there. The After-Tax Spend answer is a dollar amount whose
+fingerprint leaves out After-Tax Spend itself, so *Use it* does not make it stale.
+
 **Units and placement.** Scaling every balance and the basis by one factor scales `totalNetWealth` by
 exactly that factor, so the rails are stated as the year-end TotalNetWealth that would put the plan on
 each rail - on the row they start from, beside that row's own TotalNetWealth. The spending answers
-belong to the solved year and sit on its row. The panel keeps the previous solve and draws it faded,
-and prices other settings from the last run's cost per simulated year (`railsProjectMs`).
+belong to the solved year and sit on its row. The panel keeps the previous solve and can draw it faded
+(*Show previous rails*, off by default), and prices other settings from the last run's cost per simulated year (`railsProjectMs`).
 
 **The return model.** The panel picks its own method (`railsMethod`: Historical, either Synthetic, or
 whatever the Monte Carlo tab's Simulation Mode is); every other parameter is read from the Monte Carlo
@@ -514,7 +529,10 @@ tab (`railsModelCfg`). Those tab controls do not re-run the plan, so the panel l
 (`railsBindModelInputs`): an edit marks the rails stale and, with auto-run on, solves again.
 
 Nothing in the panel is a plan input: it sits outside `.sidebar`, its controls are `data-no-share`, and
-no field reaches `getInputs()`, the share link, a saved plan or `selectionOf`.
+no field reaches `getInputs()`, the share link, a saved plan or `selectionOf` - except the After-Tax
+Spend that *Use it* (or the After-Tax Spend ⓘ menu) writes on request, through the same path as the
+sustainable-spend suggestion (`_priorSpendGoal` for Restore). The panel is shown whatever the
+Guardrails (GK-style) switch says; the knob shows only its cadence, path count and timing readout.
 
 ---
 

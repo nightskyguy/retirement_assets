@@ -416,7 +416,7 @@
 
   <label class="fbw-label" for="fbw-email">Your email (optional)</label>
   <input type="email" id="fbw-email" autocomplete="email" maxlength="${LIMITS.address}" spellcheck="false" placeholder="you@example.com" aria-describedby="fbw-email-help">
-  <div class="fbw-help" id="fbw-email-help">Only used to reply to you.</div>
+  <div class="fbw-help" id="fbw-email-help">Used only to reply to you. Leave it empty and there is no way to answer. One person reads these, so a reply can take a while.</div>
 
   <details class="fbw-preview" id="fbw-preview">
     <summary>Show exactly what will be sent</summary>
@@ -833,13 +833,18 @@
 
   function sent() {
     const el = ui.el;
+    // Said at the one moment the answer is certain: the address either went with the message or it
+    // did not. Nobody should be left waiting for a reply that was never possible.
+    const gaveAddress = el.email.value.trim() !== '';
     el.message.value = '';
     el.plan.checked = false;
     el.shot.checked = false;
     dropShot();
     updateCount();
     refreshPreview();
-    setStatus('Thank you. Your feedback was sent.', 'ok');
+    setStatus(gaveAddress
+      ? 'Thank you. Your feedback was sent. Any reply goes to the address you gave, and it can take a while.'
+      : 'Thank you. Your feedback was sent. You left no email address, so there is no way to reply to you.', 'ok');
   }
 
   // ── Public API ───────────────────────────────────────────────────────────────────────────────

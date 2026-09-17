@@ -24,7 +24,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.186b</title>
+    <title>Retirement Optimizer 11.186c</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -47,7 +47,7 @@
 	<script src="displayhelpers.js?v=1116af"></script>
 	<!-- The Send feedback dialog. NOT deferred: it records page errors from here on, so it has to
 	     load before the scripts below. It builds nothing until FeedbackWidget.open(). -->
-	<script src="feedback.js?v=11186b"></script>
+	<script src="feedback.js?v=11186c"></script>
 	<!-- Upgrades the .md doc links below to the .html pages GitHub Pages generates from
 	     them. MUST keep `defer`: the changelog script further down copies the newest
 	     entry's HTML into the LATEST CHANGE banner during parse, and this has to sweep
@@ -1083,17 +1083,17 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="display"><b>11.186b</b>
+				<li data-flag="display"><b>11.186c</b>
 					<strong>Send feedback from the page.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li>The &#9993; Feedback button, under Share, sends a note to the author. No plan's numbers change.</li>
 					<li>Your settings and any page errors go with it unless you untick them: strategy, tax limit, filing status, state, growth and inflation, never balances, income, spending, ages or birth dates. Your full plan link and a screenshot go only if you tick them, and <i>Show exactly what will be sent</i> lists everything first.</li>
-					<li>An email address is optional and is only used to reply to you. The <a href="README.md#sending-feedback" target="_blank" rel="noopener">README&rsquo;s <i>Sending Feedback</i></a> section says where a message goes.</li>
+					<li>An email address is optional and is used only to reply to you; without one there is no way to answer. The <a href="README.md#sending-feedback" target="_blank" rel="noopener">README&rsquo;s <i>Sending Feedback</i></a> section says where a message goes.</li>
 					<li>Prefer GitHub? The same box links to a feedback form for a public GitHub issue.</li>
 					<li>On a phone the page no longer scrolls sideways.</li>
 					<li>Google Analytics no longer receives the numbers in a shared plan link.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.186b" target="_blank" rel="noopener">Details</a>
+					<a href="optimizer_changelog.md#11.186c" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="display"><b>11.1859</b>
 					<strong>Risk-based guardrails for every plan, and GK-style Guardrails stop cutting in a plan's last 8 years.</strong>
@@ -1290,7 +1290,7 @@
 			<p>Page loads are tracked anonymously using Google Analytics and Cloudflare Web Analytics. No personally identifiable information is collected. Nothing you enter leaves your browser unless you send it with <i>Feedback</i>, and then only what you choose.</p>
 
 			<h4>Send Feedback</h4>
-			<p>A problem, a question or an idea can go straight to the author. You choose what goes with it: your settings, your full plan link and a screenshot of the page each have their own box, and <i>Show exactly what will be sent</i> lists everything before it leaves your browser. An email address is optional and is only used to reply to you. The <a href="README.md#sending-feedback" target="_blank" rel="noopener">README&rsquo;s <i>Sending Feedback</i></a> section says where a message goes.</p>
+			<p>A problem, a question or an idea can go straight to the author. You choose what goes with it: your settings, your full plan link and a screenshot of the page each have their own box, and <i>Show exactly what will be sent</i> lists everything before it leaves your browser. An email address is optional and is used only to reply to you; without one there is no way to answer, and with one a reply can still take a while. The <a href="README.md#sending-feedback" target="_blank" rel="noopener">README&rsquo;s <i>Sending Feedback</i></a> section says where a message goes.</p>
 			<p><button type="button" onclick="FeedbackWidget.open()" style="font-size:0.9em;padding:6px 14px;">&#9993; Send feedback</button></p>
 			<p>Prefer GitHub? <a href="https://github.com/nightskyguy/retirement_assets/issues/new?template=feedback.yml" target="_blank" rel="noopener">Open an issue there</a>. Issues are public, so leave your own numbers out. If a problem needs numbers to show, use made-up ones that still show it.</p>
 

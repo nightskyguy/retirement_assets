@@ -8308,9 +8308,12 @@ test('P128: the rails solver solves the cadence it was given, every preset at on
     assert(msg.ruleOn === true && msg.cadence === cadence && msg.numPaths === paths, 'the message names its settings');
     const keys = Object.keys(core.RAIL_PRESETS);
     assert(JSON.stringify(Object.keys(msg.presets)) === JSON.stringify(keys), `presets ${Object.keys(msg.presets)}`);
-    // The first solve is the first full year, resumed from the end of the plan's first year.
+    // The first solve is the first full year, resumed from the end of the plan's first year, and the
+    // last is the plan's final year, which a cadence of 10 would otherwise step past.
     assert(solved[0] === 1 && msg.years[0].year === log[1].year && msg.years[0].fromYear === log[0].year,
         `first solve ${msg.years[0].year} from ${msg.years[0].fromYear}`);
+    assert(msg.years[msg.years.length - 1].year === log[n - 1].year && (n - 2) % cadence !== 0,
+        `last solve ${msg.years[msg.years.length - 1].year}, plan ends ${log[n - 1].year}`);
     const DOLLARS = [['railUpper', 'upper'], ['railLower', 'lower'], ['spendTarget', 'target'],
                      ['spendAtUpper', 'spendUp'], ['spendAtLower', 'spendDn']];
     for (const y of msg.years) {
@@ -8320,9 +8323,12 @@ test('P128: the rails solver solves the cadence it was given, every preset at on
         assert(y.wealth === log[y.k - 1].totalNetWealth, `${y.year}: wealth ${y.wealth} is not the year-end TotalNetWealth`);
         for (const key of keys) {
             const P = core.RAIL_PRESETS[key], p = y.presets[key], at = `${y.year} ${key}`;
-            // A clamped answer is a bound: it carries no dollars, so its line ends.
+            // A clamped answer is a bound: it carries no dollars, so its line ends - except a wealth rail
+            // under the search's floor, which is $0.
             for (const [f, c] of DOLLARS) {
-                if (p.clamped[c]) assert(p[f] === null, `${at}: clamped ${c} still carries ${p[f]}`);
+                if (!p.clamped[c]) continue;
+                const zero = (c === 'upper' || c === 'lower') && p.clamped[c] === 'low';
+                assert(p[f] === (zero ? 0 : null), `${at}: clamped ${c} (${p.clamped[c]}) carries ${p[f]}`);
             }
             if (p.railLower != null && p.railUpper != null) assert(p.railLower <= p.railUpper, `${at}: cut rail above raise rail`);
             if (p.spendAtLower != null && p.spendAtUpper != null) {
@@ -8331,7 +8337,7 @@ test('P128: the rails solver solves the cadence it was given, every preset at on
             if (p.railLower != null) assert((y.pos < P.lower) === (p.railLower > y.wealth), `${at}: cut rail ${p.railLower} vs ${y.wealth} at ${y.pos}`);
             if (p.railUpper != null) {
                 assert((y.pos < P.upper) === (p.railUpper > y.wealth), `${at}: raise rail ${p.railUpper} vs ${y.wealth} at ${y.pos}`);
-                assertNear(p.railUpper, y.wealth * p.upperScale, `${at}: the raise rail is the scale times the wealth`, 1e-6);
+                if (!p.clamped.upper) assertNear(p.railUpper, y.wealth * p.upperScale, `${at}: the raise rail is the scale times the wealth`, 1e-6);
             }
             if (p.spendTarget != null) assert((y.pos >= P.target) === (p.spendTarget >= y.planSpend), `${at}: target spend vs plan spend at ${y.pos}`);
         }
@@ -8415,6 +8421,8 @@ test('P129: the After-Tax Spend answer meets its target, a little more does not,
     const a = msg.start.answers.normal;
     assert(a && !a.clamped && a.spendGoal > 0 && msg.start.paths === 40, `answer ${JSON.stringify(a)}`);
     assertNear(a.spendGoal, base.spendGoal * a.mult, 'the answer is its multiple of the goal on screen', 1e-9);
+    // The same spending as the plan's first year holds it, nominal, which is where the page draws it.
+    assertNear(a.spendTarget, simulate(base).log[0].spendGoal * a.mult, 'the first year\'s target spend', 1e-6);
     // Typed in as the goal, on the same 40 paths.
     const years = simulate(base).log.length + _railsEngine.RAILS_EXTRA_YEARS;
     const solveBase = { ...base, computeOC: false, captureResume: false, resume: undefined, spendRule: '' };
@@ -8511,6 +8519,78 @@ test('P128: each solve lands on two rows, and the years between solves are inter
     // A solve whose two years are not in this log draws nothing.
     const moved = _railsEngine.railsRowFields({ years: [{ ...solvedAt(1, 0.5), year: 1991, fromYear: 1990 }] }, log);
     assert(moved.every(r => r === null), 'no rail on a year that was not solved for this log');
+});
+
+// User, 2026-09-18: "this example stops charting the Raise and Cut Rails", on a plan whose wealth grew
+// to 38 times its spending; then "clamp the raise rail to 0 ... and the cut rail to -0 also". A rail
+// under the search's floor (5% of wealth) is $0, not a line that ends. Here a pension far above the
+// spending makes every path survive at any wealth, so every wealth rail is under the floor.
+test('P128: a wealth rail under the search\'s floor is $0, drawn, and its spending left unsolved', async () => {
+    const base = { ...CEIL_BASE, spendRule: '', pensionAnnual: 400000 };
+    const msg = await _railsEngine.runRailsJob({ base, cadence: 10, numPaths: 20, startPaths: 20,
+        simulationMode: 'gbm', seed: 3, mu: 0.07, sigma: 0.12, inflationRate: 0.025 });
+    assert(msg.years.length >= 3, `solved ${msg.years.length} years`);
+    for (const y of msg.years) {
+        for (const key of Object.keys(core.RAIL_PRESETS)) {
+            const p = y.presets[key], at = `${y.year} ${key}`;
+            assert(p.clamped.upper === 'low' && p.clamped.lower === 'low', `${at}: clamped ${JSON.stringify(p.clamped)}`);
+            assert(p.railUpper === 0 && p.railLower === 0, `${at}: rails ${p.railUpper} / ${p.railLower}`);
+            assert(p.spendAtUpper === null && p.spendAtLower === null, `${at}: spending at a $0 stand-in was solved`);
+        }
+    }
+    // Laid out, the lines run on at $0 and the basis says why, without calling them ended.
+    const log = simulate(base).log;
+    const rows = _railsEngine.railsRowFields(msg, log, { preset: 'normal' });
+    const w = log.findIndex(r => r.year === msg.years[0].fromYear);
+    assert(rows[w].railUpper === 0 && rows[w + 1].railLower === 0, 'a $0 rail is drawn, and interpolated like any other');
+    assert(/raise rail, cut rail under 5% of wealth, shown as \$0/.test(rows[w].railBasis)
+        && !/ended: raise rail|ended: cut rail/.test(rows[w].railBasis)
+        && /ended: (target spend, )?spend at raise, spend at cut$/.test(rows[w].railBasis), `basis ${rows[w].railBasis}`);
+});
+
+// User, 2026-09-18: the rails should run to the end of the plan. The cadence steps from the first full
+// year and the final year is added when the steps miss it, so the wealth rails reach the year-end
+// before the last year and the spending rails the last year itself.
+test('P128: the plan\'s last year is always solved, whatever the cadence', () => {
+    const sy = _railsEngine.railsSolvedYears;
+    const eq = (got, want, what) => assert(JSON.stringify(got) === JSON.stringify(want), `${what}: ${JSON.stringify(got)}`);
+    eq(sy(25, 3), [1, 4, 7, 10, 13, 16, 19, 22, 24], '25 years, every 3: the last year is added');
+    eq(sy(23, 3), [1, 4, 7, 10, 13, 16, 19, 22], '23 years, every 3: the cadence lands on it, and it is not repeated');
+    eq(sy(12, 1), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], 'every year');
+    eq(sy(8, 10), [1, 7], 'a cadence longer than the plan: the first full year and the last');
+    eq(sy(2, 3), [1], 'two years: the first full year is the last');
+    eq(sy(1, 3), [], 'a one-year plan has no full year to solve');
+    for (let n = 2; n <= 40; n++) {
+        for (const c of [1, 2, 3, 5, 10]) {
+            const k = sy(n, c);
+            assert(k[0] === 1 && k[k.length - 1] === n - 1 && k.every((x, i) => i === 0 || x > k[i - 1]),
+                `${n} years, every ${c}: ${k}`);
+        }
+    }
+});
+
+// The target-spend line starts in the plan's first year, from the After-Tax Spend answer: the same
+// question asked from the balances as entered. Nothing else is solved from before the plan starts.
+test('P129: the first year\'s target spend is the After-Tax Spend answer, and nothing else lands there', () => {
+    const f = i => Math.pow(1.03, i);
+    const log = [0, 1, 2, 3].map(i => ({ year: 2030 + i, inflationFactor: f(i) }));
+    const solve = { k: 1, year: 2031, fromYear: 2030, pos: 0.6, wealth: 700, planSpend: 60 * f(1),
+        presets: { normal: { railLower: 800, railUpper: 1200, spendTarget: 50 * f(1), spendAtLower: 45 * f(1),
+                             spendAtUpper: 58 * f(1), clamped: {} } } };
+    const start = { answers: { normal: { mult: 0.8, clamped: '', spendGoal: 48, spendTarget: 48 },
+                               tight:  { mult: null, clamped: 'low', spendGoal: null, spendTarget: null } } };
+    const msg = { startYear: 2030, years: [solve], start };
+    const rows = _railsEngine.railsRowFields(msg, log, { preset: 'normal' });
+    assert(rows[0].railSpend === 48, `row 0's target spend: ${rows[0].railSpend}`);
+    assert(rows[0].railSpendUp === undefined && rows[0].railSpendDn === undefined, 'no spending at a rail before the first solve');
+    assert(rows[0].railUpper === 1200 && rows[0].railBasis === 'solved', 'the first solve\'s wealth rails still sit on row 0');
+    assert(rows[1].railSpend === 50 * f(1), 'and its spending on row 1');
+    assert(_railsEngine.railsRowFields(msg, log, { preset: 'tight' })[0].railSpend === undefined,
+        'a clamped answer draws no point');
+    assert(_railsEngine.railsRowFields({ ...msg, startYear: 2029 }, log, { preset: 'normal' })[0].railSpend === undefined,
+        'an answer for a plan that starts in another year draws nothing');
+    assert(_railsEngine.railsRowFields({ startYear: 2030, years: [], start }, log, { preset: 'normal' })[0].railSpend === 48,
+        'a plan with no full year to solve still shows its first-year answer');
 });
 
 test('schedule: a per-year spend applies for that year only', () => {

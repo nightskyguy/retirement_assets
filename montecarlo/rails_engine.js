@@ -10,9 +10,18 @@
 // plan's own start: the After-Tax Spend that puts the plan on each preset's target (P129).
 //
 // WHEN. The first solve is at the start of the plan's second year - the first FULL year for a plan
-// that starts this year, which is how the page is used (user, 2026-09-16) - and every `cadence`
-// years after that. Nothing is solved after the last one, so nothing is drawn past it either: an
-// extrapolated rail would be a number nobody computed.
+// that starts this year, which is how the page is used (user, 2026-09-16) - then every `cadence`
+// years, and always the plan's LAST year, whether or not the cadence lands on it (user, 2026-09-18:
+// "force RBG to plot up to the next to the last (or last) year"). So the wealth rails reach the
+// year-end before the final year and the spending rails the final year itself, and nothing is ever
+// extrapolated: a rail past the last solve would be a number nobody computed. The final-year solve
+// runs one simulated year a path, so it costs next to nothing. Lengthening the plan to push the
+// rails further would not do the same thing: the rails would then be those of a plan that has more
+// years to fund.
+//
+// The plan's own first year has one spending answer and no rails: the After-Tax Spend answer below,
+// which is the target spend for year 0 from the balances as entered, and is drawn as that year's
+// target-spend point.
 //
 // IN WHAT UNITS. A solve starting in year S resumes the plan from the end of year S-1, and it finds
 // the rails by scaling every account, and the brokerage basis, by one factor. The after-tax wealth of
@@ -74,7 +83,8 @@ const _railsMC = (typeof module !== 'undefined' && module.exports && typeof requ
 const RAILS_RESOLUTION = Math.log(1.01);
 const RAILS_START_RESOLUTION = Math.log(1.005);
 // Search brackets, as multiples of the plan's own spending and of its wealth. An answer beyond one
-// is reported as clamped, and the page ends its line there rather than drawing the bracket's edge.
+// is reported as clamped, and the page ends its line there rather than drawing the bracket's edge -
+// except a wealth rail under the floor, which is reported as $0 (below).
 const RAILS_SPEND_RANGE = [0.1, 16];
 const RAILS_SCALE_RANGE = [0.05, 16];
 // Market paths longer than the plan, as the research harness draws them.
@@ -99,11 +109,13 @@ function railsPaths(paths) {
     return Math.min(RAILS_PATHS_RANGE[1], Math.max(RAILS_PATHS_RANGE[0], Math.round(Number(paths)) || RAILS_DEFAULT_PATHS));
 }
 
-// The plan-year indexes a job solves: 1, 1 + cadence, 1 + 2 x cadence, ... while inside the plan.
+// The plan-year indexes a job solves: 1, 1 + cadence, 1 + 2 x cadence, ... while inside the plan,
+// and the last plan year, n - 1, when the cadence steps past it.
 function railsSolvedYears(n, cadence) {
     const c = railsCadence(cadence);
     const out = [];
     for (let k = RAILS_FIRST_YEAR; k < n; k += c) out.push(k);
+    if (out.length && out[out.length - 1] < n - 1) out.push(n - 1);
     return out;
 }
 
@@ -352,13 +364,21 @@ async function runRailsJob(cfg, hooks) {
             // A clamped answer is a bound, not a value: its dollar figure is null, so the page ends the
             // line there. The multiple stays, for the status text ("beyond 16x").
             const dollars = (r, of) => (r.clamped || r.value == null) ? null : of * r.value;
+            // Except a wealth rail under the floor: the plan needs less than 5% of what it has to reach
+            // that chance, and it is reported as $0 (user, 2026-09-18: "Rather than search to the floor,
+            // you can clamp the raise rail to 0 ... and the cut rail to -0 also"). Measured on ten
+            // households, searching on down to 0.1% of wealth found every such rail, at 8.8% more runs
+            // (28% on the plan that raised it), for a number that sits at the bottom of the chart either
+            // way. A line that ENDED there read as though the solve had stopped. Its spending (pass 2)
+            // stays unsolved, since $0 is a stand-in and not a wealth anyone was measured at.
+            const wealthDollars = r => r.clamped === 'low' ? 0 : dollars(r, wealth);
             const presets = {};
             for (const key of presetKeys) {
                 const r = rails[key];
                 presets[key] = {
                     upperScale: r.upper.value, lowerScale: r.lower.value, targetMult: r.target.value,
-                    railUpper:    dollars(r.upper, wealth),
-                    railLower:    dollars(r.lower, wealth),
+                    railUpper:    wealthDollars(r.upper),
+                    railLower:    wealthDollars(r.lower),
                     spendTarget:  dollars(r.target, planSpend),
                     spendAtUpper: dollars(r.spendUp, planSpend),
                     spendAtLower: dollars(r.spendDn, planSpend),
@@ -394,11 +414,16 @@ async function runRailsJob(cfg, hooks) {
         }
         const startCount = key => railsCount(startPaths, RAIL_PRESETS[key].target);
         const ans0 = await refine(items0, uniq(presetKeys.map(startCount)), false, RAILS_SPEND_RANGE, RAILS_START_RESOLUTION);
+        // `spendGoal` is the answer as the After-Tax Spend input takes it, in today's dollars;
+        // `spendTarget` is the same spending as year 0 holds it, nominal like every rails dollar, and
+        // is what the page draws as the first year's target-spend point.
         const answers = {};
         for (const key of presetKeys) {
             const a = ans0.get(startCount(key));
+            const none = a.clamped || a.value == null;
             answers[key] = { mult: a.value, clamped: a.clamped,
-                             spendGoal: (a.clamped || a.value == null) ? null : base.spendGoal * a.value };
+                             spendGoal:   none ? null : base.spendGoal * a.value,
+                             spendTarget: none ? null : rec0.sim.spendGoal * a.value };
         }
         start = { paths: startPaths, pos: ok0 / startPaths, spendGoal: base.spendGoal, answers,
                   runs: runs - sRuns0, pathYears: pathYears - sPY0, ms: performance.now() - tStart };
@@ -484,7 +509,13 @@ function railsProjectMs(cost, n, { cadence, numPaths, fixedMs = 0 } = {}) {
 //
 // A value at a search bracket's edge (clamped) is not a number anyone computed, so it is left out,
 // and so is every interpolated value that would lean on it: its line ENDS there (user, 2026-09-16:
-// "end the line"). The solved row's `railBasis` names what was left out.
+// "end the line"). The solved row's `railBasis` names what was left out. The one exception arrives
+// already as a number: a wealth rail under the search's floor is $0 (runRailsJob), drawn and
+// interpolated like any other, and `railBasis` says so.
+//
+// The plan's first row also carries a target spend of its own, the After-Tax Spend answer (`start`),
+// so the target-spend line begins in the first year. That row's other spending fields stay empty:
+// nothing is solved from before the plan starts, so there are no rails to spend at.
 //
 // Every value is NOMINAL, like every other dollar column, so the Current $ toggle treats them alike.
 // `preset` picks which preset's rails to lay out; `stale` marks rails solved for a plan that has
@@ -493,7 +524,7 @@ const RAIL_FIELDS = ['railLower', 'railUpper', 'railPoS%', 'railSpend', 'railSpe
 
 function railsRowFields(msg, log, { stale = false, preset = 'normal' } = {}) {
     const rows = log.map(() => null);
-    if (!msg || !Array.isArray(msg.years) || !msg.years.length || !log.length) return rows;
+    if (!msg || !Array.isArray(msg.years) || !log.length) return rows;
     const infl = i => log[i]?.inflationFactor || 1;
     const idxOf = new Map(log.map((r, i) => [r.year, i]));
     // A solve belongs to this log only if both of its rows are in it, one year apart.
@@ -508,10 +539,18 @@ function railsRowFields(msg, log, { stale = false, preset = 'normal' } = {}) {
     const SPEND = [['railSpend', 'spendTarget'], ['railSpendDn', 'spendAtLower'], ['railSpendUp', 'spendAtUpper']];
     const NAMES = { upper: 'raise rail', lower: 'cut rail', target: 'target spend',
                     spendUp: 'spend at raise', spendDn: 'spend at cut' };
+    // The first year's target spend, only for the plan it was solved from.
+    const first = num(msg.start?.answers?.[preset]?.spendTarget);
+    if (first != null && msg.startYear === log[0].year) put(0, { railSpend: first });
     for (let j = 0; j < pts.length; j++) {
         const a = pts[j], b = pts[j + 1];
-        const ended = Object.entries(a.clamped ?? {}).filter(([, v]) => v).map(([k]) => NAMES[k] ?? k);
-        const basis = 'solved' + (ended.length ? `; ended: ${ended.join(', ')}` : '');
+        const atZero = k => (k === 'upper' || k === 'lower') && a.clamped?.[k] === 'low';
+        const flagged = Object.entries(a.clamped ?? {}).filter(([, v]) => v);
+        const zeroed = flagged.filter(([k]) => atZero(k)).map(([k]) => NAMES[k]);
+        const ended = flagged.filter(([k]) => !atZero(k)).map(([k]) => NAMES[k] ?? k);
+        const basis = 'solved'
+            + (zeroed.length ? `; ${zeroed.join(', ')} under ${RAILS_SCALE_RANGE[0] * 100}% of wealth, shown as $0` : '')
+            + (ended.length ? `; ended: ${ended.join(', ')}` : '');
         put(a.w, { railLower: num(a.railLower), railUpper: num(a.railUpper), 'railPoS%': a.pos,
                    railBasis: tag(basis) });
         put(a.s, Object.fromEntries(SPEND.map(([f, key]) => [f, num(a[key])])));

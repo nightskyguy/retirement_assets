@@ -394,6 +394,39 @@ test('every README or changelog reference in the page is a link that opens a new
     `README or the changelog is mentioned in page text without a link: ${unlinked.map(t => '"' + t + '"').join('; ')}`);
 });
 
+// A link to a README section is only as good as its anchor: a heading renamed, or never written, and
+// the link opens the README at the top with nothing said. Every `README.md#id` in the page, and every
+// `#id` link inside README.md itself (its Table of Contents among them), must be the id GitHub gives
+// one of README's headings: lower-cased, anything but letters, digits, spaces and hyphens dropped,
+// each space a hyphen, and a repeated heading numbered -1, -2 and so on. Added 2026-09-18 with the
+// rails panel's link to "How to Read Risk-Based Rails", the first link written before its section.
+test('every README section a link names is a heading in README.md', () => {
+  if (!IS_NODE) return;   // reads both files from disk, like the test above
+  const fs = require('fs'), path = require('path');
+  const readme = fs.readFileSync(path.join(__dirname, 'README.md'), 'utf8');
+  const page = fs.readFileSync(path.join(__dirname, 'retirement_optimizer.html'), 'utf8')
+                 .replace(/<!--[\s\S]*?-->/g, ' ');
+  const ids = new Set(), seen = new Map();
+  let fence = false;
+  for (const line of readme.split(/\r?\n/)) {
+    if (/^\s*```/.test(line)) { fence = !fence; continue; }
+    const m = !fence && line.match(/^#{1,6}\s+(.*?)\s*#*\s*$/);
+    if (!m) continue;
+    const id = m[1].toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, '').replace(/ /g, '-');
+    const n = seen.get(id) || 0;
+    seen.set(id, n + 1);
+    ids.add(n ? `${id}-${n}` : id);
+  }
+  const fromPage = [...page.matchAll(/href="README\.md#([^"]+)"/g)].map(m => m[1]);
+  const fromReadme = [...readme.matchAll(/\]\(#([^)\s]+)\)/g)].map(m => m[1]);
+  // A scan that finds nothing would pass for the wrong reason.
+  assert(ids.size > 50 && fromPage.length > 0 && fromReadme.length > 50,
+    `test setup: ${ids.size} headings, ${fromPage.length} page links, ${fromReadme.length} README links`);
+  assert(fromPage.includes('how-to-read-risk-based-rails'), 'the rails panel links to How to Read Risk-Based Rails');
+  const missing = [...new Set([...fromPage, ...fromReadme])].filter(a => !ids.has(a));
+  assert(missing.length === 0, `no README heading has the id: ${missing.join(', ')}`);
+});
+
 function runDocLinksTests() {
   passed = 0;
   failed = 0;

@@ -17,6 +17,27 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1881"></a>
+
+## 11.1881
+
+**Risk-based rails run to the end of the plan, and say how to read them.**  
+*No plan's numbers change.*
+
+**The rails reach the plan's last years**, and a rail under 5% of TotalNetWealth is drawn at $0
+instead of stopping. The target spend starts in the first year, at the After-Tax Spend the panel
+suggests; spending above twice the plan's is not drawn.
+
+**A line above each chart explains its rails**, including that the spending rails are after tax,
+like Spend Goal. The panel links to the README's new
+[How to Read Risk-Based Rails](README.md#how-to-read-risk-based-rails).
+
+**The Balances tooltip is shorter**: the chance of success (CoS) once, beside TotalNetWealth, and the
+rails rounded to $1,000, the raise rail up and the cut rail down.
+
+**The panel is easier to use.** Run and Use it are green, Auto-run and Show previous rails have their
+own line, and changing the preset or market paths no longer scrolls the page away.
+
 <a id="11.186c"></a>
 
 ## 11.186c

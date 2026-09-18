@@ -1129,3 +1129,26 @@ table th.empty-column {
     opacity: 0.45;
     cursor: not-allowed;
 }
+
+/* The risk-based rails panel's Run and Use it, as action buttons in the green the mode presets above
+   use for "in effect" (user, 2026-09-18: "styled like the other action buttons"), and its Cancel in the
+   red of the Monte Carlo tab's own. Only the colors: size comes from the global button rules, as it
+   does for that tab's Run buttons. */
+button.go-btn {
+    background: #2f9e44;
+    border: 1px solid #24803a;
+    color: #fff;
+    font-weight: 600;
+}
+button.go-btn:hover:not(:disabled) { background: #2b8f3e; }
+/* Use it, which is also a go-btn, is disabled while its answer is out of date or already in use. */
+button.go-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+button.stop-btn {
+    background: #dc3545;
+    border: 1px solid #c82333;
+    color: #fff;
+}
+button.stop-btn:hover { background: #c82333; }

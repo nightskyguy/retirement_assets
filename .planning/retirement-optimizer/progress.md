@@ -5437,7 +5437,7 @@ state by default. And a question: what stops someone taking the code and floodin
 ## Session: 2026-09-18 (worktree retirement-optimizer-phases-414fe1, branch worktrees/retirement-optimizer-rbg-charts-aba35a) - P128 round 5, reading the rails, v11.1880
 
 Four asks on the rails charts, then three more rounds; detail in task_plan P128 "Round 5". Committed
-and opened as a PR at the end of the session.
+(`e94b72d`) and opened as PR #229 at the end of the session.
 
 - Year 0 on Balances vs year 1 on Income vs Net: one solve, drawn on two rows (wealth at the year-end it
   starts from, spending in the year it solves). Explained; the target-spend line now starts in year 0

@@ -2736,15 +2736,119 @@ assertEqual(
 				method.value = was;
 			}
 		}
+		// The two switches on a line of their own, above Preset, Market paths and Run; the README's
+		// how-to beside them; Run a green action button (user, 2026-09-18). The href is matched by its
+		// section only: on the live site doclinks.js points README.md at the site root.
+		const lineOf = id => document.getElementById(id)?.closest('div');
+		const switches = lineOf('rails-auto'), settings = lineOf('rails-preset');
+		assertEqual(!!switches && switches === lineOf('rails-show-prev') && switches !== settings
+			&& !!(switches.compareDocumentPosition(settings) & Node.DOCUMENT_POSITION_FOLLOWING)
+			&& settings.contains(document.getElementById('rails-run')), true,
+			'P128: Auto-run and Show previous rails sit on their own line, above the settings and Run');
+		const howto = document.getElementById('rails-howto');
+		assertEqual([/#how-to-read-risk-based-rails$/.test(howto?.getAttribute('href') || ''), howto?.target, !!switches?.contains(howto)],
+			[true, '_blank', true], 'P128: the panel links to the README\'s How to Read Risk-Based Rails, in a new tab');
+		const run = document.getElementById('rails-run');
+		assertEqual([run?.classList.contains('go-btn'), run && getComputedStyle(run).backgroundColor], [true, 'rgb(47, 158, 68)'],
+			'P128: Run is drawn as a green action button');
 	})();
 
-	(function railsTooltipNamesWhetherAYearWasSolved() {
-		if (typeof railsTooltipNote !== 'function') { console.log('SKIP: rails tooltip helper absent'); return; }
-		const ds = { _railNote: [null, 'solved', 'interpolated'] };
-		assertEqual(railsTooltipNote({ dataset: ds, dataIndex: 1 }), ' (solved)', 'P128: a solved point says so');
-		assertEqual(railsTooltipNote({ dataset: ds, dataIndex: 2 }), ' (interpolated)', 'P128: and an interpolated one');
-		assertEqual(railsTooltipNote({ dataset: ds, dataIndex: 0 }), '', 'P128: a point with no rail adds nothing');
-		assertEqual(railsTooltipNote({ dataset: {}, dataIndex: 0 }), '', 'P128: nor does any other line');
+	// Rebuilding the charts holds the Charts tab at its height, then lets go (user, 2026-09-18: using a
+	// rails menu below the charts made the window jump 253px, the canvas's 150px default while a chart
+	// was rebuilt). While the tab is hidden there is nothing to hold.
+	(function chartRebuildHoldsTheTabHeight() {
+		if (typeof updateCharts !== 'function' || typeof drawCharts !== 'function') { console.log('SKIP: charts absent'); return; }
+		const tab = document.getElementById('tab-chart');
+		if (!tab) return;
+		const real = drawCharts;
+		let during = null;
+		try {
+			drawCharts = () => { during = tab.style.minHeight; };
+			updateCharts([]);
+		} finally {
+			drawCharts = real;
+		}
+		assertEqual([during, tab.style.minHeight], [tab.offsetHeight > 0 ? tab.offsetHeight + 'px' : '', ''],
+			'P128: the Charts tab keeps its height while its charts are rebuilt, and nothing is left behind');
+	})();
+
+	// The rails' tooltip (user, 2026-09-18): no "solved" or "interpolated", which the marker already
+	// says; the wealth rails in whole thousands, the raise rail rounded up and the cut rail down; and
+	// the plan's chance of success written out once, on the TotalNetWealth line - on each rail it read
+	// as the same unexplained "CoS" twice. The first year's target spend is the After-Tax Spend answer,
+	// a solved value, so it carries a marker.
+	(function railsTooltipChanceOnceAndThousands() {
+		if (typeof railsTooltipNote !== 'function' || typeof railsTooltipValue !== 'function'
+			|| typeof railsSeries !== 'function' || typeof railsWealthNote !== 'function') {
+			console.log('SKIP: rails tooltip helpers absent'); return;
+		}
+		const log = [0, 1].map(i => ({ year: 2030 + i, inflationFactor: 1,
+			railLower: 1485615, railUpper: 2392569, 'railPoS%': [0.6, 0.613][i], railBasis: i ? 'interp' : 'solved',
+			railSpend: 118414.4, railSpendDn: i ? 104907.6 : null, railSpendUp: i ? 154036.2 : null }));
+		const id = v => v, one = () => 1, rows = i => log[i];
+		const at = (ds, i) => ({ dataset: ds, dataIndex: i, parsed: { y: ds.data[i] } });
+		const [raise, cut] = railsSeries(log, one, id, 'balance', rows, '');
+		assertEqual([railsTooltipNote(at(raise, 0)), railsTooltipNote(at(cut, 1))], ['', ''],
+			'P128: a wealth rail carries no note, solved or interpolated');
+		assertEqual(railsWealthNote(log), ['CoS 60%', 'CoS 61.3%'],
+			'P128: the chance of success, as CoS, is on the TotalNetWealth line');
+		assertEqual(railsWealthNote([{ 'railPoS%': 0.5, railBasis: 'solved (stale)' }, { year: 2031 }]),
+			['CoS 50%, stale', null], 'P128: a stale one says so, and a year without rails has none');
+		assertEqual([railsTooltipValue(at(raise, 0)), railsTooltipValue(at(cut, 0))], [2393000, 1485000],
+			'P128: the raise rail rounds up to $1,000 and the cut rail down');
+		const spend = railsSeries(log, one, id, 'spend', rows, '');
+		assertEqual(spend.map(ds => railsTooltipNote(at(ds, 1))), ['', '', ''], 'P128: the spending rails add no note');
+		assertEqual(railsTooltipValue(at(spend[0], 1)), 118414, 'P128: spending stays in whole dollars');
+		assertEqual(spend[0].pointRadius[0] > 0 && spend[1].data[0] === null, true,
+			'P129: the first year\'s target spend is marked, with no rail spending beside it');
+		assertEqual(railsTooltipValue({ dataset: {}, parsed: { y: 1234.5 } }), 1235, 'P128: every other line keeps whole dollars');
+		assertEqual(railsTooltipNote({ dataset: {}, dataIndex: 0 }), '', 'P128: and carries no note');
+	})();
+
+	// How to read the rails (user, 2026-09-18): a hint above each chart that draws them - the spending
+	// one on Income vs Net only - naming the preset's own chances and saying the spending is after tax.
+	(function railsHintsFollowTheirRails() {
+		if (typeof railsHints !== 'function') { console.log('SKIP: rails hints absent'); return; }
+		const P = { target: 0.8, upper: 0.995, lower: 0.4 };
+		const text = h => h ? h.html.replace(/<[^>]+>/g, '') : null;
+		const wealth = [{ railUpper: 20, railLower: 10 }, { railSpend: 5 }];
+		const both = railsHints(wealth, P, 'net');
+		assertEqual(/at least a 99\.5% chance of success \(CoS\)/.test(text(both.balances)) && /under 40%/.test(text(both.balances)), true,
+			`P128: the Balances hint names the preset's raise and cut chances, and spells out CoS: ${text(both.balances)}`);
+		assertEqual(/after-tax spending/.test(text(both.net)) && /Net \(Spendable\)/.test(text(both.net))
+			&& /Total Income is before tax/.test(text(both.net)) && /an? 80% chance/.test(text(both.net)), true,
+			`P128: the Income vs Net hint says what the spending is measured in: ${text(both.net)}`);
+		assertEqual(/Nothing is drawn above 2x your planned spending/.test(text(both.net)), true,
+			'P128: and that nothing above twice the planned spending is drawn');
+		assertEqual(railsHints(wealth, P, 'combined').net, null, 'P128: no spending hint on the other views');
+		assertEqual(railsHints([{ railSpend: 5 }], P, 'net').balances, null, 'P128: no Balances hint without wealth rails');
+		const none = railsHints([{ railUpper: null, railSpend: null }], P, 'net');
+		assertEqual([none.balances, none.net], [null, null], 'P128: no hint at all before a solve');
+		assertEqual(railsHints(wealth, undefined, 'net').balances, null, 'P128: nor without a preset');
+		const elB = document.getElementById('rails-hint-balances'), elN = document.getElementById('rails-hint-net');
+		assertEqual(!!elB && !!elN && !!document.getElementById('chartAssets')
+			&& !!(elB.compareDocumentPosition(document.getElementById('chartAssets')) & Node.DOCUMENT_POSITION_FOLLOWING), true,
+			'P128: each hint sits on the Charts tab, above its chart');
+	})();
+
+	// No spending rail is drawn above twice the year's planned spending (user, 2026-09-18): near a
+	// plan's end the answer climbs toward spending whatever is left, up to 10x the plan on many plans,
+	// and flattened every other line. Judged against the year's own Spend Goal in nominal dollars, so
+	// Current $ cannot move the cutoff; the wealth rails are never cut.
+	(function railsSpendPlotStopsAtTwiceThePlan() {
+		if (typeof railsSeries !== 'function' || typeof RAILS_SPEND_PLOT_MAX === 'undefined') {
+			console.log('SKIP: rails series builder absent'); return;
+		}
+		const log = [0, 1, 2, 3].map(i => ({ year: 2030 + i, inflationFactor: 1.5, spendGoal: 100,
+			railBasis: 'solved', railLower: 10, railUpper: 20, 'railPoS%': 0.5,
+			railSpend: [150, 200, 201, 1000][i], railSpendDn: 90, railSpendUp: [110, 110, 250, 110][i] }));
+		const current = r => 1 / r.inflationFactor, id = v => v, rows = i => log[i];
+		const [target, up] = railsSeries(log, current, id, 'spend', rows, '');
+		assertEqual(target.data.map(v => v == null ? null : Math.round(v * 1.5)), [150, 200, null, null],
+			'P128: the target spend is drawn up to twice the planned spending and no higher, in Current $ as well');
+		assertEqual([up.data[2], target.pointRadius[2]], [null, 0], 'P128: the spending at a rail is cut the same way, marker and all');
+		assertEqual(railsSeries(log, current, id, 'balance', rows, '')[0].data.every(v => v != null), true,
+			'P128: the wealth rails are not cut');
 	})();
 
 	// Two bands on each view (user, 2026-09-16): green above the raise line, light red below the cut
@@ -3015,6 +3119,11 @@ assertEqual(
 			Object.assign(RailsState, { result: fake, previous: null, running: false, fingerprint: 'another plan',
 			                            startFingerprint: railsStartFingerprint() });
 			assertEqual(railsStartIsCurrent(), true, 'P129: an answer solved for this plan is current');
+			// An action like Run, drawn like it (user, 2026-09-18: "'Use It' is also a button").
+			railsRenderStart();
+			const use = [...document.querySelectorAll('#rails-start button')].find(b => b.textContent === 'Use it');
+			assertEqual([!!use && use.classList.contains('go-btn'), use?.disabled], [true, false],
+				'P129: Use it is a green action button, live while its answer is current');
 			railsUseStartSpend();
 			assertEqual(Number(val('spendGoal')), Math.round(answer / 100) * 100, 'P129: Use it writes the answer, rounded to $100');
 			assertEqual(_priorSpendGoal, goal, 'P129: and remembers the goal it replaced');
@@ -3373,7 +3482,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all five suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 472, taxengine: 32, taxPaymentPlanner: 61, doclinks: 26, feedback: 46, slowInCore: 4 },
+    EXPECTED: { optimizer_core: 475, taxengine: 32, taxPaymentPlanner: 61, doclinks: 27, feedback: 46, slowInCore: 4 },
 
     checkCounts(results) {
         const drift = [];

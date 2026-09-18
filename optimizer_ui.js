@@ -3385,13 +3385,13 @@ function updateTable(log) {
             + `inflation ran higher and the raise was held to that. no-cut: spending was high enough for a cut, `
             + `but the plan is in its last ${OptimizerCore.GK_NO_CUT_FINAL_YEARS} years, when Guardrails never cuts. `
             + `@shape: a raise was held to your planned path (Never above plan). A dash: no change.`,
-        'railLower': 'Risk-based rails: the cut rail, in the same terms as totalNetWealth on this row. If your wealth at the end of this year were this value, the chance of funding every later year at your planned spending would fall to the preset\'s cut level.',
-        'railUpper': 'Risk-based rails: the raise rail, in the same terms as totalNetWealth on this row. If your wealth at the end of this year were this value, the chance of funding every later year at your planned spending would reach the preset\'s raise level.',
+        'railLower': 'Risk-based rails: the cut rail, in the same terms as totalNetWealth on this row. If your wealth at the end of this year were this value, the chance of funding every later year at your planned spending would fall to the preset\'s cut level. $0 when that is under 5% of totalNetWealth.',
+        'railUpper': 'Risk-based rails: the raise rail, in the same terms as totalNetWealth on this row. If your wealth at the end of this year were this value, the chance of funding every later year at your planned spending would reach the preset\'s raise level. $0 when that is under 5% of totalNetWealth.',
         'railPoS%': 'Risk-based rails: the chance your plan, from the end of this year, funds every remaining year - the Monte Carlo tab\'s own survival test, with Guardrails off and spending on its planned path.',
-        'railSpend': 'Risk-based rails: the spending for THIS year that puts the plan exactly on the preset\'s target chance of success, given the wealth it started the year with (the row above).',
+        'railSpend': 'Risk-based rails: the spending for THIS year that puts the plan exactly on the preset\'s target chance of success, given the wealth it started the year with (the row above). In the plan\'s first year that wealth is your balances as entered, and this is the After-Tax Spend answer in the rails panel. The Income vs Net chart leaves out any spending here above twice the year\'s planned spending.',
         'railSpendDn': 'Risk-based rails: the spending for this year that returns the plan to target if the wealth it started the year with had fallen to the cut rail (the row above). What the rule would cut spending to.',
         'railSpendUp': 'Risk-based rails: the spending for this year that returns the plan to target if the wealth it started the year with had risen to the raise rail (the row above). What the rule would raise spending to.',
-        'railBasis': 'Whether this row\'s rails were solved or interpolated: solved = computed; interp = interpolated in today\'s dollars between the solves on either side. The spending columns on the row BELOW come from the same solve. "stale" means the plan or the rail settings changed after the solve. The first solve starts with the first full year.',
+        'railBasis': 'Whether this row\'s rails were solved or interpolated: solved = computed; interp = interpolated in today\'s dollars between the solves on either side. The spending columns on the row BELOW come from the same solve. "stale" means the plan or the rail settings changed after the solve. The first solve starts with the first full year, and the last is always the plan\'s final year.',
         'timing': 'When money moved this year, shown as conversion/spending. Left of the slash: the month the Roth conversion landed (Early = January, Late = November, none = no conversion this year). Right of the slash: the month the spending withdrawal left, taking its income tax and any IRMAA surcharge with it (Early = January, Late = November). Withdrawn money earns nothing once it leaves. Split, the default, converts early and spends late. A required distribution, when one is due, moves with the conversion, because a conversion may not come before it.',
     };
 
@@ -5182,11 +5182,15 @@ function railsRenderStatus() {
     const log = lastSimulationLog || [];
     const factorAt = year => log.find(x => x.year === year)?.inflationFactor || 1;
     const cur = document.getElementById('show-current-dollars')?.checked;
-    const money = (v, year) => railsMoney(cur ? v / factorAt(year) : v);
+    const money = (v, year, round) => {
+        const x = cur ? v / factorAt(year) : v;
+        return railsMoney(round ? railsRound1000(x, round) : x);
+    };
     const pct = v => (v * 100).toFixed(1) + '%';
     const P = r.presets[s.preset];
     const p0 = y0.presets[s.preset];
-    const amount = (v, clamped, year) => v != null ? money(v, year)
+    // `round`: the rails in whole thousands, as the chart's tooltip gives them (railsTooltipValue).
+    const amount = (v, clamped, year, round) => v != null ? money(v, year, round)
         : clamped === 'high' ? 'beyond the search' : clamped === 'low' ? 'below the search' : 'not solved';
     const target = amount(p0.spendTarget, p0.clamped.target, y0.year);
     const where = y0.pos < P.lower
@@ -5197,8 +5201,8 @@ function railsRenderStatus() {
     const prev = RailsState.previous;
     el.textContent = `${head} ${y0.year}: ${pct(y0.pos)} chance, ${where}. `
         + `TotalNetWealth at the end of ${y0.fromYear}: ${money(y0.wealth, y0.fromYear)}; `
-        + `cut rail ${amount(p0.railLower, p0.clamped.lower, y0.fromYear)}, `
-        + `raise rail ${amount(p0.railUpper, p0.clamped.upper, y0.fromYear)}.`
+        + `cut rail ${amount(p0.railLower, p0.clamped.lower, y0.fromYear, 'down')}, `
+        + `raise rail ${amount(p0.railUpper, p0.clamped.upper, y0.fromYear, 'up')}.`
         + (prev && s.showPrevious ? ` Faded: the solve before (${describe(prev)}).` : '');
 }
 
@@ -5223,8 +5227,11 @@ function railsRenderStart() {
     const pct = Math.round(a.preset.target * 100);
     const mine = Number(val('spendGoal')) || 0;
     const current = railsStartIsCurrent();
-    const btn = (label, fn, title, enabled = true) =>
-        `<button type="button" class="tog" onclick="${fn}" title="${title}"${enabled ? '' : ' disabled'}>${label}</button>`;
+    // Use it is an action like Run, and is drawn like it (user, 2026-09-18: "'Use It' is also a
+    // button"); Restore, the undo, keeps the small toggle look.
+    const btn = (label, fn, title, enabled = true, cls = 'tog') =>
+        `<button type="button" class="${cls}"${cls === 'go-btn' ? ' style="padding:6px 18px;font-size:0.95em;"' : ''} `
+        + `onclick="${fn}" title="${title}"${enabled ? '' : ' disabled'}>${label}</button>`;
     let answer;
     if (a.spendGoal != null) answer = `<strong>${railsMoney(railsRound100(a.spendGoal))}</strong>`;
     else if (a.clamped === 'high') answer = `<strong>more than ${railsMoney(mine * RailsEngine.RAILS_SPEND_RANGE[1])}</strong>`;
@@ -5244,7 +5251,7 @@ function railsRenderStart() {
     el.innerHTML = `<span title="${how}">After-Tax Spend for ${railsArticle(pct)} ${pct}% chance: ${answer}.</span> ${yours} `
         + (current ? '' : '<em>Before your last change; Run to update.</em> ')
         + btn('Use it', 'railsUseStartSpend()',
-              'Set After-Tax Spend to this amount, rounded to $100, and re-run the plan. Restore puts it back.', usable)
+              'Set After-Tax Spend to this amount, rounded to $100, and re-run the plan. Restore puts it back.', usable, 'go-btn')
         + restore;
 }
 
@@ -5334,13 +5341,22 @@ function railsRenderTiming() {
 // enough without them (user, 2026-09-16).
 //
 // Rails never use the circle every other series uses (user, 2026-09-16): a raise is a triangle
-// pointing up, a cut one pointing down, the target a square. Marked points are the solved years, and
-// every point's tooltip says whether its year was solved or interpolated. A clamped answer has no
-// point at all, so its line ends there.
+// pointing up, a cut one pointing down, the target a square. Marked points are the solved years; the
+// tooltip does not repeat it (user, 2026-09-18: "the marker itself indicates which"). The tooltip gives
+// the wealth rails in whole thousands, the raise rail rounded up and the cut rail down, and the plan's
+// chance of success once, on the TotalNetWealth line (railsWealthNote). A clamped answer has no point
+// at all, so its line ends there.
 //
 // The previous solve is drawn first, faded and without the band, so the current one sits on top and
 // the difference between the two is what the eye lands on.
 const RAIL_BAND_COLORS = { above: 'rgba(46,125,50,0.10)', below: 'rgba(229,57,53,0.10)' };
+// The colors each rail line is drawn in, shared with the hints that name them.
+const RAIL_COLORS = { upper: '#2e7d32', lower: '#c62828', target: '#6a1b9a' };
+// No spending rail is drawn above this multiple of the year's own planned spending (user,
+// 2026-09-18: "At more than 2x spend, it should not plot any points"). Near a plan's end the answer
+// climbs toward spending whatever is left - up to 10x the plan on many plans - which only a known
+// date of death allows, and it squashed every other line on the chart. Annual Details keeps it.
+const RAILS_SPEND_PLOT_MAX = 2;
 
 function railsChartDatasets(log, adj, pt, kind) {
     if (!railsOn() || !log.length || !('railLower' in log[0])) return [];
@@ -5357,17 +5373,25 @@ function railsChartDatasets(log, adj, pt, kind) {
 function railsSeries(log, adj, pt, kind, fieldsAt, tag) {
     const faded = tag === 'previous';
     const alpha = faded ? '66' : '';
-    const basisAt = i => (i >= 0 ? fieldsAt(i)?.railBasis : null) ?? null;
-    const noteOf = b => b ? String(b).replace(' (stale)', '').replace('interp', 'interpolated') : null;
     // `basisRow` maps a row to the row its solve's basis sits on: the same row for the wealth rails,
     // the row above for the spending, which belongs to the year after the one the solve starts from.
-    const mk = (label, color, key, symbol, rotation, basisRow, note) => {
-        const radius = log.map((r, i) => (fieldsAt(i)?.[key] != null
-            && String(basisAt(basisRow(i)) || '').startsWith('solved')) ? 4 : 0);
+    // The first year's spending has no row above: its only value is the After-Tax Spend answer, which
+    // is solved (railsRowFields), so row -1 counts as solved.
+    const solvedAt = i => i < 0 || String(fieldsAt(i)?.railBasis || '').startsWith('solved');
+    // A spending point above RAILS_SPEND_PLOT_MAX times the year's planned spending is left out, in
+    // nominal dollars on both sides so the Current $ toggle cannot move the cutoff.
+    const plotted = (i, v) => kind !== 'spend' || !(log[i]?.spendGoal > 0) || v <= RAILS_SPEND_PLOT_MAX * log[i].spendGoal;
+    const valueAt = (i, key) => {
+        const v = fieldsAt(i)?.[key];
+        return v != null && plotted(i, v) ? v : null;
+    };
+    // `round`: 'up' or 'down' to whole thousands in the tooltip (railsTooltipValue).
+    const mk = (label, color, key, symbol, rotation, basisRow, note, round) => {
+        const radius = log.map((r, i) => (valueAt(i, key) != null && solvedAt(basisRow(i))) ? 4 : 0);
         return {
             label: label + (tag ? ` (${tag})` : ''), type: 'line', order: 0, stack: `rail-${key}-${tag}`,
             data: log.map((r, i) => {
-                const v = fieldsAt(i)?.[key];
+                const v = valueAt(i, key);
                 return v == null ? null : pt(v * adj(r));
             }),
             borderColor: color + alpha, backgroundColor: color + alpha, pointBackgroundColor: color + alpha,
@@ -5375,7 +5399,8 @@ function railsSeries(log, adj, pt, kind, fieldsAt, tag) {
             pointStyle: symbol, pointRotation: rotation,
             pointRadius: radius, pointHoverRadius: radius.map(v => v + 2),
             _railSymbol: true,
-            _railNote: log.map((r, i) => fieldsAt(i)?.[key] == null ? null : note(i)),
+            _railRound: round,
+            _railNote: log.map((r, i) => valueAt(i, key) == null ? null : note(i)),
         };
     };
     // Two bands on both views (user, 2026-09-16): green above the raise line, light red below the cut
@@ -5386,24 +5411,22 @@ function railsSeries(log, adj, pt, kind, fieldsAt, tag) {
         const shade = (ds, fill, color) => Object.assign(ds, { fill, backgroundColor: color, _keepFillOnHover: true });
         return [shade(upper, 'end', RAIL_BAND_COLORS.above), shade(lower, 'start', RAIL_BAND_COLORS.below)];
     };
+    const none = () => null;
     if (kind === 'balance') {
-        const note = i => {
-            const p = fieldsAt(i)?.['railPoS%'];
-            return noteOf(basisAt(i)) + (p != null ? `, chance of success as planned ${(p * 100).toFixed(1)}%` : '');
-        };
-        return bands(mk('Raise rail', '#2e7d32', 'railUpper', 'triangle', 0, i => i, note),
-                     mk('Cut rail', '#c62828', 'railLower', 'triangle', 180, i => i, note));
+        // No note on the rails themselves: the chance of success belongs to the plan's own wealth, and
+        // it is on the TotalNetWealth line (railsWealthNote).
+        return bands(mk('Raise rail', RAIL_COLORS.upper, 'railUpper', 'triangle', 0, i => i, none, 'up'),
+                     mk('Cut rail', RAIL_COLORS.lower, 'railLower', 'triangle', 180, i => i, none, 'down'));
     }
     // Named for what each line IS (P129d): the target line is the spending for the preset's chance,
     // and the other two are that same spending if wealth sat on a rail - which is why the raise one
     // can run BELOW the target line when the plan is already past its raise rail.
     const P = (RailsState.result?.presets ?? {})[railsSettings().preset];
     const pct = P ? `${Math.round(P.target * 100)}%` : 'target';
-    const note = i => noteOf(basisAt(i - 1));
     return [
-        mk(`Spend for ${pct} chance`, '#6a1b9a', 'railSpend', 'rect', 0, i => i - 1, note),
-        ...bands(mk('Spend at raise rail', '#2e7d32', 'railSpendUp', 'triangle', 0, i => i - 1, note),
-                 mk('Spend at cut rail', '#c62828', 'railSpendDn', 'triangle', 180, i => i - 1, note)),
+        mk(`Spend for ${pct} chance`, RAIL_COLORS.target, 'railSpend', 'rect', 0, i => i - 1, none),
+        ...bands(mk('Spend at raise rail', RAIL_COLORS.upper, 'railSpendUp', 'triangle', 0, i => i - 1, none),
+                 mk('Spend at cut rail', RAIL_COLORS.lower, 'railSpendDn', 'triangle', 180, i => i - 1, none)),
     ];
 }
 
@@ -5428,16 +5451,115 @@ function railsLegendLabels(labels) {
     };
 }
 
+// How to read the rails, one short paragraph above each chart that draws them (user, 2026-09-18:
+// "the user may need a hint about what it means/how to read it"). Visible text rather than a
+// tooltip, since a phone cannot hover over anything; what a reader can do without is in each hint's
+// title. Each is shown only while its chart carries rails: the Balances chart, and the Income vs Net
+// view of the lower one. The Income vs Net hint also answers what the spending lines are measured
+// in - after tax, like the Spend Goal line - which the chart alone does not say.
+function railsRenderHints(log) {
+    // railsSettings() reads the engine, which loads after this file: nothing to say until it has.
+    const P = railsOn() ? RailsState.result?.presets?.[railsSettings().preset] : undefined;
+    const hints = railsHints(log, P, incomeChartView);
+    for (const [id, h] of [['rails-hint-balances', hints.balances], ['rails-hint-net', hints.net]]) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        el.style.display = h ? '' : 'none';
+        el.innerHTML = h ? h.html : '';
+        el.title = h ? h.title : '';
+    }
+}
+
+// What the two hints say, or null where there is nothing to read. `P` is the preset drawn (its
+// target, raise and cut chances) and `view` the lower chart's view.
+function railsHints(log, P, view) {
+    const has = keys => !!P && Array.isArray(log) && log.some(r => keys.some(k => r?.[k] != null));
+    const pct = q => `${+(q * 100).toFixed(1)}%`;
+    const aPct = q => `${railsArticle(+(q * 100).toFixed(1))} ${pct(q)}`;   // "a 90%", "an 80%"
+    const sym = (color, ch) => `<span style="color:${color};">${ch}</span>`;
+    const up = sym(RAIL_COLORS.upper, '&#9650;'), dn = sym(RAIL_COLORS.lower, '&#9660;'), sq = sym(RAIL_COLORS.target, '&#9632;');
+    const net = `<a href="#" onclick="setIncomeChartView('net');document.getElementById('chartIncomeSources')?.scrollIntoView({block:'center'});return false;">Income vs Net</a>`;
+    const INTERP = 'Marked points are solved years; the years between them are interpolated.';
+    return {
+        balances: !has(['railUpper', 'railLower']) ? null : {
+            html: `<b>Reading the rails:</b> TotalNetWealth above the ${up} raise rail: at least ${aPct(P.upper)} chance `
+                + `of success (CoS), so spending can go up. Below the ${dn} cut rail: under ${pct(P.lower)}, so spending `
+                + `should come down. Between them: on track. Hover over a year: TotalNetWealth shows its CoS, and `
+                + `${net} shows how much to spend.`,
+            title: 'Each rail is the TotalNetWealth, at that year\'s end, at which your plan, spending as planned, '
+                + 'reaches the raise or the cut chance of success. A raise or a cut resets spending to the target spend on '
+                + `Income vs Net. A rail under ${RailsEngine.RAILS_SCALE_RANGE[0] * 100}% of TotalNetWealth is drawn at $0: `
+                + `the plan needs almost none of what it has. ${INTERP}`,
+        },
+        net: (view !== 'net' || !has(['railSpend', 'railSpendUp', 'railSpendDn'])) ? null : {
+            html: `<b>Reading the rails:</b> ${sq} ${up} ${dn} are after-tax spending, in the same terms as Spend Goal and `
+                + `Net (Spendable); Total Income is before tax. ${sq} above the Spend Goal line: ${aPct(P.target)} chance `
+                + `allows more than you plan to spend; below it, less. ${up} ${dn}: the spending that restores `
+                + `${pct(P.target)} if TotalNetWealth reaches the raise rail or falls to the cut rail. `
+                + `Nothing is drawn above ${RAILS_SPEND_PLOT_MAX}x your planned spending.`,
+            title: `The target spend is the spending for that year that puts your plan exactly on ${aPct(P.target)} `
+                + 'chance, given the wealth it started the year with. The first one starts from your balances as entered: '
+                + `it is the After-Tax Spend answer in the panel below the charts. ${INTERP} Near the end of a plan the `
+                + 'answer climbs toward spending whatever is left, which only a known date of death would allow, so a '
+                + `point above ${RAILS_SPEND_PLOT_MAX}x the year's planned spending is left off; Annual Details still has it.`,
+        },
+    };
+}
+
 function railsTooltipNote(ctx) {
     const n = ctx?.dataset?._railNote?.[ctx.dataIndex];
     return n ? ` (${n})` : '';
 }
 
+// The TotalNetWealth line's tooltip note while rails are drawn: the plan's chance of success (CoS) from
+// that year-end at its planned spending, shown once. On each rail it read as a property of the rail,
+// the same number twice (user, 2026-09-18: "It's not clear what 'CoS' means ... it shows both the Raise
+// and Cut rail with the same percentage"); the abbreviation is spelled out in the Balances hint and
+// the README (user, same day: "change 'Chance of Success' to 'CoS' and be sure to show that
+// abbreviation in the help"). A stale solve's chance is for the plan as it was, and says so.
+function railsWealthNote(log) {
+    return log.map(r => {
+        const p = r?.['railPoS%'];
+        if (p == null) return null;
+        return `CoS ${+(p * 100).toFixed(1)}%` + (/\(stale\)/.test(r.railBasis || '') ? ', stale' : '');
+    });
+}
+
+// A point's value as the tooltip prints it: whole dollars, except the wealth rails, in whole
+// thousands - the raise rail rounded up and the cut rail down (user, 2026-09-18), which never
+// narrows the band between them. A 100-path rail moves far more than $1,000 from run to run.
+function railsTooltipValue(ctx) {
+    const v = ctx?.parsed?.y ?? 0;
+    const r = ctx?.dataset?._railRound;
+    return (r === 'up' || r === 'down') ? railsRound1000(v, r) : Math.round(v);
+}
+
+function railsRound1000(v, dir) {
+    return (dir === 'up' ? Math.ceil(v / 1000) : Math.floor(v / 1000)) * 1000;
+}
+
+// Rebuilding a chart puts its canvas back to the 150px default until the new chart has sized it, and a
+// page scrolled to its end loses that height from its scroll position for good: the window jumped
+// 253px, taking the control just used off the screen (user, 2026-09-18, on the rails panel's Preset
+// and Market paths menus - the same happened to anything below the charts). Holding the tab at its
+// height across the rebuild keeps the page as long as it was, so nothing moves.
 function updateCharts(log) {
+    const tab = document.getElementById('tab-chart');
+    const hold = tab ? tab.offsetHeight : 0;   // 0 while the tab is hidden: nothing to hold
+    if (hold) tab.style.minHeight = hold + 'px';
+    try {
+        drawCharts(log);
+    } finally {
+        if (hold) tab.style.minHeight = '';
+    }
+}
+
+function drawCharts(log) {
     const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
     const adj = r => inCurrentDollars ? 1 / (r.inflationFactor || 1) : 1;
     computeMilestones(log);   // #7 - markers drawn by milestonePlugin when the toggle is on
     updateStepUpLegend();     // names the state behind the half/full step-up glyphs
+    railsRenderHints(log);    // P128: how to read the rails, above each chart that draws them
 
     const sharedTooltip = {
         interaction: { mode: 'index', intersect: false },
@@ -5455,7 +5577,7 @@ function updateCharts(log) {
                             : '--';
                         return `${r.year}  |  You: ${a1}  Spouse: ${a2}  |  Tax: ${taxPct}`;
                     },
-                    label: ctx => ctx.dataset.label + ': ' + Math.round(ctx.parsed.y).toLocaleString()
+                    label: ctx => ctx.dataset.label + ': ' + railsTooltipValue(ctx).toLocaleString()
                         + railsTooltipNote(ctx)
                 }
             }
@@ -5494,7 +5616,8 @@ function updateCharts(log) {
                 mkLine(rothLabel,     '#8e44ad', rothData),
                 mkLine('Brokerage',   '#4F4FDC', r => r.Brokerage   * adj(r)),
                 mkLine('Cash',        '#27ae60', r => r.Cash        * adj(r)),
-                mkLine('TotalNetWealth', '#555555', r => r.totalNetWealth * adj(r)),
+                // P128: with rails drawn, its tooltip also gives the plan's chance of success.
+                { ...mkLine('TotalNetWealth', '#555555', r => r.totalNetWealth * adj(r)), _railNote: railsWealthNote(log) },
                 // P69 replay overlay: the same plan run on steady assumptions, one dashed total.
                 // Deflated by ITS OWN inflationFactor (fixed-inflation compounding) - deflating by
                 // the path's factors would smuggle the path back into the "expected" line. It

@@ -483,7 +483,7 @@ flowchart TD
     CTL --> JOB["runRailsJob cfg, hooks"]
     JOB --> SPINE["simulate plan, captureResume<br/>every row carries '-resume'"]
     JOB --> BANKS["buildBanks + buildPathInputs once<br/>CRN across every estimate and year"]
-    SPINE --> YEARS["solved years 1, 1+c, 1+2c ...<br/>the first full year, then every c"]
+    SPINE --> YEARS["solved years 1, 1+c, 1+2c ... and n-1<br/>the first full year, every c, and the last"]
     BANKS --> YEARS
     YEARS --> POS["per path: survival as planned brackets its<br/>wealth threshold and its spending threshold"]
     POS --> REF["refine(): narrow only the paths that could still be<br/>an order statistic - every preset's rails and target"]
@@ -492,7 +492,7 @@ flowchart TD
     JOB --> START["After-Tax Spend: its own 400 paths from resumeStart,<br/>every preset's target, the same refine()"]
     EST --> MSG["years[].presets + start + cost record<br/>runs, runs a path a year, ms per phase"]
     START --> MSG
-    MSG --> MERGE["railsRowFields onto the live log<br/>wealth rails on the year-end row,<br/>spending on the next"]
+    MSG --> MERGE["railsRowFields onto the live log<br/>wealth rails on the year-end row,<br/>spending on the next;<br/>row 0: the After-Tax Spend answer's target spend"]
     MERGE --> DRAW["Balances chart: wealth rails<br/>Income vs Net: spending rails<br/>triangles; green above the raise rail,<br/>light red below the cut rail, on both<br/>Annual Details: Rails columns"]
 ```
 
@@ -520,8 +520,13 @@ fingerprint leaves out After-Tax Spend itself, so *Use it* does not make it stal
 **Units and placement.** Scaling every balance and the basis by one factor scales `totalNetWealth` by
 exactly that factor, so the rails are stated as the year-end TotalNetWealth that would put the plan on
 each rail - on the row they start from, beside that row's own TotalNetWealth. The spending answers
-belong to the solved year and sit on its row. The panel keeps the previous solve and can draw it faded
-(*Show previous rails*, off by default), and prices other settings from the last run's cost per simulated year (`railsProjectMs`).
+belong to the solved year and sit on its row. The plan's last year is always solved
+(`railsSolvedYears`), so the wealth rails reach the year-end before it and the spending rails the year
+itself; the first year's target spend is the After-Tax Spend answer (`start.answers[preset].spendTarget`,
+nominal). A hint above each chart that draws rails says how to read them (`railsHints`), and no spending
+point above twice the year's Spend Goal is drawn (`RAILS_SPEND_PLOT_MAX`; Annual Details keeps it). The panel keeps
+the previous solve and can draw it faded (*Show previous rails*, off by default), and prices other
+settings from the last run's cost per simulated year (`railsProjectMs`).
 
 **The return model.** The panel picks its own method (`railsMethod`: Historical, either Synthetic, or
 whatever the Monte Carlo tab's Simulation Mode is); every other parameter is read from the Monte Carlo

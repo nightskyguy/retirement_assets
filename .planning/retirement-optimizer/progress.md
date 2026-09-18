@@ -5433,3 +5433,54 @@ state by default. And a question: what stops someone taking the code and floodin
   the new texts, the bold, the GitHub link's fields and target, settings `s=CA&str=ordered`; with the
   local Worker at `DAILY_LIMIT=2` (a launch entry sets it) two sends then "Feedback is full for today"
   with the draft kept, and the emails carry `s=CA`.
+
+## Session: 2026-09-18 (worktree retirement-optimizer-phases-414fe1, branch worktrees/retirement-optimizer-rbg-charts-aba35a) - P128 round 5, reading the rails, v11.1880
+
+Four asks on the rails charts, then three more rounds; detail in task_plan P128 "Round 5". Committed
+and opened as a PR at the end of the session.
+
+- Year 0 on Balances vs year 1 on Income vs Net: one solve, drawn on two rows (wealth at the year-end it
+  starts from, spending in the year it solves). Explained; the target-spend line now starts in year 0
+  at the After-Tax Spend answer.
+- The last plan year is always solved. Default plan (25 years, every 3): solves 1..22 then 24; wealth
+  rails to 2049, spending to 2050. The final-year target spend is large and stretches the Income vs Net
+  axis (to $280k in today's dollars on the default plan) - flagged to the user, not acted on.
+- Hints above both charts; Balances tooltip "Raise rail: 2,393,000 (CoS 60.0%)", cut rail rounded down.
+- `sed -i` in Git Bash rewrote `retirement_optimizer.html` from CRLF to LF; restored with a byte-level
+  replace, and every edited file checked for lone CR / lone LF afterwards.
+- A same-token reload served a cached `optimizer_tests.js` (EXPECTED still 472, badge red): serve.py
+  sends no cache headers, so a file loaded under a token before its last edit stays cached. Verified
+  under a temporary `?v=111880z`, then set back.
+- Verified: node 474 / 32 / 61 / 26 / 46; in-page `?runtests` 1176 (537 + 639), badge green. Browser:
+  both hints and their preset wording ("an 80% chance" for Loose), hidden on other views, no overflow at
+  375 px; previous-rails drawing with the year-0 point; no console errors from the page.
+
+Second message, same session (v11.1880a; task_plan P128 round 5, `x`-`aa`):
+- 2x cap on the spending rails (chart only); the default plan's ■ now ends at 2048 and the axis at
+  $190k instead of $280k.
+- The window jump reproduced and measured before any fix: -253 px (403 px canvas back to its 150 px
+  default during a rebuild, page clamped at its end). A monkeypatched hold of `#tab-chart`'s height
+  gave 0 px at both scroll positions tried; shipped in `updateCharts`. Real keyboard change of Preset
+  and a Market paths change: 0 px, focus kept.
+- Run green (`go-btn`), Cancel red (`stop-btn`); switches on their own line with the README link; the
+  README section; the chance of success on TotalNetWealth only. New doclinks test: all 103 README
+  anchors resolve; a renamed heading fails it (checked by mutation).
+- Version refreshed to 11.1880a in the same hour: the user had loaded 11.1880, and the same token would
+  let their browser serve stale scripts.
+- Verified: node 474 / 32 / 61 / 27 / 46; in-page `?runtests` 1187 (547 + 640), badge green.
+
+Third message (v11.1881; task_plan P128 round 5, `ab`-`ac`):
+- The user's plan lost its Balances rails from 2042: under the 5% wealth floor, so clamped, so ended.
+  Measured the alternatives on ten households before choosing (see `P128ab`); the rails under the
+  floor are now $0. On that plan they now run to 2049, reaching $0 from 2044.
+- CoS back in the tooltip, once, on TotalNetWealth; spelled out in the hint and the README. Use it
+  green. The rails panel's only knob is the plain `?nerdknob`: Solve every, Paths, the timing readout.
+- Verified: node 475 / 32 / 61 / 27 / 46; in-page `?runtests` 1189 (548 + 641), badge green; the user's
+  plan in the browser: rails to 2049, "CoS 100%" on TotalNetWealth, Use it green.
+
+Fourth message: "Remove 'nerdknob=rails' and ... gate the extra controls with nerdknob only ... No
+changelog". No code keyed on the value (a leftover link was already just the plain knob); measured in
+the browser: Solve every, Paths and timing hidden on the plain page, shown with `?nerdknob` and with
+`=rails` alike. Removed from ExperimentalFeatures.md (two sentences) and the task_plan's live text; the
+dated 2026-09-16 log entries above keep it, as the record of what was run then. No page file changed,
+so no version stamp.

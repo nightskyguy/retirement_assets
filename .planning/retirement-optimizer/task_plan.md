@@ -17,7 +17,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P34 | NOT a P103 prerequisite (a-d are node harnesses); still the whole slow-machine story | `P34a` |
 | **O1** | P28j | `jg`/`jh`/`ji`/`jk` SHIPPED, and `jo`'s Split/Early/Late menu shipped in `a5d8aa9`. `jf` MEASURED and NOT acted on - the trigger is unchanged, and its removal case was withdrawn | `P28jn` / `P28jo` Automatic |
 | **O1** | P115 | **tax-payment attribution** (user, 2026-09-09). `a` SHIPPED v11.17b1: cash interest trued up to what the cash earned; `b` CLOSED v11.17f4. Priority is mine, not the user's | `P115c` |
-| **O1** | P127 + P128 | **PR #227 OPEN; round 4 committed 2026-09-16 v11.1859** (user: "Let's do P128 ... also worth amending the GK-Style rules"). P127: no cut in the last 8 years, 6% CPI cap, freeze on the portfolio return, the filter judged against the shape, $0 conversion always admissible (`P126f`), ceiling as a nerdknob switch. P128: `?nerdknob=rails`, resume-based solver, both charts, timing + projection. Round 3 on the same PR: panel below the charts, folded, own Monte Carlo method; the P91 success-path drain; heavy precision test (`P128k`) gating `P129`. Round 4, the user's decisions: Monte Carlo on Synthetic GBM, a per-path solver answering every preset at once, the panel for everyone, the After-Tax Spend answer (`P129`), income charts that leave out saved money (`P130`), gray/red/green bands. P126 itself shipped in PR #224 | user review, then merge |
+| **O1** | P127 + P128 | **PR #227 MERGED (`3ddaf6a`); round 5, reading the rails, v11.1881 on `worktrees/retirement-optimizer-rbg-charts-aba35a`, PR OPEN 2026-09-18** (user). P127: no cut in the last 8 years, 6% CPI cap, freeze on the portfolio return, the filter judged against the shape, $0 conversion always admissible (`P126f`), ceiling as a nerdknob switch. P128: resume-based solver, both charts; the plain nerdknob adds only cadence, paths and the timing readout. Round 3 on the same PR: panel below the charts, folded, own Monte Carlo method; the P91 success-path drain; heavy precision test (`P128k`) gating `P129`. Round 4, the user's decisions: Monte Carlo on Synthetic GBM, a per-path solver answering every preset at once, the panel for everyone, the After-Tax Spend answer (`P129`), income charts that leave out saved money (`P130`), gray/red/green bands. P126 itself shipped in PR #224 | user review, then merge |
 
 **Live carry-overs from finished phases** - the rest of what those phases did is in their stubs below:
 - `P85` RE-RUN: converting earlier still wins 353 of 499, but **the RMD claim BROKE** - 124 counterexamples, all bracket strategies at a live IRA Goal. `P72` is still pending.
@@ -812,7 +812,8 @@ on-demand default.
 
 ### Gating, and what must NOT happen
 
-`?nerdknob=rails` through `applyNerdKnobVisibility()`, matching `?nerdknob=goal` / `=split`. The rail
+SUPERSEDED by `P128o`: the panel is for everyone, and the plain `?nerdknob` shows only its cadence, path
+count and timing readout (a dedicated knob value was the first design, and is gone). The rail
 settings **do not enter the share URL, the saved plan, or `selectionOf`/`sameStrategySelection`** -
 they change no projected number, only what is drawn. Add the assertion the suite already makes for
 goal-first (`optimizer_tests.js:2643`): not visible without the knob.
@@ -953,7 +954,7 @@ Please calculate every rail (and spend threshold?) at the same time."
       Built with selective refinement (`refine()`): 20-23 runs a path a solved year for all three
       presets on eight bank households, against 46 for one preset before; 7-14 s a household
       (findings "P128 round 4"). Search ceiling 16x for wealth and spending.
-- [x] `P128o` the rails panel for everyone (the `?nerdknob=rails` gate goes), auto-run off by
+- [x] `P128o` the rails panel for everyone (its own knob value goes), auto-run off by
       default; ticking auto-run solves at once. Cadence, paths and the timing readout stay behind
       the plain knob. Shown whatever the Guardrails (GK-style) switch says.
 - [x] `P129` build (below): from the plan's start, 400 paths, every preset's target, rounded to $100;
@@ -973,6 +974,86 @@ Please calculate every rail (and spend threshold?) at the same time."
 - [x] `P128s` (user) "Turn of[f] 'Show Prior Rails' by default."
 - Not changed: the solver's count rule (no path-count correction) - 99.5% cannot be corrected at
   100 paths, and the user did not ask for it. `age-gap-ira-heavy-ca` stands in for the user's plan.
+
+### Round 5, 2026-09-18: reading the rails (v11.1880 - v11.1881, branch `worktrees/retirement-optimizer-rbg-charts-aba35a`)
+
+User: why does the first year of Balances carry rails when the first year of spending does not; can the
+rails reach the last year ("one way might be to artificially extend the life of both people by 3
+years"); a hint on each chart on how to read them, including whether the spending is gross or net; a
+shorter Balances tooltip ("CoS", no solved/interpolated) with the rails rounded to $1K, raise up and
+cut down.
+
+- **Why (answered, no defect):** one solve per solved year k starts from the END of year k-1. Its
+  wealth rails are stated in that year-end's TotalNetWealth, so they sit on row k-1 - the Balances
+  chart plots year-end values, and its first point IS the start of the first full year. The same
+  solve's spending is for year k. So Balances year 0 and Income vs Net year 1 are one solve.
+- [x] `P128t` the target-spend line starts in year 0 at the After-Tax Spend answer (`start`, 400
+      paths), which is that question asked from the balances as entered; `start.answers[k].spendTarget`
+      carries it nominal. No rails at year 0: nothing is solved from before the plan.
+- [x] `P128u` the plan's last year is always solved (`railsSolvedYears` appends n-1), so wealth rails
+      reach the year-end before the last year and spending the last year. Extending lifespans was
+      rejected: it changes the plan the rails describe. The added solve runs 1 to c-1 simulated years
+      a path. **Side effect for the user to judge:** the final-year target spend is large (the default
+      plan: $278k in today's dollars against a $140k goal; at a $130k goal, $430k), which stretches the
+      Income vs Net axis.
+- [x] `P128v` `railsHints()`: a visible line above each chart that draws rails (Balances; Income vs Net
+      only), with the preset's own chances; detail in its title.
+- [x] `P128w` tooltip: CoS only on the wealth rails, no note on the spending rails; `railsTooltipValue`
+      rounds the raise rail up and the cut rail down to $1,000, and the panel's status line matches.
+      Annual Details keeps exact values.
+- Tests: 2 node (the last year always solved; row 0's answer and nothing else) plus asserts in the
+  solver and P129 tests; 2 in-page blocks. Counts 474 / 32 / 61 / 26 / 46.
+
+Same day, second message (v11.1880a): the target spend "rises to as much as 10x the planned spend and
+squashes the chart ... At more than 2x spend, it should not plot any points"; Run styled as a green
+action button; Auto-run and Show previous on their own line; "When the preset or market path controls
+are used, the focus is lost and the entire window moves"; a link to a new README section "How to Read
+Risk Based Rails". Mid-turn: "It's not clear what 'CoS' means ... it shows both the Raise and Cut rail
+with the same percentage", and a tip for the README: the tooltip is sorted by size, so TotalNetWealth
+listed above the Raise rail means a raise is possible.
+
+- [x] `P128x` `RAILS_SPEND_PLOT_MAX` = 2: no spending rail point above twice the row's own `spendGoal`,
+      nominal on both sides. Chart only; Annual Details keeps the value. Default plan: ■ now ends 2048,
+      axis 280k -> 190k (today's dollars). This supersedes the side effect `P128u` flagged.
+- [x] `P128y` the jump: MEASURED -253 px on a Preset change, exactly the income canvas's 403 px minus
+      the 150 px default a destroyed chart leaves until the new one is sized; the page was at its end,
+      so the scroll position was clamped and never came back. Every chart rebuild did it, not only the
+      rails menus. `updateCharts` now holds `#tab-chart` at its height across `drawCharts`: 0 px, focus
+      kept, at the page end and above it. Focus was never actually taken; the control left the screen.
+- [x] `P128z` panel: `go-btn` (the mode presets' green) for Run, `stop-btn` (the Monte Carlo Cancel's red)
+      for Cancel; the two switches on their own line with the README link; README section
+      `How to Read Risk-Based Rails` (TOC, Key Features, Recent Fixes point at it).
+- [x] `P128aa` the chance of success moves off both rails onto the TotalNetWealth line, written out
+      (`railsWealthNote`, ", stale" when it is). The rails carry no note.
+- Tests: doclinks +1 (every README anchor linked from the page or README itself names a heading - all
+  103 did; a renamed heading is caught); in-page: the 2x cut, the panel layout and link, the height
+  hold, the wealth note. Counts 474 / 32 / 61 / 27 / 46.
+
+Third message, same day (v11.1881): "change 'Chance of Success' to 'CoS' and be sure to show that
+abbreviation in the help"; "'Use It' is also a button"; a plan (ordered CBIR, $90k at -1.5%, $75k
+extra conversions, guaranteed income $87k) that "stops charting the Raise and Cut Rails in balance".
+Mid-turn: "Rather than search to the floor, you can clamp the raise rail to 0 once spending exceeds
+some specific multiple, and the cut rail to -0 also." And: what does the rails panel still hide behind
+a knob? Only Solve every, Paths and the timing readout, behind the plain `?nerdknob`; then (user) the
+dedicated knob value was removed from the docs as well, no changelog.
+
+- [x] `P128ab` the rails stopped because they fell under the wealth search's floor (5% of TNW): the
+      plan's wealth reached ~38x its spending, and every answer past a bracket edge ends its line.
+      MEASURED on ten households at cadence 3 / 100 paths: the floor clamped rails in 4 of 10 (this
+      plan 4 solved years, bracket-filler-texas 2, single-filer-long-horizon 2, long-widowhood 1);
+      a 0.1% floor found them all at +8.8% solve runs (+28% on this plan), 0.01% at +10.5%, answers
+      solved under both within 0.69%. Taken instead: the user's clamp, triggered by the floor rather
+      than by a spending multiple - a 2x trigger would have zeroed this plan's rails at 13% of TNW
+      (2036) and the default plan's final-year rails at ~30%, each a visible cliff. A wealth rail
+      clamped low is $0 (`wealthDollars`), drawn and interpolated; its pass-2 spending stays
+      unsolved; `railBasis` says "under 5% of wealth, shown as $0" and no longer calls it ended. The
+      high clamp still ends its line. Measurement script kept out of the repo (scratch).
+- [x] `P128ac` CoS: the TotalNetWealth note reads "CoS 62.7%"; the Balances hint spells it out
+      ("chance of success (CoS)") and so does the README. `Use it` is a `go-btn` (with a disabled
+      style); Restore keeps `.tog`.
+- Tests: node +1 (a plan whose pension covers everything: every rail $0 and 'low', no rail spending,
+  the basis wording); the solver test's clamp assertion allows the $0 case; in-page: CoS wording,
+  the hint's "(CoS)", Use it's class. Counts 475 / 32 / 61 / 27 / 46.
 
 ## P129: set After-Tax Spend from the rails solve  *(2026-09-16, user-raised. BUILT in round 4, v11.1859: 400 paths, $100 rounding, ⓘ entry, shown whatever GK says)*
 

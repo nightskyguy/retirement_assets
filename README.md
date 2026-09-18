@@ -39,6 +39,7 @@ A California resident built these with [Google gemini](https://gemini.google.com
     - [Recent Fixes / Improvements](#recent-fixes--improvements)
   - [Why This Tool?](#why-this-tool)
   - [Key Features](#key-features)
+  - [How to Read Risk-Based Rails](#how-to-read-risk-based-rails)
   - [What the Tool IGNORES](#what-the-tool-ignores-no-plans-to-implement)
   - [Limitations and Restrictions](#limitations-and-restrictions)
 - [What about Other Tools](#what-about-other-tools)
@@ -230,6 +231,7 @@ local tax for the SALT test among them - that can only be set through a link. Th
 + **State standard deduction accuracy:** States that use the Federal standard deduction (AZ, CO, IA, ME, MN, MS, ND, SC) now reference it directly so the deduction updates automatically when the Federal value changes. States with *fixed* standard deductions that are **not** indexed to inflation (AL, MT, OH) are incorrectly inflated by the engine each year - this overstates the deduction and slightly understates future taxes for those state residents. A future fix will properly handle those (and any future similar) states.
 
 #### Recent Fixes / Improvements
++ **Risk-based rails** now run to the end of the plan, the target spend starts in the plan's first year, and spending above twice the plan's is no longer drawn. Each chart that shows rails has a line above it saying how to read them - including that the spending rails are after tax, in the same terms as Spend Goal - and the panel links to the new [How to Read Risk-Based Rails](#how-to-read-risk-based-rails) section.
 + **Risk-based rails** now sit under the charts on the Charts tab, with an After-Tax Spend suggestion for the chance of success you pick - see *Risk-based rails* under Key Features. Monte Carlo now starts on **Synthetic - GBM** rather than Historical, which usually means a lower chance of success. And the income charts no longer count money that goes straight back into Brokerage or Cash as income, so a Cycle Brokerage harvest year no longer looks like a windfall.
 + **The synthetic Monte Carlo now models inflation as something that varies, and offers a second synthetic model.** Inflation used to be a single rate repeated every year, which is the assumption most tools make and the one I think is least defensible - a plan is broken by prices running away for a stretch, not by an average. Each path now draws its own inflation, tuned to US consumer price data for 1948 to 2025, clustering the way the record does and leaning high in years when returns are poor. The new **Synthetic - AAM** model reads the growth rate you type as a plain yearly average, so the median it reports is the number you entered rather than one about a point lower; **Synthetic - GBM** is the model that was always there, with its market draws unchanged. Both draw the same shocks from the same seed, so switching compares the models rather than two different runs. A **Fixed Inflation** button pins inflation back to your Assumptions rate and reproduces the older model exactly.
 + The Optimizer tab has been reorganized. Labels, column names, colors and symbols are now consistent with the rest of the tool, and the table shows the columns the **"Optimize for"** goal actually uses instead of all twenty-one at once. Some were never shown at all, so **Final Roth**, **Final IRA** and **Mix Spread** now exist. Optimize for also says in one line what the goal ranks by, and a switch below it shows every column. **Spend Goal** and **Yrs Funded** moved into the row pop-up, and the legend folds out of the way. The saved-scenario list drops its Version column, and a `?tab=` web address opens the page on a chosen tab (`?tab=optimizer`, `?tab=annual`, `?tab=charts`, `?tab=montecarlo`, `?tab=importexport`, `?tab=documentation`). No numbers change.
@@ -291,7 +293,7 @@ The Optimizer and Monte Carlo run every strategy with your setting, plus your ow
 + An **"Optimize for"** selector at the top of the Optimizer re-orders the entire table by the goal you actually care about, moves the ⚓ baseline to match, and shows only the columns that goal is about, with a **Show all columns** link to bring the rest back. Nine goals are offered, from Tax Flexibility (the default) to Minimum Lifetime Taxes, Maximum Spending, and Earliest Break Even. The full list is in [How do I find the most efficient Roth conversions?](#how-do-i-find-the-most-efficient-roth-conversions) in the FAQ.
 + **Monte Carlo 🎲** - despite the name, this has nothing to do with gambling. "Monte Carlo" is a mathematical technique that asks: *what if we ran your retirement plan four hundred times, each time with a different sequence of good years and bad years drawn from the same statistical range?* Some runs get lucky (strong markets early), some get unlucky (a crash right after you retire). The result is a survival rate - "97% of scenarios still had money at age 90" - plus a chart showing the spread from best-case to worst-case portfolios over time. This is far more informative than a single projected growth rate, because the *order* of good and bad years matters enormously in retirement: a crash in year two is far more damaging than the same crash in year twenty. The tab compares all withdrawal strategies side by side under identical market conditions so you can see which ones are merely good on average and which ones are resilient across bad luck.  By default the growth and inflation sequences are drawn from your Growth rate and a model fitted to the real inflation record; in Historical mode they are chosen from historical data. My analysis of many tools has led me to believe that most of them are seriously flawed. Failing to model inflation variability is often what is lacking.
 + **Stress Test** - separate from the Monte Carlo, and not a random sample of anything. It replays your plan through the worst retirement *start years* that actually happened, one run each, and reports how many of them your plan survived. Because the sequences are fixed history, the result is identical on every machine and does not move when you change the seed. Each line is colored by what became of your money - ran out early, ran out later, never ran out - with a sortable table of the numbers behind every sequence. See [Stress Test vs Monte Carlo Analysis](#stress-test-vs-monte-carlo-analysis).
-+ **Risk-based rails** - a panel under the charts on the Charts tab, separate from the Guardrails switch. It uses the Monte Carlo engine to ask Derek Tharp and Justin Fitzpatrick's questions along your plan: from the first full year, and every few years after, what is the chance the plan funds every remaining year, and at what wealth does that chance reach the *raise* rail or fall to the *cut* rail? The rails are drawn on the Balances chart, and the spending that brings the plan back to target at each rail on the *Income vs Net* view; both are shaded green above the raise rail and light red below the cut rail, and between the two the plan is on track. Three presets (Tight, Normal, Loose) are solved at once, so switching between them is instant. It also works out the **After-Tax Spend** that gives your plan the preset's chance of success - 90% for Normal - which you can apply with *Use it* or from the After-Tax Spend ⓘ, and undo with *Restore*. Nothing here changes your plan unless you use it. A solve takes several seconds (much longer on an older computer) and runs in the background; tick *Auto-run* to keep it current as you edit, and *Show previous rails* to see the solve before it, faded. Treat the raise rails as approximate: from 100 market paths they move by a tenth or more from one set of paths to the next ([research/RISK_BASED_RAILS_PRECISION.md](research/RISK_BASED_RAILS_PRECISION.md)).
++ **Risk-based rails** - a panel under the charts on the Charts tab, separate from the Guardrails switch. It uses the Monte Carlo engine to ask Derek Tharp and Justin Fitzpatrick's questions along your plan: from the first full year, every few years after, and in its last year, what is the chance the plan funds every remaining year, and at what wealth does that chance reach the *raise* rail or fall to the *cut* rail? The rails are drawn on the Balances chart, and the spending that brings the plan back to target at each rail on the *Income vs Net* view; both are shaded green above the raise rail and light red below the cut rail, and between the two the plan is on track. The spending is after tax, in the same terms as After-Tax Spend, and a line above each chart says how to read its rails; [How to Read Risk-Based Rails](#how-to-read-risk-based-rails) has the rest. Three presets (Tight, Normal, Loose) are solved at once, so switching between them is instant. It also works out the **After-Tax Spend** that gives your plan the preset's chance of success - 90% for Normal - which you can apply with *Use it* or from the After-Tax Spend ⓘ, and undo with *Restore*. Nothing here changes your plan unless you use it. A solve takes several seconds (much longer on an older computer) and runs in the background; tick *Auto-run* to keep it current as you edit, and *Show previous rails* to see the solve before it, faded. Treat the raise rails as approximate: from 100 market paths they move by a tenth or more from one set of paths to the next ([research/RISK_BASED_RAILS_PRECISION.md](research/RISK_BASED_RAILS_PRECISION.md)).
 + Many state tax tables are present (including "No Tax" states). California tax table is the default. 33 of the US states tax IRA withdrawals the same way - albeit at different tax rates.  Also, those same 33 states treat all capital gains as taxable income - and that can matter quite a lot. WARNING: only California calculations are done using the exact correct model. Other states may be off. Best to double check. Moreover, most states do NOT tax Social Security.
 + *Cash Reserve* - if not "off" the tool attempts to maintain the cash amount specified (adjusted for inflation). Any excess over Cash reserve is routed to and invested in the Brokerage.  A $0 amount means no cash is reserved and all income is invested in the Brokerage.
 + Modeling will show the true cost of the widow penalty (when one spouse predeceases another) and the IRMAA penalty.
@@ -305,6 +307,71 @@ The Optimizer and Monte Carlo run every strategy with your setting, plus your ow
 + On the Annual Details page, click either the year column or the "totalTax" column and it will generate up to 5 different tax payment plans - showing which is the most effective.
 + By default dividends from the Brokerage and interest on cash are accumulated into the Cash account. The "*Reinvest Brokerage Dividends*" selection changes this behavior and dividends are reinvested (meaning your cost basis grows over time).
 + If you do Roth Conversions (even a $1), the tool will determine when you "break even" - if ever. Break Even means the value of your total assets becomes the same or greater than the value of your assets had you done NO Roth conversions (and paid no taxes on those conversions), and stays that way for the rest of the plan - a one-year blip that later falls behind again does not count.
+
+### How to Read Risk-Based Rails
+
+The **Risk-based rails** panel sits under the charts on the Charts tab. Press **Run**, or tick
+**Auto-run** to keep the rails current as you edit. A run takes your plan as it stands and, at the
+start of its first full year, every 3 years after that, and in its last year, replays the rest of the
+plan on 100 market paths from the Monte Carlo engine. Each time it asks: what is the chance your plan
+funds every remaining year at the spending you planned? That is its **chance of success**, shortened
+to **CoS** on the charts. The preset decides what counts as too little and too much:
+
+| Preset | Target chance | Raise spending at | Cut spending at |
+|---|---|---|---|
+| Tight | 95% | 99% | 80% |
+| Normal | 90% | 99% | 70% |
+| Loose | 80% | 99.5% | 40% |
+
+Normal and Loose come from Derek Tharp and Justin Fitzpatrick's articles on Kitces.com, and Tight
+from Tharp's worked example (see [Spending rules](#spending-rules-guyton-klinger-and-the-risk-based-guardrails-that-answer-it)).
+A raise or a cut resets spending to the amount that puts the plan back on its target.
+
+**On the Balances chart the rails are wealth.** The ▲ **raise rail** and the ▼ **cut rail** are the
+TotalNetWealth, at each year's end, at which your plan, spending as planned, would reach the raise or
+the cut chance. Read them against the TotalNetWealth line:
+
++ Above the raise rail, in the green: your chance of success is at least the raise level, so spending
+  can go up.
++ Below the cut rail, in the red: the chance is under the cut level, so spending should come down.
++ Between the two: on track. Keep spending as planned.
+
+The rails start at the end of the plan's first year, where its first full year begins, and end the
+year before its last. A rail under 5% of TotalNetWealth is drawn at $0: the plan needs almost none of
+what it has to reach that chance.
+
+**Hover over a year for the quick answer.** The hover-over list is sorted by size, so where
+TotalNetWealth lands in it says what to do: listed above the Raise rail, a raise is possible; between
+the Raise and Cut rails, all is well; below the Cut rail, a spending cut is advised. TotalNetWealth
+also shows the plan's CoS from that year's end, and the rails are rounded to $1,000 (the raise rail
+up, the cut rail down).
+
+**On the Income vs Net view the rails are spending, after tax**: the same terms as After-Tax Spend,
+the Spend Goal line and Net (Spendable). Total Income is before tax, so it is not the line to compare
+them with.
+
++ ■ **Spend for 90% chance** (the number is the preset's target) is the spending for that year that
+  puts your plan exactly on the target, given the wealth it started the year with. Above the Spend
+  Goal line, you could spend more and still have the target chance; below it, you are spending more
+  than the target allows. The first ■, in the plan's first year, is the After-Tax Spend answer the
+  panel offers, and *Use it* sets your After-Tax Spend to it.
++ ▲ and ▼ are the spending that would restore the target if TotalNetWealth rose to the raise rail or
+  fell to the cut rail: what a raise or a cut would take you to. When your wealth is already past a
+  rail, that rail's line can cross the ■ line.
++ Nothing is drawn above twice the year's planned spending. Near the end of a plan the answer climbs
+  toward spending whatever is left, which only a known date of death would allow. Annual Details
+  still shows it.
+
+**Markers and lines.** A marked point (▲, ▼ or ■) is a year that was solved; the straight lines
+between are filled in. After you change your plan the rails stay on the chart, marked *stale*, until
+you run again, and *Show previous rails* draws the solve before, faded, so you can see what moved.
+
+**How far to trust them.** From 100 market paths a raise rail can move 10% or more from one run to
+the next, and the cut rails and the spending a few percent
+([research/RISK_BASED_RAILS_PRECISION.md](research/RISK_BASED_RAILS_PRECISION.md)). The market comes
+from the panel's *Market paths*, which by default follows the Monte Carlo tab. The rails do not depend
+on the Guardrails (GK-style) switch: every run holds your spending on its planned path. Nothing in the
+panel changes your plan unless you press *Use it*, and *Restore* puts your After-Tax Spend back.
 
 ### What the Tool IGNORES (No Plans to Implement)
 

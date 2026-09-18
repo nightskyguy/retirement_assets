@@ -37,14 +37,13 @@ It can also be flipped **at runtime** by a hidden checkbox on the Documentation 
 URL, so a link you share does not carry your knob state.
 
 Three things have graduated *out* of the knob and must not be put back: the **optimizer objective
-selector** (PF13), the **ACA Cliff options** (v11.1464), and the **risk-based rails panel**, which was
-behind `?nerdknob=rails` until 2026-09-16 (user: "For non-nerdknob users, leave it off and expose
-it"). What
-stays behind the plain knob is only what a solve costs: how often it solves (every 3 years for
-everyone else), how many market paths it uses (100), and the readout of where the time went with a
-projection for other settings. The panel itself - presets, market method, Run, Auto-run, the rails on
-both charts and the After-Tax Spend answer - is for everyone, and nothing in it enters the share
-link, a saved plan or the engine inputs unless *Use it* writes After-Tax Spend.
+selector** (PF13), the **ACA Cliff options** (v11.1464), and the **risk-based rails panel** (2026-09-16,
+user: "For non-nerdknob users, leave it off and expose it"). What stays behind the knob is only what a
+solve costs: how often it solves (every 3 years for everyone else), how many market paths it uses
+(100), and the readout of where the time went with a projection for other settings. The panel
+itself - presets, market method, Run, Auto-run, the rails on both charts and the After-Tax Spend
+answer - is for everyone, and nothing in it enters the share link, a saved plan or the engine inputs
+unless *Use it* writes After-Tax Spend.
 
 ### Timing diagnostics behind the plain knob
 
@@ -82,8 +81,7 @@ input, corrected to read THIS year's conversion and to move the CONVERSION rathe
 Both are gated one notch below the plain knob: they respond only to the **literal value**, and
 plain `?nerdknob` does *not* reveal them. Both are also read once at load, so the Documentation
 checkbox cannot turn them on. Unchecking it does hide goal-first again (it also requires the knob to
-be on); the Fixed Split menu entry ignores it. A link still carrying `?nerdknob=rails` simply counts
-as the plain knob.
+be on); the Fixed Split menu entry ignores it.
 
 | URL | what it unlocks |
 |---|---|

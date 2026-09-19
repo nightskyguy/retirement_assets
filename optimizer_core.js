@@ -1295,6 +1295,11 @@ function buildSimYearLogRecord(p) {
         '-ssStart1': p.ssStart1,
         '-ssStart2': p.ssStart2,
         '-ssStartSurvivor': p.ssStartSurvivor,
+        // What the spend rule (GK-style or risk-based) did to this year's goal, in dollars: negative
+        // for a cut, positive for a raise, 0 when it held (or there is no rule). CPI and Spend Delta
+        // are not in it. computeMilestones marks the cuts and the raises from this, not from the
+        // label: a raise the ceiling trims back to the plan still moved spending up.
+        '-ruleMove': p.ruleMove ?? 0,
         MAGI: p.tax.MAGI,
         // P87d. MAGI on the ACA statute's definition - the SSA one above plus the non-taxable share
         // of the benefit. Equal to `MAGI` for every ceiling that is not a live ACA cap, which is why
@@ -1395,9 +1400,10 @@ function buildSimYearLogRecord(p) {
         // fact about the year rather than about the setting. The required distribution, when there
         // is one, follows the FIRST of the two.
         timing: (p.convLabel ?? 'none') + '/' + (p.wdLabel ?? 'Late'),
-        // Guardrails, the Guyton-Klinger spend rule: filled whenever the rule is on, under any strategy.
-        gkSpend: p.spendRule === 'gk' ? p.spendGoal : null,
-        gkAdj:   p.spendRule === 'gk' ? (p.gkAdjLabel || '—') : null,
+        // The spend rule - Guardrails (GK-style) or Risk-based - filled whenever one is on, under
+        // any strategy. One pair of columns for both: a year is adjusted by one rule or none.
+        gkSpend: (p.spendRule === 'gk' || p.spendRule === 'rbg') ? p.spendGoal : null,
+        gkAdj:   (p.spendRule === 'gk' || p.spendRule === 'rbg') ? (p.gkAdjLabel || '—') : null,
         // What the year was actually handed: this year's inflation, the compounded inflation the
         // row's nominal dollars carry, and this year's market return. Constant in a deterministic
         // run and different every year under Monte Carlo, which is the point - a replayed path is
@@ -2076,6 +2082,7 @@ function resolveSpendTarget(sim, yr) {
                 sim.spendGoal *= (1 + yr.yearInflation);
             }
             // Guardrail checks on (possibly inflation-adjusted) spend
+            const _preRule = sim.spendGoal;
             const _cwr = sim.spendGoal / sim.prevPortfolio;
             // P127. No cut in the plan's last GK_NO_CUT_FINAL_YEARS years. `y` is the plan year, so a
             // resumed run counts from the same end the whole plan does. Labelled rather than silent,
@@ -2110,6 +2117,63 @@ function resolveSpendTarget(sim, yr) {
                 labels.push('@shape');
             }
             sim.gkAdjLabel = labels.join(' ') || '';
+            yr['-ruleMove'] = sim.spendGoal - _preRule;
+        }
+    }
+
+    // P132: the risk-based rule (Tharp and Fitzpatrick). Spending takes CPI every year, and is
+    // reset when the plan's CHANCE OF SUCCESS crosses a rail - not when a withdrawal rate does. The
+    // chance is never computed here: the rails solver found, along this plan, the spend-to-wealth
+    // ratio at which the chance falls to the cut level and the one at which it reaches the raise
+    // level, and the ratio each adjustment returns the plan to (railsRuleTable). A year compares its
+    // own spending over the after-tax wealth it starts with - the same TotalNetWealth the rails are
+    // stated in - and that is the whole cost of the rule inside a Monte Carlo path.
+    //
+    // No freeze, no CPI cap, no suspension near the end: the published rule has none, and the
+    // horizon is already inside the chance the rails were solved for. CPI is applied where the plan
+    // without a rule applies it - at the END of the year, from that year's inflation (endYear) -
+    // and not, as GK does, at the start of the next year from the next year's. Under a market path
+    // the two differ by a year's inflation, and the rule is meant to be the plan's own path until
+    // a rail is crossed. The shape and the ceiling are the same as GK's: `gkShapeGoal` is the
+    // plan's own path, and `gkShapeCeiling` holds the goal at it. A year with no row - no table,
+    // or a table this plan was never solved for - is left on the shape and says so in the label;
+    // the page never hands the rule a stale table.
+    if (_usesRBGSpendRule(inputs)) {
+        if (y === 0) {
+            sim.gkAdjLabel = '';
+            sim.gkShapeGoal = sim.spendGoal;
+        } else {
+            const labels = [];
+            const _preRule = sim.spendGoal;
+            const row = _rbgRowAt(inputs, y);
+            const w = sim.prevNetWealth;
+            if (!row) {
+                labels.push('no rails');
+            } else if (w > 0 && row.wealthReal > 0) {
+                const pct = q => `${Math.round(q * 100)}%`;
+                // What the portfolio has to fund: spending net of this year's Social Security and
+                // pension, which computeIncome has already resolved. The table is in the same terms.
+                const g = (yr.s1 ?? 0) + (yr.s2 ?? 0) + (yr.pension ?? 0);
+                const r = (sim.spendGoal - g) / w;
+                // The landing: the row's line for that chance, at this path's wealth as a multiple
+                // of the spine's, both in today's dollars, back in this path's dollars, plus its
+                // own guaranteed income.
+                const wReal = w / sim.inflation;
+                const land = (a, b) => g + (a + b * (wReal / row.wealthReal)) * row.wealthReal * sim.inflation;
+                if (row.cutAt != null && row.cutB != null && r > row.cutAt) {
+                    sim.spendGoal = Math.max(0, land(row.cutA, row.cutB));
+                    labels.push(`cut→${pct(inputs.rbgRails.cutTo)}`);
+                } else if (row.raiseAt != null && row.raiseB != null && r < row.raiseAt) {
+                    sim.spendGoal = Math.max(0, land(row.raiseA, row.raiseB));
+                    labels.push(`raise→${pct(inputs.rbgRails.target)}`);
+                }
+            }
+            if (inputs.gkShapeCeiling && sim.gkShapeGoal != null && sim.spendGoal > sim.gkShapeGoal) {
+                sim.spendGoal = sim.gkShapeGoal;
+                labels.push('@shape');
+            }
+            sim.gkAdjLabel = labels.join(' ') || '';
+            yr['-ruleMove'] = sim.spendGoal - _preRule;
         }
     }
 
@@ -2127,8 +2191,8 @@ function resolveSpendTarget(sim, yr) {
         }
     }
 
-    // GK bypasses goalLimit (bracket ceiling) - spend is dynamically set by GK rules
-    const isGKStrategy = _usesGKSpendRule(inputs);
+    // A spend rule bypasses goalLimit (bracket ceiling) - spend is dynamically set by the rule
+    const isGKStrategy = _usesSpendRule(inputs);
     const _schedSetSpend = yr._spendOverride != null;
     yr.targetSpend = (yr.isBracketStrategy || yr.isOrderedStrategy || isGKStrategy || _schedSetSpend)
         ? sim.spendGoal : Math.min(sim.spendGoal, yr.goalLimit);
@@ -2272,6 +2336,24 @@ function resolveSpendTarget(sim, yr) {
 function _usesGKSpendRule(inputs) {
     return inputs.spendRule === 'gk';
 }
+// P132. The risk-based rule: spending follows the chance of success, read off a table the rails
+// solver produced for this plan (`inputs.rbgRails`, railsRuleTable in montecarlo/rails_engine.js).
+function _usesRBGSpendRule(inputs) {
+    return inputs.spendRule === 'rbg';
+}
+// Either rule: the places that care only that SOMETHING other than the plan's own path sets the
+// year's spending - the bracket ceiling bypass, the log columns, Spend Delta's timing, the search
+// filter - read this one.
+function _usesSpendRule(inputs) {
+    return inputs.spendRule === 'gk' || inputs.spendRule === 'rbg';
+}
+// The rule's row for plan year y, or null when the table has none (no table, a year before the
+// first solve, or a year the page never solved for this plan).
+function _rbgRowAt(inputs, y) {
+    const t = inputs.rbgRails;
+    if (!t || !Array.isArray(t.years)) return null;
+    return t.years[y] ?? null;
+}
 
 // P127. Two of the published rule's limits, adopted by the user on 2026-09-16. The inflation raise
 // never exceeds 6% in one year (Guyton and Klinger, 2006). The capital-preservation cut is
@@ -2306,16 +2388,18 @@ function portfolioReturnOf(balance, rates, dividendRate) {
     return held > 0 ? earned / held : (rates.IRA1 ?? 0);
 }
 
-// P128. Risk-based guardrails: three published parameter sets, each a target probability of
+// P128. Risk-based guardrails: four published parameter sets, each a target probability of
 // success, the probability at which spending is raised, and the probability at which it is cut. A
-// triggered adjustment resets spending to what the target allows. Defined ONCE: the rails panel and
-// montecarlo/rails_engine.js read this table.
+// triggered adjustment resets spending to what the target allows - except that a cut returns to
+// `cutTo` where a set names one (P132: the 2024 article's rule cuts at 25% and returns only to 45%,
+// while its raise returns to the 80% target). A set without `cutTo` returns to its target. Defined
+// ONCE: the rails panel, montecarlo/rails_engine.js and the 'rbg' spend rule read this table.
 //
-// Loose raises at 99.5%, not the article's 100% (user, 2026-09-16). "100%" can only mean "every
-// sampled path survived", which climbs without limit as paths are added - a 1,000-path solve put it
-// 37% to 44% above a 100-path one (research/RISK_BASED_RAILS_PRECISION.md, section 2). 99.5% is still
-// the worst of 100 paths, and becomes a real percentile from 200 paths up. The research harness that
-// studies the ARTICLE keeps the article's own 100% (.test_harnesses/rbg_harness.js).
+// Loose and Paper raise at 99.5%, not the articles' 100% (user, 2026-09-16). "100%" can only mean
+// "every sampled path survived", which climbs without limit as paths are added - a 1,000-path solve
+// put it 37% to 44% above a 100-path one (research/RISK_BASED_RAILS_PRECISION.md, section 2). 99.5%
+// is still the worst of 100 paths, and becomes a real percentile from 200 paths up. The research
+// harness that studies the 2021 ARTICLE keeps its own 100% (.test_harnesses/rbg_harness.js).
 const RAIL_PRESETS = Object.freeze({
     tight: Object.freeze({
         key: 'tight', label: 'Tight', target: 0.95, upper: 0.99, lower: 0.80,
@@ -2328,6 +2412,10 @@ const RAIL_PRESETS = Object.freeze({
     loose: Object.freeze({
         key: 'loose', label: 'Loose', target: 0.80, upper: 0.995, lower: 0.40,
         source: 'Tharp and Fitzpatrick, "The Retirement Distribution \'Hatchet\'", Kitces.com, 2021-11-24 - its income-risk framing, read as probability of success, with its 0% risk (100%) raise read as 99.5%',
+    }),
+    paper: Object.freeze({
+        key: 'paper', label: 'Paper', target: 0.80, upper: 0.995, lower: 0.25, cutTo: 0.45,
+        source: 'Tharp and Fitzpatrick, "Why Guyton-Klinger Guardrails Are Too Risky For Most Retirees", Kitces.com, 2024-03-27 - its risk-based parameters: spend at 80%, raise at 100% (read as 99.5%) back to 80%, cut at 25% back to 45%',
     }),
 });
 
@@ -2408,7 +2496,7 @@ function compileScheduleFromRun(res, srcInputs) {
     // scheduleOptionsForRun - never its realized spend numbers. Recorded numbers replay the past;
     // the rule can be followed forward, which is the difference between a hindsight artifact and a
     // policy someone could adopt.
-    const spendAdaptive = _usesGKSpendRule(srcInputs);
+    const spendAdaptive = _usesSpendRule(srcInputs);
     // Which cascade the source family took. `fixed` (Reduce) and `propwd` (Proportional) are not in
     // the bracket set, so they fill the gap from the [40,60] default branch instead. Plain
     // Proportional compiles to no entry at all; with Guardrails on it emits its draw, and this is
@@ -2452,6 +2540,10 @@ function scheduleOptionsForRun(srcInputs) {
     if (_usesGKSpendRule(srcInputs)) {
         return { scheduleFallback: 'none', spendRule: 'gk',
                  gkGuard: srcInputs.gkGuard, gkAdjPct: srcInputs.gkAdjPct };
+    }
+    if (_usesRBGSpendRule(srcInputs)) {
+        return { scheduleFallback: 'none', spendRule: 'rbg',
+                 rbgPreset: srcInputs.rbgPreset, rbgCustom: srcInputs.rbgCustom, rbgRails: srcInputs.rbgRails };
     }
     // Proportional fills its gap from the baseline branch, not the bracket cascade, so a schedule carrying it
     // has to say so; `gapFill` on each entry does that, and the fallback matters only for years the
@@ -4509,9 +4601,7 @@ function evaluateYearOutcome(sim, yr) {
     // After-tax terminal valuation: IRA taxed at ordinary marginal (nominalTaxRate),
     // brokerage gains above basis taxed at the capital-gains rate (not ordinary),
     // Roth + Cash + returned basis at face.
-    yr.totalNetWealth = (balance.IRA1 + balance.IRA2) * (1 - sim.nominalTaxRate)
-        + Math.max(0, balance.Brokerage - balance.BrokerageBasis) * (1 - sim.capitalGainsRate)
-        + balance.Roth1 + balance.Roth2 + balance.Cash + balance.BrokerageBasis
+    yr.totalNetWealth = netWealthOf(balance, sim);
 
     // Fail when the portfolio can't cover its required draw (spend minus guaranteed income).
     // This is strategy-agnostic and fires at the point of first real impairment.
@@ -4584,6 +4674,7 @@ function logYear(sim, yr) {
         fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep,
         _ceilDedAddBack: yr._ceilDedAddBack,
         ssStart1: yr['-ssStart1'], ssStart2: yr['-ssStart2'], ssStartSurvivor: yr['-ssStartSurvivor'],
+        ruleMove: yr['-ruleMove'],
         grossOutflows: yr._grossOutflows, netOutflows: yr._netOutflows,
         yearInflows: yr._yearInflows, wdRate: yr._wdRate,
         convLabel: yr._convLabel, wdLabel: yr._wdLabel,
@@ -4593,12 +4684,23 @@ function logYear(sim, yr) {
     totals.totalTime += log[log.length - 1].loopMs;
 }
 
+// The after-tax value of a set of balances at the household's current rates: TotalNetWealth on a
+// log row, and the wealth the risk-based rule compares its spending against. ONE formula, because
+// the rails are stated in the row's number and the rule reads the carried one.
+function netWealthOf(balance, sim) {
+    return (balance.IRA1 + balance.IRA2) * (1 - sim.nominalTaxRate)
+        + Math.max(0, balance.Brokerage - balance.BrokerageBasis) * (1 - sim.capitalGainsRate)
+        + balance.Roth1 + balance.Roth2 + balance.Cash + balance.BrokerageBasis;
+}
+
 // Carry wealth snapshots into next year, advance the spend goal, and compound rates.
 function endYear(sim, yr) {
     const { inputs } = sim;
     // Raw balance sum (no tax discount). Feeds both the withdrawal rate and the GK guardrail
     // checks, so the two stay apples-to-apples and every year uses the same basis.
     sim.prevPortfolio = yr.portfolioBalance;
+    // After-tax, for the risk-based rule: the year-end TotalNetWealth the next year starts with.
+    sim.prevNetWealth = yr.totalNetWealth;
     // P103b5: undo a schedule's one-year spend override before the goal advances, so the next year
     // starts from the trajectory the plan would have had. Without this the override compounds.
     if (yr._spendOverride != null) sim.spendGoal = yr._spendOverride;
@@ -4606,13 +4708,18 @@ function endYear(sim, yr) {
     // Advance spend goal: apply user's spend-change preference and inflation.
     // spendDelta is constant (1 + inputs.spendChange); moving this to end of loop
     // keeps year-0 spendGoal equal to the user's input in today's dollars.
-    // Phase 22: GK handles inflation at start of next year via its own rules; only apply spendDelta here.
+    // Phase 22: GK handles inflation at the start of the next year via its own rules; only apply
+    // spendDelta here. The risk-based rule takes CPI here like the plan without a rule, and so
+    // does its shape.
     if (_usesGKSpendRule(inputs)) {
         sim.gkPriorReturn = yr._portfolioReturn;
         sim.spendGoal = sim.spendGoal * sim.spendDelta;
         // The shape is the goal's twin under Spend Delta; only CPI is applied elsewhere (the rule
         // applies it at the start of the next year, and the shape takes it there unconditionally).
         if (sim.gkShapeGoal != null) sim.gkShapeGoal = sim.gkShapeGoal * sim.spendDelta;
+    } else if (_usesRBGSpendRule(inputs)) {
+        sim.spendGoal = sim.spendGoal * sim.spendDelta * (1 + yr.yearInflation);
+        if (sim.gkShapeGoal != null) sim.gkShapeGoal = sim.gkShapeGoal * sim.spendDelta * (1 + yr.yearInflation);
     } else {
         sim.spendGoal = sim.spendGoal * sim.spendDelta * (1 + yr.yearInflation);
     }
@@ -4740,10 +4847,11 @@ function assertKnownStrategy(inputs) {
 // are still read from their own index 0, so a resumed run takes a fresh future while keeping the
 // plan's past. A test pins that a resumed run reproduces the plan's own later rows.
 //
-// Every field of `sim` is carried EXCEPT these. prevPortfolio is re-derived rather than copied: it
-// is the sum of the starting balances, and a caller that SCALES those balances (the rails solver
-// does) needs it to follow them. For an unscaled resume the two are the same number.
-const _RESUME_SKIP = new Set(['inputs', 'balance', 'log', 'totals', 'prevPortfolio']);
+// Every field of `sim` is carried EXCEPT these. prevPortfolio and prevNetWealth are re-derived
+// rather than copied: they are sums of the starting balances, and a caller that SCALES those
+// balances (the rails solver does) needs them to follow. For an unscaled resume they are the same
+// numbers.
+const _RESUME_SKIP = new Set(['inputs', 'balance', 'log', 'totals', 'prevPortfolio', 'prevNetWealth']);
 
 function snapshotResume(sim, planYear) {
     const carried = {};
@@ -4950,6 +5058,9 @@ function simulate(inputs) {
     // The plan's whole length in plan years, resumed or not: P127's cut suspension counts back from
     // its end, and a resumed run's maxYears is only what is left of it.
     sim.planYears = y0 + maxYears;
+    // After the resume, so a resumed year values its (possibly scaled) balances at the rates the
+    // plan had reached: the same number as the row it resumes from, times the scale.
+    sim.prevNetWealth = netWealthOf(balance, sim);
     const resumeStart = inputs.captureResume ? snapshotResume(sim, y0) : null;
 
     // `y` is the PLAN year, which a resumed run starts partway through; `ySeq` is the index into
@@ -5454,7 +5565,7 @@ function optimizeSpendDown(baseInputs, strategyOverridesList) {
 // flat Spend Delta the two baselines are the same number, so nothing changes there.
 function gkSpendStable(res, overrides, baseInputs) {
     const ran = { ...(baseInputs || {}), ...(overrides || {}) };
-    if (!_usesGKSpendRule(ran)) return true;
+    if (!_usesSpendRule(ran)) return true;
     const log = res.log;
     if (!log || !log.length) return true;
     const initialReal = log[0].spendGoal / (log[0].inflationFactor || 1);
@@ -5953,7 +6064,7 @@ const STRATEGY_SELECTION_FIELDS = Object.freeze([
     'strategy', 'cyclicEnabled', 'cyclicOrder', 'fundConversionWithCash', 'rothGapFill',
     'propWithdraw', 'nYears', 'stratRate', 'stratIRMAATier', 'stratACAMultiple',
     'iraWithdrawPct', 'orderedSeq', 'gkGuard', 'gkAdjPct', 'splitWeights', 'spendRule',
-    'gkShapeCeiling',
+    'gkShapeCeiling', 'rbgPreset', 'rbgCustom',
 ]);
 function selectionOf(p) {
     const o = {};
@@ -5979,14 +6090,24 @@ function sameStrategySelection(a, b) {
     const near = (x, y) => Math.abs((x ?? 0) - (y ?? 0)) < 0.001;
     // Guardrails are part of the identity under every strategy: the sweep carries each draw with
     // and without the spend rule, and those are two plans. The band and the step matter only when on.
-    const rule = x => x === 'gk' ? 'gk' : '';
+    const rule = x => (x === 'gk' || x === 'rbg') ? x : '';
     if (rule(a.spendRule) !== rule(b.spendRule)) return false;
     if (rule(a.spendRule) === 'gk'
         && !(near(a.gkGuard ?? 0.20, b.gkGuard ?? 0.20) && near(a.gkAdjPct ?? 0.10, b.gkAdjPct ?? 0.10))) return false;
+    // P132. The risk-based rule's identity is its preset, and for a custom set its four numbers.
+    // The rails table is NOT identity: it is derived from the plan, and two runs of the same plan
+    // with tables from different solves are the same plan.
+    if (rule(a.spendRule) === 'rbg') {
+        if ((a.rbgPreset ?? 'normal') !== (b.rbgPreset ?? 'normal')) return false;
+        if ((a.rbgPreset ?? 'normal') === 'custom') {
+            const ca = a.rbgCustom ?? {}, cb = b.rbgCustom ?? {};
+            for (const k of ['target', 'upper', 'lower', 'cutTo']) if (!near(ca[k], cb[k])) return false;
+        }
+    }
     // P127. The shape ceiling is part of the identity for the same reason the band is: with it on
     // the rule delivers different spending. Nothing sets it yet, so every shipped row compares
     // equal here - this exists so that stops being true safely.
-    if (rule(a.spendRule) === 'gk' && !!a.gkShapeCeiling !== !!b.gkShapeCeiling) return false;
+    if (rule(a.spendRule) && !!a.gkShapeCeiling !== !!b.gkShapeCeiling) return false;
     switch (a.strategy) {
         case 'propwd':   return near(a.propWithdraw,   b.propWithdraw);
         case 'fixed':    return a.nYears === b.nYears;
@@ -6859,7 +6980,8 @@ function describeSelection(p) {
 // round. Returns that row's rule and labels; each caller runs it with the rest of the plan exactly as it
 // runs its own current-plan row, so the Optimizer table and Compare All carry the same extra row.
 function planRuleTwin(plan) {
-    const on = !_usesGKSpendRule(plan);
+    // A plan with either rule on gets the plan with no rule; a plan with none gets GK-style.
+    const on = !_usesSpendRule(plan);
     const d = describeSelection(plan);
     return {
         spendRule: on ? 'gk' : '',

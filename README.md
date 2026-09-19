@@ -320,10 +320,14 @@ to **CoS** on the charts. The preset decides what counts as too little and too m
 | Tight | 95% | 99% | 80% |
 | Normal | 90% | 99% | 70% |
 | Loose | 80% | 99.5% | 40% |
+| Paper | 80% | 99.5% | 25%, back to 45% |
 
-Normal and Loose come from Derek Tharp and Justin Fitzpatrick's articles on Kitces.com, and Tight
-from Tharp's worked example (see [Spending rules](#spending-rules-guyton-klinger-and-the-risk-based-guardrails-that-answer-it)).
-A raise or a cut resets spending to the amount that puts the plan back on its target.
+Normal and Loose come from Derek Tharp and Justin Fitzpatrick's articles on Kitces.com, Tight from
+Tharp's worked example, and Paper from their 2024 article against Guyton-Klinger (see
+[Spending rules](#spending-rules-guyton-klinger-and-the-risk-based-guardrails-that-answer-it)).
+A raise or a cut resets spending to the amount that puts the plan back on its target - except that
+Paper's cut returns only to a 45% chance, which is the rule as that article states it. With the
+nerdknob, a Custom preset takes your own four numbers.
 
 **On the Balances chart the rails are wealth.** The ▲ **raise rail** and the ▼ **cut rail** are the
 TotalNetWealth, at each year's end, at which your plan, spending as planned, would reach the raise or
@@ -366,10 +370,59 @@ you run again, and *Show previous rails* draws the solve before, faded, so you c
 
 **How far to trust them.** From 100 market paths a raise rail can move 10% or more from one run to
 the next, and the cut rails and the spending a few percent
-([research/RISK_BASED_RAILS_PRECISION.md](research/RISK_BASED_RAILS_PRECISION.md)). The market comes
-from the panel's *Market paths*, which by default follows the Monte Carlo tab. The rails do not depend
-on the Guardrails (GK-style) switch: every run holds your spending on its planned path. Nothing in the
-panel changes your plan unless you press *Use it*, and *Restore* puts your After-Tax Spend back.
+([research/RISK_BASED_RAILS_PRECISION.md](research/RISK_BASED_RAILS_PRECISION.md)). The market is
+the Monte Carlo tab's: its Simulation Mode, Synthetic Return and Volatility, inflation model and
+Bear-start share; change any of them and the rails go stale. The rails do not depend on the
+Guardrails switch: every run holds your spending on its planned path. The preset is chosen with the
+*Risk-based rails preset* menu under the Guardrails switch, or with the panel's own menu; the two are
+one setting. Nothing in the panel changes your plan unless you press *Use it*, and *Restore* puts
+your After-Tax Spend back - unless the Guardrails switch is set to Risk-based, below.
+
+**The rule table (nerdknob).** With `?nerdknob` on the address the panel has a *Rule table* fold:
+the dimensionless table the Risk-based rule reads, one row per plan year. Each row gives the ratio of
+net spending (after Social Security and pension) to the wealth at the end of the year before at which
+the chance of success falls to the cut rail and at which it reaches the raise rail, and the line each
+adjustment lands on. The ratios depend on the market model and the years left, and hardly at all on
+the plan's own balances: at the plan's Growth of 4% the cut ratio in an early year is about 60% of
+what it is at 8%, because the Monte Carlo tab's Synthetic Return follows Growth; holding that return
+fixed and moving only the plan's Growth changes the ratios by about 1%.
+
+#### Following the rails: Guardrails set to Risk-based
+
+With the nerdknob (`?nerdknob` on the address), the **Guardrails** switch beside After-Tax Spend has a rule menu. **GK-style** is the Guyton-Klinger
+rule described under *Limitations and Restrictions*. **Risk-based (CoS)** makes the plan follow the
+rails above: in any year the chance of success has fallen to the cut rail, spending is cut to what
+gives the preset's return level (its target, or 45% for Paper); in any year it has reached the raise
+rail, spending is raised to what gives the target; otherwise spending stays on your planned path, with
+inflation every year and Spend Delta on top. The preset is the *Risk-based rails preset* under the
+switch (the panel's menu is the same setting), so the rails you see are the rails the plan follows.
+Every cut and raise the rule makes is a milestone on the charts, as GK-style's are, and the
+*Guardrails* column set in Annual Details gathers everything either rule reads and writes: the spend
+goal and the guaranteed income under it, the rule's spending and what it did, the wealth it compared,
+the rails and their chance of success, and each year's inflation and return.
+
+While the rule is on the rails solve themselves whenever your plan changes, whether or not Auto-run is
+ticked, and the plan is run again when the solve lands. Until then the Guardrails columns in Annual
+Details read *no rails* and spending stays on the plan's path. Monte Carlo and the Optimizer run the
+rule too: every path and every swept row follows the same rails, which is what makes the rule cheap
+enough to sweep. The rails themselves are solved on the plan without the rule, so turning the rule on
+or changing its preset never makes them stale.
+
+**Replaying a Monte Carlo path.** With the rule on, the rails it read along that path are drawn: your
+plan's rails in dollars at the path's own spending and wealth each year, which is what decided each
+cut and raise (no chance of success is shown for them). *Solve rails on this path* - the panel's Run
+button during a replay - re-solves the chance from the state the path actually reached at each
+solved year, at the cost of one ordinary solve; that answer is kept for the path, and your plan's own
+rails come back when the replay ends. Without the rule, the plan's rails are not drawn on a replay.
+
+**Never above plan is on by default with this rule.** The rule does not re-solve the chance every year
+along a path; it compares each year's spending with the rails solved for your plan and lands on the
+spending the solve found at each rail. That is exact when spending is near your planned path and
+drifts when a run of raises has taken it far above. Measured against re-solving the chance every
+year through six historical starts on five households
+([research/RBG_RULE_VALIDATION.md](research/RBG_RULE_VALIDATION.md)), the rule stays within a few
+percent of the exact answer with the ceiling on, and both the cheap rule and the exact one drift and
+sometimes fail without it. Turn it off to let raises run above the plan, knowing that.
 
 ### What the Tool IGNORES (No Plans to Implement)
 

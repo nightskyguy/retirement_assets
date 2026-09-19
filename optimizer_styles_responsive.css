@@ -237,6 +237,14 @@ h3 {
     width: 46px !important;
     max-width: 46px !important;
 }
+/* A menu whose options are sentences (the Risk-based rails preset) takes its row's full width. */
+.compact-row > label.wide {
+    flex: 1 1 100%;
+}
+.compact-row > label.wide select {
+    width: 100% !important;
+    max-width: none !important;
+}
 
 /* ── Collapsible sidebar sections ── */
 details.section {

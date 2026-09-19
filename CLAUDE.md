@@ -71,6 +71,7 @@ needed under two fixes to code that had never shipped.
 | how it used to work | the reader wants what it does now. One exception: something they must act on, e.g. a saved plan that will not reproduce - then state it as consequence, not history |
 | the internals of the change | function, file and variable names, the mechanism, the defect, test counts, phase IDs |
 | an argument for why the change is good | state what it is |
+| anything behind the nerdknob, or the word "nerdknob" | `?nerdknob` gates experimental, UNRELEASED features; a reader without it cannot see them, and the changelog is the released tool's. Describe only what everyone gets (user, 2026-09-19) |
 
 None of that is lost: **the commit messages carry the intermediate detail**, in as much depth as the
 work deserves - what was corrected mid-branch, why an approach changed, what was measured. That is

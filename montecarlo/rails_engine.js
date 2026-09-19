@@ -128,12 +128,20 @@ function railsCount(N, q) {
     return N;
 }
 
-// The presets in a fixed order, so every consumer walks them the same way.
-function railsPresetKeys() {
-    return Object.keys(RAIL_PRESETS);
+// The presets in a fixed order, so every consumer walks them the same way. A job may bring its own
+// map (`cfg.presets`, P132: the page appends a `custom` set from the nerdknob boxes); RAIL_PRESETS
+// is the default.
+function railsPresetKeys(presets = RAIL_PRESETS) {
+    return Object.keys(presets);
+}
+
+// The chance a cut returns the plan to: the set's own `cutTo`, else its target.
+function railsCutTo(P) {
+    return P.cutTo ?? P.target;
 }
 
 const _RAILS_CANCELLED = Symbol('rails-cancelled');
+const _RAILS_SKIP_START = Symbol('rails-skip-start');
 
 // One whole rails job. Resolves to the results message, or null if shouldCancel() went true.
 //
@@ -147,20 +155,29 @@ async function runRailsJob(cfg, hooks) {
     const numPathsWanted = railsPaths(cfg.numPaths);
     const startPathsWanted = Math.max(1, Math.round(Number(cfg.startPaths)) || RAILS_START_PATHS);
     const mode = (cfg.simulationMode === 'bootstrap' || cfg.simulationMode === 'aam') ? cfg.simulationMode : 'gbm';
-    const presetKeys = railsPresetKeys();
+    const presetMap = cfg.presets ?? RAIL_PRESETS;
+    const presetKeys = railsPresetKeys(presetMap);
 
     // The page's own inputs, minus the two things that would only cost time here: the Break Even
     // counterfactual and a resume record nobody asked for.
     const base = { ...cfg.base, computeOC: false, captureResume: false, resume: undefined };
-    const ruleOn = base.spendRule === 'gk';
-    const solveBase = { ...base, spendRule: '' };
+    // The spine is the plan on screen, GK-style rule and all. With the RISK-BASED rule on it is the
+    // plan without the rule (P132): the rails are what that rule follows, and a spine adjusted by
+    // the last table would make every solve depend on the one before it.
+    const spineBase = base.spendRule === 'rbg' ? { ...base, spendRule: '', rbgRails: undefined } : base;
+    const ruleOn = spineBase.spendRule === 'gk';
+    const solveBase = { ...spineBase, spendRule: '' };
 
     const tSpine = performance.now();
-    const spine = simulate({ ...base, captureResume: true });
+    const spine = simulate({ ...spineBase, captureResume: true });
     const spineMs = performance.now() - tSpine;
     const log = spine.log;
     const n = log.length;
-    const solved = railsSolvedYears(n, cfg.cadence);
+    // A caller may name the plan years to solve (a subset of the cadence's, for a job split across
+    // workers - P132f) and skip the After-Tax Spend answer; the page never does either.
+    const solved = Array.isArray(cfg.solveYears)
+        ? railsSolvedYears(n, cfg.cadence).filter(k => cfg.solveYears.includes(k))
+        : railsSolvedYears(n, cfg.cadence);
     const years = n + RAILS_EXTRA_YEARS;
 
     const tBanks = performance.now();
@@ -306,10 +323,13 @@ async function runRailsJob(cfg, hooks) {
             const pos = paths.filter(x => x.ok11).length / numPaths;
             const countOf = q => railsCount(numPaths, q);
             const wealthAns = await refine(paths.map(x => x.w),
-                uniq(presetKeys.flatMap(key => [countOf(RAIL_PRESETS[key].upper), countOf(RAIL_PRESETS[key].lower)])),
+                uniq(presetKeys.flatMap(key => [countOf(presetMap[key].upper), countOf(presetMap[key].lower)])),
                 true, RAILS_SCALE_RANGE, RAILS_RESOLUTION);
+            // The target spend, and (P132) the spend at the plan's own wealth that returns it to a
+            // set's cutTo: the second point the rule's cut-side landing runs through. The same
+            // count as the target for every set but Paper, so it costs nothing there.
             const spendAns = await refine(paths.map(x => x.m),
-                uniq(presetKeys.map(key => countOf(RAIL_PRESETS[key].target))),
+                uniq(presetKeys.flatMap(key => [countOf(presetMap[key].target), countOf(railsCutTo(presetMap[key]))])),
                 false, RAILS_SPEND_RANGE, RAILS_RESOLUTION);
             const tThresh = performance.now();
             phaseMs.thresholds += tThresh - yT0;
@@ -318,15 +338,18 @@ async function runRailsJob(cfg, hooks) {
             const rails = {};
             const scales = new Map();   // a distinct rail wealth -> the presets and rails that use it
             for (const key of presetKeys) {
-                const P = RAIL_PRESETS[key];
+                const P = presetMap[key];
                 const upper = wealthAns.get(countOf(P.upper));
                 const lower = wealthAns.get(countOf(P.lower));
                 const target = spendAns.get(countOf(P.target));
-                rails[key] = { upper, lower, target, spendUp: { value: null, clamped: 'rail' }, spendDn: { value: null, clamped: 'rail' } };
-                for (const [which, r] of [['spendUp', upper], ['spendDn', lower]]) {
+                const cutTo = spendAns.get(countOf(railsCutTo(P)));
+                rails[key] = { upper, lower, target, cutTo, spendUp: { value: null, clamped: 'rail' }, spendDn: { value: null, clamped: 'rail' } };
+                // The spend at the raise rail returns to the target; the spend at the cut rail to
+                // `cutTo`, which the Paper set puts below the target.
+                for (const [which, r, q] of [['spendUp', upper, P.target], ['spendDn', lower, railsCutTo(P)]]) {
                     if (r.clamped) continue;   // a rail at a bracket's edge has no spend worth solving
                     if (!scales.has(r.value)) scales.set(r.value, []);
-                    scales.get(r.value).push({ key, which, c: countOf(P.target) });
+                    scales.get(r.value).push({ key, which, c: countOf(q) });
                 }
             }
 
@@ -380,15 +403,21 @@ async function runRailsJob(cfg, hooks) {
                     railUpper:    wealthDollars(r.upper),
                     railLower:    wealthDollars(r.lower),
                     spendTarget:  dollars(r.target, planSpend),
+                    spendAtCutTo: dollars(r.cutTo, planSpend),
                     spendAtUpper: dollars(r.spendUp, planSpend),
                     spendAtLower: dollars(r.spendDn, planSpend),
-                    clamped: { upper: r.upper.clamped, lower: r.lower.clamped, target: r.target.clamped,
+                    clamped: { upper: r.upper.clamped, lower: r.lower.clamped, target: r.target.clamped, cutTo: r.cutTo.clamped,
                                spendUp: r.spendUp.clamped, spendDn: r.spendDn.clamped },
                 };
             }
             out.push({
                 k, year: log[k].year, fromYear: prev.year,
                 wealth, planSpend, pos, presets,
+                // The price level the solved year's dollars carry, so the rule can state the row
+                // in today's dollars and apply it at a path's own price level, and the year's
+                // Social Security and pension, so it can state spending net of them (railsRuleTable).
+                inflationFactor: log[k].inflationFactor,
+                guaranteedIncome: log[k].guaranteedIncome ?? 0,
                 ms: performance.now() - yT0,
                 runs: runs - yRuns0,
                 pathYears: pathYears - yPY0,
@@ -399,6 +428,7 @@ async function runRailsJob(cfg, hooks) {
         // Scaling the start record's goal IS typing the scaled goal (checked on 60 path runs by the
         // research harness), so the answer is that multiple of the After-Tax Spend on screen.
         const tStart = performance.now(), sRuns0 = runs, sPY0 = pathYears;
+        if (cfg.skipStart) throw _RAILS_SKIP_START;
         const rec0 = spine.resumeStart;
         const at0 = (scale, mult) => resumeInputs(solveBase, rec0, { balanceScale: scale, spendGoal: rec0.sim.spendGoal * mult });
         const items0 = [];
@@ -412,7 +442,7 @@ async function runRailsJob(cfg, hooks) {
             it.test = v => survives(at0(1, v), pathIn);
             items0.push(it);
         }
-        const startCount = key => railsCount(startPaths, RAIL_PRESETS[key].target);
+        const startCount = key => railsCount(startPaths, presetMap[key].target);
         const ans0 = await refine(items0, uniq(presetKeys.map(startCount)), false, RAILS_SPEND_RANGE, RAILS_START_RESOLUTION);
         // `spendGoal` is the answer as the After-Tax Spend input takes it, in today's dollars;
         // `spendTarget` is the same spending as year 0 holds it, nominal like every rails dollar, and
@@ -430,7 +460,8 @@ async function runRailsJob(cfg, hooks) {
         phaseMs.start += performance.now() - tStart;
     } catch (e) {
         if (e === _RAILS_CANCELLED) return null;
-        throw e;
+        if (e === _RAILS_SKIP_START) start = { paths: 0, pos: null, spendGoal: base.spendGoal, answers: {}, runs: 0, pathYears: 0, ms: 0 };
+        else throw e;
     }
     h.onProgress(1);
 
@@ -440,8 +471,8 @@ async function runRailsJob(cfg, hooks) {
     const solvePY = pathYears - start.pathYears;
     const presetsOut = {};
     for (const key of presetKeys) {
-        const P = RAIL_PRESETS[key];
-        presetsOut[key] = { key, label: P.label, target: P.target, upper: P.upper, lower: P.lower };
+        const P = presetMap[key];
+        presetsOut[key] = { key, label: P.label, target: P.target, upper: P.upper, lower: P.lower, cutTo: railsCutTo(P) };
     }
     return {
         type: 'results', kind: 'rails', version: 2,
@@ -572,16 +603,149 @@ function railsRowFields(msg, log, { stale = false, preset = 'normal' } = {}) {
     return rows;
 }
 
+// P132. The table the 'rbg' spend rule follows (resolveSpendTarget, optimizer_core.js): one rails
+// job, one preset, turned into RATIOS a simulated year can compare its own state against.
+//
+// The solver finds every rail by scaling the plan's balances by one factor, so a rail is really a
+// spend-to-wealth ratio: the plan's spending over the wealth at which it reaches the rail's chance.
+// A ratio holds on any path's wealth, which is what lets the rule run inside a Monte Carlo path at
+// the cost of one comparison a year instead of a nested solve. What a ratio does NOT carry is the
+// dollars Social Security and pensions add - the reason the job solves the spend at each rail
+// separately (`spendAtLower`, `spendAtUpper`) rather than scaling the target - so each row keeps
+// the rail's own spend-to-wealth ratio, measured at the wealth the rail sits at, which is where a
+// path is when it crosses. research/RBG_RULE_VALIDATION.md measures how far that is from re-solving.
+//
+// Per plan year k (index k of `years`; year 0 has no row - the rule leaves the plan's own first
+// year alone), with W the spine's year-end wealth, S its year-k spending and G that year's Social
+// Security and pension. Spending is taken NET of G throughout: what the portfolio has to fund is
+// S - G, and a path that has raised its spending well above the plan's still has the same G, so a
+// ratio on gross spending would misplace both its triggers and its landings. Every dollar is
+// divided by the solved year's price level so a path applies the row at its own.
+//   cutAt, raiseAt   (S - G) / railLower and (S - G) / railUpper: the ratio of net spending to
+//                    wealth at which the chance falls to the cut level, and the one at which it
+//                    reaches the raise level
+//   wealthReal       W in today's dollars; a path's wealth over it is the multiple `m` below
+//   cutA, cutB       the NET spend that returns the plan to `cutTo`, as a share of W, AFFINE in m:
+//                    s(m) = cutA + cutB x m, through the two solved points on that chance -
+//                    (railLower, spendAtLower - G) and (W, spendAtCutTo - G); with one point solved
+//                    it is the ratio through the origin (cutA = 0). The path adds its own G back.
+//   raiseA, raiseB   the same for the target, through (railUpper, spendAtUpper - G) and
+//                    (W, spendTarget - G)
+// A rail under the search's floor is $0 on the message. For the RAISE rail that means the plan
+// reaches the raise chance at any wealth the search looked at, so the side fires at any ratio
+// (raiseAt = Infinity) and lands through the plan-wealth point alone. For the CUT rail it means the
+// chance stays above the cut level at any such wealth: the side never fires. A rail beyond the
+// search's top is the mirror image: a cut rail above 16x wealth means the plan is under the cut
+// chance at every wealth searched, so the cut fires from the top of the search (cutAt at 16 W),
+// and a raise rail beyond it never fires. A side with no landing is null on every one of its
+// fields. Years between two solves are interpolated linearly, only when both ends were solved
+// (an Infinity end stays Infinity). Nothing is written past the last solve, which is always the
+// plan's last year.
+function railsRuleTable(msg, presetKey) {
+    const P = msg?.presets?.[presetKey];
+    if (!P || !Array.isArray(msg.years)) return null;
+    const ok = v => typeof v === 'number' && Number.isFinite(v) && v > 0;
+    const TOP = RAILS_SCALE_RANGE[1];
+    const pts = msg.years
+        .map(y => ({ k: y.k, year: y.year, wealth: y.wealth, spend: y.planSpend, infl: y.inflationFactor || 1,
+                     guar: y.guaranteedIncome ?? 0, p: y.presets?.[presetKey] }))
+        .filter(y => y.p && ok(y.wealth) && ok(y.spend) && Number.isInteger(y.k) && y.k >= 1)
+        .sort((a, b) => a.k - b.k);
+    // s(m) through the solved points of one chance curve, each (wealth, net spend) as shares of W.
+    const line = (W, ...pairs) => {
+        const q = pairs.filter(([w, s]) => ok(w) && typeof s === 'number' && Number.isFinite(s)).map(([w, s]) => [w / W, s / W]);
+        if (!q.length) return [null, null];
+        if (q.length === 1 || Math.abs(q[0][0] - q[1][0]) < 1e-9) return [0, q[0][1] / q[0][0]];
+        const b = (q[1][1] - q[0][1]) / (q[1][0] - q[0][0]);
+        return [q[0][1] - b * q[0][0], b];
+    };
+    const rowOf = y => {
+        const p = y.p, W = y.wealth, G = y.guar, net = y.spend - G;
+        const cl = p.clamped ?? {};
+        const spendNet = v => ok(v) ? v - G : null;
+        const [cutA, cutB] = line(W, [p.railLower, spendNet(p.spendAtLower)], [W, spendNet(p.spendAtCutTo)]);
+        const [raiseA, raiseB] = line(W, [p.railUpper, spendNet(p.spendAtUpper)], [W, spendNet(p.spendTarget)]);
+        const r = { k: y.k, year: y.year, solved: true, wealthReal: W / y.infl,
+                    cutAt:   ok(p.railLower) ? net / p.railLower : cl.lower === 'high' ? net / (TOP * W) : null, cutA, cutB,
+                    raiseAt: ok(p.railUpper) ? net / p.railUpper : cl.upper === 'low' ? Infinity : null, raiseA, raiseB };
+        if (r.cutAt == null || r.cutB == null || !(net > 0)) r.cutAt = r.cutA = r.cutB = null;
+        if (r.raiseAt == null || r.raiseB == null) r.raiseAt = r.raiseA = r.raiseB = null;
+        return r;
+    };
+    const years = [];
+    const FIELDS = ['wealthReal', 'cutAt', 'cutA', 'cutB', 'raiseAt', 'raiseA', 'raiseB'];
+    for (let j = 0; j < pts.length; j++) {
+        const a = rowOf(pts[j]);
+        years[a.k] = a;
+        const b = pts[j + 1] && rowOf(pts[j + 1]);
+        if (!b) break;
+        for (let k = a.k + 1; k < b.k; k++) {
+            const t = (k - a.k) / (b.k - a.k);
+            const r = { k, year: a.year + (k - a.k), solved: false };
+            for (const f of FIELDS) {
+                r[f] = (a[f] == null || b[f] == null) ? null
+                     : (a[f] === Infinity || b[f] === Infinity) ? Infinity
+                     : a[f] + t * (b[f] - a[f]);
+            }
+            years[k] = r;
+        }
+    }
+    for (let k = 0; k < years.length; k++) if (years[k] === undefined) years[k] = null;
+    return {
+        preset: presetKey, label: P.label, target: P.target, upper: P.upper, lower: P.lower, cutTo: P.cutTo ?? P.target,
+        numPaths: msg.numPaths, simulationMode: msg.simulationMode, cadence: msg.cadence,
+        startYear: msg.startYear, planYears: msg.planYears,
+        years,
+    };
+}
+
+// P132. The rails the RULE reads along any log - a replayed Monte Carlo path, typically - laid out
+// as the same Annual Details fields railsRowFields produces, so the charts draw them the same way.
+// Each is the table's row for that plan year, turned back into dollars at the path's own state:
+//   cut rail   = this year's net spending / cutAt      (the wealth at the end of the year before at
+//   raise rail = this year's net spending / raiseAt     which the rule would cut, or raise)
+//   target spend, spend at cut, spend at raise = the row's landing lines at the path's own wealth,
+//   at the cut rail, and at the raise rail, plus this year's guaranteed income
+// The wealth rails sit on the row of the year before (the year-end they compare with), the spending
+// on the row of the year itself, as railsRowFields lays them. Spending is the row's own, AFTER any
+// adjustment the rule made that year. No chance of success: nothing was solved on this path.
+// `railBasis` says 'rule' on a solved row of the table and 'rule (interp)' between two.
+function railsRuleRowFields(table, log) {
+    const rows = log.map(() => null);
+    if (!table || !Array.isArray(table.years) || !Array.isArray(log)) return rows;
+    const put = (i, fields) => { rows[i] = { ...(rows[i] ?? {}), ...fields }; };
+    const num = v => (typeof v === 'number' && Number.isFinite(v) && v >= 0) ? v : null;
+    for (let k = 1; k < log.length; k++) {
+        const t = table.years[k];
+        const row = log[k], prev = log[k - 1];
+        if (!t || !row || !prev || !(t.wealthReal > 0)) continue;
+        const g = row.guaranteedIncome ?? 0;
+        const net = (row.spendGoal ?? 0) - g;
+        const infl = row.inflationFactor || 1;
+        const railLower = t.cutAt == null ? null : t.cutAt === 0 ? null : net > 0 ? net / t.cutAt : null;
+        const railUpper = t.raiseAt == null ? null : t.raiseAt === Infinity ? 0 : net > 0 ? net / t.raiseAt : null;
+        // A line at a wealth: net spend as a share of the spine's wealth, at that wealth's multiple.
+        const land = (a, b, w) => (a == null || b == null || w == null) ? null
+            : g + (a + b * ((w / infl) / t.wealthReal)) * t.wealthReal * infl;
+        put(k - 1, { railLower: num(railLower), railUpper: num(railUpper), 'railPoS%': null,
+                     railBasis: t.solved ? 'rule' : 'rule (interp)' });
+        put(k, { railSpend:   num(land(t.raiseA, t.raiseB, prev.totalNetWealth)),
+                 railSpendDn: num(land(t.cutA, t.cutB, railLower)),
+                 railSpendUp: num(land(t.raiseA, t.raiseB, railUpper)) });
+    }
+    return rows;
+}
+
 // Same three-host tail as mc_engine.js. Keep the two lists identical.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { runRailsJob, railsCadence, railsPaths, railsSolvedYears, railsProjectMs, railsRowFields,
-                       railsCount, railsPresetKeys, RAIL_FIELDS,
+    module.exports = { runRailsJob, railsCadence, railsPaths, railsSolvedYears, railsProjectMs, railsRowFields, railsRuleTable, railsRuleRowFields,
+                       railsCount, railsPresetKeys, railsCutTo, RAIL_FIELDS,
                        RAILS_RESOLUTION, RAILS_START_RESOLUTION, RAILS_SPEND_RANGE, RAILS_SCALE_RANGE,
                        RAILS_EXTRA_YEARS, RAILS_CADENCE_MAX, RAILS_PATHS_RANGE, RAILS_FIRST_YEAR,
                        RAILS_DEFAULT_PATHS, RAILS_DEFAULT_CADENCE, RAILS_START_PATHS };
 } else if (typeof window !== 'undefined') {
-    window.RailsEngine = { runRailsJob, railsCadence, railsPaths, railsSolvedYears, railsProjectMs, railsRowFields,
-                           railsCount, railsPresetKeys, RAIL_FIELDS,
+    window.RailsEngine = { runRailsJob, railsCadence, railsPaths, railsSolvedYears, railsProjectMs, railsRowFields, railsRuleTable, railsRuleRowFields,
+                           railsCount, railsPresetKeys, railsCutTo, RAIL_FIELDS,
                            RAILS_RESOLUTION, RAILS_START_RESOLUTION, RAILS_SPEND_RANGE, RAILS_SCALE_RANGE,
                            RAILS_EXTRA_YEARS, RAILS_CADENCE_MAX, RAILS_PATHS_RANGE, RAILS_FIRST_YEAR,
                            RAILS_DEFAULT_PATHS, RAILS_DEFAULT_CADENCE, RAILS_START_PATHS };

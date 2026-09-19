@@ -32,7 +32,7 @@ User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 20
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
 
-## P132: Risk-based guardrails as a Spend rule  *(2026-09-19, user-raised. `a`-`f`, `h` BUILT v11.189f; `g` open if wanted)*
+## P132: Risk-based guardrails as a Spend rule  *(2026-09-19, user-raised. `a`-`f`, `h` BUILT v11.189f, PR #230; `g` open if wanted)*
 
 User, after the 2024 kitces article (Tharp and Fitzpatrick, "Why Guyton-Klinger Guardrails Are Too
 Risky"): how to add risk-based guardrails as a Spend plan choice, whether there is a trick that

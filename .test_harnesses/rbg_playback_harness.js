@@ -209,7 +209,7 @@ function cheapWalk(h, bank, key, table, hist, { withChance = true } = {}) {
     const res = simulate({ ...h.base, spendRule: 'rbg', rbgPreset: key, rbgRails: table, gkShapeCeiling: CEILING, ...hist.inputs, captureResume: true });
     const rows = res.log.map((row, k) => ({
         k, year: row.year, wealthStart: k > 0 ? res.log[k - 1].totalNetWealth : null, spend: row.spendGoal,
-        label: row.gkAdj === '—' ? '' : row.gkAdj, wealthEnd: row.totalNetWealth, infl: row.inflationFactor,
+        label: row.ruleAdj === '—' ? '' : row.ruleAdj, wealthEnd: row.totalNetWealth, infl: row.inflationFactor,
         ruined: mc.yearIsRuined(row), pos: null,
     }));
     if (withChance) {
@@ -224,7 +224,7 @@ function cheapWalk(h, bank, key, table, hist, { withChance = true } = {}) {
 function plainWalk(h, hist, over) {
     const res = simulate({ ...h.base, ...over, ...hist.inputs });
     return res.log.map(row => ({ year: row.year, spend: row.spendGoal, infl: row.inflationFactor,
-                                 wealthEnd: row.totalNetWealth, label: row.gkAdj && row.gkAdj !== '—' ? row.gkAdj : '',
+                                 wealthEnd: row.totalNetWealth, label: row.ruleAdj && row.ruleAdj !== '—' ? row.ruleAdj : '',
                                  ruined: mc.yearIsRuined(row) }));
 }
 

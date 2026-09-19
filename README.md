@@ -415,14 +415,19 @@ button during a replay - re-solves the chance from the state the path actually r
 solved year, at the cost of one ordinary solve; that answer is kept for the path, and your plan's own
 rails come back when the replay ends. Without the rule, the plan's rails are not drawn on a replay.
 
-**Never above plan is on by default with this rule.** The rule does not re-solve the chance every year
+**Never above plan is recommended with this rule.** The rule does not re-solve the chance every year
 along a path; it compares each year's spending with the rails solved for your plan and lands on the
 spending the solve found at each rail. That is exact when spending is near your planned path and
 drifts when a run of raises has taken it far above. Measured against re-solving the chance every
 year through six historical starts on five households
 ([research/RBG_RULE_VALIDATION.md](research/RBG_RULE_VALIDATION.md)), the rule stays within a few
 percent of the exact answer with the ceiling on, and both the cheap rule and the exact one drift and
-sometimes fail without it. Turn it off to let raises run above the plan, knowing that.
+sometimes fail without it. The switch is yours: choosing a rule never changes it, and the note under
+the Guardrails switch says when it is off.
+
+**The Guardrails columns in Annual Details** are `ruleSpend` (the spending the rule set), `ruleAdj`
+(what it did that year) and `vsPlan%` (where that spending sits against your planned path, so -10%
+is a tenth under it).
 
 ### What the Tool IGNORES (No Plans to Implement)
 

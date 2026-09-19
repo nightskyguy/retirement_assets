@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.189f"></a>
+<a id="11.18a0"></a>
 
-## 11.189f
+## 11.18a0
 
 **Risk-based rails: one preset menu, the article's own set, rails on a replayed path, and Guardrails milestones and columns.**  
 *No plan's numbers change.*
@@ -39,7 +39,9 @@ are new.
 
 **Annual Details has a Guardrails column set**: the spend goal and the guaranteed income under it,
 what Guardrails did each year and the spending it set, the wealth it compared, the risk-based rails
-and their chance of success, and the inflation and market return each year was handed.
+and their chance of success, and the inflation and market return each year was handed. The
+Guardrails columns are now **ruleSpend**, **ruleAdj** and **vsPlan%**: where the rule has put
+spending against your planned path, so -10% is a tenth under it.
 
 <a id="11.1881"></a>
 

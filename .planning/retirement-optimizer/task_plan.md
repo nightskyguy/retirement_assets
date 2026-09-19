@@ -87,6 +87,15 @@ drift and one case in five fails to fund.
       (always the Monte Carlo tab's market); the two menus at full width; nerdknob rule table in the
       panel. Growth: the table follows the market model's mu (1.63x cutAt spread 4% to 8% early,
       1.07x late), not the spine (about 1%).
+- [x] `P132i` (2026-09-19, user's link): the table interpolated ratios across a Social Security
+      start between two solves and fired a raise on a rail the plan had not reached; the job now
+      hands the table its spine and the rows between solves are built from interpolated dollars at
+      each year's own guaranteed income. Columns renamed `ruleSpend`/`ruleAdj`, new `vsPlan%`;
+      choosing a rule no longer touches Never above plan. v11.18a0.
+- [ ] `P132j` GK-style measures the whole spend goal against the portfolio, so it can cut in the
+      year Social Security starts while the withdrawal rate halves. The published rule measures the
+      portfolio withdrawal (spending net of guaranteed income). Offered to the user 2026-09-19;
+      a behavior change to a shipped rule, so theirs to call.
 - [ ] `P132g` a third solved point on the cut side (pass 2 at a wealth below the cut rail), to bound
       the landing line where a path is far under the rail: the -70%/-76% single years in
       `RBG_RULE_THRESHOLDS.md` section 4. About a third more per solved year. Open if wanted.

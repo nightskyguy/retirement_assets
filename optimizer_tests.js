@@ -2274,8 +2274,9 @@ assertEqual(
 			const inp = getInputs();
 			assertEqual(inp.spendRule, 'rbg', 'P132: Risk-based sends the rbg rule');
 			assertEqual(inp.rbgPreset, 'paper', 'P132: with its preset');
-			assertEqual(ceil.checked, true, 'P132: choosing Risk-based turns Never above plan on');
-			assertEqual(inp.gkShapeCeiling, true, 'P132: and getInputs carries it');
+			assertEqual(ceil.checked, false, 'P132: choosing Risk-based leaves Never above plan as it was (user, 2026-09-19)');
+			assertEqual(inp.gkShapeCeiling, false, 'P132: and getInputs carries it');
+			assertEqual(/Never above plan is recommended/.test(note.textContent), true, 'P132: the note recommends it while it is off');
 			assertEqual(kind.classList.contains('hidden'), false, 'P132: the rule menu shows while the rule runs, knob or not');
 			assertEqual(document.getElementById('ui-rbg').classList.contains('hidden'), false, 'P132: the preset row shows');
 			assertEqual(document.getElementById('ui-rule-ceiling').classList.contains('hidden'), false, 'P132: so does the ceiling, without the knob');
@@ -2777,7 +2778,7 @@ assertEqual(
 		if (typeof CATEGORY_CHECKBOXES !== 'undefined' && typeof columnCategories !== 'undefined') {
 			assertEqual(CATEGORY_CHECKBOXES.Guardrails, 'cat-guardrails', 'P132: Guardrails is a column set');
 			assertEqual(!!document.getElementById('cat-guardrails'), true, 'P132: with a box in the table toolbar');
-			const want = ['year', 'spendGoal', 'guaranteedIncome', 'totalNetWealth', 'gkSpend', 'gkAdj', 'railLower', 'railUpper',
+			const want = ['year', 'spendGoal', 'guaranteedIncome', 'totalNetWealth', 'ruleSpend', 'ruleAdj', 'vsPlan%', 'railLower', 'railUpper',
 				'railPoS%', 'railSpend', 'railSpendDn', 'railSpendUp', 'railBasis', 'infl%', 'return%'];
 			assertEqual(want.filter(k => !(columnCategories[k] || []).includes('Guardrails')), [],
 				'P132: every guardrail column is in the Guardrails set');
@@ -3539,7 +3540,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all five suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 483, taxengine: 32, taxPaymentPlanner: 61, doclinks: 27, feedback: 46, slowInCore: 4 },
+    EXPECTED: { optimizer_core: 485, taxengine: 32, taxPaymentPlanner: 61, doclinks: 27, feedback: 46, slowInCore: 4 },
 
     checkCounts(results) {
         const drift = [];

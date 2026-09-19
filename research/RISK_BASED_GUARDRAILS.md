@@ -468,7 +468,7 @@ the third test pins.
 
 One side effect worth knowing. The rule's anchor is still the year-0 ratio, so once the portfolio
 outgrows it the rule tries to raise **every remaining year** and is clamped every time: 18 of 33 years
-on `bracket-filler-texas`. The `gkAdj` column reads `+10%pros @shape` for all of them. That is honest -
+on `bracket-filler-texas`. The `ruleAdj` column reads `+10%pros @shape` for all of them. That is honest -
 the rule wanted more and the plan said no - but it means the ceiling is a permanent state rather than
 an occasional event; the column's help text says what `@shape` means.
 

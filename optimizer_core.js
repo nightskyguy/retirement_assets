@@ -1402,8 +1402,11 @@ function buildSimYearLogRecord(p) {
         timing: (p.convLabel ?? 'none') + '/' + (p.wdLabel ?? 'Late'),
         // The spend rule - Guardrails (GK-style) or Risk-based - filled whenever one is on, under
         // any strategy. One pair of columns for both: a year is adjusted by one rule or none.
-        gkSpend: (p.spendRule === 'gk' || p.spendRule === 'rbg') ? p.spendGoal : null,
-        gkAdj:   (p.spendRule === 'gk' || p.spendRule === 'rbg') ? (p.gkAdjLabel || '—') : null,
+        ruleSpend: (p.spendRule === 'gk' || p.spendRule === 'rbg') ? p.spendGoal : null,
+        ruleAdj:   (p.spendRule === 'gk' || p.spendRule === 'rbg') ? (p.gkAdjLabel || '—') : null,
+        // Where the rule has put spending against the plan's own path (the shape: the spend goal
+        // with Spend Delta and every year's inflation, no rule): -0.10 is 10% under it.
+        'vsPlan%': (p.spendRule === 'gk' || p.spendRule === 'rbg') && p.shapeGoal > 0 ? p.spendGoal / p.shapeGoal - 1 : null,
         // What the year was actually handed: this year's inflation, the compounded inflation the
         // row's nominal dollars carry, and this year's market return. Constant in a deterministic
         // run and different every year under Monte Carlo, which is the point - a replayed path is
@@ -2086,7 +2089,7 @@ function resolveSpendTarget(sim, yr) {
             const _cwr = sim.spendGoal / sim.prevPortfolio;
             // P127. No cut in the plan's last GK_NO_CUT_FINAL_YEARS years. `y` is the plan year, so a
             // resumed run counts from the same end the whole plan does. Labelled rather than silent,
-            // because the reader of the gkAdj column would otherwise see a year over the band and no cut.
+            // because the reader of the ruleAdj column would otherwise see a year over the band and no cut.
             const _cutAllowed = (sim.planYears - y) > GK_NO_CUT_FINAL_YEARS;
             if (_cwr > sim.gkIWR * (1 + _guard) && !_cutAllowed) {
                 labels.push('no-cut');
@@ -4678,7 +4681,7 @@ function logYear(sim, yr) {
         grossOutflows: yr._grossOutflows, netOutflows: yr._netOutflows,
         yearInflows: yr._yearInflows, wdRate: yr._wdRate,
         convLabel: yr._convLabel, wdLabel: yr._wdLabel,
-        strategy: inputs.strategy, spendRule: inputs.spendRule, spendGoal: sim.spendGoal, gkAdjLabel: sim.gkAdjLabel, inflation: sim.inflation,
+        strategy: inputs.strategy, spendRule: inputs.spendRule, spendGoal: sim.spendGoal, gkAdjLabel: sim.gkAdjLabel, shapeGoal: sim.gkShapeGoal, inflation: sim.inflation,
         yearInflation: yr.yearInflation, baseReturn: yr.baseReturn, loopMs: loopMs
     }));
     totals.totalTime += log[log.length - 1].loopMs;

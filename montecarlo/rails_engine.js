@@ -303,7 +303,7 @@ async function runRailsJob(cfg, hooks) {
             // The spending the plan itself has in year k, as the engine holds it: nominal, before any
             // Medicare outflow or bracket cap is applied to it. With Guardrails on that is the rule's
             // own adjusted goal for the year.
-            const planSpend = ruleOn ? log[k].gkSpend : rec.sim.spendGoal;
+            const planSpend = ruleOn ? log[k].ruleSpend : rec.sim.spendGoal;
             const at = (scale, mult) => resumeInputs(solveBase, rec, { balanceScale: scale, spendGoal: planSpend * mult });
             const yT0 = performance.now(), yRuns0 = runs, yPY0 = pathYears;
 
@@ -481,6 +481,10 @@ async function runRailsJob(cfg, hooks) {
         numPaths, simulationMode: mode, ruleOn,
         planYears: n, startYear: log[0].year,
         years: out,
+        // Every plan year of the spine, so the rule's table can interpolate between solved years in
+        // dollars and net each year's own guaranteed income (railsRuleTable).
+        spine: log.map((r, k) => ({ k, year: r.year, wealth: r.totalNetWealth, planSpend: ruleOn ? r.ruleSpend : r.spendGoal,
+                                    inflationFactor: r.inflationFactor, guaranteedIncome: r.guaranteedIncome ?? 0 })),
         start,
         cost: {
             totalMs, spineMs, bankMs, solveMs, phaseMs,
@@ -659,36 +663,64 @@ function railsRuleTable(msg, presetKey) {
         const b = (q[1][1] - q[0][1]) / (q[1][0] - q[0][0]);
         return [q[0][1] - b * q[0][0], b];
     };
-    const rowOf = y => {
-        const p = y.p, W = y.wealth, G = y.guar, net = y.spend - G;
-        const cl = p.clamped ?? {};
+    // One row from a year's numbers, all in the same dollars (a solved year's own, or today's for an
+    // interpolated one - the ratios do not care which). `cl` is the solve's clamp flags.
+    const rowOf = (k, year, solved, W, G, S, p, cl, infl) => {
+        const net = S - G;
         const spendNet = v => ok(v) ? v - G : null;
         const [cutA, cutB] = line(W, [p.railLower, spendNet(p.spendAtLower)], [W, spendNet(p.spendAtCutTo)]);
         const [raiseA, raiseB] = line(W, [p.railUpper, spendNet(p.spendAtUpper)], [W, spendNet(p.spendTarget)]);
-        const r = { k: y.k, year: y.year, solved: true, wealthReal: W / y.infl,
+        const r = { k, year, solved, wealthReal: W / infl,
                     cutAt:   ok(p.railLower) ? net / p.railLower : cl.lower === 'high' ? net / (TOP * W) : null, cutA, cutB,
                     raiseAt: ok(p.railUpper) ? net / p.railUpper : cl.upper === 'low' ? Infinity : null, raiseA, raiseB };
         if (r.cutAt == null || r.cutB == null || !(net > 0)) r.cutAt = r.cutA = r.cutB = null;
         if (r.raiseAt == null || r.raiseB == null) r.raiseAt = r.raiseA = r.raiseB = null;
         return r;
     };
+    const solvedRow = y => rowOf(y.k, y.year, true, y.wealth, y.guar, y.spend, y.p, y.p.clamped ?? {}, y.infl);
     const years = [];
     const FIELDS = ['wealthReal', 'cutAt', 'cutA', 'cutB', 'raiseAt', 'raiseA', 'raiseB'];
-    for (let j = 0; j < pts.length; j++) {
-        const a = rowOf(pts[j]);
-        years[a.k] = a;
-        const b = pts[j + 1] && rowOf(pts[j + 1]);
-        if (!b) break;
-        for (let k = a.k + 1; k < b.k; k++) {
-            const t = (k - a.k) / (b.k - a.k);
-            const r = { k, year: a.year + (k - a.k), solved: false };
-            for (const f of FIELDS) {
-                r[f] = (a[f] == null || b[f] == null) ? null
-                     : (a[f] === Infinity || b[f] === Infinity) ? Infinity
-                     : a[f] + t * (b[f] - a[f]);
+    // Between two solves. With the job's spine (every plan year's wealth, spending and guaranteed
+    // income) the DOLLARS are interpolated in today's terms - each rail, and the spend the solver
+    // found at it - and the row is then built from that year's OWN spending and guaranteed income.
+    // Interpolating the ratios themselves goes wrong where Social Security starts between two
+    // solves: total spending capacity is smooth across the start (the solve before it already
+    // priced the benefit in), but spending NET of the benefit halves, so a net ratio interpolated
+    // across the step sat between two numbers that were both wrong for that year, and a plan raised
+    // in the first Social Security year on a rail it had not reached (2026-09-19). Without a spine
+    // (an old message) the fields are interpolated as before.
+    const spine = Array.isArray(msg.spine) ? msg.spine : null;
+    const RAIL_KEYS = ['railLower', 'railUpper', 'spendTarget', 'spendAtCutTo', 'spendAtUpper', 'spendAtLower'];
+    const interpolated = (a, b, k) => {
+        const t = (k - a.k) / (b.k - a.k);
+        const sy = spine && spine[k], sw = spine && spine[k - 1];
+        if (sy && sw && ok(sw.wealth) && ok(sy.planSpend)) {
+            const infl = sy.inflationFactor || 1;
+            const real = (y, key) => ok(y.p[key]) ? y.p[key] / y.infl : y.p[key] === 0 ? 0 : null;
+            const p = {};
+            for (const key of RAIL_KEYS) {
+                const x = real(a, key), z = real(b, key);
+                p[key] = (x == null || z == null) ? null : x + t * (z - x);
             }
-            years[k] = r;
+            // A side clamped at either end stays clamped the same way between them.
+            const cl = { lower: a.p.clamped?.lower || b.p.clamped?.lower || '', upper: a.p.clamped?.upper || b.p.clamped?.upper || '' };
+            return rowOf(k, sy.year, false, sw.wealth / infl, (sy.guaranteedIncome ?? 0) / infl, sy.planSpend / infl, p, cl, 1);
         }
+        const ra = solvedRow(a), rb = solvedRow(b);
+        const r = { k, year: ra.year + (k - ra.k), solved: false };
+        for (const f of FIELDS) {
+            r[f] = (ra[f] == null || rb[f] == null) ? null
+                 : (ra[f] === Infinity || rb[f] === Infinity) ? Infinity
+                 : ra[f] + t * (rb[f] - ra[f]);
+        }
+        return r;
+    };
+    for (let j = 0; j < pts.length; j++) {
+        const a = pts[j];
+        years[a.k] = solvedRow(a);
+        const b = pts[j + 1];
+        if (!b) break;
+        for (let k = a.k + 1; k < b.k; k++) years[k] = interpolated(a, b, k);
     }
     for (let k = 0; k < years.length; k++) if (years[k] === undefined) years[k] = null;
     return {

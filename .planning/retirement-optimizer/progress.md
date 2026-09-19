@@ -5585,3 +5585,26 @@ it gates experimental, unreleased features. The 11.189f entry (page `<li>` and .
 what everyone gets: the preset menu under the switch, Paper, Market paths gone, Solve rails on this
 path, cut/raise milestones, the Guardrails column set. The Risk-based rule, Custom presets, the rule
 table and the Never above plan note are out of it. Rule added to CLAUDE.md's "Leave out" table.
+Committed as PR #230 (2b7cb4c).
+
+Seventh message (v11.18a0): (1) `gkSpend`/`gkAdj` renamed `ruleSpend`/`ruleAdj` (word-boundary
+rename across engine, page, tests, harnesses; `gkAdjPct`/`gkAdjLabel` untouched; older changelog
+entries left as history). (2) New `vsPlan%` column: spendGoal / gkShapeGoal - 1, both rules, in
+Summary/Income/Guardrails. (3) The user's link (130k, growth 5%, custom 70/90/40/50): RBG raised in
+2031 (first SS year) and cut in 2033. ROOT CAUSE: the rule table interpolated RATIOS between solved
+years (cadence 3); with SS starting between the 2030 and 2033 solves, the net share at 2031 was
+interpolated between 0.078 (pre-SS) and 0.057 (post-SS) = 0.072, while the true net target share
+was 0.039 - the raise trigger read 0.0554 against a true 0.029, so r=0.036 raised (to 188k against a
+147k target), and the cut followed. FIX: the job's message carries `spine` (every plan year: wealth,
+planSpend, inflationFactor, guaranteedIncome); `railsRuleTable` interpolates the DOLLARS in today's
+terms and builds each row at that year's own G. Field interpolation kept for a message without a
+spine. After the fix the link shows no 2031 action (PoS 78%, between 40 and 90); raises come in
+2037/2044/2048/2050 where the prior row's PoS is 90-100%. Quick playback re-run unchanged (exact =
+cheap on bracket-filler-texas 1937/2000). (4) GK-style's 2031 cut: not SS - GK-style measures the
+WHOLE spend goal against the portfolio (documented "GK-style, not the published rule"); the ratio
+drifts up through the pre-SS drawdown years (130/1358 -> 143/1259) and crosses the 20% band in
+2031 by coincidence, while wdRate% drops 8.1% -> 3.0%. Explained to the user, offered the
+published withdrawal-rate form (net of guaranteed income). Not changed. (5) `spendRuleChanged` no
+longer turns Never above plan on when Risk-based is chosen (user: switching must not change it);
+the note recommends it while off; README/report reworded. Tests 485 (interp-across-SS-start,
+vsPlan%); in-page 578; badge green 1229.

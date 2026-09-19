@@ -111,7 +111,7 @@ function historicalPath(h, start, years) {
 }
 function rowsOf(res) {
     return res.log.map(r => ({ year: r.year, spend: r.spendGoal, infl: r.inflationFactor, wealthEnd: r.totalNetWealth,
-                               label: r.gkAdj && r.gkAdj !== '—' ? r.gkAdj : '', ruined: mc.yearIsRuined(r) }));
+                               label: r.ruleAdj && r.ruleAdj !== '—' ? r.ruleAdj : '', ruined: mc.yearIsRuined(r) }));
 }
 function score(rows, shape) {
     const real = rows.map(r => r.spend / (r.infl || 1)), shapeReal = shape.map(r => r.spend / (r.infl || 1));

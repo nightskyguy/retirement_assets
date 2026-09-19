@@ -1102,8 +1102,8 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
     // be a real funded plan for that count to mean anything.
     assert(gk.totals.spend > 0 && gk.totals.tax > 0 && gk.finalNW > 0,
         `the GK run must be a funded plan: spend ${Math.round(gk.totals.spend)}, tax ${Math.round(gk.totals.tax)}, NW ${Math.round(gk.finalNW)}`);
-    assert(gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length === 3,
-        `Expected 3 guardrail adjustments, got ${gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length}`);
+    assert(gk.log.filter(r => (r.ruleAdj ?? '—') !== '—').length === 3,
+        `Expected 3 guardrail adjustments, got ${gk.log.filter(r => (r.ruleAdj ?? '—') !== '—').length}`);
 });
 
 // ── P127 prototype: the shape ceiling on the Guardrails rule ──────────────────────
@@ -1136,8 +1136,8 @@ test('Guardrails: without the ceiling, prosperity raises lift spending above the
     const off = simulate({ ...CEIL_BASE });
     const peak = Math.max(...ceilRatios(off));
     assert(peak > 1.2, `expected the rule to outrun the shape, peaked at ${peak.toFixed(3)} of it`);
-    assert(off.log.some(r => (r.gkAdj || '').includes('pros')), 'expected at least one prosperity raise');
-    assert(!off.log.some(r => (r.gkAdj || '').includes('@shape')), 'the ceiling must be off by default');
+    assert(off.log.some(r => (r.ruleAdj || '').includes('pros')), 'expected at least one prosperity raise');
+    assert(!off.log.some(r => (r.ruleAdj || '').includes('@shape')), 'the ceiling must be off by default');
 });
 
 test('Guardrails: the shape ceiling holds spending at the plan\'s own shape, and pays for it in spending', () => {
@@ -1145,7 +1145,7 @@ test('Guardrails: the shape ceiling holds spending at the plan\'s own shape, and
     const on  = simulate({ ...CEIL_BASE, gkShapeCeiling: true });
     const peak = Math.max(...ceilRatios(on));
     assert(peak <= 1 + 1e-9, `the goal must never exceed the shape, peaked at ${peak.toFixed(6)}`);
-    assert(on.log.some(r => (r.gkAdj || '').includes('@shape')), 'expected the ceiling to bind and say so');
+    assert(on.log.some(r => (r.ruleAdj || '').includes('@shape')), 'expected the ceiling to bind and say so');
     // The trade it makes, and the reason it is a switch rather than a default: less spending, more
     // left over. Both directions are asserted because either one alone could come from a broken run.
     assert(on.totals.spendCurrentDollars < off.totals.spendCurrentDollars,
@@ -1164,9 +1164,9 @@ test('Guardrails: the shape ceiling only ever follows a raise, and changes nothi
     const inf = new Float64Array(rows + 3).fill(0.025);
     const off = simulate({ ...CEIL_BASE, returnSequence: seq, inflationSequence: inf });
     const on  = simulate({ ...CEIL_BASE, gkShapeCeiling: true, returnSequence: seq, inflationSequence: inf });
-    assert(on.log.every(r => !(r.gkAdj || '').includes('@shape') || (r.gkAdj || '').includes('pros')),
+    assert(on.log.every(r => !(r.ruleAdj || '').includes('@shape') || (r.ruleAdj || '').includes('pros')),
         'a clamped year must always be a year the rule tried to raise');
-    const first = on.log.findIndex(r => (r.gkAdj || '').includes('@shape'));
+    const first = on.log.findIndex(r => (r.ruleAdj || '').includes('@shape'));
     assert(first > 0, 'expected the ceiling to bind somewhere on the recovery');
     for (let i = 0; i < first; i++) {
         assert(on.log[i].spendGoal === off.log[i].spendGoal,
@@ -1190,13 +1190,13 @@ test('P127: the inflation raise is capped at 6%, and below the cap it is the ful
     const hot = run(0.09), mild = run(0.059);
     const delta = 1 + CEIL_BASE.spendChange;
     for (const [res, rate, label] of [[hot, cap, 'a 9% year'], [mild, 0.059, 'a 5.9% year']]) {
-        const adj = res.log[1].gkAdj || '';
+        const adj = res.log[1].ruleAdj || '';
         // Neither year may also cut or raise, or the goal below would mix two adjustments.
         assert(!/cap|pros/.test(adj), `${label}: the rule must not also adjust spending, got "${adj}"`);
-        assertNear(res.log[1].gkSpend, res.log[0].gkSpend * delta * (1 + rate), `${label}: the raise`, 0.01);
+        assertNear(res.log[1].ruleSpend, res.log[0].ruleSpend * delta * (1 + rate), `${label}: the raise`, 0.01);
     }
-    assert((hot.log[1].gkAdj || '').includes('CPI≤6%'), `the capped year says so, got "${hot.log[1].gkAdj}"`);
-    assert(!(mild.log[1].gkAdj || '').includes('CPI≤'), `an uncapped year says nothing, got "${mild.log[1].gkAdj}"`);
+    assert((hot.log[1].ruleAdj || '').includes('CPI≤6%'), `the capped year says so, got "${hot.log[1].ruleAdj}"`);
+    assert(!(mild.log[1].ruleAdj || '').includes('CPI≤'), `an uncapped year says nothing, got "${mild.log[1].ruleAdj}"`);
 });
 
 test('P127: the freeze after a losing year reads the portfolio\'s return, not the market\'s', () => {
@@ -1213,14 +1213,14 @@ test('P127: the freeze after a losing year reads the portfolio\'s return, not th
     const cashy = simulate({ ...one, IRA1: 500000, Cash: 1500000, cashYield: 0.05,
                              returnSequence: seq, inflationSequence: inf });
     assert(invested.log[0]['return%'] < 0 && cashy.log[0]['return%'] < 0, 'premise: the market lost money in year 0');
-    assert((invested.log[1].gkAdj || '').includes('no-CPI'),
-        `the invested plan lost money and must freeze, got "${invested.log[1].gkAdj}"`);
+    assert((invested.log[1].ruleAdj || '').includes('no-CPI'),
+        `the invested plan lost money and must freeze, got "${invested.log[1].ruleAdj}"`);
     // The freeze's other half held for the cash-heavy plan too: its spending was above the safe level.
     const r0 = cashy.log[0];
-    const iwr = r0.gkSpend / 2000000;
-    assert(r0.gkSpend / r0.portfolioBalance > iwr, 'premise: the cash-heavy plan is above its safe level');
-    assert(!(cashy.log[1].gkAdj || '').includes('no-CPI'),
-        `the cash-heavy plan made money and must not freeze, got "${cashy.log[1].gkAdj}"`);
+    const iwr = r0.ruleSpend / 2000000;
+    assert(r0.ruleSpend / r0.portfolioBalance > iwr, 'premise: the cash-heavy plan is above its safe level');
+    assert(!(cashy.log[1].ruleAdj || '').includes('no-CPI'),
+        `the cash-heavy plan made money and must not freeze, got "${cashy.log[1].ruleAdj}"`);
 });
 
 test('P127: the portfolio return is the balance-weighted return of the accounts, dividends included', () => {
@@ -1241,7 +1241,7 @@ test('P127: no cut in the plan\'s last 8 years, and a year the rule wanted one s
         const log = simulate({ ...GK_OPT_BASE, ...over, spendGoal: GK_OPT_BASE.spendGoal * mult }).log;
         const n = log.length;
         log.forEach((r, i) => {
-            const adj = r.gkAdj || '';
+            const adj = r.ruleAdj || '';
             const cut = /cap/.test(adj);
             if (i >= n - N) {
                 assert(!cut, `x${mult}: ${r.year} is in the last ${N} years and must not cut, got "${adj}"`);
@@ -1561,9 +1561,9 @@ test('GK stable market: no guardrail triggers in early years with zero growth/in
     // Raw portfolio depletes ~$57k/yr; WR at years 1-2 stays well below 6%. Check years 0–2.
     const res = simulate({ ...GK_BASE });
     for (let y = 0; y < 3; y++) {
-        assert(res.log[y].gkAdj === '—', `year ${y} should have no adjustment, got: ${res.log[y].gkAdj}`);
+        assert(res.log[y].ruleAdj === '—', `year ${y} should have no adjustment, got: ${res.log[y].ruleAdj}`);
     }
-    assert(res.log[0].gkSpend != null, 'gkSpend should be non-null for GK strategy');
+    assert(res.log[0].ruleSpend != null, 'ruleSpend should be non-null for GK strategy');
 });
 
 test('GK capital preservation: catastrophic bear market triggers CP cut', () => {
@@ -1571,8 +1571,8 @@ test('GK capital preservation: catastrophic bear market triggers CP cut', () => 
     // Year 1 WR = 50k/200k = 25% >> IWR*1.2 = 6%. CP should fire.
     const returns = Array.from({length: 30}, (_, i) => i === 0 ? -0.80 : 0.00);
     const res = simulate({ ...GK_BASE, returnSequence: returns });
-    assert(res.log[1].gkAdj.includes('cap'), `year 1 gkAdj should contain 'cap', got: ${res.log[1].gkAdj}`);
-    assert(res.log[1].gkSpend < 50000, `year 1 spend should be cut below 50k, got: ${res.log[1].gkSpend}`);
+    assert(res.log[1].ruleAdj.includes('cap'), `year 1 ruleAdj should contain 'cap', got: ${res.log[1].ruleAdj}`);
+    assert(res.log[1].ruleSpend < 50000, `year 1 spend should be cut below 50k, got: ${res.log[1].ruleSpend}`);
 });
 
 test('GK prosperity rule: strong bull market triggers prosperity raise', () => {
@@ -1580,36 +1580,36 @@ test('GK prosperity rule: strong bull market triggers prosperity raise', () => {
     // Year 1 WR = 50k/3M = 1.7% << IWR*(1-0.2) = 4%. Prosperity fires.
     const returns = Array.from({length: 30}, (_, i) => i === 0 ? 2.00 : 0.00);
     const res = simulate({ ...GK_BASE, returnSequence: returns });
-    assert(res.log[1].gkAdj.includes('pros'), `year 1 gkAdj should contain 'pros', got: ${res.log[1].gkAdj}`);
-    assert(res.log[1].gkSpend > 50000, `year 1 spend should be raised above 50k, got: ${res.log[1].gkSpend}`);
+    assert(res.log[1].ruleAdj.includes('pros'), `year 1 ruleAdj should contain 'pros', got: ${res.log[1].ruleAdj}`);
+    assert(res.log[1].ruleSpend > 50000, `year 1 spend should be raised above 50k, got: ${res.log[1].ruleSpend}`);
 });
 
 test('GK inflation skip: mild negative return + WR > IWR skips CPI adjustment', () => {
     // IWR = 50k/1M = 5%. After -5% return, raw portfolio ≈ $893k.
     // Year 1 WR = 50k/893k = 5.60% → above IWR (Inflation Rule fires), below 6% (CP does NOT fire).
-    // With 3% inflation: gkAdj = 'no-CPI'; spendGoal stays near 50k not 51.5k.
+    // With 3% inflation: ruleAdj = 'no-CPI'; spendGoal stays near 50k not 51.5k.
     const returns = Array.from({length: 30}, (_, i) => i === 0 ? -0.05 : 0.00);
     const res = simulate({ ...GK_BASE, returnSequence: returns, inflation: 0.03 });
-    assert(res.log[1].gkAdj.includes('no-CPI'), `year 1 gkAdj should contain 'no-CPI', got: ${res.log[1].gkAdj}`);
-    assertNear(res.log[1].gkSpend, 50000, 'gkSpend should not be inflated when Inflation Rule fires', 500);
+    assert(res.log[1].ruleAdj.includes('no-CPI'), `year 1 ruleAdj should contain 'no-CPI', got: ${res.log[1].ruleAdj}`);
+    assertNear(res.log[1].ruleSpend, 50000, 'ruleSpend should not be inflated when Inflation Rule fires', 500);
 });
 
-test('GK regression: with Guardrails off, gkSpend/gkAdj are null', () => {
+test('GK regression: with Guardrails off, ruleSpend/ruleAdj are null', () => {
     const res = simulate({ ...GK_BASE, spendRule: '' });
     for (let y = 0; y < 3; y++) {
-        assert(res.log[y].gkSpend === null, `year ${y} gkSpend should be null with the rule off`);
-        assert(res.log[y].gkAdj === null, `year ${y} gkAdj should be null with the rule off`);
+        assert(res.log[y].ruleSpend === null, `year ${y} ruleSpend should be null with the rule off`);
+        assert(res.log[y].ruleAdj === null, `year ${y} ruleAdj should be null with the rule off`);
     }
 });
 
-test('P126: Guardrails fill the gkSpend/gkAdj columns under a non-proportional draw too', () => {
+test('P126: Guardrails fill the ruleSpend/ruleAdj columns under a non-proportional draw too', () => {
     // The columns used to key on the strategy, so a Fill Bracket plan with the rule on would have hidden
     // every cut the rule made. A -80% first year trips the upper guardrail under any draw.
     const returns = Array.from({ length: 30 }, (_, i) => i === 0 ? -0.80 : 0.00);
     const res = simulate({ ...GK_BASE, strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1,
                            stratACAMultiple: 0, returnSequence: returns });
-    assert(res.log[0].gkSpend != null, 'gkSpend is filled whenever the rule is on');
-    assert(String(res.log[1].gkAdj).includes('cap'), `the -80% year must cut spending, got ${res.log[1].gkAdj}`);
+    assert(res.log[0].ruleSpend != null, 'ruleSpend is filled whenever the rule is on');
+    assert(String(res.log[1].ruleAdj).includes('cap'), `the -80% year must cut spending, got ${res.log[1].ruleAdj}`);
 });
 
 // ── GK Optimize-Spend stability floor ───────────────────────────────────────────
@@ -8528,6 +8528,50 @@ function _p132Table(n, rows) {
 }
 const RBG_BASE = { ...CEIL_BASE, spendRule: 'rbg', rbgPreset: 'normal' };
 
+test('P132: between solves the table interpolates DOLLARS and nets each year\'s own guaranteed income, so a Social Security start between two solves does not fire a rail', () => {
+    // Two solves four years apart, Social Security starting between them. Total spending capacity is
+    // flat across the start (both solves say the plan can spend 100 for the target); the benefit
+    // (40) makes the net share drop where it starts, not before and not later.
+    const none = { upper: '', lower: '', target: '', cutTo: '', spendUp: '', spendDn: '' };
+    const solve = (k, guar) => ({ k, year: 2030 + k, fromYear: 2029 + k, pos: 0.8, wealth: 1000, inflationFactor: 1,
+        guaranteedIncome: guar, planSpend: 100, presets: { normal: { railLower: 600, railUpper: 1500,
+        spendTarget: 100, spendAtCutTo: 100, spendAtLower: 70, spendAtUpper: 130, clamped: { ...none } } } });
+    const spine = [];
+    for (let k = 0; k <= 9; k++) spine.push({ k, year: 2030 + k, wealth: 1000, planSpend: 100, inflationFactor: 1, guaranteedIncome: k >= 3 ? 40 : 0 });
+    const presets = { normal: { key: 'normal', label: 'Normal', target: 0.9, upper: 0.99, lower: 0.7, cutTo: 0.9 } };
+    const msg = { presets, numPaths: 100, simulationMode: 'gbm', cadence: 4, startYear: 2030, planYears: 10,
+                  years: [solve(1, 0), solve(5, 40)], spine };
+    const t = _railsEngine.railsRuleTable(msg, 'normal');
+    // Before the benefit: net 100 over the rails. From it: net 60. Never a value in between.
+    assertNear(t.years[2].raiseAt, 100 / 1500, 'year 2, no benefit yet: the raise trigger is the full spend over the raise rail', 1e-12);
+    assertNear(t.years[3].raiseAt, 60 / 1500, 'year 3, the benefit\'s first year: net of it', 1e-12);
+    assertNear(t.years[4].cutAt, 60 / 600, 'year 4: the cut trigger too', 1e-12);
+    assert(!t.years[3].solved && t.years[3].year === 2033, `row 3 ${JSON.stringify(t.years[3])}`);
+    // The landing at the plan's own wealth is the net target, at each year's own benefit.
+    const at = r => (r.raiseA + r.raiseB) * r.wealthReal;
+    assertNear(at(t.years[2]), 100, 'year 2 lands on the full target', 1e-9);
+    assertNear(at(t.years[3]), 60, 'year 3 lands on the target net of the benefit', 1e-9);
+    // Rails and spends between solves are the dollar midpoints; here the rails are flat.
+    assertNear(t.years[3].cutAt, 60 / 600, 'the cut rail is the same dollars, netted at the year\'s own benefit', 1e-12);
+    // The old field interpolation, kept for a message without a spine, sat between the two.
+    const old = _railsEngine.railsRuleTable({ ...msg, spine: undefined }, 'normal');
+    assertNear(old.years[3].raiseAt, (100 / 1500 + 60 / 1500) / 2, 'without a spine the ratio is interpolated as before', 1e-12);
+});
+
+test('P132: vsPlan% is the rule\'s spending against the plan\'s shape', () => {
+    const n = simulate({ ...RBG_BASE }).log.length;
+    const table = _p132Table(n, { 3: { cutAt: 1e-9, cutB: 0.02, raiseAt: 1e-12, raiseB: 0.5 } });
+    const log = simulate({ ...RBG_BASE, rbgRails: table }).log;
+    const off = simulate({ ...RBG_BASE, spendRule: '' }).log;
+    for (const y of [0, 1, 2]) assertNear(log[y]['vsPlan%'], 0, `year ${y}: on the plan`, 1e-9);
+    assertNear(log[3]['vsPlan%'], log[3].spendGoal / off[3].spendGoal - 1, 'the cut year: the cut goal over the no-rule goal, minus one', 1e-9);
+    assert(log[3]['vsPlan%'] < 0, 'a cut reads negative');
+    assertNear(log[5]['vsPlan%'], log[5].spendGoal / off[5].spendGoal - 1, 'and it carries', 1e-9);
+    assert(off.every(r => r['vsPlan%'] === null), 'no rule, no column');
+    const gk = simulate({ ...GK_BASE, returnSequence: Array.from({ length: 30 }, (_, i) => i === 0 ? 2.0 : 0) }).log;
+    assert(gk[1]['vsPlan%'] > 0 && gk[0]['vsPlan%'] === 0, `GK-style raise reads positive: ${gk[1]['vsPlan%']}`);
+});
+
 test('P132: the rails the rule read along a path are its table in that path\'s dollars, laid out like the solved rails', () => {
     // wealthReal 1, lines through the origin: the rails are net spend over the ratio, the landings
     // the ratio times the wealth they are taken at, plus the year's guaranteed income.
@@ -8563,9 +8607,9 @@ test('P132: without a table the risk-based rule leaves the plan on its own path,
     assert(on.log.length === off.log.length, 'same plan length');
     for (let y = 0; y < on.log.length; y++) {
         assertNear(on.log[y].spendGoal, off.log[y].spendGoal, `year ${y}: spending is the shape`, 1e-9);
-        assert(on.log[y].gkSpend === on.log[y].spendGoal, `year ${y}: the rule column carries the spend`);
-        assert(on.log[y].gkAdj === (y === 0 ? '—' : 'no rails'), `year ${y}: label ${on.log[y].gkAdj}`);
-        assert(off.log[y].gkSpend === null && off.log[y].gkAdj === null, `year ${y}: no rule, no columns`);
+        assert(on.log[y].ruleSpend === on.log[y].spendGoal, `year ${y}: the rule column carries the spend`);
+        assert(on.log[y].ruleAdj === (y === 0 ? '—' : 'no rails'), `year ${y}: label ${on.log[y].ruleAdj}`);
+        assert(off.log[y].ruleSpend === null && off.log[y].ruleAdj === null, `year ${y}: no rule, no columns`);
     }
 });
 
@@ -8582,17 +8626,17 @@ test('P132: a cut lands on the cut ratio of the wealth, a raise on the raise rat
     // The cut: spending becomes the year's guaranteed income plus the ratio times the after-tax
     // wealth the year started with.
     assertNear(log[3].spendGoal, log[3].guaranteedIncome + 0.02 * log[2].totalNetWealth, 'year 3: cut to 2% of the year-end wealth before it', 1e-9);
-    assert(log[3].gkAdj === 'cut→90%', `year 3 label ${log[3].gkAdj}`);
+    assert(log[3].ruleAdj === 'cut→90%', `year 3 label ${log[3].ruleAdj}`);
     // After it, the goal carries on from the cut: Spend Delta and that year's CPI at the year's end,
     // exactly as the plan without a rule carries its goal.
     const carry = (y) => log[y - 1].spendGoal * (1 + RBG_BASE.spendChange) * (1 + log[y - 1]['infl%']);
     assertNear(log[4].spendGoal, carry(4), 'year 4: the cut goal, carried', 1e-9);
     assertNear(log[5].spendGoal, carry(5), 'year 5: still carried', 1e-9);
-    assert(log[4].gkAdj === '—' && log[5].gkAdj === '—', `between rails: ${log[4].gkAdj} / ${log[5].gkAdj}`);
+    assert(log[4].ruleAdj === '—' && log[5].ruleAdj === '—', `between rails: ${log[4].ruleAdj} / ${log[5].ruleAdj}`);
     // The raise, in a year both Social Security benefits are running.
     assert(log[6].guaranteedIncome > 0, 'year 6 has guaranteed income');
     assertNear(log[6].spendGoal, log[6].guaranteedIncome + 0.05 * log[5].totalNetWealth, 'year 6: raised to the benefits plus 5% of the wealth', 1e-9);
-    assert(log[6].gkAdj === 'raise→90%', `year 6 label ${log[6].gkAdj}`);
+    assert(log[6].ruleAdj === 'raise→90%', `year 6 label ${log[6].ruleAdj}`);
     assertNear(log[7].spendGoal, carry(7), 'year 7: the raised goal, carried', 1e-9);
     // A side with no ratio never fires, whatever the trigger says.
     const half = _p132Table(n, { 3: { cutAt: 1e-9, cutB: null } });
@@ -8600,7 +8644,7 @@ test('P132: a cut lands on the cut ratio of the wealth, a raise on the raise rat
     assertNear(none[3].spendGoal, off[3].spendGoal, 'a trigger without a ratio is not a rail', 1e-9);
     // The ceiling holds a raise at the shape, and labels it, exactly as it does for GK-style.
     const ceil = simulate({ ...RBG_BASE, rbgRails: table, gkShapeCeiling: true }).log;
-    assert(ceil[6].gkAdj === 'raise→90% @shape' && ceil[6].spendGoal < log[6].spendGoal, `ceiling: ${ceil[6].gkAdj} ${ceil[6].spendGoal}`);
+    assert(ceil[6].ruleAdj === 'raise→90% @shape' && ceil[6].spendGoal < log[6].spendGoal, `ceiling: ${ceil[6].ruleAdj} ${ceil[6].spendGoal}`);
     assertNear(ceil[6].spendGoal / ceil[6].inflationFactor, RBG_BASE.spendGoal * Math.pow(1 + RBG_BASE.spendChange, 6), 'held at the shape', 1e-6);
 });
 
@@ -8622,9 +8666,9 @@ test('P132: the hidden -ruleMove field is what a rule did to the year\'s goal - 
     // No rule: nothing moves. GK-style: a capital-preservation cut reads negative, a prosperity raise positive.
     assert(simulate({ ...RBG_BASE, spendRule: '' }).log.every(r => r['-ruleMove'] === 0), 'no rule, no movement');
     const gkCut = simulate({ ...GK_BASE, returnSequence: Array.from({ length: 30 }, (_, i) => i === 0 ? -0.80 : 0) }).log;
-    assert(gkCut[1].gkAdj.includes('cap') && gkCut[1]['-ruleMove'] < 0, `GK cut: ${gkCut[1].gkAdj} ${gkCut[1]['-ruleMove']}`);
+    assert(gkCut[1].ruleAdj.includes('cap') && gkCut[1]['-ruleMove'] < 0, `GK cut: ${gkCut[1].ruleAdj} ${gkCut[1]['-ruleMove']}`);
     const gkRaise = simulate({ ...GK_BASE, returnSequence: Array.from({ length: 30 }, (_, i) => i === 0 ? 2.0 : 0) }).log;
-    assert(gkRaise[1].gkAdj.includes('pros') && gkRaise[1]['-ruleMove'] > 0, `GK raise: ${gkRaise[1].gkAdj} ${gkRaise[1]['-ruleMove']}`);
+    assert(gkRaise[1].ruleAdj.includes('pros') && gkRaise[1]['-ruleMove'] > 0, `GK raise: ${gkRaise[1].ruleAdj} ${gkRaise[1]['-ruleMove']}`);
 });
 
 test('P132: on its own spine, the rule fires at the first solved year exactly when the chance is outside the rails', async () => {
@@ -8643,10 +8687,10 @@ test('P132: on its own spine, the rule fires at the first solved year exactly wh
         const P = core.RAIL_PRESETS[key];
         const res = simulate({ ...RBG_BASE, rbgPreset: key, rbgRails: table }).log;
         const y1 = msg.years[0], k = y1.k, p = y1.presets[key];
-        const fired = res[k].gkAdj !== '—';
+        const fired = res[k].ruleAdj !== '—';
         const outside = (y1.pos < P.lower && table.years[k].cutAt != null)
             || (y1.pos >= P.upper && table.years[k].raiseAt != null);
-        assert(fired === outside, `${key}: chance ${y1.pos} against ${P.lower}/${P.upper}, label ${res[k].gkAdj}`);
+        assert(fired === outside, `${key}: chance ${y1.pos} against ${P.lower}/${P.upper}, label ${res[k].ruleAdj}`);
         if (fired) {
             // On the spine the path's wealth IS the plan's, so the landing is the spend the job
             // solved at that wealth: the target spend for a raise, the cutTo spend for a cut.

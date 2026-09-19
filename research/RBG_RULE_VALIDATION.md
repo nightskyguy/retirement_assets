@@ -32,7 +32,9 @@ output unedited.
    five of the thirty no-ceiling cases the exact Paper rule is the one that fails to fund, because
    a cut that waits for a 25% chance and returns only to 45% can come too late.
 
-Decided on the strength of it: **Never above plan is on by default when Risk-based is chosen**, and
+Decided on the strength of it: **Never above plan is recommended when Risk-based is chosen** (the
+page turned it on by itself at first; since 2026-09-19 it never touches the switch, on the user's
+instruction, and says so under the Guardrails switch when it is off), and
 visible without the nerdknob. It can be turned off; the page says what that costs.
 
 ---
@@ -162,6 +164,18 @@ which `optimizer_core.tests.js` pins.
 GK-style rule does; the plan without a rule applies the year's inflation at its end. Under a real
 sequence those differ by a year of inflation, and in 1946 (18%) that read as a 15% gap in a year
 neither rule adjusted. The rule now takes inflation where the plan does.
+
+**Interpolation across a Social Security start (found 2026-09-19, after this run).** Between two
+solved years the table used to interpolate the RATIOS. Where a benefit starts between two solves,
+total spending capacity is smooth across the start (the solve before it already priced the benefit
+in) but spending net of the benefit halves, so a net ratio interpolated across the step was wrong
+for every year between - and a plan on the page raised in its first Social Security year on a raise
+rail it had not reached (chance 78%, raise level 90%), then cut two years later. The job now hands
+the table every plan year of its spine, the dollars are interpolated in today's terms, and each
+year's row is netted at that year's own guaranteed income. The households above all have Social
+Security running from the plan's start, which is why this run did not see it; a re-run of the quick
+case (bracket-filler-texas, 1937 and 2000, ceiling) after the change is unchanged: exact and cheap
+identical, 0.0% gap.
 
 **A rail under the solver's floor is $0.** The panel draws it that way (user, 2026-09-18). For the
 RAISE rail that means the plan reaches the raise chance at any wealth the search looked at, which

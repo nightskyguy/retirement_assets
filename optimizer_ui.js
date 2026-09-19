@@ -798,15 +798,10 @@ function getInputs() {
     return inputs;
 }
 
-// P132. The switch or the rule menu changed. Choosing Risk-based turns Never above plan on: with it
-// the rule stays within a few percent of re-solving the chance every year, and without it both
-// drift (research/RBG_RULE_VALIDATION.md). It can be turned off again; a saved plan or a share
-// link carries whatever was chosen.
+// P132. The switch or the rule menu changed. Never above plan is NOT touched (user, 2026-09-19:
+// switching GK-style -> Risk-based flipped it on and silently removed the cuts a link had shown);
+// the note under the switch recommends it with the risk-based rule instead.
 function spendRuleChanged() {
-    if (rbgRuleOn()) {
-        const c = document.getElementById('gkShapeCeiling');
-        if (c) c.checked = true;
-    }
     toggleStrategyUI();
 }
 
@@ -2901,8 +2896,9 @@ const columnCategories = {
     // Phase 12: Withdrawal timing
     'timing':    ['Summary', 'Withdrawals'],
     // Phase 22: Guyton-Klinger
-    'gkSpend':   ['Summary', 'Income', 'Guardrails'],
-    'gkAdj':     ['Summary', 'Income', 'Guardrails'],
+    'ruleSpend':   ['Summary', 'Income', 'Guardrails'],
+    'ruleAdj':     ['Summary', 'Income', 'Guardrails'],
+    'vsPlan%':     ['Summary', 'Income', 'Guardrails'],
     // P128: risk-based rails. Only in a log a rails solve was merged into, so the columns exist only
     // after a solve; analyzeColumnContent hides them while they are empty anyway. In Guardrails
     // (user, 2026-09-19: "all the guardrail related information") as well as Spending.
@@ -2948,7 +2944,7 @@ const columnGroupDefs = {
     'inflows': 'Withdrawals',
     'wdRate%': 'Withdrawals',
     'timing': 'Withdrawals',
-    'gkSpend': 'Income', 'gkAdj': 'Income',
+    'ruleSpend': 'Income', 'ruleAdj': 'Income', 'vsPlan%': 'Income',
     'infl%': 'Market', 'inflCum%': 'Market', 'return%': 'Market',
     'railLower': 'Rails', 'railUpper': 'Rails', 'railPoS%': 'Rails',
     'railSpend': 'Rails', 'railSpendDn': 'Rails', 'railSpendUp': 'Rails', 'railBasis': 'Rails',
@@ -3448,8 +3444,9 @@ function updateTable(log) {
         'inflCum%': 'How much the price level has risen since the plan started, compounding the infl% column. Divide any nominal dollar figure by 1 + this to read it in current dollars, or flip the Future $ / Current $ switch above the tabs and let every column do it for you.',
         'return%': 'The market return this year before dividends and before any per-account mix is applied: your Growth input in a normal run, or the year drawn from the Monte Carlo path. The balance columns will not move by exactly this much - each account adds its dividend yield and blends its own stock/bond/international split, and Cash earns its own yield instead.',
         'guaranteedIncome': 'Social Security plus pension this year: the part of the spend goal the portfolio does not have to fund. The Risk-based rule compares spending net of this with the wealth at the end of the year before.',
-        'gkSpend': 'Guardrails: the spending goal the rule (GK-style or Risk-based) set for this year.',
-        'gkAdj': `What Guardrails did this year. Risk-based: "cut→45%" - the chance of success fell to the cut rail and `
+        'ruleSpend': 'Guardrails: the spending goal the rule (GK-style or Risk-based) set for this year.',
+        'vsPlan%': 'Guardrails: where the rule has put this year\'s spending against your planned path (your spend goal with Spend Delta and inflation, no rule). -10% is a tenth under the plan; 0% is on it. With Never above plan on it is never positive.',
+        'ruleAdj': `What Guardrails did this year. Risk-based: "cut→45%" - the chance of success fell to the cut rail and `
             + `spending was reset to what gives 45%; "raise→80%" - it reached the raise rail and spending rose to what gives `
             + `80%; "no rails" - no solved rails for this year, so spending stayed on the plan's path. `
             + `GK-style: a cut ("-10%cap"): spending was too high for the savings left. `
@@ -4344,8 +4341,8 @@ function computeMilestones(log) {
         // did not move it. A cut is skipped when the same year is already flagged as a shortfall.
         // Rows without the field (a result loaded from an older file) fall back to the GK label.
         const move = r['-ruleMove'];
-        const cut = typeof move === 'number' ? move < -0.5 : String(r.gkAdj ?? '').includes('cap');
-        const raise = typeof move === 'number' ? move > 0.5 : String(r.gkAdj ?? '').includes('pros');
+        const cut = typeof move === 'number' ? move < -0.5 : String(r.ruleAdj ?? '').includes('cap');
+        const raise = typeof move === 'number' ? move > 0.5 : String(r.ruleAdj ?? '').includes('pros');
         if (!isShort && cut) {
             ms.push({ x: i, label: 'Guardrail cut', color: '#d35400' });
         } else if (raise) {
@@ -6902,7 +6899,8 @@ function updateGuardrailsNote() {
             + `${pct(P.lower)}, spending is cut to what gives ${pct(cutTo)}; when it reaches ${pct(P.upper)}, it is raised to `
             + `what gives ${pct(P.target)}. Spending takes inflation every year. ` : 'Risk-based: ')
             + state
-            + (valChecked('gkShapeCeiling') ? ' Raises never take spending above your planned path.' : '');
+            + (valChecked('gkShapeCeiling') ? ' Raises never take spending above your planned path.'
+               : ' Never above plan is recommended with this rule: the rails are solved for your planned path and are accurate near it.');
         return;
     }
     const g = Math.round(+val('gkGuard') || 20), a = Math.round(+val('gkAdjPct') || 10);

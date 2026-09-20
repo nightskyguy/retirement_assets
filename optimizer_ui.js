@@ -6919,15 +6919,18 @@ function updateGuardrailsNote() {
         + ceilingNote;
 }
 
-// The Custom fold's own line: the four numbers as the menu writes them, or what is missing.
+// The Custom fold's own line, and the Custom option in both menus: the four numbers as the other
+// presets are written (user, 2026-09-20), or what is missing.
 function updateRbgCustomSummary() {
-    const el = document.getElementById('rbg-custom-summary');
-    if (!el) return;
     const s = rbgCustomNumbers();
     const pct = v => `${Math.round(v * 1000) / 10}%`;
-    el.textContent = s
-        ? `Custom ■${pct(s.target)} ▲${pct(s.upper)} ▼${pct(s.lower)}${s.cutTo < s.target ? '→■' + pct(s.cutTo) : ''}`
-        : 'Custom: the four numbers must satisfy cut < back to ≤ target ≤ raise';
+    const text = s ? `Custom ■${pct(s.target)} ▲${pct(s.upper)} ▼${pct(s.lower)}→■${pct(s.cutTo)}` : null;
+    const el = document.getElementById('rbg-custom-summary');
+    if (el) el.textContent = text ?? 'Custom: the four numbers must satisfy cut < back to ≤ target ≤ raise';
+    for (const id of ['rbgPreset-custom', 'rails-preset-custom']) {
+        const opt = document.getElementById(id);
+        if (opt) opt.textContent = text ?? 'Custom (set the four numbers under the menu)';
+    }
 }
 
 function toggleStrategyUI() {

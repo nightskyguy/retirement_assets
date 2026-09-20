@@ -5632,3 +5632,5 @@ accuracy lever (raise rails 7-27% run to run at 100 paths, cut rails and target 
 within 1% of every year), auto-run fine on a fast machine; the end-of-plan spend climb is the
 known-horizon artifact (success = not ruined by the last year), remedies: plan to a later age, keep
 Never above plan, or a terminal-reserve success test in the rails solve (offered as a phase).
+Round 5: both folds start open; the Custom option in both menus is written from the boxes
+(`updateRbgCustomSummary`); High Safety and Normal state →■ their target. Badge green 1230.

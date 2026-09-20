@@ -159,7 +159,7 @@
 				</select>
 				<!-- The sentence stating the rule in force folds (user, 2026-09-20: "lengthy"): the summary
 				     line names the rule and its state, the body explains it. Remembered like the other folds. -->
-				<details id="guardrails-note-fold" style="display:none;font-size:0.8em;color:#555;margin:2px 0 0 20px;" ontoggle="rememberFoldState()">
+				<details id="guardrails-note-fold" open style="display:none;font-size:0.8em;color:#555;margin:2px 0 0 20px;" ontoggle="rememberFoldState()">
 					<summary id="guardrails-note-summary" style="cursor:pointer;"></summary>
 					<div id="guardrails-note" style="margin-top:2px;"></div>
 				</details>
@@ -169,16 +169,16 @@
 				     travels in the share link and the saved plan. The panel's own menu mirrors it, both ways.
 				     The option text is symbols (user, 2026-09-20): ■ target, ▲ raise at, ▼ cut at, → back to. -->
 				<div id="ui-rbg" class="compact-row" style="margin:4px 0 0 20px;">
-					<label class="wide" title="Which risk-based rails the panel under the charts draws as guidance, and the rails the Risk-based rule follows when Guardrails is set to it. ■ the target chance of success an adjustment returns to; ▲ the chance at which spending is raised; ▼ the chance at which it is cut; → the chance a cut returns to, where that is below the target. More Risk is the 2024 article's own set. Custom takes your own four numbers, in the fold below the menu.">Risk-based guidance
+					<label class="wide" title="Which risk-based rails the panel under the charts draws as guidance, and the rails the Risk-based rule follows when Guardrails is set to it. ■ the target chance of success an adjustment returns to; ▲ the chance at which spending is raised; ▼ the chance at which it is cut; → the chance a cut returns to. More Risk is the 2024 article's own set. Custom takes your own four numbers, in the fold below the menu.">Risk-based guidance
 					<select id="rbgPreset" onchange="toggleStrategyUI()" style="width:100%;max-width:none;">
-					  <option value="tight">High Safety ■95% ▲99% ▼80%</option>
-					  <option value="normal" selected>Normal ■90% ▲99% ▼70%</option>
+					  <option value="tight">High Safety ■95% ▲99% ▼80%→■95%</option>
+					  <option value="normal" selected>Normal ■90% ▲99% ▼70%→■90%</option>
 					  <option value="loose">More Tolerant ■80% ▲99.5% ▼40%→■70%</option>
 					  <option value="paper">More Risk ■80% ▲99.5% ▼25%→■45%</option>
 					  <option value="custom" id="rbgPreset-custom">Custom</option>
 					</select></label>
 					<!-- Custom's four boxes fold under a line that shows their values (user, 2026-09-20). -->
-					<details id="ui-rbg-custom" class="hidden" style="flex:1 1 100%;" ontoggle="rememberFoldState()">
+					<details id="ui-rbg-custom" class="hidden" open style="flex:1 1 100%;" ontoggle="rememberFoldState()">
 					<summary id="rbg-custom-summary" style="cursor:pointer;font-size:0.8em;font-weight:bold;color:#666;"></summary>
 					<span style="display:flex;flex-wrap:wrap;gap:6px;align-items:flex-end;margin-top:2px;">
 					<label style="display:flex;flex-direction:column;font-size:0.8em;font-weight:bold;color:#666;gap:2px;" title="■ The chance of success the rule aims for, and returns to after a raise.">■ Target %
@@ -1509,10 +1509,10 @@
                 <a id="rails-howto" href="README.md#how-to-read-risk-based-rails" target="_blank" rel="noopener" style="margin-left:auto;">How to read risk-based rails</a>
               </div>
               <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:6px;">
-                <label title="■ the target chance of success, ▲ raise when it reaches, ▼ cut when it falls to, → the chance a cut returns to where that is below the target. High Safety is Derek Tharp's worked example; Normal and More Tolerant are the two sets in Tharp and Fitzpatrick's 'Hatchet' article on Kitces.com (More Tolerant's cut returns to 70%), and More Risk is their 2024 article's own set, except that the two raise at 99.5% where the articles say 100%: from a sample of market paths, 100% only means the worst one survived, and that keeps climbing as paths are added. Every preset is solved at once, so switching presets redraws without solving again.">Preset
+                <label title="■ the target chance of success, ▲ raise when it reaches, ▼ cut when it falls to, → the chance a cut returns to. High Safety is Derek Tharp's worked example; Normal and More Tolerant are the two sets in Tharp and Fitzpatrick's 'Hatchet' article on Kitces.com (More Tolerant's cut returns to 70%), and More Risk is their 2024 article's own set, except that the two raise at 99.5% where the articles say 100%: from a sample of market paths, 100% only means the worst one survived, and that keeps climbing as paths are added. Every preset is solved at once, so switching presets redraws without solving again.">Preset
                   <select id="rails-preset" data-no-share onchange="railsPresetChanged()">
-                    <option value="tight">High Safety ■95% ▲99% ▼80%</option>
-                    <option value="normal" selected>Normal ■90% ▲99% ▼70%</option>
+                    <option value="tight">High Safety ■95% ▲99% ▼80%→■95%</option>
+                    <option value="normal" selected>Normal ■90% ▲99% ▼70%→■90%</option>
                     <option value="loose">More Tolerant ■80% ▲99.5% ▼40%→■70%</option>
                     <option value="paper">More Risk ■80% ▲99.5% ▼25%→■45%</option>
                     <option value="custom" id="rails-preset-custom">Custom (the four boxes under the Guardrails switch)</option>

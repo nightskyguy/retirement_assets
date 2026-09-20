@@ -5661,7 +5661,7 @@ deterministic GK answer equals the no-rule answer; the floor rejects a crashed c
 README caveat, switch and Guard tooltips, the note, ARCHITECTURE's flowchart updated. Core 486 (two optimize-spend tests merged), 26 critical guards; badge 1244.
 
 Round 8: rbg_grid_harness re-run on the committed engine (11.18b2, Custom 70/90/40/50 as a set) and
- rewritten from it: new preset names, Custom row, GK-style as
+research/RBG_RULE_THRESHOLDS.md rewritten from it: new preset names, Custom row, GK-style as
 corrected (51% funded on soft-cap-underfunded against 100% before: it no longer cuts a plan for
 failing on its own assumptions), the overshoot section closed (deepest single year -49%, no -100%).
 Risk-based rows identical to the pre-GK-change run (diff clean). research/README.md row rewritten.

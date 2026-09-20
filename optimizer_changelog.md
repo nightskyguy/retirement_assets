@@ -17,12 +17,20 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.18b1"></a>
+<a id="11.18b2"></a>
 
-## 11.18b1
+## 11.18b2
 
-**Risk-based rails: one preset menu, the article's own set, rails on a replayed path, and Guardrails milestones and columns.**  
-*No plan's numbers change.*
+**GK-style Guardrails corrected; risk-based rails: one preset menu, the article's own set, rails on a replayed path, and Guardrails milestones and columns.**  
+*Correction for plans with GK-style Guardrails on; nothing else changes a plan's numbers.*
+
+**GK-style Guardrails contained an error that has been corrected.** Spending could be cut in the
+year Social Security or a pension started, because the rule measured whole spending over the
+portfolio against the first year's ratio, and the years of drawing before the benefit walked that
+ratio over the band. The rule now measures what the portfolio funds (spending after Social Security
+and pension) against your plan's own draw for the same year. On your plan's own assumptions it no
+longer changes anything; it acts when a market path takes you off the plan, in Monte Carlo, on a
+replayed path and in the Stress Test.
 
 **One preset menu.** The *Risk-based guidance* menu (the rails preset) now sits under the Guardrails switch, always
 in view; the rails panel's own menu is the same setting. The presets are **High Safety**, **Normal**,

@@ -6947,10 +6947,11 @@ function updateGuardrailsNote() {
     const cap = Math.round(OptimizerCore.GK_CPI_RAISE_CAP * 100);
     const endYears = OptimizerCore.GK_NO_CUT_FINAL_YEARS;
     if (summary) summary.textContent = `GK-style: ±${g}% band, ${a}% steps${valChecked('gkShapeCeiling') ? ', never above plan' : ''}`;
-    el.textContent = `Your first year sets the safe level: what you spend for each dollar saved. After that, `
-        + `spending is cut ${a}% in any year it is more than ${g}% above the safe level for the savings you `
-        + `have, and raised ${a}% when it is more than ${g}% below. It is never cut in the plan's last `
-        + `${endYears} years, and its yearly inflation raise is at most ${cap}%.`
+    el.textContent = `Each year, what your portfolio funds (spending after Social Security and pension) is compared, `
+        + `for the savings you have, with what your plan itself would draw that year. Spending is cut ${a}% in any `
+        + `year the draw runs more than ${g}% above your plan's, and raised ${a}% when it runs more than ${g}% below. `
+        + `On your plan's own assumptions nothing changes; the rule acts when markets take you off it. It is never `
+        + `cut in the plan's last ${endYears} years, and its yearly inflation raise is at most ${cap}%.`
         + ceilingNote;
 }
 

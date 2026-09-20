@@ -656,15 +656,25 @@ function railsRuleTable(msg, presetKey) {
         .filter(y => y.p && ok(y.wealth) && ok(y.spend) && Number.isInteger(y.k) && y.k >= 1)
         .sort((a, b) => a.k - b.k);
     // s(m) through the solved points of one chance curve, each (wealth, net spend) as shares of W.
+    // The first pair is the rail's point, the second the plan's own wealth. A rail within 5% of the
+    // plan's wealth (a plan sitting at the cut or raise level) leaves the two points too close for a
+    // line: the slope is one rounding error over another, and between two solves, where the rail
+    // and the spend at it are interpolated apart, it produced landings at $0 (2026-09-20). Such a
+    // pair, and any pair whose line would have spending FALL with wealth, is read as the ratio
+    // through the origin at the rail's point instead.
+    const NEAR = 0.05;
     const line = (W, ...pairs) => {
         const q = pairs.filter(([w, s]) => ok(w) && typeof s === 'number' && Number.isFinite(s)).map(([w, s]) => [w / W, s / W]);
         if (!q.length) return [null, null];
-        if (q.length === 1 || Math.abs(q[0][0] - q[1][0]) < 1e-9) return [0, q[0][1] / q[0][0]];
+        if (q.length === 1 || Math.abs(q[0][0] - q[1][0]) < NEAR) return [0, q[0][1] / q[0][0]];
         const b = (q[1][1] - q[0][1]) / (q[1][0] - q[0][0]);
+        if (b < 0) return [0, q[0][1] / q[0][0]];
         return [q[0][1] - b * q[0][0], b];
     };
     // One row from a year's numbers, all in the same dollars (a solved year's own, or today's for an
-    // interpolated one - the ratios do not care which). `cl` is the solve's clamp flags.
+    // interpolated one - the ratios do not care which). `cl` is the solve's clamp flags. `cutM` and
+    // `raiseM` are the rails as multiples of the plan's wealth: beyond them the rule holds the
+    // rail's own spend-to-wealth ratio rather than extrapolating the line (resolveSpendTarget).
     const rowOf = (k, year, solved, W, G, S, p, cl, infl) => {
         const net = S - G;
         const spendNet = v => ok(v) ? v - G : null;
@@ -672,14 +682,16 @@ function railsRuleTable(msg, presetKey) {
         const [raiseA, raiseB] = line(W, [p.railUpper, spendNet(p.spendAtUpper)], [W, spendNet(p.spendTarget)]);
         const r = { k, year, solved, wealthReal: W / infl,
                     cutAt:   ok(p.railLower) ? net / p.railLower : cl.lower === 'high' ? net / (TOP * W) : null, cutA, cutB,
-                    raiseAt: ok(p.railUpper) ? net / p.railUpper : cl.upper === 'low' ? Infinity : null, raiseA, raiseB };
-        if (r.cutAt == null || r.cutB == null || !(net > 0)) r.cutAt = r.cutA = r.cutB = null;
-        if (r.raiseAt == null || r.raiseB == null) r.raiseAt = r.raiseA = r.raiseB = null;
+                    cutM:    ok(p.railLower) ? p.railLower / W : null,
+                    raiseAt: ok(p.railUpper) ? net / p.railUpper : cl.upper === 'low' ? Infinity : null, raiseA, raiseB,
+                    raiseM:  ok(p.railUpper) ? p.railUpper / W : null };
+        if (r.cutAt == null || r.cutB == null || !(net > 0)) r.cutAt = r.cutA = r.cutB = r.cutM = null;
+        if (r.raiseAt == null || r.raiseB == null) r.raiseAt = r.raiseA = r.raiseB = r.raiseM = null;
         return r;
     };
     const solvedRow = y => rowOf(y.k, y.year, true, y.wealth, y.guar, y.spend, y.p, y.p.clamped ?? {}, y.infl);
     const years = [];
-    const FIELDS = ['wealthReal', 'cutAt', 'cutA', 'cutB', 'raiseAt', 'raiseA', 'raiseB'];
+    const FIELDS = ['wealthReal', 'cutAt', 'cutA', 'cutB', 'cutM', 'raiseAt', 'raiseA', 'raiseB', 'raiseM'];
     // Between two solves. With the job's spine (every plan year's wealth, spending and guaranteed
     // income) the DOLLARS are interpolated in today's terms - each rail, and the spend the solver
     // found at it - and the row is then built from that year's OWN spending and guaranteed income.

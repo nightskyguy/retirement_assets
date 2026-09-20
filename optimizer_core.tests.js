@@ -1102,9 +1102,24 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
     // be a real funded plan for that count to mean anything.
     assert(gk.totals.spend > 0 && gk.totals.tax > 0 && gk.finalNW > 0,
         `the GK run must be a funded plan: spend ${Math.round(gk.totals.spend)}, tax ${Math.round(gk.totals.tax)}, NW ${Math.round(gk.finalNW)}`);
-    assert(gk.log.filter(r => (r.ruleAdj ?? '—') !== '—').length === 3,
-        `Expected 3 guardrail adjustments, got ${gk.log.filter(r => (r.ruleAdj ?? '—') !== '—').length}`);
+    // P132j (2026-09-20). The rule now measures the draw against the plan's OWN path for the year,
+    // so a plan run on its own assumptions IS its path and never adjusts: the count is 0. The three
+    // adjustments it used to record were the drift of a year-0 anchor through the years before
+    // Social Security started - the defect P132j fixed - not reactions to anything.
+    assert(gk.log.filter(r => (r.ruleAdj ?? '—') !== '—').length === 0,
+        `Expected no guardrail adjustment on the plan's own path, got ${gk.log.filter(r => (r.ruleAdj ?? '—') !== '—').length}`);
 });
+
+// P132j. GK-style measures against the plan's own path, so only a path that LEAVES it can make the
+// rule fire. The Guardrails tests below hand simulate() a market sequence for that: a boom, a crash,
+// or a crash with a recovery, on the plan's own inflation.
+function gkSeq(base, edits, fill = base.growth) {
+    const rows = simulate({ ...base, spendRule: '' }).log.length;
+    const seq = new Float64Array(rows + 3).fill(fill);
+    const inf = new Float64Array(rows + 3).fill(base.inflation);
+    for (const [i, v] of Object.entries(edits)) seq[Number(i) < 0 ? rows + Number(i) : Number(i)] = v;
+    return { returnSequence: seq, inflationSequence: inf };
+}
 
 // ── P127 prototype: the shape ceiling on the Guardrails rule ──────────────────────
 // `gkShapeCeiling` holds the rule's goal at the plan's OWN spending path - year-0 goal carried
@@ -1130,19 +1145,26 @@ const CEIL_BASE = {
 const ceilRatios = res => res.log.map((row, y) =>
     (row.spendGoal / (row.inflationFactor || 1)) / (CEIL_BASE.spendGoal * Math.pow(1 + CEIL_BASE.spendChange, y)));
 
+// A boom in years 1 and 2 (P132j: on its own assumptions the plan is its own path and the rule
+// never fires; the market has to hand it more than it planned for).
+const CEIL_BOOM = () => ({ ...CEIL_BASE, ...gkSeq(CEIL_BASE, { 1: 0.35, 2: 0.30 }) });
+
 test('Guardrails: without the ceiling, prosperity raises lift spending above the plan\'s own shape', () => {
     // The premise the ceiling answers. If this ever stops being true the ceiling is testing nothing,
     // so it is asserted rather than assumed.
-    const off = simulate({ ...CEIL_BASE });
+    const off = simulate(CEIL_BOOM());
     const peak = Math.max(...ceilRatios(off));
     assert(peak > 1.2, `expected the rule to outrun the shape, peaked at ${peak.toFixed(3)} of it`);
     assert(off.log.some(r => (r.ruleAdj || '').includes('pros')), 'expected at least one prosperity raise');
     assert(!off.log.some(r => (r.ruleAdj || '').includes('@shape')), 'the ceiling must be off by default');
+    // And on its own path, nothing: no cut, no raise, in any year.
+    const own = simulate({ ...CEIL_BASE });
+    assert(own.log.every(r => !/cap|pros/.test(r.ruleAdj || '')), 'P132j: the plan on its own path is never adjusted');
 });
 
 test('Guardrails: the shape ceiling holds spending at the plan\'s own shape, and pays for it in spending', () => {
-    const off = simulate({ ...CEIL_BASE });
-    const on  = simulate({ ...CEIL_BASE, gkShapeCeiling: true });
+    const off = simulate(CEIL_BOOM());
+    const on  = simulate({ ...CEIL_BOOM(), gkShapeCeiling: true });
     const peak = Math.max(...ceilRatios(on));
     assert(peak <= 1 + 1e-9, `the goal must never exceed the shape, peaked at ${peak.toFixed(6)}`);
     assert(on.log.some(r => (r.ruleAdj || '').includes('@shape')), 'expected the ceiling to bind and say so');
@@ -1158,12 +1180,10 @@ test('Guardrails: the shape ceiling only ever follows a raise, and changes nothi
     // A crash in years 2-3, so the rule cuts first and only reaches the shape again on the recovery.
     // TWO claims, and the second is the one that makes the switch safe to offer: the ceiling cannot
     // invent a cut, and a plan that never outruns its shape runs identically with it on.
-    const rows = simulate({ ...CEIL_BASE }).log.length;
-    const seq = new Float64Array(rows + 3).fill(0.06);
-    seq[1] = -0.22; seq[2] = -0.13;
-    const inf = new Float64Array(rows + 3).fill(0.025);
-    const off = simulate({ ...CEIL_BASE, returnSequence: seq, inflationSequence: inf });
-    const on  = simulate({ ...CEIL_BASE, gkShapeCeiling: true, returnSequence: seq, inflationSequence: inf });
+    // The recovery runs at 14% against the plan's 8%, so the path climbs back over the plan.
+    const path = gkSeq(CEIL_BASE, { 1: -0.22, 2: -0.13 }, 0.14);
+    const off = simulate({ ...CEIL_BASE, ...path });
+    const on  = simulate({ ...CEIL_BASE, gkShapeCeiling: true, ...path });
     assert(on.log.every(r => !(r.ruleAdj || '').includes('@shape') || (r.ruleAdj || '').includes('pros')),
         'a clamped year must always be a year the rule tried to raise');
     const first = on.log.findIndex(r => (r.ruleAdj || '').includes('@shape'));
@@ -1237,8 +1257,10 @@ test('P127: no cut in the plan\'s last 8 years, and a year the rule wanted one s
     const N = core.GK_NO_CUT_FINAL_YEARS;
     assert(N === 8, `the user's number is 8, got ${N}`);
     let sawHeld = false, sawEarlyCut = false;
+    // P132j: a crash in year 1 for the early cut, and one six years from the end for the held one.
+    const path = gkSeq(GK_OPT_BASE, { 1: -0.35, [-6]: -0.35 });
     for (const mult of [1.0, 1.2, 1.4, 1.6]) {
-        const log = simulate({ ...GK_OPT_BASE, ...over, spendGoal: GK_OPT_BASE.spendGoal * mult }).log;
+        const log = simulate({ ...GK_OPT_BASE, ...over, ...path, spendGoal: GK_OPT_BASE.spendGoal * mult }).log;
         const n = log.length;
         log.forEach((r, i) => {
             const adj = r.ruleAdj || '';
@@ -1254,6 +1276,34 @@ test('P127: no cut in the plan\'s last 8 years, and a year the rule wanted one s
     }
     assert(sawEarlyCut, 'premise: the rule still cuts earlier in the plan');
     assert(sawHeld, 'premise: some run wanted a cut in its last years and was held');
+});
+
+// P132j (user, 2026-09-20): the page's plan at $130k, 5% growth, Guardrails GK-style, cut spending 10%
+// in 2031 - the year Social Security started and the household's income rose $56k. The rule measured
+// whole spending over the portfolio against year 0's ratio, and the five years of drawing $130k+
+// before the benefit had walked that ratio over the 20% band, landing the cut on the benefit's first
+// year. Shipped on main (191da49) and every release with the rule. Fixed by measuring what the
+// portfolio funds (spending net of Social Security and pension) against the plan's own ratio for
+// the year. Two guards: no cut in the benefit's first year, and no adjustment at all on the plan's
+// own path, because on its own assumptions the plan IS the path the rule measures against.
+test.critical('P132j: GK-style never cuts in the year Social Security starts, and never adjusts a plan on its own path', () => {
+    const plan = {
+        STATEname: 'CA', strategy: 'propwd', propWithdraw: 0.2, spendRule: 'gk', gkGuard: 0.2, gkAdjPct: 0.1,
+        hasSpouse: true, birthyear1: 1960, birthmonth1: 12, die1: 88, birthyear2: 1952, birthmonth2: 12, die2: 98,
+        IRA1: 1000000, IRA2: 400000, Roth: 50000, Roth2: 20000, Brokerage: 100000, BrokerageBasis: 50000, Cash: 50000,
+        ss1: 48000, ss1Age: 70, ss2: 24000, ss2Age: 70, pensionAnnual: 15000, pensionStartAge: 0, survivorPct: 75, pensionCola: 'none',
+        spendGoal: 130000, spendChange: -0.01, iraBaseGoal: 750000, inflation: 0.03, cpi: 0.028, growth: 0.05,
+        cashYield: 0.03, dividendRate: 0.005, ssFailYear: 2033, ssFailPct: 0.773, startAge: 65, startInYear: 2026,
+        withdrawTiming: 'split', irmaaMarginMode: 'halfcpi', medicareEnroll1: true, medicareEnroll2: true,
+    };
+    const log = simulate({ ...plan, computeOC: false }).log;
+    const firstSS = log.findIndex((r, i) => i > 0 && (r.guaranteedIncome ?? 0) > (log[i - 1].guaranteedIncome ?? 0) * 1.5);
+    assert(firstSS > 0, `premise: a year the guaranteed income jumps (got ${firstSS})`);
+    assert(!/cap/.test(log[firstSS].ruleAdj || ''), `${log[firstSS].year}: income rose and the rule cut, "${log[firstSS].ruleAdj}"`);
+    assert(log.every(r => !/cap|pros/.test(r.ruleAdj || '')), `a plan on its own path is never adjusted: ${log.filter(r => /cap|pros/.test(r.ruleAdj || '')).map(r => r.year + ' ' + r.ruleAdj).join(', ')}`);
+    // The rule still reacts to a path that leaves the plan: a crash the year before the benefit.
+    const crashed = simulate({ ...plan, computeOC: false, ...gkSeq(plan, { [firstSS - 1]: -0.35 }) }).log;
+    assert(crashed.some(r => /cap/.test(r.ruleAdj || '')), 'premise: a crash still cuts');
 });
 
 test('P127b: the stability floor judges spending against the plan\'s own path, not year 1', () => {
@@ -1283,7 +1333,8 @@ test('P127f: converting nothing is always admissible, so the search never ends p
     // A Guardrails plan the floor rejects as it stands (P126f). The floor used to reject $0 too,
     // which forced a pick among the positive amounts - $96,275 poorer than $0 on one bank household.
     const over = { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk' };
-    const base = { ...GK_OPT_BASE, spendGoal: GK_OPT_BASE.spendGoal * 1.5 };
+    // P132j: the floor rejects a path the rule slashed, so the plan is handed a crash.
+    const base = { ...GK_OPT_BASE, spendGoal: GK_OPT_BASE.spendGoal * 1.5, ...gkSeq(GK_OPT_BASE, { 1: -0.20 }) };
     const zero = simulate({ ...base, ...over, extraConversionAmount: 0 });
     assert(!core.gkSpendStable(zero, over, base), 'premise: the floor rejects this plan as it stands');
     const { optConv, optResult } = optimizeConversionAmount(base, over, 'finalNW');
@@ -1634,39 +1685,30 @@ const GK_OPT_BASE = {
     hasSpouse: false, nYears: 30, gkGuard: 0.20, gkAdjPct: 0.10,
 };
 
-test('GK optimize-spend: stability floor caps optimized spend below the +50% ceiling', () => {
+test('GK optimize-spend: the stability floor rejects a run the rule slashed, and on the plan\'s own assumptions the search finds the no-rule answer', () => {
+    const gkOver = { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 };
+    const pwOver = { strategy: 'propwd', propWithdraw: 0, spendRule: '' };
+    // P132j: on its own assumptions the plan is the path the rule measures against, so the rule never
+    // fires, the floor has nothing to reject, and the two searches agree to the dollar.
+    const gk = optimizeSpend({ ...GK_OPT_BASE }, gkOver);
+    const pw = optimizeSpend({ ...GK_OPT_BASE, spendRule: '' }, pwOver);
+    assert(gk && pw, 'both searches should return a result');
+    assert(Math.abs(gk.optimizedSpend - pw.optimizedSpend) < 1,
+        `on its own path GK-style adds nothing: ${Math.round(gk.optimizedSpend)} vs ${Math.round(pw.optimizedSpend)}`);
+    assert(core.gkSpendStable(gk.result, gkOver, GK_OPT_BASE), 'the answer sits on the plan\'s own path, which the floor accepts');
+    // The floor still does its job on a path the rule cut: a crash in year 1 at the +50% ceiling
+    // spend is cut year after year until the draw is back inside the band, and the worst real year
+    // ends below 80% of the shape.
     const ceiling = GK_OPT_BASE.spendGoal * 1.5;
-    const over = { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 };
-    const opt = optimizeSpend({ ...GK_OPT_BASE }, over);
-    assert(opt, 'GK optimizeSpend should find a stable optimized spend (not null)');
-    assert(!opt.hitCeiling, 'floor should prevent hitting the +50% ceiling');
-    // What caps the search is the floor refusing the ceiling spend itself, so that is what is
-    // asserted. This used to demand the answer land below 90% of the ceiling, which was a margin
-    // and not the claim: when P127 stopped the rule cutting in a plan's last 8 years, the answer
-    // moved from $64,829 to $78,687 - the three late cuts that had dragged the worst year to 59% of
-    // the first no longer happen, and the plan still funds every year and ends with $1.43M.
-    const atCeiling = simulate({ ...GK_OPT_BASE, spendGoal: ceiling });
-    assert(!core.gkSpendStable(atCeiling, over, GK_OPT_BASE),
-        `the ceiling spend ${ceiling} must be one the floor rejects, or nothing here is capping the search`);
-    assert(opt.optimizedSpend < ceiling,
-        `optimizedSpend ${Math.round(opt.optimizedSpend)} should be below ceiling ${ceiling}`);
-
-    // Worst real delivered spend must stay within one guard band of the initial real spend.
-    const log = opt.result.log;
+    const crashed = simulate({ ...GK_OPT_BASE, ...gkOver, ...gkSeq(GK_OPT_BASE, { 1: -0.30 }), spendGoal: ceiling });
+    assert(crashed.log.filter(r => /cap/.test(r.ruleAdj || '')).length >= 3, 'premise: the crash at the ceiling spend cuts more than twice');
+    assert(!core.gkSpendStable(crashed, gkOver, GK_OPT_BASE), 'a run the rule slashed is one the floor rejects');
+    // Worst real delivered spend on the accepted answer stays within one guard band of the shape.
+    const log = gk.result.log;
     const initReal = log[0].spendGoal / (log[0].inflationFactor || 1);
     let minReal = Infinity;
     for (const r of log) minReal = Math.min(minReal, r.spendGoal / (r.inflationFactor || 1));
-    assert(minReal >= initReal * (1 - 0.20) - 1,
-        `min real spend ${Math.round(minReal)} fell below guard-band floor ${Math.round(initReal * 0.80)}`);
-});
-
-test('GK optimize-spend: the floor comes with the rule — the same draw without Guardrails reaches a higher spend', () => {
-    const gk = optimizeSpend({ ...GK_OPT_BASE }, { strategy: 'propwd', propWithdraw: 0, spendRule: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 });
-    const pw = optimizeSpend({ ...GK_OPT_BASE, spendRule: '' },
-                             { strategy: 'propwd', propWithdraw: 0, spendRule: '' });
-    assert(gk && pw, 'both strategies should return a result');
-    assert(pw.optimizedSpend > gk.optimizedSpend,
-        `propwd ${Math.round(pw.optimizedSpend)} should exceed floor-capped GK ${Math.round(gk.optimizedSpend)}`);
+    assert(minReal >= initReal * (1 - 0.20) - 1, `min real spend ${Math.round(minReal)} fell below guard-band floor ${Math.round(initReal * 0.80)}`);
 });
 
 // ── Compact money for display (formatDollarShort) ─────────────────────────────
@@ -8121,8 +8163,10 @@ test('schedule: carries GK by its spend RULE, and beats it', () => {
 test('schedule: GK spend rule is separable from the GK strategy', () => {
     // spendRule: 'gk' runs the adjustment for any strategy. Without the separation a schedule could
     // only ever replay GK's numbers, never follow its rule.
-    const withRule = simulate({ ...SCHED_BASE, strategy: 'bracket', stratRate: 0.22, spendRule: 'gk' });
-    const without = simulate({ ...SCHED_BASE, strategy: 'bracket', stratRate: 0.22 });
+    // P132j: the rule measures against the plan's own path, so the path has to leave it for the rule to act.
+    const crash = gkSeq(SCHED_BASE, { 1: -0.30 });
+    const withRule = simulate({ ...SCHED_BASE, ...crash, strategy: 'bracket', stratRate: 0.22, spendRule: 'gk' });
+    const without = simulate({ ...SCHED_BASE, ...crash, strategy: 'bracket', stratRate: 0.22 });
     const sameSpend = Math.abs((withRule.totals.spendCurrentDollars ?? 0)
                              - (without.totals.spendCurrentDollars ?? 0)) < 1;
     assert(!sameSpend, 'borrowing the GK spend rule must change the spend path');
@@ -8560,6 +8604,29 @@ test('P132: between solves the table interpolates DOLLARS and nets each year\'s 
     // The old field interpolation, kept for a message without a spine, sat between the two.
     const old = _railsEngine.railsRuleTable({ ...msg, spine: undefined }, 'normal');
     assertNear(old.years[3].raiseAt, (100 / 1500 + 60 / 1500) / 2, 'without a spine the ratio is interpolated as before', 1e-12);
+});
+
+test('P132: beyond a rail the rule holds the rail\'s spend-to-wealth ratio instead of extrapolating the line', () => {
+    const n = simulate({ ...RBG_BASE }).log.length;
+    // A spine wealth of $1e12 (real) puts every path at a multiple m near zero, far BELOW a cut rail
+    // at half the spine's wealth. The line would land the intercept a x W, billions; the rule holds
+    // the rail's own ratio (a + b x cutM) / cutM instead, so the landing scales with the wealth.
+    const W = 1e12;
+    const row = { wealthReal: W, cutAt: 1e-9, cutA: 0.01, cutB: 0.02 };
+    const held = simulate({ ...RBG_BASE, rbgRails: _p132Table(n, { 3: { ...row, cutM: 0.5 } }) }).log;
+    const lined = simulate({ ...RBG_BASE, rbgRails: _p132Table(n, { 3: { ...row } }) }).log;
+    const g = held[3].guaranteedIncome, w = held[2].totalNetWealth, infl = held[3].inflationFactor;
+    assertNear(held[3].spendGoal, g + (0.01 + 0.02 * 0.5) / 0.5 * w, 'below the cut rail: the rail\'s ratio times the wealth', 1e-3);
+    assertNear(lined[3].spendGoal, g + 0.01 * W * infl + 0.02 * w, 'without a rail multiple: the line as before', 1e-3);
+    // A rail the path is NOT beyond (the cut rail above the plan's wealth, the path below the plan) leaves the line.
+    const notBeyond = simulate({ ...RBG_BASE, rbgRails: _p132Table(n, { 3: { ...row, cutM: 2 } }) }).log;
+    assertNear(notBeyond[3].spendGoal, g + 0.01 * W * infl + 0.02 * w, 'a rail on the other side: the line', 1e-3);
+    // The raise side mirrors it: past a raise rail above the plan's wealth the rail's ratio holds.
+    const up = { wealthReal: 1, raiseAt: 1e9, raiseA: 5000, raiseB: 0.02 };
+    const raiseHeld = simulate({ ...RBG_BASE, rbgRails: _p132Table(n, { 3: { ...up, raiseM: 2 } }) }).log;
+    assertNear(raiseHeld[3].spendGoal, g + (5000 + 0.02 * 2) / 2 * w, 'above the raise rail: the ratio', 1e-3);
+    const raiseLined = simulate({ ...RBG_BASE, rbgRails: _p132Table(n, { 3: { ...up } }) }).log;
+    assertNear(raiseLined[3].spendGoal, g + 5000 * infl + 0.02 * w, 'without a rail multiple: the raise line', 1e-3);
 });
 
 test('P132: vsPlan% is the rule\'s spending against the plan\'s shape', () => {

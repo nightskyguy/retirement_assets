@@ -5641,3 +5641,21 @@ GK-style's Guard/Adj row moved directly under the sentence fold. In-page test
 customRailsAreCheckedBoxByBox; badge green 1243. GOTCHA: the browser served the CSS from cache under
 an unchanged ?v (11.18b1 had already been loaded once); verified by injecting the sheet with a fresh
 query, and the next stamp bump covers real users.
+
+Round 7 (v11.18b2). (1) The file:// "Solving 0% after 62 s" stall: not reproducible - the same
+main-thread fallback (`_runMCMainThread` forced on localhost) solves 70/90/20/60 in 18 s with
+progress moving, supersede and Cancel+Run both fine; the user later confirmed a fresh file:// load
+runs. Nothing in that set is wrong. (2) Grid re-run with Custom (70/90/40/50) showed six -100%
+years: the dollar interpolation (round 3's fix) fed the two-point landing line a rail and a spend
+interpolated apart, and where the rail sits within a few percent of the plan's wealth the line
+inverted and landed at $0. Fixed by holding the rail's own ratio beyond the rail (`cutM`/`raiseM`,
+`beyondRail` in resolveSpendTarget) and reading a near or falling pair as the ratio through the
+origin; re-run has no -100%, deepest -63% (GK-style). Closes P132g. (3) P132j BUILT on the user's
+"Stop... That needs to be fixed": GK-style is plan-relative (net draw vs the plan's own ratio for
+the year, `_gkShapeOf` memo). Verified the 2031 cut on main 191da49 with the user's inputs
+(gk_compare.js scratch): shipped defect, not a branch regression; correction entry in the changelog
+(data-flag behavior). `test.critical('P132j: ...')` pins the user's plan. Seven GK tests rewritten:
+a plan on its own path never adjusts, so the ceiling, no-cut, floor and schedule tests hand
+simulate() a boom or crash sequence (`gkSeq`); the two optimize-spend tests became one (the
+deterministic GK answer equals the no-rule answer; the floor rejects a crashed ceiling run).
+README caveat, switch and Guard tooltips, the note, ARCHITECTURE's flowchart updated. Core 487.

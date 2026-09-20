@@ -24,7 +24,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.18b1</title>
+    <title>Retirement Optimizer 11.18b2</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -53,7 +53,7 @@
 	     entry's HTML into the LATEST CHANGE banner during parse, and this has to sweep
 	     the document after that copy exists. See doclinks.js. -->
 	<script src="doclinks.js?v=1113d0" defer></script>
-	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=1118b1">
+	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=1118b2">
 	<style>
     .toggle { display: flex !important; }
     /* The two page-level buttons, stacked at the top left. Matching widths so the stack lines up;
@@ -72,14 +72,14 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=111807"></script>
-	<script src="optimizer_core.js?v=1118b1"></script>
+	<script src="optimizer_core.js?v=1118b2"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=1118b1"></script>
-	<script src="optimizer_tests.js?v=1118b1"></script>
+	<script src="optimizer_ui.js?v=1118b2"></script>
+	<script src="optimizer_tests.js?v=1118b2"></script>
 </head>
 <body>
 
@@ -145,7 +145,7 @@
 			     stay behind the nerdknob (user, 2026-09-13 and 2026-09-19), and the sentence under the
 			     switch states the rule in force, so nothing about it depends on a tooltip. -->
 			<div class="input-group" style="margin-top:2px;">
-				<label class="toggle" title="Guardrails: lets your spending follow how your plan is doing, under any withdrawal strategy; choose the rule beside the switch. GK-style is Guyton-Klinger in style, not the published rule - it measures your whole spending against your savings, where the published rule watches what your portfolio withdraws. Your first year sets the safe level (what you spend for each dollar saved); spending is cut when it is well above that level for the savings you have and raised when well below, never cut in the plan's last 8 years, with the inflation raise capped at 6% and skipped after a year your savings as a whole lose money. Risk-based follows your plan's chance of success (CoS) instead, from the Risk-based rails panel under the charts: spending is cut when the chance falls to the cut rail and raised when it reaches the raise rail, to the spending that gives the preset's chance. Spend Delta still applies on top of either.">
+				<label class="toggle" title="Guardrails: lets your spending follow how your plan is doing, under any withdrawal strategy; choose the rule beside the switch. GK-style is Guyton-Klinger in style, not the published rule: each year it compares what your portfolio funds (spending after Social Security and pension), for the savings you have, with what your plan itself would draw that year, where the published rule compares with your first year. Spending is cut when the draw runs well above your plan's and raised when well below; on your plan's own assumptions nothing changes. Never cut in the plan's last 8 years, with the inflation raise capped at 6% and skipped after a year your savings as a whole lose money. Risk-based follows your plan's chance of success (CoS) instead, from the Risk-based rails panel under the charts: spending is cut when the chance falls to the cut rail and raised when it reaches the raise rail, to the spending that gives the preset's chance. Spend Delta still applies on top of either.">
 				  <input type="checkbox" id="spendRule" onchange="spendRuleChanged()">
 				  <span class="toggle-label"></span>
 				  <span class="toggle-switch"></span>
@@ -166,7 +166,7 @@
 				<!-- GK-style's band and step (nerdknob) sit right under the sentence that states them, above
 				     the Risk-based guidance (user, 2026-09-20). -->
 				<div id="ui-gk" class="compact-row hidden" style="margin:4px 0 0 20px;">
-					<label title="Guard band: how far spending may sit above or below the safe level for your savings before it is cut or raised. Typical: 10-20%.">Guard ±%
+					<label title="Guard band: how far the portfolio's draw may run above or below your plan's own draw for the year, for the savings you have, before spending is cut or raised. Typical: 10-20%.">Guard ±%
 					<input type="number" id="gkGuard" value="20" min="5" max="40" step="5" oninput="updateGuardrailsNote()"></label>
 					<label title="How much spending is cut or raised when it crosses the band. The same amount either way.">Adj %
 					<input type="number" id="gkAdjPct" value="10" min="5" max="20" step="5" oninput="updateGuardrailsNote()"></label>
@@ -1136,14 +1136,15 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="display"><b>11.18b1</b>
-					<strong>Risk-based rails: one preset menu, the article&rsquo;s own set, rails on a replayed path, and Guardrails milestones and columns.</strong>
+				<li data-flag="behavior"><b>11.18b2</b>
+					<strong>GK-style Guardrails corrected; risk-based rails: one preset menu, the article&rsquo;s own set, rails on a replayed path, and Guardrails milestones and columns.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>GK-style Guardrails contained an error that has been corrected: spending could be cut in the year Social Security or a pension started. The rule now measures what your portfolio funds (spending after Social Security and pension) against your plan&rsquo;s own draw for the same year, so on your plan&rsquo;s own assumptions nothing changes and the rule acts when markets take you off the plan. See the Details.</li>
 					<li>The <i>Risk-based guidance</i> menu (the rails preset) now sits under the Guardrails switch, always in view; the rails panel&rsquo;s own menu is the same setting. The presets are <i>High Safety</i>, <i>Normal</i>, <i>More Tolerant</i> (a cut now returns to 70%), the new <i>More Risk</i> (the 2024 article&rsquo;s own numbers: cut at 25%, back to 45%, raise at 99.5% back to 80%) and <i>Custom</i>, four boxes of your own. The panel&rsquo;s <i>Market paths</i> menu is gone: the rails always solve on the Monte Carlo tab&rsquo;s own market.</li>
 					<li>Replaying a Monte Carlo path: <i>Solve rails on this path</i>, the panel&rsquo;s Run button during a replay, re-solves the chance of success from the state the path actually reached. Your plan&rsquo;s own rails return when the replay ends.</li>
 					<li>Every Guardrails cut and raise is a milestone on the charts (raises are new), and Annual Details has a <i>Guardrails</i> column set: the spend goal and the guaranteed income under it, what Guardrails did each year, the wealth it compared, the rails and their chance of success, and each year&rsquo;s inflation and return. The Guardrails columns are now <i>ruleSpend</i>, <i>ruleAdj</i> and <i>vsPlan%</i>, where the rule has put spending against your planned path. No plan&rsquo;s numbers change.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.18b1" target="_blank" rel="noopener">Details</a>
+					<a href="optimizer_changelog.md#11.18b2" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="display"><b>11.1881</b>
 					<strong>Risk-based rails run to the end of the plan, and say how to read them.</strong>
@@ -1693,7 +1694,7 @@
 <script src="montecarlo/mc_engine.js?v=111857"></script>
 <!-- P128. The risk-based rails solver. Same arrangement as mc_engine.js: the worker imports it too,
      and on file:// the controller runs it here. -->
-<script src="montecarlo/rails_engine.js?v=1118b1"></script>
+<script src="montecarlo/rails_engine.js?v=1118b2"></script>
 <script src="montecarlo/mc_controller.js?v=111857"></script>
 <script src="montecarlo/mc_tab.js?v=11189d"></script>
 
@@ -1892,7 +1893,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these seven are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1118b1';
+    const V = '?v=1118b2';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

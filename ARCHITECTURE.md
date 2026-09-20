@@ -209,13 +209,13 @@ flowchart TD
     G{"_usesGKSpendRule(inputs)<br/>spendRule 'gk'"}
     G -->|no| SKIP["spendGoal untouched<br/>(strategy's own spend path)"]
     G -->|yes| Y0{"y == 0?"}
-    Y0 -->|yes| SEED["gkIWR = spendGoal / prevPortfolio<br/>the year-0 rate, LOCKED as reference<br/>never re-baselined"]
-    Y0 -->|no| INF{"Inflation rule<br/>last year's PORTFOLIO return &lt; 0<br/>AND spendGoal/prevPortfolio &gt; gkIWR ?"}
+    Y0 -->|yes| SEED["gkIWR = spendGoal / prevPortfolio<br/>(kept for the resume record)<br/>the reference is the plan's OWN ratio<br/>for each year: sim.gkShape (P132j)"]
+    Y0 -->|no| INF{"Inflation rule<br/>last year's PORTFOLIO return &lt; 0<br/>AND (spendGoal - G)/prevPortfolio &gt; the plan's ratio ?"}
     INF -->|yes| NOCPI["skip the CPI raise<br/>label 'no-CPI'"]
     INF -->|no| CPI["spendGoal *= 1 + min(yearInflation, 6%)<br/>label 'CPI≤6%' when capped"]
-    NOCPI --> CWR["_cwr = spendGoal / prevPortfolio<br/>recomputed on the POSSIBLY-RAISED goal"]
+    NOCPI --> CWR["_cwr = (spendGoal - G) / prevPortfolio<br/>G = Social Security + pension<br/>recomputed on the POSSIBLY-RAISED goal"]
     CPI --> CWR
-    CWR --> BAND{"_cwr vs the band<br/>gkIWR * (1 +/- gkGuard)<br/>guard default 0.20"}
+    CWR --> BAND{"_cwr vs the band<br/>ref * (1 +/- gkGuard), ref = the plan's<br/>net draw / portfolio for THIS year<br/>guard default 0.20"}
     BAND -->|above| LATE{"in the plan's final 8 years?<br/>planYears - y &lt;= 8"}
     LATE -->|yes| NOCUT["no cut<br/>label 'no-cut'"]
     LATE -->|no| CAP["Capital preservation<br/>spendGoal *= 1 - gkAdjPct<br/>label '-10%cap'"]
@@ -232,7 +232,8 @@ flowchart TD
 ```
 
 Each rail fires **once per year, at a fixed percentage**: a year 50% over the band cuts 10%, not 50%.
-And the band is measured against the **year-0** IWR forever, so it does not drift with the portfolio.
+And the band is measured against the plan's **own** ratio for the year (P132j, 2026-09-20): a plan run on its
+assumptions is its own reference and never adjusts; the rule acts when a market path leaves the plan.
 
 Three of those limits came from the published rule on 2026-09-16 (P127): the freeze reads the
 portfolio's return (`portfolioReturnOf`, computed in `beginYear` only when the rule is on), the raise

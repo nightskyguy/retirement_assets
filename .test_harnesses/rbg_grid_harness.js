@@ -70,6 +70,9 @@ const DISCOUNTS = [0, 0.03, 0.05];
 // 90, each returning to its target and to 35 points under it (floored at cut + 5), raise at 99.5%.
 function railSets() {
     const sets = { ...RAIL_PRESETS };
+    // The page's Custom preset as it is prefilled (user, 2026-09-20): target 70, raise 90, cut 40,
+    // back to 50.
+    sets.custom = { key: 'custom', label: 'Custom (70/90/40/50)', target: 0.70, upper: 0.90, lower: 0.40, cutTo: 0.50 };
     const cuts = QUICK ? [0.25, 0.50] : [0.25, 0.35, 0.50];
     const targets = QUICK ? [0.80] : [0.70, 0.80, 0.90];
     for (const t of targets) {

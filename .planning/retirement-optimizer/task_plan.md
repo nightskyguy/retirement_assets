@@ -92,13 +92,19 @@ drift and one case in five fails to fund.
       hands the table its spine and the rows between solves are built from interpolated dollars at
       each year's own guaranteed income. Columns renamed `ruleSpend`/`ruleAdj`, new `vsPlan%`;
       choosing a rule no longer touches Never above plan. v11.18a0.
-- [ ] `P132j` GK-style measures the whole spend goal against the portfolio, so it can cut in the
-      year Social Security starts while the withdrawal rate halves. The published rule measures the
-      portfolio withdrawal (spending net of guaranteed income). Offered to the user 2026-09-19;
-      a behavior change to a shipped rule, so theirs to call.
-- [ ] `P132g` a third solved point on the cut side (pass 2 at a wealth below the cut rail), to bound
-      the landing line where a path is far under the rail: the -70%/-76% single years in
-      `RBG_RULE_THRESHOLDS.md` section 4. About a third more per solved year. Open if wanted.
+- [x] `P132j` (user, 2026-09-20: "Income increased - there should not be a cut") GK-style now
+      measures the portfolio's draw (spending net of Social Security and pension) against the
+      plan's OWN ratio for the year (`sim.gkShape`, `_gkShapeOf`: the no-rule twin, memoized on the
+      plan minus paths). Shipped on main too (verified: main 191da49 cuts 2031 on the user's link),
+      so a correction entry. Consequence: on its own assumptions a plan never adjusts; the rule
+      acts under Monte Carlo, replay and the Stress Test; Optimize Spend with GK-style equals the
+      no-rule answer deterministically. `test.critical` guard on the user's plan. v11.18b2.
+- [x] `P132g` closed another way (2026-09-20): beyond the rail the rule holds the rail's own
+      spend-to-wealth ratio instead of extrapolating the line (`cutM`/`raiseM`), and a rail within
+      5% of the plan's wealth, or a line that would fall with wealth, reads as the ratio through
+      the origin. The dollar interpolation across a benefit start had made the two-point line land
+      at $0 (six -100% years in the first re-run of the grid); the re-run after the hold has none,
+      deepest trough -63% (GK-style).
 
 ## P131: Send feedback from the page  *(2026-09-17, user-raised. BUILT v11.1867; live only after the owner's setup)*
 

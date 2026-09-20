@@ -17,17 +17,19 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.18a0"></a>
+<a id="11.18b0"></a>
 
-## 11.18a0
+## 11.18b0
 
 **Risk-based rails: one preset menu, the article's own set, rails on a replayed path, and Guardrails milestones and columns.**  
 *No plan's numbers change.*
 
 **One preset menu.** The *Risk-based rails preset* menu now sits under the Guardrails switch, always
-in view; the rails panel's own menu is the same setting. A new **Paper** preset carries the 2024
-article's own numbers: cut at 25%, back to 45%, raise at 99.5% back to 80%. The panel's *Market
-paths* menu is gone: the rails always solve on the Monte Carlo tab's own market.
+in view; the rails panel's own menu is the same setting. The presets are **High Safety**, **Normal**,
+**More Tolerant** (a cut now returns to a 70% chance), the new **More Risk** (the 2024 article's own
+numbers: cut at 25%, back to 45%, raise at 99.5% back to 80%) and **Custom**, four boxes of your
+own. The panel's *Market paths* menu is gone: the rails always solve on the Monte Carlo tab's own
+market.
 
 **Replaying a Monte Carlo path.** *Solve rails on this path*, the panel's Run button during a
 replay, re-solves the chance of success from the state the path actually reached at each solved

@@ -317,17 +317,20 @@ to **CoS** on the charts. The preset decides what counts as too little and too m
 
 | Preset | Target chance | Raise spending at | Cut spending at |
 |---|---|---|---|
-| Tight | 95% | 99% | 80% |
+| High Safety | 95% | 99% | 80% |
 | Normal | 90% | 99% | 70% |
-| Loose | 80% | 99.5% | 40% |
-| Paper | 80% | 99.5% | 25%, back to 45% |
+| More Tolerant | 80% | 99.5% | 40%, back to 70% |
+| More Risk | 80% | 99.5% | 25%, back to 45% |
+| Custom | yours | yours | yours, back to yours (starts at 70 / 90 / 40 / 50) |
 
-Normal and Loose come from Derek Tharp and Justin Fitzpatrick's articles on Kitces.com, Tight from
-Tharp's worked example, and Paper from their 2024 article against Guyton-Klinger (see
+Normal and More Tolerant come from Derek Tharp and Justin Fitzpatrick's articles on Kitces.com,
+High Safety from Tharp's worked example, and More Risk from their 2024 article against
+Guyton-Klinger (see
 [Spending rules](#spending-rules-guyton-klinger-and-the-risk-based-guardrails-that-answer-it)).
-A raise or a cut resets spending to the amount that puts the plan back on its target - except that
-Paper's cut returns only to a 45% chance, which is the rule as that article states it. With the
-nerdknob, a Custom preset takes your own four numbers.
+A raise resets spending to the amount that puts the plan back on its target. A cut resets it to the
+amount that gives the "back to" chance: the target for High Safety and Normal, 70% for More
+Tolerant, and 45% for More Risk, which is the rule as the 2024 article states it. Custom takes your
+own four numbers, in the boxes under the menu.
 
 **On the Balances chart the rails are wealth.** The ▲ **raise rail** and the ▼ **cut rail** are the
 TotalNetWealth, at each year's end, at which your plan, spending as planned, would reach the raise or
@@ -392,7 +395,7 @@ fixed and moving only the plan's Growth changes the ratios by about 1%.
 With the nerdknob (`?nerdknob` on the address), the **Guardrails** switch beside After-Tax Spend has a rule menu. **GK-style** is the Guyton-Klinger
 rule described under *Limitations and Restrictions*. **Risk-based (CoS)** makes the plan follow the
 rails above: in any year the chance of success has fallen to the cut rail, spending is cut to what
-gives the preset's return level (its target, or 45% for Paper); in any year it has reached the raise
+gives the preset's "back to" chance; in any year it has reached the raise
 rail, spending is raised to what gives the target; otherwise spending stays on your planned path, with
 inflation every year and Spend Delta on top. The preset is the *Risk-based rails preset* under the
 switch (the panel's menu is the same setting), so the rails you see are the rails the plan follows.

@@ -824,10 +824,9 @@ function rbgCustomNumbers() {
 function rbgCustomSet() {
     return val('rbgPreset') === 'custom' ? (rbgCustomNumbers() ?? undefined) : undefined;
 }
-// The presets a rails job solves: the published four, plus Custom from the nerdknob boxes when they
-// describe a rule. Undefined means the engine's own table.
+// The presets a rails job solves: the published four, plus Custom from the four boxes when they
+// describe a rule (open to everyone since 2026-09-20). Undefined means the engine's own table.
 function railsJobPresets() {
-    if (!NERD_KNOBS) return undefined;
     const s = rbgCustomNumbers();
     if (!s) return undefined;
     return { ...OptimizerCore.RAIL_PRESETS, custom: { key: 'custom', label: 'Custom', ...s } };
@@ -5203,8 +5202,6 @@ function railsAfterSimulation() {
 function railsRuleSync() {
     const panel = document.getElementById('rails-preset');
     if (!panel || typeof RailsState === 'undefined') return;
-    const customOpt = document.getElementById('rails-preset-custom');
-    if (customOpt) customOpt.hidden = val('rbgPreset') !== 'custom';
     const wanted = val('rbgPreset') || panel.value || 'normal';
     let changed = false;
     if (panel.value !== wanted) { panel.value = wanted; changed = true; }
@@ -6889,7 +6886,7 @@ function updateGuardrailsNote() {
         const P = (railsJobPresets() ?? OptimizerCore.RAIL_PRESETS)[key];
         const pct = v => `${Math.round(v * 1000) / 10}%`;
         let state;
-        if (!P) state = 'The Custom preset needs the nerdknob boxes to describe a rule (cut < returns to <= target <= raise); until then spending stays on your planned path.';
+        if (!P) state = 'The Custom preset needs its four boxes to describe a rule (cut < returns to <= target <= raise); until then spending stays on your planned path.';
         else if (!railsOn()) state = 'The rails cannot be solved on this page, so spending stays on your planned path.';
         else if (typeof RailsState !== 'undefined' && RailsState.running) state = 'Solving the rails now; the plan follows them when the solve lands.';
         else if (typeof RailsState !== 'undefined' && (!RailsState.result || railsIsStale())) state = 'The rails are not solved for this plan yet; the solve starts by itself in a moment, and the plan follows it.';
@@ -6942,9 +6939,8 @@ function toggleStrategyUI() {
         // The rails preset stays in view whatever the switch says (user, 2026-09-19): it picks the
         // rails the panel draws on demand, and the rule's rails when the rule is on.
         document.getElementById('ui-rbg')?.classList.remove('hidden');
-        const customOpt = document.getElementById('rbgPreset-custom');
-        if (customOpt) customOpt.hidden = !NERD_KNOBS && val('rbgPreset') !== 'custom';
-        document.getElementById('ui-rbg-custom')?.classList.toggle('hidden', !NERD_KNOBS || val('rbgPreset') !== 'custom');
+        // Custom is open to everyone (user, 2026-09-20); its four boxes show while it is chosen.
+        document.getElementById('ui-rbg-custom')?.classList.toggle('hidden', val('rbgPreset') !== 'custom');
         document.getElementById('ui-rule-ceiling')?.classList.toggle('hidden', !on || (!rbg && !NERD_KNOBS));
         railsRuleSync();
     }

@@ -2280,7 +2280,7 @@ assertEqual(
 			assertEqual(kind.classList.contains('hidden'), false, 'P132: the rule menu shows while the rule runs, knob or not');
 			assertEqual(document.getElementById('ui-rbg').classList.contains('hidden'), false, 'P132: the preset row shows');
 			assertEqual(document.getElementById('ui-rule-ceiling').classList.contains('hidden'), false, 'P132: so does the ceiling, without the knob');
-			assertEqual(/Risk-based, Paper/.test(note.textContent) && /25%/.test(note.textContent) && /45%/.test(note.textContent), true,
+			assertEqual(/Risk-based, More Risk/.test(note.textContent) && /25%/.test(note.textContent) && /45%/.test(note.textContent), true,
 				`P132: the sentence states the rule: ${note.textContent.slice(0, 80)}`);
 			assertEqual(document.getElementById('rails-preset').value, 'paper', 'P132: the rails panel mirrors the sidebar preset');
 			assertEqual(document.getElementById('rails-preset').disabled, false, 'P132: and can still be set there');

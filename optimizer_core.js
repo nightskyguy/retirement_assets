@@ -2404,8 +2404,10 @@ function portfolioReturnOf(balance, rates, dividendRate) {
 // is still the worst of 100 paths, and becomes a real percentile from 200 paths up. The research
 // harness that studies the 2021 ARTICLE keeps its own 100% (.test_harnesses/rbg_harness.js).
 const RAIL_PRESETS = Object.freeze({
+    // Labels are the user's (2026-09-20): safety-first to risk-first, not the articles' names. Keys
+    // stay: share links (rbp=) and saved plans carry them.
     tight: Object.freeze({
-        key: 'tight', label: 'Tight', target: 0.95, upper: 0.99, lower: 0.80,
+        key: 'tight', label: 'High Safety', target: 0.95, upper: 0.99, lower: 0.80,
         source: 'Tharp, "Using Probability-Of-Success-Driven Guardrails To Manage Safe Retirement Spending", Kitces.com',
     }),
     normal: Object.freeze({
@@ -2413,11 +2415,11 @@ const RAIL_PRESETS = Object.freeze({
         source: 'Tharp and Fitzpatrick, "The Retirement Distribution \'Hatchet\'", Kitces.com, 2021-11-24 - its implementation recipe',
     }),
     loose: Object.freeze({
-        key: 'loose', label: 'Loose', target: 0.80, upper: 0.995, lower: 0.40,
-        source: 'Tharp and Fitzpatrick, "The Retirement Distribution \'Hatchet\'", Kitces.com, 2021-11-24 - its income-risk framing, read as probability of success, with its 0% risk (100%) raise read as 99.5%',
+        key: 'loose', label: 'More Tolerant', target: 0.80, upper: 0.995, lower: 0.40, cutTo: 0.70,
+        source: 'Tharp and Fitzpatrick, "The Retirement Distribution \'Hatchet\'", Kitces.com, 2021-11-24 - its income-risk framing, read as probability of success, with its 0% risk (100%) raise read as 99.5%; a cut returns to 70% (user, 2026-09-20)',
     }),
     paper: Object.freeze({
-        key: 'paper', label: 'Paper', target: 0.80, upper: 0.995, lower: 0.25, cutTo: 0.45,
+        key: 'paper', label: 'More Risk', target: 0.80, upper: 0.995, lower: 0.25, cutTo: 0.45,
         source: 'Tharp and Fitzpatrick, "Why Guyton-Klinger Guardrails Are Too Risky For Most Retirees", Kitces.com, 2024-03-27 - its risk-based parameters: spend at 80%, raise at 100% (read as 99.5%) back to 80%, cut at 25% back to 45%',
     }),
 });

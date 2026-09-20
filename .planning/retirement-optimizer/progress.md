@@ -5607,4 +5607,18 @@ drifts up through the pre-SS drawdown years (130/1358 -> 143/1259) and crosses t
 published withdrawal-rate form (net of guaranteed income). Not changed. (5) `spendRuleChanged` no
 longer turns Never above plan on when Risk-based is chosen (user: switching must not change it);
 the note recommends it while off; README/report reworded. Tests 485 (interp-across-SS-start,
-vsPlan%); in-page 578; badge green 1229.
+vsPlan%); in-page 578; badge green 1229. Committed e7b714b, pushed to PR #230.
+
+## 2026-09-20 - P132 round 3 (v11.18b0)
+
+User: Custom rails not nerdknob-gated; presets renamed High Safety / Normal / More Tolerant (cut
+back to 70%) / More Risk / Custom prefilled 70/90/40/50; explain P132j. Labels changed in
+RAIL_PRESETS and both menus, KEYS kept (tight/normal/loose/paper travel in rbp= and saved plans);
+loose gains cutTo 0.70; custom option and boxes ungated (railsJobPresets, toggleStrategyUI,
+railsRuleSync); README table and text, changelog entry. Verified without the knob: Custom in both
+menus, boxes 70/90/40/50, the job solves five sets; badge green 1229. P132j explained in the reply:
+GK-style measures the whole spend goal over the portfolio; the published rule's withdrawal-rate
+form (net of guaranteed income) would instead fire PROSPERITY raises the year Social Security
+starts (rate 8% -> 3% against an IWR set before it), so the fix proposed is plan-relative: compare
+each year's net draw ratio with the no-rule plan's own ratio for that year (the same device as the
+risk-based table, one deterministic run), band and step unchanged.

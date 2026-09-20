@@ -24,7 +24,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.18a0</title>
+    <title>Retirement Optimizer 11.18b0</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -53,7 +53,7 @@
 	     entry's HTML into the LATEST CHANGE banner during parse, and this has to sweep
 	     the document after that copy exists. See doclinks.js. -->
 	<script src="doclinks.js?v=1113d0" defer></script>
-	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=1118a0">
+	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=1118b0">
 	<style>
     .toggle { display: flex !important; }
     /* The two page-level buttons, stacked at the top left. Matching widths so the stack lines up;
@@ -72,14 +72,14 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=111807"></script>
-	<script src="optimizer_core.js?v=1118a0"></script>
+	<script src="optimizer_core.js?v=1118b0"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=1118a0"></script>
-	<script src="optimizer_tests.js?v=1118a0"></script>
+	<script src="optimizer_ui.js?v=1118b0"></script>
+	<script src="optimizer_tests.js?v=1118b0"></script>
 </head>
 <body>
 
@@ -164,23 +164,23 @@
 				     travels in the share link and the saved plan. The panel's own menu mirrors it, both ways.
 				     Custom numbers are a nerdknob option. -->
 				<div id="ui-rbg" class="compact-row" style="margin:4px 0 0 20px;">
-					<label class="wide" title="The chance-of-success levels: the target an adjustment returns to, the chance at which spending is raised, the chance at which it is cut, and the chance a cut returns to. Sets which rails the Risk-based rails panel under the charts draws, and the rails the Risk-based rule follows when Guardrails is set to it. Paper is the 2024 article's own set: it lets the chance fall to 25% before cutting, and a cut returns only to 45%.">Risk-based rails preset
+					<label class="wide" title="The chance-of-success levels: the target an adjustment returns to, the chance at which spending is raised, the chance at which it is cut, and the chance a cut returns to. Sets which rails the Risk-based rails panel under the charts draws, and the rails the Risk-based rule follows when Guardrails is set to it. More Risk is the 2024 article's own set: it lets the chance fall to 25% before cutting, and a cut returns only to 45%. Custom takes your own four numbers.">Risk-based rails preset
 					<select id="rbgPreset" onchange="toggleStrategyUI()" style="width:100%;max-width:none;">
-					  <option value="tight">Tight: 95% target, raise 99%, cut 80%</option>
+					  <option value="tight">High Safety: 95% target, raise 99%, cut 80%</option>
 					  <option value="normal" selected>Normal: 90% target, raise 99%, cut 70%</option>
-					  <option value="loose">Loose: 80% target, raise 99.5%, cut 40%</option>
-					  <option value="paper">Paper: 80% target, raise 99.5%, cut 25% back to 45%</option>
-					  <option value="custom" id="rbgPreset-custom" hidden>Custom</option>
+					  <option value="loose">More Tolerant: 80% target, raise 99.5%, cut 40% back to 70%</option>
+					  <option value="paper">More Risk: 80% target, raise 99.5%, cut 25% back to 45%</option>
+					  <option value="custom" id="rbgPreset-custom">Custom</option>
 					</select></label>
 					<span id="ui-rbg-custom" class="hidden">
 					<label title="The chance of success the rule aims for, and returns to after a raise.">Target %
-					<input type="number" id="rbgTarget" value="90" min="50" max="99" step="1" style="width:52px;" oninput="toggleStrategyUI()"></label>
+					<input type="number" id="rbgTarget" value="70" min="50" max="99" step="1" style="width:52px;" oninput="toggleStrategyUI()"></label>
 					<label title="Spending is raised when the chance reaches this. 100% cannot be measured from a sample; 99.5% is the highest that means anything at 200 paths or more.">Raise at %
-					<input type="number" id="rbgUpper" value="99" min="90" max="99.5" step="0.5" style="width:56px;" oninput="toggleStrategyUI()"></label>
+					<input type="number" id="rbgUpper" value="90" min="60" max="99.5" step="0.5" style="width:56px;" oninput="toggleStrategyUI()"></label>
 					<label title="Spending is cut when the chance falls to this.">Cut at %
-					<input type="number" id="rbgLower" value="70" min="5" max="95" step="1" style="width:52px;" oninput="toggleStrategyUI()"></label>
-					<label title="After a cut, spending is set to what gives this chance. Equal to the target for the three published sets; the paper's own set returns to 45% from an 80% target.">Cut returns to %
-					<input type="number" id="rbgCutTo" value="90" min="10" max="99" step="1" style="width:52px;" oninput="toggleStrategyUI()"></label>
+					<input type="number" id="rbgLower" value="40" min="5" max="95" step="1" style="width:52px;" oninput="toggleStrategyUI()"></label>
+					<label title="After a cut, spending is set to what gives this chance: at least the cut level, at most the target. High Safety and Normal return to their target; More Tolerant returns to 70% from 80%, More Risk to 45% from 80%.">Cut returns to %
+					<input type="number" id="rbgCutTo" value="50" min="10" max="99" step="1" style="width:52px;" oninput="toggleStrategyUI()"></label>
 					</span>
 				</div>
 				<div id="ui-gk" class="compact-row hidden" style="margin:4px 0 0 20px;">
@@ -1119,14 +1119,14 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="display"><b>11.18a0</b>
+				<li data-flag="display"><b>11.18b0</b>
 					<strong>Risk-based rails: one preset menu, the article&rsquo;s own set, rails on a replayed path, and Guardrails milestones and columns.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>The <i>Risk-based rails preset</i> menu now sits under the Guardrails switch, always in view; the rails panel&rsquo;s own menu is the same setting. A new <i>Paper</i> preset carries the 2024 article&rsquo;s own numbers: cut at 25%, back to 45%, raise at 99.5% back to 80%. The panel&rsquo;s <i>Market paths</i> menu is gone: the rails always solve on the Monte Carlo tab&rsquo;s own market.</li>
+					<li>The <i>Risk-based rails preset</i> menu now sits under the Guardrails switch, always in view; the rails panel&rsquo;s own menu is the same setting. The presets are <i>High Safety</i>, <i>Normal</i>, <i>More Tolerant</i> (a cut now returns to 70%), the new <i>More Risk</i> (the 2024 article&rsquo;s own numbers: cut at 25%, back to 45%, raise at 99.5% back to 80%) and <i>Custom</i>, four boxes of your own. The panel&rsquo;s <i>Market paths</i> menu is gone: the rails always solve on the Monte Carlo tab&rsquo;s own market.</li>
 					<li>Replaying a Monte Carlo path: <i>Solve rails on this path</i>, the panel&rsquo;s Run button during a replay, re-solves the chance of success from the state the path actually reached. Your plan&rsquo;s own rails return when the replay ends.</li>
 					<li>Every Guardrails cut and raise is a milestone on the charts (raises are new), and Annual Details has a <i>Guardrails</i> column set: the spend goal and the guaranteed income under it, what Guardrails did each year, the wealth it compared, the rails and their chance of success, and each year&rsquo;s inflation and return. The Guardrails columns are now <i>ruleSpend</i>, <i>ruleAdj</i> and <i>vsPlan%</i>, where the rule has put spending against your planned path. No plan&rsquo;s numbers change.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.18a0" target="_blank" rel="noopener">Details</a>
+					<a href="optimizer_changelog.md#11.18b0" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="display"><b>11.1881</b>
 					<strong>Risk-based rails run to the end of the plan, and say how to read them.</strong>
@@ -1500,13 +1500,13 @@
                 <a id="rails-howto" href="README.md#how-to-read-risk-based-rails" target="_blank" rel="noopener" style="margin-left:auto;">How to read risk-based rails</a>
               </div>
               <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:6px;">
-                <label title="Target chance of success / raise when it reaches / cut when it falls to. Tight is Derek Tharp's worked example; Normal and Loose are the two sets in Tharp and Fitzpatrick's 'Hatchet' article on Kitces.com, except that Loose raises at 99.5% where the article says 100%: from a sample of market paths, 100% only means the worst one survived, and that keeps climbing as paths are added. Every preset is solved at once, so switching presets redraws without solving again.">Preset
+                <label title="Target chance of success / raise when it reaches / cut when it falls to. High Safety is Derek Tharp's worked example; Normal and More Tolerant are the two sets in Tharp and Fitzpatrick's 'Hatchet' article on Kitces.com (More Tolerant's cut returns to 70%), and More Risk is their 2024 article's own set, except that the two raise at 99.5% where the articles say 100%: from a sample of market paths, 100% only means the worst one survived, and that keeps climbing as paths are added. Every preset is solved at once, so switching presets redraws without solving again.">Preset
                   <select id="rails-preset" data-no-share onchange="railsPresetChanged()">
-                    <option value="tight">Tight: 95% target, raise 99%, cut 80%</option>
+                    <option value="tight">High Safety: 95% target, raise 99%, cut 80%</option>
                     <option value="normal" selected>Normal: 90% target, raise 99%, cut 70%</option>
-                    <option value="loose">Loose: 80% target, raise 99.5%, cut 40%</option>
-                    <option value="paper">Paper: 80% target, raise 99.5%, cut 25% back to 45%</option>
-                    <option value="custom" id="rails-preset-custom" hidden>Custom (from the Guardrails boxes)</option>
+                    <option value="loose">More Tolerant: 80% target, raise 99.5%, cut 40% back to 70%</option>
+                    <option value="paper">More Risk: 80% target, raise 99.5%, cut 25% back to 45%</option>
+                    <option value="custom" id="rails-preset-custom">Custom (the four boxes under the Guardrails switch)</option>
                   </select>
                 </label>
                 <span id="rails-market" style="color:#555;" title="The market every chance of success is measured on is the Monte Carlo tab's: its Simulation Mode, Synthetic Return and Volatility, inflation model and Bear-start share. Change them there and the rails on screen go stale.">Market paths: from the Monte Carlo tab</span>
@@ -1676,7 +1676,7 @@
 <script src="montecarlo/mc_engine.js?v=111857"></script>
 <!-- P128. The risk-based rails solver. Same arrangement as mc_engine.js: the worker imports it too,
      and on file:// the controller runs it here. -->
-<script src="montecarlo/rails_engine.js?v=1118a0"></script>
+<script src="montecarlo/rails_engine.js?v=1118b0"></script>
 <script src="montecarlo/mc_controller.js?v=111857"></script>
 <script src="montecarlo/mc_tab.js?v=11189d"></script>
 
@@ -1875,7 +1875,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these seven are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1118a0';
+    const V = '?v=1118b0';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

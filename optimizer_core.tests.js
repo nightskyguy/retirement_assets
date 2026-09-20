@@ -8203,8 +8203,11 @@ test('P128: the rail presets are the four published sets, and each target sits b
     const P = core.RAIL_PRESETS;
     // Loose and Paper raise at 99.5% where the articles say 100% (user, 2026-09-16): a sample cannot
     // state 100%. Paper's cut returns to 45%, not to its 80% target (P132).
-    const want = { tight: [0.95, 0.99, 0.80], normal: [0.90, 0.99, 0.70], loose: [0.80, 0.995, 0.40],
+    // More Tolerant (loose) returns to 70% from an 80% target (user, 2026-09-20).
+    const want = { tight: [0.95, 0.99, 0.80], normal: [0.90, 0.99, 0.70], loose: [0.80, 0.995, 0.40, 0.70],
                    paper: [0.80, 0.995, 0.25, 0.45] };
+    const labels = { tight: 'High Safety', normal: 'Normal', loose: 'More Tolerant', paper: 'More Risk' };
+    for (const [k, l] of Object.entries(labels)) assert(P[k].label === l, `${k} is labelled ${P[k].label}, wanted ${l}`);
     assert(JSON.stringify(Object.keys(P)) === JSON.stringify(Object.keys(want)), `presets ${Object.keys(P)}`);
     for (const [k, [t, u, l, c]] of Object.entries(want)) {
         assert(P[k].target === t && P[k].upper === u && P[k].lower === l && P[k].cutTo === c,
@@ -8417,14 +8420,15 @@ test.slow('P128n: every preset\'s rails, targets and rail spends match a direct 
         }
     }
     assert(checked >= 16, `only ${checked} of 20 answers were unclamped enough to check`);
-    // Paper and Loose share a target and a raise rail, so only the cut side can differ - and it
-    // does, in both the rail (25% against 40%) and the spend it returns to (45% against 80%).
+    // More Risk (paper) and More Tolerant (loose) share a target and a raise rail, so only the cut
+    // side can differ - and it does, in both the rail (25% against 40%) and the spend it returns to
+    // (45% against 70%).
     const pa = y.presets.paper, lo = y.presets.loose;
     assert(pa.targetMult === lo.targetMult && pa.upperScale === lo.upperScale, 'Paper and Loose share the target and the raise rail');
     if (!pa.clamped.lower && !lo.clamped.lower) assert(pa.lowerScale <= lo.lowerScale, 'a 25% cut rail needs no more wealth than a 40% one');
     if (!pa.clamped.spendDn && !lo.clamped.spendDn) {
         assert(pa.spendAtLower / pa.railLower > lo.spendAtLower / lo.railLower,
-            `returning to 45% spends more of the wealth than returning to 80%: ${pa.spendAtLower / pa.railLower} vs ${lo.spendAtLower / lo.railLower}`);
+            `returning to 45% spends more of the wealth than returning to 70%: ${pa.spendAtLower / pa.railLower} vs ${lo.spendAtLower / lo.railLower}`);
     }
 });
 

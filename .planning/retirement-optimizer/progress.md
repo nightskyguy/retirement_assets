@@ -5634,3 +5634,10 @@ known-horizon artifact (success = not ruined by the last year), remedies: plan t
 Never above plan, or a terminal-reserve success test in the rails solve (offered as a phase).
 Round 5: both folds start open; the Custom option in both menus is written from the boxes
 (`updateRbgCustomSummary`); High Safety and Normal state →■ their target. Badge green 1230.
+Round 6: Custom boxes as two pairs on two rows (`.rbg-pair`); `rbgCustomProblems()` names each
+bad pair, marks its boxes (`.rbg-bad`, red) and suggests a change; rule = back ≥ cut+5, back ≤
+target, target ≥ cut+5, raise > target (RBG_GAP = 5); summary and option say "not a rule yet";
+GK-style's Guard/Adj row moved directly under the sentence fold. In-page test
+customRailsAreCheckedBoxByBox; badge green 1243. GOTCHA: the browser served the CSS from cache under
+an unchanged ?v (11.18b1 had already been loaded once); verified by injecting the sheet with a fresh
+query, and the next stamp bump covers real users.

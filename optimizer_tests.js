@@ -2235,6 +2235,52 @@ assertEqual(
 		assertEqual(foldRetiredGKStrategy(kept).data === kept, true, 'a plan already on the switch passes through untouched');
 	})();
 
+	// The Custom risk-based numbers are checked box by box (user, 2026-09-20): each problem names its
+	// pair, marks the boxes and suggests a change; a set that is a rule clears every mark.
+	// ⚠ UNSAFE - MUTATES: the four Custom boxes and the preset menu, snapshotted and restored below.
+	(function customRailsAreCheckedBoxByBox() {
+		if (!unsafeTest('customRailsAreCheckedBoxByBox')) return;   // writes #rbgTarget etc.
+		if (typeof rbgCustomProblems !== 'function') { console.log('SKIP: rbgCustomProblems absent'); return; }
+		const ids = ['rbgTarget', 'rbgUpper', 'rbgLower', 'rbgCutTo'];
+		const el = id => document.getElementById(id);
+		if (ids.some(id => !el(id))) return;
+		const was = Object.fromEntries(ids.map(id => [id, el(id).value]));
+		const preset = el('rbgPreset'), wasPreset = preset?.value;
+		const set = (t, u, l, c) => { el('rbgTarget').value = t; el('rbgUpper').value = u; el('rbgLower').value = l; el('rbgCutTo').value = c; };
+		try {
+			set(70, 90, 40, 50);
+			assertEqual(rbgCustomProblems(), [], 'the prefilled set is a rule');
+			// The user's example: cut at 30, back to 10.
+			set(70, 90, 30, 10);
+			let p = rbgCustomProblems();
+			assertEqual(p.length, 1, `cut 30 back to 10 is one problem: ${JSON.stringify(p)}`);
+			assertEqual(p[0].ids.slice().sort(), ['rbgCutTo', 'rbgLower'], 'and it names the cut and back-to boxes');
+			assertEqual(/at least 5 above/.test(p[0].text) && /set Back to 35%/.test(p[0].fix), true, `with the gap and a fix: ${p[0].text}: ${p[0].fix}`);
+			if (preset) { preset.value = 'custom'; toggleStrategyUI(); }
+			else updateRbgCustomSummary();
+			assertEqual([el('rbgLower').classList.contains('rbg-bad'), el('rbgCutTo').classList.contains('rbg-bad'), el('rbgTarget').classList.contains('rbg-bad')],
+				[true, true, false], 'the two boxes at fault are marked, the others not');
+			assertEqual(el('rbg-custom-summary')?.classList.contains('rbg-bad'), true, 'the fold line turns red');
+			assertEqual(el('rbg-custom-warn')?.style.display, '', 'and the fix is shown');
+			assertEqual(rbgCustomNumbers(), null, 'no rule is handed to the job');
+			// Every other pair, one at a time.
+			set(70, 90, 40, 75); p = rbgCustomProblems();
+			assertEqual(p.map(x => x.ids.slice().sort().join('+')), ['rbgCutTo+rbgTarget'], 'back to above the target');
+			set(43, 90, 40, 45); p = rbgCustomProblems();
+			assertEqual(p.length, 2 && 2, 'a target within 5 of the cut is caught (with back-to above it)');
+			set(70, 70, 40, 50); p = rbgCustomProblems();
+			assertEqual(p.map(x => x.ids.slice().sort().join('+')), ['rbgTarget+rbgUpper'], 'a raise level at the target');
+			set('', 90, 40, 50); p = rbgCustomProblems();
+			assertEqual(p.length === 1 && p[0].ids[0] === 'rbgTarget', true, 'a blank box is named alone');
+			set(70, 90, 40, 50);
+			if (preset) toggleStrategyUI(); else updateRbgCustomSummary();
+			assertEqual(ids.some(id => el(id).classList.contains('rbg-bad')) || el('rbg-custom-summary')?.classList.contains('rbg-bad'), false, 'a rule clears every mark');
+		} finally {
+			ids.forEach(id => { el(id).value = was[id]; });
+			if (preset) { preset.value = wasPreset; toggleStrategyUI(); }
+		}
+	})();
+
 	// ⚠ UNSAFE - MUTATES: the Guardrails switch and its sentence, snapshotted and restored below.
 	(function guardrailsSwitchDrivesTheSpendRule() {
 		if (!unsafeTest('guardrailsSwitchDrivesTheSpendRule')) return;   // writes #spendRule

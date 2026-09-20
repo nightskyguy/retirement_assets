@@ -330,7 +330,10 @@ Guyton-Klinger (see
 A raise resets spending to the amount that puts the plan back on its target. A cut resets it to the
 amount that gives the "back to" chance: the target for High Safety and Normal, 70% for More
 Tolerant, and 45% for More Risk, which is the rule as the 2024 article states it. Custom takes your
-own four numbers, in the boxes under the menu.
+own four numbers, in the boxes under the menu. They have to make a rule: the cut level at least 5
+points below both the target and the "back to" chance, "back to" no higher than the target, and the
+raise level above the target. A set that does not is marked red, box by box, with the change that
+would fix it, and the plan stays on its path until it does.
 
 **On the Balances chart the rails are wealth.** The ▲ **raise rail** and the ▼ **cut rail** are the
 TotalNetWealth, at each year's end, at which your plan, spending as planned, would reach the raise or

@@ -163,6 +163,14 @@
 					<summary id="guardrails-note-summary" style="cursor:pointer;"></summary>
 					<div id="guardrails-note" style="margin-top:2px;"></div>
 				</details>
+				<!-- GK-style's band and step (nerdknob) sit right under the sentence that states them, above
+				     the Risk-based guidance (user, 2026-09-20). -->
+				<div id="ui-gk" class="compact-row hidden" style="margin:4px 0 0 20px;">
+					<label title="Guard band: how far spending may sit above or below the safe level for your savings before it is cut or raised. Typical: 10-20%.">Guard ±%
+					<input type="number" id="gkGuard" value="20" min="5" max="40" step="5" oninput="updateGuardrailsNote()"></label>
+					<label title="How much spending is cut or raised when it crosses the band. The same amount either way.">Adj %
+					<input type="number" id="gkAdjPct" value="10" min="5" max="20" step="5" oninput="updateGuardrailsNote()"></label>
+				</div>
 				<!-- P132. Risk-based guidance: ONE setting for the rails the panel under the charts draws and
 				     for the rule, shown whether or not Guardrails is on (user, 2026-09-19: the rails are drawn
 				     on demand either way), because it changes the plan's numbers when the rule is on and so
@@ -177,26 +185,26 @@
 					  <option value="paper">More Risk ■80% ▲99.5% ▼25%→■45%</option>
 					  <option value="custom" id="rbgPreset-custom">Custom</option>
 					</select></label>
-					<!-- Custom's four boxes fold under a line that shows their values (user, 2026-09-20). -->
+					<!-- Custom's four boxes fold under a line that shows their values (user, 2026-09-20), as two
+					     pairs on two rows: the target and the raise that returns to it, the cut and where it
+					     lands. A set that is not a rule turns the line red, marks the boxes at fault and says
+					     what to change (rbgCustomProblems). -->
 					<details id="ui-rbg-custom" class="hidden" open style="flex:1 1 100%;" ontoggle="rememberFoldState()">
-					<summary id="rbg-custom-summary" style="cursor:pointer;font-size:0.8em;font-weight:bold;color:#666;"></summary>
-					<span style="display:flex;flex-wrap:wrap;gap:6px;align-items:flex-end;margin-top:2px;">
-					<label style="display:flex;flex-direction:column;font-size:0.8em;font-weight:bold;color:#666;gap:2px;" title="■ The chance of success the rule aims for, and returns to after a raise.">■ Target %
-					<input type="number" id="rbgTarget" value="70" min="50" max="99" step="1" style="width:52px;" oninput="toggleStrategyUI()"></label>
-					<label style="display:flex;flex-direction:column;font-size:0.8em;font-weight:bold;color:#666;gap:2px;" title="▲ Spending is raised when the chance reaches this. 100% cannot be measured from a sample; 99.5% is the highest that means anything at 200 paths or more.">▲ Raise at %
-					<input type="number" id="rbgUpper" value="90" min="60" max="99.5" step="0.5" style="width:56px;" oninput="toggleStrategyUI()"></label>
-					<label style="display:flex;flex-direction:column;font-size:0.8em;font-weight:bold;color:#666;gap:2px;" title="▼ Spending is cut when the chance falls to this.">▼ Cut at %
-					<input type="number" id="rbgLower" value="40" min="5" max="95" step="1" style="width:52px;" oninput="toggleStrategyUI()"></label>
-					<label style="display:flex;flex-direction:column;font-size:0.8em;font-weight:bold;color:#666;gap:2px;" title="→ After a cut, spending is set to what gives this chance: at least the cut level, at most the target. High Safety and Normal return to their target; More Tolerant returns to 70% from 80%, More Risk to 45% from 80%.">→ Back to %
-					<input type="number" id="rbgCutTo" value="50" min="10" max="99" step="1" style="width:52px;" oninput="toggleStrategyUI()"></label>
-					</span>
+					<summary id="rbg-custom-summary" style="cursor:pointer;font-size:0.8em;font-weight:bold;"></summary>
+					<div class="rbg-pair" style="margin-top:2px;">
+					<label title="■ The chance of success the rule aims for, and returns to after a raise. At least 5 points above the cut level, and below the raise level.">■ Target %
+					<input type="number" id="rbgTarget" value="70" min="10" max="99" step="1" oninput="toggleStrategyUI()"></label>
+					<label title="▲ Spending is raised when the chance reaches this: above the target. 100% cannot be measured from a sample; 99.5% is the highest that means anything at 200 paths or more.">▲ Raise at %
+					<input type="number" id="rbgUpper" value="90" min="10" max="99.5" step="0.5" oninput="toggleStrategyUI()"></label>
+					</div>
+					<div class="rbg-pair">
+					<label title="▼ Spending is cut when the chance falls to this: at least 5 points below the target and below where a cut returns to.">▼ Cut at %
+					<input type="number" id="rbgLower" value="40" min="1" max="95" step="1" oninput="toggleStrategyUI()"></label>
+					<label title="→ After a cut, spending is set to what gives this chance: at least 5 points above the cut level, at most the target. High Safety and Normal return to their target; More Tolerant returns to 70% from 80%, More Risk to 45% from 80%.">→ Back to %
+					<input type="number" id="rbgCutTo" value="50" min="1" max="99" step="1" oninput="toggleStrategyUI()"></label>
+					</div>
+					<div id="rbg-custom-warn" style="display:none;font-size:0.8em;color:#c0392b;margin-top:3px;"></div>
 					</details>
-				</div>
-				<div id="ui-gk" class="compact-row hidden" style="margin:4px 0 0 20px;">
-					<label title="Guard band: how far spending may sit above or below the safe level for your savings before it is cut or raised. Typical: 10-20%.">Guard ±%
-					<input type="number" id="gkGuard" value="20" min="5" max="40" step="5" oninput="updateGuardrailsNote()"></label>
-					<label title="How much spending is cut or raised when it crosses the band. The same amount either way.">Adj %
-					<input type="number" id="gkAdjPct" value="10" min="5" max="20" step="5" oninput="updateGuardrailsNote()"></label>
 				</div>
 				<!-- P127a. Off by default. It changes the plan's numbers, so unlike the rails panel it travels
 				     in the share link (gsc) and the saved plan. Nerdknob for GK-style; shown to everyone with

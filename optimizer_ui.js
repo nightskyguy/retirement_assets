@@ -813,13 +813,48 @@ function spendRuleOf() {
 function rbgRuleOn() {
     return spendRuleOf() === 'rbg';
 }
+// What is wrong with the four custom numbers, as a list a reader can act on (user, 2026-09-20:
+// "spell out exactly which pair(s) of numbers is wrong, highlight the entry box(es) and suggest a
+// fix"). Each problem names the boxes at fault and a change that would clear it. Empty = a rule.
+//
+// The rule they must satisfy, and why each part: a cut has to land at least RBG_GAP points above
+// the cut level or the plan is cut again the next year (a spiral); it may not land above the
+// target, or it is a raise; the target has to sit at least RBG_GAP points above the cut level or a
+// plan on target is one ordinary year from a cut (at 100 paths a chance moves 2-5 points run to
+// run); and the raise level has to be above the target, or a raise lands above its own trigger
+// and fires every year.
+const RBG_GAP = 5;
+function rbgCustomProblems() {
+    const box = { target: 'rbgTarget', upper: 'rbgUpper', lower: 'rbgLower', cutTo: 'rbgCutTo' };
+    const name = { target: '■ Target', upper: '▲ Raise at', lower: '▼ Cut at', cutTo: '→ Back to' };
+    const v = {};
+    for (const k of Object.keys(box)) { const x = Number(val(box[k])); v[k] = Number.isFinite(x) && val(box[k]) !== '' ? x : null; }
+    const out = [];
+    const bad = (keys, text, fix) => out.push({ ids: keys.map(k => box[k]), text, fix });
+    for (const k of Object.keys(box)) {
+        if (v[k] == null || v[k] < 1 || v[k] > 99.5) bad([k], `${name[k]} needs a number from 1 to 99.5`, 'enter one');
+    }
+    if (out.length) return out;
+    const p = x => `${x}%`;
+    if (v.cutTo < v.lower + RBG_GAP) bad(['lower', 'cutTo'],
+        `${name.cutTo} ${p(v.cutTo)} must be at least ${RBG_GAP} above ${name.lower} ${p(v.lower)}`,
+        `set Back to ${p(v.lower + RBG_GAP)} or Cut at ${p(Math.max(1, v.cutTo - RBG_GAP))}`);
+    if (v.cutTo > v.target) bad(['cutTo', 'target'],
+        `${name.cutTo} ${p(v.cutTo)} may not be above ${name.target} ${p(v.target)}`,
+        `set Back to ${p(v.target)} or Target ${p(v.cutTo)}`);
+    if (v.target < v.lower + RBG_GAP) bad(['lower', 'target'],
+        `${name.target} ${p(v.target)} must be at least ${RBG_GAP} above ${name.lower} ${p(v.lower)}`,
+        `set Target ${p(v.lower + RBG_GAP)} or Cut at ${p(Math.max(1, v.target - RBG_GAP))}`);
+    if (v.upper <= v.target) bad(['target', 'upper'],
+        `${name.upper} ${p(v.upper)} must be above ${name.target} ${p(v.target)}`,
+        `set Raise at ${p(Math.min(99.5, v.target + 1))} or Target ${p(v.upper - 1)}`);
+    return out;
+}
 // The four custom numbers as chances, or null when they do not describe a rule.
 function rbgCustomNumbers() {
-    const n = id => (+val(id) || 0) / 100;
-    const s = { target: n('rbgTarget'), upper: n('rbgUpper'), lower: n('rbgLower'), cutTo: n('rbgCutTo') };
-    const ok = [s.target, s.upper, s.lower, s.cutTo].every(v => v > 0 && v <= 1)
-        && s.lower < s.cutTo && s.cutTo <= s.target && s.target <= s.upper;
-    return ok ? s : null;
+    if (rbgCustomProblems().length) return null;
+    const n = id => Number(val(id)) / 100;
+    return { target: n('rbgTarget'), upper: n('rbgUpper'), lower: n('rbgLower'), cutTo: n('rbgCutTo') };
 }
 function rbgCustomSet() {
     return val('rbgPreset') === 'custom' ? (rbgCustomNumbers() ?? undefined) : undefined;
@@ -6891,7 +6926,7 @@ function updateGuardrailsNote() {
         const P = (railsJobPresets() ?? OptimizerCore.RAIL_PRESETS)[key];
         const pct = v => `${Math.round(v * 1000) / 10}%`;
         let state, short;
-        if (!P) { state = 'The Custom preset needs its four boxes to describe a rule (cut < back to <= target <= raise); until then spending stays on your planned path.'; short = 'Custom numbers incomplete, on the planned path'; }
+        if (!P) { state = 'Custom is not a rule yet: the boxes under the Risk-based guidance menu say what to change. Until then spending stays on your planned path.'; short = 'Custom is not a rule yet, on the planned path'; }
         else if (!railsOn()) { state = 'The rails cannot be solved on this page, so spending stays on your planned path.'; short = 'no rails on this page'; }
         else if (typeof RailsState !== 'undefined' && RailsState.running) { state = 'Solving the rails now; the plan follows them when the solve lands.'; short = 'solving the rails'; }
         else if (typeof RailsState !== 'undefined' && (!RailsState.result || railsIsStale())) { state = 'The rails are not solved for this plan yet; the solve starts by itself in a moment, and the plan follows it.'; short = 'rails not solved yet'; }
@@ -6922,14 +6957,31 @@ function updateGuardrailsNote() {
 // The Custom fold's own line, and the Custom option in both menus: the four numbers as the other
 // presets are written (user, 2026-09-20), or what is missing.
 function updateRbgCustomSummary() {
-    const s = rbgCustomNumbers();
+    const problems = rbgCustomProblems();
+    const s = problems.length ? null : rbgCustomNumbers();
     const pct = v => `${Math.round(v * 1000) / 10}%`;
     const text = s ? `Custom ■${pct(s.target)} ▲${pct(s.upper)} ▼${pct(s.lower)}→■${pct(s.cutTo)}` : null;
     const el = document.getElementById('rbg-custom-summary');
-    if (el) el.textContent = text ?? 'Custom: the four numbers must satisfy cut < back to ≤ target ≤ raise';
+    if (el) {
+        el.textContent = text ?? `Custom: not a rule yet, ${problems.length} thing${problems.length === 1 ? '' : 's'} to fix`;
+        el.classList.toggle('rbg-bad', !s);
+    }
     for (const id of ['rbgPreset-custom', 'rails-preset-custom']) {
         const opt = document.getElementById(id);
-        if (opt) opt.textContent = text ?? 'Custom (set the four numbers under the menu)';
+        if (opt) opt.textContent = text ?? 'Custom (not a rule yet: see the boxes under the menu)';
+    }
+    // The boxes at fault, and the line that says what to change.
+    const atFault = new Set(problems.flatMap(p => p.ids));
+    for (const id of ['rbgTarget', 'rbgUpper', 'rbgLower', 'rbgCutTo']) {
+        const input = document.getElementById(id);
+        if (!input) continue;
+        input.classList.toggle('rbg-bad', atFault.has(id));
+        input.closest('label')?.classList.toggle('rbg-bad', atFault.has(id));
+    }
+    const warn = document.getElementById('rbg-custom-warn');
+    if (warn) {
+        warn.style.display = problems.length ? '' : 'none';
+        warn.innerHTML = problems.map(p => `<div>${p.text}: ${p.fix}.</div>`).join('');
     }
 }
 

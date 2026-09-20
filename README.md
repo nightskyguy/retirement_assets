@@ -377,7 +377,7 @@ the next, and the cut rails and the spending a few percent
 the Monte Carlo tab's: its Simulation Mode, Synthetic Return and Volatility, inflation model and
 Bear-start share; change any of them and the rails go stale. The rails do not depend on the
 Guardrails switch: every run holds your spending on its planned path. The preset is chosen with the
-*Risk-based rails preset* menu under the Guardrails switch, or with the panel's own menu; the two are
+*Risk-based guidance* menu under the Guardrails switch, or with the panel's own menu; the two are
 one setting. Nothing in the panel changes your plan unless you press *Use it*, and *Restore* puts
 your After-Tax Spend back - unless the Guardrails switch is set to Risk-based, below.
 
@@ -397,7 +397,7 @@ rule described under *Limitations and Restrictions*. **Risk-based (CoS)** makes 
 rails above: in any year the chance of success has fallen to the cut rail, spending is cut to what
 gives the preset's "back to" chance; in any year it has reached the raise
 rail, spending is raised to what gives the target; otherwise spending stays on your planned path, with
-inflation every year and Spend Delta on top. The preset is the *Risk-based rails preset* under the
+inflation every year and Spend Delta on top. The preset is the *Risk-based guidance* menu under the
 switch (the panel's menu is the same setting), so the rails you see are the rails the plan follows.
 Every cut and raise the rule makes is a milestone on the charts, as GK-style's are, and the
 *Guardrails* column set in Annual Details gathers everything either rule reads and writes: the spend

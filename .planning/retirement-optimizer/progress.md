@@ -5622,3 +5622,13 @@ form (net of guaranteed income) would instead fire PROSPERITY raises the year So
 starts (rate 8% -> 3% against an IWR set before it), so the fix proposed is plan-relative: compare
 each year's net draw ratio with the no-rule plan's own ratio for that year (the same device as the
 risk-based table, one deterministic run), band and step unchanged.
+
+Round 4 (v11.18b1): the Guardrails sentence folds (`#guardrails-note-fold`, summary names the rule
+and state: "GK-style: ±20% band, 10% steps" / "Risk-based, Normal: following the rails"); Custom's
+four boxes fold under a line showing their values ("Custom ■70% ▲90% ▼40%→■50%"); both folds in
+FOLD_IDS. Preset options are symbols: ■ target ▲ raise ▼ cut →■ back to. The menu is "Risk-based
+guidance" (user: "rails preset" read as rule-only). Advice given in the reply: paths are the
+accuracy lever (raise rails 7-27% run to run at 100 paths, cut rails and target 2-8%; cadence 3 is
+within 1% of every year), auto-run fine on a fast machine; the end-of-plan spend climb is the
+known-horizon artifact (success = not ruined by the last year), remedies: plan to a later age, keep
+Never above plan, or a terminal-reserve success test in the rails solve (offered as a phase).

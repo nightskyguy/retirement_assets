@@ -2240,17 +2240,21 @@ assertEqual(
 		if (!unsafeTest('guardrailsSwitchDrivesTheSpendRule')) return;   // writes #spendRule
 		const sw = document.getElementById('spendRule');
 		const note = document.getElementById('guardrails-note');
+		// The sentence folds (2026-09-20): the fold is what shows and hides, its summary names the rule.
+		const fold = document.getElementById('guardrails-note-fold') ?? note;
+		const summary = document.getElementById('guardrails-note-summary');
 		if (!sw || !note) return;
 		const was = sw.checked;
 		try {
 			sw.checked = true;
 			toggleStrategyUI();
 			assertEqual(getInputs().spendRule, 'gk', 'the switch on sends the Guardrails rule');
-			assertEqual(note.style.display, '', 'and the sentence stating the rule is shown');
+			assertEqual(fold.style.display, '', 'and the sentence stating the rule is shown');
+			if (summary) assertEqual(/^GK-style: ±\d+% band, \d+% steps/.test(summary.textContent), true, `the fold's own line names the rule: ${summary.textContent}`);
 			sw.checked = false;
 			toggleStrategyUI();
 			assertEqual(getInputs().spendRule, '', 'off sends no rule');
-			assertEqual(note.style.display, 'none', 'and the sentence is hidden');
+			assertEqual(fold.style.display, 'none', 'and the sentence is hidden');
 		} finally {
 			sw.checked = was;
 			toggleStrategyUI();

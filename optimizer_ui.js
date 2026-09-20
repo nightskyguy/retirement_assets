@@ -2583,7 +2583,7 @@ function toggleFailedRows() {
 // the saved-scenario blob under STORAGE_KEY, because this is not scenario data.
 const FOLD_STORAGE_KEY = 'optimizerChromeFolds';
 // The rails panel below the Charts tab's charts folds the same way, for the same reason.
-const FOLD_IDS = ['opt-fold-legend', 'rails-panel'];
+const FOLD_IDS = ['opt-fold-legend', 'rails-panel', 'guardrails-note-fold', 'ui-rbg-custom'];
 // Chrome fires a `toggle` event when it PARSES a <details open>, before any of our init code has
 // run. The strip carries `open` in the markup, so that toggle lands first, the inline handler
 // writes "both open" to storage, and restoreFoldState then reads back the value it just
@@ -6873,31 +6873,36 @@ function foldRetiredGKStrategy(data) {
 // terms of savings, never a withdrawal rate: nobody enters or sees the rate the rule tests (user,
 // 2026-09-14). "More than g% above the safe level for the savings you have" is the engine's test,
 // spend / portfolio > IWR x (1 + g), multiplied through by the portfolio.
+// The sentence folds (user, 2026-09-20): the summary line names the rule and its state, the body
+// carries the explanation.
 function updateGuardrailsNote() {
     const el = document.getElementById('guardrails-note');
+    const fold = document.getElementById('guardrails-note-fold');
+    const summary = document.getElementById('guardrails-note-summary');
     if (!el) return;
     const on = valChecked('spendRule');
-    el.style.display = on ? '' : 'none';
+    (fold ?? el).style.display = on ? '' : 'none';
     if (!on) return;
+    const ceilingNote = valChecked('gkShapeCeiling') ? ' Raises never take spending above your planned path.' : '';
     // P132. The risk-based rule, with where its rails stand: the rule is inert until the rails
     // panel has solved this plan, and that is said here rather than left to a blank column.
     if (rbgRuleOn()) {
         const key = val('rbgPreset') || 'normal';
         const P = (railsJobPresets() ?? OptimizerCore.RAIL_PRESETS)[key];
         const pct = v => `${Math.round(v * 1000) / 10}%`;
-        let state;
-        if (!P) state = 'The Custom preset needs its four boxes to describe a rule (cut < returns to <= target <= raise); until then spending stays on your planned path.';
-        else if (!railsOn()) state = 'The rails cannot be solved on this page, so spending stays on your planned path.';
-        else if (typeof RailsState !== 'undefined' && RailsState.running) state = 'Solving the rails now; the plan follows them when the solve lands.';
-        else if (typeof RailsState !== 'undefined' && (!RailsState.result || railsIsStale())) state = 'The rails are not solved for this plan yet; the solve starts by itself in a moment, and the plan follows it.';
-        else state = 'Following the rails in the Risk-based rails panel under the charts.';
+        let state, short;
+        if (!P) { state = 'The Custom preset needs its four boxes to describe a rule (cut < back to <= target <= raise); until then spending stays on your planned path.'; short = 'Custom numbers incomplete, on the planned path'; }
+        else if (!railsOn()) { state = 'The rails cannot be solved on this page, so spending stays on your planned path.'; short = 'no rails on this page'; }
+        else if (typeof RailsState !== 'undefined' && RailsState.running) { state = 'Solving the rails now; the plan follows them when the solve lands.'; short = 'solving the rails'; }
+        else if (typeof RailsState !== 'undefined' && (!RailsState.result || railsIsStale())) { state = 'The rails are not solved for this plan yet; the solve starts by itself in a moment, and the plan follows it.'; short = 'rails not solved yet'; }
+        else { state = 'Following the rails in the Risk-based rails panel under the charts.'; short = 'following the rails'; }
         const cutTo = P ? (P.cutTo ?? P.target) : null;
+        if (summary) summary.textContent = `Risk-based${P ? ', ' + P.label : ''}: ${short}${valChecked('gkShapeCeiling') ? ', never above plan' : ''}`;
         el.textContent = (P ? `Risk-based, ${P.label}: spending follows your plan's chance of success (CoS). When it falls to `
             + `${pct(P.lower)}, spending is cut to what gives ${pct(cutTo)}; when it reaches ${pct(P.upper)}, it is raised to `
             + `what gives ${pct(P.target)}. Spending takes inflation every year. ` : 'Risk-based: ')
             + state
-            + (valChecked('gkShapeCeiling') ? ' Raises never take spending above your planned path.'
-               : ' Never above plan is recommended with this rule: the rails are solved for your planned path and are accurate near it.');
+            + (ceilingNote || ' Never above plan is recommended with this rule: the rails are solved for your planned path and are accurate near it.');
         return;
     }
     const g = Math.round(+val('gkGuard') || 20), a = Math.round(+val('gkAdjPct') || 10);
@@ -6906,11 +6911,23 @@ function updateGuardrailsNote() {
     // for anyone, and a rule that is running has to be readable by whoever it is running for.
     const cap = Math.round(OptimizerCore.GK_CPI_RAISE_CAP * 100);
     const endYears = OptimizerCore.GK_NO_CUT_FINAL_YEARS;
+    if (summary) summary.textContent = `GK-style: ±${g}% band, ${a}% steps${valChecked('gkShapeCeiling') ? ', never above plan' : ''}`;
     el.textContent = `Your first year sets the safe level: what you spend for each dollar saved. After that, `
         + `spending is cut ${a}% in any year it is more than ${g}% above the safe level for the savings you `
         + `have, and raised ${a}% when it is more than ${g}% below. It is never cut in the plan's last `
         + `${endYears} years, and its yearly inflation raise is at most ${cap}%.`
-        + (valChecked('gkShapeCeiling') ? ' Raises never take spending above your planned path.' : '');
+        + ceilingNote;
+}
+
+// The Custom fold's own line: the four numbers as the menu writes them, or what is missing.
+function updateRbgCustomSummary() {
+    const el = document.getElementById('rbg-custom-summary');
+    if (!el) return;
+    const s = rbgCustomNumbers();
+    const pct = v => `${Math.round(v * 1000) / 10}%`;
+    el.textContent = s
+        ? `Custom ■${pct(s.target)} ▲${pct(s.upper)} ▼${pct(s.lower)}${s.cutTo < s.target ? '→■' + pct(s.cutTo) : ''}`
+        : 'Custom: the four numbers must satisfy cut < back to ≤ target ≤ raise';
 }
 
 function toggleStrategyUI() {
@@ -6939,8 +6956,9 @@ function toggleStrategyUI() {
         // The rails preset stays in view whatever the switch says (user, 2026-09-19): it picks the
         // rails the panel draws on demand, and the rule's rails when the rule is on.
         document.getElementById('ui-rbg')?.classList.remove('hidden');
-        // Custom is open to everyone (user, 2026-09-20); its four boxes show while it is chosen.
+        // Custom is open to everyone (user, 2026-09-20); its fold shows while it is chosen.
         document.getElementById('ui-rbg-custom')?.classList.toggle('hidden', val('rbgPreset') !== 'custom');
+        updateRbgCustomSummary();
         document.getElementById('ui-rule-ceiling')?.classList.toggle('hidden', !on || (!rbg && !NERD_KNOBS));
         railsRuleSync();
     }

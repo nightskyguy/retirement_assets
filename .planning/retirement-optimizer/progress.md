@@ -5658,4 +5658,10 @@ the year, `_gkShapeOf` memo). Verified the 2031 cut on main 191da49 with the use
 a plan on its own path never adjusts, so the ceiling, no-cut, floor and schedule tests hand
 simulate() a boom or crash sequence (`gkSeq`); the two optimize-spend tests became one (the
 deterministic GK answer equals the no-rule answer; the floor rejects a crashed ceiling run).
-README caveat, switch and Guard tooltips, the note, ARCHITECTURE's flowchart updated. Core 487.
+README caveat, switch and Guard tooltips, the note, ARCHITECTURE's flowchart updated. Core 486 (two optimize-spend tests merged), 26 critical guards; badge 1244.
+
+Round 8: rbg_grid_harness re-run on the committed engine (11.18b2, Custom 70/90/40/50 as a set) and
+ rewritten from it: new preset names, Custom row, GK-style as
+corrected (51% funded on soft-cap-underfunded against 100% before: it no longer cuts a plan for
+failing on its own assumptions), the overshoot section closed (deepest single year -49%, no -100%).
+Risk-based rows identical to the pre-GK-change run (diff clean). research/README.md row rewritten.

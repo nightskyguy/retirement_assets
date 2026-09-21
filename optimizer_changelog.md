@@ -21,37 +21,25 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ## 11.18b2
 
-**GK-style Guardrails corrected; risk-based rails: one preset menu, the article's own set, rails on a replayed path, and Guardrails milestones and columns.**  
+**GK-style Guardrails corrected; the risk-based rails get one preset menu, the article's own set, a replay solve, milestones and a column set.**  
 *Correction for plans with GK-style Guardrails on; nothing else changes a plan's numbers.*
 
 **GK-style Guardrails contained an error that has been corrected.** Spending could be cut in the
-year Social Security or a pension started, because the rule measured whole spending over the
-portfolio against the first year's ratio, and the years of drawing before the benefit walked that
-ratio over the band. The rule now measures what the portfolio funds (spending after Social Security
-and pension) against your plan's own draw for the same year. On your plan's own assumptions it no
-longer changes anything; it acts when a market path takes you off the plan, in Monte Carlo, on a
-replayed path and in the Stress Test.
+year Social Security or a pension started. The rule now measures what your portfolio funds
+(spending after Social Security and pension) against your plan's own draw for the same year, so on
+your plan's own assumptions nothing changes, and it acts when markets take you off the plan: in
+Monte Carlo, on a replayed path and in the Stress Test.
 
-**One preset menu.** The *Risk-based guidance* menu (the rails preset) now sits under the Guardrails switch, always
-in view; the rails panel's own menu is the same setting. The presets are **High Safety**, **Normal**,
-**More Tolerant** (a cut now returns to a 70% chance), the new **More Risk** (the 2024 article's own
-numbers: cut at 25%, back to 45%, raise at 99.5% back to 80%) and **Custom**, four boxes of your
-own. The panel's *Market paths* menu is gone: the rails always solve on the Monte Carlo tab's own
-market.
+**One preset menu**, *Risk-based guidance*, under the Guardrails switch and always in view: **High
+Safety**, **Normal**, **More Tolerant** (a cut returns to a 70% chance), the new **More Risk** (the
+2024 article's own numbers) and **Custom**, four boxes of your own. The panel's *Market paths* menu
+is gone; the rails solve on the Monte Carlo tab's market.
 
-**Replaying a Monte Carlo path.** *Solve rails on this path*, the panel's Run button during a
-replay, re-solves the chance of success from the state the path actually reached at each solved
-year, at the cost of one ordinary solve. That solve is kept for the path, and your plan's own rails
-return when the replay ends.
+**Solve rails on this path** re-solves the chance of success along a replayed Monte Carlo path.
 
-**Every Guardrails cut and raise is a milestone on the charts.** Cuts were marked already; raises
-are new.
-
-**Annual Details has a Guardrails column set**: the spend goal and the guaranteed income under it,
-what Guardrails did each year and the spending it set, the wealth it compared, the risk-based rails
-and their chance of success, and the inflation and market return each year was handed. The
-Guardrails columns are now **ruleSpend**, **ruleAdj** and **vsPlan%**: where the rule has put
-spending against your planned path, so -10% is a tenth under it.
+**Every Guardrails cut and raise is a milestone** on the charts, and Annual Details has a
+*Guardrails* column set: **ruleSpend**, **ruleAdj** and **vsPlan%**, where spending sits against
+your planned path.
 
 <a id="11.1881"></a>
 

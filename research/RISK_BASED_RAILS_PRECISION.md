@@ -1,5 +1,7 @@
 # Risk-based rails: how precise, how reachable, how costly (P128k)
 
+> **Preset names.** Since v11.18b2 (2026-09-20) the page calls the presets High Safety, Normal, More Tolerant and More Risk; this report keeps the names it was run with: Tight = High Safety, Loose = More Tolerant (whose cut has since returned to 70% instead of its 80% target), Paper = More Risk. The keys in the code (tight, normal, loose, paper) never changed.
+
 The risk-based rails panel under the Charts tab's charts ([RISK_BASED_GUARDRAILS.md](RISK_BASED_GUARDRAILS.md))
 solves Tharp and Fitzpatrick's probability-of-success guardrails along a live plan. Before building
 anything more on it - an After-Tax Spend answer from the same run (`P129`), a "higher precision"

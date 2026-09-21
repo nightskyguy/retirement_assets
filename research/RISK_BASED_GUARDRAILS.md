@@ -1,5 +1,7 @@
 # Risk-based spending guardrails
 
+> **Preset names.** Since v11.18b2 (2026-09-20) the page calls the presets High Safety, Normal, More Tolerant and More Risk; this report keeps the names it was run with: Tight = High Safety, Loose = More Tolerant (whose cut has since returned to 70% instead of its 80% target), Paper = More Risk. The keys in the code (tight, normal, loose, paper) never changed.
+
 Whether the guardrail rule published by Derek Tharp and Justin Fitzpatrick - spend to a target
 **probability of success**, adjust when that probability crosses a rail - can be computed on this
 engine, what it costs, and where it disagrees with the Guardrails rule the tool already ships.

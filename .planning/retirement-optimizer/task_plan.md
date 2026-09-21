@@ -99,6 +99,9 @@ drift and one case in five fails to fund.
       so a correction entry. Consequence: on its own assumptions a plan never adjusts; the rule
       acts under Monte Carlo, replay and the Stress Test; Optimize Spend with GK-style equals the
       no-rule answer deterministically. `test.critical` guard on the user's plan. v11.18b2.
+      **Decided 2026-09-20 (user: "do them all", on the open question):** GK-style stays the
+      market-reacting rule and does NOT cut a plan for failing on its own assumptions; that case
+      is the Risk-based rule's. The grid records the price (51% funded on `soft-cap-underfunded`).
 - [x] `P132g` closed another way (2026-09-20): beyond the rail the rule holds the rail's own
       spend-to-wealth ratio instead of extrapolating the line (`cutM`/`raiseM`), and a rail within
       5% of the plan's wealth, or a line that would fall with wealth, reads as the ratio through

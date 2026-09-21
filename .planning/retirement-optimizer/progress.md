@@ -5665,3 +5665,10 @@ research/RBG_RULE_THRESHOLDS.md rewritten from it: new preset names, Custom row,
 corrected (51% funded on soft-cap-underfunded against 100% before: it no longer cuts a plan for
 failing on its own assumptions), the overshoot section closed (deepest single year -49%, no -100%).
 Risk-based rows identical to the pre-GK-change run (diff clean). research/README.md row rewritten.
+
+Round 9 (user: "do them all"): PR #230 title and body rewritten; the 11.18b2 changelog entry cut to
+~200 words; name notes on RISK_BASED_GUARDRAILS.md and RISK_BASED_RAILS_PRECISION.md; GK-style design
+question decided (stays market-reacting; task_plan); memory project_p132_risk_based_guardrails.md.
+Full playback harness re-run on 11.18b2, both arms (ceiling: 60/60 funded, mean gap 0-6% but one
+12.8%; no ceiling: 11 exact / 12 cheap of 60 fail): RBG_RULE_VALIDATION.md findings, presets and
+appendix refreshed, sections 1-5 marked as the first run's figures; index row updated.

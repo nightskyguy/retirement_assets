@@ -8,34 +8,35 @@ is what lets Monte Carlo and the Optimizer run it at the cost of one comparison 
 measures what that approximation costs, and finds the one setting under which it costs almost nothing.
 
 Produced by [`.test_harnesses/rbg_playback_harness.js`](../.test_harnesses/rbg_playback_harness.js)
-on engine v11.189d (2026-09-19), two runs: `node .test_harnesses/rbg_playback_harness.js` and the
-same with `--ceiling`. Every number below is printed by that script; the two summary tables are its
-output unedited.
+on engine v11.18b2 (2026-09-20; first run 2026-09-19 on v11.189d), two runs:
+`node .test_harnesses/rbg_playback_harness.js` and the same with `--ceiling`. Every number below is
+printed by that script; the two summary tables in the appendix are its output unedited. The presets
+are named as the harness prints them: `normal` is the page's Normal, `paper` its More Risk.
 
-**What it found, in four lines:**
+**What it found, in four lines (re-run of 2026-09-20):**
 
 1. **With Never above plan on, the cheap rule IS the exact rule on a plan the rails never cut**
-   (`bracket-filler-texas`: 12 of 12 cases identical to the dollar) **and within 0% to 7.5% of it on
-   average elsewhere**, with every one of 60 cases funded under both rules. The largest single-year
-   gaps, 13% to 35%, are the years of a cut, where the two land at different levels.
-2. **Without it, both rules drift**: the exact rule raises spending to four to eight times the plan
-   by the 2050s on a 1937 or 1966 start, the cheap rule's table was solved near the plan and is 30%
-   to 66% off out there, and about one case in five FAILS TO FUND under the exact rule itself
-   (11 of 60) or the cheap one (13 of 60) - the record wraps from 2025 back into 1929-1932 after two
-   decades of raises.
-3. **Three approximations were measured and two were closed on the way.** Spending net of Social
+   (`bracket-filler-texas`: 12 of 12 cases identical to the dollar) **and within 0% to 6% of it on
+   average elsewhere** but one case (`mixed-portfolio-couple`, 1929, More Risk: 12.8%), with every
+   one of 60 cases funded under both rules. The largest single-year gaps, 10% to 28%, are the years
+   of a cut, where the two land at different levels.
+2. **Without it, both rules drift**: the exact rule raises spending to several times the plan by the
+   2050s on the long plans, the cheap rule's table was solved near the plan and is 30% to 66% off out
+   there, and about one case in five FAILS TO FUND under the exact rule itself (11 of 60) or the
+   cheap one (12 of 60) - the record wraps from 2025 back into 1929-1932 after two decades of raises.
+3. **Four approximations were measured and three were closed on the way.** Spending net of Social
    Security and pensions (a fixed-dollar offset a ratio cannot see), the rule's inflation timing (a
-   year's lag against the plan's own path), and a rail under the solver's floor (reported as $0,
-   which the rule read as "never fires" and now reads as "always fires"). What is left is the
-   landing at a cut, one solved point plus a line, and it is what the single-year gaps are.
-4. **The Paper preset is gentler and later on every household**, as its article claims - and on
-   five of the thirty no-ceiling cases the exact Paper rule is the one that fails to fund, because
-   a cut that waits for a 25% chance and returns only to 45% can come too late.
+   year's lag against the plan's own path), a rail under the solver's floor, and - found after the
+   first run - the interpolation between solved years across a benefit start, which now works in
+   dollars, and the landing line beyond a rail, which now holds the rail's own ratio (section 3).
+   What is left is the landing at a cut, and it is what the single-year gaps are.
+4. **More Risk is gentler and later on every household**, as its article claims - and on six of
+   the thirty no-ceiling cases the exact More Risk rule is the one that fails to fund, because a
+   cut that waits for a 25% chance and returns only to 45% can come too late.
 
 Decided on the strength of it: **Never above plan is recommended when Risk-based is chosen** (the
 page turned it on by itself at first; since 2026-09-19 it never touches the switch, on the user's
-instruction, and says so under the Guardrails switch when it is off), and
-visible without the nerdknob. It can be turned off; the page says what that costs.
+instruction, and says so under the Guardrails switch when it is off).
 
 ---
 
@@ -50,6 +51,7 @@ visible without the nerdknob. It can be turned off; the page says what that cost
 | **cheap, every year** | the cheap rule with a table solved every year instead of every 3, to separate the cadence's interpolation from the rest |
 | **no rule** | the same plan on the same sequence with no spend rule: the plan's own path, and the **shape** every spending figure is measured against |
 | **GK-style** | the same plan with the Guyton-Klinger-style Guardrails rule, for scale |
+| **Paper** | in sections 1 to 5, the preset the page now calls **More Risk** (key `paper`); the harness prints the key |
 | **CoS** / chance | probability of success by the Monte Carlo tab's own test (`yearIsRuined`): the share of paths on which the plan funds every remaining year |
 | **table** | per plan year: the ratio of net spending to wealth at which the chance falls to the cut rail (`cutAt`) or reaches the raise rail (`raiseAt`), and for each a line through the two solved points of that chance curve giving the net spend to land on as a function of wealth; net of that year's Social Security and pension, in today's dollars |
 | **the spine** | the plan as configured, deterministic growth, no rule: what the table is solved on |
@@ -63,8 +65,8 @@ visible without the nerdknob. It can be turned off; the page says what that cost
 
 ### The presets
 
-Two of the four in `RAIL_PRESETS`. **Normal**: target 90%, raise at 99%, cut at 70%, a cut returning
-to 90%. **Paper**: target 80%, raise at 99.5%, cut at 25%, a cut returning to 45% - the 2024
+Two of the page's presets, by key. **Normal** (`normal`): target 90%, raise at 99%, cut at 70%, a cut returning
+to 90%. **More Risk** (`paper`): target 80%, raise at 99.5%, cut at 25%, a cut returning to 45% - the 2024
 article's own numbers (Tharp and Fitzpatrick, *Why Guyton-Klinger Guardrails Are Too Risky For Most
 Retirees*, Kitces.com, 2024-03-27), read with 100% as 99.5% for the reason
 [RISK_BASED_RAILS_PRECISION.md](RISK_BASED_RAILS_PRECISION.md) gives.
@@ -100,6 +102,10 @@ solve's own run-to-run noise - 3% to 5% at 100 paths (RISK_BASED_RAILS_PRECISION
 ---
 
 ## What it found
+
+Sections 1, 2, 4 and 5 quote the first run (v11.189d, 2026-09-19); the four lines above and the
+appendix are the re-run of 2026-09-20 on v11.18b2, and where a figure differs the appendix is the
+current one. The direction of every finding is the same in both runs.
 
 ### 1. With the ceiling on, the cheap rule meets the criterion
 
@@ -230,133 +236,153 @@ sits at the raise rail year after year, bisecting a landing it will cap.
 
 ### With the ceiling (`--ceiling`)
 
-| household | start | preset | exact adjusts | cheap adjusts | matched +/-1 yr | first: exact / cheap | largest spend gap (year) | mean gap | mean gap near plan (years) | trough: exact / cheap / every-year / GK | lifetime real 0%: exact / cheap / off | funded: exact / cheap |
+| household | start | preset | exact adjusts | cheap adjusts | matched +/-1 yr | first: exact / cheap | largest spend gap (year) | mean |gap| | mean |gap| near plan (years) | trough: exact / cheap / every-year / GK | lifetime real 0%: exact / cheap / off | funded: exact / cheap |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | bracket-filler-texas | 1929 | normal | 26 | 22 | 23 | 2033 / 2033 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -28% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
 | bracket-filler-texas | 1929 | paper | 23 | 19 | 20 | 2034 / 2034 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -28% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
-| bracket-filler-texas | 1937 | normal | 26 | 22 | 23 | 2033 / 2033 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -37% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
-| bracket-filler-texas | 1937 | paper | 21 | 17 | 18 | 2035 / 2035 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -37% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
-| bracket-filler-texas | 1966 | normal | 27 | 22 | 24 | 2029 / 2028 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -50% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
-| bracket-filler-texas | 1966 | paper | 17 | 13 | 14 | 2033 / 2033 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -50% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
-| bracket-filler-texas | 1973 | normal | 22 | 18 | 19 | 2037 / 2037 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -44% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
-| bracket-filler-texas | 1973 | paper | 20 | 16 | 17 | 2039 / 2039 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -44% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
-| bracket-filler-texas | 2000 | normal | 29 | 25 | 26 | 2030 / 2030 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -18% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
-| bracket-filler-texas | 2000 | paper | 25 | 21 | 22 | 2033 / 2033 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -18% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
+| bracket-filler-texas | 1937 | normal | 26 | 22 | 23 | 2033 / 2033 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -32% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
+| bracket-filler-texas | 1937 | paper | 21 | 17 | 18 | 2035 / 2035 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -32% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
+| bracket-filler-texas | 1966 | normal | 27 | 21 | 24 | 2029 / 2029 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -35% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
+| bracket-filler-texas | 1966 | paper | 17 | 13 | 14 | 2033 / 2033 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -35% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
+| bracket-filler-texas | 1973 | normal | 22 | 18 | 19 | 2037 / 2037 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -29% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
+| bracket-filler-texas | 1973 | paper | 20 | 16 | 17 | 2039 / 2039 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -29% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
+| bracket-filler-texas | 2000 | normal | 29 | 25 | 26 | 2030 / 2030 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -17% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
+| bracket-filler-texas | 2000 | paper | 25 | 21 | 22 | 2033 / 2033 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -17% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
 | bracket-filler-texas | 2007 | normal | 31 | 27 | 28 | 2027 / 2027 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -6% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
 | bracket-filler-texas | 2007 | paper | 30 | 25 | 26 | 2027 / 2030 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -6% | $3,630,000 / $3,630,000 / $3,630,000 | yes / yes |
-| modest-balances-little-surplus | 1929 | normal | 13 | 14 | 12 | 2027 / 2027 | +27.3% (2031) | 3.2% | 3.2% (28) | -31% / -30% / -30% / -33% | $2,764,498 / $2,816,829 / $3,045,000 | yes / yes |
-| modest-balances-little-surplus | 1929 | paper | 9 | 10 | 9 | 2029 / 2029 | +0.3% (2030) | 0.1% | 0.1% (28) | -15% / -15% / -14% / -33% | $2,819,595 / $2,823,188 / $3,045,000 | yes / yes |
-| modest-balances-little-surplus | 1937 | normal | 17 | 14 | 15 | 2027 / 2027 | +33.0% (2027) | 6.5% | 6.5% (28) | -25% / -14% / -17% / -39% | $2,796,187 / $2,860,192 / $3,045,000 | yes / yes |
-| modest-balances-little-surplus | 1937 | paper | 10 | 10 | 10 | 2045 / 2045 | +0.0% (-) | 0.0% | 0.0% (28) | +0% / +0% / +0% / -39% | $3,045,000 / $3,045,000 / $3,045,000 | yes / yes |
-| modest-balances-little-surplus | 1966 | normal | 11 | 13 | 11 | 2027 / 2027 | +19.3% (2043) | 4.1% | 4.1% (28) | -16% / -23% / -16% / -45% | $2,756,387 / $2,740,144 / $3,045,000 | yes / yes |
-| modest-balances-little-surplus | 1966 | paper | 9 | 9 | 9 | 2042 / 2042 | +2.0% (2042) | 0.3% | 0.3% (28) | -14% / -12% / -12% / -45% | $2,973,398 / $2,982,251 / $3,045,000 | yes / yes |
-| modest-balances-little-surplus | 1973 | normal | 19 | 18 | 19 | 2027 / 2027 | +24.9% (2028) | 7.5% | 7.5% (28) | -30% / -25% / -31% / -44% | $2,733,087 / $2,822,590 / $3,045,000 | yes / yes |
-| modest-balances-little-surplus | 1973 | paper | 14 | 15 | 14 | 2028 / 2028 | +11.3% (2040) | 4.1% | 4.1% (28) | -10% / -17% / -13% / -44% | $2,895,862 / $2,831,034 / $3,045,000 | yes / yes |
-| modest-balances-little-surplus | 2000 | normal | 17 | 18 | 16 | 2027 / 2027 | -13.9% (2037) | 3.8% | 3.8% (28) | -22% / -15% / -18% / -26% | $2,828,998 / $2,865,161 / $3,045,000 | yes / yes |
-| modest-balances-little-surplus | 2000 | paper | 11 | 11 | 11 | 2044 / 2044 | +0.0% (-) | 0.0% | 0.0% (28) | +0% / +0% / +0% / -26% | $3,045,000 / $3,045,000 / $3,045,000 | yes / yes |
-| modest-balances-little-surplus | 2007 | normal | 21 | 21 | 21 | 2027 / 2027 | -13.4% (2033) | 1.6% | 1.6% (28) | -18% / -13% / -19% / -15% | $2,937,447 / $2,949,969 / $3,045,000 | yes / yes |
+| modest-balances-little-surplus | 1929 | normal | 13 | 16 | 13 | 2027 / 2027 | -15.8% (2028) | 4.5% | 4.5% (28) | -31% / -34% / -34% / -28% | $2,764,498 / $2,797,859 / $3,045,000 | yes / yes |
+| modest-balances-little-surplus | 1929 | paper | 9 | 10 | 9 | 2029 / 2029 | -0.4% (2029) | 0.2% | 0.2% (28) | -15% / -16% / -15% / -28% | $2,819,595 / $2,814,362 / $3,045,000 | yes / yes |
+| modest-balances-little-surplus | 1937 | normal | 17 | 16 | 15 | 2027 / 2027 | -15.9% (2028) | 5.4% | 5.4% (28) | -25% / -37% / -37% / -26% | $2,796,187 / $2,782,412 / $3,045,000 | yes / yes |
+| modest-balances-little-surplus | 1937 | paper | 10 | 10 | 10 | 2045 / 2045 | +0.0% (-) | 0.0% | 0.0% (28) | +0% / +0% / +0% / -26% | $3,045,000 / $3,045,000 / $3,045,000 | yes / yes |
+| modest-balances-little-surplus | 1966 | normal | 11 | 12 | 11 | 2027 / 2027 | +19.3% (2043) | 3.9% | 3.9% (28) | -16% / -21% / -21% / -32% | $2,756,387 / $2,694,849 / $3,045,000 | yes / yes |
+| modest-balances-little-surplus | 1966 | paper | 9 | 9 | 9 | 2042 / 2042 | +1.6% (2046) | 0.3% | 0.3% (28) | -14% / -12% / -12% / -32% | $2,973,398 / $2,980,861 / $3,045,000 | yes / yes |
+| modest-balances-little-surplus | 1973 | normal | 19 | 19 | 18 | 2027 / 2027 | +21.9% (2030) | 6.3% | 6.3% (28) | -30% / -41% / -40% / -28% | $2,733,087 / $2,793,923 / $3,045,000 | yes / yes |
+| modest-balances-little-surplus | 1973 | paper | 14 | 14 | 14 | 2028 / 2028 | +11.3% (2041) | 1.0% | 1.0% (28) | -10% / -11% / -13% / -28% | $2,895,862 / $2,891,234 / $3,045,000 | yes / yes |
+| modest-balances-little-surplus | 2000 | normal | 17 | 18 | 16 | 2027 / 2027 | +16.9% (2032) | 4.4% | 4.4% (28) | -22% / -24% / -16% / -18% | $2,828,998 / $2,864,006 / $3,045,000 | yes / yes |
+| modest-balances-little-surplus | 2000 | paper | 11 | 11 | 11 | 2044 / 2044 | +0.0% (-) | 0.0% | 0.0% (28) | +0% / +0% / +0% / -18% | $3,045,000 / $3,045,000 / $3,045,000 | yes / yes |
+| modest-balances-little-surplus | 2007 | normal | 21 | 22 | 20 | 2027 / 2027 | +13.4% (2030) | 2.9% | 2.9% (28) | -18% / -26% / -24% / -15% | $2,937,447 / $2,933,104 / $3,045,000 | yes / yes |
 | modest-balances-little-surplus | 2007 | paper | 17 | 16 | 16 | 2037 / 2039 | +0.0% (-) | 0.0% | 0.0% (28) | +0% / +0% / +0% / -15% | $3,045,000 / $3,045,000 / $3,045,000 | yes / yes |
-| long-widowhood | 1929 | normal | 22 | 23 | 20 | 2028 / 2028 | -15.0% (2035) | 3.4% | 3.4% (37) | -36% / -36% / -36% / -33% | $5,354,492 / $5,332,055 / $5,700,000 | yes / yes |
-| long-widowhood | 1929 | paper | 18 | 15 | 16 | 2029 / 2029 | -0.6% (2031) | 0.2% | 0.2% (37) | -14% / -14% / -13% / -33% | $5,413,593 / $5,403,428 / $5,700,000 | yes / yes |
-| long-widowhood | 1937 | normal | 26 | 23 | 23 | 2027 / 2027 | -14.1% (2038) | 2.0% | 2.0% (37) | -26% / -25% / -25% / -37% | $5,520,310 / $5,411,999 / $5,700,000 | yes / yes |
-| long-widowhood | 1937 | paper | 22 | 19 | 20 | 2042 / 2042 | +0.0% (-) | 0.0% | 0.0% (37) | +0% / +0% / +0% / -37% | $5,700,000 / $5,700,000 / $5,700,000 | yes / yes |
-| long-widowhood | 1966 | normal | 21 | 19 | 19 | 2035 / 2034 | -17.9% (2034) | 3.2% | 3.2% (37) | -32% / -36% / -32% / -44% | $5,442,707 / $5,363,887 / $5,700,000 | yes / yes |
-| long-widowhood | 1966 | paper | 17 | 14 | 15 | 2047 / 2047 | +0.0% (-) | 0.0% | 0.0% (37) | +0% / +0% / +0% / -44% | $5,700,000 / $5,700,000 / $5,700,000 | yes / yes |
-| long-widowhood | 1973 | normal | 26 | 26 | 24 | 2027 / 2027 | -18.8% (2028) | 2.6% | 2.6% (37) | -19% / -35% / -20% / -44% | $5,350,302 / $5,317,060 / $5,700,000 | yes / yes |
-| long-widowhood | 1973 | paper | 22 | 19 | 20 | 2042 / 2042 | +0.0% (-) | 0.0% | 0.0% (37) | +0% / +0% / +0% / -44% | $5,700,000 / $5,700,000 / $5,700,000 | yes / yes |
-| long-widowhood | 2000 | normal | 26 | 25 | 24 | 2029 / 2028 | -20.5% (2028) | 2.2% | 2.2% (37) | -24% / -25% / -24% / -26% | $5,457,683 / $5,470,419 / $5,700,000 | yes / yes |
-| long-widowhood | 2000 | paper | 23 | 18 | 20 | 2041 / 2043 | +0.0% (-) | 0.0% | 0.0% (37) | +0% / +0% / +0% / -26% | $5,700,000 / $5,700,000 / $5,700,000 | yes / yes |
-| long-widowhood | 2007 | normal | 33 | 30 | 31 | 2028 / 2028 | -5.2% (2028) | 0.3% | 0.3% (37) | -19% / -24% / -19% / -15% | $5,609,126 / $5,596,900 / $5,700,000 | yes / yes |
-| long-widowhood | 2007 | paper | 30 | 25 | 27 | 2034 / 2036 | +0.0% (-) | 0.0% | 0.0% (37) | +0% / +0% / +0% / -15% | $5,700,000 / $5,700,000 / $5,700,000 | yes / yes |
-| soft-cap-underfunded | 1929 | normal | 11 | 10 | 9 | 2027 / 2027 | +17.7% (2029) | 5.9% | 5.9% (23) | -39% / -28% / -28% / -57% | $2,857,566 / $2,921,779 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 1929 | paper | 6 | 4 | 4 | 2028 / 2029 | -17.8% (2045) | 10.3% | 10.3% (23) | -26% / -18% / -25% / -57% | $2,922,167 / $2,978,062 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 1937 | normal | 10 | 17 | 10 | 2027 / 2027 | +35.2% (2028) | 6.1% | 6.1% (23) | -35% / -36% / -35% / -53% | $2,816,942 / $2,877,285 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 1937 | paper | 7 | 7 | 7 | 2027 / 2027 | +0.3% (2039) | 0.3% | 0.3% (23) | -18% / -18% / -18% / -53% | $2,985,967 / $2,992,886 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 1966 | normal | 7 | 14 | 7 | 2027 / 2027 | +27.8% (2028) | 5.7% | 5.7% (23) | -29% / -34% / -30% / -63% | $2,698,796 / $2,755,878 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 1966 | paper | 6 | 6 | 6 | 2030 / 2030 | +18.4% (2035) | 3.3% | 3.3% (23) | -28% / -31% / -29% / -63% | $2,871,249 / $2,911,628 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 1973 | normal | 12 | 12 | 12 | 2027 / 2027 | -10.0% (2038) | 1.3% | 1.3% (23) | -32% / -32% / -32% / -56% | $2,857,895 / $2,862,683 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 1973 | paper | 10 | 10 | 10 | 2027 / 2027 | +14.5% (2028) | 3.6% | 3.6% (23) | -24% / -26% / -23% / -56% | $2,982,673 / $3,021,447 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 2000 | normal | 13 | 14 | 12 | 2027 / 2027 | +21.5% (2028) | 4.5% | 4.5% (23) | -27% / -27% / -27% / -34% | $2,970,561 / $3,041,695 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 2000 | paper | 8 | 8 | 6 | 2029 / 2031 | +19.3% (2029) | 4.7% | 4.7% (23) | -16% / -12% / -15% / -34% | $3,143,956 / $3,214,582 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 2007 | normal | 14 | 14 | 13 | 2027 / 2027 | +11.9% (2032) | 2.3% | 2.3% (23) | -26% / -26% / -26% / -15% | $3,133,596 / $3,179,338 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 2007 | paper | 9 | 10 | 9 | 2041 / 2040 | +0.0% (-) | 0.0% | 0.0% (23) | +0% / +0% / +0% / -15% | $3,429,150 / $3,429,150 / $3,429,150 | yes / yes |
-| mixed-portfolio-couple | 1929 | normal | 16 | 17 | 16 | 2027 / 2027 | +14.8% (2048) | 3.4% | 3.4% (32) | -43% / -41% / -42% / -47% | $6,427,760 / $6,467,301 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 1929 | paper | 11 | 11 | 9 | 2028 / 2028 | +32.5% (2046) | 4.8% | 4.8% (32) | -30% / -29% / -30% / -47% | $6,386,648 / $6,579,953 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 1937 | normal | 20 | 19 | 19 | 2027 / 2027 | -10.7% (2040) | 2.7% | 2.7% (32) | -38% / -38% / -38% / -48% | $6,545,024 / $6,552,094 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 1937 | paper | 11 | 14 | 11 | 2027 / 2027 | +22.9% (2044) | 6.6% | 6.6% (32) | -19% / -26% / -19% / -48% | $6,806,767 / $6,751,668 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 1966 | normal | 16 | 18 | 16 | 2027 / 2027 | +3.1% (2035) | 0.9% | 0.9% (32) | -39% / -38% / -38% / -59% | $6,253,669 / $6,269,179 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 1966 | paper | 10 | 10 | 10 | 2030 / 2030 | +3.8% (2050) | 0.7% | 0.7% (32) | -30% / -31% / -30% / -59% | $6,458,090 / $6,465,577 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 1973 | normal | 21 | 19 | 20 | 2027 / 2027 | -12.7% (2034) | 3.4% | 3.4% (32) | -43% / -42% / -42% / -51% | $6,558,616 / $6,537,650 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 1973 | paper | 14 | 15 | 14 | 2027 / 2027 | -1.3% (2027) | 0.1% | 0.1% (32) | -27% / -27% / -27% / -51% | $6,748,581 / $6,741,095 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 2000 | normal | 18 | 21 | 17 | 2027 / 2027 | +9.8% (2039) | 3.2% | 3.2% (32) | -28% / -33% / -34% / -33% | $6,872,155 / $6,899,467 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 2000 | paper | 14 | 14 | 14 | 2029 / 2029 | +0.6% (2041) | 0.3% | 0.3% (32) | -18% / -17% / -18% / -33% | $7,013,344 / $7,033,845 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 2007 | normal | 24 | 24 | 24 | 2027 / 2027 | -15.6% (2032) | 1.8% | 1.8% (32) | -27% / -31% / -31% / -6% | $7,269,855 / $7,201,280 / $7,722,000 | yes / yes |
+| long-widowhood | 1929 | normal | 22 | 21 | 20 | 2028 / 2028 | -11.4% (2039) | 1.9% | 1.9% (37) | -36% / -36% / -35% / -35% | $5,354,492 / $5,345,480 / $5,700,000 | yes / yes |
+| long-widowhood | 1929 | paper | 18 | 14 | 15 | 2029 / 2029 | +15.8% (2034) | 3.9% | 3.9% (37) | -14% / -14% / -13% / -35% | $5,413,593 / $5,592,771 / $5,700,000 | yes / yes |
+| long-widowhood | 1937 | normal | 26 | 25 | 24 | 2027 / 2027 | -14.3% (2031) | 2.6% | 2.6% (37) | -26% / -26% / -25% / -25% | $5,520,310 / $5,428,922 / $5,700,000 | yes / yes |
+| long-widowhood | 1937 | paper | 22 | 19 | 20 | 2042 / 2042 | +0.0% (-) | 0.0% | 0.0% (37) | +0% / +0% / +0% / -25% | $5,700,000 / $5,700,000 / $5,700,000 | yes / yes |
+| long-widowhood | 1966 | normal | 21 | 18 | 19 | 2035 / 2035 | +15.6% (2044) | 2.7% | 2.7% (37) | -32% / -32% / -31% / -39% | $5,442,707 / $5,387,202 / $5,700,000 | yes / yes |
+| long-widowhood | 1966 | paper | 17 | 14 | 15 | 2047 / 2047 | +0.0% (-) | 0.0% | 0.0% (37) | +0% / +0% / +0% / -39% | $5,700,000 / $5,700,000 / $5,700,000 | yes / yes |
+| long-widowhood | 1973 | normal | 26 | 25 | 24 | 2027 / 2027 | +24.1% (2037) | 2.1% | 2.1% (37) | -19% / -34% / -20% / -35% | $5,350,302 / $5,371,274 / $5,700,000 | yes / yes |
+| long-widowhood | 1973 | paper | 22 | 19 | 20 | 2042 / 2042 | +0.0% (-) | 0.0% | 0.0% (37) | +0% / +0% / +0% / -35% | $5,700,000 / $5,700,000 / $5,700,000 | yes / yes |
+| long-widowhood | 2000 | normal | 26 | 25 | 23 | 2029 / 2028 | -20.6% (2028) | 3.7% | 3.7% (37) | -24% / -21% / -24% / -26% | $5,457,683 / $5,487,199 / $5,700,000 | yes / yes |
+| long-widowhood | 2000 | paper | 23 | 19 | 21 | 2041 / 2041 | +0.0% (-) | 0.0% | 0.0% (37) | +0% / +0% / +0% / -26% | $5,700,000 / $5,700,000 / $5,700,000 | yes / yes |
+| long-widowhood | 2007 | normal | 33 | 30 | 31 | 2028 / 2028 | -5.2% (2028) | 0.3% | 0.3% (37) | -19% / -24% / -19% / -15% | $5,609,126 / $5,596,868 / $5,700,000 | yes / yes |
+| long-widowhood | 2007 | paper | 30 | 27 | 28 | 2034 / 2034 | +0.0% (-) | 0.0% | 0.0% (37) | +0% / +0% / +0% / -15% | $5,700,000 / $5,700,000 / $5,700,000 | yes / yes |
+| soft-cap-underfunded | 1929 | normal | 11 | 11 | 11 | 2027 / 2027 | -10.2% (2041) | 2.5% | 2.5% (23) | -39% / -36% / -28% / -29% | $2,857,566 / $2,880,021 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 1929 | paper | 6 | 6 | 6 | 2028 / 2028 | -17.9% (2041) | 2.3% | 2.3% (23) | -26% / -25% / -24% / -29% | $2,922,167 / $2,910,880 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 1937 | normal | 10 | 12 | 10 | 2027 / 2027 | -13.3% (2040) | 3.9% | 3.9% (23) | -35% / -35% / -35% / -26% | $2,816,942 / $2,865,841 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 1937 | paper | 7 | 8 | 7 | 2027 / 2027 | +21.7% (2042) | 4.6% | 4.6% (23) | -18% / -21% / -21% / -26% | $2,985,967 / $2,957,768 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 1966 | normal | 7 | 8 | 7 | 2027 / 2027 | +5.6% (2032) | 3.0% | 3.0% (23) | -29% / -30% / -30% / -36% | $2,698,796 / $2,751,771 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 1966 | paper | 6 | 7 | 6 | 2030 / 2030 | +11.3% (2045) | 3.1% | 3.1% (23) | -28% / -32% / -33% / -36% | $2,871,249 / $2,905,007 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 1973 | normal | 12 | 12 | 12 | 2027 / 2027 | -2.7% (2038) | 0.2% | 0.2% (23) | -32% / -32% / -32% / -27% | $2,857,895 / $2,853,750 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 1973 | paper | 10 | 10 | 10 | 2027 / 2027 | -1.3% (2033) | 0.7% | 0.7% (23) | -24% / -25% / -23% / -27% | $2,982,673 / $2,963,388 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 2000 | normal | 13 | 12 | 12 | 2027 / 2027 | -8.6% (2040) | 2.5% | 2.5% (23) | -27% / -27% / -27% / -9% | $2,970,561 / $2,961,582 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 2000 | paper | 8 | 8 | 8 | 2029 / 2028 | -12.5% (2041) | 3.4% | 3.4% (23) | -16% / -12% / -15% / -9% | $3,143,956 / $3,172,333 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 2007 | normal | 14 | 15 | 14 | 2027 / 2027 | +12.1% (2032) | 1.6% | 1.6% (23) | -26% / -26% / -26% / -5% | $3,133,596 / $3,155,953 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 2007 | paper | 9 | 12 | 9 | 2041 / 2028 | -13.3% (2028) | 6.3% | 6.3% (23) | +0% / -13% / +0% / -5% | $3,429,150 / $3,211,468 / $3,429,150 | yes / yes |
+| mixed-portfolio-couple | 1929 | normal | 16 | 17 | 16 | 2027 / 2027 | +14.9% (2048) | 3.4% | 3.4% (32) | -43% / -42% / -42% / -31% | $6,427,760 / $6,465,766 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 1929 | paper | 11 | 10 | 9 | 2028 / 2028 | +22.0% (2034) | 12.8% | 12.8% (32) | -30% / -39% / -40% / -31% | $6,386,648 / $6,623,413 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 1937 | normal | 20 | 20 | 19 | 2027 / 2027 | -11.9% (2040) | 2.4% | 2.4% (32) | -38% / -38% / -38% / -32% | $6,545,024 / $6,558,362 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 1937 | paper | 11 | 13 | 11 | 2027 / 2027 | +22.9% (2045) | 4.9% | 4.9% (32) | -19% / -23% / -23% / -32% | $6,806,767 / $6,767,366 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 1966 | normal | 16 | 17 | 15 | 2027 / 2027 | -10.2% (2044) | 1.6% | 1.6% (32) | -39% / -38% / -38% / -41% | $6,253,669 / $6,256,343 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 1966 | paper | 10 | 11 | 10 | 2030 / 2030 | +25.5% (2047) | 3.4% | 3.4% (32) | -30% / -31% / -31% / -41% | $6,458,090 / $6,523,487 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 1973 | normal | 21 | 19 | 20 | 2027 / 2027 | -12.4% (2030) | 3.4% | 3.4% (32) | -43% / -41% / -42% / -35% | $6,558,616 / $6,540,385 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 1973 | paper | 14 | 17 | 13 | 2027 / 2027 | +28.3% (2040) | 7.5% | 7.5% (32) | -27% / -35% / -35% / -35% | $6,748,581 / $6,620,395 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 2000 | normal | 18 | 21 | 17 | 2027 / 2027 | +9.9% (2039) | 3.3% | 3.3% (32) | -28% / -34% / -34% / -18% | $6,872,155 / $6,896,959 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 2000 | paper | 14 | 14 | 14 | 2029 / 2029 | +21.7% (2044) | 2.8% | 2.8% (32) | -18% / -20% / -21% / -18% | $7,013,344 / $7,007,884 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 2007 | normal | 24 | 24 | 24 | 2027 / 2027 | -15.5% (2032) | 1.8% | 1.8% (32) | -27% / -31% / -31% / -6% | $7,269,855 / $7,201,973 / $7,722,000 | yes / yes |
 | mixed-portfolio-couple | 2007 | paper | 13 | 13 | 13 | 2046 / 2046 | +0.0% (-) | 0.0% | 0.0% (32) | +0% / +0% / +0% / -6% | $7,722,000 / $7,722,000 / $7,722,000 | yes / yes |
+
+Cost, ceiling run:
+
+| household | plan years | table job (every 3) | table job (every year) | exact walk per sequence | runs per exact walk | task total |
+|---|---|---|---|---|---|---|
+| bracket-filler-texas | 33 | 22.3 s, 32,212 runs | 54.2 s, 83,754 runs | 20.8 s | 27,875 | 355 s |
+| modest-balances-little-surplus | 29 | 18.6 s, 29,390 runs | 47.3 s, 80,283 runs | 7.9 s | 17,675 | 181 s |
+| long-widowhood | 38 | 30.0 s, 36,299 runs | 76.7 s, 101,214 runs | 18.9 s | 26,542 | 370 s |
+| soft-cap-underfunded | 24 | 12.5 s, 25,192 runs | 29.7 s, 59,869 runs | 5.5 s | 12,658 | 125 s |
+| mixed-portfolio-couple | 33 | 21.1 s, 34,783 runs | 54.3 s, 88,942 runs | 10.5 s | 20,358 | 229 s |
 
 ### Without the ceiling
 
-| household | start | preset | exact adjusts | cheap adjusts | matched +/-1 yr | first: exact / cheap | largest spend gap (year) | mean gap | mean gap near plan (years) | trough: exact / cheap / every-year / GK | lifetime real 0%: exact / cheap / off | funded: exact / cheap |
+| household | start | preset | exact adjusts | cheap adjusts | matched +/-1 yr | first: exact / cheap | largest spend gap (year) | mean |gap| | mean |gap| near plan (years) | trough: exact / cheap / every-year / GK | lifetime real 0%: exact / cheap / off | funded: exact / cheap |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| bracket-filler-texas | 1929 | normal | 10 | 5 | 7 | 2033 / 2033 | -51.7% (2058) | 8.4% | 1.7% (19) | +0% / +0% / +0% / -30% | $7,158,306 / $6,134,360 / $3,630,000 | yes / yes |
-| bracket-filler-texas | 1929 | paper | 5 | 3 | 3 | 2034 / 2034 | -38.7% (2058) | 6.0% | 0.7% (23) | +0% / +0% / +0% / -30% | $6,811,173 / $6,501,113 / $3,630,000 | yes / yes |
-| bracket-filler-texas | 1937 | normal | 12 | 8 | 10 | 2033 / 2033 | -32.1% (2058) | 3.3% | 0.3% (17) | +0% / +0% / +0% / -37% | $8,700,160 / $8,052,883 / $3,630,000 | yes / yes |
-| bracket-filler-texas | 1937 | paper | 4 | 3 | 3 | 2035 / 2035 | -28.9% (2055) | 4.3% | 0.0% (8) | +0% / +0% / +0% / -37% | $8,167,940 / $7,489,491 / $3,630,000 | yes / yes |
-| bracket-filler-texas | 1966 | normal | 11 | 8 | 7 | 2029 / 2028 | -66.1% (2058) | 10.8% | 3.9% (19) | -2% / -3% / -3% / -50% | $7,582,257 / $6,122,940 / $3,630,000 | yes / yes |
-| bracket-filler-texas | 1966 | paper | 5 | 3 | 3 | 2033 / 2033 | -64.7% (2058) | 4.9% | 0.0% (22) | +0% / +0% / +0% / -50% | $7,055,554 / $6,063,537 / $3,630,000 | yes / yes |
-| bracket-filler-texas | 1973 | normal | 10 | 7 | 8 | 2037 / 2037 | -38.7% (2058) | 3.5% | 0.2% (15) | +0% / +0% / +0% / -44% | $11,086,186 / $10,070,634 / $3,630,000 | yes / yes |
-| bracket-filler-texas | 1973 | paper | 5 | 4 | 5 | 2039 / 2039 | +29.7% (2052) | 3.5% | 0.0% (12) | +0% / +0% / +0% / -44% | $11,137,633 / $10,799,117 / $3,630,000 | yes / yes |
-| bracket-filler-texas | 2000 | normal | 11 | 8 | 8 | 2030 / 2030 | +42.1% (2056) | 3.6% | 0.1% (13) | +0% / +0% / +0% / -18% | $8,377,329 / $8,554,265 / $3,630,000 | yes / yes |
-| bracket-filler-texas | 2000 | paper | 5 | 4 | 4 | 2033 / 2033 | +52.3% (2057) | 6.7% | 0.3% (14) | +0% / +0% / +0% / -18% | $8,394,167 / $9,054,850 / $3,630,000 | yes / NO |
-| bracket-filler-texas | 2007 | normal | 13 | 9 | 9 | 2027 / 2027 | -35.1% (2058) | 7.8% | 0.9% (7) | +0% / +0% / +0% / -6% | $9,804,085 / $9,109,504 / $3,630,000 | yes / yes |
-| bracket-filler-texas | 2007 | paper | 6 | 5 | 1 | 2027 / 2030 | +57.4% (2048) | 21.1% | 12.5% (8) | +0% / +0% / +0% / -6% | $9,801,952 / $10,229,144 / $3,630,000 | NO / NO |
-| modest-balances-little-surplus | 1929 | normal | 10 | 13 | 9 | 2027 / 2027 | -34.6% (2054) | 7.0% | 5.1% (23) | -31% / -30% / -30% / -35% | $3,730,685 / $3,536,894 / $3,045,000 | yes / yes |
-| modest-balances-little-surplus | 1929 | paper | 4 | 4 | 4 | 2029 / 2029 | +21.2% (2052) | 2.5% | 0.4% (25) | -15% / -15% / -14% / -35% | $3,444,743 / $3,497,785 / $3,045,000 | yes / NO |
-| modest-balances-little-surplus | 1937 | normal | 11 | 9 | 9 | 2027 / 2027 | -43.1% (2054) | 13.7% | 11.3% (17) | -25% / -14% / -17% / -39% | $5,018,312 / $4,443,113 / $3,045,000 | yes / yes |
-| modest-balances-little-surplus | 1937 | paper | 4 | 3 | 4 | 2045 / 2045 | +21.3% (2051) | 4.5% | 1.3% (22) | +0% / +0% / +0% / -39% | $3,868,740 / $3,919,427 / $3,045,000 | yes / yes |
-| modest-balances-little-surplus | 1966 | normal | 9 | 11 | 9 | 2027 / 2027 | +28.9% (2043) | 8.4% | 6.8% (20) | -16% / -23% / -16% / -45% | $3,852,128 / $3,910,018 / $3,045,000 | yes / yes |
-| modest-balances-little-surplus | 1966 | paper | 4 | 5 | 4 | 2042 / 2042 | -11.9% (2054) | 2.6% | 2.4% (26) | -14% / -12% / -12% / -45% | $3,387,101 / $3,444,668 / $3,045,000 | yes / NO |
-| modest-balances-little-surplus | 1973 | normal | 12 | 11 | 12 | 2027 / 2027 | -37.2% (2054) | 14.0% | 15.0% (16) | -30% / -25% / -31% / -44% | $5,503,357 / $4,972,670 / $3,045,000 | yes / yes |
-| modest-balances-little-surplus | 1973 | paper | 6 | 6 | 5 | 2028 / 2028 | +55.7% (2052) | 13.4% | 11.7% (19) | -10% / -17% / -13% / -44% | $4,736,155 / $4,990,122 / $3,045,000 | yes / NO |
-| modest-balances-little-surplus | 2000 | normal | 13 | 12 | 11 | 2027 / 2027 | -33.7% (2054) | 9.9% | 9.6% (18) | -22% / -15% / -18% / -26% | $4,741,435 / $4,665,120 / $3,045,000 | NO / yes |
-| modest-balances-little-surplus | 2000 | paper | 4 | 4 | 4 | 2044 / 2044 | -22.5% (2054) | 5.2% | 1.1% (20) | +0% / +0% / +0% / -26% | $4,115,612 / $4,116,057 / $3,045,000 | NO / NO |
-| modest-balances-little-surplus | 2007 | normal | 13 | 12 | 10 | 2027 / 2027 | +33.8% (2052) | 9.8% | 9.6% (14) | -18% / -13% / -19% / -15% | $5,703,207 / $5,696,734 / $3,045,000 | NO / NO |
-| modest-balances-little-surplus | 2007 | paper | 6 | 4 | 4 | 2037 / 2039 | +52.7% (2052) | 12.3% | 7.8% (17) | +0% / +0% / +0% / -15% | $5,299,664 / $5,373,446 / $3,045,000 | NO / NO |
-| long-widowhood | 1929 | normal | 16 | 15 | 12 | 2028 / 2028 | -42.3% (2063) | 8.5% | 8.1% (21) | -36% / -36% / -36% / -36% | $14,531,307 / $13,337,314 / $5,700,000 | yes / yes |
-| long-widowhood | 1929 | paper | 7 | 5 | 5 | 2029 / 2029 | -40.3% (2063) | 2.9% | 1.1% (25) | -14% / -14% / -13% / -36% | $12,579,823 / $11,716,243 / $5,700,000 | NO / yes |
-| long-widowhood | 1937 | normal | 13 | 11 | 9 | 2027 / 2027 | -36.2% (2062) | 7.3% | 7.2% (17) | -26% / -25% / -25% / -37% | $19,159,416 / $18,231,642 / $5,700,000 | NO / yes |
-| long-widowhood | 1937 | paper | 5 | 4 | 4 | 2042 / 2042 | -17.4% (2063) | 2.1% | 0.0% (15) | +0% / +0% / +0% / -37% | $16,317,596 / $15,939,466 / $5,700,000 | NO / yes |
-| long-widowhood | 1966 | normal | 12 | 13 | 11 | 2035 / 2034 | +32.1% (2046) | 9.7% | 8.0% (20) | -32% / -36% / -32% / -44% | $14,308,039 / $15,047,301 / $5,700,000 | yes / yes |
-| long-widowhood | 1966 | paper | 5 | 5 | 5 | 2047 / 2047 | -21.0% (2059) | 2.4% | 0.0% (20) | +0% / +0% / +0% / -44% | $12,663,861 / $12,894,579 / $5,700,000 | yes / NO |
-| long-widowhood | 1973 | normal | 11 | 11 | 8 | 2027 / 2027 | +27.9% (2043) | 7.3% | 7.4% (15) | -19% / -35% / -20% / -44% | $18,326,707 / $18,178,692 / $5,700,000 | yes / yes |
-| long-widowhood | 1973 | paper | 5 | 4 | 4 | 2042 / 2042 | -25.5% (2057) | 3.8% | 0.0% (15) | +0% / +0% / +0% / -44% | $15,535,869 / $14,783,716 / $5,700,000 | yes / yes |
-| long-widowhood | 2000 | normal | 14 | 13 | 12 | 2029 / 2028 | +38.8% (2039) | 8.9% | 8.6% (17) | -24% / -25% / -24% / -26% | $12,951,375 / $12,434,429 / $5,700,000 | yes / yes |
-| long-widowhood | 2000 | paper | 8 | 5 | 5 | 2041 / 2043 | -31.5% (2041) | 8.1% | 5.9% (20) | +0% / +0% / +0% / -26% | $11,690,075 / $11,528,774 / $5,700,000 | yes / yes |
-| long-widowhood | 2007 | normal | 19 | 17 | 16 | 2028 / 2028 | -57.7% (2063) | 9.0% | 2.9% (10) | -19% / -24% / -19% / -15% | $15,660,845 / $14,509,546 / $5,700,000 | yes / yes |
-| long-widowhood | 2007 | paper | 7 | 5 | 4 | 2034 / 2036 | -48.5% (2063) | 8.8% | 6.8% (13) | +0% / +0% / +0% / -15% | $14,498,991 / $13,942,805 / $5,700,000 | NO / yes |
-| soft-cap-underfunded | 1929 | normal | 11 | 9 | 9 | 2027 / 2027 | +17.7% (2029) | 7.4% | 7.2% (22) | -39% / -28% / -28% / -56% | $3,070,875 / $3,067,509 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 1929 | paper | 4 | 3 | 2 | 2028 / 2029 | -26.2% (2043) | 12.7% | 12.7% (23) | -26% / -18% / -25% / -56% | $3,026,010 / $2,993,319 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 1937 | normal | 8 | 14 | 8 | 2027 / 2027 | +35.2% (2028) | 9.0% | 8.7% (18) | -35% / -36% / -35% / -53% | $3,419,382 / $3,398,697 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 1937 | paper | 4 | 3 | 3 | 2027 / 2027 | +14.8% (2046) | 2.8% | 2.7% (21) | -18% / -18% / -18% / -53% | $3,259,979 / $3,334,040 / $3,429,150 | yes / NO |
-| soft-cap-underfunded | 1966 | normal | 6 | 14 | 6 | 2027 / 2027 | +27.8% (2028) | 7.5% | 7.0% (22) | -29% / -34% / -30% / -63% | $2,917,914 / $2,954,244 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 1966 | paper | 5 | 6 | 5 | 2030 / 2030 | +18.4% (2035) | 4.4% | 4.4% (23) | -28% / -31% / -29% / -63% | $2,924,635 / $2,929,618 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 1973 | normal | 9 | 10 | 9 | 2027 / 2027 | +23.0% (2046) | 5.7% | 3.8% (18) | -32% / -32% / -32% / -56% | $3,577,020 / $3,617,332 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 1973 | paper | 7 | 5 | 5 | 2027 / 2027 | -35.6% (2049) | 7.1% | 5.7% (21) | -24% / -26% / -23% / -56% | $3,455,398 / $3,426,739 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 2000 | normal | 10 | 11 | 9 | 2027 / 2027 | +21.5% (2028) | 8.0% | 7.4% (19) | -27% / -27% / -27% / -34% | $3,666,906 / $3,674,342 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 2000 | paper | 5 | 4 | 3 | 2029 / 2031 | -23.2% (2048) | 7.9% | 6.7% (21) | -16% / -12% / -15% / -34% | $3,556,290 / $3,534,955 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 2007 | normal | 11 | 12 | 10 | 2027 / 2027 | -19.4% (2049) | 7.7% | 6.3% (16) | -26% / -26% / -26% / -15% | $4,326,629 / $4,360,790 / $3,429,150 | yes / yes |
-| soft-cap-underfunded | 2007 | paper | 3 | 5 | 3 | 2041 / 2040 | +35.6% (2040) | 5.9% | 4.7% (20) | +0% / +0% / +0% / -15% | $4,144,212 / $4,186,702 / $3,429,150 | NO / yes |
-| mixed-portfolio-couple | 1929 | normal | 13 | 13 | 13 | 2027 / 2027 | +14.8% (2048) | 4.7% | 4.9% (25) | -43% / -41% / -42% / -49% | $8,498,233 / $8,449,995 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 1929 | paper | 7 | 7 | 4 | 2028 / 2028 | +32.5% (2046) | 8.4% | 7.1% (25) | -30% / -29% / -30% / -49% | $8,139,544 / $7,880,775 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 1937 | normal | 13 | 11 | 12 | 2027 / 2027 | +14.9% (2050) | 4.8% | 4.5% (24) | -38% / -38% / -38% / -48% | $9,813,827 / $9,860,424 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 1937 | paper | 4 | 7 | 3 | 2027 / 2027 | +40.5% (2058) | 12.3% | 12.1% (24) | -19% / -26% / -19% / -48% | $8,599,711 / $9,052,233 / $7,722,000 | yes / NO |
-| mixed-portfolio-couple | 1966 | normal | 13 | 14 | 13 | 2027 / 2027 | -12.4% (2057) | 2.3% | 1.6% (25) | -39% / -38% / -38% / -59% | $8,916,302 / $8,856,887 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 1966 | paper | 6 | 7 | 6 | 2030 / 2030 | +25.9% (2055) | 2.0% | 1.8% (29) | -30% / -31% / -30% / -59% | $7,898,226 / $7,940,786 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 1973 | normal | 14 | 11 | 13 | 2027 / 2027 | +18.6% (2056) | 6.7% | 6.0% (22) | -43% / -42% / -42% / -51% | $11,740,389 / $12,031,423 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 1973 | paper | 6 | 8 | 6 | 2027 / 2027 | -24.8% (2053) | 3.9% | 0.9% (22) | -27% / -27% / -27% / -51% | $10,705,013 / $10,550,129 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 2000 | normal | 11 | 12 | 9 | 2027 / 2027 | -12.6% (2058) | 7.1% | 8.1% (24) | -28% / -33% / -34% / -33% | $9,483,820 / $9,535,694 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 2000 | paper | 5 | 4 | 4 | 2029 / 2029 | +20.2% (2056) | 4.8% | 0.6% (24) | -18% / -17% / -18% / -33% | $8,887,517 / $8,809,885 / $7,722,000 | yes / yes |
-| mixed-portfolio-couple | 2007 | normal | 13 | 12 | 13 | 2027 / 2027 | -15.6% (2032) | 4.4% | 4.3% (21) | -27% / -31% / -31% / -6% | $11,223,969 / $11,444,515 / $7,722,000 | yes / NO |
-| mixed-portfolio-couple | 2007 | paper | 4 | 4 | 4 | 2046 / 2046 | +30.2% (2056) | 2.6% | 0.3% (23) | +0% / +0% / +0% / -6% | $10,053,208 / $10,057,129 / $7,722,000 | NO / NO |
+| bracket-filler-texas | 1929 | normal | 10 | 5 | 7 | 2033 / 2033 | -51.5% (2058) | 8.4% | 1.7% (19) | +0% / +0% / +0% / -28% | $7,158,306 / $6,148,207 / $3,630,000 | yes / yes |
+| bracket-filler-texas | 1929 | paper | 5 | 3 | 3 | 2034 / 2034 | -36.6% (2058) | 7.1% | 0.8% (23) | +0% / +0% / +0% / -28% | $6,811,173 / $6,532,883 / $3,630,000 | yes / yes |
+| bracket-filler-texas | 1937 | normal | 12 | 8 | 10 | 2033 / 2033 | -32.2% (2058) | 3.3% | 0.2% (17) | +0% / +0% / +0% / -32% | $8,700,160 / $8,050,483 / $3,630,000 | yes / yes |
+| bracket-filler-texas | 1937 | paper | 4 | 3 | 3 | 2035 / 2035 | -28.9% (2055) | 4.3% | 0.0% (8) | +0% / +0% / +0% / -32% | $8,167,940 / $7,488,435 / $3,630,000 | yes / yes |
+| bracket-filler-texas | 1966 | normal | 11 | 8 | 7 | 2029 / 2029 | -65.8% (2058) | 9.8% | 2.3% (19) | -2% / -2% / -3% / -35% | $7,582,257 / $6,145,009 / $3,630,000 | yes / yes |
+| bracket-filler-texas | 1966 | paper | 5 | 3 | 3 | 2033 / 2033 | -64.6% (2058) | 5.0% | 0.0% (22) | +0% / +0% / +0% / -35% | $7,055,554 / $6,069,816 / $3,630,000 | yes / yes |
+| bracket-filler-texas | 1973 | normal | 10 | 8 | 8 | 2037 / 2037 | -31.1% (2058) | 3.1% | 0.2% (15) | +0% / +0% / +0% / -29% | $11,086,186 / $10,471,227 / $3,630,000 | yes / yes |
+| bracket-filler-texas | 1973 | paper | 5 | 4 | 5 | 2039 / 2039 | +31.0% (2052) | 3.4% | 0.0% (12) | +0% / +0% / +0% / -29% | $11,137,633 / $10,878,023 / $3,630,000 | yes / yes |
+| bracket-filler-texas | 2000 | normal | 11 | 9 | 8 | 2030 / 2030 | +44.9% (2056) | 4.3% | 0.1% (13) | +0% / +0% / +0% / -17% | $8,377,329 / $8,547,959 / $3,630,000 | yes / yes |
+| bracket-filler-texas | 2000 | paper | 5 | 4 | 4 | 2033 / 2033 | +53.1% (2056) | 6.9% | 0.3% (14) | +0% / +0% / +0% / -17% | $8,394,167 / $9,084,746 / $3,630,000 | yes / NO |
+| bracket-filler-texas | 2007 | normal | 13 | 9 | 9 | 2027 / 2027 | -34.6% (2058) | 8.0% | 1.0% (7) | +0% / +0% / +0% / -6% | $9,804,085 / $9,150,621 / $3,630,000 | yes / yes |
+| bracket-filler-texas | 2007 | paper | 6 | 5 | 1 | 2027 / 2030 | +58.0% (2047) | 21.1% | 12.5% (8) | +0% / +0% / +0% / -6% | $9,801,952 / $10,199,318 / $3,630,000 | NO / NO |
+| modest-balances-little-surplus | 1929 | normal | 10 | 13 | 10 | 2027 / 2027 | -25.5% (2054) | 7.4% | 6.4% (23) | -31% / -34% / -34% / -26% | $3,730,685 / $3,751,882 / $3,045,000 | yes / yes |
+| modest-balances-little-surplus | 1929 | paper | 4 | 3 | 3 | 2029 / 2029 | +18.0% (2052) | 2.8% | 1.1% (25) | -15% / -16% / -15% / -26% | $3,444,743 / $3,501,730 / $3,045,000 | yes / NO |
+| modest-balances-little-surplus | 1937 | normal | 11 | 8 | 9 | 2027 / 2027 | +41.8% (2053) | 12.6% | 11.5% (17) | -25% / -37% / -37% / -26% | $5,018,312 / $5,082,352 / $3,045,000 | yes / yes |
+| modest-balances-little-surplus | 1937 | paper | 4 | 2 | 2 | 2045 / 2045 | +41.8% (2051) | 4.8% | 1.3% (22) | +0% / +0% / +0% / -26% | $3,868,740 / $3,906,457 / $3,045,000 | yes / yes |
+| modest-balances-little-surplus | 1966 | normal | 9 | 8 | 9 | 2027 / 2027 | +42.9% (2052) | 9.7% | 6.3% (20) | -16% / -21% / -21% / -32% | $3,852,128 / $4,062,843 / $3,045,000 | yes / yes |
+| modest-balances-little-surplus | 1966 | paper | 4 | 4 | 3 | 2042 / 2042 | +48.8% (2052) | 4.3% | 4.2% (26) | -14% / -12% / -12% / -32% | $3,387,101 / $3,457,442 / $3,045,000 | yes / NO |
+| modest-balances-little-surplus | 1973 | normal | 12 | 11 | 11 | 2027 / 2027 | -37.7% (2054) | 10.3% | 11.9% (16) | -30% / -41% / -40% / -28% | $5,503,357 / $5,238,744 / $3,045,000 | yes / yes |
+| modest-balances-little-surplus | 1973 | paper | 6 | 7 | 6 | 2028 / 2028 | +53.1% (2052) | 8.4% | 4.7% (19) | -10% / -11% / -13% / -28% | $4,736,155 / $4,837,939 / $3,045,000 | yes / NO |
+| modest-balances-little-surplus | 2000 | normal | 13 | 9 | 11 | 2027 / 2027 | -27.5% (2054) | 10.9% | 10.9% (18) | -22% / -24% / -16% / -18% | $4,741,435 / $4,627,304 / $3,045,000 | NO / yes |
+| modest-balances-little-surplus | 2000 | paper | 4 | 3 | 3 | 2044 / 2044 | -37.1% (2053) | 5.9% | 1.1% (20) | +0% / +0% / +0% / -18% | $4,115,612 / $4,042,388 / $3,045,000 | NO / NO |
+| modest-balances-little-surplus | 2007 | normal | 13 | 11 | 11 | 2027 / 2027 | +32.9% (2053) | 10.9% | 12.8% (14) | -18% / -26% / -24% / -15% | $5,703,207 / $5,836,964 / $3,045,000 | NO / NO |
+| modest-balances-little-surplus | 2007 | paper | 6 | 4 | 4 | 2037 / 2039 | +51.5% (2053) | 13.1% | 8.0% (17) | +0% / +0% / +0% / -15% | $5,299,664 / $5,415,754 / $3,045,000 | NO / NO |
+| long-widowhood | 1929 | normal | 16 | 13 | 12 | 2028 / 2028 | -42.4% (2063) | 6.9% | 5.1% (21) | -36% / -36% / -35% / -34% | $14,531,307 / $13,343,981 / $5,700,000 | yes / yes |
+| long-widowhood | 1929 | paper | 7 | 7 | 4 | 2029 / 2029 | -43.7% (2063) | 14.6% | 17.0% (25) | -14% / -14% / -13% / -34% | $12,579,823 / $11,227,674 / $5,700,000 | NO / yes |
+| long-widowhood | 1937 | normal | 13 | 10 | 10 | 2027 / 2027 | -31.5% (2062) | 6.5% | 6.6% (17) | -26% / -26% / -25% / -25% | $19,159,416 / $18,236,049 / $5,700,000 | NO / yes |
+| long-widowhood | 1937 | paper | 5 | 4 | 4 | 2042 / 2042 | -16.5% (2061) | 2.2% | 0.0% (15) | +0% / +0% / +0% / -25% | $16,317,596 / $16,020,233 / $5,700,000 | NO / yes |
+| long-widowhood | 1966 | normal | 12 | 12 | 11 | 2035 / 2035 | +29.9% (2046) | 8.7% | 7.0% (20) | -32% / -32% / -31% / -39% | $14,308,039 / $14,805,106 / $5,700,000 | yes / yes |
+| long-widowhood | 1966 | paper | 5 | 5 | 5 | 2047 / 2047 | -20.7% (2059) | 2.4% | 0.0% (20) | +0% / +0% / +0% / -39% | $12,663,861 / $12,893,234 / $5,700,000 | yes / NO |
+| long-widowhood | 1973 | normal | 11 | 13 | 8 | 2027 / 2027 | +26.6% (2038) | 8.3% | 8.8% (15) | -19% / -34% / -20% / -35% | $18,326,707 / $17,856,792 / $5,700,000 | yes / yes |
+| long-widowhood | 1973 | paper | 5 | 4 | 4 | 2042 / 2042 | -25.5% (2057) | 3.8% | 0.0% (15) | +0% / +0% / +0% / -35% | $15,535,869 / $14,817,428 / $5,700,000 | yes / yes |
+| long-widowhood | 2000 | normal | 14 | 12 | 10 | 2029 / 2028 | -29.2% (2061) | 10.8% | 12.0% (17) | -24% / -21% / -24% / -26% | $12,951,375 / $12,404,976 / $5,700,000 | yes / yes |
+| long-widowhood | 2000 | paper | 8 | 5 | 6 | 2041 / 2041 | -27.6% (2061) | 3.0% | 1.1% (20) | +0% / +0% / +0% / -26% | $11,690,075 / $11,351,165 / $5,700,000 | yes / yes |
+| long-widowhood | 2007 | normal | 19 | 15 | 16 | 2028 / 2028 | -58.2% (2063) | 9.9% | 3.0% (10) | -19% / -24% / -19% / -15% | $15,660,845 / $14,468,035 / $5,700,000 | yes / yes |
+| long-widowhood | 2007 | paper | 7 | 8 | 6 | 2034 / 2034 | -56.2% (2063) | 9.4% | 0.4% (13) | +0% / +0% / +0% / -15% | $14,498,991 / $14,058,295 / $5,700,000 | NO / yes |
+| soft-cap-underfunded | 1929 | normal | 11 | 11 | 11 | 2027 / 2027 | -10.2% (2041) | 2.9% | 2.8% (22) | -39% / -36% / -28% / -25% | $3,070,875 / $3,080,203 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 1929 | paper | 4 | 5 | 4 | 2028 / 2028 | +20.1% (2048) | 6.0% | 6.0% (23) | -26% / -25% / -24% / -25% | $3,026,010 / $3,020,645 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 1937 | normal | 8 | 9 | 8 | 2027 / 2027 | -20.5% (2049) | 6.6% | 5.6% (18) | -35% / -35% / -35% / -26% | $3,419,382 / $3,413,591 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 1937 | paper | 4 | 4 | 3 | 2027 / 2027 | +22.6% (2042) | 7.5% | 6.7% (21) | -18% / -21% / -21% / -26% | $3,259,979 / $3,337,604 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 1966 | normal | 6 | 7 | 6 | 2027 / 2027 | -13.7% (2049) | 3.7% | 3.3% (22) | -29% / -30% / -30% / -36% | $2,917,914 / $2,944,469 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 1966 | paper | 5 | 6 | 4 | 2030 / 2030 | -16.7% (2049) | 4.1% | 4.1% (23) | -28% / -32% / -33% / -36% | $2,924,635 / $2,923,104 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 1973 | normal | 9 | 9 | 9 | 2027 / 2027 | -16.6% (2049) | 3.9% | 2.0% (18) | -32% / -32% / -32% / -27% | $3,577,020 / $3,642,034 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 1973 | paper | 7 | 6 | 7 | 2027 / 2027 | +11.9% (2046) | 4.1% | 3.9% (21) | -24% / -25% / -23% / -27% | $3,455,398 / $3,508,693 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 2000 | normal | 10 | 10 | 9 | 2027 / 2027 | -12.8% (2040) | 5.2% | 4.9% (19) | -27% / -27% / -27% / -9% | $3,666,906 / $3,716,189 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 2000 | paper | 5 | 5 | 5 | 2029 / 2028 | +22.1% (2045) | 7.0% | 6.8% (21) | -16% / -12% / -15% / -9% | $3,556,290 / $3,581,760 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 2007 | normal | 11 | 11 | 10 | 2027 / 2027 | -13.5% (2049) | 5.0% | 4.0% (16) | -26% / -26% / -26% / -5% | $4,326,629 / $4,350,995 / $3,429,150 | yes / yes |
+| soft-cap-underfunded | 2007 | paper | 3 | 6 | 2 | 2041 / 2028 | +33.7% (2039) | 16.0% | 14.5% (20) | +0% / -13% / +0% / -5% | $4,144,212 / $4,286,581 / $3,429,150 | NO / NO |
+| mixed-portfolio-couple | 1929 | normal | 13 | 13 | 13 | 2027 / 2027 | +14.9% (2048) | 5.0% | 4.9% (25) | -43% / -42% / -42% / -34% | $8,498,233 / $8,476,173 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 1929 | paper | 7 | 5 | 4 | 2028 / 2028 | -26.0% (2050) | 15.9% | 17.3% (25) | -30% / -39% / -40% / -34% | $8,139,544 / $7,940,991 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 1937 | normal | 13 | 12 | 12 | 2027 / 2027 | +12.8% (2056) | 3.6% | 3.4% (24) | -38% / -38% / -38% / -32% | $9,813,827 / $9,797,004 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 1937 | paper | 4 | 6 | 3 | 2027 / 2027 | +44.3% (2045) | 10.9% | 9.7% (24) | -19% / -23% / -23% / -32% | $8,599,711 / $9,199,672 / $7,722,000 | yes / NO |
+| mixed-portfolio-couple | 1966 | normal | 13 | 13 | 12 | 2027 / 2027 | +13.6% (2056) | 2.8% | 2.4% (25) | -39% / -38% / -38% / -41% | $8,916,302 / $8,934,585 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 1966 | paper | 6 | 7 | 5 | 2030 / 2030 | +25.5% (2047) | 7.1% | 7.0% (29) | -30% / -31% / -31% / -41% | $7,898,226 / $8,014,312 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 1973 | normal | 14 | 12 | 13 | 2027 / 2027 | -12.4% (2030) | 5.7% | 5.9% (22) | -43% / -41% / -42% / -35% | $11,740,389 / $11,985,546 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 1973 | paper | 6 | 8 | 5 | 2027 / 2027 | +35.5% (2058) | 15.2% | 16.2% (22) | -27% / -35% / -35% / -35% | $10,705,013 / $11,380,417 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 2000 | normal | 11 | 14 | 9 | 2027 / 2027 | +12.1% (2041) | 6.6% | 8.0% (24) | -28% / -34% / -34% / -18% | $9,483,820 / $9,520,362 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 2000 | paper | 5 | 7 | 3 | 2029 / 2029 | +38.1% (2044) | 8.0% | 8.8% (24) | -18% / -20% / -21% / -18% | $8,887,517 / $8,988,596 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 2007 | normal | 13 | 13 | 13 | 2027 / 2027 | -15.5% (2032) | 4.9% | 4.6% (21) | -27% / -31% / -31% / -6% | $11,223,969 / $11,383,059 / $7,722,000 | yes / yes |
+| mixed-portfolio-couple | 2007 | paper | 4 | 3 | 3 | 2046 / 2046 | -21.0% (2053) | 3.4% | 0.2% (23) | +0% / +0% / +0% / -6% | $10,053,208 / $10,115,465 / $7,722,000 | NO / NO |
+
+Cost, no-ceiling run:
+
+| household | plan years | table job (every 3) | table job (every year) | exact walk per sequence | runs per exact walk | task total |
+|---|---|---|---|---|---|---|
+| bracket-filler-texas | 33 | 22.0 s, 32,212 runs | 54.3 s, 83,754 runs | 6.3 s | 12,092 | 178 s |
+| modest-balances-little-surplus | 29 | 18.8 s, 29,390 runs | 47.6 s, 80,283 runs | 5.9 s | 11,600 | 159 s |
+| long-widowhood | 38 | 29.5 s, 36,299 runs | 75.5 s, 101,214 runs | 9.7 s | 14,883 | 257 s |
+| soft-cap-underfunded | 24 | 12.6 s, 25,192 runs | 29.9 s, 59,869 runs | 4.8 s | 9,908 | 117 s |
+| mixed-portfolio-couple | 33 | 21.4 s, 34,783 runs | 54.2 s, 88,942 runs | 7.4 s | 13,192 | 189 s |
 
 ## Open questions this report does not settle
 

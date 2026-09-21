@@ -1763,8 +1763,8 @@ assertEqual(
 			const magis = [...rate.options].map(o => Number(o.dataset.limit) + (/^\d+$/.test(o.value) ? ded : 0));
 			assertEqual(magis.every((m, i) => i === 0 || m >= magis[i - 1]), true,
 				`the Limit menu runs upward in MAGI: ${magis.map(Math.round).join(', ')}`);
-			assertEqual([...rate.options].every(o => /\$[\d.]+[kMB]?\+? MAGI/.test(o.textContent)), true,
-				'and every entry prints its MAGI figure');
+			assertEqual([...rate.options].every(o => !/MAGI|taxable/.test(o.textContent.replace(/\(.*\)/, ''))), true,
+				'and no entry spells out the basis or a second figure: the sentence under the menu does');
 			const fed24 = [...rate.options].findIndex(o => o.value === '24'), t3 = [...rate.options].findIndex(o => o.value === 'IRMAA3');
 			if (fed24 >= 0 && t3 >= 0) assertEqual(fed24 > t3, true, '24% Fed lists after IRMAA Tier 3, whose MAGI top is lower');
 			assertEqual(ded > 0, true, 'there is a deduction to convert between the two bases with');

@@ -9402,7 +9402,7 @@ function generateStratRateOptions() {
             const floor = prevFedLimit + 1;
             options.push({
                 value: String(ratePct),
-                label: `${ratePct}% Fed  ·  ${money(floor + ded)}+ MAGI, ${money(floor)}+ taxable (${crossLadderNote('fed', floor, status, cpiAdj)})`,
+                label: `${ratePct}% Fed  ·  ${money(floor + ded)}+ (${crossLadderNote('fed', floor, status, cpiAdj)})`,
                 limit: floor,
                 magi: floor + ded,
                 disabled: true,
@@ -9413,7 +9413,7 @@ function generateStratRateOptions() {
         prevFedLimit = limit;
         options.push({
             value: String(ratePct),
-            label: `${ratePct}% Fed  ·  ${money(limit + ded)} MAGI, ${money(limit)} taxable (${crossLadderNote('fed', limit, status, cpiAdj)})`,
+            label: `${ratePct}% Fed  ·  ${money(limit + ded)} (${crossLadderNote('fed', limit, status, cpiAdj)})`,
             limit,
             magi: limit + ded,
             defaultSelected: false
@@ -9441,7 +9441,7 @@ function generateStratRateOptions() {
             const floor = Math.round(IRMAABrks[i].l * cpiAdj);
             options.push({
                 value: `IRMAA${i}`,
-                label: `${label}  ·  ${money(floor)}+ MAGI (${crossLadderNote('magi', floor, status, cpiAdj)})`,
+                label: `${label}  ·  ${money(floor)}+ (${crossLadderNote('magi', floor, status, cpiAdj)})`,
                 limit: floor,
                 magi: floor,
                 disabled: true,
@@ -9451,7 +9451,7 @@ function generateStratRateOptions() {
         const limit = Math.round((IRMAABrks[i + 1].l - 1) * cpiAdj);
         options.push({
             value: `IRMAA${i}`,
-            label: `${label}  ·  ${money(limit)} MAGI (${crossLadderNote('magi', limit, status, cpiAdj)})`,
+            label: `${label}  ·  ${money(limit)} (${crossLadderNote('magi', limit, status, cpiAdj)})`,
             limit,
             magi: limit,
             defaultSelected: i === 0
@@ -9493,7 +9493,7 @@ function generateStratRateOptions() {
         const limit = Math.round(fplBase * pct / 100 * fplCpiAdj);
         options.push({
             value: `aca${pct}`,
-            label: `${label}  ·  ${money(limit)} MAGI (${crossLadderNote('magi', limit, status, cpiAdj)})`,
+            label: `${label}  ·  ${money(limit)} (${crossLadderNote('magi', limit, status, cpiAdj)})`,
             limit,
             magi: limit
         });
@@ -9504,10 +9504,11 @@ function generateStratRateOptions() {
     // is MAGI, and sorted on those own figures `24% Fed - $404k` listed before `IRMAA Tier 3 -
     // $410k` although the ceiling it imposes ($436k of MAGI) is above Tier 3 (user, 2026-09-20).
     // Sorting on MAGI was tried once before (P92e) and reverted because the printed column then
-    // read 42k, 52.5k, 63k, 24.8k, 84k; the fix this time is to print every entry's MAGI first, so
-    // the column a reader scans is the column the list is ordered on. The federal entries keep
-    // their taxable figure beside it, because that is the number the strategy fills to, and
-    // `data-limit` still carries that own figure for updateBracketFeedback().
+    // read 42k, 52.5k, 63k, 24.8k, 84k; the fix this time is to print every entry's MAGI, and only
+    // that (user, 2026-09-20: the word MAGI and a taxable figure beside it "waste space" - the
+    // sentence under the menu and the Show me ladder say both), so the column a reader scans is
+    // the column the list is ordered on. `data-limit` still carries a federal entry's taxable top,
+    // the number the strategy fills to, for updateBracketFeedback().
     options.sort((a, b) => a.magi - b.magi);
 
     // ── Build HTML ─────────────────────────────────────────────────────────────

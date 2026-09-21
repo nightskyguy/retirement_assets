@@ -41,8 +41,7 @@ is gone; the rails solve on the Monte Carlo tab's market.
 *Guardrails* column set: **ruleSpend**, **ruleAdj** and **vsPlan%**, where spending sits against
 your planned path.
 
-**The Limit menu is in order of the income each entry caps** (MAGI), and every entry shows that
-figure; a federal bracket keeps its taxable-income top beside it.
+**The Limit menu is in order of the income each entry caps**, and its figures are that income.
 
 <a id="11.1881"></a>
 

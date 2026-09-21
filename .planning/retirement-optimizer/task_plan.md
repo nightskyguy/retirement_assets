@@ -17,6 +17,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P34 | NOT a P103 prerequisite (a-d are node harnesses); still the whole slow-machine story | `P34a` |
 | **O1** | P28j | `jg`/`jh`/`ji`/`jk` SHIPPED, and `jo`'s Split/Early/Late menu shipped in `a5d8aa9`. `jf` MEASURED and NOT acted on - the trigger is unchanged, and its removal case was withdrawn | `P28jn` / `P28jo` Automatic |
 | **O1** | P115 | **tax-payment attribution** (user, 2026-09-09). `a` SHIPPED v11.17b1: cash interest trued up to what the cash earned; `b` CLOSED v11.17f4. Priority is mine, not the user's | `P115c` |
+| **O1** | P132 | **Risk-based as a Spend rule, v11.189d, 2026-09-19** (user): `a`-`d` BUILT - `spendRule:'rbg'` reads a rails table (net of guaranteed income, affine landing, floor-clamped rails), Paper preset + `cutTo` + nerdknob Custom, page wiring with auto-solve; `c` MEASURED (research/RBG_RULE_VALIDATION.md): exact-to-the-dollar with Never above plan on, drifts without, so the ceiling defaults on. `e` RUN (research/RBG_RULE_THRESHOLDS.md: the cut level decides the funded share; Paper funds 72% on the underfunded household); `f` MEASURED (year-split parallelism caps near 3x; 32-85 s on the audience's laptops, so no Web Worker split; server = user's call). Open: the cut-side landing overshoot (`P132g`?) and the server decision | user: server? `P132g`? |
 | **O1** | P127 + P128 | **PR #227 MERGED (`3ddaf6a`); round 5, reading the rails, v11.1881, PR #229 OPEN 2026-09-18** (user). P127: no cut in the last 8 years, 6% CPI cap, freeze on the portfolio return, the filter judged against the shape, $0 conversion always admissible (`P126f`), ceiling as a nerdknob switch. P128: resume-based solver, both charts; the plain nerdknob adds only cadence, paths and the timing readout. Round 3 on the same PR: panel below the charts, folded, own Monte Carlo method; the P91 success-path drain; heavy precision test (`P128k`) gating `P129`. Round 4, the user's decisions: Monte Carlo on Synthetic GBM, a per-path solver answering every preset at once, the panel for everyone, the After-Tax Spend answer (`P129`), income charts that leave out saved money (`P130`), gray/red/green bands. P126 itself shipped in PR #224 | user review, then merge |
 
 **Live carry-overs from finished phases** - the rest of what those phases did is in their stubs below:
@@ -30,6 +31,83 @@ User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. 20
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
+
+## P132: Risk-based guardrails as a Spend rule  *(2026-09-19, user-raised. `a`-`f`, `h` BUILT v11.189f, PR #230; `g` open if wanted)*
+
+User, after the 2024 kitces article (Tharp and Fitzpatrick, "Why Guyton-Klinger Guardrails Are Too
+Risky"): how to add risk-based guardrails as a Spend plan choice, whether there is a trick that
+gives CoS for every year AND Monte Carlo on top, what one exact run on one historical sequence costs,
+and trials at several Target/Cut/Raise thresholds on worst-case plans. Plus: would Python/Flask be
+faster (answer: no - the engine is ~1 ms/run in V8; a port would be slower unless vectorized, and
+two engines to keep in parity; if a server, node with the same files).
+
+**The trick.** The rails are solved once per plan (the P128 job) and handed to `simulate()` as a
+per-year table of RATIOS: net spending over wealth at which the chance crosses each rail, and a line
+through the two solved points of each chance curve for where an adjustment lands. Scale-free because
+the solver finds rails by scaling balances; net of Social Security because that is the fixed dollar
+a ratio cannot see. The rule is then one comparison a year inside any path.
+
+**Decisions (user, 2026-09-19):** the rule + the one-path validator + the grid harness; the server
+decided after measuring node `worker_threads` against browser Web Workers; a Paper preset (the
+article's 80/100/25 back to 45) AND custom numbers under the nerdknob. **Mine, from the measurement:**
+Never above plan on by default with this rule - with it the cheap rule is exact to the dollar where
+the rails never cut and within a few percent elsewhere; without it both the cheap and the exact rule
+drift and one case in five fails to fund.
+
+- [x] `P132a` presets and the solver: `paper`, `cutTo`, `cfg.presets`, `spendAtCutTo`, `railsRuleTable`
+- [x] `P132b` the rule in `resolveSpendTarget`; `prevNetWealth`; identity; the twin; resume
+- [x] `P132c` `rbg_playback_harness.js` and `research/RBG_RULE_VALIDATION.md` - the gate, passed
+- [x] `P132d` page wiring, README, changelog, version 11.189d, counts 481
+- [x] `P132e` `rbg_grid_harness.js` RUN 2026-09-19, report `research/RBG_RULE_THRESHOLDS.md`: every
+      risk-based set funds every historical start on all four households (no rule fails 4/5 and
+      5/5); under 400 GBM paths the cut level decides the funded share (cut 50: 92-97%, cut 25:
+      62-96%) and returning below the target costs 4-27 points more - Paper funds 72% on
+      `soft-cap-underfunded` against GK-style's 100%, at a -20% trough against -46%. Bad-path (p10)
+      lifetime spending 25-35% higher under every risk-based set than under GK-style. **Defect
+      candidate:** `mixed-portfolio-couple`, the cut-50-back-to-55 sets, 1966/1973: single years at
+      -70%/-76% - the cut-side landing line extrapolated far below the cut rail; a third solved point
+      below the rail would bound it. Open as `P132g` if wanted.
+- [x] `P132f` `rails_parallel_bench.js` MEASURED 2026-09-19 (bracket-filler-texas, 12 solved years,
+      100 paths, dev box, best of 2): 1 thread 14.25 s; 2: 12.57 s (1.13x); 4: 9.15 s (1.56x);
+      8: 7.06 s (2.02x); 16: 4.53 s (3.14x); answers identical at every count. **Splitting by
+      solved year caps near 3x however many cores**: the first solved year alone is about a third
+      of the work (it simulates every remaining year), and thread startup adds 1-2 s each. Projected
+      on the audience's laptops (3.5-6x slower per core): 1 core 50-85 s, 2 cores 44-75 s, 4 cores
+      32-55 s - NOT under 15 s, so a Web Worker split does not meet the bar and was not built.
+      Also: the job grew from 10.3 s (11.1859, three presets) to 14.2 s with Paper and `cutTo`, +38%.
+      **Server decision - the user's call, with these numbers:** a node service on a many-core box
+      (same engine files, `worker_threads`) answers the default job in ~4.5 s split by year, and
+      ~2 s if pass 1 were split by PATH instead (each thread bisects its own paths' thresholds
+      fully, ~2x the runs, near-linear); Python/Flask is not the lever - the engine is ~1 ms/run in
+      V8 and a port would be slower unless rewritten vectorized. The costs of a server: hosting
+      (the page is static on Pages), CORS, availability, and a second deploy. Without one, the
+      rule's auto-solve is a 50-85 s wait on the audience's machines after every plan edit, once.
+- [x] `P132h` (2026-09-19, user): rule cuts and raises as milestones (`-ruleMove`); the rails preset
+      one sidebar control in view always, panel menu mirrored both ways; `#rails-method` removed
+      (always the Monte Carlo tab's market); the two menus at full width; nerdknob rule table in the
+      panel. Growth: the table follows the market model's mu (1.63x cutAt spread 4% to 8% early,
+      1.07x late), not the spine (about 1%).
+- [x] `P132i` (2026-09-19, user's link): the table interpolated ratios across a Social Security
+      start between two solves and fired a raise on a rail the plan had not reached; the job now
+      hands the table its spine and the rows between solves are built from interpolated dollars at
+      each year's own guaranteed income. Columns renamed `ruleSpend`/`ruleAdj`, new `vsPlan%`;
+      choosing a rule no longer touches Never above plan. v11.18a0.
+- [x] `P132j` (user, 2026-09-20: "Income increased - there should not be a cut") GK-style now
+      measures the portfolio's draw (spending net of Social Security and pension) against the
+      plan's OWN ratio for the year (`sim.gkShape`, `_gkShapeOf`: the no-rule twin, memoized on the
+      plan minus paths). Shipped on main too (verified: main 191da49 cuts 2031 on the user's link),
+      so a correction entry. Consequence: on its own assumptions a plan never adjusts; the rule
+      acts under Monte Carlo, replay and the Stress Test; Optimize Spend with GK-style equals the
+      no-rule answer deterministically. `test.critical` guard on the user's plan. v11.18b2.
+      **Decided 2026-09-20 (user: "do them all", on the open question):** GK-style stays the
+      market-reacting rule and does NOT cut a plan for failing on its own assumptions; that case
+      is the Risk-based rule's. The grid records the price (51% funded on `soft-cap-underfunded`).
+- [x] `P132g` closed another way (2026-09-20): beyond the rail the rule holds the rail's own
+      spend-to-wealth ratio instead of extrapolating the line (`cutM`/`raiseM`), and a rail within
+      5% of the plan's wealth, or a line that would fall with wealth, reads as the ratio through
+      the origin. The dollar interpolation across a benefit start had made the two-point line land
+      at $0 (six -100% years in the first re-run of the grid); the re-run after the hold has none,
+      deepest trough -63% (GK-style).
 
 ## P131: Send feedback from the page  *(2026-09-17, user-raised. BUILT v11.1867; live only after the owner's setup)*
 

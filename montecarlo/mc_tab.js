@@ -551,7 +551,7 @@ function ruleTwinVariation(base) {
 // and nothing else between them, an unlabeled one leaves the reader to infer which it is.
 function planScopeVariations(planVars, base) {
     const plan = planVars[0];
-    const setting = base.spendRule === 'gk' ? 'Guardrails on' : 'Guardrails off';
+    const setting = base.spendRule === 'gk' ? 'Guardrails on' : base.spendRule === 'rbg' ? 'Risk-based on' : 'Guardrails off';
     const head = String(plan._label).replace(/ ✓$/, '').trim();
     return [
         { ...plan,
@@ -1847,12 +1847,17 @@ function applyMCVariationToSidebar(v) {
     // Guardrails ride with the row whatever its strategy: on for a 🛡️ row with its own band and
     // step, back to off otherwise, or a leftover switch follows the next row loaded.
     const grEl = document.getElementById('spendRule');
-    if (grEl) grEl.checked = (v.spendRule === 'gk');
+    const ruleOn = v.spendRule === 'gk' || v.spendRule === 'rbg';
+    if (grEl) grEl.checked = ruleOn;
+    const kindEl = document.getElementById('spendRuleKind');
+    if (kindEl && ruleOn) kindEl.value = v.spendRule;
     if (v.spendRule === 'gk') {
         const gEl = document.getElementById('gkGuard'), aEl = document.getElementById('gkAdjPct');
         if (gEl && v.gkGuard  != null) gEl.value = Math.round(v.gkGuard  * 100);
         if (aEl && v.gkAdjPct != null) aEl.value = Math.round(v.gkAdjPct * 100);
     }
+    // P132. A risk-based row carries its preset, and its custom numbers when it has them.
+    if (v.spendRule === 'rbg' && typeof applyRbgSelection === 'function') applyRbgSelection(v);
     // Set unconditionally, including back to off, or a leftover follows the next strategy loaded.
     const rgEl = document.getElementById('rothGapFill');
     if (rgEl) rgEl.checked = (v.rothGapFill === 'fillCashThenRoth');

@@ -24,7 +24,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1881</title>
+    <title>Retirement Optimizer 11.18bf</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -53,7 +53,7 @@
 	     entry's HTML into the LATEST CHANGE banner during parse, and this has to sweep
 	     the document after that copy exists. See doclinks.js. -->
 	<script src="doclinks.js?v=1113d0" defer></script>
-	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=111881">
+	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=1118bf">
 	<style>
     .toggle { display: flex !important; }
     /* The two page-level buttons, stacked at the top left. Matching widths so the stack lines up;
@@ -72,14 +72,14 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=111807"></script>
-	<script src="optimizer_core.js?v=111859t"></script>
+	<script src="optimizer_core.js?v=1118bf"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=111881"></script>
-	<script src="optimizer_tests.js?v=111881"></script>
+	<script src="optimizer_ui.js?v=1118bf"></script>
+	<script src="optimizer_tests.js?v=1118bf"></script>
 </head>
 <body>
 
@@ -138,26 +138,79 @@
 				<input type="number" id="spendChange" value="-1" step="0.1" min="-25" max="25" placeholder="0.0" style="width:70px;font-size:14px;"></label></div>
 				</div><!-- spending -->
 			</div>	<!-- class=row -->
-			<!-- P126. Guardrails: the Guyton-Klinger spend rule. It sits beside the spend goal because it
-			     decides how much is spent, not which account pays. The switch is visible to everyone; the
-			     band and the step stay behind the nerdknob (user, 2026-09-13), and the sentence under the
+			<!-- P126, P132. Guardrails: a spend rule. It sits beside the spend goal because it decides how
+			     much is spent, not which account pays. Two rules: GK-style (Guyton-Klinger) follows your
+			     savings; Risk-based follows the plan's chance of success, read from the rails panel under
+			     the charts. The switch and the rails preset are visible to everyone; the rule menu, GK-style's band and step
+			     stay behind the nerdknob (user, 2026-09-13 and 2026-09-19), and the sentence under the
 			     switch states the rule in force, so nothing about it depends on a tooltip. -->
 			<div class="input-group" style="margin-top:2px;">
-				<label class="toggle" title="Guardrails (GK-style): lets your spending follow your savings, under any withdrawal strategy. It is Guyton-Klinger in style, not the published rule - what it measures is your whole spending against your savings, where the published rule watches what your portfolio withdraws. Your first year sets the safe level: what you spend for each dollar saved. When your savings fall far enough that your spending is well above the safe level for what is left, spending is cut. When they grow far enough that it is well below, spending is raised. Spending is never cut in the plan's last 8 years. The yearly inflation raise is at most 6%, and it is skipped after a year your savings as a whole lose money, while spending is above the safe level. Spend Delta still applies on top.">
-				  <input type="checkbox" id="spendRule" onchange="toggleStrategyUI()">
+				<label class="toggle" title="Guardrails: lets your spending follow how your plan is doing, under any withdrawal strategy; choose the rule beside the switch. GK-style is Guyton-Klinger in style, not the published rule: each year it compares what your portfolio funds (spending after Social Security and pension), for the savings you have, with what your plan itself would draw that year, where the published rule compares with your first year. Spending is cut when the draw runs well above your plan's and raised when well below; on your plan's own assumptions nothing changes. Never cut in the plan's last 8 years, with the inflation raise capped at 6% and skipped after a year your savings as a whole lose money. Risk-based follows your plan's chance of success (CoS) instead, from the Risk-based rails panel under the charts: spending is cut when the chance falls to the cut rail and raised when it reaches the raise rail, to the spending that gives the preset's chance. Spend Delta still applies on top of either.">
+				  <input type="checkbox" id="spendRule" onchange="spendRuleChanged()">
 				  <span class="toggle-label"></span>
 				  <span class="toggle-switch"></span>
 				  <span>Guardrails</span>
 				</label>
-				<div id="guardrails-note" style="display:none;font-size:0.8em;color:#555;margin:2px 0 0 20px;"></div>
+				<!-- The rule menu and the preset menu each take the box's full width (user, 2026-09-19:
+				     "truncating needlessly"): block labels, the same width:100% the Ordered and State menus use. -->
+				<select id="spendRuleKind" class="hidden" onchange="spendRuleChanged()" style="display:block;width:calc(100% - 20px);max-width:none;margin:4px 0 0 20px;" title="Which rule adjusts spending. GK-style (Guyton-Klinger): by your spending against your savings. Risk-based: by your plan's chance of success (CoS), from the Risk-based rails panel under the charts - the rails are solved for your plan and spending follows them.">
+				  <option value="gk" selected>GK-style</option>
+				  <option value="rbg">Risk-based (CoS)</option>
+				</select>
+				<!-- The sentence stating the rule in force folds (user, 2026-09-20: "lengthy"): the summary
+				     line names the rule and its state, the body explains it. Remembered like the other folds. -->
+				<details id="guardrails-note-fold" open style="display:none;font-size:0.8em;color:#555;margin:2px 0 0 20px;" ontoggle="rememberFoldState()">
+					<summary id="guardrails-note-summary" style="cursor:pointer;"></summary>
+					<div id="guardrails-note" style="margin-top:2px;"></div>
+				</details>
+				<!-- GK-style's band and step (nerdknob) sit right under the sentence that states them, above
+				     the Risk-based guidance (user, 2026-09-20). -->
 				<div id="ui-gk" class="compact-row hidden" style="margin:4px 0 0 20px;">
-					<label title="Guard band: how far spending may sit above or below the safe level for your savings before it is cut or raised. Typical: 10-20%.">Guard ±%
+					<label title="Guard band: how far the portfolio's draw may run above or below your plan's own draw for the year, for the savings you have, before spending is cut or raised. Typical: 10-20%.">Guard ±%
 					<input type="number" id="gkGuard" value="20" min="5" max="40" step="5" oninput="updateGuardrailsNote()"></label>
 					<label title="How much spending is cut or raised when it crosses the band. The same amount either way.">Adj %
 					<input type="number" id="gkAdjPct" value="10" min="5" max="20" step="5" oninput="updateGuardrailsNote()"></label>
-					<!-- P127a. Off by default. It changes the plan's numbers, so unlike the rails panel it
-					     travels in the share link (gsc) and the saved plan. -->
-					<label class="toggle" title="Never above plan: a raise can only bring spending back up to your planned path (your spend goal with Spend Delta and inflation), never above it. Cuts still follow your savings. Costs spending in good markets and leaves more at the end.">
+				</div>
+				<!-- P132. Risk-based guidance: ONE setting for the rails the panel under the charts draws and
+				     for the rule, shown whether or not Guardrails is on (user, 2026-09-19: the rails are drawn
+				     on demand either way), because it changes the plan's numbers when the rule is on and so
+				     travels in the share link and the saved plan. The panel's own menu mirrors it, both ways.
+				     The option text is symbols (user, 2026-09-20): ■ target, ▲ raise at, ▼ cut at, → back to. -->
+				<div id="ui-rbg" class="compact-row" style="margin:4px 0 0 20px;">
+					<label class="wide" title="Which risk-based rails the panel under the charts draws as guidance, and the rails the Risk-based rule follows when Guardrails is set to it. ■ the target chance of success an adjustment returns to; ▲ the chance at which spending is raised; ▼ the chance at which it is cut; → the chance a cut returns to. More Risk is the 2024 article's own set. Custom takes your own four numbers, in the fold below the menu.">Risk-based guidance
+					<select id="rbgPreset" onchange="toggleStrategyUI()" style="width:100%;max-width:none;">
+					  <option value="tight">High Safety ■95% ▲99% ▼80%→■95%</option>
+					  <option value="normal" selected>Normal ■90% ▲99% ▼70%→■90%</option>
+					  <option value="loose">More Tolerant ■80% ▲99.5% ▼40%→■70%</option>
+					  <option value="paper">More Risk ■80% ▲99.5% ▼25%→■45%</option>
+					  <option value="custom" id="rbgPreset-custom">Custom</option>
+					</select></label>
+					<!-- Custom's four boxes fold under a line that shows their values (user, 2026-09-20), as two
+					     pairs on two rows: the target and the raise that returns to it, the cut and where it
+					     lands. A set that is not a rule turns the line red, marks the boxes at fault and says
+					     what to change (rbgCustomProblems). -->
+					<details id="ui-rbg-custom" class="hidden" open style="flex:1 1 100%;" ontoggle="rememberFoldState()">
+					<summary id="rbg-custom-summary" style="cursor:pointer;font-size:0.8em;font-weight:bold;"></summary>
+					<div class="rbg-pair" style="margin-top:2px;">
+					<label title="■ The chance of success the rule aims for, and returns to after a raise. At least 5 points above the cut level, and below the raise level.">■ Target %
+					<input type="number" id="rbgTarget" value="70" min="10" max="99" step="1" oninput="toggleStrategyUI()"></label>
+					<label title="▲ Spending is raised when the chance reaches this: above the target. 100% cannot be measured from a sample; 99.5% is the highest that means anything at 200 paths or more.">▲ Raise at %
+					<input type="number" id="rbgUpper" value="90" min="10" max="99.5" step="0.5" oninput="toggleStrategyUI()"></label>
+					</div>
+					<div class="rbg-pair">
+					<label title="▼ Spending is cut when the chance falls to this: at least 5 points below the target and below where a cut returns to.">▼ Cut at %
+					<input type="number" id="rbgLower" value="40" min="1" max="95" step="1" oninput="toggleStrategyUI()"></label>
+					<label title="→ After a cut, spending is set to what gives this chance: at least 5 points above the cut level, at most the target. High Safety and Normal return to their target; More Tolerant returns to 70% from 80%, More Risk to 45% from 80%.">→ Back to %
+					<input type="number" id="rbgCutTo" value="50" min="1" max="99" step="1" oninput="toggleStrategyUI()"></label>
+					</div>
+					<div id="rbg-custom-warn" style="display:none;font-size:0.8em;color:#c0392b;margin-top:3px;"></div>
+					</details>
+				</div>
+				<!-- P127a. Off by default. It changes the plan's numbers, so unlike the rails panel it travels
+				     in the share link (gsc) and the saved plan. Nerdknob for GK-style; shown to everyone with
+				     the risk-based rule (P132), where it is what keeps the rule close to a fresh solve. -->
+				<div id="ui-rule-ceiling" class="compact-row hidden" style="margin:4px 0 0 20px;">
+					<label class="toggle" title="Never above plan: a raise can only bring spending back up to your planned path (your spend goal with Spend Delta and inflation), never above it. Cuts still follow the rule. Costs spending in good markets and leaves more at the end. With the risk-based rule it also keeps spending near the plan the rails were solved for, which is where they are accurate.">
 					  <input type="checkbox" id="gkShapeCeiling" onchange="updateGuardrailsNote()">
 					  <span class="toggle-label"></span>
 					  <span class="toggle-switch"></span>
@@ -1083,6 +1136,15 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="behavior"><b>11.18bf</b>
+					<strong>GK-style Guardrails corrected; the risk-based rails get one preset menu, the article&rsquo;s own set, a replay solve, milestones and a column set.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>GK-style Guardrails contained an error that has been corrected: spending could be cut in the year Social Security or a pension started. The rule now measures what your portfolio funds (spending after Social Security and pension) against your plan&rsquo;s own draw for the same year, so on your plan&rsquo;s own assumptions nothing changes and it acts when markets take you off the plan. See the Details.</li>
+					<li>One preset menu, <i>Risk-based guidance</i>, under the Guardrails switch and always in view: <i>High Safety</i>, <i>Normal</i>, <i>More Tolerant</i> (a cut returns to 70%), the new <i>More Risk</i> (the 2024 article&rsquo;s own numbers) and <i>Custom</i>, four boxes of your own. The panel&rsquo;s <i>Market paths</i> menu is gone; the rails solve on the Monte Carlo tab&rsquo;s market.</li>
+					<li><i>Solve rails on this path</i> re-solves the chance of success along a replayed Monte Carlo path. Every Guardrails cut and raise is a milestone on the charts, and Annual Details has a <i>Guardrails</i> column set (<i>ruleSpend</i>, <i>ruleAdj</i>, <i>vsPlan%</i>). The Limit menu is in order of the income each entry caps, and its figures are that income. No other plan numbers change.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.18bf" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="display"><b>11.1881</b>
 					<strong>Risk-based rails run to the end of the plan, and say how to read them.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1363,6 +1425,9 @@
 				<label>
 					<input type="checkbox" id="cat-spending" onchange="updateColumnVisibility()"> Spending
 				</label>
+				<label title="Everything the Guardrails rules read and write: the spend goal and the guaranteed income under it, the rule's own spending and what it did each year, the wealth it compared, the risk-based rails and their chance of success, and the inflation and market return the year was handed.">
+					<input type="checkbox" id="cat-guardrails" onchange="updateColumnVisibility()"> Guardrails
+				</label>
 				<button type="button" class="tog" onclick="showSpendingOnly()" title="Show only per-account spend/withdrawal columns">Spending only</button>
 			</div><!-- class="column-controls" -->
 			<div style="font-size:0.8em;color:#444;padding:4px 6px 6px;border-bottom:1px solid #e0e0e0;margin-bottom:4px;">
@@ -1452,21 +1517,16 @@
                 <a id="rails-howto" href="README.md#how-to-read-risk-based-rails" target="_blank" rel="noopener" style="margin-left:auto;">How to read risk-based rails</a>
               </div>
               <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:6px;">
-                <label title="Target chance of success / raise when it reaches / cut when it falls to. Tight is Derek Tharp's worked example; Normal and Loose are the two sets in Tharp and Fitzpatrick's 'Hatchet' article on Kitces.com, except that Loose raises at 99.5% where the article says 100%: from a sample of market paths, 100% only means the worst one survived, and that keeps climbing as paths are added. Every preset is solved at once, so switching presets redraws without solving again.">Preset
+                <label title="■ the target chance of success, ▲ raise when it reaches, ▼ cut when it falls to, → the chance a cut returns to. High Safety is Derek Tharp's worked example; Normal and More Tolerant are the two sets in Tharp and Fitzpatrick's 'Hatchet' article on Kitces.com (More Tolerant's cut returns to 70%), and More Risk is their 2024 article's own set, except that the two raise at 99.5% where the articles say 100%: from a sample of market paths, 100% only means the worst one survived, and that keeps climbing as paths are added. Every preset is solved at once, so switching presets redraws without solving again.">Preset
                   <select id="rails-preset" data-no-share onchange="railsPresetChanged()">
-                    <option value="tight">Tight: 95% target, raise 99%, cut 80%</option>
-                    <option value="normal" selected>Normal: 90% target, raise 99%, cut 70%</option>
-                    <option value="loose">Loose: 80% target, raise 99.5%, cut 40%</option>
+                    <option value="tight">High Safety ■95% ▲99% ▼80%→■95%</option>
+                    <option value="normal" selected>Normal ■90% ▲99% ▼70%→■90%</option>
+                    <option value="loose">More Tolerant ■80% ▲99.5% ▼40%→■70%</option>
+                    <option value="paper">More Risk ■80% ▲99.5% ▼25%→■45%</option>
+                    <option value="custom" id="rails-preset-custom">Custom (the four boxes under the Guardrails switch)</option>
                   </select>
                 </label>
-                <label title="Where each solve's market paths come from. Historical samples real 1928–2025 returns and inflation in blocks, and opens a share of its paths with one of history's worst starts (Bear-start % on the Monte Carlo tab, 25% unless changed). The two Synthetic methods draw returns from the Monte Carlo tab's Synthetic Return and Volatility, and inflation from its inflation model. 'Same as the Monte Carlo tab' follows that tab's Simulation Mode, so the rails and the tab describe the same market.">Market paths
-                  <select id="rails-method" data-no-share onchange="railsSettingsChanged()">
-                    <option value="tab" selected>Same as the Monte Carlo tab</option>
-                    <option value="bootstrap">Historical (1928–2025)</option>
-                    <option value="gbm">Synthetic – Lognormal (GBM)</option>
-                    <option value="aam">Synthetic – Arithmetic (AAM)</option>
-                  </select>
-                </label>
+                <span id="rails-market" style="color:#555;" title="The market every chance of success is measured on is the Monte Carlo tab's: its Simulation Mode, Synthetic Return and Volatility, inflation model and Bear-start share. Change them there and the rails on screen go stale.">Market paths: from the Monte Carlo tab</span>
                 <label id="rails-cadence-wrap" style="display:none;" title="Years between solved years; the years between are drawn as straight lines, which sit within about 1% of solving every year. The plan's last year is always solved too, so the rails run to the end of the plan. Solving every year costs about three times what every 3 years does.">Solve every
                   <input type="number" id="rails-cadence" data-no-share value="3" min="1" max="10" step="1" style="width:46px;" onchange="railsSettingsChanged()"> years</label>
                 <label id="rails-paths-wrap" style="display:none;" title="Market paths behind each chance-of-success estimate. More paths make a rail steadier and cost proportionally more time. The After-Tax Spend answer always uses 400.">Paths
@@ -1477,7 +1537,13 @@
               <div id="rails-status" style="margin-top:4px;"></div>
               <div id="rails-start" style="margin-top:4px;"></div>
               <div id="rails-timing" style="margin-top:4px;display:none;"></div>
-              <div id="rails-note" style="margin-top:4px;font-size:0.92em;color:#555;" title="Each solve re-runs your plan from the end of the year before, on fresh market paths, with the Guardrails (GK-style) switch off so spending holds its planned path. The wealth rails are in TotalNetWealth terms at the same year-end. From 100 paths a 99% raise rail behaves more like a 98% one; the cut rails and the spending answers move a few percent from run to run.">Wealth rails: Balances chart. Spending rails: the <a href="#" onclick="setIncomeChartView('net');document.getElementById('chartIncomeSources')?.scrollIntoView({block:'center'});return false;">Income vs Net</a> view. Both: Annual Details, Spending. Shaded <span style="background:rgba(46,125,50,0.18);padding:0 4px;border-radius:3px;">above raise</span> and <span style="background:rgba(229,57,53,0.16);padding:0 4px;border-radius:3px;">below cut</span>; between them is on track. Marked points are solved years. Independent of the Guardrails (GK-style) switch. Raise rails can move 10% or more between runs. Nothing changes your plan unless you press Use it.</div>
+              <!-- Nerdknob. The table the risk-based RULE reads (railsRuleTable): one row per plan
+                   year, in ratios, so the rule it drives can be checked by eye. -->
+              <details id="rails-table-wrap" style="margin-top:4px;display:none;">
+                <summary style="cursor:pointer;color:#555;" title="The dimensionless table the risk-based rule follows for the preset on screen: for each plan year, the ratio of net spending (after Social Security and pension) to the wealth at the end of the year before at which the chance of success reaches the cut rail and the raise rail, and the line each adjustment lands on. Solved every few years; the rows between are straight-line interpolations.">Rule table (the ratios the risk-based rule reads)</summary>
+                <div id="rails-table" style="margin-top:4px;overflow-x:auto;"></div>
+              </details>
+              <div id="rails-note" style="margin-top:4px;font-size:0.92em;color:#555;" title="Each solve re-runs your plan from the end of the year before, on fresh market paths, with the Guardrails (GK-style) switch off so spending holds its planned path. The wealth rails are in TotalNetWealth terms at the same year-end. From 100 paths a 99% raise rail behaves more like a 98% one; the cut rails and the spending answers move a few percent from run to run.">Wealth rails: Balances chart. Spending rails: the <a href="#" onclick="setIncomeChartView('net');document.getElementById('chartIncomeSources')?.scrollIntoView({block:'center'});return false;">Income vs Net</a> view. Both: Annual Details, Guardrails. Shaded<span style="background:rgba(46,125,50,0.18);padding:0 4px;border-radius:3px;">above raise</span> and <span style="background:rgba(229,57,53,0.16);padding:0 4px;border-radius:3px;">below cut</span>; between them is on track. Marked points are solved years. Independent of the Guardrails (GK-style) switch. Raise rails can move 10% or more between runs. Nothing changes your plan unless you press Use it.</div>
             </details>
         </div>
 
@@ -1627,9 +1693,9 @@
 <script src="montecarlo/mc_engine.js?v=111857"></script>
 <!-- P128. The risk-based rails solver. Same arrangement as mc_engine.js: the worker imports it too,
      and on file:// the controller runs it here. -->
-<script src="montecarlo/rails_engine.js?v=111881"></script>
+<script src="montecarlo/rails_engine.js?v=1118bf"></script>
 <script src="montecarlo/mc_controller.js?v=111857"></script>
-<script src="montecarlo/mc_tab.js?v=111859t"></script>
+<script src="montecarlo/mc_tab.js?v=11189d"></script>
 
 <script type="text/javascript">
 function clampIntlInput(intlId, equityPct) {
@@ -1826,7 +1892,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these seven are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111881';
+    const V = '?v=1118bf';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

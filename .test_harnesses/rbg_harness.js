@@ -36,7 +36,7 @@
  *      market variation, against its 1 +/- gkGuard band. That isolates the hatchet from the market;
  *   2. WHO ACTS FIRST - the first-year market return that makes each rule act. Guyton-Klinger is
  *      MEASURED, not re-derived from its formula: the year-0 return is bisected until the year-1
- *      row actually carries a cut (or a raise) in its `gkAdj` column;
+ *      row actually carries a cut (or a raise) in its `ruleAdj` column;
  *   3. THE SHOCK - a fixed -22% / -13% pair in the first two years, the 2000-2002 shape, then the
  *      plan's own growth. What each rule does to real spending, and what it costs over a lifetime.
  *
@@ -221,14 +221,14 @@ function stateAfterYear(base, rows, r) {
     return { inputs: core.resumeInputs(base, row['-resume']), portfolio: row.portfolioBalance };
 }
 
-// Does the SHIPPED rule act in year 1, given a first-year return of `r`? Read off the `gkAdj`
+// Does the SHIPPED rule act in year 1, given a first-year return of `r`? Read off the `ruleAdj`
 // column rather than re-derived from the rule's formula, so this measures what the engine does.
 function gkActs(base, rows, r, kind) {
     const seq = new Float64Array(rows + 3).fill(base.growth ?? 0.06);
     seq[0] = r;
     const inf = new Float64Array(rows + 3).fill(base.inflation ?? 0.025);
     const label = simulate({ ...base, spendRule: 'gk', returnSequence: seq, inflationSequence: inf })
-        .log[1]?.gkAdj || '';
+        .log[1]?.ruleAdj || '';
     return kind === 'cut' ? label.includes('cap') : label.includes('pros');
 }
 
@@ -267,7 +267,7 @@ for (const id of PLAN_IDS) {
         if (prev > 0) peak = Math.max(peak, (benign.log[i].spendGoal / prev) / iwr);
     }
     benigns.push({ id, peak, band: 1 + (base.gkGuard ?? 0.20),
-                   fired: benign.log.slice(0, 7).some(r => { const a = r.gkAdj || ''; return a && a !== '—'; }) });
+                   fired: benign.log.slice(0, 7).some(r => { const a = r.ruleAdj || ''; return a && a !== '—'; }) });
 
     // 2. Who acts first. The shipped rule is measured at the plan's own spend, because that is what
     // it is applied to; each risk-based rail is measured from ITS OWN target spend, because that is
@@ -307,7 +307,7 @@ for (const id of PLAN_IDS) {
     const troughRatio = Math.min(...on.log.map((r, i) => real(r) / (real(off.log[i]) || 1)));
     const below = on.log.filter((r, i) => real(r) < real(off.log[i]) * 0.995).length;
     // Both rules are read at the same moment: the year the shipped rule stopped cutting.
-    const cuts = on.log.filter(r => (r.gkAdj || '').includes('cap'));
+    const cuts = on.log.filter(r => (r.ruleAdj || '').includes('cap'));
     const lastCut = cuts.length ? cuts[cuts.length - 1] : on.log[3];
     const idx = on.log.findIndex(r => r.year === lastCut.year);
     const rowOff = off.log[idx];
@@ -520,10 +520,10 @@ for (const id of PLAN_IDS) {
     const inf = new Float64Array(rows + 3).fill(base.inflation ?? 0.025);
     const on = simulate({ ...base, spendRule: 'gk', returnSequence: seq, inflationSequence: inf });
     const n = on.log.length;
-    const cuts = on.log.map((r, i) => ({ i, a: r.gkAdj || '' })).filter(x => x.a.includes('cap'));
+    const cuts = on.log.map((r, i) => ({ i, a: r.ruleAdj || '' })).filter(x => x.a.includes('cap'));
     const late = cuts.filter(x => x.i >= n - 15).length;
-    const held = on.log.filter(r => (r.gkAdj || '').includes('no-cut')).length;
-    const raises = on.log.filter(r => (r.gkAdj || '').includes('pros')).length;
+    const held = on.log.filter(r => (r.ruleAdj || '').includes('no-cut')).length;
+    const raises = on.log.filter(r => (r.ruleAdj || '').includes('pros')).length;
     console.log('   ' + pad(id, 26) + n + ' years: ' + cuts.length + ' cuts (' + late
         + ' in the final 15), ' + held + ' held back in the final ' + core.GK_NO_CUT_FINAL_YEARS
         + ', ' + raises + ' raises');
@@ -564,7 +564,7 @@ for (const id of PLAN_IDS) {
         const res = simulate({ ...base, spendRule: 'gk', returnSequence: flat, inflationSequence: flatInf });
         const real = r => r.spendGoal / (r.inflationFactor || 1);
         const ratio = Math.min(...res.log.map(real)) / real(res.log[0]);
-        const cuts = res.log.filter(r => (r.gkAdj || '').includes('cap')).length;
+        const cuts = res.log.filter(r => (r.ruleAdj || '').includes('cap')).length;
         console.log(pad(id, 26) + rpad((delta * 100).toFixed(0) + '%', 8) + rpad(cuts, 10)
             + rpad(ratio.toFixed(3), 19) + rpad(core.gkSpendStable(res, { spendRule: 'gk' }, base) ? 'accepted' : 'REJECTED', 15));
     }
@@ -607,7 +607,7 @@ for (const id of PLAN_IDS) {
         runs.forEach((res, i) => {
             const peak = Math.max(...res.log.map((r, y) =>
                 (r.spendGoal / (r.inflationFactor || 1)) / shapeReal(y)));
-            const clamped = res.log.filter(r => (r.gkAdj || '').includes('@shape')).length;
+            const clamped = res.log.filter(r => (r.ruleAdj || '').includes('@shape')).length;
             console.log(pad(i === 0 ? id : '  with the ceiling', 26) + rpad(label, 8)
                 + rpad(peak.toFixed(3), 17) + rpad(clamped, 13)
                 + rpad(money(res.totals.spendCurrentDollars), 21)

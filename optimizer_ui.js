@@ -640,7 +640,7 @@ function getInputs() {
     if (_strat.stratACAMultiple > 0 && _strategy === 'bracket') {
         _strategy = 'aca';
     }
-    return {
+    const inputs = {
         STATEname: val('STATEname'),
         strategy: _strategy,
         orderedSeq: val('orderedSeq') || 'CBIR',
@@ -785,9 +785,93 @@ function getInputs() {
         // P127a. Raises never lift spending above the plan's own path. A nerdknob switch beside the
         // band and step, off by default; like them it is only read while Guardrails is on.
         gkShapeCeiling: !!valChecked('gkShapeCeiling'),
-        // Guardrails, the Guyton-Klinger spend rule: a switch beside the spend goal, not a strategy.
-        spendRule: valChecked('spendRule') ? 'gk' : '',
+        // Guardrails, a spend rule beside the spend goal, not a strategy: '' | 'gk' | 'rbg'.
+        spendRule: spendRuleOf(),
+        // P132. The risk-based rule's preset, its custom numbers when the preset is Custom, and the
+        // table it follows: the rails solved for this plan, when they are current. NOT identity
+        // (selectionOf leaves the table out) and NOT saved (saveScenario strips it): it is derived
+        // from the plan and solved again on load.
+        rbgPreset: val('rbgPreset') || 'normal',
+        rbgCustom: rbgCustomSet(),
     };
+    if (inputs.spendRule === 'rbg') inputs.rbgRails = rbgRuleTable(inputs);
+    return inputs;
+}
+
+// P132. The switch or the rule menu changed. Never above plan is NOT touched (user, 2026-09-19:
+// switching GK-style -> Risk-based flipped it on and silently removed the cuts a link had shown);
+// the note under the switch recommends it with the risk-based rule instead.
+function spendRuleChanged() {
+    toggleStrategyUI();
+}
+
+// P132. The rule the Guardrails switch runs: nothing, GK-style, or risk-based.
+function spendRuleOf() {
+    if (!valChecked('spendRule')) return '';
+    return val('spendRuleKind') === 'rbg' ? 'rbg' : 'gk';
+}
+function rbgRuleOn() {
+    return spendRuleOf() === 'rbg';
+}
+// What is wrong with the four custom numbers, as a list a reader can act on (user, 2026-09-20:
+// "spell out exactly which pair(s) of numbers is wrong, highlight the entry box(es) and suggest a
+// fix"). Each problem names the boxes at fault and a change that would clear it. Empty = a rule.
+//
+// The rule they must satisfy, and why each part: a cut has to land at least RBG_GAP points above
+// the cut level or the plan is cut again the next year (a spiral); it may not land above the
+// target, or it is a raise; the target has to sit at least RBG_GAP points above the cut level or a
+// plan on target is one ordinary year from a cut (at 100 paths a chance moves 2-5 points run to
+// run); and the raise level has to be above the target, or a raise lands above its own trigger
+// and fires every year.
+const RBG_GAP = 5;
+function rbgCustomProblems() {
+    const box = { target: 'rbgTarget', upper: 'rbgUpper', lower: 'rbgLower', cutTo: 'rbgCutTo' };
+    const name = { target: '■ Target', upper: '▲ Raise at', lower: '▼ Cut at', cutTo: '→ Back to' };
+    const v = {};
+    for (const k of Object.keys(box)) { const x = Number(val(box[k])); v[k] = Number.isFinite(x) && val(box[k]) !== '' ? x : null; }
+    const out = [];
+    const bad = (keys, text, fix) => out.push({ ids: keys.map(k => box[k]), text, fix });
+    for (const k of Object.keys(box)) {
+        if (v[k] == null || v[k] < 1 || v[k] > 99.5) bad([k], `${name[k]} needs a number from 1 to 99.5`, 'enter one');
+    }
+    if (out.length) return out;
+    const p = x => `${x}%`;
+    if (v.cutTo < v.lower + RBG_GAP) bad(['lower', 'cutTo'],
+        `${name.cutTo} ${p(v.cutTo)} must be at least ${RBG_GAP} above ${name.lower} ${p(v.lower)}`,
+        `set Back to ${p(v.lower + RBG_GAP)} or Cut at ${p(Math.max(1, v.cutTo - RBG_GAP))}`);
+    if (v.cutTo > v.target) bad(['cutTo', 'target'],
+        `${name.cutTo} ${p(v.cutTo)} may not be above ${name.target} ${p(v.target)}`,
+        `set Back to ${p(v.target)} or Target ${p(v.cutTo)}`);
+    if (v.target < v.lower + RBG_GAP) bad(['lower', 'target'],
+        `${name.target} ${p(v.target)} must be at least ${RBG_GAP} above ${name.lower} ${p(v.lower)}`,
+        `set Target ${p(v.lower + RBG_GAP)} or Cut at ${p(Math.max(1, v.target - RBG_GAP))}`);
+    if (v.upper <= v.target) bad(['target', 'upper'],
+        `${name.upper} ${p(v.upper)} must be above ${name.target} ${p(v.target)}`,
+        `set Raise at ${p(Math.min(99.5, v.target + 1))} or Target ${p(v.upper - 1)}`);
+    return out;
+}
+// The four custom numbers as chances, or null when they do not describe a rule.
+function rbgCustomNumbers() {
+    if (rbgCustomProblems().length) return null;
+    const n = id => Number(val(id)) / 100;
+    return { target: n('rbgTarget'), upper: n('rbgUpper'), lower: n('rbgLower'), cutTo: n('rbgCutTo') };
+}
+function rbgCustomSet() {
+    return val('rbgPreset') === 'custom' ? (rbgCustomNumbers() ?? undefined) : undefined;
+}
+// The presets a rails job solves: the published four, plus Custom from the four boxes when they
+// describe a rule (open to everyone since 2026-09-20). Undefined means the engine's own table.
+function railsJobPresets() {
+    const s = rbgCustomNumbers();
+    if (!s) return undefined;
+    return { ...OptimizerCore.RAIL_PRESETS, custom: { key: 'custom', label: 'Custom', ...s } };
+}
+// The rule's table for `base`, when the rails on screen were solved for exactly this plan.
+function rbgRuleTable(base) {
+    // A replayed path runs the rule too: the Monte Carlo run it came from did.
+    if (!railsOn() || !RailsState.result) return undefined;
+    if (RailsState.fingerprint !== railsFingerprint(base)) return undefined;
+    return RailsEngine.railsRuleTable(RailsState.result, railsSettings().preset) ?? undefined;
 }
 
 /*
@@ -1405,7 +1489,7 @@ function _runOptimizerNow() {
                 stratACAMultiple: inputs.stratACAMultiple ?? 0,
                 iraWithdrawPct: inputs.iraWithdrawPct, orderedSeq: inputs.orderedSeq,
                 gkGuard: inputs.gkGuard, gkAdjPct: inputs.gkAdjPct,
-                spendRule: inputs.spendRule === 'gk' ? 'gk' : '',
+                spendRule: (inputs.spendRule === 'gk' || inputs.spendRule === 'rbg') ? inputs.spendRule : '',
                 cyclicEnabled: !!inputs.cyclicEnabled, cyclicOrder: inputs.cyclicOrder ?? 'ira-first',
                 fundConversionWithCash: !!inputs.fundConversionWithCash,
                 rothGapFill: inputs.rothGapFill ?? '',
@@ -1536,7 +1620,8 @@ function _runOptimizerNow() {
             gkGuard: userPlan.gkGuard, gkAdjPct: userPlan.gkAdjPct,
             // Explicit for the reason rothGapFill is below: the Guardrails sweep writes spendRule ''
             // onto every fixed-spend row, and this reference row is the user's actual plan.
-            spendRule: userPlan.spendRule === 'gk' ? 'gk' : '',
+            spendRule: (userPlan.spendRule === 'gk' || userPlan.spendRule === 'rbg') ? userPlan.spendRule : '',
+            rbgPreset: userPlan.rbgPreset, rbgCustom: userPlan.rbgCustom,
             cyclicEnabled: !!userPlan.cyclicEnabled, cyclicOrder: userPlan.cyclicOrder ?? 'ira-first',
             convertExcessToRoth: !!userPlan.convertExcessToRoth,
             fundConversionWithCash: !!userPlan.fundConversionWithCash,
@@ -2533,7 +2618,7 @@ function toggleFailedRows() {
 // the saved-scenario blob under STORAGE_KEY, because this is not scenario data.
 const FOLD_STORAGE_KEY = 'optimizerChromeFolds';
 // The rails panel below the Charts tab's charts folds the same way, for the same reason.
-const FOLD_IDS = ['opt-fold-legend', 'rails-panel'];
+const FOLD_IDS = ['opt-fold-legend', 'rails-panel', 'guardrails-note-fold', 'ui-rbg-custom'];
 // Chrome fires a `toggle` event when it PARSES a <details open>, before any of our init code has
 // run. The strip carries `open` in the markup, so that toggle lands first, the inline handler
 // writes "both open" to storage, and restoreFoldState then reads back the value it just
@@ -2650,13 +2735,20 @@ function loadOptimizerResult(id) {
         // Guardrails, the same way: on for a 🛡️ row, back to off for a fixed-spend one, with the
         // row's own band and step restored so the rule that runs is the one the table evaluated.
         const grEl = document.getElementById('spendRule');
-        const grOn = result._selection.spendRule === 'gk';
+        const rule = result._selection.spendRule;
+        const grOn = rule === 'gk' || rule === 'rbg';
         if (grEl) grEl.checked = grOn;
-        if (grOn) {
+        const kindEl = document.getElementById('spendRuleKind');
+        if (kindEl && grOn) kindEl.value = rule;
+        if (rule === 'gk') {
             const gEl = document.getElementById('gkGuard'), aEl = document.getElementById('gkAdjPct');
             if (gEl && result._selection.gkGuard != null) gEl.value = Math.round(result._selection.gkGuard * 100);
             if (aEl && result._selection.gkAdjPct != null) aEl.value = Math.round(result._selection.gkAdjPct * 100);
-            // P127a. The ceiling is part of the rule the row ran, so it travels with the band and step.
+        }
+        // P132. A risk-based row carries its preset, and its custom numbers when it has them.
+        if (rule === 'rbg') applyRbgSelection(result._selection);
+        if (grOn) {
+            // P127a. The ceiling is part of the rule the row ran, so it travels with the rule.
             const cEl = document.getElementById('gkShapeCeiling');
             if (cEl) cEl.checked = !!result._selection.gkShapeCeiling;
         }
@@ -2724,13 +2816,16 @@ function loadOptimizerResult(id) {
 // Column category mappings - each column can be in multiple categories
 const columnCategories = {
     // Summary - high-level overview
-    'year': ['Summary', 'Taxation', 'Balances', 'Income', 'Spending', 'IRA Δ', 'Roth Δ', 'Brokerage Δ', 'Cash Δ', 'Opp. Cost'],
+    'year': ['Summary', 'Taxation', 'Balances', 'Income', 'Spending', 'IRA Δ', 'Roth Δ', 'Brokerage Δ', 'Cash Δ', 'Opp. Cost', 'Guardrails'],
     'age1': ['Summary'],
     'age2': ['Summary'],
     'status': ['Summary', 'Taxation'],
-    'spendGoal': ['Summary', 'Income'],
+    'spendGoal': ['Summary', 'Income', 'Guardrails'],
+    // Social Security plus pension: what the portfolio does not have to fund. The risk-based rule
+    // compares spending NET of it, so it belongs beside the rule's columns (user, 2026-09-19).
+    'guaranteedIncome': ['Income', 'Guardrails'],
     'netIncome': ['Summary', 'Income'],
-    'totalNetWealth': ['Summary', 'Balances'],
+    'totalNetWealth': ['Summary', 'Balances', 'Guardrails'],
     'totalTax': ['Summary', 'Taxation', 'Income'],
     'NominalRate%': ['Summary', 'Taxation'],
     'surplus': ['Summary', 'Income'],
@@ -2816,9 +2911,11 @@ const columnCategories = {
     // What the market handed this year. No checkbox maps to 'Market' either, so these three are
     // Show All only for now: in a deterministic run they are the same two numbers on every row,
     // and they only start saying anything once a Monte Carlo path is being read back.
-    'infl%':    ['Market'],
+    // Guardrails (user, 2026-09-19): the two the rules react to - inflation moves the goal, the
+    // return moves the wealth - so a replayed path's cuts and raises can be read against them.
+    'infl%':    ['Market', 'Guardrails'],
     'inflCum%': ['Market'],
-    'return%':  ['Market'],
+    'return%':  ['Market', 'Guardrails'],
 
     // Opportunity cost (Phase 20) + BETR signal (Phase 21) + extra conversion (Phase 23)
     'convOC':    ['Opp. Cost'],
@@ -2833,23 +2930,25 @@ const columnCategories = {
     // Phase 12: Withdrawal timing
     'timing':    ['Summary', 'Withdrawals'],
     // Phase 22: Guyton-Klinger
-    'gkSpend':   ['Summary', 'Income'],
-    'gkAdj':     ['Summary', 'Income'],
+    'ruleSpend':   ['Summary', 'Income', 'Guardrails'],
+    'ruleAdj':     ['Summary', 'Income', 'Guardrails'],
+    'vsPlan%':     ['Summary', 'Income', 'Guardrails'],
     // P128: risk-based rails. Only in a log a rails solve was merged into, so the columns exist only
-    // after a solve; analyzeColumnContent hides them while they are empty anyway.
-    'railLower':   ['Spending'],
-    'railUpper':   ['Spending'],
-    'railPoS%':    ['Spending'],
-    'railSpend':   ['Spending'],
-    'railSpendDn': ['Spending'],
-    'railSpendUp': ['Spending'],
-    'railBasis':   ['Spending'],
+    // after a solve; analyzeColumnContent hides them while they are empty anyway. In Guardrails
+    // (user, 2026-09-19: "all the guardrail related information") as well as Spending.
+    'railLower':   ['Spending', 'Guardrails'],
+    'railUpper':   ['Spending', 'Guardrails'],
+    'railPoS%':    ['Spending', 'Guardrails'],
+    'railSpend':   ['Spending', 'Guardrails'],
+    'railSpendDn': ['Spending', 'Guardrails'],
+    'railSpendUp': ['Spending', 'Guardrails'],
+    'railBasis':   ['Spending', 'Guardrails'],
 };
 
 // Maps each column key to a visual group label for the group header row
 const columnGroupDefs = {
     'year': 'Who', 'age1': 'Who', 'age2': 'Who', 'status': 'Who',
-    'SSincome': 'Income', 'pension': 'Income', 'spendGoal': 'Income',
+    'SSincome': 'Income', 'pension': 'Income', 'spendGoal': 'Income', 'guaranteedIncome': 'Income',
     'netIncome': 'Income', 'totalIncome': 'Income', 'surplus': 'Income',
     'shortfall': 'Income', 'RMDwd': 'Income', 'cashD+I': 'Income',
     'IRAwd': 'Withdrawals', 'IRA1-': 'Withdrawals', 'IRA2-': 'Withdrawals',
@@ -2879,7 +2978,7 @@ const columnGroupDefs = {
     'inflows': 'Withdrawals',
     'wdRate%': 'Withdrawals',
     'timing': 'Withdrawals',
-    'gkSpend': 'Income', 'gkAdj': 'Income',
+    'ruleSpend': 'Income', 'ruleAdj': 'Income', 'vsPlan%': 'Income',
     'infl%': 'Market', 'inflCum%': 'Market', 'return%': 'Market',
     'railLower': 'Rails', 'railUpper': 'Rails', 'railPoS%': 'Rails',
     'railSpend': 'Rails', 'railSpendDn': 'Rails', 'railSpendUp': 'Rails', 'railBasis': 'Rails',
@@ -2944,7 +3043,7 @@ const CATEGORY_CHECKBOXES = {
     'Summary': 'cat-summary', 'Balances': 'cat-balances', 'Income': 'cat-income',
     'Taxation': 'cat-taxation', 'IRA Δ': 'cat-ira', 'Roth Δ': 'cat-roth',
     'Brokerage Δ': 'cat-brokerage', 'Cash Δ': 'cat-cash', 'Opp. Cost': 'cat-oppcost',
-    'Spending': 'cat-spending',
+    'Spending': 'cat-spending', 'Guardrails': 'cat-guardrails',
 };
 
 // Get active categories based on checkbox state
@@ -3378,8 +3477,13 @@ function updateTable(log) {
         'infl%': 'Inflation applied to the spending goal for this year. Fixed at your Inflation input in a normal run; under Monte Carlo each path draws its own, so this column is how you see which years the path got expensive. Note that tax brackets and IRMAA thresholds index at the separate CPI input instead, which is why a high-inflation year can raise spending without widening the brackets that spending is taxed in.',
         'inflCum%': 'How much the price level has risen since the plan started, compounding the infl% column. Divide any nominal dollar figure by 1 + this to read it in current dollars, or flip the Future $ / Current $ switch above the tabs and let every column do it for you.',
         'return%': 'The market return this year before dividends and before any per-account mix is applied: your Growth input in a normal run, or the year drawn from the Monte Carlo path. The balance columns will not move by exactly this much - each account adds its dividend yield and blends its own stock/bond/international split, and Cash earns its own yield instead.',
-        'gkSpend': 'Guardrails: the spending goal the rule set for this year.',
-        'gkAdj': `What Guardrails did this year. A cut ("-10%cap"): spending was too high for the savings left. `
+        'guaranteedIncome': 'Social Security plus pension this year: the part of the spend goal the portfolio does not have to fund. The Risk-based rule compares spending net of this with the wealth at the end of the year before.',
+        'ruleSpend': 'Guardrails: the spending goal the rule (GK-style or Risk-based) set for this year.',
+        'vsPlan%': 'Guardrails: where the rule has put this year\'s spending against your planned path (your spend goal with Spend Delta and inflation, no rule). -10% is a tenth under the plan; 0% is on it. With Never above plan on it is never positive.',
+        'ruleAdj': `What Guardrails did this year. Risk-based: "cut→45%" - the chance of success fell to the cut rail and `
+            + `spending was reset to what gives 45%; "raise→80%" - it reached the raise rail and spending rose to what gives `
+            + `80%; "no rails" - no solved rails for this year, so spending stayed on the plan's path. `
+            + `GK-style: a cut ("-10%cap"): spending was too high for the savings left. `
             + `A raise ("+10%pros"): it was low enough to spend more. no-CPI: the inflation raise was skipped `
             + `after a year the savings as a whole lost money. CPI≤${Math.round(OptimizerCore.GK_CPI_RAISE_CAP * 100)}%: `
             + `inflation ran higher and the raise was held to that. no-cut: spending was high enough for a cut, `
@@ -4083,6 +4187,9 @@ const RMD_MILESTONE_COLOR = '#2471a3';
 // Milestone marker color for the Social Security start lines. Green, so it reads as income
 // arriving rather than as one of the cost/warning markers.
 const SS_MILESTONE_COLOR = '#1e8449';
+// A spend-rule raise: olive, apart from the cut's orange, the Social Security green and the
+// break-even teal it can share a chart with.
+const RULE_RAISE_MILESTONE_COLOR = '#7d8b0a';
 
 // Legend hover hint for the Medicare series (browser-native tooltip via canvas title).
 const MEDICARE_LEGEND_TIP = 'Base Cost for Medicare B+D - not deducted from spendable. Illustration only.';
@@ -4209,7 +4316,8 @@ function makeChartLegendInteraction(groupSize = 1) {
 //     '—'), carrying a half or full basis step-up glyph per the state's property law.
 //  8. Last death - the final row, always someone's death since the plan ends at one. Labelled the
 //     same way, always a FULL step-up (heirs), and it is the only death marker a single filer gets.
-//  2. Every Guardrails spending CUT (gkAdj contains a "cap" adjustment).
+//  2. Every Guardrails spending CUT and RAISE, by the GK-style or the risk-based rule (the hidden
+//     -ruleMove field: what the rule did to the year's goal).
 //  3. Every year the IRMAA tier INCREASES over the prior year (e.g. Tier 1→Tier 2), labelled with
 //     the new tier ("IRMAA Tier 2"). Same-or-lower tiers are not marked.
 //  4. Every year net income falls short of the spend goal by more than 10%.
@@ -4261,10 +4369,18 @@ function computeMilestones(log) {
         const sg = r.spendGoal ?? r.SpendGoal;
         const ni = r.netIncome ?? r.NetIncome;
         const isShort = (sg > 0 && ni != null && ni < sg * 0.90);
-        // 2. GK guardrail cut - gkAdj like "−10%cap" (may be combined with "no-CPI"). Skipped when
-        // the same year is already flagged as a shortfall.
-        if (!isShort && String(r.gkAdj ?? '').includes('cap')) {
+        // 2. A spend-rule cut or raise, by either rule (GK-style or risk-based), from what the rule
+        // actually did to the goal (the hidden -ruleMove field): a risk-based raise the ceiling
+        // trims back to the plan still moved spending up, and a GK-style year labelled 'no-cut'
+        // did not move it. A cut is skipped when the same year is already flagged as a shortfall.
+        // Rows without the field (a result loaded from an older file) fall back to the GK label.
+        const move = r['-ruleMove'];
+        const cut = typeof move === 'number' ? move < -0.5 : String(r.ruleAdj ?? '').includes('cap');
+        const raise = typeof move === 'number' ? move > 0.5 : String(r.ruleAdj ?? '').includes('pros');
+        if (!isShort && cut) {
             ms.push({ x: i, label: 'Guardrail cut', color: '#d35400' });
+        } else if (raise) {
+            ms.push({ x: i, label: 'Guardrail raise', color: RULE_RAISE_MILESTONE_COLOR });
         }
         // 3. IRMAA tier increase over the prior year.
         const tier = tierNum(r.IRMAATier);
@@ -4830,6 +4946,11 @@ const RailsState = {
     // plan or the settings shows up as the difference between two sets of rails (user, 2026-09-16).
     previous: null,
     previousFixedMs: null,
+    // P132. A solve along a REPLAYED path, kept apart from the plan's: the plan's rails come back
+    // untouched when the replay ends, and a step to another path leaves this one behind.
+    pathResult: null,
+    pathFingerprint: null,
+    runIsPath: false,
     running: false,
     runFingerprint: null,   // what the job in flight is solving for
     startedAt: 0,
@@ -4850,8 +4971,9 @@ function railsSettings() {
         return NERD_KNOBS && Number.isFinite(v) && v > 0 ? v : d;
     };
     return {
-        preset:  document.getElementById('rails-preset')?.value || 'normal',
-        method:  document.getElementById('rails-method')?.value || 'tab',
+        // P132. The preset is the sidebar's Risk-based rails preset, whether or not the rule is on;
+        // the panel's own menu mirrors it both ways (railsRuleSync, railsPresetChanged).
+        preset:  val('rbgPreset') || document.getElementById('rails-preset')?.value || 'normal',
         cadence: RailsEngine.railsCadence(num('rails-cadence', RailsEngine.RAILS_DEFAULT_CADENCE)),
         paths:   RailsEngine.railsPaths(num('rails-paths', RailsEngine.RAILS_DEFAULT_PATHS)),
         auto:    !!document.getElementById('rails-auto')?.checked,
@@ -4859,14 +4981,13 @@ function railsSettings() {
     };
 }
 
-// The Monte Carlo method the panel asks for (user, 2026-09-16: "let me select which of the MC methods
-// to use"): one of the tab's three, or whatever the tab itself is set to - the default.
-const RAILS_METHODS = ['bootstrap', 'gbm', 'aam'];
+// The Monte Carlo method is the tab's own (user, 2026-09-19: "Market Path can be eliminated, it should
+// always follow Monte Carlo"): the rails and the tab describe one market.
 function railsTabMethod() {
     return document.getElementById('mc-sim-mode')?.value ?? 'gbm';
 }
-function railsMethod(s = railsSettings()) {
-    return RAILS_METHODS.includes(s.method) ? s.method : railsTabMethod();
+function railsMethod() {
+    return railsTabMethod();
 }
 function railsMethodLabel(mode) {
     return typeof _mcModeLabel === 'function' ? _mcModeLabel(mode) : String(mode);
@@ -4887,20 +5008,50 @@ function railsModelCfg(base) {
 // Everything a solve depends on, and nothing else. The preset is not in it: every preset is solved
 // at once, so switching presets only redraws. Nor is anything cosmetic: Current $ / Future $, the
 // chart views and the person view never reach getInputs().
+//
+// P132. Neither the risk-based rule nor its table is in it: the solve runs the plan WITHOUT that
+// rule (the rails are what the rule follows), so turning it on, changing its preset, or a new table
+// changes nothing the job computes. A custom set from the nerdknob boxes IS in it: the job solves it.
 function railsFingerprint(base = getInputs(), s = railsSettings()) {
-    return JSON.stringify({ base, cadence: s.cadence, paths: s.paths, model: railsModelCfg(base) });
+    return JSON.stringify({ base: railsPlanOf(base), cadence: s.cadence, paths: s.paths, model: railsModelCfg(base),
+                            custom: railsJobPresets()?.custom ?? null });
+}
+function railsPlanOf(base) {
+    const { rbgRails, rbgPreset, rbgCustom, ...rest } = base;
+    if (rest.spendRule === 'rbg') rest.spendRule = '';
+    return rest;
 }
 
 // What the After-Tax Spend answer depends on: the plan WITHOUT its After-Tax Spend - the answer is in
 // dollars and comes out the same whatever goal it started from - and the market model. Using the
 // answer therefore does not make it stale; any other change does.
 function railsStartFingerprint(base = getInputs()) {
-    const { spendGoal, ...rest } = base;
-    return JSON.stringify({ base: rest, model: railsModelCfg(base) });
+    const { spendGoal, ...rest } = railsPlanOf(base);
+    return JSON.stringify({ base: rest, model: railsModelCfg(base), custom: railsJobPresets()?.custom ?? null });
 }
 
 function railsIsStale() {
     return !!RailsState.result && RailsState.fingerprint !== railsFingerprint();
+}
+
+// P132. The replayed path, as inputs and as identity. The sequences ride in `base` so the job's
+// spine follows the path; the key names the path so a solve is kept only for the path it was
+// solved on (a step to the next path is another path).
+function railsReplayBase(base = getInputs()) {
+    if (!_replayState?.rows) return base;
+    return { ...base, ...MCEngine.pathInputsFromBankRows(_replayState.rows, base, _replayState.mcMode) };
+}
+function railsReplayKey() {
+    const s = _replayState;
+    if (!s?.rows?.scenario) return null;
+    const sc = Array.from(s.rows.scenario);
+    return `${s.pathName ?? s.label ?? ''}|${s.mcMode}|${sc.length}|${sc.slice(0, 16).map(v => v.toFixed(6)).join(',')}`;
+}
+function railsPathFingerprint(base = getInputs(), s = railsSettings()) {
+    return railsFingerprint(base, s) + '|' + railsReplayKey();
+}
+function railsPathIsCurrent() {
+    return !!_replayState && !!RailsState.pathResult && RailsState.pathFingerprint === railsPathFingerprint();
 }
 
 function railsStartIsCurrent() {
@@ -4911,18 +5062,26 @@ function runRails() {
     if (!railsOn()) return;
     clearTimeout(RailsState.debounce);
     RailsState.debounce = null;
-    if (_replayState) { railsRenderPanel(); return; }
-    const base = getInputs();
+    // P132. During a replay the job solves along the REPLAYED path: its spine is the plan on that
+    // path's sequences, and each solved year resumes from the state the path actually reached, on
+    // fresh Monte Carlo paths. The After-Tax Spend answer is the plan's, not the path's, so it is
+    // skipped. Kept apart from the plan's solve (railsComplete).
+    const inReplay = !!_replayState;
+    const plan = getInputs();
+    const base = inReplay ? railsReplayBase(plan) : plan;
     const s = railsSettings();
-    const fingerprint = railsFingerprint(base, s);
-    const startFingerprint = railsStartFingerprint(base);
-    Object.assign(RailsState, { running: true, runFingerprint: fingerprint, startedAt: performance.now(),
+    const fingerprint = inReplay ? railsPathFingerprint(plan, s) : railsFingerprint(base, s);
+    const startFingerprint = railsStartFingerprint(plan);
+    Object.assign(RailsState, { running: true, runIsPath: inReplay, runFingerprint: fingerprint, startedAt: performance.now(),
                                 progress: 0, error: null });
     railsStopTicker();
     RailsState.ticker = setInterval(railsRenderStatus, 250);
     railsRenderPanel();
+    // The plan without the rule's table (the job runs the plan without the rule anyway), plus the
+    // custom set when the boxes define one.
     runMCWorker(
-        { kind: 'rails', base, cadence: s.cadence, numPaths: s.paths, ...railsModelCfg(base) },
+        { kind: 'rails', base: { ...base, rbgRails: undefined }, cadence: s.cadence, numPaths: s.paths,
+          presets: railsJobPresets(), skipStart: inReplay, ...railsModelCfg(base) },
         pct => { if (RailsState.runFingerprint === fingerprint) RailsState.progress = pct; },
         msg => railsComplete(msg, fingerprint, startFingerprint));
 }
@@ -4943,11 +5102,17 @@ function railsComplete(msg, fingerprint, startFingerprint) {
     // A job that a newer one replaced never reports: its worker was terminated. This guard covers the
     // rest - a cancel while it ran.
     if (fingerprint !== RailsState.runFingerprint) return;
-    Object.assign(RailsState, { running: false, runFingerprint: null });
+    const isPath = RailsState.runIsPath;
+    Object.assign(RailsState, { running: false, runFingerprint: null, runIsPath: false });
     railsStopTicker();
     if (msg.error || !msg.cost) {
         RailsState.error = msg.error || 'no result';
         railsRenderPanel();
+        return;
+    }
+    if (isPath) {
+        Object.assign(RailsState, { pathResult: msg, pathFingerprint: fingerprint, error: null });
+        railsRedraw({ charts: true });
         return;
     }
     // The solve on screen becomes the previous one. Its own timing goes with it, so the panel can
@@ -4959,6 +5124,11 @@ function railsComplete(msg, fingerprint, startFingerprint) {
     });
     railsRedraw({ charts: true });
     updateSuggestSpendTooltip();
+    // P132. With the risk-based rule on, the plan follows the rails just solved: run it again so
+    // every number on the page is the rule's. runSimulation ends in railsAfterSimulation, which
+    // finds this fingerprint already solved and starts nothing.
+    if (rbgRuleOn() && !_replayState && typeof runSimulation === 'function') runSimulation();
+    else updateGuardrailsNote();
     // The plan may have moved while the job ran; with auto-run on, that is solved in turn.
     railsScheduleAutoRun();
 }
@@ -4972,10 +5142,24 @@ function railsApplyToLog(log) {
     const FIELDS = RailsEngine.RAIL_FIELDS;
     const had = FIELDS[0] in log[0];
     for (const r of log) for (const f of FIELDS) delete r[f];
-    // Hidden during a replay: the rails describe the plan, and the log on screen is a replayed path.
-    if (!railsOn() || !RailsState.result || _replayState) return had;
-    const rows = RailsEngine.railsRowFields(RailsState.result, log,
-        { stale: railsIsStale(), preset: railsSettings().preset });
+    if (!railsOn()) return had;
+    let rows;
+    if (_replayState) {
+        // P132. On a replayed path: the rails solved along this path when there are some, else the
+        // rails the rule read along it (from the plan's table) while the rule is on, else nothing -
+        // the plan's own rails describe the plan, not this path.
+        if (railsPathIsCurrent()) {
+            rows = RailsEngine.railsRowFields(RailsState.pathResult, log, { preset: railsSettings().preset });
+        } else if (rbgRuleOn() && lastSimInputs?.rbgRails) {
+            rows = RailsEngine.railsRuleRowFields(lastSimInputs.rbgRails, log);
+        } else {
+            return had;
+        }
+    } else {
+        if (!RailsState.result) return had;
+        rows = RailsEngine.railsRowFields(RailsState.result, log,
+            { stale: railsIsStale(), preset: railsSettings().preset });
+    }
     log.forEach((r, i) => {
         const f = rows[i] || {};
         for (const k of FIELDS) r[k] = f[k] ?? null;
@@ -5000,8 +5184,18 @@ function railsPreviousToggled() {
     railsRenderPanel();
 }
 
-// The preset: every preset was solved, so this only redraws - never stale, never a solve.
+// The panel's preset menu: it sets the sidebar's Risk-based rails preset, the one setting, and the
+// sidebar's handler mirrors it back and redraws. Every preset was solved, so this never solves.
 function railsPresetChanged() {
+    const panel = document.getElementById('rails-preset');
+    const side = document.getElementById('rbgPreset');
+    if (panel && side && side.value !== panel.value) {
+        side.value = panel.value;
+        // A real change on the sidebar control: its own handler mirrors the panel and redraws, and
+        // the sidebar's recalc re-runs the plan, which matters when the rule is reading the preset.
+        side.dispatchEvent(new Event('change', { bubbles: true }));
+        return;
+    }
     railsRedraw({ charts: true });
     updateSuggestSpendTooltip();
 }
@@ -5033,13 +5227,43 @@ function railsAutoToggled() {
 function railsAfterSimulation() {
     if (!railsOn()) return;
     railsRenderPanel();
+    updateGuardrailsNote();
     railsScheduleAutoRun();
 }
 
+// P132. The panel's preset menu mirrors the sidebar's Risk-based rails preset, always: one setting,
+// two places to set it, so the rails drawn are the rails the rule would follow. A change to the
+// sidebar's redraws the rails (and, with the rule on, the plan re-runs on its own).
+function railsRuleSync() {
+    const panel = document.getElementById('rails-preset');
+    if (!panel || typeof RailsState === 'undefined') return;
+    const wanted = val('rbgPreset') || panel.value || 'normal';
+    let changed = false;
+    if (panel.value !== wanted) { panel.value = wanted; changed = true; }
+    if (changed || RailsState._drawnPreset !== wanted) {
+        RailsState._drawnPreset = wanted;
+        railsRedraw({ charts: true });
+        updateSuggestSpendTooltip();
+    }
+}
+function applyRbgSelection(sel) {
+    const pEl = document.getElementById('rbgPreset');
+    if (pEl && sel.rbgPreset) pEl.value = sel.rbgPreset;
+    const c = sel.rbgCustom;
+    if (c && typeof c === 'object') {
+        for (const [k, id] of [['target', 'rbgTarget'], ['upper', 'rbgUpper'], ['lower', 'rbgLower'], ['cutTo', 'rbgCutTo']]) {
+            const el = document.getElementById(id);
+            if (el && c[k] != null) el.value = Math.round(c[k] * 1000) / 10;
+        }
+    }
+}
+
 // Debounced, and only when a solve would answer something new: a fingerprint already solved, or
-// already being solved, starts nothing.
+// already being solved, starts nothing. P132: the risk-based rule needs current rails to run at
+// all, so with it on a solve is scheduled whether or not Auto-run is ticked.
 function railsScheduleAutoRun() {
-    if (!railsOn() || !railsSettings().auto || _replayState) return;
+    if (!railsOn() || _replayState) return;
+    if (!railsSettings().auto && !rbgRuleOn()) return;
     const wanted = () => {
         const fp = railsFingerprint();
         if (RailsState.result && RailsState.fingerprint === fp) return false;
@@ -5058,7 +5282,7 @@ function railsScheduleAutoRun() {
 function railsKnobChanged() {
     const panel = document.getElementById('rails-panel');
     if (panel) panel.style.display = railsOn() ? '' : 'none';
-    for (const id of ['rails-cadence-wrap', 'rails-paths-wrap', 'rails-timing']) {
+    for (const id of ['rails-cadence-wrap', 'rails-paths-wrap', 'rails-timing', 'rails-table-wrap']) {
         const el = document.getElementById(id);
         if (el) el.style.display = NERD_KNOBS ? '' : 'none';
     }
@@ -5111,27 +5335,73 @@ function railsRenderPanel() {
     if (run) {
         run.style.display = RailsState.running ? 'none' : '';
         const pj = railsProjection();
-        run.textContent = pj?.ms != null ? `Run (about ${railsFmtSecs(pj.ms / 1000)})` : 'Run';
+        const about = pj?.ms != null ? ` (about ${railsFmtSecs(pj.ms / 1000)})` : '';
+        run.textContent = _replayState ? `Solve rails on this path${about}` : `Run${about}`;
     }
     if (cancel) cancel.style.display = RailsState.running ? '' : 'none';
-    // "Same as the Monte Carlo tab" names what the tab is set to, so the choice is never a guess.
-    const tabOpt = document.querySelector('#rails-method option[value="tab"]');
-    if (tabOpt) tabOpt.textContent = `Same as the Monte Carlo tab: ${railsMethodLabel(railsTabMethod())}`;
+    // The market is the Monte Carlo tab's; named here so the panel says what it solves on.
+    const market = document.getElementById('rails-market');
+    if (market) market.textContent = `Market paths: ${railsMethodLabel(railsTabMethod())}, from the Monte Carlo tab`;
     railsRenderStatus();
     railsRenderStart();
     railsRenderTiming();
+    railsRenderTable();
+}
+
+// Nerdknob. The rule's table for the preset on screen - the plan's, or the path's while a replayed
+// path has its own solve - one row per plan year. Ratios are net spending (after Social Security and
+// pension) over the wealth at the end of the year before; a landing line is net spending as a share
+// of the spine's wealth, a + b x (wealth / spine wealth). Interpolated rows are greyed.
+function railsRenderTable() {
+    const el = document.getElementById('rails-table');
+    if (!el) return;
+    const msg = (_replayState && railsPathIsCurrent()) ? RailsState.pathResult : RailsState.result;
+    const preset = railsSettings().preset;
+    const t = (NERD_KNOBS && msg) ? RailsEngine.railsRuleTable(msg, preset) : null;
+    if (!t) { el.innerHTML = ''; return; }
+    const n4 = v => v == null ? '-' : v === Infinity ? 'never' : v.toFixed(4);
+    const n3 = v => v == null ? '-' : v.toFixed(3);
+    const td = 'padding:1px 8px;text-align:right;white-space:nowrap;';
+    const th = 'padding:1px 8px;text-align:right;white-space:nowrap;border-bottom:1px solid #cbb8dd;';
+    const pct = v => `${Math.round(v * 1000) / 10}%`;
+    const head = `<div style="color:#555;margin-bottom:3px;">${t.label}: cut when the ratio is above <b>cut at</b> `
+        + `(chance ${pct(t.lower)}), landing on the ${pct(t.cutTo)} line; raise when below <b>raise at</b> `
+        + `(chance ${pct(t.upper)}), landing on the ${pct(t.target)} line. Ratio = net spending / wealth at the end `
+        + `of the year before. Landing = (a + b × wealth / spine wealth) × spine wealth, plus the year's `
+        + `guaranteed income. ${t.numPaths} paths, ${railsMethodLabel(t.simulationMode)}, solved every ${t.cadence} `
+        + `${t.cadence === 1 ? 'year' : 'years'}${msg === RailsState.pathResult ? ', on this path' : ''}.</div>`;
+    const rows = [];
+    for (let k = 0; k < t.years.length; k++) {
+        const r = t.years[k];
+        if (!r) continue;
+        const grey = r.solved ? '' : 'color:#888;';
+        rows.push(`<tr style="${grey}"><td style="${td}text-align:left;">${r.year}${r.solved ? '' : ' <span title="interpolated">~</span>'}</td>`
+            + `<td style="${td}">${k}</td><td style="${td}">${r.wealthReal == null ? '-' : '$' + Math.round(r.wealthReal / 1000).toLocaleString() + 'k'}</td>`
+            + `<td style="${td}">${n4(r.cutAt)}</td><td style="${td}">${n3(r.cutA)}</td><td style="${td}">${n3(r.cutB)}</td>`
+            + `<td style="${td}">${n4(r.raiseAt)}</td><td style="${td}">${n3(r.raiseA)}</td><td style="${td}">${n3(r.raiseB)}</td></tr>`);
+    }
+    el.innerHTML = head + '<table style="border-collapse:collapse;font-size:0.95em;">'
+        + `<tr><th style="${th}text-align:left;">Year</th><th style="${th}">k</th><th style="${th}" title="The plan's own wealth at the end of the year before, in today's dollars">Spine wealth</th>`
+        + `<th style="${th}">Cut at</th><th style="${th}">cut a</th><th style="${th}">cut b</th>`
+        + `<th style="${th}">Raise at</th><th style="${th}">raise a</th><th style="${th}">raise b</th></tr>`
+        + rows.join('') + '</table>';
 }
 
 // The folded panel's one line: enough to know, without opening it, whether the rails on the charts
 // are current and where the plan sits against them.
 function railsHeadline() {
-    if (_replayState) return 'hidden during a replay';
-    if (RailsState.running) return `solving, ${Math.round(RailsState.progress * 100)}%`;
+    if (RailsState.running) return `solving${RailsState.runIsPath ? ' on this path' : ''}, ${Math.round(RailsState.progress * 100)}%`;
+    if (_replayState) {
+        if (railsPathIsCurrent()) return 'solved on this path';
+        if (rbgRuleOn() && lastSimInputs?.rbgRails) return 'the rails the rule read on this path';
+        return 'not solved on this path';
+    }
     if (RailsState.error) return 'the solve failed';
     const r = RailsState.result;
     if (!r) return 'not solved yet';
     const y0 = r.years[0];
     const P = r.presets[railsSettings().preset];
+    if (!P) return `${railsIsStale() ? 'stale: ' : ''}the ${railsSettings().preset} preset was not in this solve`;
     const where = !y0 ? 'no full year to solve'
         : `${(y0.pos * 100).toFixed(1)}% chance from ${y0.year}, `
           + (y0.pos < P.lower ? 'below the cut rail' : y0.pos >= P.upper ? 'at or above the raise rail' : 'between the rails');
@@ -5143,8 +5413,23 @@ function railsRenderStatus() {
     if (headline) headline.textContent = ' - ' + railsHeadline();
     const el = document.getElementById('rails-status');
     if (!el) return;
-    if (_replayState) {
-        el.textContent = 'Hidden while a Monte Carlo path is being replayed: the rails describe your plan, not the replayed path.';
+    if (_replayState && !RailsState.running) {
+        const describe = x => `${railsMethodLabel(x.simulationMode)}, every ${x.cadence} ${x.cadence === 1 ? 'year' : 'years'}, ${x.numPaths} paths`;
+        if (railsPathIsCurrent()) {
+            const r = RailsState.pathResult, y0 = r.years[0], P = r.presets[railsSettings().preset];
+            el.textContent = `Solved along this path (${describe(r)}): at each solved year the chance of success from the state `
+                + `the path actually reached, and the rails from there.`
+                + (y0 && P ? ` ${y0.year}: ${(y0.pos * 100).toFixed(1)}% chance, `
+                    + (y0.pos < P.lower ? 'below the cut rail.' : y0.pos >= P.upper ? 'at or above the raise rail.' : 'between the rails.') : '');
+        } else if (rbgRuleOn() && lastSimInputs?.rbgRails) {
+            el.textContent = 'Drawn: the rails the Risk-based rule read along this path - your plan\'s solved rails, turned into '
+                + 'dollars at the path\'s own spending and wealth each year, which is exactly what decided each cut and raise. '
+                + 'No chance of success is shown for them. Solve rails on this path re-solves the chance from the path\'s '
+                + 'real state at each solved year.';
+        } else {
+            el.textContent = 'Your plan\'s rails describe the plan, not this path, so they are not drawn. Solve rails on this path '
+                + 'solves them along the path: the chance of success from the state the path reached at each solved year.';
+        }
         return;
     }
     if (RailsState.running) {
@@ -5189,6 +5474,10 @@ function railsRenderStatus() {
     const pct = v => (v * 100).toFixed(1) + '%';
     const P = r.presets[s.preset];
     const p0 = y0.presets[s.preset];
+    if (!P || !p0) {
+        el.textContent = `${head} The ${s.preset} preset was not part of this solve; run again to draw it.`;
+        return;
+    }
     // `round`: the rails in whole thousands, as the chart's tooltip gives them (railsTooltipValue).
     const amount = (v, clamped, year, round) => v != null ? money(v, year, round)
         : clamped === 'high' ? 'beyond the search' : clamped === 'low' ? 'below the search' : 'not solved';
@@ -6619,23 +6908,82 @@ function foldRetiredGKStrategy(data) {
 // terms of savings, never a withdrawal rate: nobody enters or sees the rate the rule tests (user,
 // 2026-09-14). "More than g% above the safe level for the savings you have" is the engine's test,
 // spend / portfolio > IWR x (1 + g), multiplied through by the portfolio.
+// The sentence folds (user, 2026-09-20): the summary line names the rule and its state, the body
+// carries the explanation.
 function updateGuardrailsNote() {
     const el = document.getElementById('guardrails-note');
+    const fold = document.getElementById('guardrails-note-fold');
+    const summary = document.getElementById('guardrails-note-summary');
     if (!el) return;
     const on = valChecked('spendRule');
-    el.style.display = on ? '' : 'none';
+    (fold ?? el).style.display = on ? '' : 'none';
     if (!on) return;
+    const ceilingNote = valChecked('gkShapeCeiling') ? ' Raises never take spending above your planned path.' : '';
+    // P132. The risk-based rule, with where its rails stand: the rule is inert until the rails
+    // panel has solved this plan, and that is said here rather than left to a blank column.
+    if (rbgRuleOn()) {
+        const key = val('rbgPreset') || 'normal';
+        const P = (railsJobPresets() ?? OptimizerCore.RAIL_PRESETS)[key];
+        const pct = v => `${Math.round(v * 1000) / 10}%`;
+        let state, short;
+        if (!P) { state = 'Custom is not a rule yet: the boxes under the Risk-based guidance menu say what to change. Until then spending stays on your planned path.'; short = 'Custom is not a rule yet, on the planned path'; }
+        else if (!railsOn()) { state = 'The rails cannot be solved on this page, so spending stays on your planned path.'; short = 'no rails on this page'; }
+        else if (typeof RailsState !== 'undefined' && RailsState.running) { state = 'Solving the rails now; the plan follows them when the solve lands.'; short = 'solving the rails'; }
+        else if (typeof RailsState !== 'undefined' && (!RailsState.result || railsIsStale())) { state = 'The rails are not solved for this plan yet; the solve starts by itself in a moment, and the plan follows it.'; short = 'rails not solved yet'; }
+        else { state = 'Following the rails in the Risk-based rails panel under the charts.'; short = 'following the rails'; }
+        const cutTo = P ? (P.cutTo ?? P.target) : null;
+        if (summary) summary.textContent = `Risk-based${P ? ', ' + P.label : ''}: ${short}${valChecked('gkShapeCeiling') ? ', never above plan' : ''}`;
+        el.textContent = (P ? `Risk-based, ${P.label}: spending follows your plan's chance of success (CoS). When it falls to `
+            + `${pct(P.lower)}, spending is cut to what gives ${pct(cutTo)}; when it reaches ${pct(P.upper)}, it is raised to `
+            + `what gives ${pct(P.target)}. Spending takes inflation every year. ` : 'Risk-based: ')
+            + state
+            + (ceilingNote || ' Never above plan is recommended with this rule: the rails are solved for your planned path and are accurate near it.');
+        return;
+    }
     const g = Math.round(+val('gkGuard') || 20), a = Math.round(+val('gkAdjPct') || 10);
     // P127. The two published limits the rule adopted, and the ceiling when it is on. Stated here and
     // not only in the tooltip: the ceiling switch is nerdknob-only, but a share link can turn it on
     // for anyone, and a rule that is running has to be readable by whoever it is running for.
     const cap = Math.round(OptimizerCore.GK_CPI_RAISE_CAP * 100);
     const endYears = OptimizerCore.GK_NO_CUT_FINAL_YEARS;
-    el.textContent = `Your first year sets the safe level: what you spend for each dollar saved. After that, `
-        + `spending is cut ${a}% in any year it is more than ${g}% above the safe level for the savings you `
-        + `have, and raised ${a}% when it is more than ${g}% below. It is never cut in the plan's last `
-        + `${endYears} years, and its yearly inflation raise is at most ${cap}%.`
-        + (valChecked('gkShapeCeiling') ? ' Raises never take spending above your planned path.' : '');
+    if (summary) summary.textContent = `GK-style: ±${g}% band, ${a}% steps${valChecked('gkShapeCeiling') ? ', never above plan' : ''}`;
+    el.textContent = `Each year, what your portfolio funds (spending after Social Security and pension) is compared, `
+        + `for the savings you have, with what your plan itself would draw that year. Spending is cut ${a}% in any `
+        + `year the draw runs more than ${g}% above your plan's, and raised ${a}% when it runs more than ${g}% below. `
+        + `On your plan's own assumptions nothing changes; the rule acts when markets take you off it. It is never `
+        + `cut in the plan's last ${endYears} years, and its yearly inflation raise is at most ${cap}%.`
+        + ceilingNote;
+}
+
+// The Custom fold's own line, and the Custom option in both menus: the four numbers as the other
+// presets are written (user, 2026-09-20), or what is missing.
+function updateRbgCustomSummary() {
+    const problems = rbgCustomProblems();
+    const s = problems.length ? null : rbgCustomNumbers();
+    const pct = v => `${Math.round(v * 1000) / 10}%`;
+    const text = s ? `Custom ■${pct(s.target)} ▲${pct(s.upper)} ▼${pct(s.lower)}→■${pct(s.cutTo)}` : null;
+    const el = document.getElementById('rbg-custom-summary');
+    if (el) {
+        el.textContent = text ?? `Custom: not a rule yet, ${problems.length} thing${problems.length === 1 ? '' : 's'} to fix`;
+        el.classList.toggle('rbg-bad', !s);
+    }
+    for (const id of ['rbgPreset-custom', 'rails-preset-custom']) {
+        const opt = document.getElementById(id);
+        if (opt) opt.textContent = text ?? 'Custom (not a rule yet: see the boxes under the menu)';
+    }
+    // The boxes at fault, and the line that says what to change.
+    const atFault = new Set(problems.flatMap(p => p.ids));
+    for (const id of ['rbgTarget', 'rbgUpper', 'rbgLower', 'rbgCutTo']) {
+        const input = document.getElementById(id);
+        if (!input) continue;
+        input.classList.toggle('rbg-bad', atFault.has(id));
+        input.closest('label')?.classList.toggle('rbg-bad', atFault.has(id));
+    }
+    const warn = document.getElementById('rbg-custom-warn');
+    if (warn) {
+        warn.style.display = problems.length ? '' : 'none';
+        warn.innerHTML = problems.map(p => `<div>${p.text}: ${p.fix}.</div>`).join('');
+    }
 }
 
 function toggleStrategyUI() {
@@ -6646,9 +6994,30 @@ function toggleStrategyUI() {
     document.getElementById('ui-fixedpct').classList.toggle('hidden', m !== 'fixedpct');
     document.getElementById('ui-ordered').classList.toggle('hidden', m !== 'ordered');
     // Guardrails is a spend rule, not a strategy, so its fields follow the switch rather than the
-    // menu, and stay behind the nerdknob by the user's choice (2026-09-13). Everyone gets the switch,
-    // and a sentence stating the rule in force while it is on.
-    document.getElementById('ui-gk').classList.toggle('hidden', !valChecked('spendRule') || !NERD_KNOBS);
+    // menu. GK-style's band and step stay behind the nerdknob by the user's choice (2026-09-13).
+    // Everyone gets the switch, the rule menu, the risk-based preset, and a sentence stating the
+    // rule in force while it is on; the ceiling is nerdknob for GK-style and open for Risk-based
+    // (P132), and Custom numbers are nerdknob-only.
+    {
+        const on = valChecked('spendRule'), rbg = rbgRuleOn();
+        // The rule menu is a nerdknob control (user, 2026-09-19): beside the switch whenever the
+        // knob is on, greyed until the switch is, and shown without the knob only for a plan or a
+        // link that already carries the risk-based rule, so a running rule is never invisible.
+        const kindEl = document.getElementById('spendRuleKind');
+        if (kindEl) {
+            kindEl.classList.toggle('hidden', !NERD_KNOBS && !rbg);
+            kindEl.disabled = !on;
+        }
+        document.getElementById('ui-gk').classList.toggle('hidden', !on || rbg || !NERD_KNOBS);
+        // The rails preset stays in view whatever the switch says (user, 2026-09-19): it picks the
+        // rails the panel draws on demand, and the rule's rails when the rule is on.
+        document.getElementById('ui-rbg')?.classList.remove('hidden');
+        // Custom is open to everyone (user, 2026-09-20); its fold shows while it is chosen.
+        document.getElementById('ui-rbg-custom')?.classList.toggle('hidden', val('rbgPreset') !== 'custom');
+        updateRbgCustomSummary();
+        document.getElementById('ui-rule-ceiling')?.classList.toggle('hidden', !on || (!rbg && !NERD_KNOBS));
+        railsRuleSync();
+    }
     updateGuardrailsNote();
     // Gated on the knob as well as the selection: a share link can carry str=split to someone who
     // has no menu entry for it, and a panel with no way to have been chosen is worse than hidden.
@@ -6713,6 +7082,8 @@ const OPT_LONG_TO_SHORT = {
     cyclicEnabled:'cyc',
     qcdHHMax:'qm', qcdAlways:'qa',
     gkGuard:'gkg', gkAdjPct:'gka', spendRule:'gr', gkShapeCeiling:'gsc',
+    // P132. The rule menu beside the switch, the risk-based preset, and its custom numbers.
+    spendRuleKind:'grk', rbgPreset:'rbp', rbgTarget:'rbt', rbgUpper:'rbu', rbgLower:'rbl', rbgCutTo:'rbc',
     // P104b3. FOUR keys rather than one packed `sw=0,9,1,0`. buildShareURL and loadFromURL are both
     // driven off the DOM fields themselves, so four plain fields round-trip with no parse step -
     // and a hand-written parse step for a packed value is exactly the shape of the ACA share-link
@@ -6738,6 +7109,7 @@ const OPT_SHARE_PRIVACY = {
         'g', 'cy', 'inf', 'cpi', 'fitr',
         'c1r', 'c1x', 'c2r', 'c2x', 'cbr', 'cbx', 'cr1r', 'cr1x', 'cr2r', 'cr2x',
         'cd', 'opt', 'copt', 'cyc', 'qa', 'gkg', 'gka', 'gr', 'gsc',
+        'grk', 'rbp', 'rbt', 'rbu', 'rbl', 'rbc',                         // the spend rule's menu and preset
         'swi', 'swb', 'swc', 'swr',
         'obj', 'ptxm', 'ptxr',
     ],
@@ -7190,7 +7562,8 @@ function saveScenario({ alsoExport = false } = {}) {
             // P100b1: `optObjective` rides along beside the engine inputs. It is NOT added to
             // getInputs() on purpose - that object feeds simulate() and the MC cache hash, and a
             // ranking preference has no business changing either.
-            data: { ...inputs, optObjective: OptimizerState.objective },
+            // P132. The rails table is derived from the plan and solved again on load, never saved.
+            data: { ...inputs, rbgRails: undefined, optObjective: OptimizerState.objective },
             savedAt: new Date().toISOString(),
             // P113. The release that produced the numbers below. Without it a later difference is
             // just a difference; with it the tool can say which release moved them.
@@ -7252,6 +7625,16 @@ function applyScenario(data) {
     // below leaves a control alone when the plan has no key for it, so a switch left on by the
     // previous plan would apply to this one without a word.
     if (data.gkShapeCeiling === undefined) data = { ...data, gkShapeCeiling: false };
+    // P132. The switch is a checkbox and the rule a menu: 'rbg' checks it and picks Risk-based, 'gk'
+    // (or the switch on from before the menu) picks GK-style. The preset loads through the loop
+    // below like any select; the custom numbers are an object and land on their four boxes here.
+    // The table is never in a saved plan: the rails are solved again for the plan as loaded.
+    {
+        const kindEl = document.getElementById('spendRuleKind');
+        if (kindEl && data.spendRule !== undefined) kindEl.value = data.spendRule === 'rbg' ? 'rbg' : 'gk';
+        if (data.rbgPreset === undefined) data = { ...data, rbgPreset: 'normal' };
+        if (data.rbgCustom && typeof data.rbgCustom === 'object') applyRbgSelection({ rbgCustom: data.rbgCustom });
+    }
     // Legacy: scenarios saved before the rename store maxConversion. Map it to its renamed
     // continuation; fundConversionWithCash stays at its own default (those scenarios predate it,
     // so implying it would silently change their numbers).
@@ -8989,6 +9372,11 @@ function generateStratRateOptions() {
     // dollars are shortened to make room. 3 significant figures: $24.8k at the bottom of the ladder
     // where that precision means something, $211k where it does not.
     const money = n => DisplayHelpers.formatDollarShort(n);
+    // The deduction that turns a federal (taxable-income) top into MAGI, the axis every entry is
+    // ordered on and the figure every entry now prints first (user, 2026-09-20: "the user is
+    // expecting the bracket tops to be ordered numerically" - by MAGI, so 24% Fed, whose MAGI top
+    // is above IRMAA Tier 3's, lists after it).
+    const ded = dropdownDeduction(status);
 
     const options = [];
 
@@ -9014,8 +9402,9 @@ function generateStratRateOptions() {
             const floor = prevFedLimit + 1;
             options.push({
                 value: String(ratePct),
-                label: `${ratePct}% Fed  ·  ${money(floor)}+ (${crossLadderNote('fed', floor, status, cpiAdj)})`,
+                label: `${ratePct}% Fed  ·  ${money(floor + ded)}+ (${crossLadderNote('fed', floor, status, cpiAdj)})`,
                 limit: floor,
+                magi: floor + ded,
                 disabled: true,
             });
             continue;
@@ -9024,8 +9413,9 @@ function generateStratRateOptions() {
         prevFedLimit = limit;
         options.push({
             value: String(ratePct),
-            label: `${ratePct}% Fed  ·  ${money(limit)} (${crossLadderNote('fed', limit, status, cpiAdj)})`,
+            label: `${ratePct}% Fed  ·  ${money(limit + ded)} (${crossLadderNote('fed', limit, status, cpiAdj)})`,
             limit,
+            magi: limit + ded,
             defaultSelected: false
         });
     }
@@ -9053,6 +9443,7 @@ function generateStratRateOptions() {
                 value: `IRMAA${i}`,
                 label: `${label}  ·  ${money(floor)}+ (${crossLadderNote('magi', floor, status, cpiAdj)})`,
                 limit: floor,
+                magi: floor,
                 disabled: true,
             });
             continue;
@@ -9062,6 +9453,7 @@ function generateStratRateOptions() {
             value: `IRMAA${i}`,
             label: `${label}  ·  ${money(limit)} (${crossLadderNote('magi', limit, status, cpiAdj)})`,
             limit,
+            magi: limit,
             defaultSelected: i === 0
         });
     }
@@ -9102,23 +9494,22 @@ function generateStratRateOptions() {
         options.push({
             value: `aca${pct}`,
             label: `${label}  ·  ${money(limit)} (${crossLadderNote('magi', limit, status, cpiAdj)})`,
-            limit
+            limit,
+            magi: limit
         });
     }
 
-    // ── Sort all options by income limit, lowest → highest ─────────────────────
-    // Sorted on each entry's OWN printed figure, so the column of dollars a reader scans runs
-    // upward. It is not the comparable axis: a federal entry's number is taxable income and an
-    // IRMAA entry's is MAGI, so `24% Fed - $404k` lists before `IRMAA Tier 3 - $410k` while the
-    // ceiling it really imposes ($435,750 of MAGI) is above Tier 3.
-    //
-    // SORTING ON THE COMPARABLE AXIS WAS TRIED AND REVERTED (P92e). It fixes that inversion and
-    // breaks something worse: `10% Fed - $24.8k` then lands between the $63k and $84k ACA entries,
-    // because its MAGI equivalent is $57k, and a column reading 42k, 52.5k, 63k, 24.8k, 84k looks
-    // broken on sight, on every load. The annotation in each label now carries the cross-ladder
-    // truth in words, and the ladder picture under the menu carries it visually. That is where the
-    // ranking belongs; this list is for picking one entry and reading its own number.
-    options.sort((a, b) => a.limit - b.limit);
+    // ── Sort all options by the MAGI they cap, lowest → highest ────────────────
+    // The comparable axis. A federal entry's own figure is taxable income, an IRMAA or ACA entry's
+    // is MAGI, and sorted on those own figures `24% Fed - $404k` listed before `IRMAA Tier 3 -
+    // $410k` although the ceiling it imposes ($436k of MAGI) is above Tier 3 (user, 2026-09-20).
+    // Sorting on MAGI was tried once before (P92e) and reverted because the printed column then
+    // read 42k, 52.5k, 63k, 24.8k, 84k; the fix this time is to print every entry's MAGI, and only
+    // that (user, 2026-09-20: the word MAGI and a taxable figure beside it "waste space" - the
+    // sentence under the menu and the Show me ladder say both), so the column a reader scans is
+    // the column the list is ordered on. `data-limit` still carries a federal entry's taxable top,
+    // the number the strategy fills to, for updateBracketFeedback().
+    options.sort((a, b) => a.magi - b.magi);
 
     // ── Build HTML ─────────────────────────────────────────────────────────────
     const statusLabel  = isMFJ ? 'MFJ' : 'Single';

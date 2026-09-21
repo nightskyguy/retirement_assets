@@ -237,6 +237,52 @@ h3 {
     width: 46px !important;
     max-width: 46px !important;
 }
+/* The Custom risk-based numbers: two pairs on two rows (target with its raise, cut with where it
+   lands), and a box at fault marked red with its line. */
+.rbg-pair {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+}
+.rbg-pair > label {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.8em;
+    font-weight: bold;
+    color: #666;
+    gap: 2px;
+}
+.rbg-pair input[type="number"] {
+    width: 62px !important;
+    max-width: 62px !important;
+    padding: 5px 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-top: 0;
+}
+.rbg-pair input.rbg-bad {
+    border-color: #c0392b;
+    background: #fdecea;
+}
+.rbg-pair > label.rbg-bad {
+    color: #c0392b;
+}
+#rbg-custom-summary {
+    color: #666;
+}
+#rbg-custom-summary.rbg-bad {
+    color: #c0392b;
+}
+/* A menu whose options are sentences (the Risk-based rails preset) takes its row's full width. */
+.compact-row > label.wide {
+    flex: 1 1 100%;
+}
+.compact-row > label.wide select {
+    width: 100% !important;
+    max-width: none !important;
+}
 
 /* ── Collapsible sidebar sections ── */
 details.section {

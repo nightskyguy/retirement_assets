@@ -283,7 +283,7 @@ In this tool, we show each: IRMAA, state and Federal taxes to show the big pictu
 	+ A "**💸Reduce IRA in *N* Years**" attempts to amortize the IRA down to "IRA Goal" in the number of years specified (Note "**Optimizer 🎯**" tries 3, 7, 11, 17 and 23 years, and highlights the best result in a table - click any line in the table to choose that scenario). 
 	+ A "**🪣Fill Fed/IRMAA Bracket**" caps income/IRA draws at a chosen ceiling - the top of a federal tax bracket, or a specific IRMAA tier threshold - with any spending shortfall filled from Cash → Brokerage → Roth, and then from extra IRA above the ceiling as a last resort. An **ACA Cliff** ceiling (200/250/300/400% of the Federal Poverty Level) is also available, and the Optimizer sweeps those rows for everyone. It skips them entirely once both people are on Medicare at the start of the plan, when an income cap has no subsidy left to protect. A lower percentage is a **stricter** income limit, so if the Optimizer flags one ACA row as untenable (⚠️) it will flag every lower one too. 
 	+ "**📉IRA Draw %**" withdraws a fixed percentage of the IRA balance each year (the Optimizer tries 5, 7, 9, 11 and 13%, plus your own figure if it differs). **Ordered** strategies (CBIR, RIBC, BIRC) withdraw from accounts in a strict sequence: Cash→Brokerage→IRA→Roth, Roth→IRA→Brokerage→Cash, or Brokerage→IRA→Roth→Cash respectively. Because the sequence is yours, Ordered is the one strategy that will **not** draw extra IRA outside it, so unlike the others it can report a small residual shortfall while an account later in your sequence still holds money. 
-   + A **Guardrails** switch, a *Guyton-Klinger-style* spending rule, works with any of these strategies: spending is cut when your savings fall far enough that your spending is no longer safe, and raised when they grow far enough to spend more. It is Guyton Klinger **styled**, not the published rule - see the caveat under *Limitations and Restrictions* for the two places it departs. It never cuts spending in the plan's last 8 years, and its yearly inflation raise is at most 6%.   
+   + A **Guardrails** switch, a *Guyton-Klinger-style* spending rule, works with any of these strategies: spending is cut when markets leave your savings far enough below your plan that what your portfolio funds (spending after Social Security and pension) runs 20% above what the plan itself would draw that year, and raised when it runs 20% below. On your plan's own assumptions nothing changes. It is Guyton Klinger **styled**, not the published rule - see the caveat under *Limitations and Restrictions* for the places it departs. It never cuts spending in the plan's last 8 years, and its yearly inflation raise is at most 6%.   
 The Optimizer and Monte Carlo run every strategy with your setting, plus your own plan with the Guardrails switch the other way round. Apart from Ordered, and apart from ACA Cliff while its cap is in force, every strategy will draw additional IRA once Cash, Brokerage and Roth are exhausted rather than report unfunded spending. Every swept row runs with Max Conversion **on**, so the table compares strategies rather than conversion switches; turn it off in the sidebar to see your own plan without it.
 + A "Max Conversion" option. It uses any surplus cash to increase Roth conversions from the *largest* IRA balance. With advanced controls turned on, the Optimizer also sweeps a **💵 Cash-funded taxes** copy of each strategy, which pays the conversion tax from Cash so more of the conversion actually lands in the Roth.
 + **Roth before Brokerage** is a switch under Cycle Brokerage that decides where Roth sits when a year's spending needs more than the strategy itself withdraws. Off, the default, fills the shortfall from Cash, then Brokerage, then Roth. On, Roth is taken ahead of the brokerage account, with Cash still first either way; that avoids realizing capital gains but spends the account that grows tax-free. It is a two-sided lever: across 60 test plans it gained as much as $471,000 and lost as much as $634,000. The Optimizer sweeps a 🅡 copy of every strategy, whenever you hold Roth. The switch and the 🅡 rows cover everything except **Ordered**, which draws from your accounts in the sequence you chose and therefore has no shortfall rule to change - it greys the switch out rather than hiding it. With **Guardrails** on, watch where the gain lands: it tends to arrive as *more spending* rather than more money left over, because the guardrails turn a healthier portfolio into a higher withdrawal.
@@ -317,13 +317,23 @@ to **CoS** on the charts. The preset decides what counts as too little and too m
 
 | Preset | Target chance | Raise spending at | Cut spending at |
 |---|---|---|---|
-| Tight | 95% | 99% | 80% |
+| High Safety | 95% | 99% | 80% |
 | Normal | 90% | 99% | 70% |
-| Loose | 80% | 99.5% | 40% |
+| More Tolerant | 80% | 99.5% | 40%, back to 70% |
+| More Risk | 80% | 99.5% | 25%, back to 45% |
+| Custom | yours | yours | yours, back to yours (starts at 70 / 90 / 40 / 50) |
 
-Normal and Loose come from Derek Tharp and Justin Fitzpatrick's articles on Kitces.com, and Tight
-from Tharp's worked example (see [Spending rules](#spending-rules-guyton-klinger-and-the-risk-based-guardrails-that-answer-it)).
-A raise or a cut resets spending to the amount that puts the plan back on its target.
+Normal and More Tolerant come from Derek Tharp and Justin Fitzpatrick's articles on Kitces.com,
+High Safety from Tharp's worked example, and More Risk from their 2024 article against
+Guyton-Klinger (see
+[Spending rules](#spending-rules-guyton-klinger-and-the-risk-based-guardrails-that-answer-it)).
+A raise resets spending to the amount that puts the plan back on its target. A cut resets it to the
+amount that gives the "back to" chance: the target for High Safety and Normal, 70% for More
+Tolerant, and 45% for More Risk, which is the rule as the 2024 article states it. Custom takes your
+own four numbers, in the boxes under the menu. They have to make a rule: the cut level at least 5
+points below both the target and the "back to" chance, "back to" no higher than the target, and the
+raise level above the target. A set that does not is marked red, box by box, with the change that
+would fix it, and the plan stays on its path until it does.
 
 **On the Balances chart the rails are wealth.** The ▲ **raise rail** and the ▼ **cut rail** are the
 TotalNetWealth, at each year's end, at which your plan, spending as planned, would reach the raise or
@@ -366,10 +376,23 @@ you run again, and *Show previous rails* draws the solve before, faded, so you c
 
 **How far to trust them.** From 100 market paths a raise rail can move 10% or more from one run to
 the next, and the cut rails and the spending a few percent
-([research/RISK_BASED_RAILS_PRECISION.md](research/RISK_BASED_RAILS_PRECISION.md)). The market comes
-from the panel's *Market paths*, which by default follows the Monte Carlo tab. The rails do not depend
-on the Guardrails (GK-style) switch: every run holds your spending on its planned path. Nothing in the
-panel changes your plan unless you press *Use it*, and *Restore* puts your After-Tax Spend back.
+([research/RISK_BASED_RAILS_PRECISION.md](research/RISK_BASED_RAILS_PRECISION.md)). The market is
+the Monte Carlo tab's: its Simulation Mode, Synthetic Return and Volatility, inflation model and
+Bear-start share; change any of them and the rails go stale. The rails do not depend on the
+Guardrails switch: every run holds your spending on its planned path. The preset is chosen with the
+*Risk-based guidance* menu under the Guardrails switch, or with the panel's own menu; the two are
+one setting. Nothing in the panel changes your plan unless you press *Use it*, and *Restore* puts
+your After-Tax Spend back.
+
+**Guardrails on the charts and in Annual Details.** Every cut and raise Guardrails makes is a
+milestone on the charts, and the *Guardrails* column set in Annual Details gathers everything the
+rule reads and writes: the spend goal and the guaranteed income under it, the rule's spending and
+what it did, the wealth it compared, the rails and their chance of success, and each year's
+inflation and return.
+
+**The Guardrails columns in Annual Details** are `ruleSpend` (the spending the rule set), `ruleAdj`
+(what it did that year) and `vsPlan%` (where that spending sits against your planned path, so -10%
+is a tenth under it).
 
 ### What the Tool IGNORES (No Plans to Implement)
 
@@ -440,12 +463,14 @@ More inputs and knobs and conditions make the tool less simple. If you've got th
 0. **The ACA subsidy itself is not modeled, only the income ceiling.** There is no premium, no premium tax credit and no applicable-percentage table anywhere in the tool. The ACA strategy enforces the income cap and reports a plan that cannot stay under it as untenable, so it can show you what staying under the cap **costs** and never what it **buys**. This is deliberate: actual premiums vary enormously by state, by plan and by year, and inventing them would put a large made-up number at the center of your projection. Read an ACA row as a constraint study, never as a recommendation. The same gap means a household that would be better off crossing the cap and simply paying full price has no way to see that here.
 0. **Guardrails is a Guyton-Klinger-STYLE rule, not the published one, and it departs in two places.**
    Guyton (2004) and Guyton & Klinger (2006, *Journal of Financial Planning*) test **portfolio
-   withdrawals ÷ portfolio** against that ratio in year 0. This tool tests **total spending ÷
-   portfolio** - Social Security and pension money included - so a household whose benefits start at
-   70 is judged on a number their benefits barely move. It is the single biggest departure, and it
-   points the rule in a different direction, not just a different degree: on the reference
-   households in `research/RISK_BASED_GUARDRAILS.md` the two ratios disagree about whether the first
-   adjustment is a cut or a raise, and about which year it falls in. The other: the paper stops the
+   withdrawals ÷ portfolio** against that ratio in **year 0**. This tool tests the same withdrawal
+   ratio (spending net of Social Security and pension, over the portfolio) against **your plan's own
+   ratio for that year**: the plan run on its assumptions with the rule off. Against year 0, a
+   household whose benefits start at 70 draws heavily before them and is cut, or raised, in the very
+   year they arrive; against the plan's own path a benefit start moves plan and household together
+   and nothing fires, while a market fall moves only the household and the rule reacts. The price is
+   that on the plan's own assumptions the rule never acts: its effect shows under Monte Carlo, on a
+   replayed path and in the Stress Test. The other: the paper stops the
    capital-preservation cut in a plan's **final 15 years**, and this tool stops it in the **final 8**.
    Two more of the paper's rules are followed as published: the inflation raise is skipped only after
    a year your **savings as a whole** lost money, and the raise is **capped at 6%** a year (under

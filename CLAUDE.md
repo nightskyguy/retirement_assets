@@ -71,12 +71,21 @@ needed under two fixes to code that had never shipped.
 | how it used to work | the reader wants what it does now. One exception: something they must act on, e.g. a saved plan that will not reproduce - then state it as consequence, not history |
 | the internals of the change | function, file and variable names, the mechanism, the defect, test counts, phase IDs |
 | an argument for why the change is good | state what it is |
+| anything behind the nerdknob, or the word "nerdknob" | `?nerdknob` gates experimental, UNRELEASED features; a reader without it cannot see them, and the changelog is the released tool's. Describe only what everyone gets (user, 2026-09-19) |
 
 None of that is lost: **the commit messages carry the intermediate detail**, in as much depth as the
 work deserves - what was corrected mid-branch, why an approach changed, what was measured. That is
 the audit trail. The changelog is for the person deciding whether this release touches their plan.
 
 Target for a whole entry: **about 150 words.** A 954-word entry was rejected once already.
+## README.md describes released features only; the nerdknob lives in ExperimentalFeatures.md
+
+`?nerdknob` gates experimental, unreleased features. README.md is the public document: it describes
+what every reader of the page gets, and never names the nerdknob or a control behind it, unless the
+user pre-approves a mention. Anything gated goes in `ExperimentalFeatures.md`, which exists for that.
+The same rule already governs the changelog (above). On 2026-09-20 a PR review found two nerdknob
+sections in README.md (the risk-based spend rule and its rule table) and had them moved.
+
 ## A research report in `research/` is written for a reader who has none of the context
 
 Three rules, all three added on 2026-08-29 after a read-through found every one of them broken

@@ -1,5 +1,7 @@
 # Risk-based spending guardrails
 
+> **Preset names.** Since v11.18b2 (2026-09-20) the page calls the presets High Safety, Normal, More Tolerant and More Risk; this report keeps the names it was run with: Tight = High Safety, Loose = More Tolerant (whose cut has since returned to 70% instead of its 80% target), Paper = More Risk. The keys in the code (tight, normal, loose, paper) never changed.
+
 Whether the guardrail rule published by Derek Tharp and Justin Fitzpatrick - spend to a target
 **probability of success**, adjust when that probability crosses a rail - can be computed on this
 engine, what it costs, and where it disagrees with the Guardrails rule the tool already ships.
@@ -63,7 +65,7 @@ others; both are used here, unchanged.
 | code | meaning |
 |---|---|
 | **PoS** | probability of success: the share of Monte Carlo paths in which `totals.success` is true, i.e. every year of the plan is funded |
-| **the shipped rule** | `spendRule: 'gk'`, the Guyton-Klinger spend adjustment the tool labels **Guardrails** (`resolveSpendTarget` in `optimizer_core.js`). Trigger: `spendGoal / start-of-year portfolio` against that same ratio in year 0, band `1 ± gkGuard` (0.20), step `gkAdjPct` (10%). Since P127 (2026-09-16) it also never cuts in a plan's final 8 years, caps the inflation raise at 6%, and freezes the raise on the portfolio's return rather than the market's |
+| **the shipped rule** | `spendRule: 'gk'`, the Guyton-Klinger spend adjustment the tool labels **Guardrails** (`resolveSpendTarget` in `optimizer_core.js`). Trigger (as measured here, through 11.18b1): `spendGoal / start-of-year portfolio` against that same ratio in year 0; since 11.18b2 (P132j) the ratio is net of Social Security and pension and is compared with the plan's own ratio for the year, so a plan on its own assumptions never adjusts, band `1 ± gkGuard` (0.20), step `gkAdjPct` (10%). Since P127 (2026-09-16) it also never cuts in a plan's final 8 years, caps the inflation raise at 6%, and freezes the raise on the portfolio's return rather than the market's |
 | **rails A** | the article's implementation recipe: target **90%** PoS, raise at **99%**, cut at **70%** |
 | **rails B** | the article's income-risk framing: "target an initial income risk of 20% … increase at 0% … decrease at 60%", read as PoS: target **80%**, raise at **100%**, cut at **40%** |
 | **at its target** | the rail measured from the spending that rule would have the household on - the target-PoS number, not the plan's own |
@@ -468,7 +470,7 @@ the third test pins.
 
 One side effect worth knowing. The rule's anchor is still the year-0 ratio, so once the portfolio
 outgrows it the rule tries to raise **every remaining year** and is clamped every time: 18 of 33 years
-on `bracket-filler-texas`. The `gkAdj` column reads `+10%pros @shape` for all of them. That is honest -
+on `bracket-filler-texas`. The `ruleAdj` column reads `+10%pros @shape` for all of them. That is honest -
 the rule wanted more and the plan said no - but it means the ceiling is a permanent state rather than
 an occasional event; the column's help text says what `@shape` means.
 

@@ -193,7 +193,7 @@ function pathBank(h, method, seed, numPaths) {
 // what an After-Tax Spend answer starts from.
 function solvePoint(h, k) {
     const rec = k === 0 ? h.spine.resumeStart : h.spine.log[k - 1]['-resume'];
-    const planSpend = (k > 0 && h.ruleOn) ? h.spine.log[k].gkSpend : rec.sim.spendGoal;
+    const planSpend = (k > 0 && h.ruleOn) ? h.spine.log[k].ruleSpend : rec.sim.spendGoal;
     const at = (scale, mult) => resumeInputs(h.solveBase, rec, { balanceScale: scale, spendGoal: planSpend * mult });
     return { rec, planSpend, at, wealth: k > 0 ? h.spine.log[k - 1].totalNetWealth : null,
              year: h.spine.log[k].year };

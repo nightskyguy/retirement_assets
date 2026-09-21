@@ -5484,3 +5484,204 @@ the browser: Solve every, Paths and timing hidden on the plain page, shown with 
 `=rails` alike. Removed from ExperimentalFeatures.md (two sentences) and the task_plan's live text; the
 dated 2026-09-16 log entries above keep it, as the record of what was run then. No page file changed,
 so no version stamp.
+
+---
+
+## 2026-09-19: P132, risk-based guardrails as a Spend rule (v11.189d, branch `worktrees/boldin-tax-estimation-767848`)
+
+User's four questions after reading the 2024 kitces article ("how can I realistically do the
+calculations", "is there a trick", "one run against one historical sequence", "trials at several
+thresholds") plus a Python/Flask thought. Plan approved: the rule + a one-path validator + a grid
+harness; server after a node-vs-browser measurement; Paper preset and nerdknob Custom.
+
+- `P132a`: `RAIL_PRESETS.paper` (80/99.5/25, cut back to 45) and `cutTo` on every set; the solver
+  solves the cut-side spend at `cutTo` and the plan-wealth spend at `cutTo` (one more count, near
+  free), takes `cfg.presets`, and carries each solved year's price level and guaranteed income.
+  `railsRuleTable()` turns one job into per-year ratios.
+- `P132b`: `spendRule:'rbg'` in `resolveSpendTarget`: net-of-guaranteed-income ratio against the
+  row's `cutAt`/`raiseAt`, landing on a LINE through the two solved points of the chance curve, plus
+  the path's own guaranteed income; `prevNetWealth` carried on `sim` (re-derived on a scaled resume);
+  the spine of a rails job runs WITHOUT the rule so the table cannot depend on itself; CPI at the
+  year's end like the plan without a rule (not GK's start-of-next-year). Identity: preset + custom
+  numbers, never the table; the twin of either rule is the plan with none.
+- `P132c`: `.test_harnesses/rbg_playback_harness.js`, exact (re-solve CoS every year on 100 fresh
+  paths, bisect on a crossing) against cheap, five households x six historical starts x two presets,
+  with and without the ceiling. Three approximations found on the first quick run and closed: the
+  gross-spending ratio (Social Security is a fixed offset - 4x spending paths were 25-45% off), the
+  CPI lag (1946's 18% read as a +14.8% gap), and floor-clamped rails read as "never fires" (now
+  "always fires" for a $0 raise rail). Result: with the ceiling on, 12/12 identical on
+  `bracket-filler-texas`, 0-7.5% mean gap elsewhere, 60/60 funded; without it both rules drift and
+  11 exact / 13 cheap of 60 fail to fund when the record wraps into 1929. Report
+  `research/RBG_RULE_VALIDATION.md`.
+- `P132d`: the page. Rule menu beside the Guardrails switch (GK-style / Risk-based), `rbgPreset` in
+  the sidebar mirrored onto the panel's menu (disabled while the rule is on), nerdknob Custom boxes
+  feeding the job's `presets`, the fingerprint stripping the rule and its table, auto-solve when the
+  rule needs rails whether or not Auto-run is ticked, re-run of the plan when the solve lands,
+  Never above plan on by default when Risk-based is chosen and visible without the knob. Share keys
+  grk/rbp/rbt/rbu/rbl/rbc (safe in OPT_SHARE_PRIVACY), saved plan strips the table, Optimizer and MC
+  rows carry the preset. README section under How to Read Risk-Based Rails; changelog entry.
+- Verified: node 481 / 32 / 61 / 27 / 46; in the browser (serve.py --root worktree): switching to
+  Risk-based on the default plan started the solve by itself, landed in ~12 s, the plan re-ran with a
+  2027 cut→90% (60% chance, below the 70% rail) and raises capped @shape from 2031, share link
+  `gr=1&grk=rbg&gsc=1`, the sweep's variations carry the 25-row table; `?runtests` green.
+- `P132e`: `rbg_grid_harness.js`, 22 sets x 4 households x (5 historical starts + 400 GBM paths),
+  report `research/RBG_RULE_THRESHOLDS.md`. Every risk-based set funds every historical start;
+  under Monte Carlo the cut level decides the funded share and returning below the target costs
+  more (Paper 72% funded on `soft-cap-underfunded`, GK-style 100% at a -46% trough). Defect
+  candidate: cut-side landing overshoot to -70% in single years on `mixed-portfolio-couple`.
+- `P132f`: `rails_parallel_bench.js`: 1/2/4/8/16 threads 14.25 / 12.57 / 9.15 / 7.06 / 4.53 s,
+  answers identical; year-split caps near 3x; projected 32-85 s on the audience's laptops, so no
+  Web Worker split. The job itself grew 10.3 -> 14.2 s with Paper and `cutTo`. Server decision
+  left to the user with the numbers in task_plan `P132f`.
+- Open: the server decision; `P132g` (a third solved point on the cut side) if wanted.
+
+Second message (v11.189e): "How do I enable/disable rbg? ... it should appear under nerdknob" - the
+rule menu is now a nerdknob control (drawn beside the switch, greyed until the switch is on; shown
+without the knob only when a plan or link already carries the rule). Third message: "RBG analysis
+drawn when replaying any MC outcome" - built both ways. (1) With the rule on, a replay draws the rails
+the rule read along the path (`railsRuleRowFields`: the table back in the path's dollars, net spend
+over the ratios; no CoS), and the rule now APPLIES during replay (it was inert: `rbgRuleTable`
+refused in replay). (2) The panel's Run becomes "Solve rails on this path": the job's spine is the
+plan on the path's sequences, `skipStart`, kept in `RailsState.pathResult` under a fingerprint that
+names the path, so the plan's own rails return on exit and a step to another path drops it. Verified
+in the browser on a synthetic replayed path: cut→90% then raises @shape, rule rails on rows, the path
+solve landing in ~8 s with CoS 38% -> 78% along it, plan rails back after exit. Horizon question
+answered: the table is per plan year, each row solved with the years left at that year.
+
+Fourth message (v11.189f): six asks. (1) Rule cuts AND raises are milestones: the engine
+writes a hidden `-ruleMove` (what the rule did to the goal, in dollars, CPI and Spend Delta excluded)
+for both rules and computeMilestones reads its sign, so a raise the ceiling trims to the shape still
+marks and a later `raise @shape` that moved nothing does not (GK raises are new markers too). (2) The
+rails preset is ONE control, the sidebar's `rbgPreset` ("Risk-based rails preset"), in view whatever
+the Guardrails switch says; the panel's menu mirrors it both ways (`railsPresetChanged` dispatches a
+change on the sidebar control so its recalc runs). `#rails-method` removed: the market is always the
+Monte Carlo tab's (`railsMethod()` = `railsTabMethod()`), named in `#rails-market`. (3) The two menus
+truncated at 64px from `.compact-row select {width:64px !important}` in
+`optimizer_styles_responsive.css`; new `.compact-row > label.wide` rule takes the row's width, the
+rule menu is `calc(100% - 20px)`; CSS ?v bumped. (4) Nerdknob `#rails-table-wrap` in the panel:
+`railsRenderTable` prints `railsRuleTable` for the preset on screen (the path's while a path solve
+is current). Growth measured (scratch `rbg_growth_tables.js`, bracket-filler-texas, Normal, 100
+paths, seed 42): with Growth moving both the spine and mu as the page does, cutAt at 4% vs 8% is
+0.054 vs 0.089 in 2027 (1.63x), narrowing to 1.07x by 2054 (short horizon); spine-only (mu fixed
+6%) moves the ratios about 1%; mu-only reproduces the whole spread. The table is a property of the
+market model and the years left, not of the balances - that is the scale-freedom the rule rests on.
+(5) Explained, no code: the CPI timing defect (rule inflated at the start of the year like GK; the
+plan inflates at year end, so under a real sequence the two were one year of CPI apart, 15% in 1946)
+and the cut-side landing overshoot (a line through two solved points, extrapolated far below the cut
+rail, lands near zero on the 1966/1973 starts). Verified: node 483 / 32 / 61 / 27 / 46; browser:
+preset menu 270 px = its row, rule table 25 rows, Guardrail cut@1 + Guardrail raise@5 milestones on
+the default plan with the rule on, panel Paper -> sidebar Paper -> note and table follow; `?runtests`
+badge green at 1223 (a P127a in-page assertion still placed the ceiling switch in `#ui-gk`; it sits
+in `#ui-rule-ceiling` since P132d, test updated).
+
+Fifth message: "Annual details needs a Guardrails option" - `cat-guardrails` column set (`CATEGORY_CHECKBOXES`,
+`columnCategories`): year, spendGoal, guaranteedIncome (newly a column, group Income, help text),
+totalNetWealth, gkSpend, gkAdj, infl%, return%, the seven rail columns. Rails note and README point
+at it. In-page assertion in the P128 block; badge green at 1226 (577 in-page + 649 node); browser:
+Guardrails-only view shows exactly those 15 columns with the rule's cut→90% rows.
+
+Sixth message (rule): changelog entries never show nerdknob-gated elements nor mention the nerdknob -
+it gates experimental, unreleased features. The 11.189f entry (page `<li>` and .md) rewritten around
+what everyone gets: the preset menu under the switch, Paper, Market paths gone, Solve rails on this
+path, cut/raise milestones, the Guardrails column set. The Risk-based rule, Custom presets, the rule
+table and the Never above plan note are out of it. Rule added to CLAUDE.md's "Leave out" table.
+Committed as PR #230 (2b7cb4c).
+
+Seventh message (v11.18a0): (1) `gkSpend`/`gkAdj` renamed `ruleSpend`/`ruleAdj` (word-boundary
+rename across engine, page, tests, harnesses; `gkAdjPct`/`gkAdjLabel` untouched; older changelog
+entries left as history). (2) New `vsPlan%` column: spendGoal / gkShapeGoal - 1, both rules, in
+Summary/Income/Guardrails. (3) The user's link (130k, growth 5%, custom 70/90/40/50): RBG raised in
+2031 (first SS year) and cut in 2033. ROOT CAUSE: the rule table interpolated RATIOS between solved
+years (cadence 3); with SS starting between the 2030 and 2033 solves, the net share at 2031 was
+interpolated between 0.078 (pre-SS) and 0.057 (post-SS) = 0.072, while the true net target share
+was 0.039 - the raise trigger read 0.0554 against a true 0.029, so r=0.036 raised (to 188k against a
+147k target), and the cut followed. FIX: the job's message carries `spine` (every plan year: wealth,
+planSpend, inflationFactor, guaranteedIncome); `railsRuleTable` interpolates the DOLLARS in today's
+terms and builds each row at that year's own G. Field interpolation kept for a message without a
+spine. After the fix the link shows no 2031 action (PoS 78%, between 40 and 90); raises come in
+2037/2044/2048/2050 where the prior row's PoS is 90-100%. Quick playback re-run unchanged (exact =
+cheap on bracket-filler-texas 1937/2000). (4) GK-style's 2031 cut: not SS - GK-style measures the
+WHOLE spend goal against the portfolio (documented "GK-style, not the published rule"); the ratio
+drifts up through the pre-SS drawdown years (130/1358 -> 143/1259) and crosses the 20% band in
+2031 by coincidence, while wdRate% drops 8.1% -> 3.0%. Explained to the user, offered the
+published withdrawal-rate form (net of guaranteed income). Not changed. (5) `spendRuleChanged` no
+longer turns Never above plan on when Risk-based is chosen (user: switching must not change it);
+the note recommends it while off; README/report reworded. Tests 485 (interp-across-SS-start,
+vsPlan%); in-page 578; badge green 1229. Committed e7b714b, pushed to PR #230.
+
+## 2026-09-20 - P132 round 3 (v11.18b0)
+
+User: Custom rails not nerdknob-gated; presets renamed High Safety / Normal / More Tolerant (cut
+back to 70%) / More Risk / Custom prefilled 70/90/40/50; explain P132j. Labels changed in
+RAIL_PRESETS and both menus, KEYS kept (tight/normal/loose/paper travel in rbp= and saved plans);
+loose gains cutTo 0.70; custom option and boxes ungated (railsJobPresets, toggleStrategyUI,
+railsRuleSync); README table and text, changelog entry. Verified without the knob: Custom in both
+menus, boxes 70/90/40/50, the job solves five sets; badge green 1229. P132j explained in the reply:
+GK-style measures the whole spend goal over the portfolio; the published rule's withdrawal-rate
+form (net of guaranteed income) would instead fire PROSPERITY raises the year Social Security
+starts (rate 8% -> 3% against an IWR set before it), so the fix proposed is plan-relative: compare
+each year's net draw ratio with the no-rule plan's own ratio for that year (the same device as the
+risk-based table, one deterministic run), band and step unchanged.
+
+Round 4 (v11.18b1): the Guardrails sentence folds (`#guardrails-note-fold`, summary names the rule
+and state: "GK-style: ±20% band, 10% steps" / "Risk-based, Normal: following the rails"); Custom's
+four boxes fold under a line showing their values ("Custom ■70% ▲90% ▼40%→■50%"); both folds in
+FOLD_IDS. Preset options are symbols: ■ target ▲ raise ▼ cut →■ back to. The menu is "Risk-based
+guidance" (user: "rails preset" read as rule-only). Advice given in the reply: paths are the
+accuracy lever (raise rails 7-27% run to run at 100 paths, cut rails and target 2-8%; cadence 3 is
+within 1% of every year), auto-run fine on a fast machine; the end-of-plan spend climb is the
+known-horizon artifact (success = not ruined by the last year), remedies: plan to a later age, keep
+Never above plan, or a terminal-reserve success test in the rails solve (offered as a phase).
+Round 5: both folds start open; the Custom option in both menus is written from the boxes
+(`updateRbgCustomSummary`); High Safety and Normal state →■ their target. Badge green 1230.
+Round 6: Custom boxes as two pairs on two rows (`.rbg-pair`); `rbgCustomProblems()` names each
+bad pair, marks its boxes (`.rbg-bad`, red) and suggests a change; rule = back ≥ cut+5, back ≤
+target, target ≥ cut+5, raise > target (RBG_GAP = 5); summary and option say "not a rule yet";
+GK-style's Guard/Adj row moved directly under the sentence fold. In-page test
+customRailsAreCheckedBoxByBox; badge green 1243. GOTCHA: the browser served the CSS from cache under
+an unchanged ?v (11.18b1 had already been loaded once); verified by injecting the sheet with a fresh
+query, and the next stamp bump covers real users.
+
+Round 7 (v11.18b2). (1) The file:// "Solving 0% after 62 s" stall: not reproducible - the same
+main-thread fallback (`_runMCMainThread` forced on localhost) solves 70/90/20/60 in 18 s with
+progress moving, supersede and Cancel+Run both fine; the user later confirmed a fresh file:// load
+runs. Nothing in that set is wrong. (2) Grid re-run with Custom (70/90/40/50) showed six -100%
+years: the dollar interpolation (round 3's fix) fed the two-point landing line a rail and a spend
+interpolated apart, and where the rail sits within a few percent of the plan's wealth the line
+inverted and landed at $0. Fixed by holding the rail's own ratio beyond the rail (`cutM`/`raiseM`,
+`beyondRail` in resolveSpendTarget) and reading a near or falling pair as the ratio through the
+origin; re-run has no -100%, deepest -63% (GK-style). Closes P132g. (3) P132j BUILT on the user's
+"Stop... That needs to be fixed": GK-style is plan-relative (net draw vs the plan's own ratio for
+the year, `_gkShapeOf` memo). Verified the 2031 cut on main 191da49 with the user's inputs
+(gk_compare.js scratch): shipped defect, not a branch regression; correction entry in the changelog
+(data-flag behavior). `test.critical('P132j: ...')` pins the user's plan. Seven GK tests rewritten:
+a plan on its own path never adjusts, so the ceiling, no-cut, floor and schedule tests hand
+simulate() a boom or crash sequence (`gkSeq`); the two optimize-spend tests became one (the
+deterministic GK answer equals the no-rule answer; the floor rejects a crashed ceiling run).
+README caveat, switch and Guard tooltips, the note, ARCHITECTURE's flowchart updated. Core 486 (two optimize-spend tests merged), 26 critical guards; badge 1244.
+
+Round 8: rbg_grid_harness re-run on the committed engine (11.18b2, Custom 70/90/40/50 as a set) and
+research/RBG_RULE_THRESHOLDS.md rewritten from it: new preset names, Custom row, GK-style as
+corrected (51% funded on soft-cap-underfunded against 100% before: it no longer cuts a plan for
+failing on its own assumptions), the overshoot section closed (deepest single year -49%, no -100%).
+Risk-based rows identical to the pre-GK-change run (diff clean). research/README.md row rewritten.
+
+Round 9 (user: "do them all"): PR #230 title and body rewritten; the 11.18b2 changelog entry cut to
+~200 words; name notes on RISK_BASED_GUARDRAILS.md and RISK_BASED_RAILS_PRECISION.md; GK-style design
+question decided (stays market-reacting; task_plan); memory project_p132_risk_based_guardrails.md.
+Full playback harness re-run on 11.18b2, both arms (ceiling: 60/60 funded, mean gap 0-6% but one
+12.8%; no ceiling: 11 exact / 12 cheap of 60 fail): RBG_RULE_VALIDATION.md findings, presets and
+appendix refreshed, sections 1-5 marked as the first run's figures; index row updated.
+
+Round 10 (v11.18bf): the Limit menu (Fill Bracket / IRMAA) is sorted by the MAGI each entry caps
+(federal top + the deduction), not by each entry's own printed figure, and every entry prints its
+MAGI first (federal entries keep the taxable top beside it) so the scanned column never runs
+backwards - the reason the P92e attempt at MAGI order was reverted. 24% Fed now lists after IRMAA
+Tier 3. In-page assertions on the order and the MAGI figure; badge 1247. Then the labels cut to the
+figure alone (user: MAGI and the taxable figure waste space; the note and Show me say both).
+
+Round 11 (PR review): two nerdknob sections in README.md (the rule table paragraph and the whole
+"Following the rails: Guardrails set to Risk-based" subsection) moved to ExperimentalFeatures.md
+section 1 as "The risk-based spend rule, and its rule table"; README keeps one public paragraph on
+Guardrails milestones and the column set. Rule added to CLAUDE.md and memory. The two nerdknob
+mentions left in README predate the branch (main 399/425).

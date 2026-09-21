@@ -1757,6 +1757,16 @@ assertEqual(
 			// deduction is MAGI; an IRMAA threshold minus it is taxable income. If these two ever agree
 			// with each other the conversion has been dropped somewhere.
 			const ded = dropdownDeduction(status);
+			// The list is in order of the MAGI each entry caps (user, 2026-09-20: 24% Fed's top is above
+			// IRMAA Tier 3's, so it lists after it), and every entry prints that MAGI figure so the
+			// column read top to bottom never runs backwards.
+			const magis = [...rate.options].map(o => Number(o.dataset.limit) + (/^\d+$/.test(o.value) ? ded : 0));
+			assertEqual(magis.every((m, i) => i === 0 || m >= magis[i - 1]), true,
+				`the Limit menu runs upward in MAGI: ${magis.map(Math.round).join(', ')}`);
+			assertEqual([...rate.options].every(o => !/MAGI|taxable/.test(o.textContent.replace(/\(.*\)/, ''))), true,
+				'and no entry spells out the basis or a second figure: the sentence under the menu does');
+			const fed24 = [...rate.options].findIndex(o => o.value === '24'), t3 = [...rate.options].findIndex(o => o.value === 'IRMAA3');
+			if (fed24 >= 0 && t3 >= 0) assertEqual(fed24 > t3, true, '24% Fed lists after IRMAA Tier 3, whose MAGI top is lower');
 			assertEqual(ded > 0, true, 'there is a deduction to convert between the two bases with');
 			assertEqual(irmaaBandNameAt(1e9, status, cpiAdj).startsWith('IRMAA Tier'), true,
 				'an enormous income lands in a named tier, not "below IRMAA"');
@@ -2235,24 +2245,130 @@ assertEqual(
 		assertEqual(foldRetiredGKStrategy(kept).data === kept, true, 'a plan already on the switch passes through untouched');
 	})();
 
+	// The Custom risk-based numbers are checked box by box (user, 2026-09-20): each problem names its
+	// pair, marks the boxes and suggests a change; a set that is a rule clears every mark.
+	// ⚠ UNSAFE - MUTATES: the four Custom boxes and the preset menu, snapshotted and restored below.
+	(function customRailsAreCheckedBoxByBox() {
+		if (!unsafeTest('customRailsAreCheckedBoxByBox')) return;   // writes #rbgTarget etc.
+		if (typeof rbgCustomProblems !== 'function') { console.log('SKIP: rbgCustomProblems absent'); return; }
+		const ids = ['rbgTarget', 'rbgUpper', 'rbgLower', 'rbgCutTo'];
+		const el = id => document.getElementById(id);
+		if (ids.some(id => !el(id))) return;
+		const was = Object.fromEntries(ids.map(id => [id, el(id).value]));
+		const preset = el('rbgPreset'), wasPreset = preset?.value;
+		const set = (t, u, l, c) => { el('rbgTarget').value = t; el('rbgUpper').value = u; el('rbgLower').value = l; el('rbgCutTo').value = c; };
+		try {
+			set(70, 90, 40, 50);
+			assertEqual(rbgCustomProblems(), [], 'the prefilled set is a rule');
+			// The user's example: cut at 30, back to 10.
+			set(70, 90, 30, 10);
+			let p = rbgCustomProblems();
+			assertEqual(p.length, 1, `cut 30 back to 10 is one problem: ${JSON.stringify(p)}`);
+			assertEqual(p[0].ids.slice().sort(), ['rbgCutTo', 'rbgLower'], 'and it names the cut and back-to boxes');
+			assertEqual(/at least 5 above/.test(p[0].text) && /set Back to 35%/.test(p[0].fix), true, `with the gap and a fix: ${p[0].text}: ${p[0].fix}`);
+			if (preset) { preset.value = 'custom'; toggleStrategyUI(); }
+			else updateRbgCustomSummary();
+			assertEqual([el('rbgLower').classList.contains('rbg-bad'), el('rbgCutTo').classList.contains('rbg-bad'), el('rbgTarget').classList.contains('rbg-bad')],
+				[true, true, false], 'the two boxes at fault are marked, the others not');
+			assertEqual(el('rbg-custom-summary')?.classList.contains('rbg-bad'), true, 'the fold line turns red');
+			assertEqual(el('rbg-custom-warn')?.style.display, '', 'and the fix is shown');
+			assertEqual(rbgCustomNumbers(), null, 'no rule is handed to the job');
+			// Every other pair, one at a time.
+			set(70, 90, 40, 75); p = rbgCustomProblems();
+			assertEqual(p.map(x => x.ids.slice().sort().join('+')), ['rbgCutTo+rbgTarget'], 'back to above the target');
+			set(43, 90, 40, 45); p = rbgCustomProblems();
+			assertEqual(p.length, 2 && 2, 'a target within 5 of the cut is caught (with back-to above it)');
+			set(70, 70, 40, 50); p = rbgCustomProblems();
+			assertEqual(p.map(x => x.ids.slice().sort().join('+')), ['rbgTarget+rbgUpper'], 'a raise level at the target');
+			set('', 90, 40, 50); p = rbgCustomProblems();
+			assertEqual(p.length === 1 && p[0].ids[0] === 'rbgTarget', true, 'a blank box is named alone');
+			set(70, 90, 40, 50);
+			if (preset) toggleStrategyUI(); else updateRbgCustomSummary();
+			assertEqual(ids.some(id => el(id).classList.contains('rbg-bad')) || el('rbg-custom-summary')?.classList.contains('rbg-bad'), false, 'a rule clears every mark');
+		} finally {
+			ids.forEach(id => { el(id).value = was[id]; });
+			if (preset) { preset.value = wasPreset; toggleStrategyUI(); }
+		}
+	})();
+
 	// ⚠ UNSAFE - MUTATES: the Guardrails switch and its sentence, snapshotted and restored below.
 	(function guardrailsSwitchDrivesTheSpendRule() {
 		if (!unsafeTest('guardrailsSwitchDrivesTheSpendRule')) return;   // writes #spendRule
 		const sw = document.getElementById('spendRule');
 		const note = document.getElementById('guardrails-note');
+		// The sentence folds (2026-09-20): the fold is what shows and hides, its summary names the rule.
+		const fold = document.getElementById('guardrails-note-fold') ?? note;
+		const summary = document.getElementById('guardrails-note-summary');
 		if (!sw || !note) return;
 		const was = sw.checked;
 		try {
 			sw.checked = true;
 			toggleStrategyUI();
 			assertEqual(getInputs().spendRule, 'gk', 'the switch on sends the Guardrails rule');
-			assertEqual(note.style.display, '', 'and the sentence stating the rule is shown');
+			assertEqual(fold.style.display, '', 'and the sentence stating the rule is shown');
+			if (summary) assertEqual(/^GK-style: ±\d+% band, \d+% steps/.test(summary.textContent), true, `the fold's own line names the rule: ${summary.textContent}`);
 			sw.checked = false;
 			toggleStrategyUI();
 			assertEqual(getInputs().spendRule, '', 'off sends no rule');
-			assertEqual(note.style.display, 'none', 'and the sentence is hidden');
+			assertEqual(fold.style.display, 'none', 'and the sentence is hidden');
 		} finally {
 			sw.checked = was;
+			toggleStrategyUI();
+		}
+	})();
+
+	// P132. The rule menu beside the switch: Risk-based sends 'rbg' with its preset, shows its own
+	// controls, states the rule, turns Never above plan on, and never puts the rails table in a
+	// share link or an identity.
+	// ⚠ UNSAFE - MUTATES: the switch, the rule menu, the ceiling; snapshotted and restored below.
+	(function riskBasedRuleDrivesTheSpendRule() {
+		if (!unsafeTest('riskBasedRuleDrivesTheSpendRule')) return;   // writes #spendRule, #spendRuleKind, #gkShapeCeiling
+		const sw = document.getElementById('spendRule'), kind = document.getElementById('spendRuleKind');
+		const ceil = document.getElementById('gkShapeCeiling'), note = document.getElementById('guardrails-note');
+		const preset = document.getElementById('rbgPreset');
+		if (!sw || !kind || !ceil || !note || !preset) { console.log('SKIP: risk-based controls absent'); return; }
+		const was = { sw: sw.checked, kind: kind.value, ceil: ceil.checked, preset: preset.value };
+		try {
+			sw.checked = true; kind.value = 'rbg'; ceil.checked = false; preset.value = 'paper';
+			spendRuleChanged();
+			const inp = getInputs();
+			assertEqual(inp.spendRule, 'rbg', 'P132: Risk-based sends the rbg rule');
+			assertEqual(inp.rbgPreset, 'paper', 'P132: with its preset');
+			assertEqual(ceil.checked, false, 'P132: choosing Risk-based leaves Never above plan as it was (user, 2026-09-19)');
+			assertEqual(inp.gkShapeCeiling, false, 'P132: and getInputs carries it');
+			assertEqual(/Never above plan is recommended/.test(note.textContent), true, 'P132: the note recommends it while it is off');
+			assertEqual(kind.classList.contains('hidden'), false, 'P132: the rule menu shows while the rule runs, knob or not');
+			assertEqual(document.getElementById('ui-rbg').classList.contains('hidden'), false, 'P132: the preset row shows');
+			assertEqual(document.getElementById('ui-rule-ceiling').classList.contains('hidden'), false, 'P132: so does the ceiling, without the knob');
+			assertEqual(/Risk-based, More Risk/.test(note.textContent) && /25%/.test(note.textContent) && /45%/.test(note.textContent), true,
+				`P132: the sentence states the rule: ${note.textContent.slice(0, 80)}`);
+			assertEqual(document.getElementById('rails-preset').value, 'paper', 'P132: the rails panel mirrors the sidebar preset');
+			assertEqual(document.getElementById('rails-preset').disabled, false, 'P132: and can still be set there');
+			assertEqual('rbgRails' in selectionOf(inp), false, 'P132: the table is not identity');
+			assertEqual(OPT_LONG_TO_SHORT.spendRuleKind, 'grk', 'P132: the rule menu travels in the share link');
+			assertEqual(OPT_LONG_TO_SHORT.rbgPreset, 'rbp', 'P132: so does the preset');
+			assertEqual(typeof OPT_LONG_TO_SHORT.rbgRails, 'undefined', 'P132: the table never does');
+			assertEqual(inp.rbgRails === undefined || (inp.rbgRails && Array.isArray(inp.rbgRails.years)), true,
+				'P132: the table is absent until the rails are solved for this plan, then a table');
+			kind.value = 'gk';
+			spendRuleChanged();
+			assertEqual(getInputs().spendRule, 'gk', 'P132: back to GK-style');
+			assertEqual(document.getElementById('ui-rbg').classList.contains('hidden'), false,
+				'P132: the rails preset stays in view with GK-style (user, 2026-09-19: the rails are drawn on demand either way)');
+			assertEqual(kind.classList.contains('hidden'), !NERD_KNOBS, 'P132: without the rule running, the menu is a nerdknob control');
+			// The switch off: the preset row is still there, and the panel's menu still mirrors it.
+			sw.checked = false;
+			spendRuleChanged();
+			assertEqual(document.getElementById('ui-rbg').classList.contains('hidden'), false, 'P132: and with Guardrails off');
+			preset.value = 'tight';
+			toggleStrategyUI();
+			assertEqual(document.getElementById('rails-preset').value, 'tight', 'P132: the panel follows the sidebar with the rule off too');
+			// The two menus take the full width of the box (user, 2026-09-19: "truncating needlessly").
+			const box = document.getElementById('ui-rbg');
+			assertEqual(box.offsetWidth === 0 || preset.getBoundingClientRect().width >= box.getBoundingClientRect().width - 2, true,
+				'P132: the preset menu is as wide as its row');
+		} finally {
+			sw.checked = was.sw; kind.value = was.kind; ceil.checked = was.ceil; preset.value = was.preset;
 			toggleStrategyUI();
 		}
 	})();
@@ -2263,16 +2379,18 @@ assertEqual(
 	(function myPlanOnlyRunsThePlanBothWays() {
 		if (typeof planScopeVariations !== 'function' || typeof compareVariations !== 'function') return;
 		const plan = { ...getInputs(), extraConversionAmount: 20000, convEndYear: 2035 };
-		['', 'gk'].forEach(rule => {
+		['', 'gk', 'rbg'].forEach(rule => {
 			const base = { ...plan, spendRule: rule };
 			const rows = planScopeVariations(planOnlyVariations(compareVariations(base), base), base);
 			const diffs = r => Object.keys(base).filter(k => !Object.is(r[k], base[k])).join(',');
-			const on = rule === 'gk';
+			const on = rule !== '';
 			assertEqual(rows.length, 2, `rule '${rule}': My Plan Only runs two rows`);
 			assertEqual(diffs(rows[0]), '', `rule '${rule}': the first row is the plan exactly as set`);
 			assertEqual(diffs(rows[1]), 'spendRule', `rule '${rule}': the second differs in the Guardrails switch alone`);
+			// P132: the twin of a plan with either rule on is the plan with none.
 			assertEqual(rows[1].spendRule, on ? '' : 'gk', `rule '${rule}': and has it the other way round`);
-			assertEqual(/Guardrails on$/.test(rows[on ? 0 : 1]._paramLabel), true, `rule '${rule}': the row with Guardrails says so`);
+			const onLabel = rule === 'rbg' ? /Risk-based on$/ : /Guardrails on$/;
+			assertEqual(onLabel.test(rows[on ? 0 : 1]._paramLabel), true, `rule '${rule}': the row with the rule says so`);
 			assertEqual(/Guardrails off$/.test(rows[on ? 1 : 0]._paramLabel), true, `rule '${rule}': and so does the row without`);
 		});
 	})();
@@ -2672,16 +2790,16 @@ assertEqual(
 		// ...except what the solve costs. `?runtests` runs this before boot has shown anything, so the
 		// knob check only applies once the panel has been laid out.
 		if (panel.style.display !== 'none') {
-			for (const id of ['rails-cadence-wrap', 'rails-paths-wrap', 'rails-timing']) {
+			for (const id of ['rails-cadence-wrap', 'rails-paths-wrap', 'rails-timing', 'rails-table-wrap']) {
 				assertEqual(document.getElementById(id)?.style.display === '', !!NERD_KNOBS,
 					`P128o: ${id} shows exactly when the nerdknob is on`);
 			}
 		}
 		const el = id => document.getElementById(id);
 		assertEqual([el('rails-cadence')?.defaultValue, el('rails-paths')?.defaultValue, el('rails-auto')?.defaultChecked,
-			el('rails-show-prev')?.defaultChecked, el('rails-method')?.querySelector('option[selected]')?.value],
-			['3', '100', false, false, 'tab'],
-			'P128o: every 3 years, 100 paths, auto-run off, previous rails hidden, and the Monte Carlo tab\'s own method by default');
+			el('rails-show-prev')?.defaultChecked],
+			['3', '100', false, false],
+			'P128o: every 3 years, 100 paths, auto-run off, previous rails hidden by default');
 		// The Monte Carlo tab's own default is the lognormal synthetic (user, 2026-09-16).
 		assertEqual(document.querySelector('#mc-sim-mode option[selected]')?.value, 'gbm',
 			'P128m: the Monte Carlo tab opens on Synthetic lognormal');
@@ -2715,28 +2833,26 @@ assertEqual(
 		if (typeof FOLD_IDS !== 'undefined') {
 			assertEqual(FOLD_IDS.includes('rails-panel'), true, 'P128: the rails fold is remembered');
 		}
-		// Its own Monte Carlo method: the tab's three, or whatever the tab is set to.
-		const method = document.getElementById('rails-method');
-		const tabMode = document.getElementById('mc-sim-mode');
-		if (method && tabMode && typeof railsModelCfg === 'function') {
-			const offered = [...method.options].map(o => o.value);
-			const tabModes = [...tabMode.options].map(o => o.value);
-			assertEqual(offered[0] === 'tab' && JSON.stringify(offered.slice(1).sort()) === JSON.stringify(tabModes.slice().sort()),
-				true, `P128: the rails offer "same as the tab" and the tab's own methods (${offered})`);
-			const was = method.value;
-			try {
-				for (const m of tabModes) {
-					method.value = m;
-					assertEqual(railsModelCfg(getInputs()).simulationMode, m, `P128: choosing ${m} solves on ${m}`);
-				}
-				method.value = 'tab';
-				assertEqual(railsModelCfg(getInputs()).simulationMode, tabMode.value,
-					'P128: "same as the tab" solves on the tab\'s own method');
-			} finally {
-				method.value = was;
-			}
+		// A Guardrails column set (user, 2026-09-19: "all the guardrail related information"): the
+		// rule's columns, the rails, what the rule compares, and what the year was handed.
+		if (typeof CATEGORY_CHECKBOXES !== 'undefined' && typeof columnCategories !== 'undefined') {
+			assertEqual(CATEGORY_CHECKBOXES.Guardrails, 'cat-guardrails', 'P132: Guardrails is a column set');
+			assertEqual(!!document.getElementById('cat-guardrails'), true, 'P132: with a box in the table toolbar');
+			const want = ['year', 'spendGoal', 'guaranteedIncome', 'totalNetWealth', 'ruleSpend', 'ruleAdj', 'vsPlan%', 'railLower', 'railUpper',
+				'railPoS%', 'railSpend', 'railSpendDn', 'railSpendUp', 'railBasis', 'infl%', 'return%'];
+			assertEqual(want.filter(k => !(columnCategories[k] || []).includes('Guardrails')), [],
+				'P132: every guardrail column is in the Guardrails set');
 		}
-		// The two switches on a line of their own, above Preset, Market paths and Run; the README's
+		// The market is the Monte Carlo tab's own, with no menu of its own (user, 2026-09-19: "Market
+		// Path can be eliminated, it should always follow Monte Carlo"); the panel names it.
+		assertEqual(document.getElementById('rails-method'), null, 'P128: the rails have no market menu of their own');
+		const tabMode = document.getElementById('mc-sim-mode');
+		if (tabMode && typeof railsModelCfg === 'function') {
+			assertEqual(railsModelCfg(getInputs()).simulationMode, tabMode.value, 'P128: the rails solve on the tab\'s own method');
+			const market = document.getElementById('rails-market');
+			assertEqual(!!market && market.textContent.includes('Monte Carlo tab'), true, 'P128: and the panel says so');
+		}
+		// The two switches on a line of their own, above Preset and Run; the README's
 		// how-to beside them; Run a green action button (user, 2026-09-18). The href is matched by its
 		// section only: on the live site doclinks.js points README.md at the site root.
 		const lineOf = id => document.getElementById(id)?.closest('div');
@@ -3192,8 +3308,10 @@ assertEqual(
 		if (!el) { console.log('SKIP: ceiling switch absent'); return; }
 		assertEqual(OPT_LONG_TO_SHORT.gkShapeCeiling, 'gsc', 'P127a: the ceiling travels in the share link');
 		assertEqual(typeof getInputs().gkShapeCeiling, 'boolean', 'P127a: getInputs carries the ceiling');
-		const box = document.getElementById('ui-gk');
-		assertEqual(!!box && box.contains(el), true, 'P127a: the switch sits with the band and step, behind the knob');
+		// P132 moved it out of GK-style's band-and-step row into a row of its own, behind the knob for
+		// GK-style and open to everyone with the risk-based rule (toggleStrategyUI decides).
+		const box = document.getElementById('ui-rule-ceiling');
+		assertEqual(!!box && box.contains(el), true, 'P127a: the switch sits in its own row under the rule\'s controls');
 		assertEqual(!!document.querySelector('.sidebar')?.contains(el), true,
 			'P127a: inside the sidebar, so a change re-runs the plan');
 		if (typeof OPT_DEFAULTS !== 'undefined' && OPT_DEFAULTS.gkShapeCeiling) {
@@ -3482,7 +3600,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all five suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 475, taxengine: 32, taxPaymentPlanner: 61, doclinks: 27, feedback: 46, slowInCore: 4 },
+    EXPECTED: { optimizer_core: 486, taxengine: 32, taxPaymentPlanner: 61, doclinks: 27, feedback: 46, slowInCore: 4 },
 
     checkCounts(results) {
         const drift = [];

@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.18b2"></a>
+<a id="11.18bf"></a>
 
-## 11.18b2
+## 11.18bf
 
 **GK-style Guardrails corrected; the risk-based rails get one preset menu, the article's own set, a replay solve, milestones and a column set.**  
 *Correction for plans with GK-style Guardrails on; nothing else changes a plan's numbers.*
@@ -40,6 +40,9 @@ is gone; the rails solve on the Monte Carlo tab's market.
 **Every Guardrails cut and raise is a milestone** on the charts, and Annual Details has a
 *Guardrails* column set: **ruleSpend**, **ruleAdj** and **vsPlan%**, where spending sits against
 your planned path.
+
+**The Limit menu is in order of the income each entry caps** (MAGI), and every entry shows that
+figure; a federal bracket keeps its taxable-income top beside it.
 
 <a id="11.1881"></a>
 

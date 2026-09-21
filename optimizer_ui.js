@@ -9372,6 +9372,11 @@ function generateStratRateOptions() {
     // dollars are shortened to make room. 3 significant figures: $24.8k at the bottom of the ladder
     // where that precision means something, $211k where it does not.
     const money = n => DisplayHelpers.formatDollarShort(n);
+    // The deduction that turns a federal (taxable-income) top into MAGI, the axis every entry is
+    // ordered on and the figure every entry now prints first (user, 2026-09-20: "the user is
+    // expecting the bracket tops to be ordered numerically" - by MAGI, so 24% Fed, whose MAGI top
+    // is above IRMAA Tier 3's, lists after it).
+    const ded = dropdownDeduction(status);
 
     const options = [];
 
@@ -9397,8 +9402,9 @@ function generateStratRateOptions() {
             const floor = prevFedLimit + 1;
             options.push({
                 value: String(ratePct),
-                label: `${ratePct}% Fed  ·  ${money(floor)}+ (${crossLadderNote('fed', floor, status, cpiAdj)})`,
+                label: `${ratePct}% Fed  ·  ${money(floor + ded)}+ MAGI, ${money(floor)}+ taxable (${crossLadderNote('fed', floor, status, cpiAdj)})`,
                 limit: floor,
+                magi: floor + ded,
                 disabled: true,
             });
             continue;
@@ -9407,8 +9413,9 @@ function generateStratRateOptions() {
         prevFedLimit = limit;
         options.push({
             value: String(ratePct),
-            label: `${ratePct}% Fed  ·  ${money(limit)} (${crossLadderNote('fed', limit, status, cpiAdj)})`,
+            label: `${ratePct}% Fed  ·  ${money(limit + ded)} MAGI, ${money(limit)} taxable (${crossLadderNote('fed', limit, status, cpiAdj)})`,
             limit,
+            magi: limit + ded,
             defaultSelected: false
         });
     }
@@ -9434,8 +9441,9 @@ function generateStratRateOptions() {
             const floor = Math.round(IRMAABrks[i].l * cpiAdj);
             options.push({
                 value: `IRMAA${i}`,
-                label: `${label}  ·  ${money(floor)}+ (${crossLadderNote('magi', floor, status, cpiAdj)})`,
+                label: `${label}  ·  ${money(floor)}+ MAGI (${crossLadderNote('magi', floor, status, cpiAdj)})`,
                 limit: floor,
+                magi: floor,
                 disabled: true,
             });
             continue;
@@ -9443,8 +9451,9 @@ function generateStratRateOptions() {
         const limit = Math.round((IRMAABrks[i + 1].l - 1) * cpiAdj);
         options.push({
             value: `IRMAA${i}`,
-            label: `${label}  ·  ${money(limit)} (${crossLadderNote('magi', limit, status, cpiAdj)})`,
+            label: `${label}  ·  ${money(limit)} MAGI (${crossLadderNote('magi', limit, status, cpiAdj)})`,
             limit,
+            magi: limit,
             defaultSelected: i === 0
         });
     }
@@ -9484,24 +9493,22 @@ function generateStratRateOptions() {
         const limit = Math.round(fplBase * pct / 100 * fplCpiAdj);
         options.push({
             value: `aca${pct}`,
-            label: `${label}  ·  ${money(limit)} (${crossLadderNote('magi', limit, status, cpiAdj)})`,
-            limit
+            label: `${label}  ·  ${money(limit)} MAGI (${crossLadderNote('magi', limit, status, cpiAdj)})`,
+            limit,
+            magi: limit
         });
     }
 
-    // ── Sort all options by income limit, lowest → highest ─────────────────────
-    // Sorted on each entry's OWN printed figure, so the column of dollars a reader scans runs
-    // upward. It is not the comparable axis: a federal entry's number is taxable income and an
-    // IRMAA entry's is MAGI, so `24% Fed - $404k` lists before `IRMAA Tier 3 - $410k` while the
-    // ceiling it really imposes ($435,750 of MAGI) is above Tier 3.
-    //
-    // SORTING ON THE COMPARABLE AXIS WAS TRIED AND REVERTED (P92e). It fixes that inversion and
-    // breaks something worse: `10% Fed - $24.8k` then lands between the $63k and $84k ACA entries,
-    // because its MAGI equivalent is $57k, and a column reading 42k, 52.5k, 63k, 24.8k, 84k looks
-    // broken on sight, on every load. The annotation in each label now carries the cross-ladder
-    // truth in words, and the ladder picture under the menu carries it visually. That is where the
-    // ranking belongs; this list is for picking one entry and reading its own number.
-    options.sort((a, b) => a.limit - b.limit);
+    // ── Sort all options by the MAGI they cap, lowest → highest ────────────────
+    // The comparable axis. A federal entry's own figure is taxable income, an IRMAA or ACA entry's
+    // is MAGI, and sorted on those own figures `24% Fed - $404k` listed before `IRMAA Tier 3 -
+    // $410k` although the ceiling it imposes ($436k of MAGI) is above Tier 3 (user, 2026-09-20).
+    // Sorting on MAGI was tried once before (P92e) and reverted because the printed column then
+    // read 42k, 52.5k, 63k, 24.8k, 84k; the fix this time is to print every entry's MAGI first, so
+    // the column a reader scans is the column the list is ordered on. The federal entries keep
+    // their taxable figure beside it, because that is the number the strategy fills to, and
+    // `data-limit` still carries that own figure for updateBracketFeedback().
+    options.sort((a, b) => a.magi - b.magi);
 
     // ── Build HTML ─────────────────────────────────────────────────────────────
     const statusLabel  = isMFJ ? 'MFJ' : 'Single';

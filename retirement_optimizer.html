@@ -24,7 +24,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.18b2</title>
+    <title>Retirement Optimizer 11.18bf</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -53,7 +53,7 @@
 	     entry's HTML into the LATEST CHANGE banner during parse, and this has to sweep
 	     the document after that copy exists. See doclinks.js. -->
 	<script src="doclinks.js?v=1113d0" defer></script>
-	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=1118b2">
+	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=1118bf">
 	<style>
     .toggle { display: flex !important; }
     /* The two page-level buttons, stacked at the top left. Matching widths so the stack lines up;
@@ -72,14 +72,14 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=111807"></script>
-	<script src="optimizer_core.js?v=1118b2"></script>
+	<script src="optimizer_core.js?v=1118bf"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=1118b2"></script>
-	<script src="optimizer_tests.js?v=1118b2"></script>
+	<script src="optimizer_ui.js?v=1118bf"></script>
+	<script src="optimizer_tests.js?v=1118bf"></script>
 </head>
 <body>
 
@@ -1136,14 +1136,14 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.18b2</b>
+				<li data-flag="behavior"><b>11.18bf</b>
 					<strong>GK-style Guardrails corrected; the risk-based rails get one preset menu, the article&rsquo;s own set, a replay solve, milestones and a column set.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li>GK-style Guardrails contained an error that has been corrected: spending could be cut in the year Social Security or a pension started. The rule now measures what your portfolio funds (spending after Social Security and pension) against your plan&rsquo;s own draw for the same year, so on your plan&rsquo;s own assumptions nothing changes and it acts when markets take you off the plan. See the Details.</li>
 					<li>One preset menu, <i>Risk-based guidance</i>, under the Guardrails switch and always in view: <i>High Safety</i>, <i>Normal</i>, <i>More Tolerant</i> (a cut returns to 70%), the new <i>More Risk</i> (the 2024 article&rsquo;s own numbers) and <i>Custom</i>, four boxes of your own. The panel&rsquo;s <i>Market paths</i> menu is gone; the rails solve on the Monte Carlo tab&rsquo;s market.</li>
-					<li><i>Solve rails on this path</i> re-solves the chance of success along a replayed Monte Carlo path. Every Guardrails cut and raise is a milestone on the charts, and Annual Details has a <i>Guardrails</i> column set (<i>ruleSpend</i>, <i>ruleAdj</i>, <i>vsPlan%</i>). No other plan numbers change.</li>
+					<li><i>Solve rails on this path</i> re-solves the chance of success along a replayed Monte Carlo path. Every Guardrails cut and raise is a milestone on the charts, and Annual Details has a <i>Guardrails</i> column set (<i>ruleSpend</i>, <i>ruleAdj</i>, <i>vsPlan%</i>). The Limit menu is in order of the income each entry caps (MAGI), and every entry shows that figure. No other plan numbers change.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.18b2" target="_blank" rel="noopener">Details</a>
+					<a href="optimizer_changelog.md#11.18bf" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="display"><b>11.1881</b>
 					<strong>Risk-based rails run to the end of the plan, and say how to read them.</strong>
@@ -1693,7 +1693,7 @@
 <script src="montecarlo/mc_engine.js?v=111857"></script>
 <!-- P128. The risk-based rails solver. Same arrangement as mc_engine.js: the worker imports it too,
      and on file:// the controller runs it here. -->
-<script src="montecarlo/rails_engine.js?v=1118b2"></script>
+<script src="montecarlo/rails_engine.js?v=1118bf"></script>
 <script src="montecarlo/mc_controller.js?v=111857"></script>
 <script src="montecarlo/mc_tab.js?v=11189d"></script>
 
@@ -1892,7 +1892,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these seven are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1118b2';
+    const V = '?v=1118bf';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

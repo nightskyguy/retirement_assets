@@ -5672,3 +5672,9 @@ question decided (stays market-reacting; task_plan); memory project_p132_risk_ba
 Full playback harness re-run on 11.18b2, both arms (ceiling: 60/60 funded, mean gap 0-6% but one
 12.8%; no ceiling: 11 exact / 12 cheap of 60 fail): RBG_RULE_VALIDATION.md findings, presets and
 appendix refreshed, sections 1-5 marked as the first run's figures; index row updated.
+
+Round 10 (v11.18bf): the Limit menu (Fill Bracket / IRMAA) is sorted by the MAGI each entry caps
+(federal top + the deduction), not by each entry's own printed figure, and every entry prints its
+MAGI first (federal entries keep the taxable top beside it) so the scanned column never runs
+backwards - the reason the P92e attempt at MAGI order was reverted. 24% Fed now lists after IRMAA
+Tier 3. In-page assertions on the order and the MAGI figure; badge 1247.

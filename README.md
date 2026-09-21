@@ -382,54 +382,13 @@ Bear-start share; change any of them and the rails go stale. The rails do not de
 Guardrails switch: every run holds your spending on its planned path. The preset is chosen with the
 *Risk-based guidance* menu under the Guardrails switch, or with the panel's own menu; the two are
 one setting. Nothing in the panel changes your plan unless you press *Use it*, and *Restore* puts
-your After-Tax Spend back - unless the Guardrails switch is set to Risk-based, below.
+your After-Tax Spend back.
 
-**The rule table (nerdknob).** With `?nerdknob` on the address the panel has a *Rule table* fold:
-the dimensionless table the Risk-based rule reads, one row per plan year. Each row gives the ratio of
-net spending (after Social Security and pension) to the wealth at the end of the year before at which
-the chance of success falls to the cut rail and at which it reaches the raise rail, and the line each
-adjustment lands on. The ratios depend on the market model and the years left, and hardly at all on
-the plan's own balances: at the plan's Growth of 4% the cut ratio in an early year is about 60% of
-what it is at 8%, because the Monte Carlo tab's Synthetic Return follows Growth; holding that return
-fixed and moving only the plan's Growth changes the ratios by about 1%.
-
-#### Following the rails: Guardrails set to Risk-based
-
-With the nerdknob (`?nerdknob` on the address), the **Guardrails** switch beside After-Tax Spend has a rule menu. **GK-style** is the Guyton-Klinger
-rule described under *Limitations and Restrictions*. **Risk-based (CoS)** makes the plan follow the
-rails above: in any year the chance of success has fallen to the cut rail, spending is cut to what
-gives the preset's "back to" chance; in any year it has reached the raise
-rail, spending is raised to what gives the target; otherwise spending stays on your planned path, with
-inflation every year and Spend Delta on top. The preset is the *Risk-based guidance* menu under the
-switch (the panel's menu is the same setting), so the rails you see are the rails the plan follows.
-Every cut and raise the rule makes is a milestone on the charts, as GK-style's are, and the
-*Guardrails* column set in Annual Details gathers everything either rule reads and writes: the spend
-goal and the guaranteed income under it, the rule's spending and what it did, the wealth it compared,
-the rails and their chance of success, and each year's inflation and return.
-
-While the rule is on the rails solve themselves whenever your plan changes, whether or not Auto-run is
-ticked, and the plan is run again when the solve lands. Until then the Guardrails columns in Annual
-Details read *no rails* and spending stays on the plan's path. Monte Carlo and the Optimizer run the
-rule too: every path and every swept row follows the same rails, which is what makes the rule cheap
-enough to sweep. The rails themselves are solved on the plan without the rule, so turning the rule on
-or changing its preset never makes them stale.
-
-**Replaying a Monte Carlo path.** With the rule on, the rails it read along that path are drawn: your
-plan's rails in dollars at the path's own spending and wealth each year, which is what decided each
-cut and raise (no chance of success is shown for them). *Solve rails on this path* - the panel's Run
-button during a replay - re-solves the chance from the state the path actually reached at each
-solved year, at the cost of one ordinary solve; that answer is kept for the path, and your plan's own
-rails come back when the replay ends. Without the rule, the plan's rails are not drawn on a replay.
-
-**Never above plan is recommended with this rule.** The rule does not re-solve the chance every year
-along a path; it compares each year's spending with the rails solved for your plan and lands on the
-spending the solve found at each rail. That is exact when spending is near your planned path and
-drifts when a run of raises has taken it far above. Measured against re-solving the chance every
-year through six historical starts on five households
-([research/RBG_RULE_VALIDATION.md](research/RBG_RULE_VALIDATION.md)), the rule stays within a few
-percent of the exact answer with the ceiling on, and both the cheap rule and the exact one drift and
-sometimes fail without it. The switch is yours: choosing a rule never changes it, and the note under
-the Guardrails switch says when it is off.
+**Guardrails on the charts and in Annual Details.** Every cut and raise Guardrails makes is a
+milestone on the charts, and the *Guardrails* column set in Annual Details gathers everything the
+rule reads and writes: the spend goal and the guaranteed income under it, the rule's spending and
+what it did, the wealth it compared, the rails and their chance of success, and each year's
+inflation and return.
 
 **The Guardrails columns in Annual Details** are `ruleSpend` (the spending the rule set), `ruleAdj`
 (what it did that year) and `vsPlan%` (where that spending sits against your planned path, so -10%

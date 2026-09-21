@@ -20,8 +20,8 @@ changes the code around it.
 
 `?nerdknob` on any Optimizer URL reveals advanced controls: Monte Carlo parameters, the Guardrails
 band and step inputs and its **Never above plan** switch, the 💵 cash-funded sweep dimension, the
-timing control, the risk-based rails panel's *Solve every*, *Paths* and timing readout, and other
-diagnostics. (Fixed tax indexing used to be here; it now lives on the Monte
+timing control, the risk-based rails panel's *Solve every*, *Paths*, timing readout and rule table, the
+risk-based spend rule (below), and other diagnostics. (Fixed tax indexing used to be here; it now lives on the Monte
 Carlo tab, which is the only place it can do anything.)
 
 **Never above plan** (`P127a`, off by default) lets a Guardrails raise bring spending back up to the
@@ -44,6 +44,52 @@ solve costs: how often it solves (every 3 years for everyone else), how many mar
 itself - presets, market method, Run, Auto-run, the rails on both charts and the After-Tax Spend
 answer - is for everyone, and nothing in it enters the share link, a saved plan or the engine inputs
 unless *Use it* writes After-Tax Spend.
+
+### The risk-based spend rule, and its rule table
+
+Everyone gets the risk-based rails panel and the *Risk-based guidance* preset; what stays behind the
+knob is the rule that makes the plan **follow** them. With `?nerdknob` the **Guardrails** switch
+beside After-Tax Spend has a rule menu: **GK-style**, the Guyton-Klinger-style rule the README
+describes under *Limitations and Restrictions*, or **Risk-based (CoS)**. Risk-based makes the plan
+follow the rails: in any year the chance of success has fallen to the cut rail, spending is cut to
+what gives the preset's "back to" chance; in any year it has reached the raise rail, spending is
+raised to what gives the target; otherwise spending stays on the planned path, with inflation every
+year and Spend Delta on top. The preset is the *Risk-based guidance* menu (the panel's menu is the
+same setting), so the rails on screen are the rails the plan follows. It travels in a share link
+(`grk=rbg` with `rbp` and, for Custom, `rbt`/`rbu`/`rbl`/`rbc`) and in a saved plan, and a link
+carrying it runs the rule for a reader without the knob, with the menu shown so the rule is never
+invisible.
+
+While the rule is on the rails solve themselves whenever the plan changes, whether or not Auto-run
+is ticked, and the plan is run again when the solve lands. Until then the Guardrails columns in
+Annual Details read *no rails* and spending stays on the plan's path. Monte Carlo and the Optimizer
+run the rule too: every path and every swept row follows the same rails, which is what makes the
+rule cheap enough to sweep. The rails themselves are solved on the plan without the rule, so turning
+the rule on or changing its preset never makes them stale.
+
+**Replaying a Monte Carlo path** with the rule on draws the rails it read along that path: the
+plan's rails in dollars at the path's own spending and wealth each year, which is what decided each
+cut and raise (no chance of success is shown for them). *Solve rails on this path*, which everyone
+has, then re-solves the chance from the state the path actually reached.
+
+**Never above plan is recommended with this rule.** The rule does not re-solve the chance every
+year along a path; it compares each year's spending with the rails solved for the plan and lands on
+the spending the solve found at each rail. That is exact when spending is near the planned path and
+drifts when a run of raises has taken it far above. Measured against re-solving the chance every
+year through six historical starts on five households
+(`research/RBG_RULE_VALIDATION.md`), the rule stays within a few percent of the exact answer with
+the ceiling on, and both the cheap rule and the exact one drift and sometimes fail without it.
+Choosing a rule never changes the switch; the note under it says when it is off.
+
+**The rule table.** With the knob the rails panel has a *Rule table* fold: the dimensionless table
+the rule reads, one row per plan year. Each row gives the ratio of net spending (after Social
+Security and pension) to the wealth at the end of the year before at which the chance of success
+falls to the cut rail and at which it reaches the raise rail, and the line each adjustment lands on.
+The ratios depend on the market model and the years left, and hardly at all on the plan's own
+balances: at a Growth of 4% the cut ratio in an early year is about 60% of what it is at 8%, because
+the Monte Carlo tab's Synthetic Return follows Growth; holding that return fixed and moving only the
+plan's Growth changes the ratios by about 1%. What each setting delivers on the households the rails
+are likely to cut is in `research/RBG_RULE_THRESHOLDS.md`.
 
 ### Timing diagnostics behind the plain knob
 

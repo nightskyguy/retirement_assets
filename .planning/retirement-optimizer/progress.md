@@ -5677,4 +5677,11 @@ Round 10 (v11.18bf): the Limit menu (Fill Bracket / IRMAA) is sorted by the MAGI
 (federal top + the deduction), not by each entry's own printed figure, and every entry prints its
 MAGI first (federal entries keep the taxable top beside it) so the scanned column never runs
 backwards - the reason the P92e attempt at MAGI order was reverted. 24% Fed now lists after IRMAA
-Tier 3. In-page assertions on the order and the MAGI figure; badge 1247.
+Tier 3. In-page assertions on the order and the MAGI figure; badge 1247. Then the labels cut to the
+figure alone (user: MAGI and the taxable figure waste space; the note and Show me say both).
+
+Round 11 (PR review): two nerdknob sections in README.md (the rule table paragraph and the whole
+"Following the rails: Guardrails set to Risk-based" subsection) moved to ExperimentalFeatures.md
+section 1 as "The risk-based spend rule, and its rule table"; README keeps one public paragraph on
+Guardrails milestones and the column set. Rule added to CLAUDE.md and memory. The two nerdknob
+mentions left in README predate the branch (main 399/425).

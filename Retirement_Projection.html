@@ -13,63 +13,7 @@
 <title>Retirement Projection Tool</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="displayhelpers.js"></script>
-<!-- Inline fallback: Federal + IRMAA sections needed by this tool.
-     Keep in sync with taxengine.js.
-     The external script below overrides this when the file is accessible. -->
-<script>
-var TAXData = {
-  FEDERAL: {
-    YEAR: 2026,
-    NIIT: { MFJ: 250000, SGL: 200000 },
-    MFJ: {
-      std: 32200, age: 65, stdbump: 1650,
-      brackets: [
-        { l: 24800,    r: 0.10, nr: 0.1000 },
-        { l: 100800,   r: 0.12, nr: 0.1151 },
-        { l: 211400,   r: 0.22, nr: 0.1700 },
-        { l: 403550,   r: 0.24, nr: 0.2033 },
-        { l: 512450,   r: 0.32, nr: 0.2281 },
-        { l: 768700,   r: 0.35, nr: 0.2687 },
-        { l: Infinity, r: 0.37, nr: 0.37   }
-      ]
-    },
-    SGL: {
-      std: 16100, age: 65, stdbump: 2050,
-      brackets: [
-        { l: 12400,    r: 0.10, nr: 0.1000 },
-        { l: 50400,    r: 0.12, nr: 0.1151 },
-        { l: 105700,   r: 0.22, nr: 0.1700 },
-        { l: 201775,   r: 0.24, nr: 0.2033 },
-        { l: 256225,   r: 0.32, nr: 0.2281 },
-        { l: 640600,   r: 0.35, nr: 0.3012 },
-        { l: Infinity, r: 0.37, nr: 0.37   }
-      ]
-    }
-  },
-  IRMAA: {
-    YEAR: 2026,
-    MFJ: { brackets: [
-      { l: 217999,   r: 0,                  tier: '-none-'       },
-      { l: 218000,   r: 2*202.90,           tier: 'Tier 1'       },
-      { l: 274000,   r: 2*(284.10+14.50),   tier: 'Tier 2'       },
-      { l: 348000,   r: 2*(405.90+37.60),   tier: 'Tier 3'       },
-      { l: 410000,   r: 2*(527.70+60.60),   tier: 'Tier 4'       },
-      { l: 750000,   r: 2*(649.50+83.70),   tier: 'Tier 5'       },
-      { l: Infinity, r: 2*(689.90+91.00),   tier: 'Tier 6 (TOP)' }
-    ]},
-    SGL: { brackets: [
-      { l: 108999,   r: 0,                  tier: '-none-'       },
-      { l: 109000,   r: 202.90,             tier: 'Tier 1'       },
-      { l: 137000,   r: 284.10+14.50,       tier: 'Tier 2'       },
-      { l: 174000,   r: 405.90+37.60,       tier: 'Tier 3'       },
-      { l: 205000,   r: 527.70+60.60,       tier: 'Tier 4'       },
-      { l: 500000,   r: 649.50+83.70,       tier: 'Tier 5'       },
-      { l: Infinity, r: 689.90+91.00,       tier: 'Tier 6 (TOP)' }
-    ]}
-  }
-};
-</script>
-<script src="taxengine.js?v=1118df"></script>
+<script src="taxengine.js?v=1118e1"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
@@ -885,24 +829,11 @@ function computeAge(birthYear, birthMonth){
   return Math.min(Math.max(age, 18), 120);
 }
 
-/* ── SECURE 2.0: RMD start age by birth year ── */
-function rmdStartAge(birthYear){
-  if(birthYear >= 1960) return 75;  // full phase-in
-  if(birthYear >= 1951) return 73;  // transitional
-  return 72;                        // pre-SECURE 2.0
-}
-
-/* ── IRS Uniform Lifetime Table ── */
-const ULT = {
-  72:27.4,73:26.5,74:25.5,75:24.6,76:23.7,77:22.9,78:22.0,79:21.1,
-  80:20.2,81:19.4,82:18.5,83:17.7,84:16.8,85:16.0,86:15.2,87:14.4,
-  88:13.7,89:12.9,90:12.2,91:11.5,92:10.8,93:10.1,94:9.5,95:8.9,
-  96:8.4,97:7.8,98:7.3,99:6.8,100:6.4
-};
-/* rmdAge = person-specific start age from rmdStartAge(birthYear) */
+/* ── RMDs: rmdStartAge() and the Uniform Lifetime Table come from taxengine.js ──
+   rmdAge = the person's start age, rmdStartAge(birthYear); null before it. */
 function rmdFactor(age, rmdAge){
   if(age < rmdAge) return null;
-  return ULT[Math.min(Math.max(Math.round(age), rmdAge), 100)] || 6.4;
+  return rmdDivisor(Math.max(Math.round(age), rmdAge));
 }
 
 /* ── Threshold defaults — built from TAXData (taxengine.js) ──
@@ -2310,14 +2241,18 @@ function syncRothContribUI(){
   });
 }
 
+// The annual contributions above which the page shows its limit warning. Not IRS figures: the
+// most each field is expected to hold, one person's IRA and the household's Roth.
+const CONTRIB_WARN_ABOVE = { IRA: 82500, ROTH: 165000 };
+
 function syncContribLimitWarning(){
   const v = parseContribInput('contrib');
-  document.getElementById('warnIRAContribLimit').style.display = v > 82500 ? 'block' : 'none';
+  document.getElementById('warnIRAContribLimit').style.display = v > CONTRIB_WARN_ABOVE.IRA ? 'block' : 'none';
 }
 
 function syncRothContribLimitWarning(){
   const v = parseContribInput('rothContrib');
-  document.getElementById('warnRothContribLimit').style.display = v > 165000 ? 'block' : 'none';
+  document.getElementById('warnRothContribLimit').style.display = v > CONTRIB_WARN_ABOVE.ROTH ? 'block' : 'none';
 }
 
 function syncSpouseUI(){

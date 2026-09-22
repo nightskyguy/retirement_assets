@@ -88,6 +88,17 @@ const BASE = {
   todayDate: TODAY,
 };
 
+// ── 0. The federal safe-harbor threshold, in both of its homes ──────────────────
+// RetirementTaxPlanner.html does not load taxengine.js, so the planner carries the rule itself;
+// the Optimizer's hand-off to this page reads TAXData.FEDERAL.SAFE_HARBOR_HIGH_INCOME_AGI.
+test('the safe-harbor AGI threshold is one figure in the planner and in TAXData', () => {
+  const engine = (typeof module !== 'undefined' && module.exports) ? require('./taxengine.js') : window.TaxEngine;
+  if (!engine) return;   // a page that runs this suite without taxengine.js; node always has it
+  const planner = TaxPaymentPlanner.SAFE_HARBOR.HIGH_INCOME_AGI;
+  const taxdata = engine.TAXData.FEDERAL.SAFE_HARBOR_HIGH_INCOME_AGI;
+  assert(planner === taxdata, `planner ${planner}, TAXData ${taxdata}`);
+});
+
 // ── 1. No IRA operations ──────────────────────────────────────────────────
 test('No IRA — strategy is all_quarterly', () => {
   const plan = TaxPaymentPlanner.computePaymentPlan({ ...BASE, federalTax: 20000 });

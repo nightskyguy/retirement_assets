@@ -80,12 +80,10 @@ function inspectForErrors(namedObjects) {
 }
 
 function getRMDPercentage(currentYear, birthYear) {
-    const startAge = (birthYear >= 1960) ? 75 : 73;
     // IRS uses "age attained during the year" = currentYear - birthYear (no +1).
     const age = currentYear - birthYear;
-    if (age < startAge) return 0;
-    if (age > 120) return 1 / RMD_TABLE[120];
-    return 1 / (RMD_TABLE[age]);
+    if (age < rmdStartAge(birthYear)) return 0;
+    return 1 / rmdDivisor(age);
 }
 
 // Tax-rate creep multiplier: bracket RATES escalate `rate` per year starting in `startYear`
@@ -778,24 +776,18 @@ function sumAccounts(obj, keys = ['IRA', 'IRA1', 'IRA2', 'Roth', 'Brokerage', 'C
 // ============================================================================
 
 /**
- * Full Retirement Age in months, per the SSA schedule. FRA is 66 for anyone born 1943-1954, then
- * rises two months per birth year through 1959, and is 67 for 1960 and later.
- *
- * This used to be hard-coded at 67 for everyone, which over-states an early-claiming pre-1955
- * decedent's survivor benefit (the deceased's PIA is derived by dividing out an early-claim
- * reduction, and assuming a later FRA makes that reduction look bigger than it was). The app's own
- * default spouse is born in 1952, so the default scenario was affected.
- *
- * Birth years before 1943 are treated as 66. The real schedule steps down to 65 for 1937 and
- * earlier, but anyone in that range is over 89 today and cannot be a plan's starting spouse.
+ * Full Retirement Age in months, from TAXData.SOCIALSECURITY.FRA_MONTHS (the SSA schedule). Each
+ * spouse has their own: the survivor benefit unwinds the deceased's claim against the deceased's
+ * FRA and measures the survivor's early claim against the survivor's. A birth year that is not a
+ * number gets the table's earliest row, 66.
  * @param {number} birthYear
  * @returns {number} FRA expressed in months
  */
 function fraMonthsForBirthYear(birthYear) {
+    const rows = TAXData.SOCIALSECURITY.FRA_MONTHS;
     const by = Math.round(+birthYear);
-    if (!Number.isFinite(by) || by <= 1954) return 66 * 12;
-    if (by >= 1960) return 67 * 12;
-    return 66 * 12 + (by - 1954) * 2;
+    const row = Number.isFinite(by) && rows.find(([from]) => by >= from);
+    return (row || rows[rows.length - 1])[1];
 }
 
 /**
@@ -839,23 +831,25 @@ function calculateSurvivorBenefit(
 ) {
     // Two different people, two different FRAs. The deceased's is what their own benefit at claim
     // age is unwound against; the survivor's is what their early-claim reduction is measured from.
-    // A single hard-coded 67 for both was wrong for anyone born before 1960 on either side.
+    // The claiming rules themselves are TAXData.SOCIALSECURITY's.
+    const SS = TAXData.SOCIALSECURITY;
     const userFRAMonths   = fraMonthsForBirthYear(userBirthYear   ?? 1960);
     const spouseFRAMonths = fraMonthsForBirthYear(spouseBirthYear ?? 1960);
     const userClaimMonths  = Math.round(userClaimAge  * 12);
     const userDeathMonths  = Math.round(userAgeAtDeath * 12);
-    const spouseClaimMonths = Math.round(Math.max(spouseClaimAge, 60) * 12);
+    const spouseClaimMonths = Math.round(Math.max(spouseClaimAge, SS.SURVIVOR.MIN_AGE) * 12);
 
     // Step 1: Derive deceased's PIA at FRA from their benefit at claiming age
     let userPIA;
     if (userClaimMonths >= userFRAMonths) {
         const delayedMonths = userClaimMonths - userFRAMonths;
-        userPIA = userMonthlyBenefit / (1 + delayedMonths * (0.08 / 12));
+        userPIA = userMonthlyBenefit / (1 + delayedMonths * (SS.DELAYED_CREDIT_PER_YEAR / 12));
     } else {
         const reductionMonths = userFRAMonths - userClaimMonths;
-        const reductionFactor = reductionMonths <= 36
-            ? reductionMonths * (5 / 9 / 100)
-            : (36 * (5 / 9 / 100)) + ((reductionMonths - 36) * (5 / 12 / 100));
+        const E = SS.EARLY_REDUCTION;
+        const reductionFactor = reductionMonths <= E.FIRST_MONTHS
+            ? reductionMonths * E.FIRST_RATE
+            : (E.FIRST_MONTHS * E.FIRST_RATE) + ((reductionMonths - E.FIRST_MONTHS) * E.LATER_RATE);
         userPIA = userMonthlyBenefit / (1 - reductionFactor);
     }
 
@@ -871,11 +865,11 @@ function calculateSurvivorBenefit(
     if (spouseClaimMonths >= spouseFRAMonths) {
         rawSurvivorBenefit = deceasedBaseline;
     } else {
-        // The 28.5% maximum reduction is spread across the survivor's own 60-to-FRA span, so the
-        // span shortens with an earlier FRA: 84 months at FRA 67, 72 at FRA 66.
-        const totalPossibleEarlyMonths = spouseFRAMonths - 720;
+        // The maximum reduction is spread across the survivor's own span from the earliest claiming
+        // age to FRA, so the span shortens with an earlier FRA: 84 months at FRA 67, 72 at FRA 66.
+        const totalPossibleEarlyMonths = spouseFRAMonths - SS.SURVIVOR.MIN_AGE * 12;
         const earlyMonths = spouseFRAMonths - spouseClaimMonths;
-        rawSurvivorBenefit = deceasedBaseline * (1 - (earlyMonths / totalPossibleEarlyMonths) * 0.285);
+        rawSurvivorBenefit = deceasedBaseline * (1 - (earlyMonths / totalPossibleEarlyMonths) * SS.SURVIVOR.MAX_REDUCTION);
     }
 
     // Step 4: Higher-of rule - survivor gets their own benefit if larger
@@ -1920,7 +1914,9 @@ function computeIncome(sim, yr) {
     // same real current year, so this is the identical exponent under a fixed rate and the only
     // correct one under a path. Same convention as every bracket lookup (`b.l * cpiRate`).
     const qcdLimit = getQCDLimit(sim.cpiRate);
-    const provisionalMAGI = yr.taxableInc + yr.rmd1 + yr.rmd2 + 0.85 * (yr.s1 + yr.s2) + yr.taxableInterest + yr.taxableDividends;
+    // The benefit enters at its largest possible taxable share, the top SOCIALSECURITY rate (85%).
+    const ssMaxTaxable = TAXData.SOCIALSECURITY[yr.status].brackets[2].r;
+    const provisionalMAGI = yr.taxableInc + yr.rmd1 + yr.rmd2 + ssMaxTaxable * (yr.s1 + yr.s2) + yr.taxableInterest + yr.taxableDividends;
     const _qcds = computeAnnualQCDs(inputs, balance, sim.currentYear, qcdLimit, provisionalMAGI, sim.cpiRate, yr.alive1, yr.alive2, yr.status);
     yr.qcd1 = _qcds.qcd1;
     yr.qcd2 = _qcds.qcd2;
@@ -4648,7 +4644,7 @@ function evaluateYearOutcome(sim, yr) {
         const _drag = (inputs.dividendRate ?? 0) * ((yr.tax.capitalGainsRate ?? TAXData.FEDERAL.CAPITAL_GAINS.DEFAULT_RATE)
                                                    + (yr.tax.niitMarginalOnInvestment ?? 0));
         const _rTax = Math.max(0, (inputs.growth ?? _rIRA) - _drag);
-        const _rmdAge1 = (inputs.birthyear1 ?? 1960) >= 1960 ? 75 : 73;
+        const _rmdAge1 = rmdStartAge(inputs.birthyear1 ?? 1960);
         const _yearsToRMD = Math.max(1, _rmdAge1 - yr.age1);
         yr.yearBETR = computeBETR(yr.tax.federalMarginalRate + (yr.tax.stateMarginalRate ?? 0), _rIRA, _rTax, _yearsToRMD);
         if (yr.yearBETR !== null) {

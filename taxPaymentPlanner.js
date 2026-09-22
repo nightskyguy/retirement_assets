@@ -148,6 +148,15 @@ const TaxPaymentPlanner = (() => {
   const ROLLOVER_DEADLINE_DAYS = 60;
   const RESTORE_TARGET_DAYS    = 45;
 
+  // Federal estimated-tax safe harbor, IRC 6654(d)(1)(B)-(C): the required annual payment is the
+  // lesser of 90% of this year's tax and 100% of last year's, or 110% of last year's when last
+  // year's AGI was above HIGH_INCOME_AGI. STATE_DB's states use the same percentages at their own
+  // thresholds. TAXData.FEDERAL.SAFE_HARBOR_HIGH_INCOME_AGI is the Optimizer page's copy of the
+  // threshold, and taxPaymentPlanner.tests.js pins the two to one figure.
+  const SAFE_HARBOR = Object.freeze({
+    CURRENT_YEAR: 0.90, PRIOR_YEAR: 1.00, PRIOR_YEAR_HIGH_INCOME: 1.10, HIGH_INCOME_AGI: 150000,
+  });
+
   // Gap between an RMD and a same-month Roth conversion. The RMD must be distributed
   // before the conversion; this leaves room for it to settle first.
   const ORDERING_BUFFER_DAYS = 7;
@@ -1135,16 +1144,16 @@ const TaxPaymentPlanner = (() => {
     // So when the caller has not said, infer rather than assume the lower bar, because assuming
     // 100% where 110% applies UNDERSTATES what is owed, and that is the expensive direction to be
     // wrong in. Inferring the other way overstates it, which costs a refund rather than a penalty.
-    const FED_HIGH_INCOME_AGI = 150000;
+    const SH = SAFE_HARBOR;
     const highIncomeStated    = p.highIncomeFiler === true;
-    const highIncomeInferred  = !highIncomeStated && grossIncome > FED_HIGH_INCOME_AGI;
+    const highIncomeInferred  = !highIncomeStated && grossIncome > SH.HIGH_INCOME_AGI;
     const treatHighIncome     = highIncomeStated || highIncomeInferred;
-    const sfFedMult   = treatHighIncome ? 1.10 : 1.00;
-    const sfStateMult = stateInfo.safeHarborAlways110 ? 1.10
+    const sfFedMult   = treatHighIncome ? SH.PRIOR_YEAR_HIGH_INCOME : SH.PRIOR_YEAR;
+    const sfStateMult = stateInfo.safeHarborAlways110 ? SH.PRIOR_YEAR_HIGH_INCOME
                       : (treatHighIncome && p.stateTax >= (stateInfo.safeHarborHighIncomeThreshold || Infinity))
-                        ? 1.10 : 1.00;
-    const shFed   = p.priorYearFedTax   != null ? p.priorYearFedTax   * sfFedMult   : p.federalTax * 0.90;
-    const shState = p.priorYearStateTax != null ? p.priorYearStateTax * sfStateMult : p.stateTax   * 0.90;
+                        ? SH.PRIOR_YEAR_HIGH_INCOME : SH.PRIOR_YEAR;
+    const shFed   = p.priorYearFedTax   != null ? p.priorYearFedTax   * sfFedMult   : p.federalTax * SH.CURRENT_YEAR;
+    const shState = p.priorYearStateTax != null ? p.priorYearStateTax * sfStateMult : p.stateTax   * SH.CURRENT_YEAR;
     const safeHarborTotal = shFed + shState;
 
     // Required annual payment, IRC 6654(d)(1)(B): the LESSER of 90% of this year's tax and
@@ -1159,11 +1168,11 @@ const TaxPaymentPlanner = (() => {
     // work (TPP-1), which has to unify them anyway. What follows is used ONLY to decide whether
     // withholding alone makes the taxpayer timely, and that question needs the real number.
     const reqAnnualFed = p.priorYearFedTax != null
-      ? Math.min(p.federalTax * 0.90, p.priorYearFedTax * sfFedMult)
-      : p.federalTax * 0.90;
+      ? Math.min(p.federalTax * SH.CURRENT_YEAR, p.priorYearFedTax * sfFedMult)
+      : p.federalTax * SH.CURRENT_YEAR;
     const reqAnnualState = p.priorYearStateTax != null
-      ? Math.min(p.stateTax * 0.90, p.priorYearStateTax * sfStateMult)
-      : p.stateTax * 0.90;
+      ? Math.min(p.stateTax * SH.CURRENT_YEAR, p.priorYearStateTax * sfStateMult)
+      : p.stateTax * SH.CURRENT_YEAR;
 
 
     // Gap fill — applies to ALL plans.
@@ -2081,10 +2090,10 @@ const TaxPaymentPlanner = (() => {
         return { rule: '90% of this year, because last year\'s tax was not supplied', tag: '90%',
                  basis: 'current-year-only' };
       }
-      if (cur * 0.90 < prior * mult) {
+      if (cur * SAFE_HARBOR.CURRENT_YEAR < prior * mult) {
         return { rule: '90% of this year', tag: '90%', basis: 'current' };
       }
-      return mult >= 1.10
+      return mult >= SAFE_HARBOR.PRIOR_YEAR_HIGH_INCOME
         ? { rule: '110% of last year', tag: '110%', basis: 'prior-110' }
         : { rule: '100% of last year', tag: '100%', basis: 'prior-100' };
     };
@@ -2438,12 +2447,12 @@ const TaxPaymentPlanner = (() => {
     const out = [];
     if (sh.highIncomeInferred) {
       out.push(`The 110% bar was applied because the income entered here totals ${fmt$(sh.agiProxy)}, ` +
-        `over the $150,000 AGI threshold. That threshold is measured on LAST year's AGI, which this ` +
+        `over the ${fmt$(SAFE_HARBOR.HIGH_INCOME_AGI)} AGI threshold. That threshold is measured on LAST year's AGI, which this ` +
         `planner is not given, so if last year was the quieter year the real bar is 100% and this ` +
         `overstates what you must pay.`);
     } else if (sh.provisional) {
       out.push(`This rests on the 100% bar. The bar rises to 110% when LAST year's AGI was over ` +
-        `$150,000, and this planner is not given AGI, so it cannot check. If last year was above it, ` +
+        `${fmt$(SAFE_HARBOR.HIGH_INCOME_AGI)}, and this planner is not given AGI, so it cannot check. If last year was above it, ` +
         `the real requirement is 10% higher than shown and a plan marked met may not clear it.`);
     }
     if (sh.priorYearMissing) {
@@ -3093,7 +3102,7 @@ const TaxPaymentPlanner = (() => {
     // built from a prior year at all.
     const shNote = (mult, given, always110) =>
       !given ? 'estimated at 90% of this year; enter last year\'s tax for the real test'
-      : mult >= 1.10
+      : mult >= SAFE_HARBOR.PRIOR_YEAR_HIGH_INCOME
         ? (always110 ? `110% of prior-year (${stateInfo.name} applies 110% to every filer)`
                      : '110% of prior-year (high-income filer)')
         : '100% of prior-year';
@@ -3182,6 +3191,7 @@ const TaxPaymentPlanner = (() => {
     ROLLOVER_DEADLINE_DAYS,
     RESTORE_TARGET_DAYS,
     ORDERING_BUFFER_DAYS,
+    SAFE_HARBOR,
     restoreDateFor,
     _withholdingCoversSchedule: withholdingCoversSchedule,
     OBSERVED_HOLIDAYS,

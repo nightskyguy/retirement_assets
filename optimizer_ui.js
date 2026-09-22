@@ -916,17 +916,17 @@ function updateProfileAgeDisplay() {
     function ageInfo(birthYear, birthMonth, iraBalance) {
         if (!birthYear) return null;
         const age = currentYear - birthYear - (currentMonth <= birthMonth ? 1 : 0);
-        const rmdAge = birthYear >= 1960 ? 75 : 73;
+        const rmdAge = rmdStartAge(birthYear);
         let rmdStr = `RMD starts ${rmdAge}`;
         if (iraBalance > 0) {
             const yearsTo = rmdAge - age;
             let firstRMD;
             if (yearsTo <= 0) {
-                const factor = RMD_TABLE[Math.min(age, 120)] ?? 2.0;
+                const factor = rmdDivisor(age);
                 firstRMD = iraBalance / factor;
             } else {
                 const projIRA = iraBalance * Math.pow(1 + growthRate, yearsTo);
-                const factor = RMD_TABLE[rmdAge] ?? 26.5;
+                const factor = rmdDivisor(rmdAge);
                 firstRMD = projIRA / factor;
             }
             rmdStr += ` | ~$${Math.round(firstRMD).toLocaleString()}/yr`;
@@ -3759,7 +3759,7 @@ function openTaxPlanner(row, prevRow) {
     // $150,000, so this reads prevRow, not row -- the same row priorYearFedTax comes from. MAGI is
     // the closest thing the log carries to AGI; they differ by the MAGI add-backs, which matters
     // only for a filer sitting within those add-backs of the threshold.
-    if (prevRow && (prevRow.MAGI || 0) > 150000) p.set('hi', '1');
+    if (prevRow && (prevRow.MAGI || 0) > TAXData.FEDERAL.SAFE_HARBOR_HIGH_INCOME_AGI) p.set('hi', '1');
 
     const stateEl = document.getElementById('STATEname');
     if (stateEl?.value) p.set('state', stateEl.value);
@@ -4338,10 +4338,10 @@ function computeMilestones(log) {
         ? lastTotals.basisStepUpFraction : 0.50;
     // RMD start age from the log alone: the engine sets age = year − birthyear exactly
     // (optimizer_core.js resolveHousehold), so the birth year is recoverable from any row with a
-    // numeric age, and the start age follows the same rule as getRMDPercentage() - 75 for anyone
-    // born 1960 or later, else 73. A non-numeric age ('—') means not alive / no spouse.
+    // numeric age, and rmdStartAge() is the rule getRMDPercentage() uses. A non-numeric age ('—')
+    // means not alive / no spouse.
     const numAge = a => (a == null || a === '—') ? null : +a;
-    const rmdAgeFor = (year, age) => ((year - age) >= 1960 ? 75 : 73);
+    const rmdAgeFor = (year, age) => rmdStartAge(year - age);
     // Fires on the first row where this person reaches their RMD age AND the prior row had them
     // below it. Requiring the crossing to happen inside the log means a plan that starts after
     // RMD age gets no marker (RMDs began before the plan), a spouse who dies first never fires

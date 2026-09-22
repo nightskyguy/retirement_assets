@@ -17,6 +17,16 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.18e1"></a>
+
+## 11.18e1
+
+**The RMD start age shown for a birth year before 1951.**  
+*Nothing changes a plan's numbers.*
+
+Beside a birth year before 1951, the start age now reads 72, which is the age those years reach
+their first required distribution under the SECURE Act. The estimate beside it is unchanged.
+
 <a id="11.18e0"></a>
 
 ## 11.18e0

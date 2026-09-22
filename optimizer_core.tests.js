@@ -5908,21 +5908,19 @@ test('P81: the engine floor matches the one the banks are drawn under', () => {
         `the engine floor (${core.CPI_INDEX_FLOOR}) and the draw floor (${drawn}) have drifted apart`);
 });
 
-// Names declared at column 0 of each file, for the two shared-scope tests below: `name: fileA and
-// fileB` for every name two of the files declare. Node gives each file its own module scope, so
-// these collisions are invisible to every other test here.
-function _topLevelClashes(files) {
-    const fs = require('fs'), path = require('path');
-    const topLevel = src => new Set(
-        [...src.matchAll(/^(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]));
-    const seen = new Map();   // name -> first file that declared it
+// Names declared at column 0, for the two shared-scope tests below. `units` is a list of [label,
+// source text]; the result has `name: labelA and labelB` for every name two units both declare.
+// A unit wrapped in an IIFE declares no globals at column 0, so it is skipped whole. Node gives
+// each file its own module scope, so these collisions are invisible to every other test here.
+function _topLevelClashes(units) {
+    const topLevel = src => /^\((?:\(\)\s*=>|function[\s(])/m.test(src) ? new Set()
+        : new Set([...src.matchAll(/^(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]));
+    const seen = new Map();   // name -> first unit that declared it
     const clashes = [];
-    for (const f of files) {
-        const p = path.join(__dirname, f);
-        if (!fs.existsSync(p)) continue;
-        for (const name of topLevel(fs.readFileSync(p, 'utf8'))) {
-            if (seen.has(name)) clashes.push(`${name}: ${seen.get(name)} and ${f}`);
-            else seen.set(name, f);
+    for (const [label, text] of units) {
+        for (const name of topLevel(text)) {
+            if (seen.has(name)) clashes.push(`${name}: ${seen.get(name)} and ${label}`);
+            else seen.set(name, label);
         }
     }
     return clashes;
@@ -5935,27 +5933,42 @@ test('P81: no top-level name collides across the files the worker shares a scope
     // module scope there. A duplicated INFLATION_FLOOR shipped exactly this way and took the whole
     // Monte Carlo tab down; only the in-page suite noticed.
     if (!IS_NODE) return;   // the browser tier has already proven it by loading
-    const clashes = _topLevelClashes(['taxengine.js', 'optimizer_core.js', 'montecarlo/prng.js',
-        'montecarlo/historical_returns.js', 'montecarlo/stats.js', 'montecarlo/mc_engine.js']);
+    const fs = require('fs'), path = require('path');
+    const files = ['taxengine.js', 'optimizer_core.js', 'montecarlo/prng.js',
+                   'montecarlo/historical_returns.js', 'montecarlo/stats.js', 'montecarlo/mc_engine.js'];
+    const clashes = _topLevelClashes(files.map(f => [f, fs.readFileSync(path.join(__dirname, f), 'utf8')]));
     assert(clashes.length === 0,
         'the worker shares one scope, so these top-level names collide: ' + clashes.join(' | '));
 });
 
-test('no top-level name collides across the scripts retirement_optimizer.html loads', () => {
-    // Every classic <script> on the page shares one global scope. A duplicated `const` or `let` is
-    // a SyntaxError that stops the later file; a duplicated `function` fails nothing at all, and
-    // the later file's copy silently replaces the earlier one for every caller on the page. The
-    // list is read from the page itself, so a script added there is covered without an edit here.
+test('no top-level name collides across the scripts each page loads, inline scripts included', () => {
+    // Every classic <script> on a page shares one global scope. A duplicated `const` or `let` is a
+    // SyntaxError that stops the later script; a duplicated `function` fails nothing at all, and
+    // the later copy silently replaces the earlier one for every caller on the page, which is how
+    // a page's own helper can shadow the engine's. Script lists are read from the pages
+    // themselves, so a page or a script added later is covered without an edit here.
     if (!IS_NODE) return;   // the browser tier has already proven the const/let half by loading
     const fs = require('fs'), path = require('path');
-    const html = fs.readFileSync(path.join(__dirname, 'retirement_optimizer.html'), 'utf8');
-    const files = [...html.matchAll(/<script\b[^>]*\bsrc="([^"?]+)[^"]*"/g)].map(m => m[1])
-        .filter(f => !/^https?:/.test(f));
-    assert(files.includes('optimizer_ui.js') && files.includes('montecarlo/mc_tab.js'),
-        `the page's script list did not parse: ${files.join(', ')}`);
-    const clashes = _topLevelClashes(files);
-    assert(clashes.length === 0,
-        'the page\'s scripts share one scope, so these top-level names collide: ' + clashes.join(' | '));
+    const pages = [...fs.readdirSync(__dirname).filter(f => f.endsWith('.html')),
+                   ...fs.readdirSync(path.join(__dirname, 'standalone')).filter(f => f.endsWith('.html'))
+                       .map(f => 'standalone/' + f)];
+    const problems = [];
+    let optimizerUnits = 0;
+    for (const page of pages) {
+        const html = fs.readFileSync(path.join(__dirname, page), 'utf8');
+        const units = [];
+        for (const m of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)) {
+            const src = (m[1].match(/\ssrc="([^"?]+)/) || [])[1];
+            if (!src) { units.push([`${page} inline`, m[2]]); continue; }
+            if (/^https?:/.test(src)) continue;
+            const file = path.join(__dirname, path.dirname(page), src);
+            if (fs.existsSync(file)) units.push([src, fs.readFileSync(file, 'utf8')]);
+        }
+        if (page === 'retirement_optimizer.html') optimizerUnits = units.length;
+        for (const c of _topLevelClashes(units)) problems.push(`${page}: ${c}`);
+    }
+    assert(optimizerUnits > 10, `the Optimizer page's script list did not parse: ${optimizerUnits} scripts`);
+    assert(problems.length === 0, 'these top-level names collide within a page: ' + problems.join(' | '));
 });
 
 test('P81: no index step falls below the floor, at any spread', () => {
@@ -7368,6 +7381,23 @@ test('FRA: the old hard-coded 67 over-stated an early-claiming pre-1955 decedent
     // The error direction is what matters: the hard-code paid the survivor MORE than they are due,
     // which is the wrong way round for a tool that ships a widow-RMD objective.
     assert(newWay < oldWay, 'deriving FRA from birth year must reduce, not raise, this benefit');
+});
+
+test('calculateSurvivorBenefit: the SSA claiming adjustments, worked by hand', () => {
+    // Deceased born 1960 (FRA 67). Claimed at 70: 36 months of delayed credit at 8%/yr, so $3,720
+    // unwinds to a $3,000 PIA, and the survivor at FRA receives the whole enhanced $3,720.
+    assert(calculateSurvivorBenefit(80, 70, 3720, 67, 0, 1960, 1960) === 3720, 'delayed credit passes to the survivor');
+    // Claimed at 62, 60 months early: 36 x 5/9% + 24 x 5/12% = 30%, so $1,400 unwinds to a $2,000
+    // PIA, and a survivor at FRA receives the PIA, not the reduced benefit.
+    assert(calculateSurvivorBenefit(80, 62, 1400, 67, 0, 1960, 1960) === 2000, 'an early claim does not reduce the survivor');
+    // The survivor's own early claim: the full 28.5% at 60, spread over the months from 60 to FRA.
+    assert(calculateSurvivorBenefit(80, 62, 1400, 60, 0, 1960, 1960) === 1430, 'survivor at 60 takes 28.5% less');
+    assert(calculateSurvivorBenefit(80, 62, 1400, 62, 0, 1960, 1960) === 1592, 'survivor at 62: 60 of the 84 months');
+    assert(calculateSurvivorBenefit(80, 62, 1400, 58, 0, 1960, 1960) === 1430, 'a claim before 60 is taken at 60');
+    // A survivor born 1954 has FRA 66, so the same 28.5% spreads over 72 months: 36 early is 14.25%.
+    assert(calculateSurvivorBenefit(80, 62, 1400, 63, 0, 1960, 1954) === 1715, 'FRA 66 survivor at 63');
+    assert(calculateSurvivorBenefit(80, 62, 1400, 67, 2500, 1960, 1960) === 2500, 'a larger own benefit is kept');
+    assert(fraMonthsForBirthYear(NaN) === 792 && fraMonthsForBirthYear(undefined) === 792, 'an unknown birth year is FRA 66');
 });
 
 test('FRA: a 1960-or-later couple is completely unaffected', () => {
@@ -9762,10 +9792,9 @@ test("the plan bank: every card's measured viability still reproduces", () => {
 });
 
 test('the plan bank: every plan file can be loaded ALONGSIDE the others in a page', () => {
-    // Each file declares `PLAN`. A classic script declaring `const PLAN` at global scope throws a
-    // redeclaration SyntaxError the moment a SECOND one is loaded, so the bank required cleanly in
-    // node while only ever ONE file could reach a browser - every load after the first died
-    // silently. Found by trying to run the Optimizer against all 19 households; the page had one.
+    // Every file declares `PLAN`, so each one must keep that declaration inside an IIFE: two
+    // classic scripts declaring `const PLAN` in the one global scope a page has is a redeclaration
+    // SyntaxError, and every load after the first dies.
     //
     // A source check, because `require()` cannot reproduce the failure: node gives every module its
     // own scope, so the bug is invisible to the very suite that covers the bank.
@@ -9775,11 +9804,12 @@ test('the plan bank: every plan file can be loaded ALONGSIDE the others in a pag
     const bad = [];
     for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.js') && f !== 'index.js')) {
         const src = fs.readFileSync(path.join(dir, f), 'utf8');
-        // The declaration must not sit at column 0, which is the only place it would collide.
-        if (/^const PLAN/m.test(src)) bad.push(f);
+        const wrapped = /^\((?:\(\)\s*=>|function[\s(])/m.test(src);
+        if (!wrapped || /^const PLAN[\s=]/m.test(src.slice(0, src.search(/^\((?:\(\)\s*=>|function[\s(])/m))))
+            bad.push(f);
     }
     assert(bad.length === 0,
-        'these plan files declare PLAN at global scope and cannot be loaded together: ' + bad.join(', '));
+        'these plan files declare PLAN outside an IIFE and cannot be loaded together: ' + bad.join(', '));
 });
 
 test('the plan bank: the card fields a chooser relies on are all present and honest', () => {
@@ -10068,6 +10098,9 @@ test('getRMDPercentage: zero before the start age, the Uniform Lifetime divisor 
     assert(rmd73 > 0.037 && rmd73 < 0.038, `born 1952, age 73 (divisor 26.5) is about 3.77%, got ${rmd73}`);
     same(getRMDPercentage(1960 + 73, 1960), 0, 'born 1960, age 73: nothing yet, the start age is 75');
     same(getRMDPercentage(1950 + 76, 1950), 0.042, 'born 1950, age 76: 4.2%');
+    same(getRMDPercentage(1950 + 72, 1950), 1 / 27.4, 'born 1950, age 72: RMDs begin at 72');
+    same(getRMDPercentage(1951 + 72, 1951), 0, 'born 1951, age 72: nothing until 73');
+    same(getRMDPercentage(1945 + 125, 1945), 1 / 2.0, 'past the table, the last divisor holds');
 });
 
 test('calculateInflationAdjustedWithdrawal: the first-year draw that lasts n years rising with inflation', () => {

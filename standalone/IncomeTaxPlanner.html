@@ -141,8 +141,8 @@
 </style>
 <!-- Shared tax modules — NOTE: these require file:// or http:// (CORS blocks in data: URLs) -->
 <script src="../displayhelpers.js"></script>
-<script src="../taxengine.js?v=1118df"></script>
-<script src="../taxengine.tests.js?v=1118df"></script>
+<script src="../taxengine.js?v=1118e1"></script>
+<script src="../taxengine.tests.js?v=1118e1"></script>
 </head>
 <body>
 <header>
@@ -325,14 +325,18 @@
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const FULL_MAX  = 1_100_000;
 const FULL_STEP =    10_000;
-const BASE_YEAR = 2026;
+const BASE_YEAR = TAXData.FEDERAL.YEAR;   // the year the tax tables are stated in
 
 // OBBBA display helpers — read from TAXData so display stays in sync with calculations
 const obbaSalt = TAXData.OBBBA.SALT;
 const obbaSen  = TAXData.OBBBA.SENIOR_DED;
 
-// Display-only: SS torpedo thresholds (not indexed to inflation per current law)
-const SS_T = { MFJ:{t1:32_000,t2:44_000}, SGL:{t1:25_000,t2:34_000} };
+// Display-only: where each Social Security tier starts, from taxengine.js (not indexed to
+// inflation under current law).
+const SS_T = Object.fromEntries(['MFJ', 'SGL'].map(s => {
+  const b = TAXData.SOCIALSECURITY[s].brackets;
+  return [s, { t1: b[1].l, t2: b[2].l }];
+}));
 
 // SS slider travel by filing status. Max benefit at age 70 is roughly $63k/person in 2026,
 // so two maxed earners reach ~$126k. The numeric field is never capped by these.
@@ -1109,7 +1113,7 @@ function clearPin() {
 function renderSummary(data) {
   const inf   = Math.pow(1+cfg.inflation/100, cfg.year-BASE_YEAR);
   const fm    = TAXData.FEDERAL[cfg.status];
-  const nSen  = (cfg.ages[0]>=65?1:0)+(cfg.status==='MFJ'&&cfg.ages[1]>=65?1:0);
+  const nSen  = (cfg.ages[0]>=fm.age?1:0)+(cfg.status==='MFJ'&&cfg.ages[1]>=fm.age?1:0);
   const stdF  = (fm.std + fm.stdbump*nSen)*inf;
   const cgGain= cfg.cgSale*(1-cfg.cgBasisPct/100);
 
@@ -1140,7 +1144,9 @@ function renderSummary(data) {
     rows.push(`<div><strong>Deduction @ $200k:</strong> ${sample.useItz?'SALT itemized':'Standard ded.'}</div>`);
   if (cfg.ssIncome > 0) {
     const cls = peakMarg>.40?'hi-red':'hi-amber';
-    const torpEntry = Math.max(0, SS_T[cfg.status].t1 - .5*cfg.ssIncome - cgGain);
+    // Provisional income counts the benefit at the first tier's rate (half), as calculateTaxes does.
+    const ssShare   = TAXData.SOCIALSECURITY[cfg.status].brackets[1].r;
+    const torpEntry = Math.max(0, SS_T[cfg.status].t1 - ssShare*cfg.ssIncome - cgGain);
     rows.push(`<div class="${cls}"><strong>SS torpedo peak:</strong> ~${(peakMarg*100).toFixed(1)}% fed marginal @ $${peakInc.toLocaleString()} ordinary income</div>`);
     rows.push(`<div><strong>SS torpedo starts:</strong> ~$${Math.round(torpEntry).toLocaleString()} ordinary income</div>`);
   }

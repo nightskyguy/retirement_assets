@@ -1,6 +1,10 @@
 var TAXData = {
 	FEDERAL: {
 		YEAR: 2026,  // Official IRS Revenue Procedure 2025-32
+		// Estimated-tax safe harbor, IRC 6654(d)(1)(C): 110% of last year's tax, not 100%, once last
+		// year's AGI was above this. Not indexed. taxPaymentPlanner.js carries the whole rule as
+		// SAFE_HARBOR for its own page, and taxPaymentPlanner.tests.js pins the two to one figure.
+		SAFE_HARBOR_HIGH_INCOME_AGI: 150000,
 		REFERENCE: 'https://www.irs.gov/newsroom/irs-releases-tax-inflation-adjustments-for-tax-year-2026-including-amendments-from-the-one-big-beautiful-bill',
 		REF_2: 'https://taxfoundation.org/data/all/federal/2026-tax-brackets/',
 		// Net Investment Income Tax (3.8% surtax). MAGI thresholds — not indexed to inflation.
@@ -93,7 +97,18 @@ var TAXData = {
 	SOCIALSECURITY: {
 		Year: 2026,
 		SGL: { brackets: [{ l: 25000-1, r: 0.0}, { l: 25000, r: 0.5}, { l: 34000, r: 0.85}] },
-		MFJ: { brackets: [{ l: 32000-1, r: 0.0}, { l: 32000, r: 0.5}, { l: 44000, r: 0.85}] }
+		MFJ: { brackets: [{ l: 32000-1, r: 0.0}, { l: 32000, r: 0.5}, { l: 44000, r: 0.85}] },
+		// Benefit rules (SSA). Full retirement age in months, keyed by the first birth year each row
+		// applies to: 66 through 1954, two months more per year to 1959, 67 from 1960. Earlier
+		// cohorts are treated as 66; they are past any claiming age in a plan this tool runs.
+		FRA_MONTHS: [[1960, 67 * 12], [1959, 66 * 12 + 10], [1958, 66 * 12 + 8], [1957, 66 * 12 + 6],
+		             [1956, 66 * 12 + 4], [1955, 66 * 12 + 2], [0, 66 * 12]],
+		DELAYED_CREDIT_PER_YEAR: 0.08,          // each year claimed past FRA, to 70 (born 1943 or later)
+		// Claiming before FRA: 5/9 of 1% a month for the first 36 months early, 5/12 of 1% after.
+		EARLY_REDUCTION: { FIRST_MONTHS: 36, FIRST_RATE: 5 / 9 / 100, LATER_RATE: 5 / 12 / 100 },
+		// A widow(er) may claim from 60, at a reduction reaching 28.5% at 60 and spread evenly
+		// over the months from 60 to their own FRA.
+		SURVIVOR: { MIN_AGE: 60, MAX_REDUCTION: 0.285 },
 	},
 
 	IRMAA: {
@@ -134,6 +149,7 @@ var TAXData = {
 
 	QCD: {
 		YEAR: 2026,
+		ELIGIBILITY_AGE: 70.5,   // IRC 408(d)(8): the IRA owner must have attained 70½
 		AMOUNT: 111000,       // per person per year (SECURE 2.0, permanently CPI-indexed from 2024)
 		ANNUAL_INCREASE: 'cpi', // sentinel: use simulation's CPI assumption (same as bracket growth)
 		// REFERENCE: IRS Notice 2025-49; $105k 2024, $108k 2025, $111k 2026
@@ -208,6 +224,7 @@ var TAXData = {
 		Default: true,
 		NOTE: 'Excludes CA SDI and CA personal exemption credits. Because those credits are not applied, the California tax shown here is slightly over-calculated — your actual California tax would be a bit lower.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		HSA_DEDUCTIBLE: false,   // CA does not conform to the federal HSA deduction; absent means deductible
 		// Thresholds inflation-adjusted by CA FTB (~2.971% CCPI); 13.3% = 12.3% + 1% MHSA surtax on income >$1M.
 		// MFJ brackets >$1M: $1M triggers MHSA (+1%), nominal 12.3% bracket starts at $1,442,628 (= 2×SGL).
         MFJ: {
@@ -1121,7 +1138,24 @@ TAXData.OBBBA = {
     }
 };
 
-// Uniform Lifetime Table (Simplified)
+// RMD start age by birth year, keyed by the first birth year each row applies to: 75 from 1960 and
+// 73 from 1951 (SECURE 2.0), 72 before (SECURE Act). Owners born before July 1949 began at 70½, but
+// they are past every start age in a plan this tool runs, so the table stops at 72.
+const RMD_START_AGE = [[1960, 75], [1951, 73], [0, 72]];
+
+function rmdStartAge(birthYear) {
+    const row = RMD_START_AGE.find(([from]) => birthYear >= from);
+    return (row || RMD_START_AGE[RMD_START_AGE.length - 1])[1];
+}
+
+// The divisor for an age, clamped into the table: the youngest row for any age below it, the
+// oldest for any age past it.
+function rmdDivisor(age) {
+    const ages = Object.keys(RMD_TABLE).map(Number);
+    return RMD_TABLE[Math.min(Math.max(age, Math.min(...ages)), Math.max(...ages))];
+}
+
+// IRS Uniform Lifetime Table, Treas. Reg. 1.401(a)(9)-9(c), in effect for distribution years from 2022.
 const RMD_TABLE = {
     72: 27.4, 73: 26.5, 74: 25.5, 75: 24.6, 76: 23.7, 77: 22.9, 78: 22.0, 79: 21.1,
     80: 20.2, 81: 19.4, 82: 18.5, 83: 17.7, 84: 16.8, 85: 16.0, 86: 15.2, 87: 14.4,
@@ -1575,13 +1609,9 @@ function calculateTaxes(params = {}) {
         pensionIncome, iraIncome, totalSS, ages, birthyears, status, federalAGI
     });
 
-    let stateAGI;
-    if (state === 'CA') {
-        // CA does not allow HSA deduction
-        stateAGI = earnedIncome + stateTaxableSS + ordDivInterest + qualifiedDiv + capGains - stateRetExcl;
-    } else {
-        stateAGI = earnedIncome - hsaContrib + stateTaxableSS + ordDivInterest + qualifiedDiv + capGains - stateRetExcl;
-    }
+    // A state row with HSA_DEDUCTIBLE: false taxes HSA contributions; every other state deducts them.
+    const stateHSADeduction = stateData.HSA_DEDUCTIBLE === false ? 0 : hsaContrib;
+    const stateAGI = earnedIncome - stateHSADeduction + stateTaxableSS + ordDivInterest + qualifiedDiv + capGains - stateRetExcl;
 
     const rawStateStd = stateData[status].std;
     const stateStdDeduction = rawStateStd === 'FEDERAL'
@@ -1786,12 +1816,14 @@ function getQCDLimit(cpiFactor) {
 	return TAXData.QCD.AMOUNT * (cpiFactor ?? 1);
 }
 
-// Returns true if a person is QCD-eligible (age 70½+) during simYear.
-// Uses birth month for precision: born Jan–Jun → turns 70.5 in (birthYear+70);
-// born Jul–Dec → turns 70.5 in (birthYear+71).
+// True if a person has reached TAXData.QCD.ELIGIBILITY_AGE (70½) during simYear. A half-year age
+// falls in the same calendar year as the whole birthday for a January-June birth and in the next
+// year otherwise; a missing birth month counts as the later half.
 function isQCDEligible(birthYear, birthMonth, simYear) {
-	const eligible70_5Year = birthYear + 70 + (birthMonth <= 6 ? 0 : 1);
-	return simYear >= eligible70_5Year;
+	const age = TAXData.QCD.ELIGIBILITY_AGE;
+	const whole = Math.floor(age);
+	const nextYear = age > whole && !(birthMonth <= 6);
+	return simYear >= birthYear + whole + (nextYear ? 1 : 0);
 }
 
 // For QCD "As Needed" mode: returns the target MAGI ceiling to reduce to in order to drop
@@ -1817,7 +1849,7 @@ function getIRMAATierTargetMAGI(magi, status, cpiRate, tiersDown) {
 // Dual-mode export: inert in browser/worker (classic script); lets Node tests require() this file.
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
-        TAXData, RMD_TABLE, getRateBracket,
+        TAXData, RMD_TABLE, RMD_START_AGE, rmdStartAge, rmdDivisor, getRateBracket,
         findLimitByRate, findUpperLimitByAmount, calculateProgressive,
         calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATierTargetMAGI,
         getQCDLimit, isQCDEligible,
@@ -1831,7 +1863,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // test reading RMD_TABLE off globalThis would get undefined and fail somewhere unrelated
     // rather than at the point of the mistake.
     window.TaxEngine = {
-        TAXData, RMD_TABLE, getRateBracket,
+        TAXData, RMD_TABLE, RMD_START_AGE, rmdStartAge, rmdDivisor, getRateBracket,
         findLimitByRate, findUpperLimitByAmount, calculateProgressive,
         calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATierTargetMAGI,
         getQCDLimit, isQCDEligible,

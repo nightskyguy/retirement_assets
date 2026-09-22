@@ -573,6 +573,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="../displayhelpers.js"></script>
+<script src="../sharepanel.js?v=1118e2"></script>
 <script>
   const BRACKETS = [
     { t: 0,    id: '0',  label: '0%',            color: '#4caf80', width: 1.5 },
@@ -825,37 +826,15 @@
     return href.split('?')[0].split('#')[0] + '?' + p;
   }
 
-  function toggleSharePanel() {
-    const panel = document.getElementById('share-panel');
-    const input = document.getElementById('share-url-input');
-    const lbl   = document.getElementById('share-label');
-    if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
-    const url = buildShareURL();
-    input.value = url;
-    lbl.textContent = url.startsWith('?')
+  // The panel's open/copy/dismiss behavior is sharepanel.js; this page supplies the URL, names its
+  // own toggle so a click on it is not read as a click outside, and captions the panel for the two
+  // kinds of URL buildShareURL can return.
+  SharePanel.init({
+    build: buildShareURL,
+    toggle: '#share-toggle-btn',
+    label: url => url.startsWith('?')
       ? 'Append these params to the file URL when opening from disk or web:'
-      : 'Copy this URL to restore your settings in any browser:';
-    document.getElementById('share-status').textContent = '';
-    panel.style.display = 'block';
-    requestAnimationFrame(() => input.select());
-  }
-
-  async function copyShareURL() {
-    const input  = document.getElementById('share-url-input');
-    const status = document.getElementById('share-status');
-    input.select();
-    try { await navigator.clipboard.writeText(input.value); status.textContent = '✓ Copied to clipboard'; return; } catch {}
-    try { document.execCommand('copy'); status.textContent = '✓ Copied to clipboard'; }
-    catch { status.textContent = 'Select the URL above and press Ctrl+C / Cmd+C'; }
-  }
-
-  document.addEventListener('click', e => {
-    const panel = document.getElementById('share-panel');
-    if (panel.style.display === 'block' &&
-        !panel.contains(e.target) &&
-        e.target.id !== 'share-toggle-btn') {
-      panel.style.display = 'none';
-    }
+      : 'Copy this URL to restore your settings in any browser:',
   });
 
   function loadFromURL() {

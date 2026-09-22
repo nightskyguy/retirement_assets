@@ -7190,43 +7190,10 @@ function buildShareURL() {
     return base + '?' + params.toString();
 }
 
-function toggleSharePanel() {
-    const panel = document.getElementById('share-panel');
-    const input = document.getElementById('share-url-input');
-    const isOpen = panel.style.display === 'block';
-    if (isOpen) { panel.style.display = 'none'; return; }
-    input.value = buildShareURL();
-    document.getElementById('share-status').textContent = '';
-    panel.style.display = 'block';
-    requestAnimationFrame(() => { input.select(); });
-}
-
-async function copyShareURL() {
-    const input  = document.getElementById('share-url-input');
-    const status = document.getElementById('share-status');
-    input.select();
-    try {
-        await navigator.clipboard.writeText(input.value);
-        status.textContent = '✓ Copied to clipboard';
-        return;
-    } catch {}
-    try {
-        document.execCommand('copy');
-        status.textContent = '✓ Copied to clipboard';
-    } catch {
-        status.textContent = 'Select the URL above and press Ctrl+C / Cmd+C';
-    }
-}
-
-if (typeof document !== 'undefined') {
-    document.addEventListener('click', e => {
-        const panel = document.getElementById('share-panel');
-        if (panel && panel.style.display === 'block' &&
-            !panel.contains(e.target) &&
-            !e.target.closest('[onclick="toggleSharePanel()"]')) {
-            panel.style.display = 'none';
-        }
-    });
+// The panel's open/copy/dismiss behavior is sharepanel.js; this page supplies the URL and names
+// its own toggle so a click on it is not read as a click outside.
+if (typeof window !== 'undefined' && window.SharePanel) {
+    window.SharePanel.init({ build: buildShareURL, toggle: '[onclick="toggleSharePanel()"]' });
 }
 
 function loadFromURL() {

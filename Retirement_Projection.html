@@ -13,6 +13,7 @@
 <title>Retirement Projection Tool</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="displayhelpers.js"></script>
+<script src="sharepanel.js?v=1118e2"></script>
 <script src="taxengine.js?v=1118e1"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
@@ -2050,45 +2051,16 @@ function applyUrlParams(){
   if(cvParam && CV[cvParam]) setChartView(cvParam);
 }
 
-function toggleSharePanel() {
-  const panel = document.getElementById('share-panel');
-  const input = document.getElementById('share-url-input');
-  const isOpen = panel.style.display === 'block';
-  if (isOpen) { panel.style.display = 'none'; return; }
-  const qs  = buildBookmarkUrl();
-  const href = window.location.href;
-  input.value = (href.startsWith('data:') || href.startsWith('blob:'))
-    ? qs
-    : href.split('?')[0] + qs;
-  document.getElementById('share-status').textContent = '';
-  panel.style.display = 'block';
-  requestAnimationFrame(() => { input.select(); });
-}
-
-async function copyShareURL() {
-  const input  = document.getElementById('share-url-input');
-  const status = document.getElementById('share-status');
-  input.select();
-  try {
-    await navigator.clipboard.writeText(input.value);
-    status.textContent = '✓ Copied to clipboard';
-    return;
-  } catch {}
-  try {
-    document.execCommand('copy');
-    status.textContent = '✓ Copied to clipboard';
-  } catch {
-    status.textContent = 'Select the URL above and press Ctrl+C / Cmd+C';
-  }
-}
-
-document.addEventListener('click', e => {
-  const panel = document.getElementById('share-panel');
-  if (panel && panel.style.display === 'block' &&
-      !panel.contains(e.target) &&
-      !e.target.closest('.help-btn.share')) {
-    panel.style.display = 'none';
-  }
+// The panel's open/copy/dismiss behavior is sharepanel.js; this page supplies the URL and names its
+// own toggle so a click on it is not read as a click outside. A page opened from a data: or blob:
+// URL has no path to hang the query on, so it shares the query string by itself.
+SharePanel.init({
+  toggle: '.help-btn.share',
+  build: () => {
+    const qs = buildBookmarkUrl();
+    const href = window.location.href;
+    return (href.startsWith('data:') || href.startsWith('blob:')) ? qs : href.split('?')[0] + qs;
+  },
 });
 
 function showToast(msg){

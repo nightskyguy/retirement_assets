@@ -149,8 +149,8 @@ function _realCagr(eqCagr, infCagr) {
 // alternative is an out-of-range undefined turning every downstream CAGR into NaN. The distortion is
 // small because intl is typically under 10% of a portfolio.
 //
-// This rule was written out three times, in the stress bank, the bootstrap bank and the bear overlay.
-// One copy, so a correction cannot land in two of the three.
+// ONE copy, shared by the stress bank, the bootstrap bank and the bear overlay, so a correction
+// cannot land in two of the three.
 // P80. The calendar year an index into the historical series refers to. Every series in
 // HISTORICAL_RETURNS starts at the same year (1928) and the banks index all four with one shared
 // index, which is what makes ONE source year per path-year honest for returns and inflation alike.
@@ -425,15 +425,13 @@ function buildStressBank(count = 10, years, windowMode = 10) {
 //   'ruin-late'   ran out in the second half
 //   'survive'     never ruined
 //
-// Graded on the plan's own length, not on the ranking window. The window used to draw this line,
-// which worked only while there was exactly one of them; 'combined' has five and 'all' has none, so
-// there is nothing left to grade against. Halving the plan is also the more useful question: running
-// dry at year 8 of 30 and at year 28 of 30 are different kinds of bad, and a fixed 10-year line
-// called both of them the same thing on a long plan.
+// Graded on the plan's own LENGTH, not on the ranking window: 'combined' has five windows and 'all'
+// has none, so there is nothing left to grade against. Halving the plan is also the more useful
+// question - running dry at year 8 of 30 and at year 28 of 30 are different kinds of bad, and a fixed
+// 10-year line calls both the same thing on a long plan.
 //
-// planStartYear is the plan's FIRST CALENDAR YEAR (2026), not the historical year the return
-// sequence is drawn from (1973). The money runs out on the plan's clock.
-// ruinYear is 0/null for a path that survived (worker.js leaves the slot at 0).
+// planStartYear is the plan's FIRST CALENDAR YEAR, not the historical year the return sequence is
+// drawn from: the money runs out on the plan's clock. ruinYear is 0 or null for a path that survived.
 // Exactly half is LATE: on a 30-year plan, year 15 is the first year of the second half.
 function stressOutcomeBand(planStartYear, ruinYear, planYears) {
     if (!ruinYear) return 'survive';
@@ -443,19 +441,16 @@ function stressOutcomeBand(planStartYear, ruinYear, planYears) {
 // The opening lengths the bear-start overlay draws from, and how many worst start years each one
 // contributes.
 //
-// It used to be a single 10-year window, which biased the overlay toward one shape. Averaging over a
-// decade washes a crash out: 1930 is the WORST opening in the record over three years, at -26.9%/yr
-// real, and only the 13th worst over ten, at -0.4%/yr, because the decade starting 1930 contains
-// 1933's +54% rebound. Ranked on decades the pool came out as 1999, 1965, 2000, 1969, 1968, 1966,
-// 1972, 1973, 1970 and 1929: six of ten 1960s-70s stagflation, 1930 absent, and only 1929 opening
-// worse than -15%/yr over its first three years. Worse, a 1929 draw was spliced for ten years, so the
-// crash arrived with its own 1933-1936 rebound attached -- the overlay could not produce "crash, then
-// whatever comes next", which is the sequence-risk shape people mean by a bear start.
+// THREE LENGTHS, not one, because averaging over a decade washes a crash out: 1930 is the worst
+// opening in the record over three years at -26.9%/yr real, and only the 13th worst over ten, because
+// the decade starting 1930 contains 1933's +54% rebound. Ranked on decades alone the pool comes out
+// six-tenths 1960s-70s stagflation with 1930 absent - and a 1929 draw spliced for ten years arrives
+// with its own rebound attached, so the overlay cannot produce "crash, then whatever comes next",
+// which is the sequence-risk shape people mean by a bear start.
 //
-// Three lengths, because they find genuinely different shapes: only 12 of the worst 20 are shared
-// between the 3-year and 10-year rankings. The short windows surface sharp crashes (1930, 1931,
-// 2006-2008), the long one surfaces the slow grind (1964-1971) that no individual 3-year stretch
-// flags. Same argument as the Stress window's Combined mode.
+// The three find genuinely different shapes: only 12 of the worst 20 are shared between the 3-year
+// and 10-year rankings. Short windows surface sharp crashes, the long one the slow grind that no
+// individual 3-year stretch flags. Same argument as the Stress window's Combined mode.
 const BEAR_OVERLAY_WINDOWS = [3, 5, 10];
 // Per window, not in total: the pool is 3 x this many (start year, length) pairs.
 // Deliberately a CONSTANT and not the user's "Stress sequences" input, which is what it used to read.

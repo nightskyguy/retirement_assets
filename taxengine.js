@@ -40,9 +40,7 @@ var TAXData = {
 			//
 			// That split point DRIFTS every year, which is why it must never be written into this
 			// table as a bracket line: these ceilings are inflation-indexed and the NIIT threshold
-			// is not. An earlier version of this block carried the 15% ceiling as $250,000/$200,000
-			// - the NIIT thresholds - trying to mark exactly that transition, and so it was both
-			// mis-valued and, being fixed, only ever right in a single year.
+			// is not, so any fixed figure is right in at most one year.
 			//
 			// The one regime where a bare 20% becomes reachable is sustained DEFLATION shrinking
 			// these ceilings toward the fixed threshold: the crossover is a cumulative CPI factor
@@ -120,7 +118,9 @@ var TAXData = {
 		// (FEDERAL.*.age above) or a state's retirement-income ageGate — separate statutes that
 		// happen to share a number today, so changing one must not move the others.
 		ELIGIBILITY_AGE: 65,
-		ANNUAL_INCREASE: 0.056,	// based on analysis of 
+		// Assumed annual growth of the Medicare premium and IRMAA dollar amounts, which run ahead of
+		// CPI. Applied to the premiums and surcharges below, never to the bracket thresholds.
+		ANNUAL_INCREASE: 0.056,
 		standardPartB: 202.90,
 		standardPartD: 38.99,	// 2026 Part D base beneficiary premium (CMS, 6% IRA cap); plan premiums vary
 		partBDeductible: 283,
@@ -177,7 +177,7 @@ var TAXData = {
 	//     LA  3.0%  constitutional amendment, effective 2025
 	//     UT  4.65% cut from 4.85% in 2022; no further changes scheduled
 	//
-	// GRADUATED — 16 states + DC included  (27 total across all 51 jurisdictions)
+	// GRADUATED — 15 states + DC included  (27 total across all 51 jurisdictions)
 	//   Included: AL, CA, CT, DC, MD, ME, MN, MS, MT, ND, NY, OH, OR, SC, VA, WI
 	//   Not yet coded (11 graduated states):
 	//     AR  top 3.9%    2 brackets  statutory   SS partial  major 2024 reform
@@ -1322,7 +1322,7 @@ function calculateProgressive(entity, status, amount, inflation = 1, ratecreep =
 // ============================================================================
 
 // Counts filers whose age qualifies (>= minAge), reusing the same shape as the federal
-// `nSeniors` count in calculateTaxes() below (taxengine.js ~1135-1136), generalized to an
+// `nSeniors` count in `calculateTaxes` below, generalized to an
 // arbitrary threshold.
 function countQualifyingFilers(ages, status, minAge) {
     if (minAge == null) return (status === 'MFJ' && ages.length > 1) ? 2 : 1;

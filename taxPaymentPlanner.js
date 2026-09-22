@@ -1,49 +1,25 @@
 /**
- * taxPaymentPlanner.js — v5
- * =========================
- * Retirement Tax Payment Strategy Planner — Dual-IRA Edition
+ * taxPaymentPlanner.js
+ * =====================
+ * Retirement Tax Payment Strategy Planner - Dual-IRA Edition
  *
- * Enhancements over v4:
- *   • Business-day arithmetic. Every date the planner prints is one you have to act on,
- *     and nothing used to check that you could. A future tax year forces nextMonth to
- *     January, and the same-month RMD/conversion split was day 1 / day 8, so tax year
- *     2028 scheduled the draw on January 1 (a federal holiday AND a Saturday). January
- *     now starts on the first Monday after New Year's Day; every other target is day 15
- *     nudged forward. The restore date is nudged too.
- *     Models weekends plus New Year's Day and Christmas Day only — see OBSERVED_HOLIDAYS.
- *   • IRC 7503 applied to federal and state estimated-tax due dates, for both the printed
- *     deadline and the past-due check, so an installment is no longer flagged late while
- *     the real deadline is still ahead.
+ * Two independent IRAs, each with its own RMD, voluntary withdrawal and Roth conversion amounts and
+ * timing. A cross-IRA withholding optimizer concentrates withholding in the latest-month draw across
+ * both, to keep money tax-deferred as long as possible, and tax payments may come from either.
  *
- * Enhancements over v3:
- *   • Rule correction: the 60-day cash replacement after a Roth conversion is a
- *     traditional-to-Roth CONVERSION rollover, which the IRS excludes from the
- *     one-rollover-per-12-months limit of IRC 408(d)(3)(B). v3 wrongly warned that
- *     it was limited to once per rolling 12 months. It is repeatable per conversion.
- *   • December conversion withholding is no longer skipped outright. It now fires
- *     when the shortfall would breach safe harbor, because withholding is deemed
- *     paid ratably across all four due dates under IRC 6654(g)(1).
- *   • Restore-cash deadline follows the real 60-day window and may cross year end.
- *   • RULE_CITES — sources rendered in both the HTML and plain-text output.
- *   • _sixtyDayAnalysis replaced by _replacementAnalysis (summary key sixtyDay →
- *     replacement). The old version weighted the Roth side by the rest of the year and
- *     the cash side by 60 days, which overstated the gain by 20-50% and went negative in
- *     December. It is one differential over one period:
- *         gain = withheld × (portfolioRate − hysaNet) × yearsFromRestoreToYearEnd
- *     Growth now accrues from the restore date, not the conversion date.
+ * Dates are BUSINESS days, because every date this prints is one the reader has to act on: January
+ * targets the first Monday after New Year's Day, every other target is day 15 nudged forward, and
+ * IRC 7503 is applied to federal and state estimated-tax due dates for both the printed deadline and
+ * the past-due check. Weekends plus New Year's Day and Christmas Day only - see OBSERVED_HOLIDAYS.
  *
- * Enhancements over v2:
- *   • Two independent IRAs (IRA 1 and IRA 2), each with separate RMD,
- *     voluntary withdrawal, and Roth conversion amounts and timing
- *   • Cross-IRA withholding optimizer — concentrates tax withholding in the
- *     latest-month draw across both IRAs to maximise tax-deferred growth
- *   • Per-IRA RMD → Roth ordering rule applied independently
- *   • Tax payments can come from either IRA (optimizer decides)
- *   • Comprehensive STATE_DB for all 50 states, DC, and 5 territories
- *   • todayDate — enables "missed payment" detection and warnings
- *   • State-aware quarterly schedules (CA 30/40/30, VA May 1, OR Dec 15)
- *   • State-aware safe-harbor rules (MD always 110%; CA $1M threshold)
- *   • IRA-exempt state handling (IL, PA, MI, IA, MS)
+ * State-aware throughout: quarterly schedules (CA 30/40/30, VA May 1, OR Dec 15), safe-harbor rules
+ * (MD always 110%, CA a $1M threshold) and IRA-exempt states (IL, PA, MI, IA, MS), for all 50 states,
+ * DC and 5 territories.
+ *
+ * The 60-day cash replacement after a Roth conversion is a traditional-to-Roth CONVERSION rollover,
+ * which IRC 408(d)(3)(B) excludes from the one-rollover-per-12-months limit, so it is repeatable per
+ * conversion. December conversion withholding fires when the shortfall would breach safe harbor,
+ * because withholding is deemed paid ratably across all four due dates under IRC 6654(g)(1).
  *
  * API
  * ---
@@ -92,7 +68,7 @@
  *
  *   Rates
  *   portfolioRate        {Number}   annual portfolio return (default 0.07)
- *   hysaGross            {Number}   gross HYSA yield (default 0.045)
+ *   hysaGross            {Number}   gross HYSA yield (default 0.038)
  *   marginalOrdRate      {Number}   marginal ordinary rate, fed+state (default 0.30)
  *   cgRateBlended        {Number}   blended LTCG rate, fed + state (default 0.20)
  *   brokerageValue       {Number}   brokerage market value, dollars (optional)
@@ -638,13 +614,7 @@ const TaxPaymentPlanner = (() => {
     return STATE_DB[code] || STATE_DB._DEFAULT;
   }
 
-  // IRC 6654(g)(1) credits withholding as if an equal part were paid on each due date, whatever
-  // date it actually happened. So "does withholding alone make me timely" is a CUMULATIVE question,
-  // not one comparison: at every due date, is the cumulative ratable credit at least the cumulative
-  // required installment? A uniform credit against a WEIGHTED schedule can clear the annual total
-  // and still miss an early date — California is 30/40/30 — which is the case a single
-  // total-versus-total test gets wrong.
-  // P59. The full safe-harbor question, which withholdingCoversSchedule only half answers: it
+  // The full safe-harbor question, which `withholdingCoversSchedule` only half answers: it
   // asks whether WITHHOLDING alone clears each installment, and says nothing about a plan that
   // pays by estimates. Both credit rules apply here:
   //   withholding is deemed paid in equal parts on every due date, whatever date it happened
@@ -690,6 +660,12 @@ const TaxPaymentPlanner = (() => {
     return { met: missedAt === null, required: reqAnnual, missedAt, shortBy };
   }
 
+  // IRC 6654(g)(1) credits withholding as if an equal part were paid on each due date, whatever
+  // date it actually happened. So "does withholding alone make me timely" is a CUMULATIVE question,
+  // not one comparison: at every due date, is the cumulative ratable credit at least the cumulative
+  // required installment? A uniform credit against a WEIGHTED schedule can clear the annual total and
+  // still miss an early date - California is 30/40/30 - which is the case a single total-versus-total
+  // test gets wrong.
   function withholdingCoversSchedule(withheldTotal, reqAnnual, schedule) {
     if (reqAnnual <= 0) return true;
     const n = schedule.length;

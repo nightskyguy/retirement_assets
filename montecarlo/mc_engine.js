@@ -1,19 +1,13 @@
 // The Monte Carlo engine: ONE implementation of the run, shared by the Web Worker and the
-// main-thread fallback.
-//
-// It used to be two. worker.js held the real thing and mc_controller.js held a hand-kept copy for
-// file:// (where a worker cannot load its scripts), and every change to the model meant the same
-// edit twice - the P23 mode work was six paired edits in one session. The copies had already
-// drifted: the controller grew per-path progress and cancellation that the worker never got, so the
-// progress bar behaved differently depending on which one ran. This file is the merge, and it takes
-// the RICHER behavior of the two, so the worker now reports progress inside a variation as well.
+// main-thread fallback used on file://, where a worker cannot load its scripts. It must stay one:
+// as two copies they drifted, and every change to the model meant the same edit twice.
 //
 // Loadable three ways, like prng.js: module.exports for node, window for the page, bare globals
 // under importScripts in the worker.
 //
-// Depends on, and does not own: simulate(), assertKnownStrategy(), selectionOf() and afterTaxWealthOfLogRow()
-// (optimizer_core.js), computePercentiles() and computeInputFan() (stats.js), and the bank
-// builders in prng.js.
+// Depends on, and does not own: `simulate`, `assertKnownStrategy`, `selectionOf` and
+// `afterTaxWealthOfLogRow` (optimizer_core.js), `computePercentiles` and `computeInputFan`
+// (stats.js), and the bank builders in prng.js.
 
 // Everything the caller may hook. All three are optional; the worker supplies only onProgress,
 // which is why they default to no-ops rather than being required.

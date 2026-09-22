@@ -7499,11 +7499,6 @@ test.critical('a no-tax state reports honest spend and honest failure', () => {
     }
 });
 
-// ── Runner ────────────────────────────────────────────────────────────────────
-// Returns the counts instead of setting process.exitCode, so the browser can render them. The node
-// entry point below is what still sets the exit code.
-//
-// `skipSlow` is honoured ONLY by the browser tier. Node always passes false: a tag must never be
 // -- Synthetic Monte Carlo: arithmetic returns and AR(1) inflation (P23) ------
 // The synthetic modes draw one standard normal per path-year and differ only in the transform.
 // Everything below asserts against the real prng.js helpers, not a reimplementation.
@@ -9131,6 +9126,11 @@ test('schedule: refuses to compose with cyclicEnabled', () => {
     assert(threw, 'schedule + cyclicEnabled should be an explicit error, not a precedence rule');
 });
 
+// ── Runner ────────────────────────────────────────────────────────────────────
+// Returns the counts instead of setting process.exitCode, so the browser can render them; the node
+// entry point below is what sets the exit code.
+//
+// `skipSlow` is honoured ONLY by the browser tier. Node always passes false: a tag must never be
 // able to stop a test from running in the place that gates commits.
 async function runOptimizerCoreTests(opts) {
     const skipSlow = !!(opts && opts.skipSlow);

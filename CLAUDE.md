@@ -54,6 +54,15 @@ Everything after the first commit edits that entry in place. The version stamp m
 each change (the `<title>` and the entry keep matching), but a refreshed stamp is a new number on the
 same entry, never a second entry. A new branch starts a new entry.
 
+**A multi-pass effort is ONE entry, not one per pass.** When a single piece of work ships as a run of
+stacked branches - a review's fix order, a refactor done in steps, anything numbered "step n of m" -
+every user-visible change across the whole run accumulates into the **same** entry, edited in place
+and restamped, no matter how many branches and PRs it takes. Keep bumping the version; do not open a
+second entry. The page shows only the most recent five or six, so ten passes each claiming an entry
+would push every genuinely different release off the list and leave a reader paging through one
+refactor (user, 2026-09-22). A pass with nothing user-visible in it adds nothing at all: it takes a
+version stamp and no entry.
+
 The scope test is mechanical: **if it does not show up in `git diff main...HEAD` as something a user
 can see or feel, it does not go in the changelog.** Work that fixes something introduced earlier on
 the same branch nets out to zero against `main` and is not reportable at all - there is only the

@@ -10306,6 +10306,88 @@ test('Brokerage gap-fill: an exhausted portfolio still reports its shortfall', (
     assert(r.totals.success === false, 'the plan is not a success');
     assert(r.log.some(row => (row.shortfall ?? 0) < -1000), 'and the log shows real shortfall years');
 });
+
+// ── The shared tax-call shape: what every calculateTaxes site in the engine has to preserve ──
+// Written before the `taxArgs` / `repriceYear` / `ratesAtLimit` extraction, and kept: these are the
+// only assertions on `attributeIncrementalTaxes` (which had no test reacting to any change), on the
+// ceiling rate lookups, and on the forced-IRA backstop's own reprice.
+const TAXCALL_BASE = {
+    ...BASE, IRA1: 1500000, spendGoal: 90000, growth: 0.04, cpi: 0.02, inflation: 0.02,
+    stratIRMAATier: -1, stratACAMultiple: 0,
+};
+
+test('the conversion tax is attributed to the years that converted, and to no others', () => {
+    // A Fill Bracket 22% plan converts the headroom above spending every year, so `convTax` should
+    // be a real figure in most years and exactly 0 in the rest. It is a SHARE of the year's own
+    // tax - the year's tax minus the tax the same year would have paid without the conversion - so
+    // it can never exceed it.
+    const r = simulate({ ...TAXCALL_BASE, strategy: 'bracket', stratRate: 0.22, convertExcessToRoth: true });
+    let converted = 0;
+    for (const row of r.log) {
+        // Read WITHOUT `?? 0`: the field is initialized to 0 on every row, and a missing
+        // initializer has to read as a failure here rather than as a zero.
+        assert(typeof row.convTax === 'number', `convTax must be a number, got ${row.convTax}`);
+        const ownTax = row.totalTax - row.IRMAA;
+        assert(row.convTax >= 0 && row.convTax <= ownTax + 0.01,
+            `convTax ${row.convTax} outside [0, ${ownTax}] in ${row.year}`);
+        if (row.rothConv > 1) { converted++; assert(row.convTax > 0, `a conversion year with no attributed tax: ${row.year}`); }
+        else assert(row.convTax === 0, `no conversion in ${row.year} but convTax is ${row.convTax}`);
+    }
+    assert(converted >= 10, `the fixture must convert in most years, got ${converted}`);
+    // Nothing converted anywhere: every year reads 0, not undefined.
+    const none = simulate({ ...TAXCALL_BASE, strategy: 'fixed', spendGoal: 70000, convertExcessToRoth: false });
+    assert(none.log.every(row => row.rothConv === 0 && row.convTax === 0), 'a plan that converts nothing attributes nothing');
+});
+
+test('the banked-excess tax is a share of the year that banked it', () => {
+    const r = simulate({ ...TAXCALL_BASE, strategy: 'fixed', spendGoal: 70000 });
+    let attributed = 0;
+    for (const row of r.log) {
+        assert(typeof row.excessTax === 'number', `excessTax must be a number, got ${row.excessTax}`);
+        const ownTax = row.totalTax - row.IRMAA;
+        assert(row.excessTax >= 0 && row.excessTax <= ownTax + 0.01,
+            `excessTax ${row.excessTax} outside [0, ${ownTax}] in ${row.year}`);
+        if (row.excessTax > 0) attributed++;
+    }
+    assert(attributed > 0, 'the fixture must bank surplus in at least one year');
+});
+
+test('a ceiling reads its rates at RateBasis: the statutory top for a bracket, the limit itself for IRMAA and ACA', () => {
+    // The three ceilings derive their marginal and nominal rates from ONE block of lookups keyed on
+    // `rateBasis`. For IRMAA and ACA the basis IS the limit. A federal-bracket ceiling is the odd
+    // one out: the lookups stay on the statutory bracket top while the limit is lifted by the
+    // deduction add-back, so its basis sits strictly below its target. Deriving a federal ceiling's
+    // rates at the lifted limit picks the next bracket up.
+    const rows = f => simulate(f).log.filter(row => row.BracketTarget > 0);
+    const fed = rows({ ...TAXCALL_BASE, strategy: 'bracket', stratRate: 0.22 });
+    assert(fed.length > 5, 'the federal fixture must run bracket-ceiling years');
+    assert(fed.every(row => row.RateBasis < row.BracketTarget),
+        'a federal ceiling derives its rates BELOW its own target');
+    for (const f of [{ stratRate: 0, stratIRMAATier: 1 },
+                     { stratRate: 0, stratACAMultiple: 400, birthyear1: 1968, die1: 95, nYears: 12 }]) {
+        const got = rows({ ...TAXCALL_BASE, strategy: 'bracket', ...f });
+        assert(got.length > 5, `the ${f.stratACAMultiple ? 'ACA' : 'IRMAA'} fixture must run ceiling years`);
+        assert(got.every(row => Math.abs(row.RateBasis - row.BracketTarget) < 0.005),
+            `an ${f.stratACAMultiple ? 'ACA' : 'IRMAA'} ceiling derives its rates AT its own target`);
+    }
+});
+
+test('the forced-IRA backstop funds spending from the IRA once the other accounts are empty', () => {
+    // Cash, Brokerage and Roth all zero and a spending goal far above a 10% bracket ceiling: the
+    // only money left is IRA above that ceiling, which is what makes a soft cap soft. The draw
+    // reprices the year, so the tax it creates has to be in `totalTax` and not left behind.
+    const r = simulate({ ...TAXCALL_BASE, strategy: 'bracket', stratRate: 0.10,
+        IRA1: 2000000, Cash: 0, Brokerage: 0, BrokerageBasis: 0, Roth: 0, spendGoal: 150000 });
+    const forced = r.log.filter(row => row.ForcedIRA > 1);
+    assert(forced.length > 5, `the backstop must fire, got ${forced.length} years`);
+    for (const row of forced) {
+        assert(row.BracketOverage > 0, `a forced draw must breach its own ceiling in ${row.year}`);
+        assert(row.totalTax > 0, `a forced draw is ordinary income and must be taxed in ${row.year}`);
+    }
+    // While the IRA lasts the backstop funds the whole goal; the shortfall years come later, once
+    // it is gone. The first forced year is the one that proves the funding, not the last.
+    assert((forced[0].shortfall ?? 0) >= -1, `the first forced year must be fully funded, got ${forced[0].shortfall}`);
+});
 }
 
 if (IS_NODE) {

@@ -953,6 +953,25 @@ function nominalRateAtLimit(entity, status, limit, inflation, rateCreep = 1) {
     return calculateProgressive(entity, status, limit, inflation, rateCreep).cumulative / limit;
 }
 
+// The four rates a ceiling is described by, all read at ONE income - the rate basis. Both ceiling
+// branches that derive at their own limit use this, and so does the schedule replay in
+// planPrimaryWithdrawals, which derives at the basis a compiled year recorded.
+//
+// findUpperLimitByAmount reads the statutory rate straight off the bracket table and never passes
+// through calculateProgressive, so the creep has to be applied here by hand; nominalRateAtLimit
+// takes it as an argument and applies it itself.
+function ratesAtLimit(basis, status, cpiRate, STATEname, fedRateCreep, stateRateCreep) {
+    const fedAt = findUpperLimitByAmount('FEDERAL', status, basis, cpiRate);
+    const stAt = findUpperLimitByAmount(STATEname, status, basis, cpiRate);
+    return {
+        marginalFedTaxRate: fedAt.rate * fedRateCreep,
+        nominalFedTaxRateAtLimit: nominalRateAtLimit('FEDERAL', status, basis, cpiRate, fedRateCreep),
+        marginalStateTaxRate: stAt.rate * stateRateCreep,
+        nominalStateTaxAtLimit: nominalRateAtLimit(STATEname, status, basis, cpiRate, stateRateCreep),
+        stateLimit: stAt.limit,
+    };
+}
+
 // P70b. This took a fourth argument, `inflation`, and handed it to the average-rate lookups while
 // the ceiling itself was placed with `cpiRate`. Both index the SAME bracket table, and the callers
 // passed `sim.inflation` for one and `sim.cpiRate` for the other - so the strategy priced its
@@ -1008,14 +1027,8 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
             // the same dollar figure. No IRMAA cliff is in play here, so no margin either.
             limit = findUpperLimitByAmount('FEDERAL', status, rawThreshold - 1, cpiRate).limit;
         }
-        const fedAtLimit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate);
-        // findUpperLimitByAmount reads the statutory rate straight off the bracket table and never
-        // passes through calculateProgressive, so the creep has to be applied here by hand.
-        marginalFedTaxRate = fedAtLimit.rate * fedRateCreep;
-        nominalFedTaxRateAtLimit = nominalRateAtLimit('FEDERAL', status, limit, cpiRate, fedRateCreep);
-        const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
-        marginalStateTaxRate = stAtLimit.rate * stateRateCreep;
-        nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, cpiRate, stateRateCreep);
+        ({ marginalFedTaxRate, nominalFedTaxRateAtLimit, marginalStateTaxRate, nominalStateTaxAtLimit } =
+            ratesAtLimit(limit, status, cpiRate, STATEname, fedRateCreep, stateRateCreep));
         rateBasis = limit;
     } else if ((inputs.stratACAMultiple ?? 0) > 0) {
         kind = 'aca';
@@ -1033,12 +1046,8 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         // The Limit menu and the limit ladder in optimizer_ui.js compute the same figure.
         const fplBase = TAXData.FPL[status];
         limit = Math.round(fplBase * inputs.stratACAMultiple / 100 * cpiRate) - 1;
-        const fedAtLimit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate);
-        marginalFedTaxRate = fedAtLimit.rate * fedRateCreep;
-        nominalFedTaxRateAtLimit = nominalRateAtLimit('FEDERAL', status, limit, cpiRate, fedRateCreep);
-        const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
-        marginalStateTaxRate = stAtLimit.rate * stateRateCreep;
-        nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, cpiRate, stateRateCreep);
+        ({ marginalFedTaxRate, nominalFedTaxRateAtLimit, marginalStateTaxRate, nominalStateTaxAtLimit } =
+            ratesAtLimit(limit, status, cpiRate, STATEname, fedRateCreep, stateRateCreep));
         rateBasis = limit;
     } else {
         kind = 'federal';
@@ -1960,7 +1969,7 @@ function computeIncome(sim, yr) {
 
 // Strategy flags, Guyton-Klinger spend adjustment, target spend, marginal-rate seeds, and the working balance snapshot.
 function resolveSpendTarget(sim, yr) {
-    const { inputs, balance, birthyear1, birthyear2 } = sim;
+    const { inputs, balance } = sim;
     const y = yr.y;
     // 4. Determine Target Spending amount based on Strategy
     // ACA is a STRICT-cap strategy: it shares the bracket strategy's ceiling math and
@@ -2025,16 +2034,11 @@ function resolveSpendTarget(sim, yr) {
         const _fixed = yr.pension + yr.taxableRMD + yr.taxableInterest + yr.taxableDividends + yr.fixedInc;
         const _dedAt = income => {
             const _provIRA = Math.max(0, income - _fixed);
-            return calculateTaxes({
-                filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
-                totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: 0,
-                earnedIncome: yr.pension + yr.taxableRMD + yr.taxableInterest + _provIRA, inflation: sim.cpiRate,
-                pensionIncome: yr.pension, iraIncome: yr.taxableRMD + _provIRA,
-                qualifiedDiv: yr.taxableDividends, capGains: 0, hsaContrib: 0,
-                taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep,
-                stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh,
-                propTax: yr.propTax, taxYear: yr.taxYear
-            }).federalStdDeduction;
+            return calculateTaxes(taxArgs(sim, yr, {
+                IRMAAAnnualCost: 0, capGains: 0,
+                earnedIncome: yr.pension + yr.taxableRMD + yr.taxableInterest + _provIRA,
+                iraIncome: yr.taxableRMD + _provIRA,
+            })).federalStdDeduction;
         };
         // TWO PASSES, and the second one is not a refinement for its own sake. The first asks at the
         // BRACKET TOP, which is about one deduction below where the plan will actually land, so the
@@ -2256,14 +2260,11 @@ function resolveSpendTarget(sim, yr) {
     // error. So calculateTaxes runs on the guaranteed-income base ALONE, with no discretionary IRA
     // draw and no capital gains, mirroring the argument shape used in the forced-IRA loop.
     // yr.IRMAA is added separately below and tax.totalTax excludes it, so there is no double count.
-    yr.guaranteedIncomeTax = yr.possibleIncome > 0 ? calculateTaxes({
-        filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
-        totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
-        earnedIncome: yr.pension + yr.taxableRMD + yr.taxableInterest, inflation: sim.cpiRate,
-        pensionIncome: yr.pension, iraIncome: yr.taxableRMD,
-        qualifiedDiv: yr.taxableDividends, capGains: 0, hsaContrib: 0,
-        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
-    }).totalTax : 0;
+    yr.guaranteedIncomeTax = yr.possibleIncome > 0 ? calculateTaxes(taxArgs(sim, yr, {
+        capGains: 0,
+        earnedIncome: yr.pension + yr.taxableRMD + yr.taxableInterest,
+        iraIncome: yr.taxableRMD,
+    })).totalTax : 0;
 
     yr.additionalSpendNeeded = Math.max(0, yr.targetSpend + yr.IRMAA - (yr.possibleIncome - yr.guaranteedIncomeTax));
 
@@ -2666,6 +2667,30 @@ function _splitWeightsFor(inputs) {
     return { order: ['IRA', 'Brokerage', 'Cash', 'Roth'], weight: w.slice() };
 }
 
+// Draw IRA up to the ceiling already on `yr`, and no further: the room left under the limit once
+// the year's other income is counted. Any spending the draw does not cover is filled from
+// Cash -> Brokerage -> Roth in the gap-fill pass. Both callers are ceiling strategies - the one
+// that computes a ceiling and the one replaying a compiled schedule's recorded ceiling.
+//
+// P87c. How much of the Social Security benefit the ceiling counts is decided by its KIND, and
+// nothing else may decide it. Federal-bracket and IRMAA ceilings are spent against `tax.MAGI`,
+// which carries at most 85% of the benefit, so the room is found by INVERTING the MAGI relation -
+// nonSSIncomeForMAGI answers "what non-SS income puts MAGI exactly on this limit". An ACA cap
+// counts the WHOLE benefit, because ACA MAGI adds the non-taxable part back by statute. Subtracting
+// the full benefit from a federal or IRMAA ceiling stops the plan short of the limit it was told to
+// fill; inverting an ACA cap breaches it. `kind` is set inside computeBracketCeiling, the only
+// place that knows which branch built the number, and a caller must not re-derive it from
+// `inputs.stratACAMultiple`: the IRMAA branch wins when both are set, and an ACA cap that has
+// lapsed at Medicare eligibility is no longer 'aca'.
+function drawIRAToCeiling(yr) {
+    const ssCeilRoom = (yr.ceilingKind === 'aca')
+        ? yr.limit - yr.fixedInc
+        : nonSSIncomeForMAGI(yr.status, yr.limit, yr.fixedInc);
+    const iRAbracketRoom = Math.max(0, ssCeilRoom - yr.taxableInc - yr.taxableInterest - yr.taxableDividends);
+    const IRAwd = Math.min(yr.curIRA, iRAbracketRoom);
+    yr.withdrawals = { IRA: IRAwd, netAmount: IRAwd };
+}
+
 // Cyclic harvest-year decision plus the per-strategy primary withdrawal plan.
 function planPrimaryWithdrawals(sim, yr) {
     const { inputs, balance } = sim;
@@ -2798,19 +2823,12 @@ function planPrimaryWithdrawals(sim, yr) {
         const _ltcgFloor = (ordFloor) => {
             const _ss = yr.fixedInc;
             const _nonSS = Math.max(0, ordFloor - _ss);
-            const _t = calculateTaxes({
-                filingStatus: yr.status, ages: [yr.age1, yr.age2],
-                birthyears: [sim.birthyear1, sim.birthyear2],
-                totalSS: _ss, IRMAAAnnualCost: 0,
+            const _t = calculateTaxes(taxArgs(sim, yr, {
+                totalSS: _ss, IRMAAAnnualCost: 0, capGains: 0,
                 earnedIncome: yr.pension + yr.taxableRMD + yr.taxableInterest
                             + Math.max(0, _nonSS - yr.pension - yr.taxableRMD - yr.taxableInterest - yr.taxableDividends),
-                inflation: sim.cpiRate,
-                pensionIncome: yr.pension, iraIncome: yr.taxableRMD,
-                qualifiedDiv: yr.taxableDividends, capGains: 0, hsaContrib: 0,
-                taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep,
-                stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh,
-                propTax: yr.propTax, taxYear: yr.taxYear
-            });
+                iraIncome: yr.taxableRMD,
+            }));
             const _untaxedBenefit = Math.max(0, _ss - (_t.taxableSS ?? 0));
             const _floor = Math.max(0, ordFloor - _untaxedBenefit - (_t.federalStdDeduction ?? 0));
             // Recorded so the estimate's residual is auditable from a finished run rather than
@@ -2968,21 +2986,12 @@ function planPrimaryWithdrawals(sim, yr) {
             // fixed: Fill Bracket 22% replayed at 24% and drifted $121 over 33 years, first visible
             // in year 8 at $0.34 and compounding.
             yr.rateBasis = _e.rateBasis;
-            const _rb = yr.rateBasis;
-            const _fedAt = findUpperLimitByAmount('FEDERAL', yr.status, _rb, sim.cpiRate);
-            yr.marginalFedTaxRate = _fedAt.rate * yr.fedRateCreep;
-            yr.nominalFedTaxRateAtLimit = nominalRateAtLimit('FEDERAL', yr.status, _rb, sim.cpiRate, yr.fedRateCreep);
-            const _stAt = findUpperLimitByAmount(STATEname, yr.status, _rb, sim.cpiRate);
-            yr.marginalStateTaxRate = _stAt.rate * yr.stateRateCreep;
-            yr.nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, yr.status, _rb, sim.cpiRate, yr.stateRateCreep);
-            yr.stateLimit = _stAt.limit;
+            ({ marginalFedTaxRate: yr.marginalFedTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit,
+               marginalStateTaxRate: yr.marginalStateTaxRate, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit,
+               stateLimit: yr.stateLimit } =
+                ratesAtLimit(yr.rateBasis, yr.status, sim.cpiRate, STATEname, yr.fedRateCreep, yr.stateRateCreep));
             yr.bracketTarget = yr.limit;
-            const _ssCeilRoom = (yr.ceilingKind === 'aca')
-                ? yr.limit - yr.fixedInc
-                : nonSSIncomeForMAGI(yr.status, yr.limit, yr.fixedInc);
-            const iRAbracketRoom = Math.max(0, _ssCeilRoom - yr.taxableInc - yr.taxableInterest - yr.taxableDividends);
-            const IRAwd = Math.min(yr.curIRA, iRAbracketRoom);
-            yr.withdrawals = { IRA: IRAwd, netAmount: IRAwd };
+            drawIRAToCeiling(yr);
         }
 
     } else if (inputs.strategy === 'bracket' || yr.isACAStrategy) {
@@ -2990,39 +2999,7 @@ function planPrimaryWithdrawals(sim, yr) {
             computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate, yr._ceilDedAddBack));
 
         yr.bracketTarget = yr.limit;
-
-        // P87c. How much of the Social Security benefit this ceiling's own income definition counts.
-        //
-        // Federal-bracket and IRMAA ceilings are spent against `tax.MAGI`, which carries only the
-        // TAXABLE share of the benefit - at most 85%, and less in the two lower statutory tiers.
-        // Subtracting the FULL benefit here therefore charges the ceiling for income it never
-        // receives, and the plan stops exactly that much short of the limit it was told to fill:
-        // measured at `short / SSincome` = 0.150000, min equal to max, worth $168,500 on one $2.8M
-        // Fill Bracket 22% plan (retired BRACKET_CEILING_BASIS report, sections 9 and 10).
-        //
-        // ACA IS DIFFERENT AND KEEPS THE FULL BENEFIT. ACA MAGI adds non-taxable Social Security
-        // back by statute, so the whole benefit really does occupy that cap. This is why the fork is
-        // on the ceiling's KIND and not one global change - and why `kind` is decided inside
-        // computeBracketCeiling, which is the only place that knows which branch built the number.
-        //
-        // The room is found by INVERTING the MAGI relation - nonSSIncomeForMAGI answers "what non-SS
-        // income puts MAGI exactly on this limit" - rather than by subtracting a fixed share of the
-        // benefit. Subtracting the statutory MAXIMUM share, 0.85, would also be safe (the true share
-        // is never higher, so MAGI could not exceed the limit) and was measured as a candidate: it
-        // recovers 79% of the unused headroom. The inversion recovers all of it, because in the two
-        // lower statutory tiers MAGI rises 1.5x or 1.85x as fast as the draw and a flat subtraction
-        // leaves that difference unused. Across a 720-cell grid the inversion filled every
-        // ceiling-bound year to the dollar while breaching LESS than the full-benefit form did, so
-        // there was no trade to make (retired BRACKET_CEILING_BASIS report, section 10).
-        const _ssCeilRoom = (yr.ceilingKind === 'aca')
-            ? yr.limit - yr.fixedInc
-            : nonSSIncomeForMAGI(yr.status, yr.limit, yr.fixedInc);
-
-        // Cap IRA draw at the bracket ceiling; any spending shortfall is filled from
-        // Cash → Brokerage → Roth in the gap-fill pass below (bracket-strategy path).
-        const iRAbracketRoom = Math.max(0, _ssCeilRoom - yr.taxableInc - yr.taxableInterest - yr.taxableDividends);
-        const IRAwd = Math.min(yr.curIRA, iRAbracketRoom);
-        yr.withdrawals = { IRA: IRAwd, netAmount: IRAwd };
+        drawIRAToCeiling(yr);
 
     } else if (inputs.strategy === 'fixedpct') {
         // Withdraw a fixed % of the original IRA balance (before RMDs) each year.
@@ -3099,9 +3076,48 @@ function planPrimaryWithdrawals(sim, yr) {
     yr.volIRAwd = yr.withdrawals?.IRA ?? 0;
 }
 
+// The argument object every calculateTaxes() call in this file is built from: the year's filing
+// status, ages, Social Security, rate creeps and state, plus the income the plan has drawn so far.
+// `overrides` replaces whichever fields a caller prices differently - a shadow calculation drops
+// the IRMAA charge and substitutes its own income, the guaranteed-income pass sets capGains to 0.
+//
+// The defaults read `yr.netWithdrawals` optionally because the two callers that run BEFORE the
+// primary draw (the deduction probe in the ceiling search, and the guaranteed-income pass) have no
+// withdrawals yet and override both income fields anyway.
+function taxArgs(sim, yr, overrides) {
+    return Object.assign({
+        filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [sim.birthyear1, sim.birthyear2],
+        totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
+        earnedIncome: yr.pension + yr.taxableRMD + (yr.netWithdrawals?.IRA ?? 0) + yr.taxableInterest,
+        inflation: sim.cpiRate,
+        pensionIncome: yr.pension, iraIncome: yr.taxableRMD + (yr.netWithdrawals?.IRA ?? 0),
+        qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
+        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep,
+        stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh,
+        propTax: yr.propTax, taxYear: yr.taxYear
+    }, overrides);
+}
+
+// Re-price the year after a pass has drawn more money: the gains the Brokerage draws realized, the
+// tax on the whole year's income, and the total the year owes. Called by the second pass, by both
+// loops in the third pass and by the forced-IRA backstop.
+//
+// `rates` refreshes the marginal rates the NEXT gross-up prices against, and the sites that leave
+// it off are the ones with no further draw to price. Both rates carry the NIIT surtax on top of the
+// statutory rate, for the reason set out above the seed block in applyPrimaryAndTaxPass1.
+function repriceYear(sim, yr, { rates = false } = {}) {
+    yr.capitalGains = Math.max(0, (yr.netWithdrawals.Brokerage ?? 0) - (yr.netWithdrawals.BrokerageBasis ?? 0));
+    yr.tax = calculateTaxes(taxArgs(sim, yr));
+    yr.totalTax = yr.tax.totalTax + yr.IRMAA;
+    if (rates) {
+        yr.marginalFedTaxRate = yr.tax.federalMarginalRate + (yr.tax.niitMarginalOnOrdinary ?? 0);
+        yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
+    }
+}
+
 // Apply the primary withdrawals, first tax pass, MAGI-history seeding and the year-0 IRMAA retro-correction.
 function applyPrimaryAndTaxPass1(sim, yr) {
-    const { balance, birthyear1, birthyear2 } = sim;
+    const { balance } = sim;
     applyWithdrawals(yr.curBalances, yr.withdrawals)
     inspectForErrors(yr.curBalances, yr.withdrawals)
 
@@ -3118,14 +3134,7 @@ function applyPrimaryAndTaxPass1(sim, yr) {
     inspectForErrors({ fixedInc: yr.fixedInc, totalRMD: yr.totalRMD, taxableInterest: yr.taxableInterest, capitalGains: yr.capitalGains, taxableDividends: yr.taxableDividends, age1: yr.age1, age2: yr.age2, cpiRate: sim.cpiRate })
 
 
-    yr.tax = calculateTaxes({
-        filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
-        totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
-        earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
-        pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
-        qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
-    })
+    yr.tax = calculateTaxes(taxArgs(sim, yr))
     inspectForErrors(yr.tax)  // See if any numbers look fishy.
 
     // P117. Both seeds carry the 3.8% NIIT surtax on top of the statutory rate, because both are
@@ -3163,7 +3172,7 @@ function applyPrimaryAndTaxPass1(sim, yr) {
 
 // Cash-flow gap fill (strategy-dependent supplemental withdrawals) and second tax pass.
 function fillSpendingGap(sim, yr) {
-    const { inputs, birthyear1, birthyear2 } = sim;
+    const { inputs } = sim;
     // 6. Cash Flow Gap
     // taxableInc includes pension, RMDs
     yr.possibleIncome = yr.taxableInc + yr.fixedInc + yr.netWithdrawals.IRA +
@@ -3338,33 +3347,18 @@ function fillSpendingGap(sim, yr) {
         }
     }
 
-    // Recheck tax calculations due to possible additional withdrawals - and we now
-    // have a more accurate income picture.
-    yr.capitalGains = Math.max(0, (yr.netWithdrawals.Brokerage ?? 0) - (yr.netWithdrawals.BrokerageBasis ?? 0));
-
-
-    yr.tax = calculateTaxes({
-        filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
-        totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
-        earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
-        pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
-        qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
-    })
+    // Recheck tax calculations due to possible additional withdrawals - and we now have a more
+    // accurate income picture. The rates are refreshed here so the third pass grosses up at the
+    // bracket the year actually landed in.
+    repriceYear(sim, yr, { rates: true });
     inspectForErrors(yr.tax)  // See if any numbers look fishy.
-
-    // Now we have the "real tax"
-    yr.totalTax = yr.tax.totalTax + yr.IRMAA;
     yr.acaMAGI = ceilingMAGI(yr);   // P87d
     yr.bracketOverage = yr.bracketTarget > 0 ? Math.max(0, yr.acaMAGI - yr.bracketTarget) : 0;
-    // Update marginal rates so the third pass grosses up correctly at actual bracket.
-    yr.marginalFedTaxRate = yr.tax.federalMarginalRate + (yr.tax.niitMarginalOnOrdinary ?? 0);  // P117: see the seed block above
-    yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
 }
 
 // Third tax pass for residual shortfall, soft-cap forced-IRA convergence, and the year's income/overage finalization.
 function resolveResidualAndForcedIRA(sim, yr) {
-    const { inputs, totals, birthyear1, birthyear2 } = sim;
+    const { inputs, totals } = sim;
     // Two inputs, one SHIPPED and one research-only. Both were added by P32c to make the Brokerage
     // exclusions in this function falsifiable rather than asserted; P32d then measured them over
     // 3,960 armed runs and they came out opposite ways, so they ship differently.
@@ -3459,22 +3453,7 @@ function resolveResidualAndForcedIRA(sim, yr) {
             // Soft caps fund the residual from IRA in the convergence loop below.
             if (_remShort > 1 && yr.isACAStrategy) yr.acaBreach = true;
         }
-        yr.capitalGains = Math.max(0, (yr.netWithdrawals.Brokerage ?? 0) - (yr.netWithdrawals.BrokerageBasis ?? 0));
-        // pensionIncome/iraIncome split out the retirement-income share of earnedIncome. 16 of the
-        // 38 modeled states exempt some or all of it (taxengine.js evaluateRetirementExclusion /
-        // evaluateRetirementCredit), and without the split every dollar reads as ordinary wages.
-        // This call used to omit both while the other three passes (:1504, :1638, :1753) passed
-        // them, so any year that reached the third pass was taxed as though its state had no
-        // exclusion at all - state tax overstated, spendable income understated.
-        yr.tax = calculateTaxes({
-            filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
-            totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
-            earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
-            pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
-            qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-            taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
-        });
-        yr.totalTax = yr.tax.totalTax + yr.IRMAA;
+        repriceYear(sim, yr);
         // P32c arm: the spiral test itself. The recalc above just priced the Brokerage leg's
         // realized gains; if that re-opened the residual, draw Brokerage again and reprice, and
         // count the passes. A converging year uses one or two; a genuine spiral hits the cap.
@@ -3498,18 +3477,7 @@ function resolveResidualAndForcedIRA(sim, yr) {
                     { order: ['Brokerage'], weight: [1], taxrate: [_brokTaxRate] });
                 yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, _bw]);
                 applyWithdrawals(yr.curBalances, _bw);
-                yr.capitalGains = Math.max(0, (yr.netWithdrawals.Brokerage ?? 0) - (yr.netWithdrawals.BrokerageBasis ?? 0));
-                yr.tax = calculateTaxes({
-                    filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
-                    totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
-                    earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
-                    pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
-                    qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-                    taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
-                });
-                yr.totalTax = yr.tax.totalTax + yr.IRMAA;
-                yr.marginalFedTaxRate = yr.tax.federalMarginalRate + (yr.tax.niitMarginalOnOrdinary ?? 0);  // P117: see the seed block above
-                yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
+                repriceYear(sim, yr, { rates: true });
             }
             if (_it > 0) totals.thirdPassBrokerIters = (totals.thirdPassBrokerIters ?? 0) + _it;
             if (_stalled) totals.thirdPassBrokerStalled = (totals.thirdPassBrokerStalled ?? 0) + 1;
@@ -3565,17 +3533,7 @@ function resolveResidualAndForcedIRA(sim, yr) {
             yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, iraTop]);
             applyWithdrawals(yr.curBalances, iraTop);
             yr.forcedIRA += (iraTop.IRA ?? 0);
-            yr.capitalGains = Math.max(0, (yr.netWithdrawals.Brokerage ?? 0) - (yr.netWithdrawals.BrokerageBasis ?? 0));
-            yr.tax = calculateTaxes({
-                filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2], totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
-                earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
-                pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
-                qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-                taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
-            });
-            yr.totalTax = yr.tax.totalTax + yr.IRMAA;
-            yr.marginalFedTaxRate = yr.tax.federalMarginalRate + (yr.tax.niitMarginalOnOrdinary ?? 0);  // P117: see the seed block above
-            yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
+            repriceYear(sim, yr, { rates: true });
         }
     }
 
@@ -3832,21 +3790,16 @@ function routeSurplusAndConvert(sim, yr) {
 // RMDs are never refunded (netWithdrawals.IRA excludes them); amounts already earmarked
 // for conversion (surplus.Roth1/2) are excluded from the refundable cap.
 function cfRefundIRA(sim, yr, netTarget) {
-    const { birthyear1, birthyear2 } = sim;
     const _cap = Math.max(0, (yr.netWithdrawals.IRA1 ?? 0) + (yr.netWithdrawals.IRA2 ?? 0)
         - (yr.surplus.Roth1 ?? 0) - (yr.surplus.Roth2 ?? 0));
     if (netTarget <= 1 || _cap <= 1) return;
     let G = Math.min(netTarget, _cap);
     let t2 = yr.tax, dT = 0;
     for (let _i = 0; _i < 3; _i++) {
-        t2 = calculateTaxes({
-            filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
-            totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
-            earnedIncome: yr.pension + yr.taxableRMD + Math.max(0, yr.netWithdrawals.IRA - G) + yr.taxableInterest, inflation: sim.cpiRate,
-            pensionIncome: yr.pension, iraIncome: yr.taxableRMD + Math.max(0, yr.netWithdrawals.IRA - G),
-            qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-            taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
-        });
+        t2 = calculateTaxes(taxArgs(sim, yr, {
+            earnedIncome: yr.pension + yr.taxableRMD + Math.max(0, yr.netWithdrawals.IRA - G) + yr.taxableInterest,
+            iraIncome: yr.taxableRMD + Math.max(0, yr.netWithdrawals.IRA - G),
+        }));
         dT = Math.max(0, (yr.totalTax - yr.IRMAA) - t2.totalTax);
         const Gnext = Math.min(netTarget + dT, _cap);
         if (Math.abs(Gnext - G) < 1) { G = Gnext; break; }
@@ -3926,7 +3879,7 @@ function recomputeBracketOverage(yr) {
 }
 
 function applyExtraConversion(sim, yr) {
-    const { inputs, balance, birthyear1, birthyear2 } = sim;
+    const { inputs, balance } = sim;
     const y = yr.y;
     const _extraConvReq = _extraConvAmountFor(inputs, y);
     yr.extraConvGross = 0;
@@ -3944,13 +3897,10 @@ function applyExtraConversion(sim, yr) {
             // tax, and silently understates the extra conversion's own tax by that amount.
             const _priorIRAInc = (yr.netWithdrawals.IRA ?? 0) + (yr._extraIRAIncome ?? 0);
             const _baseEI = yr.pension + yr.taxableRMD + yr.taxableInterest + _priorIRAInc;
-            const _exTaxCalc = calculateTaxes({
-                filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2], totalSS: yr.s1 + yr.s2,
-                IRMAAAnnualCost: 0, earnedIncome: _baseEI + _gross, inflation: sim.cpiRate,
-                pensionIncome: yr.pension, iraIncome: yr.taxableRMD + _priorIRAInc + _gross,
-                qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-                hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
-            });
+            const _exTaxCalc = calculateTaxes(taxArgs(sim, yr, {
+                IRMAAAnnualCost: 0, earnedIncome: _baseEI + _gross,
+                iraIncome: yr.taxableRMD + _priorIRAInc + _gross,
+            }));
             incrementalExtraConvTax = Math.max(0, _exTaxCalc.totalTax - (yr.totalTax - yr.IRMAA));
             yr.extraConvGross = _gross;
             // fundConversionWithCash: pay this conversion's incremental tax from Cash (capped at
@@ -4170,7 +4120,7 @@ function splitPreferLarger(amount, ira1Avail, ira2Avail) {
 // increase lands in Roth in full. Never partially funds an increase's tax - scales the whole
 // increase down to what Cash/IRA availability allows instead.
 function applyConversionGrossUp(sim, yr) {
-    const { inputs, balance, birthyear1, birthyear2 } = sim;
+    const { inputs, balance } = sim;
     yr.grossUpIRA = 0;
     yr.grossUpTax = 0;
     const conversion = (yr.surplus.Roth1 ?? 0) + (yr.surplus.Roth2 ?? 0);
@@ -4178,13 +4128,10 @@ function applyConversionGrossUp(sim, yr) {
 
     const baseEI = yr.pension + yr.taxableRMD + yr.taxableInterest;
     const shadowIRA = Math.max(0, (yr.netWithdrawals.IRA ?? 0) - conversion);
-    const shadowCalc = calculateTaxes({
-        filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2], totalSS: yr.s1 + yr.s2,
-        IRMAAAnnualCost: 0, earnedIncome: baseEI + shadowIRA, inflation: sim.cpiRate,
-        pensionIncome: yr.pension, iraIncome: yr.taxableRMD + shadowIRA,
-        qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-        hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
-    });
+    const shadowCalc = calculateTaxes(taxArgs(sim, yr, {
+        IRMAAAnnualCost: 0, earnedIncome: baseEI + shadowIRA,
+        iraIncome: yr.taxableRMD + shadowIRA,
+    }));
     const dT = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowCalc.totalTax);
     const t = Math.min(0.6, dT / conversion);   // 0.6 is a numeric safety guard, not a business rate
     if (t <= 0.0001) return;
@@ -4235,16 +4182,11 @@ function applyConversionGrossUp(sim, yr) {
     // When applyExtraConversion runs afterwards it recomputes over the same income plus its own
     // gross and adopts that instead, so the two never disagree - this call is what makes the basis
     // right for a plan that grosses up and has no extra conversion.
-    adoptTaxBasis(yr, calculateTaxes({
-        filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
-        totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: 0,
-        earnedIncome: baseEI + (yr.netWithdrawals.IRA ?? 0) + increase, inflation: sim.cpiRate,
-        pensionIncome: yr.pension, iraIncome: yr.taxableRMD + (yr.netWithdrawals.IRA ?? 0) + increase,
-        qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep,
-        stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh,
-        propTax: yr.propTax, taxYear: yr.taxYear
-    }));
+    adoptTaxBasis(yr, calculateTaxes(taxArgs(sim, yr, {
+        IRMAAAnnualCost: 0,
+        earnedIncome: baseEI + (yr.netWithdrawals.IRA ?? 0) + increase,
+        iraIncome: yr.taxableRMD + (yr.netWithdrawals.IRA ?? 0) + increase,
+    })));
 
     yr.grossUpIRA = increase;   // bookkeeping for grossOut
     yr.grossUpTax = taxCost;
@@ -4255,18 +4197,14 @@ function applyConversionGrossUp(sim, yr) {
 // incremental tax attributable to that action by re-running calculateTaxes() without it.
 // The Opp. Cost / Break Even values themselves come from the counterfactual run after the loop.
 function attributeIncrementalTaxes(sim, yr) {
-    const { birthyear1, birthyear2 } = sim;
     yr.incrementalConvTax = 0;
     if (yr.totalConverted > 0) {
         const baseEI = yr.pension + yr.taxableRMD + yr.taxableInterest;
         const convShadowEI = baseEI + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - yr.totalConverted);
-        const shadowConvCalc = calculateTaxes({
-            filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2], totalSS: yr.s1 + yr.s2,
-            IRMAAAnnualCost: 0, earnedIncome: convShadowEI, inflation: sim.cpiRate,
-            pensionIncome: yr.pension, iraIncome: yr.taxableRMD + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - yr.totalConverted),
-            qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-            hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
-        });
+        const shadowConvCalc = calculateTaxes(taxArgs(sim, yr, {
+            IRMAAAnnualCost: 0, earnedIncome: convShadowEI,
+            iraIncome: yr.taxableRMD + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - yr.totalConverted),
+        }));
         yr.incrementalConvTax = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowConvCalc.totalTax);
     }
 
@@ -4275,13 +4213,10 @@ function attributeIncrementalTaxes(sim, yr) {
     if (excessCashOC > 0 && (yr.netWithdrawals.IRA ?? 0) > 0) {
         const baseEI = yr.pension + yr.taxableRMD + yr.taxableInterest;
         const excessShadowEI = baseEI + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - excessCashOC);
-        const shadowExcessCalc = calculateTaxes({
-            filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2], totalSS: yr.s1 + yr.s2,
-            IRMAAAnnualCost: 0, earnedIncome: excessShadowEI, inflation: sim.cpiRate,
-            pensionIncome: yr.pension, iraIncome: yr.taxableRMD + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - excessCashOC),
-            qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-            hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
-        });
+        const shadowExcessCalc = calculateTaxes(taxArgs(sim, yr, {
+            IRMAAAnnualCost: 0, earnedIncome: excessShadowEI,
+            iraIncome: yr.taxableRMD + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - excessCashOC),
+        }));
         yr.incrementalExcessTax = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowExcessCalc.totalTax);
     }
 }

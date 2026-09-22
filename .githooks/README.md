@@ -15,8 +15,8 @@ Runs the five `node`-only suites and blocks the commit if any of them fails:
 
 | suite | tests | approx |
 |---|---|---|
-| `optimizer_core.tests.js` | 486 | 14 s |
-| `taxengine.tests.js` | 32 | 0.1 s |
+| `optimizer_core.tests.js` | 490 | 14 s |
+| `taxengine.tests.js` | 33 | 0.1 s |
 | `taxPaymentPlanner.tests.js` | 61 | 0.5 s |
 | `doclinks.tests.js` | 27 | 0.1 s |
 | `feedback.tests.js` | 46 | 0.1 s |

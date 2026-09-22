@@ -17,6 +17,22 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.18e0"></a>
+
+## 11.18e0
+
+**ACA income limits corrected; Saved Scenarios handles any name.**  
+*Correction for plans using an ACA Cliff limit; nothing else changes a plan's numbers.*
+
+**The ACA Cliff limits contained an error that has been corrected.** The error was small, and it
+made each limit slightly too strict. The limits now use the 2025 Federal Poverty Level figures,
+$15,650 for one person and $21,150 for a couple, which are the ones 2026 coverage is measured
+against: at 400% that is $62,600 for one person and $84,600 for a couple in 2026. Later years rise
+with your CPI assumption.
+
+**Saved Scenarios**: a saved scenario whose name contains a double quotation mark can now be
+opened, loaded, deleted and exported from the list.
+
 <a id="11.18bf"></a>
 
 ## 11.18bf

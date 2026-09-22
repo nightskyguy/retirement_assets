@@ -1758,6 +1758,34 @@ test('formatDollarShort: a non-number is empty, not "$NaN"', () => {
     }
 });
 
+// The one escapeHtml every page script calls. It serves element content AND quoted attribute
+// values, so it must escape all five characters, the quotes included.
+const escapeHtml = globalThis.window.DisplayHelpers.escapeHtml;
+
+test('escapeHtml: all five characters, so its output is safe in an attribute as well as in content', () => {
+    const got = escapeHtml(`<b title="x">Tom & Jerry's</b>`);
+    assert(got === '&lt;b title=&quot;x&quot;&gt;Tom &amp; Jerry&#39;s&lt;/b&gt;', `got ${got}`);
+    assert(escapeHtml('&amp;') === '&amp;amp;', 'text that looks like an entity stays text');
+    assert(escapeHtml(null) === '' && escapeHtml(undefined) === '', 'a missing value is empty, not "null"');
+    assert(escapeHtml(0) === '0' && escapeHtml(42.5) === '42.5', 'a number is its own text');
+});
+
+test('jsStringArg: an inline handler receives the string exactly, whatever it contains', () => {
+    // What the browser does with onclick="f(${jsStringArg(s)})": decode the attribute's entities,
+    // then parse the result as JavaScript. Both steps are replayed here.
+    const jsStringArg = globalThis.window.DisplayHelpers.jsStringArg;
+    const decodeAttr = a => a.replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+        .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+    const nasty = [`My "best" plan`, `Tom's plan`, 'x" onclick="alert(1)', "a\\b'c\\", '<img src=x>',
+                   'two\nlines', '&quot; stays text', '', 'plain'];
+    for (const s of nasty) {
+        const attr = jsStringArg(s);
+        assert(!/["'<>]/.test(attr), `${JSON.stringify(s)}: the attribute text holds no raw quote or angle bracket: ${attr}`);
+        const got = new Function('f', `return f(${decodeAttr(attr)});`)(x => x);
+        assert(got === s, `${JSON.stringify(s)}: the handler received ${JSON.stringify(got)}`);
+    }
+});
+
 // ── Share-URL value compression (compactNum) ────────────────────────────────────
 // compactNum shrinks dollar values; DisplayHelpers.parseShorthand decodes them on load.
 // The round-trip MUST be lossless, and the compact form never longer than the raw form.
@@ -2664,6 +2692,24 @@ test('ACA untenable flag is monotonic: a lower FPL multiple is a STRICTER cap', 
     // Guard against the invariant holding only because nothing ever flagged.
     assert(sawNone && sawPartial && sawAll,
         `fixture must span all three shapes, got none=${sawNone} partial=${sawPartial} all=${sawAll}`);
+});
+
+test('ACA cap: the FPL guideline applies as published where cpiRate is 1, and cpiRate indexes it after', () => {
+    // TAXData.FPL is already the guideline a plan starting in its PLAN_YEAR is measured against,
+    // so the first year's ceiling is that guideline times the multiple whatever the CPI assumption,
+    // and each later year carries the year's own CPI factor, with no extra year of CPI on top.
+    // ACA_LIVE opens in 2026 at ages 58/59, so the cap is live in all three years read here.
+    const want = (status, f) => Math.round(TAXData.FPL[status] * 4 * f) - 1;
+    for (const cpi of [0, 0.025, 0.05]) {
+        const log = simulate({ ...ACA_LIVE, ...ACA_ARM, cpi }).log;
+        assert(log[0]['-cpiFactor'] === 1, `fixture must open where cpiRate is 1, got ${log[0]['-cpiFactor']}`);
+        for (const e of log.slice(0, 3))
+            assert(e.BracketTarget === want('MFJ', e['-cpiFactor']),
+                `cpi ${cpi}, ${e.year}: ceiling ${e.BracketTarget}, want ${want('MFJ', e['-cpiFactor'])}`);
+    }
+    const single = simulate({ ...ACA_LIVE, ...ACA_ARM, hasSpouse: false, birthyear2: 0 }).log[0];
+    assert(single.status === 'SGL' && single.BracketTarget === want('SGL', 1),
+        `a single filer's first-year ceiling is the one-person guideline x 4: ${single.status} ${single.BracketTarget}`);
 });
 
 test('ACA lapse: it is LIVING spouses, not both people — a survivor past 65 lapses alone', () => {
@@ -5864,21 +5910,16 @@ test('P81: the engine floor matches the one the banks are drawn under', () => {
         `the engine floor (${core.CPI_INDEX_FLOOR}) and the draw floor (${drawn}) have drifted apart`);
 });
 
-test('P81: no top-level name collides across the files the worker shares a scope with', () => {
-    // montecarlo/worker.js importScripts() taxengine.js, optimizer_core.js, prng.js, stats.js and
-    // mc_engine.js into ONE global scope. Two top-level `const` of the same name is a SyntaxError
-    // that kills the worker before it runs a path, and NODE CANNOT SEE IT - each file gets its own
-    // module scope there. A duplicated INFLATION_FLOOR shipped exactly this way and took the whole
-    // Monte Carlo tab down; only the in-page suite noticed.
-    if (!IS_NODE) return;   // the browser tier has already proven it by loading
+// Names declared at column 0 of each file, for the two shared-scope tests below: `name: fileA and
+// fileB` for every name two of the files declare. Node gives each file its own module scope, so
+// these collisions are invisible to every other test here.
+function _topLevelClashes(files) {
     const fs = require('fs'), path = require('path');
-    const FILES = ['taxengine.js', 'optimizer_core.js', 'montecarlo/prng.js',
-                   'montecarlo/historical_returns.js', 'montecarlo/stats.js', 'montecarlo/mc_engine.js'];
     const topLevel = src => new Set(
         [...src.matchAll(/^(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]));
     const seen = new Map();   // name -> first file that declared it
     const clashes = [];
-    for (const f of FILES) {
+    for (const f of files) {
         const p = path.join(__dirname, f);
         if (!fs.existsSync(p)) continue;
         for (const name of topLevel(fs.readFileSync(p, 'utf8'))) {
@@ -5886,8 +5927,37 @@ test('P81: no top-level name collides across the files the worker shares a scope
             else seen.set(name, f);
         }
     }
+    return clashes;
+}
+
+test('P81: no top-level name collides across the files the worker shares a scope with', () => {
+    // montecarlo/worker.js importScripts() taxengine.js, optimizer_core.js, prng.js, stats.js and
+    // mc_engine.js into ONE global scope. Two top-level `const` of the same name is a SyntaxError
+    // that kills the worker before it runs a path, and NODE CANNOT SEE IT - each file gets its own
+    // module scope there. A duplicated INFLATION_FLOOR shipped exactly this way and took the whole
+    // Monte Carlo tab down; only the in-page suite noticed.
+    if (!IS_NODE) return;   // the browser tier has already proven it by loading
+    const clashes = _topLevelClashes(['taxengine.js', 'optimizer_core.js', 'montecarlo/prng.js',
+        'montecarlo/historical_returns.js', 'montecarlo/stats.js', 'montecarlo/mc_engine.js']);
     assert(clashes.length === 0,
         'the worker shares one scope, so these top-level names collide: ' + clashes.join(' | '));
+});
+
+test('no top-level name collides across the scripts retirement_optimizer.html loads', () => {
+    // Every classic <script> on the page shares one global scope. A duplicated `const` or `let` is
+    // a SyntaxError that stops the later file; a duplicated `function` fails nothing at all, and
+    // the later file's copy silently replaces the earlier one for every caller on the page. The
+    // list is read from the page itself, so a script added there is covered without an edit here.
+    if (!IS_NODE) return;   // the browser tier has already proven the const/let half by loading
+    const fs = require('fs'), path = require('path');
+    const html = fs.readFileSync(path.join(__dirname, 'retirement_optimizer.html'), 'utf8');
+    const files = [...html.matchAll(/<script\b[^>]*\bsrc="([^"?]+)[^"]*"/g)].map(m => m[1])
+        .filter(f => !/^https?:/.test(f));
+    assert(files.includes('optimizer_ui.js') && files.includes('montecarlo/mc_tab.js'),
+        `the page's script list did not parse: ${files.join(', ')}`);
+    const clashes = _topLevelClashes(files);
+    assert(clashes.length === 0,
+        'the page\'s scripts share one scope, so these top-level names collide: ' + clashes.join(' | '));
 });
 
 test('P81: no index step falls below the floor, at any spread', () => {

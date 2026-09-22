@@ -1033,11 +1033,12 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         // is "no ceiling strategy at all", which only a caller can express. Both callers gate on
         // `yr.isACAStrategy` (resolveSpendTarget), which is false once `yr.acaLapsed`. A new caller
         // must do the same or it will re-enforce a cap that ended at Medicare eligibility.
-        // TAXData.FPL carries the year lag (a 2026 plan year uses the 2025 guideline) and the note
-        // on why these are not on the same clock as the federal tables. The UI menu and the limit
-        // ladder read the same entry, so the three cannot drift apart again.
+        // TAXData.FPL is the guideline a plan starting in its PLAN_YEAR is measured against (a 2026
+        // plan year uses the 2025 guideline; the note there says why), so it applies as published
+        // where cpiRate is 1 and cpiRate indexes it after that, with no extra year of CPI on top.
+        // The Limit menu and the limit ladder in optimizer_ui.js compute the same figure.
         const fplBase = TAXData.FPL[status];
-        limit = Math.round(fplBase * inputs.stratACAMultiple / 100 * cpiRate * (1 + inputs.cpi)) - 1;
+        limit = Math.round(fplBase * inputs.stratACAMultiple / 100 * cpiRate) - 1;
         const fedAtLimit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate);
         marginalFedTaxRate = fedAtLimit.rate * fedRateCreep;
         nominalFedTaxRateAtLimit = nominalRateAtLimit('FEDERAL', status, limit, cpiRate, fedRateCreep);

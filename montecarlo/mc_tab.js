@@ -1524,11 +1524,11 @@ function renderPlanHeadline(msg) {
                    + 'and the row marked 📍 in the table below.';
 
     el.innerHTML =
-        `<div title="${escapeHtml(tip)}" style="display:flex;align-items:center;gap:12px;background:${band.bg};`
+        `<div title="${DisplayHelpers.escapeHtml(tip)}" style="display:flex;align-items:center;gap:12px;background:${band.bg};`
         + `border-radius:6px;padding:10px 14px;margin-bottom:8px;">${chev}`
         + `<div style="font-size:1.9em;font-weight:700;line-height:1;color:${band.fg};white-space:nowrap;">${pct}%</div>`
         + `<div style="font-size:0.92em;color:#333;">Chance of success for <strong>your plan</strong> `
-        + `(📍 ${escapeHtml(name)}): it survives ${survived.toLocaleString()} of ${total.toLocaleString()} paths. `
+        + `(📍 ${DisplayHelpers.escapeHtml(name)}): it survives ${survived.toLocaleString()} of ${total.toLocaleString()} paths. `
         + `Median ending balance $${fmt(Math.round(finalBal))}. `
         + `<span style="color:#666;">${modeTxt}.</span></div>`
         // P69: the replay entry point, the same in BOTH scopes and above the table, so the captured
@@ -1541,7 +1541,7 @@ function renderPlanHeadline(msg) {
               + ` title="Walk one of this run's captured paths through Charts and Annual Details, year by year, with your own plan's settings. Paths span the whole outcome range, worst to best.">`
               + `<option value="">▶️ Replay a path…</option>`
               + mcReplayList().map((e, k) =>
-                    `<option value="${k}">${escapeHtml(e.short)}</option>`).join('')
+                    `<option value="${k}">${DisplayHelpers.escapeHtml(e.short)}</option>`).join('')
               + `</select>`
             : '')
         + `</div>`;
@@ -1758,7 +1758,7 @@ function renderSurvivalTable(variations, numPaths) {
         // a duplicate button on the pinned row was table clutter.
         [
             (isPinned ? '📍 ' : '') + v.strategyFamily,
-            escapeHtml(v.paramLabel),
+            DisplayHelpers.escapeHtml(v.paramLabel),
             ruinTxt,
             '$' + fmt(_mcFinalBal(v)),
             `<strong>${pct}%</strong>`,
@@ -2757,11 +2757,4 @@ function renderInputFanCharts(inputFan, years, sourceText) {
 function fmt(n) {
     if (!n && n !== 0) return '—';
     return Math.round(n).toLocaleString();
-}
-
-function escapeHtml(s) {
-    return String(s ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
 }

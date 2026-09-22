@@ -7456,26 +7456,6 @@ function isCompatibleScenario(scenario) {
     return scenario.version === SCENARIO_VERSION;
 }
 
-/**
- * Escapes single and double quotes in a string for safe use in HTML attributes
- * @param {string} str - String to escape
- * @returns {string} String with ' replaced by \' and " replaced by \"
- */
-function escapeQuotes(str) {
-    return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
-}
-
-/**
- * Escape text for insertion as HTML CONTENT. escapeQuotes above handles attribute values only; it
- * leaves < and & alone, which was survivable while the only interpolated text was a scenario name
- * and is not once free-form notes go through the same innerHTML path.
- */
-function escapeHtml(str) {
-    return String(str ?? '')
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
 // ============================================================================
 // PLAN PROVENANCE - the release a plan was saved under, and where it came from
 // ============================================================================
@@ -7820,6 +7800,39 @@ function applyScenario(data) {
 // ============================================================================
 
 /**
+ * One row of the Saved Scenarios list. The name is user text, and an imported file can carry any
+ * name at all: it is escaped as content where it is shown, and every handler receives it as a
+ * JavaScript string literal (DisplayHelpers.jsStringArg), so each one gets the name exactly.
+ */
+function scenarioRowHtml(name, scenario) {
+    // Minutes, not seconds: with three buttons and a release stamp beside it, a full timestamp
+    // makes the table wider than the modal.
+    const savedDate = scenario.savedAt !== 'Unknown'
+        ? new Date(scenario.savedAt).toLocaleString(undefined,
+            { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+        : 'Unknown';
+    const isCurrent = (scenario.version || 1) === SCENARIO_VERSION;
+    const rowStyle = isCurrent ? '' : 'background-color: #ffeeee;';
+    const rel = scenario.appVersion ? ` <span style="color:#888;">(${DisplayHelpers.escapeHtml(scenario.appVersion)})</span>` : '';
+    // Info is the ⓘ beside the name, and the name and the date open it too. It is the one action
+    // that describes the plan rather than doing something to it, so it sits with the plan's
+    // identity instead of among the buttons.
+    const arg = DisplayHelpers.jsStringArg(name);
+    return `<tr style="${rowStyle}">
+                <td onclick="showScenarioInfo(${arg})" title="Notes and recorded statistics for this plan" style="padding: 4px; border-bottom: 1px solid #eee; text-align: left; white-space: nowrap; cursor: pointer;">
+                    <span style="color:#2980b9;">ⓘ</span>
+                    <span style="text-decoration:underline;text-decoration-style:dotted;">${DisplayHelpers.escapeHtml(name)}</span>
+                </td>
+                <td onclick="showScenarioInfo(${arg})" title="Notes and recorded statistics for this plan" style="padding: 4px; border-bottom: 1px solid #eee; text-align: left; white-space: nowrap; cursor: pointer;">${DisplayHelpers.escapeHtml(savedDate)}${rel}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right; white-space: nowrap;">
+					<button class="modal-btn" onclick="loadScenarioByName(${arg})" ${!isCurrent ? 'disabled title="Incompatible version"' : ''}>Load</button>
+					<button class="modal-btn" onclick="deleteScenario(${arg})">Delete</button>
+					<button class="modal-btn" onclick="exportScenario(${arg})">Export</button>
+                </td>
+            </tr>`;
+}
+
+/**
  * Opens modal dialog showing all scenarios from both storage locations
  * Displays table with Name, Saved Date, Version, Storage location, and Actions
  * Shows compatibility status with color coding (green=compatible, red=incompatible)
@@ -7842,42 +7855,7 @@ function manageScenarios() {
         // A column of green ticks next to every other row was three states of nothing.
         html += '<th style="text-align: right; padding: 8px; border-bottom: 2px solid #ddd;">Actions</th></tr>';
 
-        for (const [name, scenario] of Object.entries(scenarios)) {
-            // Seconds dropped. Four action buttons plus a full timestamp plus a release stamp made
-            // the table wider than the modal, so it scrolled sideways and the headers read as
-            // misaligned against it. Nobody picks a saved plan by the second it was written.
-            const savedDate = scenario.savedAt !== 'Unknown'
-                ? new Date(scenario.savedAt).toLocaleString(undefined,
-                    { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-                : 'Unknown';
-            const version = scenario.version || 1;
-            const isCurrent = version === SCENARIO_VERSION;
-            const isOldStorage = scenario.isOldStorage || false;
-
-            const rowStyle = isCurrent ? '' : 'background-color: #ffeeee;';
-
-            // The name is user text and goes into innerHTML, so it is escaped as CONTENT here.
-            // escapeQuotes below covers the attribute position only, which is a different job.
-            const rel = scenario.appVersion ? ` <span style="color:#888;">(${escapeHtml(scenario.appVersion)})</span>` : '';
-            // Info is an ⓘ beside the name rather than a fourth button. It is the only action that
-            // does not DO anything to the plan - it just describes it - so it belongs with the
-            // identity rather than in the row of verbs, and moving it there is what gets the table
-            // back inside the modal. The name itself opens the same panel: it is the largest and
-            // most obvious target, and a dotted underline says it is clickable.
-            const _q = escapeQuotes(name);
-            html += `<tr style="${rowStyle}">
-                <td onclick="showScenarioInfo('${_q}')" title="Notes and recorded statistics for this plan" style="padding: 4px; border-bottom: 1px solid #eee; text-align: left; white-space: nowrap; cursor: pointer;">
-                    <span style="color:#2980b9;">ⓘ</span>
-                    <span style="text-decoration:underline;text-decoration-style:dotted;">${escapeHtml(name)}</span>
-                </td>
-                <td onclick="showScenarioInfo('${_q}')" title="Notes and recorded statistics for this plan" style="padding: 4px; border-bottom: 1px solid #eee; text-align: left; white-space: nowrap; cursor: pointer;">${escapeHtml(savedDate)}${rel}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right; white-space: nowrap;">
-					<button class="modal-btn" onclick="loadScenarioByName('${_q}')" ${!isCurrent ? 'disabled title="Incompatible version"' : ''}>Load</button>
-					<button class="modal-btn" onclick="deleteScenario('${_q}')">Delete</button>
-					<button class="modal-btn" onclick="exportScenario('${_q}')">Export</button>
-                </td>
-            </tr>`;
-        }
+        for (const [name, scenario] of Object.entries(scenarios)) html += scenarioRowHtml(name, scenario);
         html += '</table>';
 
         const incompatibleCount = Object.values(scenarios).filter(s => !isCompatibleScenario(s)).length;
@@ -7939,20 +7917,20 @@ function _fmtSummaryValue(kind, v) {
  */
 function scenarioInfoHtml(entry, name) {
     const rows = [];
-    const push = (k, v) => rows.push(`<tr><td style="padding:3px 10px 3px 0;color:#555;">${escapeHtml(k)}</td>` +
-                                     `<td style="padding:3px 0;"><strong>${escapeHtml(v)}</strong></td></tr>`);
+    const push = (k, v) => rows.push(`<tr><td style="padding:3px 10px 3px 0;color:#555;">${DisplayHelpers.escapeHtml(k)}</td>` +
+                                     `<td style="padding:3px 0;"><strong>${DisplayHelpers.escapeHtml(v)}</strong></td></tr>`);
     push('Saved', entry.savedAt && entry.savedAt !== 'Unknown'
         ? new Date(entry.savedAt).toLocaleString() : 'Unknown');
     push('Saved under release', entry.appVersion || 'not recorded');
     if (entry.sourceFile) push('From file', entry.sourceFile);
     if (entry.summary && entry.summary.strategy) push('Strategy', entry.summary.strategy);
 
-    let html = `<h4 style="margin:0 0 8px;">${escapeHtml(name)}</h4>`;
+    let html = `<h4 style="margin:0 0 8px;">${DisplayHelpers.escapeHtml(name)}</h4>`;
     html += `<table style="border-collapse:collapse;font-size:0.9em;margin-bottom:10px;">${rows.join('')}</table>`;
 
     html += '<div style="margin-bottom:10px;"><em>Notes</em><br>';
     html += entry.notes
-        ? `<div style="white-space:pre-wrap;">${escapeHtml(entry.notes)}</div>`
+        ? `<div style="white-space:pre-wrap;">${DisplayHelpers.escapeHtml(entry.notes)}</div>`
         : '<span style="color:#777;">No notes recorded.</span>';
     html += '</div>';
 
@@ -7963,14 +7941,14 @@ function scenarioInfoHtml(entry, name) {
         const t = entry.summary.tiles || {};
         html += '<em>Recorded when saved</em><table style="border-collapse:collapse;font-size:0.9em;">';
         for (const f of OptimizerCore.SUMMARY_FIELDS) {
-            html += `<tr><td style="padding:2px 10px 2px 0;color:#555;">${escapeHtml(f.label)}</td>` +
-                    `<td style="padding:2px 0;">${escapeHtml(_fmtSummaryValue(f.kind, t[f.key]))}</td></tr>`;
+            html += `<tr><td style="padding:2px 10px 2px 0;color:#555;">${DisplayHelpers.escapeHtml(f.label)}</td>` +
+                    `<td style="padding:2px 0;">${DisplayHelpers.escapeHtml(_fmtSummaryValue(f.kind, t[f.key]))}</td></tr>`;
         }
         const term = entry.summary.terminal;
         if (term) {
             for (const f of OptimizerCore.SUMMARY_TERMINAL_FIELDS) {
-                html += `<tr><td style="padding:2px 10px 2px 0;color:#555;">${escapeHtml(f.label)}</td>` +
-                        `<td style="padding:2px 0;">${escapeHtml(_fmtSummaryValue(f.kind, term[f.key]))}</td></tr>`;
+                html += `<tr><td style="padding:2px 10px 2px 0;color:#555;">${DisplayHelpers.escapeHtml(f.label)}</td>` +
+                        `<td style="padding:2px 0;">${DisplayHelpers.escapeHtml(_fmtSummaryValue(f.kind, term[f.key]))}</td></tr>`;
             }
             // The fact that decides what this plan can be used to measure at all.
             if (Number.isFinite(term.ira) && term.ira <= 0) {
@@ -8001,11 +7979,15 @@ function showScenarioInfo(name) {
     if (!raw) return;
     const entry = normalizeScenarioEntry(raw);
     const content = document.getElementById('scenarioListContent');
-    const disabled = isCompatibleScenario(raw) ? '' : ' disabled title="Incompatible version"';
     content.innerHTML = scenarioInfoHtml(entry, name);
-    setModalActions(
-        `<button class="modal-btn" onclick="loadScenarioByName('${escapeQuotes(name)}')"${disabled}>Load</button>` +
-        `<button class="modal-btn" onclick="manageScenarios()">Back</button>`);
+    setModalActions(scenarioInfoActionsHtml(name, isCompatibleScenario(raw)));
+}
+
+/** Load and Back for one plan's info view. Load receives the name exactly, as scenarioRowHtml's do. */
+function scenarioInfoActionsHtml(name, compatible) {
+    const disabled = compatible ? '' : ' disabled title="Incompatible version"';
+    return `<button class="modal-btn" onclick="loadScenarioByName(${DisplayHelpers.jsStringArg(name)})"${disabled}>Load</button>` +
+        `<button class="modal-btn" onclick="manageScenarios()">Back</button>`;
 }
 
 /** Show an imported file's details before anything is applied or stored. */
@@ -9055,7 +9037,7 @@ function buildLimitLadderSVG(status, cpiAdj, selectedLimit) {
         const fplBase = TAXData.FPL?.[status] ?? 0;
         const mult = TAXData.FPL?.MULTIPLES ?? [];
         const caps = mult
-            .map(m => Math.max(0, Math.round(fplBase * m / 100 * cpiAdj * (1 + (+document.getElementById('cpi')?.value || 2.8) / 100)) - untaxedSS))
+            .map(m => Math.max(0, Math.round(fplBase * m / 100 * cpiAdj) - untaxedSS))
             .filter(v => v > 0 && v < maxX);
         if (caps.length) {
             band(ROW_Y.aca, caps[0], caps[caps.length - 1], '#ede9fe', '');
@@ -9459,30 +9441,16 @@ function generateStratRateOptions() {
     }
 
     // ── ACA FPL cliffs ────────────────────────────────────────────────────────
-    // Available to everyone. These were nerdknob-only ("the ACA cliff model is rough"), which is
-    // still true and is now said plainly in the strategy's documentation instead of being enforced
-    // by hiding the control. The age gate below is the only thing that removes them.
+    // Available to everyone; the strategy's documentation says the ACA cliff model is rough. The
+    // age gate below is the only thing that removes them. No entry carries a warning of its own:
+    // whether a cap can fund the plan is known only by simulating, which this menu does not do, and
+    // the Optimizer's ⚠️ row flag (from acaBreachYears) is the signal for that.
     //
-    // The 400% entry used to carry a hardcoded ⚠️ and no other entry did. Nothing computed it: it
-    // was a string literal, so it fired on every scenario including ones where 400% was the only
-    // FEASIBLE arm, and stayed silent on a 200% cap that could not fund a single year. PF13 saw it
-    // ("not just the hardcoded 400% label") and worked around it in the results table rather than
-    // removing it. Feasibility cannot be known without simulating, which the dropdown does not do -
-    // the Optimizer's ⚠️ row flag is computed from acaBreachYears and is the honest signal.
-    //
-    // The FPL base now lives in TAXData.FPL, which carries the year lag and the Alaska/Hawaii
-    // caveat. It was a literal here AND a second literal in the engine, kept in step by hand.
-    //
-    // P92e. This used to compound from its own FPL_BASE_YEAR with a `+ 1`, which came to two years
-    // where the federal rows took one, so the ACA rows were high by a year on top of the base-year
-    // error the other two families had. It now mirrors the engine's own ACA formula exactly
-    // (`optimizer_core.js`, the stratACAMultiple branch of computeBracketCeiling):
-    //     FPL_2025 * multiple/100 * cpiRate * (1 + cpi)
-    // The trailing `(1 + cpi)` is the engine's, ageing a 2025 FPL figure into the plan's first year,
-    // and `cpiAdj` stands in for `cpiRate` at a plan starting this calendar year. Measured against a
-    // live run before changing: a 2026 plan targets $84,049 where the menu was offering $86,403.
+    // Each figure is the cap the engine holds MAGI under (the ACA branch of computeBracketCeiling):
+    //     TAXData.FPL * multiple/100 * cpiRate
+    // with `cpiAdj` standing in for `cpiRate` at a plan starting this calendar year. TAXData.FPL
+    // carries the year lag and the Alaska/Hawaii caveat, and no year of CPI goes on top of it.
     const fplBase = TAXData.FPL[status];
-    const fplCpiAdj = cpiAdj * (1 + cpi);
     const acaEntries = [
         { pct: 200, label: 'ACA 200% FPL' },
         { pct: 250, label: 'ACA 250% FPL' },
@@ -9490,7 +9458,7 @@ function generateStratRateOptions() {
         { pct: 400, label: 'ACA 400% FPL' },
     ];
     for (const { pct, label } of acaEntries) {
-        const limit = Math.round(fplBase * pct / 100 * fplCpiAdj);
+        const limit = Math.round(fplBase * pct / 100 * cpiAdj);
         options.push({
             value: `aca${pct}`,
             label: `${label}  ·  ${money(limit)} (${crossLadderNote('magi', limit, status, cpiAdj)})`,

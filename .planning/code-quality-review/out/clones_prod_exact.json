@@ -1,0 +1,827 @@
+[
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 282,
+  "a1": 323,
+  "b": "standalone/FutureCost.html",
+  "b0": 299,
+  "b1": 340,
+  "units": 34,
+  "chars": 723,
+  "sample": [
+   "background: var(--surface2);",
+   "border: 1px solid var(--border);",
+   "border-radius: 4px;"
+  ]
+ },
+ {
+  "a": "standalone/HYSA.html",
+  "a0": 629,
+  "a1": 666,
+  "b": "standalone/RealReturns.html",
+  "b0": 993,
+  "b1": 1030,
+  "units": 28,
+  "chars": 1425,
+  "sample": [
+   "const base = window . location . origin + window . location . pathname ;",
+   "const q = params . toString ( ) ;",
+   "return q ? base + '?' + q : base ;"
+  ]
+ },
+ {
+  "a": "RetirementTaxPlanner.html",
+  "a0": 664,
+  "a1": 688,
+  "b": "optimizer_ui.js",
+  "b0": 7193,
+  "b1": 7217,
+  "units": 22,
+  "chars": 929,
+  "sample": [
+   "function toggleSharePanel ( ) {",
+   "const panel = document . getElementById ( 'share-panel' ) ;",
+   "const input = document . getElementById ( 'share-url-input' ) ;"
+  ]
+ },
+ {
+  "a": "RetirementTaxPlanner.html",
+  "a0": 670,
+  "a1": 695,
+  "b": "Retirement_Projection.html",
+  "b0": 2132,
+  "b1": 2157,
+  "units": 20,
+  "chars": 821,
+  "sample": [
+   "document . getElementById ( 'share-status' ) . textContent = '' ;",
+   "panel . style . display = 'block' ;",
+   "requestAnimationFrame ( ( ) => { input . select ( ) ; } ) ;"
+  ]
+ },
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 234,
+  "a1": 252,
+  "b": "standalone/FutureCost.html",
+  "b0": 250,
+  "b1": 268,
+  "units": 18,
+  "chars": 352,
+  "sample": [
+   ".help-btn {",
+   "display: inline-flex;",
+   "align-items: center;"
+  ]
+ },
+ {
+  "a": "RetirementTaxPlanner.html",
+  "a0": 670,
+  "a1": 688,
+  "b": "standalone/IncomeTaxPlanner.html",
+  "b0": 1364,
+  "b1": 1382,
+  "units": 16,
+  "chars": 628,
+  "sample": [
+   "document . getElementById ( 'share-status' ) . textContent = '' ;",
+   "panel . style . display = 'block' ;",
+   "requestAnimationFrame ( ( ) => { input . select ( ) ; } ) ;"
+  ]
+ },
+ {
+  "a": "Retirement_Projection.html",
+  "a0": 2132,
+  "a1": 2150,
+  "b": "optimizer_ui.js",
+  "b0": 7199,
+  "b1": 7217,
+  "units": 16,
+  "chars": 628,
+  "sample": [
+   "document . getElementById ( 'share-status' ) . textContent = '' ;",
+   "panel . style . display = 'block' ;",
+   "requestAnimationFrame ( ( ) => { input . select ( ) ; } ) ;"
+  ]
+ },
+ {
+  "a": "Retirement_Projection.html",
+  "a0": 2132,
+  "a1": 2150,
+  "b": "standalone/IncomeTaxPlanner.html",
+  "b0": 1364,
+  "b1": 1382,
+  "units": 16,
+  "chars": 628,
+  "sample": [
+   "document . getElementById ( 'share-status' ) . textContent = '' ;",
+   "panel . style . display = 'block' ;",
+   "requestAnimationFrame ( ( ) => { input . select ( ) ; } ) ;"
+  ]
+ },
+ {
+  "a": "optimizer_ui.js",
+  "a0": 7199,
+  "a1": 7217,
+  "b": "standalone/IncomeTaxPlanner.html",
+  "b0": 1364,
+  "b1": 1382,
+  "units": 16,
+  "chars": 628,
+  "sample": [
+   "document . getElementById ( 'share-status' ) . textContent = '' ;",
+   "panel . style . display = 'block' ;",
+   "requestAnimationFrame ( ( ) => { input . select ( ) ; } ) ;"
+  ]
+ },
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 107,
+  "a1": 122,
+  "b": "standalone/FutureCost.html",
+  "b0": 135,
+  "b1": 150,
+  "units": 14,
+  "chars": 295,
+  "sample": [
+   "border-radius: 50%;",
+   "background: var(--accent);",
+   "cursor: pointer;"
+  ]
+ },
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 255,
+  "a1": 270,
+  "b": "standalone/FutureCost.html",
+  "b0": 271,
+  "b1": 286,
+  "units": 14,
+  "chars": 285,
+  "sample": [
+   ".modal-overlay {",
+   "display: none;",
+   "position: fixed;"
+  ]
+ },
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 14,
+  "a1": 27,
+  "b": "standalone/FutureCost.html",
+  "b0": 14,
+  "b1": 27,
+  "units": 13,
+  "chars": 429,
+  "sample": [
+   "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
+   "<link href=\"https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&disp",
+   "<style>"
+  ]
+ },
+ {
+  "a": "Retirement_Projection.html",
+  "a0": 1,
+  "a1": 12,
+  "b": "standalone/AfterTaxRealGrowth.html",
+  "b0": 1,
+  "b1": 12,
+  "units": 10,
+  "chars": 383,
+  "sample": [
+   "<!DOCTYPE html>",
+   "<html lang=\"en\">",
+   "<head>"
+  ]
+ },
+ {
+  "a": "Retirement_Projection.html",
+  "a0": 1,
+  "a1": 12,
+  "b": "standalone/FutureCost.html",
+  "b0": 1,
+  "b1": 12,
+  "units": 10,
+  "chars": 383,
+  "sample": [
+   "<!DOCTYPE html>",
+   "<html lang=\"en\">",
+   "<head>"
+  ]
+ },
+ {
+  "a": "Retirement_Projection.html",
+  "a0": 1,
+  "a1": 12,
+  "b": "standalone/IncomeTaxPlanner.html",
+  "b0": 1,
+  "b1": 12,
+  "units": 10,
+  "chars": 383,
+  "sample": [
+   "<!DOCTYPE html>",
+   "<html lang=\"en\">",
+   "<head>"
+  ]
+ },
+ {
+  "a": "Retirement_Projection.html",
+  "a0": 1,
+  "a1": 12,
+  "b": "standalone/irmaa_and_rmds.html",
+  "b0": 1,
+  "b1": 12,
+  "units": 10,
+  "chars": 383,
+  "sample": [
+   "<!DOCTYPE html>",
+   "<html lang=\"en\">",
+   "<head>"
+  ]
+ },
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 1,
+  "a1": 12,
+  "b": "standalone/FutureCost.html",
+  "b0": 1,
+  "b1": 12,
+  "units": 10,
+  "chars": 383,
+  "sample": [
+   "<!DOCTYPE html>",
+   "<html lang=\"en\">",
+   "<head>"
+  ]
+ },
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 1,
+  "a1": 12,
+  "b": "standalone/IncomeTaxPlanner.html",
+  "b0": 1,
+  "b1": 12,
+  "units": 10,
+  "chars": 383,
+  "sample": [
+   "<!DOCTYPE html>",
+   "<html lang=\"en\">",
+   "<head>"
+  ]
+ },
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 1,
+  "a1": 12,
+  "b": "standalone/irmaa_and_rmds.html",
+  "b0": 1,
+  "b1": 12,
+  "units": 10,
+  "chars": 383,
+  "sample": [
+   "<!DOCTYPE html>",
+   "<html lang=\"en\">",
+   "<head>"
+  ]
+ },
+ {
+  "a": "standalone/FutureCost.html",
+  "a0": 1,
+  "a1": 12,
+  "b": "standalone/IncomeTaxPlanner.html",
+  "b0": 1,
+  "b1": 12,
+  "units": 10,
+  "chars": 383,
+  "sample": [
+   "<!DOCTYPE html>",
+   "<html lang=\"en\">",
+   "<head>"
+  ]
+ },
+ {
+  "a": "standalone/FutureCost.html",
+  "a0": 1,
+  "a1": 12,
+  "b": "standalone/irmaa_and_rmds.html",
+  "b0": 1,
+  "b1": 12,
+  "units": 10,
+  "chars": 383,
+  "sample": [
+   "<!DOCTYPE html>",
+   "<html lang=\"en\">",
+   "<head>"
+  ]
+ },
+ {
+  "a": "standalone/IncomeTaxPlanner.html",
+  "a0": 1,
+  "a1": 12,
+  "b": "standalone/irmaa_and_rmds.html",
+  "b0": 1,
+  "b1": 12,
+  "units": 10,
+  "chars": 383,
+  "sample": [
+   "<!DOCTYPE html>",
+   "<html lang=\"en\">",
+   "<head>"
+  ]
+ },
+ {
+  "a": "standalone/HYSA.html",
+  "a0": 7,
+  "a1": 17,
+  "b": "standalone/RealReturns.html",
+  "b0": 7,
+  "b1": 17,
+  "units": 10,
+  "chars": 334,
+  "sample": [
+   "<script src=\"https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js\"></script>",
+   "<style>",
+   "*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }"
+  ]
+ },
+ {
+  "a": "standalone/HYSA.html",
+  "a0": 19,
+  "a1": 30,
+  "b": "standalone/RealReturns.html",
+  "b0": 19,
+  "b1": 30,
+  "units": 10,
+  "chars": 329,
+  "sample": [
+   "margin: 0 auto;",
+   "background: #fff;",
+   "border-radius: 12px;"
+  ]
+ },
+ {
+  "a": "Retirement_Projection.html",
+  "a0": 1823,
+  "a1": 1833,
+  "b": "Retirement_Projection.html",
+  "b0": 1844,
+  "b1": 1854,
+  "units": 10,
+  "chars": 275,
+  "sample": [
+   "if ( ! t . visible ) return ;",
+   "const data = rows . map ( r => {",
+   "const v = threshAmt ( t , r , useReal ) ;"
+  ]
+ },
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 85,
+  "a1": 96,
+  "b": "standalone/FutureCost.html",
+  "b0": 111,
+  "b1": 122,
+  "units": 10,
+  "chars": 215,
+  "sample": [
+   "input[type=\"range\"] {",
+   "-webkit-appearance: none;",
+   "width: 100%;"
+  ]
+ },
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 30,
+  "a1": 41,
+  "b": "standalone/FutureCost.html",
+  "b0": 30,
+  "b1": 41,
+  "units": 10,
+  "chars": 206,
+  "sample": [
+   "--mono: 'DM Mono', monospace;",
+   "--sans: 'DM Sans', sans-serif;",
+   "body {"
+  ]
+ },
+ {
+  "a": "standalone/HYSA.html",
+  "a0": 121,
+  "a1": 130,
+  "b": "standalone/RealReturns.html",
+  "b0": 181,
+  "b1": 190,
+  "units": 9,
+  "chars": 1269,
+  "sample": [
+   "<div style=\"display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.25rem;position:relative;\">",
+   "<button class=\"other-tools-btn\" onclick=\"showOtherTools()\">&#9783; Other Tools</button>",
+   "<button class=\"other-tools-btn\" style=\"background:#2a9d5c\" onclick=\"toggleSharePanel()\">&#8258; Share</button>"
+  ]
+ },
+ {
+  "a": "optimizer_core.js",
+  "a0": 3465,
+  "a1": 3480,
+  "b": "optimizer_core.js",
+  "b0": 3504,
+  "b1": 3513,
+  "units": 9,
+  "chars": 889,
+  "sample": [
+   "yr . capitalGains = Math . max ( 0 , ( yr . netWithdrawals . Brokerage ?? 0 ) - ( yr . netWithdrawals . Broker",
+   "yr . tax = calculateTaxes ( {",
+   "filingStatus : yr . status , ages : [ yr . age1 , yr . age2 ] , birthyears : [ birthyear1 , birthyear2 ] ,"
+  ]
+ },
+ {
+  "a": "montecarlo/prng.js",
+  "a0": 573,
+  "a1": 581,
+  "b": "montecarlo/prng.js",
+  "b0": 586,
+  "b1": 594,
+  "units": 9,
+  "chars": 465,
+  "sample": [
+   "stressOutcomeBand , applyBearStartOverlay , bootstrapMultiAssetBank ,",
+   "scoreStartYears , selectStressStarts , stressWindowsFor , buildBearPool ,",
+   "STRESS_WINDOWS , STRESS_ROLLING_WINDOWS ,"
+  ]
+ },
+ {
+  "a": "montecarlo/mc_tab.js",
+  "a0": 2211,
+  "a1": 2220,
+  "b": "montecarlo/mc_tab.js",
+  "b0": 2353,
+  "b1": 2362,
+  "units": 9,
+  "chars": 351,
+  "sample": [
+   "tooltip : tooltipCfg ,",
+   "scales : {",
+   "x : { title : { display : true , text : 'Year' } , ticks : { maxTicksLimit : 10 } } ,"
+  ]
+ },
+ {
+  "a": "Retirement_Projection.html",
+  "a0": 26,
+  "a1": 36,
+  "b": "taxengine.js",
+  "b0": 67,
+  "b1": 77,
+  "units": 9,
+  "chars": 303,
+  "sample": [
+   "brackets : [",
+   "{ l : 24800 , r : 0.10 , nr : 0.1000 } ,",
+   "{ l : 100800 , r : 0.12 , nr : 0.1151 } ,"
+  ]
+ },
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 212,
+  "a1": 220,
+  "b": "standalone/FutureCost.html",
+  "b0": 71,
+  "b1": 79,
+  "units": 9,
+  "chars": 200,
+  "sample": [
+   ".formula-box {",
+   "background: var(--surface2);",
+   "border: 1px solid var(--border);"
+  ]
+ },
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 332,
+  "a1": 340,
+  "b": "standalone/FutureCost.html",
+  "b0": 358,
+  "b1": 366,
+  "units": 9,
+  "chars": 198,
+  "sample": [
+   ".modal .example-box {",
+   "background: var(--surface2);",
+   "border: 1px solid var(--border);"
+  ]
+ },
+ {
+  "a": "optimizer_core.js",
+  "a0": 3346,
+  "a1": 3355,
+  "b": "optimizer_core.js",
+  "b0": 3465,
+  "b1": 3478,
+  "units": 8,
+  "chars": 839,
+  "sample": [
+   "yr . capitalGains = Math . max ( 0 , ( yr . netWithdrawals . Brokerage ?? 0 ) - ( yr . netWithdrawals . Broker",
+   "yr . tax = calculateTaxes ( {",
+   "filingStatus : yr . status , ages : [ yr . age1 , yr . age2 ] , birthyears : [ birthyear1 , birthyear2 ] ,"
+  ]
+ },
+ {
+  "a": "optimizer_core.js",
+  "a0": 3346,
+  "a1": 3355,
+  "b": "optimizer_core.js",
+  "b0": 3504,
+  "b1": 3511,
+  "units": 8,
+  "chars": 839,
+  "sample": [
+   "yr . capitalGains = Math . max ( 0 , ( yr . netWithdrawals . Brokerage ?? 0 ) - ( yr . netWithdrawals . Broker",
+   "yr . tax = calculateTaxes ( {",
+   "filingStatus : yr . status , ages : [ yr . age1 , yr . age2 ] , birthyears : [ birthyear1 , birthyear2 ] ,"
+  ]
+ },
+ {
+  "a": "optimizer_core.js",
+  "a0": 3124,
+  "a1": 3132,
+  "b": "optimizer_core.js",
+  "b0": 3349,
+  "b1": 3357,
+  "units": 8,
+  "chars": 739,
+  "sample": [
+   "yr . tax = calculateTaxes ( {",
+   "filingStatus : yr . status , ages : [ yr . age1 , yr . age2 ] , birthyears : [ birthyear1 , birthyear2 ] ,",
+   "totalSS : yr . s1 + yr . s2 , IRMAAAnnualCost : yr . IRMAA ,"
+  ]
+ },
+ {
+  "a": "standalone/HYSA.html",
+  "a0": 255,
+  "a1": 262,
+  "b": "standalone/RealReturns.html",
+  "b0": 355,
+  "b1": 362,
+  "units": 8,
+  "chars": 529,
+  "sample": [
+   "Chart . defaults . color = '#4a4a47' ;",
+   "Chart . defaults . font . family = '-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif' ;",
+   "Chart . defaults . plugins . tooltip . backgroundColor = 'rgba(28,28,26,0.93)' ;"
+  ]
+ },
+ {
+  "a": "optimizer_ui.js",
+  "a0": 5859,
+  "a1": 5866,
+  "b": "optimizer_ui.js",
+  "b0": 6084,
+  "b1": 6091,
+  "units": 8,
+  "chars": 356,
+  "sample": [
+   "title : items => {",
+   "const r = log [ items [ 0 ] ?. dataIndex ] ;",
+   "if ( ! r ) return items [ 0 ] ?. label ?? '' ;"
+  ]
+ },
+ {
+  "a": "RetirementTaxPlanner.html",
+  "a0": 675,
+  "a1": 683,
+  "b": "standalone/HYSA.html",
+  "b0": 644,
+  "b1": 652,
+  "units": 8,
+  "chars": 300,
+  "sample": [
+   "async function copyShareURL ( ) {",
+   "const input = document . getElementById ( 'share-url-input' ) ;",
+   "const status = document . getElementById ( 'share-status' ) ;"
+  ]
+ },
+ {
+  "a": "RetirementTaxPlanner.html",
+  "a0": 675,
+  "a1": 683,
+  "b": "standalone/RealReturns.html",
+  "b0": 1008,
+  "b1": 1016,
+  "units": 8,
+  "chars": 300,
+  "sample": [
+   "async function copyShareURL ( ) {",
+   "const input = document . getElementById ( 'share-url-input' ) ;",
+   "const status = document . getElementById ( 'share-status' ) ;"
+  ]
+ },
+ {
+  "a": "Retirement_Projection.html",
+  "a0": 2137,
+  "a1": 2145,
+  "b": "standalone/HYSA.html",
+  "b0": 644,
+  "b1": 652,
+  "units": 8,
+  "chars": 300,
+  "sample": [
+   "async function copyShareURL ( ) {",
+   "const input = document . getElementById ( 'share-url-input' ) ;",
+   "const status = document . getElementById ( 'share-status' ) ;"
+  ]
+ },
+ {
+  "a": "Retirement_Projection.html",
+  "a0": 2137,
+  "a1": 2145,
+  "b": "standalone/RealReturns.html",
+  "b0": 1008,
+  "b1": 1016,
+  "units": 8,
+  "chars": 300,
+  "sample": [
+   "async function copyShareURL ( ) {",
+   "const input = document . getElementById ( 'share-url-input' ) ;",
+   "const status = document . getElementById ( 'share-status' ) ;"
+  ]
+ },
+ {
+  "a": "optimizer_ui.js",
+  "a0": 7204,
+  "a1": 7212,
+  "b": "standalone/HYSA.html",
+  "b0": 644,
+  "b1": 652,
+  "units": 8,
+  "chars": 300,
+  "sample": [
+   "async function copyShareURL ( ) {",
+   "const input = document . getElementById ( 'share-url-input' ) ;",
+   "const status = document . getElementById ( 'share-status' ) ;"
+  ]
+ },
+ {
+  "a": "optimizer_ui.js",
+  "a0": 7204,
+  "a1": 7212,
+  "b": "standalone/RealReturns.html",
+  "b0": 1008,
+  "b1": 1016,
+  "units": 8,
+  "chars": 300,
+  "sample": [
+   "async function copyShareURL ( ) {",
+   "const input = document . getElementById ( 'share-url-input' ) ;",
+   "const status = document . getElementById ( 'share-status' ) ;"
+  ]
+ },
+ {
+  "a": "standalone/HYSA.html",
+  "a0": 644,
+  "a1": 652,
+  "b": "standalone/IncomeTaxPlanner.html",
+  "b0": 1369,
+  "b1": 1377,
+  "units": 8,
+  "chars": 300,
+  "sample": [
+   "async function copyShareURL ( ) {",
+   "const input = document . getElementById ( 'share-url-input' ) ;",
+   "const status = document . getElementById ( 'share-status' ) ;"
+  ]
+ },
+ {
+  "a": "standalone/IncomeTaxPlanner.html",
+  "a0": 1369,
+  "a1": 1377,
+  "b": "standalone/RealReturns.html",
+  "b0": 1008,
+  "b1": 1016,
+  "units": 8,
+  "chars": 300,
+  "sample": [
+   "async function copyShareURL ( ) {",
+   "const input = document . getElementById ( 'share-url-input' ) ;",
+   "const status = document . getElementById ( 'share-status' ) ;"
+  ]
+ },
+ {
+  "a": "Retirement_Projection.html",
+  "a0": 38,
+  "a1": 45,
+  "b": "taxengine.js",
+  "b0": 81,
+  "b1": 88,
+  "units": 8,
+  "chars": 295,
+  "sample": [
+   "brackets : [",
+   "{ l : 12400 , r : 0.10 , nr : 0.1000 } ,",
+   "{ l : 50400 , r : 0.12 , nr : 0.1151 } ,"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 448,
+  "a1": 455,
+  "b": "taxengine.js",
+  "b0": 464,
+  "b1": 471,
+  "units": 8,
+  "chars": 200,
+  "sample": [
+   "brackets : [",
+   "{ l : 1000 , r : 0.02 } ,",
+   "{ l : 2000 , r : 0.03 } ,"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 954,
+  "a1": 961,
+  "b": "taxengine.js",
+  "b0": 965,
+  "b1": 972,
+  "units": 8,
+  "chars": 186,
+  "sample": [
+   "std : 'FEDERAL' ,",
+   "brackets : [",
+   "{ l : 3200 , r : 0.00 } ,"
+  ]
+ },
+ {
+  "a": "taxPaymentPlanner.js",
+  "a0": 1898,
+  "a1": 1905,
+  "b": "taxPaymentPlanner.js",
+  "b0": 1964,
+  "b1": 1971,
+  "units": 8,
+  "chars": 182,
+  "sample": [
+   "if ( amt === 0 ) return ;",
+   "const d = dueDateFor ( q , yr ) ;",
+   "const isPast = d . dueDate < today ;"
+  ]
+ },
+ {
+  "a": "taxPaymentPlanner.js",
+  "a0": 1931,
+  "a1": 1938,
+  "b": "taxPaymentPlanner.js",
+  "b0": 1988,
+  "b1": 1995,
+  "units": 8,
+  "chars": 182,
+  "sample": [
+   "if ( amt === 0 ) return ;",
+   "const d = dueDateFor ( q , yr ) ;",
+   "const isPast = d . dueDate < today ;"
+  ]
+ },
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 53,
+  "a1": 60,
+  "b": "standalone/FutureCost.html",
+  "b0": 55,
+  "b1": 62,
+  "units": 8,
+  "chars": 164,
+  "sample": [
+   "header h1 {",
+   "font-family: var(--mono);",
+   "font-size: 1.1rem;"
+  ]
+ },
+ {
+  "a": "optimizer_styles_responsive.css",
+  "a0": 217,
+  "a1": 224,
+  "b": "optimizer_styles_responsive.css",
+  "b0": 256,
+  "b1": 263,
+  "units": 8,
+  "chars": 162,
+  "sample": [
+   "width: 62px !important;",
+   "max-width: 62px !important;",
+   "padding: 5px 4px;"
+  ]
+ },
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 65,
+  "a1": 74,
+  "b": "standalone/FutureCost.html",
+  "b0": 87,
+  "b1": 96,
+  "units": 8,
+  "chars": 155,
+  "sample": [
+   ".controls {",
+   "background: var(--surface);",
+   "border: 1px solid var(--border);"
+  ]
+ }
+]

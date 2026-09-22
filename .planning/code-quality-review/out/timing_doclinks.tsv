@@ -1,0 +1,27 @@
+2.4	pass	bare .md becomes .html
+1.4	pass	per-version anchor is preserved
+0.1	pass	query string is preserved
+0.0	pass	subdirectory and parent-relative paths keep their prefix
+0.0	pass	uppercase extension is handled
+0.0	pass	root README.md maps to the directory, not README.html
+0.0	pass	README.md in a subdirectory maps to that directory
+0.0	pass	the theme edit link is left alone
+0.0	pass	other schemes and protocol-relative URLs are left alone
+0.0	pass	site-absolute .md is still rewritten
+0.1	pass	html, js and fragment hrefs are left alone
+0.0	pass	a path that merely contains .md is not a match
+0.0	pass	.planning links are left as-is because Jekyll never publishes them
+0.0	pass	non-string input is returned as given
+0.1	pass	sourceFile maps a rendered page back to its source .md
+0.1	pass	a label that is exactly the old filename follows the href
+0.0	pass	surrounding whitespace in the label survives
+0.0	pass	descriptive labels are never touched
+0.0	pass	README keeps its name, since the index has no filename to show
+0.0	pass	an unchanged href never relabels
+0.0	pass	non-string label is returned as given
+0.0	pass	the DOM half of the module is exported
+3.0	pass	retirement_optimizer.html closes every inline tag it opens
+1.2	pass	every changelog version stamp sits in its own <li>
+0.9	pass	every .toggle checkbox has a visible switch, and no label is nested in a label
+2.1	pass	every README or changelog reference in the page is a link that opens a new tab
+3.2	pass	every README section a link names is a heading in README.md

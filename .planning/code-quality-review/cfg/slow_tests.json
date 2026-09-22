@@ -1,0 +1,9 @@
+[
+ "breakEvenHeirsRate: the predicate is monotonic in the rate (binary search precondition)",
+ "P128: the rails solver solves the cadence it was given, every preset at once, and prices itself",
+ "P128n: every preset's rails, targets and rail spends match a direct search on the same paths",
+ "P132: a job may bring its own presets, and solves the cut-side spend at each set's cutTo",
+ "P132: on its own spine, the rule fires at the first solved year exactly when the chance is outside the rails",
+ "P129: the After-Tax Spend answer meets its target, a little more does not, and it ignores the goal it started from",
+ "P128: a wealth rail under the search's floor is $0, drawn, and its spending left unsolved"
+]

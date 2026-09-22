@@ -1,0 +1,18 @@
+{
+ "repo": "C:/Users/starc/source/retirement_assets/.claude/worktrees/boldin-tax-estimation-767848",
+ "sandboxRoot": "C:/Users/starc/AppData/Local/Temp/claude/C--Users-starc-source-retirement-assets--claude-worktrees-boldin-tax-estimation-767848/d451cfe7-6cd3-4304-ad09-b1a45d3b3cdd/scratchpad/mut/sb",
+ "workers": 10,
+ "seed": 20260921,
+ "timeoutMs": 20000,
+ "skipTests": [],
+ "perFunctionMin": 2,
+ "statementDeletion": true,
+ "target": "taxengine.js",
+ "suites": [
+  "__inpage_runner.js"
+ ],
+ "out": "C:/Users/starc/AppData/Local/Temp/claude/C--Users-starc-source-retirement-assets--claude-worktrees-boldin-tax-estimation-767848/d451cfe7-6cd3-4304-ad09-b1a45d3b3cdd/scratchpad/out/mut_inpage_taxengine.jsonl",
+ "env": {
+  "INPAGE_BASELINE": "C:/Users/starc/AppData/Local/Temp/claude/C--Users-starc-source-retirement-assets--claude-worktrees-boldin-tax-estimation-767848/d451cfe7-6cd3-4304-ad09-b1a45d3b3cdd/scratchpad/mut/sb/inpage_baseline.json"
+ }
+}

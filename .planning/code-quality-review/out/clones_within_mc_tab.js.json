@@ -1,0 +1,32 @@
+[
+ {
+  "a": "montecarlo/mc_tab.js",
+  "a0": 2211,
+  "a1": 2220,
+  "b": "montecarlo/mc_tab.js",
+  "b0": 2353,
+  "b1": 2362,
+  "units": 9,
+  "chars": 351,
+  "sample": [
+   "tooltip : tooltipCfg ,",
+   "scales : {",
+   "x : { title : { display : true , text : 'Year' } , ticks : { maxTicksLimit : 10 } } ,"
+  ]
+ },
+ {
+  "a": "montecarlo/mc_tab.js",
+  "a0": 2198,
+  "a1": 2203,
+  "b": "montecarlo/mc_tab.js",
+  "b0": 2344,
+  "b1": 2349,
+  "units": 6,
+  "chars": 123,
+  "sample": [
+   "type : 'line' ,",
+   "data : { labels , datasets } ,",
+   "options : {"
+  ]
+ }
+]

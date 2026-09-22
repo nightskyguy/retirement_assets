@@ -1,0 +1,991 @@
+tier	match	us	file	line	zone	context
+V	forwards	forward	.feedback-worker/README.md	71	doc	address forwards to must show **Verified**. If it is not listed, a
+S	renormalises	renormalizes	.gitattributes	3	doc	# it renormalises every tracked file at once.
+V	forwards	forward	.githooks/install	51	doc	s/pre-commit in the working tree being committed; this only forwards to it.
+S	normalised	normalized	.githooks/install	28	doc	# are normalised because git reports Windows paths with them and s
+S	modelling	modeled / modeling	.planning/FILE_DIRECTORY.md	93	doc	, who they are for, the tax-torpedo explainer, FAQ, and the modelling caveats. |
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/FILE_DIRECTORY.md	54	doc	afe-key list, the full plan link and a screenshot only when ticked), captures the page with a pinned, hash-checked `
+I	in Future	in the future (vet: "in future years" is fine)	.planning/IRAprojection.spec.txt	97	doc	urple #a78bfa [2,3]    yWd   — flat in Today's $, inflating in Future $
+V	Afterwards	afterward	.planning/retirement-optimizer/MERGE_PR182_IRMAA.md	33	doc	structural claim showing through cleanly. Afterwards the feedback loop opens and MAGI drifts.
+S	honoured	honor	.planning/retirement-optimizer/findings.md	1009	doc	`INFLATION_INDEXED: false` (set on AL, MT, ND, OH, SC) is honoured only for *brackets*, at
+S	centre	center	.planning/retirement-optimizer/findings.md	1713	doc	spend to seven figures.** The reported centre moves a full point, from 6.051% to 7.000%, and th
+S	centre	center	.planning/retirement-optimizer/findings.md	1720	doc	higher centre and delivering a lower balance is exactly the con
+S	centres	center	.planning/retirement-optimizer/findings.md	3069	doc	- The corrected count c = q(N + 1) centres 99% at every N but, at N = 100, makes it the wors
+S	analyses	analyze (check: "analyses" as a plural noun is fine)	.planning/retirement-optimizer/findings.md	323	doc	**4. Coverage now: basis 20-80% swept for the 45-cell grid analyses and the oracle; Q1 ladder
+S	modelled	modeled / modeling	.planning/retirement-optimizer/findings.md	51	doc	arithmetic was wrong; the modelled transaction was simply not permitted. Before beli
+S	modelling	modeled / modeling	.planning/retirement-optimizer/findings.md	1346	doc	e SALT limit is high now but falls to $10k in 2029/2030; is modelling
+S	modelled	modeled / modeling	.planning/retirement-optimizer/findings.md	1429	doc	e standard deduction is inflation-indexed while the cap was modelled as frozen. The
+S	labelled	labeled / labeling	.planning/retirement-optimizer/findings.md	2839	doc	labelled by the reporter is the FIRST SURVIVOR year, not t
+S	labelled	labeled / labeling	.planning/retirement-optimizer/findings.md	2938	doc	reproduced in the browser before the fix:** clicking a row labelled
+V	afterwards	afterward	.planning/retirement-optimizer/findings.md	3078	doc	changes every task launched afterwards. It was not edited during the run; the `--from` m
+V	backwards	backward	.planning/retirement-optimizer/findings.md	439	doc	backwards. U+25C9 (fisheye) and U+25D5 (three-quarter) matc
+V	backwards	backward	.planning/retirement-optimizer/findings.md	1394	doc	figure. Wrong, and backwards: property tax alone must clear the whole standard
+V	backwards	backward	.planning/retirement-optimizer/findings.md	1718	doc	direction and worth stating because it reads backwards. GBM's arithmetic mean return is
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/findings.md	181	doc	ticked. A phase can be finished by another phase. ("P87b
+I	tick	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/findings.md	2819	doc	logarithmic scale subclassed with a tick generator at powers of two: pixel geometry is inh
+I	knock-on	ripple / downstream (effect)	.planning/retirement-optimizer/findings.md	2858	doc	inheritance year is a knock-on, not a second effect: a larger distribution leave
+V	tidied up	clean up - UK-leaning	.planning/retirement-optimizer/findings.md	195	doc	ed .test_harnesses/` misses exactly the harnesses that were tidied up. The
+V	tidy	clean up - UK-leaning	.planning/retirement-optimizer/findings.md	462	doc	not an inconsistency to tidy away. A `*.tests.js` glob is safe only because `_
+V	$1M	$xM / $xB	.planning/retirement-optimizer/findings.md	59	doc	rned months 8 and 9); the peak is `B*g^2/4` a year, $900 on $1M at 6% and $6,125 on $5M
+V	$5M	$xM / $xB	.planning/retirement-optimizer/findings.md	59	doc	e peak is `B*g^2/4` a year, $900 on $1M at 6% and $6,125 on $5M
+V	$3.7M	$xM / $xB	.planning/retirement-optimizer/findings.md	246	doc	nudge reaches differ by 4.5x in lifetime conversions and $3.7M in ending Roth, at 1.3-4.6% of net
+V	$1.3M	$xM / $xB	.planning/retirement-optimizer/findings.md	287	doc	**3. Wealth boundary mapped**: below ~$1.3M endgame totals the 0% LTCG bracket swallows the
+V	$2M	$xM / $xB	.planning/retirement-optimizer/findings.md	290	doc	only above ~$2M**, where realized LTCG is actually taxed.
+V	$2.1M	$xM / $xB	.planning/retirement-optimizer/findings.md	342	doc	IRMAA Tier 4) lose up to −$2.1M because the reclaimed draw-and-convert was the ar
+V	$1.9M	$xM / $xB	.planning/retirement-optimizer/findings.md	360	doc	twin (spend equal within $1) in 26/45 cells with deltas to +$1.9M. A
+V	$4.1M	$xM / $xB	.planning/retirement-optimizer/findings.md	386	doc	successful cyclic rows, 28,390 harvest years drew $4.1M of IRA total while the same arms' IRA-year
+V	$3.3M	$xM / $xB	.planning/retirement-optimizer/findings.md	631	doc	idates looked obviously safe and lost the right answer on a $3.3M scenario (reported 25% against a true 5%). A plan
+V	$2M	$xM / $xB	.planning/retirement-optimizer/findings.md	672	doc	(PF10), now tracked as PF11.** No longer hypothetical. On a $2M-IRA/$90k-spend scenario the top-5 were all cyclic
+V	$2M	$xM / $xB	.planning/retirement-optimizer/findings.md	705	doc	lter(success).sort(finalNW desc).slice(0,5)`. Measured on a $2M-IRA/$90k-spend scenario, all five slots went to c
+V	$23.161M	$xM / $xB	.planning/retirement-optimizer/findings.md	742	doc	| no conversions | $23.161M | $4.789M | -- | $0 | $9.42M |
+V	$4.789M	$xM / $xB	.planning/retirement-optimizer/findings.md	742	doc	| no conversions | $23.161M | $4.789M | -- | $0 | $9.42M |
+V	$9.42M	$xM / $xB	.planning/retirement-optimizer/findings.md	742	doc	| no conversions | $23.161M | $4.789M | -- | $0 | $9.42M |
+V	$23.855M	$xM / $xB	.planning/retirement-optimizer/findings.md	743	doc	| **2031 (the true optimum)** | **$23.855M** | $3.751M | **2046** | $585k | $6.59M |
+V	$3.751M	$xM / $xB	.planning/retirement-optimizer/findings.md	743	doc	| **2031 (the true optimum)** | **$23.855M** | $3.751M | **2046** | $585k | $6.59M |
+V	$6.59M	$xM / $xB	.planning/retirement-optimizer/findings.md	743	doc	ue optimum)** | **$23.855M** | $3.751M | **2046** | $585k | $6.59M |
+V	$23.193M	$xM / $xB	.planning/retirement-optimizer/findings.md	744	doc	| 2043 (the ⓘ boundary year) | $23.193M | $3.367M | 2051 | $1,414k | $3.26M |
+V	$3.367M	$xM / $xB	.planning/retirement-optimizer/findings.md	744	doc	| 2043 (the ⓘ boundary year) | $23.193M | $3.367M | 2051 | $1,414k | $3.26M |
+V	$3.26M	$xM / $xB	.planning/retirement-optimizer/findings.md	744	doc	he ⓘ boundary year) | $23.193M | $3.367M | 2051 | $1,414k | $3.26M |
+V	$22.809M	$xM / $xB	.planning/retirement-optimizer/findings.md	745	doc	| 2051 (as configured) | $22.809M | $3.601M | -- | $1,859k | $1.99M |
+V	$3.601M	$xM / $xB	.planning/retirement-optimizer/findings.md	745	doc	| 2051 (as configured) | $22.809M | $3.601M | -- | $1,859k | $1.99M |
+V	$1.99M	$xM / $xB	.planning/retirement-optimizer/findings.md	745	doc	2051 (as configured) | $22.809M | $3.601M | -- | $1,859k | $1.99M |
+V	$22.809M	$xM / $xB	.planning/retirement-optimizer/findings.md	771	doc	| A. plan as configured | $22.809M | $33k | none |
+V	$23.855M	$xM / $xB	.planning/retirement-optimizer/findings.md	772	doc	| B. best stop year, configured amount | $23.855M | $33k | 2031 |
+V	$23.192M	$xM / $xB	.planning/retirement-optimizer/findings.md	773	doc	amount, no stop (**what the ⇌ optimizer searches today**) | $23.192M | $50k | none |
+V	$24.228M	$xM / $xB	.planning/retirement-optimizer/findings.md	774	doc	| C. best amount AND stop year jointly | **$24.228M** | $200k | 2031 |
+V	$1.045M	$xM / $xB	.planning/retirement-optimizer/findings.md	776	doc	Stop-year alone (B-A, +$1.045M) is worth slightly MORE than amount alone (D-A, +
+V	$1.036M	$xM / $xB	.planning/retirement-optimizer/findings.md	778	doc	optimizer, is **+$1.036M** here and was positive in all 11 scenarios teste
+V	$1.887M	$xM / $xB	.planning/retirement-optimizer/findings.md	779	doc	+$1.887M, median ~$1.0M). Converting $200k/yr for six year
+V	$1.0M	$xM / $xB	.planning/retirement-optimizer/findings.md	779	doc	+$1.887M, median ~$1.0M). Converting $200k/yr for six years then stopping
+V	$1.07M	$xM / $xB	.planning/retirement-optimizer/findings.md	780	doc	amount-only plan, and beats converting nothing by $1.07M.
+V	$23.465M	$xM / $xB	.planning/retirement-optimizer/findings.md	785	doc	ConversionAmount`. Best result over the same amount grid: **$23.465M**, versus $24.228M
+V	$24.228M	$xM / $xB	.planning/retirement-optimizer/findings.md	785	doc	Best result over the same amount grid: **$23.465M**, versus $24.228M
+V	$0.8M	$xM / $xB	.planning/retirement-optimizer/findings.md	796	doc	across growth 3-12%, `die1` 80-100, spend $120k-$400k, IRA $0.8M-$8M, states
+V	$8M	$xM / $xB	.planning/retirement-optimizer/findings.md	796	doc	s growth 3-12%, `die1` 80-100, spend $120k-$400k, IRA $0.8M-$8M, states
+V	$2.97M	$xM / $xB	.planning/retirement-optimizer/findings.md	800	doc	Never negative. Range $0 to $2.97M.
+V	$0.8M	$xM / $xB	.planning/retirement-optimizer/findings.md	802	doc	$300k, IRA1 $0.8M and $1.5M. Low growth, short horizon, or a small
+V	$1.5M	$xM / $xB	.planning/retirement-optimizer/findings.md	802	doc	$300k, IRA1 $0.8M and $1.5M. Low growth, short horizon, or a small IRA means
+V	$1.32M	$xM / $xB	.planning/retirement-optimizer/findings.md	805	doc	$37k at 6%, $693k at 8.5%, $1.32M at 10%, $2.97M at 12%. And $0 at die 80, $218k at
+V	$2.97M	$xM / $xB	.planning/retirement-optimizer/findings.md	805	doc	$37k at 6%, $693k at 8.5%, $1.32M at 10%, $2.97M at 12%. And $0 at die 80, $218k at die 88,
+V	$2.11M	$xM / $xB	.planning/retirement-optimizer/findings.md	806	doc	$2.11M at die 95, $5.86M at die 100.
+V	$5.86M	$xM / $xB	.planning/retirement-optimizer/findings.md	806	doc	$2.11M at die 95, $5.86M at die 100.
+V	$2.97M	$xM / $xB	.planning/retirement-optimizer/findings.md	809	doc	stopping early still gained $99k to $2.97M. The actionable quantity exists independently of
+V	$2.0M	$xM / $xB	.planning/retirement-optimizer/findings.md	861	doc	$80k, g8% | t* 6%, gain@0% −$144k | **t* 84%**, gain@0% **−$2.0M** | 29.6% |
+V	$6.34M	$xM / $xB	.planning/retirement-optimizer/findings.md	1170	doc	apital gains go to zero and the Brokerage balance survives ($6.34M -> $11.79M on Fill
+V	$11.79M	$xM / $xB	.planning/retirement-optimizer/findings.md	1170	doc	ns go to zero and the Brokerage balance survives ($6.34M -> $11.79M on Fill
+V	$1.06M	$xM / $xB	.planning/retirement-optimizer/findings.md	1198	doc	> $1k) go 13/20 at 4%, 19/20 at 6%, 19/20 at 8%; best cell $1.06M ->
+V	$3.56M	$xM / $xB	.planning/retirement-optimizer/findings.md	1199	doc	$3.56M -> $2.48M. At 4% Social Security ($69k combined)
+V	$2.48M	$xM / $xB	.planning/retirement-optimizer/findings.md	1199	doc	$3.56M -> $2.48M. At 4% Social Security ($69k combined) covers mos
+V	$3.4M	$xM / $xB	.planning/retirement-optimizer/findings.md	1353	doc	(~$3.4M, $160k spend) and a large one (~$9.4M, $300k spen
+V	$9.4M	$xM / $xB	.planning/retirement-optimizer/findings.md	1353	doc	(~$3.4M, $160k spend) and a large one (~$9.4M, $300k spend, $120k pension) x bracket-fill targe
+V	$32M	$xM / $xB	.planning/retirement-optimizer/findings.md	1371	doc	- **Final net worth moves 0.02% to 0.06%** on a $32M terminal balance.
+V	$1.3M	$xM / $xB	.planning/retirement-optimizer/findings.md	1613	doc	that as a $1.3M win. It funds nineteen fewer years of the plan.
+V	$1M	$xM / $xB	.planning/retirement-optimizer/findings.md	1990	doc	future start year** - typed $1M gives a year-0 IRA of $1,050,154 starting 2026 an
+V	$1.26M	$xM / $xB	.planning/retirement-optimizer/findings.md	1991	doc	starting 2030, where four years at 6% would be ~$1.26M. Balances are treated as AT RETIREMENT, not
+V	$1.078M	$xM / $xB	.planning/retirement-optimizer/findings.md	2192	doc	(4.47% -> 1.13% at b20, 1.83% -> 0.90% at b80). The `+$1.078M` headline that opened `P103` is gone:
+V	$1.43M	$xM / $xB	.planning/retirement-optimizer/findings.md	3017	doc	the final 8 years, and the plan still funds every year with $1.43M left. The rbg re-run shows the same
+V	sat	"was sat" (UK) -> sitting / sits (vet)	.planning/retirement-optimizer/findings.md	173	doc	why none of them ever announced itself, and why the ACA one sat behind
+S	neighbouring	neighbor	.planning/retirement-optimizer/findings_archive.md	710	doc	**Two neighbouring rules the same review surfaced, both load-bearing
+S	modelled	modeled / modeling	.planning/retirement-optimizer/findings_archive.md	613	doc	been modelled.
+S	modelled	modeled / modeling	.planning/retirement-optimizer/findings_archive.md	627	doc	**Measured across all 38 modelled jurisdictions, before vs after, three strategies:
+S	greying	gray	.planning/retirement-optimizer/findings_archive.md	876	doc	hase 1) | Finds max feasible spend for each bracket option; greying infeasible options guides user choice |
+V	backwards	backward	.planning/retirement-optimizer/findings_archive.md	388	doc	backwards. The old behavior looked $1.2M richer *because* i
+V	backwards	backward	.planning/retirement-optimizer/findings_archive.md	1355	doc	**CORRECTED same day - the sign was read backwards the first time.** This paragraph originally said
+I	one-off	one-time	.planning/retirement-optimizer/findings_archive.md	1521	doc	Carry this one because it is a shape, not a one-off: **`startInYear` was computed in two places and
+I	top-up	add to / replenish / refill	.planning/retirement-optimizer/findings_archive.md	2056	doc	*pass 3* = `resolveResidualAndForcedIRA`, the tax-residual top-up. *phantom
+V	$1.08M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	61	doc	per-year oracle found up to +$241k (conv-only) and up to **+$1.08M** on a non-cyclic
+V	$1M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	115	doc	dividend-bearing plan must finish BEHIND. Brokerage-only $1M, basis = value so capital gains cannot
+V	$1M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	167	doc	$1M/$500k basis is 50% before a $400k draw and 50% af
+V	$2.16M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	253	doc	$2.16M** - the 4th iteration was one short. Cap raised 4
+V	$2.1M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	343	doc	draws proportionally from IRA/Brokerage/Cash to meet spend. $2.1M of IRA against a $160k goal funds it. Shortfall -
+V	$1.2M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	388	doc	backwards. The old behavior looked $1.2M richer *because* it refused to fund the spend goa
+V	$1.3M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	749	doc	s fix holds.** 10 of the 12 selected candidates carry $700k-$1.3M of terminal IRA (gk, fixedpct, ordered, bracket,
+V	$1.29M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	751	doc	/heirs rate, and it was invisible.** On a candidate holding $1.29M of terminal IRA: rate 24% → $0; 32% → $0; **40% →
+V	$3.3M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	757	doc	es on candidates the flat sweep left empty: **10 of 12 on a $3.3M-IRA scenario, 5 at a 45% future rate, 5 at 9% gro
+V	$3.26M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	1002	doc	ear: 18`) | **$23,192,547** | **$3,367,165** | $1,414,421 | $3.26M | **2051** |
+V	$9.42M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	1003	doc	| no conversions at all | $23,161,241 | $4,788,561 | $0 | $9.42M | — |
+V	$4.60M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	1004	doc	racket-fill only) | $22,884,593 | $3,482,440 | $1,372,988 | $4.60M | — |
+V	$1.99M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	1005	doc	ed (all 26 years) | $22,809,307 | $3,601,204 | $1,858,960 | $1.99M | — |
+V	$0.6M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	1100	doc	brokerage-heavy scenario holds only $0.6M of Roth. Two candidate shortcuts were scored and
+V	$1.62M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	1104	doc	he shipped defaults are a *stressed* plan ($140k spend on a $1.62M portfolio),
+V	$1.80M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	1158	doc	ON holds $1.80M more Roth and $2.61M less Brokerage, on identical
+V	$2.61M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	1158	doc	ON holds $1.80M more Roth and $2.61M less Brokerage, on identical delivered spend and
+V	$1.0M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	1159	doc	bought the Roth balance by liquidating Brokerage and paying $1.0M more of realized gains.
+V	$1.41M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	1498	doc	worse than "too low": IRMAA FELL as the conversion grew**, $1.41M to
+V	$0.63M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	1499	doc	$0.63M. The shrinking IRA lowered later RMDs while the c
+V	$3.59M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	1853	doc	legitimate fallback - but it leaves $3.59M on the table across the grid for no gain anywhere
+V	$16.8M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	1864	doc	$16.8M is measured on the largest set of the three.
+V	$1M	$xM / $xB	.planning/retirement-optimizer/findings_archive.md	1905	doc	eight cents on a $1M one - where stopping on the interval holds the sa
+S	minimise	minimize	.planning/retirement-optimizer/findings_archive.md	1038	doc	said "PAST DUE — pay immediately to minimise underpayment penalty", so the tool contradicted i
+S	Colour	color	.planning/retirement-optimizer/progress.md	168	doc	ld. Naming unified. `Conv Tax` with Break Even ahead of it. Colour legend lines dropped for
+S	colour	color	.planning/retirement-optimizer/progress.md	169	doc	every colour whose rows carry a symbol. Compare hint folded. O
+S	colour	color	.planning/retirement-optimizer/progress.md	173	doc	the row colour and the hide-rows filter), and the summary bar's
+S	colour	color	.planning/retirement-optimizer/progress.md	179	doc	Three things blue. User chose to strip ✦ of its colour rather than invent a fourth.
+S	colour	color	.planning/retirement-optimizer/progress.md	243	doc	negative on End Wealth is red. Final IRA and All RMDs colour NOTHING: a bigger Final IRA is worse
+S	colour	color	.planning/retirement-optimizer/progress.md	290	doc	- **US spelling** ([[feedback_us_spelling]]). "colour" had reached a `<summary>` a reader sees. It
+S	behaviour	behavior	.planning/retirement-optimizer/progress.md	4860	doc	2 / 61 / 22**, browser badge green at 1048. No user-visible behaviour changed,
+S	neighbours	neighbor	.planning/retirement-optimizer/progress.md	200	doc	assert the neighbours, do not trust `rfind` on a brace.
+S	neighbour	neighbor	.planning/retirement-optimizer/progress.md	1409	doc	ar 18 the Rank 95% survivor sits 143px clear of its nearest neighbour
+S	neighbouring	neighbor	.planning/retirement-optimizer/progress.md	2329	doc	nded cost, and the fix is the move P92a already made in the neighbouring
+S	catalogues	catalog	.planning/retirement-optimizer/progress.md	4125	doc	own claim. Same species as the scorer defects `findings.md` catalogues. Re-scored: AUTO holds more
+S	cancelled	canceled / canceling	.planning/retirement-optimizer/progress.md	559	doc	per selected scenario. Then a cancelled job resolving to `null`, which is the contract th
+S	modelling	modeled / modeling	.planning/retirement-optimizer/progress.md	2016	doc	orted the no-growth-before-retirement finding as a possible modelling gap. The user reframed it
+S	modelled	modeled / modeling	.planning/retirement-optimizer/progress.md	4019	doc	it. **And it can be modelled with ZERO engine change**, which is what the user
+S	modelled	modeled / modeling	.planning/retirement-optimizer/progress.md	4884	doc	$97k wide - and the DEDUCTION is $50,161 of that, so a fix modelled on `P87c4` would recover
+S	labelled	labeled / labeling	.planning/retirement-optimizer/progress.md	150	doc	only on pin, labelled `ΔFinalWealth vs ⚖`; the escape hatch reads "Show
+S	labelled	labeled / labeling	.planning/retirement-optimizer/progress.md	2622	doc	rest by net wealth and labelled as such. A single blended number is rejected beca
+S	labelled	labeled / labeling	.planning/retirement-optimizer/progress.md	4437	doc	definition of what is recorded, compared and labelled. `summarizeRun` did not exist in any form -
+S	greyed	gray	.planning/retirement-optimizer/progress.md	828	doc	Historical shows Default green with the other two greyed; switching to GBM enables them; Fixed
+S	greyed	gray	.planning/retirement-optimizer/progress.md	1828	doc	advisory is gated on an ACA selection; the "options are greyed out" message deliberately is not,
+S	greyed	gray	.planning/retirement-optimizer/progress.md	2196	doc	shared one. Already past: greyed and silent, per the instruction. Start age is wha
+S	greyed	gray	.planning/retirement-optimizer/progress.md	2199	doc	Verified on five profiles: both 65+ today -> greyed, silent; both under 65 with start 70 -> greyed,
+S	greyed	gray	.planning/retirement-optimizer/progress.md	2199	doc	65+ today -> greyed, silent; both under 65 with start 70 -> greyed,
+S	greyed	gray	.planning/retirement-optimizer/progress.md	2200	doc	note shown; one on Medicare -> not greyed; single 65+ today -> greyed, silent; single under
+S	greyed	gray	.planning/retirement-optimizer/progress.md	2200	doc	e shown; one on Medicare -> not greyed; single 65+ today -> greyed, silent; single under 65 with
+S	greyed	gray	.planning/retirement-optimizer/progress.md	2201	doc	start 70 -> greyed, note shown. Four in-page assertions. Badge 864,
+S	greyed	gray	.planning/retirement-optimizer/progress.md	2210	doc	already-past-65 case now loses that explanation. If greyed-with-no-reason reads badly, the answer is
+S	greying	gray	.planning/retirement-optimizer/progress.md	3997	doc	table, so is leaving it an inert floor). **`P107e`'s greying is now a STOPGAP** documenting an
+S	greying	gray	.planning/retirement-optimizer/progress.md	4049	doc	**Two earlier items corrected by this.** `P107e`'s greying is honest for `ordered`/`split`/`gk` - no
+S	greyed	gray	.planning/retirement-optimizer/progress.md	4228	doc	hecked box should mean outside MC - same shape as `P107e`'s greyed IRA Goal, a live-looking control
+S	greyed	gray	.planning/retirement-optimizer/progress.md	5539	doc	le menu is now a nerdknob control (drawn beside the switch, greyed until the switch is on; shown
+V	judgement	judgment	.planning/retirement-optimizer/progress.md	241	doc	Three judgement calls worth keeping:
+V	afterwards	afterward	.planning/retirement-optimizer/progress.md	825	doc	checked afterwards.
+V	afterwards	afterward	.planning/retirement-optimizer/progress.md	1431	doc	that passes. Measured at the same pixel afterwards: **1 line**. Medians needed a `hitRadius` too;
+V	afterwards	afterward	.planning/retirement-optimizer/progress.md	1930	doc	Killed the two staged A/B servers afterwards.
+V	afterwards	afterward	.planning/retirement-optimizer/progress.md	4780	doc	harness can exclude them by name instead of discovering it afterwards.
+V	afterwards	afterward	.planning/retirement-optimizer/progress.md	5423	doc	so `.tog` now keeps its own width. Every tab measured 375 afterwards, Optimizer and Monte Carlo
+V	afterwards	afterward	.planning/retirement-optimizer/progress.md	5450	doc	eplace, and every edited file checked for lone CR / lone LF afterwards.
+V	forwards	forward	.planning/retirement-optimizer/progress.md	498	doc	the whole difference between the two callers: `onProgress` forwards to the caller's
+V	forwards	forward	.planning/retirement-optimizer/progress.md	5372	doc	mails the inbox the help address forwards to; free on every plan; Turnstile cannot run on `
+V	backwards	backward	.planning/retirement-optimizer/progress.md	2263	doc	n a billion by recursing to carry; the unit search also ran backwards
+V	backwards	backward	.planning/retirement-optimizer/progress.md	4838	doc	**The refit turned the cards' provenance backwards** and that had to be fixed with it: `origin` said
+V	backwards	backward	.planning/retirement-optimizer/progress.md	5679	doc	backwards - the reason the P92e attempt at MAGI order was r
+I	ticking	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/progress.md	1362	doc	disagreeing with what is being replayed. Browser-verified - ticking the box flipped
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/progress.md	1414	doc	the reader ticks the box.
+I	tick	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/progress.md	3460	doc	registered on first use, zeros as gaps on log axes, dollar tick
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/progress.md	4109	doc	measured note dated 2026-09-04. Only the checkbox was open; ticked. **`P28je` is
+I	tick	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/progress.md	4486	doc	same tick as the render.
+I	untick	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/progress.md	5056	doc	User: "where is the control to untick?" There was none on screen. The page's `.toggle`
+I	untick	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/progress.md	5061	doc	text says "switch off" instead of "untick".
+I	ticking	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/progress.md	5334	doc	readout. Auto-run off by default; ticking it solves at once if the rails are not current.
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/progress.md	5355	doc	switches the view; previous rails hidden until ticked, then drawn; Use it / Restore / the ⓘ menu;
+I	unticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/progress.md	5367	doc	automatic capture, plan link unticked with a "hard to reproduce" note, optional reply a
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/progress.md	5368	doc	something that does NOT compromise privacy" - built as the ticked settings-and-errors tier.
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/progress.md	5519	doc	rule needs rails whether or not Auto-run is ticked, re-run of the plan when the solve lands,
+I	way round	way around	.planning/retirement-optimizer/progress.md	4864	doc	because doing it the other way round means baselining twice.
+I	belt-and-braces	belt and suspenders	.planning/retirement-optimizer/progress.md	2080	doc	belt-and-braces: the self-check suite runs BEFORE `captureDefault
+I	to hand	on hand / at hand (vet)	.planning/retirement-optimizer/progress.md	884	doc	e month, but only in the UI layer.** The user does not want to hand-enter
+V	tidy	clean up - UK-leaning	.planning/retirement-optimizer/progress.md	705	doc	log to tidy a path.
+V	30 August	Month D, YYYY	.planning/retirement-optimizer/progress.md	2296	doc	241.96 days on 30 August - floor 241, one day short. `Math.round` is corre
+V	$1M	$xM / $xB	.planning/retirement-optimizer/progress.md	1588	doc	ion 16 with section 9 left under a SUPERSEDED pointer. The >$1M loss that
+V	$1M	$xM / $xB	.planning/retirement-optimizer/progress.md	2132	doc	ctual run's is confounded now that the actual arm converts ~$1M. Replaced with the
+V	$1M	$xM / $xB	.planning/retirement-optimizer/progress.md	2262	doc	including the carry cases (999,500 -> $1M, 999,999,999 -> $1B) and that it never emits an e
+V	$4M	$xM / $xB	.planning/retirement-optimizer/progress.md	2268	doc	ared URL, and their own diagnosis was right. On that plan - $4M across two IRAs,
+V	$2.8M	$xM / $xB	.planning/retirement-optimizer/progress.md	2317	doc	$168,500 of headroom never used on one $2.8M fixture at Fill Bracket 22%. That is P87c: the si
+V	$16.8M	$xM / $xB	.planning/retirement-optimizer/progress.md	2399	doc	$16.8M unused, `flat85` left 144 and $3.6M, `exact` left
+V	$3.6M	$xM / $xB	.planning/retirement-optimizer/progress.md	2399	doc	$16.8M unused, `flat85` left 144 and $3.6M, `exact` left **zero**. `exact` also breached LES
+V	$3M	$xM / $xB	.planning/retirement-optimizer/progress.md	2414	doc	$3M IRA and the RMD alone cleared the ceiling. Draft
+V	$2.28M	$xM / $xB	.planning/retirement-optimizer/progress.md	2623	doc	savings top out at $2.28M here while net wealth runs ~$10M - a naive blend
+V	$10M	$xM / $xB	.planning/retirement-optimizer/progress.md	2623	doc	savings top out at $2.28M here while net wealth runs ~$10M - a naive blend sorts by scale and "rank
+V	$3M	$xM / $xB	.planning/retirement-optimizer/progress.md	2794	doc	**2,395 ms -> 732 ms, 0 rows lost**; $3M IRA **3,231 ms -> 682 ms, 2 rows lost**.
+V	$1.078M	$xM / $xB	.planning/retirement-optimizer/progress.md	2828	doc	`defaults3x @4%`, the +$1.078M cell, now measures +$122k. Three fixes shipped be
+V	$2.04M	$xM / $xB	.planning/retirement-optimizer/progress.md	3105	doc	nearly double in total ($2.04M -> $3.80M) and the split falls ($5.47M -> $4.85M)
+V	$3.80M	$xM / $xB	.planning/retirement-optimizer/progress.md	3105	doc	nearly double in total ($2.04M -> $3.80M) and the split falls ($5.47M -> $4.85M).
+V	$5.47M	$xM / $xB	.planning/retirement-optimizer/progress.md	3105	doc	rly double in total ($2.04M -> $3.80M) and the split falls ($5.47M -> $4.85M).
+V	$4.85M	$xM / $xB	.planning/retirement-optimizer/progress.md	3105	doc	in total ($2.04M -> $3.80M) and the split falls ($5.47M -> $4.85M).
+V	$7.4M	$xM / $xB	.planning/retirement-optimizer/progress.md	3285	doc	The actual drift was **$1 against $7.4M** - the base over-funds by $2 and the tolerance w
+V	$3.7M	$xM / $xB	.planning/retirement-optimizer/progress.md	3593	doc	or less, over years that differ by 4.5x in conversions and $3.7M in ending
+V	$1M	$xM / $xB	.planning/retirement-optimizer/progress.md	3993	doc	room)`) and score near-zero spread only because a $1M goal never binds under a $6M balance, and
+V	$6M	$xM / $xB	.planning/retirement-optimizer/progress.md	3993	doc	ear-zero spread only because a $1M goal never binds under a $6M balance, and
+V	$1M	$xM / $xB	.planning/retirement-optimizer/progress.md	5037	doc	brokerage gains 7% above ~$278k and 9.9% above $1M with retirement accounts and real estate
+V	sat	"was sat" (UK) -> sitting / sits (vet)	.planning/retirement-optimizer/progress.md	749	doc	headings, and from `inflationFactor` rightward every value sat under the heading to its
+V	sat	"was sat" (UK) -> sitting / sits (vet)	.planning/retirement-optimizer/progress.md	820	doc	d test tier registers. On that one URL the self-check badge sat on its neutral hourglass
+V	sat	"was sat" (UK) -> sitting / sits (vet)	.planning/retirement-optimizer/progress.md	1654	doc	lifetime flow sat beside a deflated one. Exactly two columns are ge
+V	sat	"was sat" (UK) -> sitting / sits (vet)	.planning/retirement-optimizer/progress.md	1999	doc	and sat there looking current. Now re-checked at completi
+V	sat	"was sat" (UK) -> sitting / sits (vet)	.planning/retirement-optimizer/progress.md	2071	doc	anchor sat above the `## 11.16a9` heading, and `## 11.1691`
+V	sat	"was sat" (UK) -> sitting / sits (vet)	.planning/retirement-optimizer/progress.md	2466	doc	**One item was rescued rather than parked.** `P91d` sat inside a DONE phase: the Monte Carlo controls
+V	sat	"was sat" (UK) -> sitting / sits (vet)	.planning/retirement-optimizer/progress.md	3504	doc	sat inside a phase whose status reads DONE. It stays
+V	stood	"was stood" (UK) -> standing (vet)	.planning/retirement-optimizer/progress.md	552	doc	tests drive `mc_engine.js` directly, and the hand copy that stood in for it is gone.
+S	normalises	normalizes	.planning/retirement-optimizer/progress.md	191	doc	`.githooks/README.md`. Git normalises so the blob survives, but `.gitattributes` pins
+S	recognise	recognize	.planning/retirement-optimizer/progress.md	1389	doc	clamped BEFORE the variation loop (the loop has to recognise its own variation while it still holds
+S	minimising	minimizing	.planning/retirement-optimizer/progress.md	4250	doc	- every richer cell pays more tax, monotonically. **A user minimising lifetime tax picks the
+S	unsanitised	unsanitized	.planning/retirement-optimizer/progress.md	4452	doc	Also fixed: unsanitised export filename (the blank-name fallback is a tim
+S	optimised	optimized	.planning/retirement-optimizer/progress.md	4507	doc	ly one place, so I wrote a comment asserting that ⇌ / spend-optimised /
+S	materialised	materialized	.planning/retirement-optimizer/progress.md	4848	doc	becomes. Five named plans exist for its rungs, but each was materialised at ONE spend rate
+S	colours	color	.planning/retirement-optimizer/progress_archived.md	1230	doc	- Wording and colours moved fully into `setOptimizerBusy()`; the HTML d
+S	behaviour	behavior	.planning/retirement-optimizer/progress_archived.md	2166	doc	behaviour (`age >= 0` always true), so existing plans are u
+S	behaviour	behavior	.planning/retirement-optimizer/progress_archived.md	3215	doc	those are not behaviour-neutral, so they ship separately.
+S	behaviour	behavior	.planning/retirement-optimizer/progress_archived.md	3252	doc	behaviour in a comment two lines above the call that defeat
+S	behaviour	behavior	.planning/retirement-optimizer/progress_archived.md	3253	doc	the cap and its phase-down. Not behaviour-neutral, and it reaches IncomeTaxPlanner, which h
+S	behaviour	behavior	.planning/retirement-optimizer/progress_archived.md	3305	doc	Same defect family, different tool, not behaviour-neutral, so it gets its own commit.
+S	honoured	honor	.planning/retirement-optimizer/progress_archived.md	1340	doc	of selling - so it clamps to 0. Raw `appreciationPct` still honoured, so legacy `?ap=` links work.
+S	honoured	honor	.planning/retirement-optimizer/progress_archived.md	1380	doc	n bug at `:181` is STILL REAL: `INFLATION_INDEXED:false` is honoured only for brackets (`taxengine.js:1089`), while th
+S	honour	honor	.planning/retirement-optimizer/progress_archived.md	3179	doc	Asked which shape P63a should take, honour the flag or delete it. The reading behind the que
+S	Honouring	honor	.planning/retirement-optimizer/progress_archived.md	3183	doc	short-circuits every consumer. Honouring it is not localized, because `stateTimelyByWithho
+S	analyses	analyze (check: "analyses" as a plural noun is fine)	.planning/retirement-optimizer/progress_archived.md	224	doc	branch worktrees/retirement-optimizer-review-c4e406). Three analyses: architecture (findings recorded in task_plan.md
+S	Catalogue	catalog	.planning/retirement-optimizer/progress_archived.md	2465	doc	(added out-of-band) and P51 at O1. Catalogue of the unlogged work, newest first:
+S	cataloguing	catalog	.planning/retirement-optimizer/progress_archived.md	2486	doc	cataloguing #159-#173 and the new test counts; prior 08-07 sn
+S	modelled	modeled / modeling	.planning/retirement-optimizer/progress_archived.md	1444	doc	nfinity}]` table matches that on EVERY lookup, and 21 of 38 modelled jurisdictions have one. Full mechanism and measur
+S	modelled	modeled / modeling	.planning/retirement-optimizer/progress_archived.md	3327	doc	exclusion, already modelled in `computeAnnualQCDs`), but **a gift of apprecia
+S	labelled	labeled / labeling	.planning/retirement-optimizer/progress_archived.md	444	doc	1. Death labelled **"Your Passing"/"Spouse Passing"** (deceased's `
+S	labelled	labeled / labeling	.planning/retirement-optimizer/progress_archived.md	1213	doc	ified: nerdknob + no full run -> stress chart draws with 25 labelled years; Synthetic mode -> stress pass runs (10 pat
+S	labelling	labeled / labeling	.planning/retirement-optimizer/progress_archived.md	1241	doc	nstants, since the same literal is now both PREPENDED (when labelling rows) and STRIPPED (in the pinned row) and those
+S	labelled	labeled / labeling	.planning/retirement-optimizer/progress_archived.md	2946	doc	dicting the results. It now shows inputs and the two rates, labelled "From your
+S	equalled	equaled	.planning/retirement-optimizer/progress_archived.md	1114	doc	"Stop after 2040 ▸" and the loaded plan's after-tax wealth equalled the searched score **to the dollar** ($17,342,828
+S	grey	gray	.planning/retirement-optimizer/progress_archived.md	1318	doc	T WARNING with 2 red badges (federal, genuinely late) and 2 grey DATE PASSED badges (California, covered); Plans A
+V	backwards	backward	.planning/retirement-optimizer/progress_archived.md	2204	doc	plan length entirely - backwards to the whole withdrawal-rate literature (Bengen/T
+V	backwards	backward	.planning/retirement-optimizer/progress_archived.md	3264	doc	easurement guess that TX and FL would be the sweet spot was backwards: with no state income tax,
+I	tick	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/progress_archived.md	2729	doc	window and loading a scenario in the same tick left the tile on the older plan's 36/36, because
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/progress_archived.md	3004	doc	checkbox is ticked and survive a share link.
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/progress_archived.md	3080	doc	It used to fall back to 100% unless the high-income box was ticked. It now
+I	one-off	one-time	.planning/retirement-optimizer/progress_archived.md	1459	doc	- ANSWERED THE GOLDEN QUESTION WITH A RULE, not a one-off placement: **would the node suite fail without th
+I	Knock-on	ripple / downstream (effect)	.planning/retirement-optimizer/progress_archived.md	2060	doc	**Knock-on the user did not have to ask for:** demoting P28
+V	tidy	clean up - UK-leaning	.planning/retirement-optimizer/progress_archived.md	1314	doc	are deliberately separate until TPP-1 unifies them. Do not "tidy" that into one variable without doing the TPP-1 w
+V	tidying	clean up - UK-leaning	.planning/retirement-optimizer/progress_archived.md	1463	doc	ute. Pointing them at the Medicare constant would look like tidying and would silently couple unrelated law. Left alo
+I	would do	elliptical "do" (UK) - drop "do"	.planning/retirement-optimizer/progress_archived.md	1212	doc	cation, which is exactly what a user switching browser tabs would do. Now races a double rAF against `setTimeout(start
+V	00 January	Month D, YYYY	.planning/retirement-optimizer/progress_archived.md	2850	doc	$40,000 January conversion drives every total negative, and the w
+V	$1.3M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	94	doc	candidate pool is properly diversified (10 of 12 hold $700k-$1.3M terminal IRA, so PF11 holds), the sweep honestly
+V	$1.29M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	94	doc	/heirs rate (24% → $0, 40% → +$42,355, 65% → +$200,516 on a $1.29M-IRA candidate). Also confirmed the apparent "conv
+V	$2M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	614	doc	starting 2039 growing to ~$75k/yr by 2043 despite a $2M+ IRA. Root cause: `bracket`/`fixedpct`
+V	$1.26M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	780	doc	"IRA Draw (no conv)" $1.26M, conversion strategies show signed deltas vs it.
+V	$2M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	995	doc	onversion per strategy (67ms; $150k/yr adds $773k wealth on $2M IRA scenario).
+V	$2M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	1068	doc	+1 confirmed exactly (17/81/201 sims per candidate at $400k/$2M/$5M). $2M @ 12 candidates ~835ms/~1184 runs, unde
+V	$5M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	1068	doc	onfirmed exactly (17/81/201 sims per candidate at $400k/$2M/$5M). $2M @ 12 candidates ~835ms/~1184 runs, under th
+V	$2M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	1068	doc	ed exactly (17/81/201 sims per candidate at $400k/$2M/$5M). $2M @ 12 candidates ~835ms/~1184 runs, under the 2.5s
+V	$5M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	1068	doc	e 2.5s/1500-run triggers -> shipped without coarse-to-fine. $5M+ crosses the run budget (~2624) -> recorded as th
+V	$2M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	1072	doc	- Browser (v11.12e5, python http.server :8767): $2M/$90k -> 12 candidates, 3 ⇌ rows from 3 families i
+V	$3M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	1114	doc	another python server): built an interior-optimum scenario ($3M IRA, 8% growth, 12% heirs rate, $120k extra conv)
+V	$1.2M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	1480	doc	and down is CORRECT: the old behavior looked $1.2M richer because it refused to fund the spend
+V	$1.2M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	1636	doc	ecause the engine under-withdrew - `BASE` has $850k against $1.2M of
+V	$1.45M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	1637	doc	nd now depletes fully, so the mean is ~22.9%. `CREEP_BASE` ($1.45M against $1.8M) now
+V	$1.8M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	1637	doc	fully, so the mean is ~22.9%. `CREEP_BASE` ($1.45M against $1.8M) now
+V	$2.1M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	2338	doc	ause the skip was protective for aggressive ceilings (FB35 -$2.1M)
+V	$1.08M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	2346	doc	(defaults3x@4%: +$1.08M vs +$36k), propwd gap-to-oracle 2.3-11.6% -> **de
+V	$14.58M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	2364	doc	ranges (assets $810k-$14.58M, IRA 22-86%, Brok 6-62%, spend $32.4k-$1.17M) and
+V	$1.17M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	2364	doc	(assets $810k-$14.58M, IRA 22-86%, Brok 6-62%, spend $32.4k-$1.17M) and the held-fixed
+V	$1.3M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	2387	doc	mapped: below ~$1.3M totals CRB/CBR tie (0% LTCG bracket), proportiona
+V	$32M	$xM / $xB	.planning/retirement-optimizer/progress_archived.md	3259	doc	after-tax net worth on $32M - **0.06%**. It saturates at the cap, it is exact
+V	sat	"was sat" (UK) -> sitting / sits (vet)	.planning/retirement-optimizer/progress_archived.md	2031	doc	ong.** After this morning's restructure the Open Task Index sat at **lines 77-133** -
+S	minimise	minimize	.planning/retirement-optimizer/progress_archived.md	1313	doc	tallment underneath said "PAST DUE - pay immediately ... to minimise underpayment penalty". **The installments were ri
+S	normalise	normalize	.planning/retirement-optimizer/progress_archived.md	1433	doc	- The node test does normalise key ORDER inside an overrides object before compa
+S	unnormalised	unnormalized	.planning/retirement-optimizer/progress_archived.md	1433	doc	r. The live-page diff above is the strict one and it passed unnormalised, so nothing is being hidden by that.
+S	renormalise	renormalize	.planning/retirement-optimizer/progress_archived.md	1724	doc	**not** `* text=auto`, which would renormalise every tracked file in one unmeasured sweep.
+S	colours	color	.planning/retirement-optimizer/task_parked.md	751	doc	`Chart.defaults` rules apply: no per-chart tooltip colours, no per-chart `labelColor`.
+S	behaviour	behavior	.planning/retirement-optimizer/task_parked.md	1054	doc	**behaviour-neutral by construction only if a characterizatio
+S	behaviour	behavior	.planning/retirement-optimizer/task_parked.md	1088	doc	for "pro-rata". Nothing pins current behaviour, in either direction.
+S	honour	honor	.planning/retirement-optimizer/task_parked.md	1067	doc	differing. Either honour it or delete it; a flag that does nothing is wors
+S	honouring	honor	.planning/retirement-optimizer/task_parked.md	1069	doc	switches text between "[DATE PASSED]" and "[PAST DUE]", so honouring it changes the action plan,
+S	Honouring	honor	.planning/retirement-optimizer/task_parked.md	1081	doc	- **Honouring it is not localized.** `stateTimelyByWithholding`
+S	honouring	honor	.planning/retirement-optimizer/task_parked.md	1091	doc	meaningful value is probably wrong. Confirm before honouring rather than deleting.
+S	modelled	modeled / modeling	.planning/retirement-optimizer/task_parked.md	1138	doc	income exclusion, already modelled correctly in `computeAnnualQCDs`. **A gift of app
+S	labelled	labeled / labeling	.planning/retirement-optimizer/task_parked.md	574	doc	08-01).** The divisor. `RMD_TABLE` (`taxengine.js:976-983`, labelled "Uniform Lifetime
+S	labelling	labeled / labeling	.planning/retirement-optimizer/task_parked.md	698	doc	elds that already exist. The risk is not correctness, it is labelling and surface.
+S	Labelling	labeled / labeling	.planning/retirement-optimizer/task_parked.md	711	doc	**Labelling decision, to be made before anything ships.** "Gr
+V	$1.68M	$xM / $xB	.planning/retirement-optimizer/task_parked.md	108	doc	$427,589 at requests of $0 / $420k / $1.68M). An arm that converts nothing carries a bigger I
+V	$1M	$xM / $xB	.planning/retirement-optimizer/task_parked.md	226	doc	| Linear depletion | growth=0, inflation=0, Roth-only $1M, spend $50k | Depletes year 20; netSpend%=5% each
+V	$1M	$xM / $xB	.planning/retirement-optimizer/task_parked.md	229	doc	| RMD accuracy | IRA=$1M at age 73, zero growth | First RMD = $1M ÷ 26.5 ±
+V	$1M	$xM / $xB	.planning/retirement-optimizer/task_parked.md	229	doc	RMD accuracy | IRA=$1M at age 73, zero growth | First RMD = $1M ÷ 26.5 ± $1 |
+V	$2M	$xM / $xB	.planning/retirement-optimizer/task_parked.md	944	doc	- [ ] **P45f** — Test: large IRA ($2M) → rmd-growth insight appears; plan that depletes
+V	$1.08M	$xM / $xB	.planning/retirement-optimizer/task_parked.md	1020	doc	conversion timing >> withdrawal split (defaults3x @4%: +$1.08M conv vs +$36k split); flat
+S	Deprioritised	Deprioritized	.planning/retirement-optimizer/task_parked.md	1141	doc	- [ ] **P65c** - **Mortgage interest. Deprioritised by the user**: significant mortgage deductions ar
+S	neighbouring	neighbor	.planning/retirement-optimizer/task_plan.md	961	doc	olumns fill only where expected; hide/show behaves like the neighbouring series.
+S	licence	license	.planning/retirement-optimizer/task_plan.md	3559	doc	Optimizer ranking's job to surface, not a licence for the engine to under-deliver the strategy
+S	catalogues	catalog	.planning/retirement-optimizer/task_plan.md	4352	doc	own claim. Same species as the scorer defects `findings.md` catalogues.
+S	modelled	modeled / modeling	.planning/retirement-optimizer/task_plan.md	1805	doc	accounted correctly; when it is paid is not modelled at all.
+S	modelling	modeled / modeling	.planning/retirement-optimizer/task_plan.md	1807	doc	**The mechanism is legitimate, not a modelling cheat: withholding is deemed paid RATABLY across
+S	MODELLED	modeled / modeling	.planning/retirement-optimizer/task_plan.md	2363	doc	**IT CAN BE MODELLED WITH ZERO ENGINE CHANGE.** Two per-year research
+S	modelled	modeled / modeling	.planning/retirement-optimizer/task_plan.md	4760	doc	community-property handling is explicitly not modelled (`STATEname` is knowable at `:2307` but no
+S	modelled	modeled / modeling	.planning/retirement-optimizer/task_plan.md	4872	doc	a jurisdiction. Every one of the 38 modelled jurisdictions carries its own numeric
+S	modelled	modeled / modeling	.planning/retirement-optimizer/task_plan.md	5017	doc	within 10 years, modelled against heir withdrawal rates. Today none of that
+S	modelling	modeled / modeling	.planning/retirement-optimizer/task_plan.md	5025	doc	blast radius of anything in the backlog. It is also better modelling: the
+S	labelled	labeled / labeling	.planning/retirement-optimizer/task_plan.md	775	doc	labelled `no-cut`. **Moves Optimize Spend**: the suite's G
+S	labelled	labeled / labeling	.planning/retirement-optimizer/task_plan.md	778	doc	27e` the inflation raise capped at 6% (`GK_CPI_RAISE_CAP`), labelled `CPI≤6%`; the shape
+S	labelled	labeled / labeling	.planning/retirement-optimizer/task_plan.md	931	doc	- [x] `P128d` the panel: preset, cadence, paths, Run (labelled with its projected time), Cancel,
+S	labelled	labeled / labeling	.planning/retirement-optimizer/task_plan.md	976	doc	28i` `#rails-method`: Same as the Monte Carlo tab (default, labelled with the tab's current
+S	labelled	labeled / labeling	.planning/retirement-optimizer/task_plan.md	1223	doc	anyway, labelled, or hide it?
+S	labelled	labeled / labeling	.planning/retirement-optimizer/task_plan.md	1472	doc	labelled. `summarizeRun` did not exist in any form - `upda
+S	labelled	labeled / labeling	.planning/retirement-optimizer/task_plan.md	2704	doc	labelled dominance.
+S	labelled	labeled / labeling	.planning/retirement-optimizer/task_plan.md	3004	doc	control (Quick / Standard / Exhaustive) labelled with its measured estimate on this machine,
+S	greyed	gray	.planning/retirement-optimizer/task_plan.md	1721	doc	nothing, which is the same failure shape as `P107e`'s greyed IRA Goal: a live-looking control
+S	grey	gray	.planning/retirement-optimizer/task_plan.md	1722	doc	that cannot affect the result. Options are to grey it outside MC the way
+S	greying	gray	.planning/retirement-optimizer/task_plan.md	1958	doc	1. **`P107e`'s greying is mostly RIGHT, not a wholesale stopgap.** `orde
+S	greying	gray	.planning/retirement-optimizer/task_plan.md	1959	doc	aw, so no value of the target can change them and the field greying out is honest.
+S	grey	gray	.planning/retirement-optimizer/task_plan.md	2045	doc	- [x] **P107e - grey out the IRA Goal for the strategies that ignore i
+S	greys	gray	.planning/retirement-optimizer/task_plan.md	2047	doc	o the UI cannot drift from the engine. `toggleStrategyUI()` greys
+S	greyed	gray	.planning/retirement-optimizer/task_plan.md	2053	doc	ed: all 7 strategies, the load path (`?str=ordered` arrives greyed with `ibg`
+S	greying	gray	.planning/retirement-optimizer/task_plan.md	2056	doc	URPLUS draw, and `ordered`, `split` and `gk` take none - so greying the field for those
+S	greyed	gray	.planning/retirement-optimizer/task_plan.md	2083	doc	the only one of the four greyed strategies that is greyed wrongly.
+S	greyed	gray	.planning/retirement-optimizer/task_plan.md	2083	doc	the only one of the four greyed strategies that is greyed wrongly.
+S	greying	gray	.planning/retirement-optimizer/task_plan.md	2090	doc	nothing to switch off, and `P107e`'s greying stays correct for them.
+S	greyed	gray	.planning/retirement-optimizer/task_plan.md	2114	doc	is user-facing, so it carries the label, the greyed note and the ⓘ suggestion. `ibg` stays as
+S	greying	gray	.planning/retirement-optimizer/task_plan.md	2119	doc	the optimizer will not draw below"*), and the `P107e` greying note (`:1013`). A changelog `<li>`
+S	greyed	gray	.planning/retirement-optimizer/task_plan.md	2961	doc	` disables the whole stop-conversions row** (both controls, greyed), because
+V	forwards	forward	.planning/retirement-optimizer/task_plan.md	129	doc	ddresses, so the Worker sends to the inbox the help address forwards to, never to the help address
+V	backwards	backward	.planning/retirement-optimizer/task_plan.md	4447	doc	**P1 broke backwards and it is the finding.** Bootstrap leads the unde
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/task_plan.md	30	doc	duction add-back shipped under `P92a` and its box was never ticked. `P87d` and `P87c4` were the same defect twice: a
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/task_plan.md	122	doc	settings-and-errors tier, ticked by default. **Mine, in the approved plan:** Turns
+I	ticking	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/task_plan.md	1036	doc	default; ticking auto-run solves at once. Cadence, paths and the t
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/task_plan.md	3588	doc	ngine" note still lists was removed when it shipped. Nobody ticked the box.
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/retirement-optimizer/task_plan.md	4165	doc	- [x] **P28jb - ALREADY IN THE ENGINE, box was never ticked.** `timingConvThreshold` research input
+I	knock-on	ripple / downstream (effect)	.planning/retirement-optimizer/task_plan.md	4375	doc	plus the RMD knock-on) against a spending cost of `W·10g/12` in full pr
+I	top up	add to / replenish / refill	.planning/retirement-optimizer/task_plan.md	4109	doc	arly so the Roth compounds. A year that converted $1,001 to top up a bracket
+I	the lot	all of it / all of them (vet)	.planning/retirement-optimizer/task_plan.md	562	doc	the lot-selection limit the README already documents and
+V	$3.7M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	247	doc	in lifetime conversions and $3.7M in ending Roth**, worth **1.3-4.6% of net worth**
+V	$1M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	479	doc	, and not only for the very rich.** Oregon's exemption is **$1M**
+V	$2M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	480	doc	and Massachusetts' **$2M**, and **neither is indexed**, against a *nominal
+V	$2M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	481	doc	years out. The plan bank routinely ends between $2M and $26M. The federal exemption is $15M per
+V	$26M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	481	doc	years out. The plan bank routinely ends between $2M and $26M. The federal exemption is $15M per
+V	$15M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	481	doc	utinely ends between $2M and $26M. The federal exemption is $15M per
+V	$2M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	485	doc	about: crossing $2M taxes the ENTIRE estate, not the excess. It belon
+V	$15M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	497	doc	- [ ] `P120a` Federal: $15M per person (OBBBA, permanent), portability betwee
+V	$1M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	806	doc	nage Safe Retirement Spending*, Kitces.com. Worked example: $1M portfolio, $6,800/month; cut to $6,500 at ~$800k,
+V	$1.1M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	806	doc	$6,800/month; cut to $6,500 at ~$800k, raise to $7,100 at ~$1.1M |
+V	$1M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	1598	doc	**Run on the page defaults 2026-09-06** (Proportional +%, $1M IRA, $140k spend, conversions on,
+V	$0.5M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	1911	doc	the canonical household, sweeping `iraBaseGoal` over $0 / $0.5M / $1M / $2M / $4M and reading real
+V	$1M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	1911	doc	nonical household, sweeping `iraBaseGoal` over $0 / $0.5M / $1M / $2M / $4M and reading real
+V	$2M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	1911	doc	l household, sweeping `iraBaseGoal` over $0 / $0.5M / $1M / $2M / $4M and reading real
+V	$4M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	1911	doc	ehold, sweeping `iraBaseGoal` over $0 / $0.5M / $1M / $2M / $4M and reading real
+V	$4M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	1914	doc	strategy | spread across the sweep | ending IRA, goal $0 -> $4M | verdict |
+V	$4M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	1917	doc	% (`bracket`) | $69k | $6,340k -> $6,894k | moves only at a $4M goal |
+V	$4M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	1918	doc	(`fixedpct`) | $23k | $6,042k -> $6,762k | moves only at a $4M goal |
+V	$3.44M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	1927	doc	$3.44M IRA growing past $6M a $1M goal is inert - the br
+V	$6M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	1927	doc	$3.44M IRA growing past $6M a $1M goal is inert - the bracket room binds inst
+V	$1M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	1927	doc	$3.44M IRA growing past $6M a $1M goal is inert - the bracket room binds instead. I
+V	$4M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	1928	doc	clip at a $4M goal. `propwd`, `ordered` and `split` never refer
+V	$4M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	1933	doc	l to reduce TO, not an amount to obtain.** Raising it $0 -> $4M asks for LESS
+V	$1.5M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	1937	doc	household that costs $1.5M of net worth, and that trade is the whole point o
+V	$1.16M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	2198	doc	f the `P103b2` SPLIT field: one vector, not 33. Worth $140k-$1.16M on this
+V	$2M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	2460	doc	n` found the endgame regime; the tail rule flips at roughly $2M of endgame assets |
+V	$1.078M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	2469	doc	(defaults3x @6% b20, conversions); the old **+$1.078M** headline cell is now +$122k. Mix-dependent:
+V	$1.078M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	2513	doc	and the +$1.078M headline cell is now +$122k. Three shipped fixes
+V	$1.06M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	2575	doc	every family: mean +$243k (GK) to +$1.06M (Ordered) real after-tax; survival unchanged.**
+V	$3M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	2993	doc	| $3M IRA, 32% heirs rate | 3,231 ms, 195 rows | 682 ms
+V	$4M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	3075	doc	- **Teaching surface.** "IRMAA tier plan for a $4M IRA couple" is a better on-ramp than an empty
+V	$2.28M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	3253	doc	ended score stays rejected**: conversion savings top out at $2.28M here while
+V	$10M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	3254	doc	net wealth runs ~$10M, so a blend sorts by scale and "rank 40" would si
+V	$2.8M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	3606	doc	on one $2.8M Fill Bracket 22% fixture. Harness `.test_harnesse
+V	$1M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	3762	doc	need per-state partial-SS-taxation thresholds; NJ needs a >$1M surtax bracket; VT needs a low-income exemption r
+V	$1M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	3852	doc	So a plan opened in late August with $1M in Cash at 4% books a full year of interest inste
+V	$1M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	4088	doc	FAULT-FACING checkbox that P28 round 3 measured losing over $1M. **That is no longer the finding.**
+V	$1M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	4152	doc	engine. **The >$1M framing this phase opened with is gone: the conve
+V	$5M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	4564	doc	rized** optimization already on record in this file (PF11: "$5M+ IRAs cross the run budget
+V	$2M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	4566	doc	A/25000)+1`, measured exactly 17 / 81 / 201 sims at $400k / $2M / $5M.
+V	$5M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	4566	doc	0)+1`, measured exactly 17 / 81 / 201 sims at $400k / $2M / $5M.
+V	$5M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	4570	doc	nd an even grid steps straight over them. $100k coarse on a $5M IRA is a 50-point grid,
+V	$3.3M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	4587	doc	right answer on a $3.3M scenario (reported 25% against a true 5%)."
+V	$1.3M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	4816	doc	splaces a Brokerage draw", live from endgame year 0. Below ~$1.3M
+V	$3.3M	$xM / $xB	.planning/retirement-optimizer/task_plan.md	4939	doc	that "looked obviously safe and lost the right answer on a $3.3M scenario, reported 25% against
+V	sat	"was sat" (UK) -> sitting / sits (vet)	.planning/retirement-optimizer/task_plan.md	1739	doc	Optimizer cannot see past its own grid, and the user's pick sat ON the boundary
+V	stood	"was stood" (UK) -> standing (vet)	.planning/retirement-optimizer/task_plan.md	4922	doc	under this same heading. The duplicate that stood here disagreed with `P35`’s own settled-decisions
+S	normalise	normalize	.planning/retirement-optimizer/task_plan.md	1479	doc	ort could manufacture entries Load would not open. Both now normalise, then
+S	unsanitised	unsanitized	.planning/retirement-optimizer/task_plan.md	1487	doc	Also fixed on the way: the export filename was interpolated unsanitised and the blank-name fallback
+S	materialised	materialized	.planning/retirement-optimizer/task_plan.md	1569	doc	materialised at one spend rate and one strategy, and the harne
+S	italicised	italicized	.planning/retirement-optimizer/task_plan.md	4302	doc	named modes. *RMDs* is italicised with a "when required" footnote - it tells the re
+S	optimising	optimizing	.planning/retirement-optimizer/task_plan.md	4326	doc	objective, and a user optimising the IRA Target wants the opposite mode from one o
+S	optimising	optimizing	.planning/retirement-optimizer/task_plan.md	4326	doc	optimising the IRA Target wants the opposite mode from one optimising
+S	coloured	color	.planning/task_completed.md	618	doc	Test` tile** (`#stat-stress`), reading e.g. `7 of 10 fail`, coloured on `renderSurvivalTable`'s bands. Written by `upd
+S	coloured	color	.planning/task_completed.md	620	doc	dist` idiom), with `renderStressHeadline()` drawing a large coloured `7 / 10` plus a plain sentence, mirrored into the
+S	colour	color	.planning/task_completed.md	708	doc	ne variation, the current plan) and `stress.numPaths`. Same colour bands as `renderSurvivalTable`.
+S	colours	color	.planning/task_completed.md	4541	doc	colours, symbols and the compare hint merged into ONE fol
+S	colour	color	.planning/task_completed.md	4545	doc	renders ⚠️ on exactly the flag that drives the row colour and the filter) and are now
+S	colour	color	.planning/task_completed.md	4547	doc	Conv Tax`**, with Break Even ahead of it. Only Best keeps a colour
+S	colour	color	.planning/task_completed.md	5485	doc	sis table deleted. **DONE 2026-08-18.** Each plan keeps the colour
+S	behaviour	behavior	.planning/task_completed.md	4628	doc	which reaches the same behaviour by a different route since `age1 >= 0` is always
+S	behaviour	behavior	.planning/task_completed.md	4942	doc	- [x] **P64a** - **DONE v11.15b6.** Thread the parameter, behaviour-neutral at the default. `inputs.propTax` (today's
+S	behaviour	behavior	.planning/task_completed.md	4965	doc	either inside P64a.** Unlike `propTax: 0` these are NOT behaviour-neutral: a CA household whose state
+S	behaviour	behavior	.planning/task_completed.md	4982	doc	`obbaOn` gates only the senior deduction. **Not behaviour-neutral**: it lowers 2029 federal tax for
+S	neighbour	neighbor	.planning/task_completed.md	2351	doc	`selectionOf` round-trips every family and never matches a neighbour,
+S	neighbour	neighbor	.planning/task_completed.md	2751	doc	separate - the reader can get a neighbour. Verified both ways in the browser: clicking at y
+S	neighbour	neighbor	.planning/task_completed.md	2753	doc	he Rank 95% survivor at year 18, 143px clear of its nearest neighbour, replayed exactly it.
+S	neighbourhood	neighbor	.planning/task_completed.md	3909	doc	neighbourhood only, so it does not collide with `P35i`'s `fillS
+S	neighbour	neighbor	.planning/task_completed.md	3911	doc	in `P84` waits on `P72`. **`P28j` is the other neighbour:** it owns the `preMonths` 1-vs-11 rule
+S	cancelled	canceled / canceling	.planning/task_completed.md	1928	doc	satisfied); `cancelMC` clears it, deliberately - the user cancelled, so do not start another
+S	cancelled	canceled / canceling	.planning/task_completed.md	3046	doc	error ran the other way for some plans and the two partly cancelled. Private defined-benefit
+S	cancelled	canceled / canceling	.planning/task_completed.md	3231	doc	one path per selected scenario, and a cancelled job resolving to null. `_p23NewSynth` is now a
+S	modelled	modeled / modeling	.planning/task_completed.md	679	doc	- **Not modelled (stated in the changelog, not half-built):** the
+S	modelled	modeled / modeling	.planning/task_completed.md	1289	doc	`[{l: Infinity}]` hit it on every lookup, and 21 of 38 modelled jurisdictions have one. Full writeup
+S	modelling	modeled / modeling	.planning/task_completed.md	1548	doc	`minlimit` ("Lesser of") predates the tool's IRMAA modelling. It meant *the lesser of the chosen
+S	modelled	modeled / modeling	.planning/task_completed.md	1550	doc	**Both reasons are gone:** IRMAA tiers are modelled directly (the `IRMAA Ceil` family sweeps tiers
+S	modelling	modeled / modeling	.planning/task_completed.md	1708	doc	**Raised as a modelling gap, resolved as a labelling one, and the user's
+S	labelling	labeled / labeling	.planning/task_completed.md	1708	doc	**Raised as a modelling gap, resolved as a labelling one, and the user's framing is the right one.**
+S	labelled	labeled / labeling	.planning/task_completed.md	2075	doc	was labelled "neither 65 at start", but the plan starts in 202
+S	labelled	labeled / labeling	.planning/task_completed.md	2079	doc	- **Follow-up, not opened as work:** `startAge` is labelled "Retirement Start Age" but behaves as
+S	labelled	labeled / labeling	.planning/task_completed.md	2780	doc	ader looks first, so without it those cells would have been labelled with the block the
+S	labelled	labeled / labeling	.planning/task_completed.md	4762	doc	### Group 3 - the second model nobody labelled
+S	equalling	equaled	.planning/task_completed.md	1377	doc	page reproduces every node number, including the lapsed arm equalling the
+S	greys	gray	.planning/task_completed.md	1681	doc	The gate greys out the ACA rows once everyone in the plan is on
+S	greyed	gray	.planning/task_completed.md	1689	doc	s no second age calculation to drift. Already past: options greyed, box silent, on the
+S	greyed	gray	.planning/task_completed.md	1698	doc	and it is defensible - the options are visibly greyed and nothing could be done about it either way -
+S	greyed	gray	.planning/task_completed.md	1699	doc	but if greyed-with-no-reason reads badly, the fix is a short st
+S	greyed	gray	.planning/task_completed.md	2067	doc	NOT gated the same way: it explains why the ACA options are greyed out, and a
+S	grey	gray	.planning/task_completed.md	2612	doc	Neither arrow is ever disabled, which answers the grey-out question by removing it. `ringStep`
+S	greyed	gray	.planning/task_completed.md	3448	doc	the *Roth before Brokerage* switch (under Cycle Brokerage, greyed under
+V	backwards	backward	.planning/task_completed.md	2058	doc	produces a backwards flip fails rather than ships.
+V	backwards	backward	.planning/task_completed.md	3337	doc	as numbers (3 before 23, which the old text sort got backwards), a negative parameter (IRMAA
+V	backwards	backward	.planning/task_completed.md	4428	doc	findings.md - the shortfall sign was read backwards).
+V	backwards	backward	.planning/task_completed.md	5003	doc	backwards: TX and FL must clear the entire standard deducti
+I	ticking	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/task_completed.md	2694	doc	browser: ticking the box flipped `convertExcessToRoth` false -> tr
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/task_completed.md	2743	doc	at plan scope, 0 at compare, 10 at compare once the reader ticks the box.
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	.planning/task_completed.md	4885	doc	California)". The field appears only once its checkbox is ticked, and it survives a share link.
+I	Full stop	period	.planning/task_completed.md	1744	doc	1. **The target is whatever limit the user chose. Full stop.** No `min` against anything else.
+V	00 January	Month D, YYYY	.planning/task_completed.md	5513	doc	for a signed total. A $40,000 January conversion drives every total NEGATIVE (the Roth
+V	$2M	$xM / $xB	.planning/task_completed.md	145	doc	='aca'` that never breaches FPL cap (`acaBreach`/⚠️). Fixes $2M-IRA-stranded shortfall after spouse death halves
+V	$1.2M	$xM / $xB	.planning/task_completed.md	255	doc	while the engine under-withdrew (`BASE` has $850k against $1.2M of spending; it now depletes fully
+V	$1.45M	$xM / $xB	.planning/task_completed.md	256	doc	and the mean is ~22.9%). `CREEP_BASE` had $1.45M against $1.8M, so once the IRA is actually spent
+V	$1.8M	$xM / $xB	.planning/task_completed.md	256	doc	and the mean is ~22.9%). `CREEP_BASE` had $1.45M against $1.8M, so once the IRA is actually spent
+V	$2M	$xM / $xB	.planning/task_completed.md	816	doc	ate, prediction confirmed exactly (17 / 81 / 201 at $400k / $2M / $5M). At the $2M benchmark, 12 candidates ≈ 835
+V	$5M	$xM / $xB	.planning/task_completed.md	816	doc	rediction confirmed exactly (17 / 81 / 201 at $400k / $2M / $5M). At the $2M benchmark, 12 candidates ≈ 835 ms /
+V	$2M	$xM / $xB	.planning/task_completed.md	816	doc	firmed exactly (17 / 81 / 201 at $400k / $2M / $5M). At the $2M benchmark, 12 candidates ≈ 835 ms / ~1184 runs —
+V	$5M	$xM / $xB	.planning/task_completed.md	816	doc	so NO coarse-to-fine built. **Follow-up trigger recorded:** $5M+ IRAs cross the run budget (~2624 runs) → open a
+V	$2M	$xM / $xB	.planning/task_completed.md	821	doc	** node 84/84 + taxPaymentPlanner 12/12. Browser (v11.12e5, $2M/$90k): 12 candidates → 3 ⇌ rows from 3 DIFFERENT
+V	$2M	$xM / $xB	.planning/task_completed.md	829	doc	rically confirmed 2026-07-16 (browser, default scenario + a $2M-IRA/$90k-spend variant):**
+V	$2M	$xM / $xB	.planning/task_completed.md	830	doc	his family benefit from converting more."** Measured on the $2M/$90k scenario:
+V	$9.2M	$xM / $xB	.planning/task_completed.md	831	doc	- Top-5 were all cyclic `fixedpct` (IRA Draw) rows, ~$9.2M finalNW. Their sweep correctly returns `optConv:
+V	$3.5M	$xM / $xB	.planning/task_completed.md	1012	doc	code path P28 valued at up to $3.5M. P32 follows on that same path. P31 after both, b
+V	$2.5M	$xM / $xB	.planning/task_completed.md	1653	doc	Measured on that plan - $2.5M + $1.5M IRAs, IRMAA Tier 1, TX, person 1 dying 20
+V	$1.5M	$xM / $xB	.planning/task_completed.md	1653	doc	Measured on that plan - $2.5M + $1.5M IRAs, IRMAA Tier 1, TX, person 1 dying 2046 - **a
+V	$1M	$xM / $xB	.planning/task_completed.md	1709	doc	not grow between today and a future retirement year - typed $1M
+V	$1.26M	$xM / $xB	.planning/task_completed.md	1711	doc	would be about $1.26M. The user's answer: the section is titled **"Asse
+V	$2.8M	$xM / $xB	.planning/task_completed.md	1863	doc	% is treated as consuming ceiling it never occupies. On one $2.8M fixture
+V	$2.5M	$xM / $xB	.planning/task_completed.md	2102	doc	One plan, Fill Bracket 22%, MFJ 64/62, CA, $2.5M IRA, 4 conversion sizes. Straight off the log:
+V	$1.41M	$xM / $xB	.planning/task_completed.md	2215	doc	grew ($1.41M to $0.63M), so the tool was presenting a large co
+V	$0.63M	$xM / $xB	.planning/task_completed.md	2215	doc	grew ($1.41M to $0.63M), so the tool was presenting a large conversion a
+V	$2.97M	$xM / $xB	.planning/task_completed.md	3349	doc	across 23 scenarios: `gainVsFull >= 0` in every one, up to +$2.97M, scaling hard with growth and longevity; delivere
+V	$2.97M	$xM / $xB	.planning/task_completed.md	3351	doc	agnostic never fires while stopping early still gained $99k–$2.97M. **So P24 is a searched stop-year feature, and th
+V	$23.47M	$xM / $xB	.planning/task_completed.md	3356	doc	versions by default.** Extra-only truncation is much worse ($23.47M vs $24.23M) and never breaks even at any cutoff —
+V	$24.23M	$xM / $xB	.planning/task_completed.md	3356	doc	default.** Extra-only truncation is much worse ($23.47M vs $24.23M) and never breaks even at any cutoff — the late d
+V	$1.887M	$xM / $xB	.planning/task_completed.md	3366	doc	is where the real value is (finding §3: C−D was +$228k to +$1.887M). Optimizer table then displays the stop as a **c
+V	$2.97M	$xM / $xB	.planning/task_completed.md	3404	doc	idence sweep: `gainVsFull >= 0` in all 23 scenarios, up to +$2.97M. The
+V	$1M	$xM / $xB	.planning/task_completed.md	3436	doc	cost >$1M in plausible account mixes, and part of that is t
+V	$3.56M	$xM / $xB	.planning/task_completed.md	3469	doc	, and the zero-predicate still holds. What does not: "worth $3.56M and almost
+V	$2M	$xM / $xB	.planning/task_completed.md	3577	doc	advisory fee on a $2M portfolio is ~$20,000 in year one, compounding fo
+V	$2M	$xM / $xB	.planning/task_completed.md	3698	doc	order of `rate^2 * 3/8 * balance`, which at 1% on $2M is roughly **$75/yr against a $20,000 fee**.
+V	$7.4M	$xM / $xB	.planning/task_completed.md	3971	doc	largest LOSSES (brokerage-heavy, $7.4M drawn, -$146,374; balanced thirds at 6%, -$633,60
+V	$3.5M	$xM / $xB	.planning/task_completed.md	4282	doc	costing the tool the exact lever P28 valued at up to $3.5M.
+V	$2.1M	$xM / $xB	.planning/task_completed.md	4404	doc	tally protective for aggressive ceilings (Fill Bracket 35% -$2.1M) while
+V	$2.1M	$xM / $xB	.planning/task_completed.md	4475	doc	tally protective for aggressive ceilings (Fill Bracket 35% −$2.1M) while measured
+V	$32M	$xM / $xB	.planning/task_completed.md	4992	doc	after-tax net worth on a $32M terminal balance, i.e. **0.06%**.
+V	sat	"was sat" (UK) -> sitting / sits (vet)	.planning/task_completed.md	1445	doc	saved scenario nor the share URL - sat inside a phase whose status reads DONE. It stays
+V	sat	"was sat" (UK) -> sitting / sits (vet)	.planning/task_completed.md	2569	doc	inflationFactor and infl%/return% already sat behind Show All, verified 2026-08-25. Browser:
+V	sat	"was sat" (UK) -> sitting / sits (vet)	.planning/task_completed.md	3440	doc	were high. Round 2 had confounded mix with strain (defaults sat at 8.6%,
+V	sat	"was sat" (UK) -> sitting / sits (vet)	.planning/task_completed.md	3516	doc	**UNGATED from the nerdknob, user request 2026-08-28.** It sat behind the knob only while it was
+V	sat	"was sat" (UK) -> sitting / sits (vet)	.planning/task_completed.md	4344	doc	2026-08-21 and the question sat inert while looking answered. Also fixed the arm
+S	summarised	summarized	.planning/task_completed.md	181	doc	or duplicates. Bodies are verbatim; nothing was summarised away. `progress.md` carries a one-line
+S	materialised	materialized	.planning/task_completed.md	475	doc	`.gitattributes`, so a fresh clone would have materialised the hook with CRLF and `sh` cannot
+S	renormalise	renormalize	.planning/task_completed.md	477	doc	at directory on purpose** — a repo-wide `* text=auto` would renormalise every
+S	summarised	summarized	.planning/task_completed.md	1438	doc	verbatim; nothing was summarised away, and `[x]` boxes and stale `**Status:**` lin
+S	recognise	recognize	.planning/task_completed.md	2730	doc	variation loop so the loop can recognise its own variation while it still has those paths;
+S	normalises	normalizes	.planning/task_completed.md	4560	doc	`retirement_optimizer.html` and `.githooks/README.md`. Git normalises on commit so the blob is fine,
+S	maximises	maximizes	.planning/task_completed.md	4729	doc	- [x] **P57g** - The December-draw step note claims "maximises IRA tax-deferred growth" with no
+V	$1.87M	$xM / $xB	.test_harnesses/betr_harness.js	204	comment	// that must never convert, while its actual gain is +$1.87M at a 0% heirs rate. So the verdict here
+V	$2.6M	$xM / $xB	.test_harnesses/conversion_value_general_harness.js	113	string	why: 'the IRA-to-taxable axis. $700k of IRA against $2.6M of brokerage, the reverse of the '
+V	$3.44M	$xM / $xB	.test_harnesses/conversion_value_harness.js	11	comment	ge-gap-ira-heavy-ca` household from the plan bank. CA, MFJ, $3.44M across two
+S	labelled	labeled / labeling	.test_harnesses/convtiming_harness.js	703	comment	ng is not evidence that they agree about anything, so it is labelled as vacuous
+V	$1M	$xM / $xB	.test_harnesses/convtiming_harness.js	176	comment	// registered here is in dollars over a ~$1M-$20M range, so $1 is a real threshold rather than
+V	$20M	$xM / $xB	.test_harnesses/convtiming_harness.js	176	comment	// registered here is in dollars over a ~$1M-$20M range, so $1 is a real threshold rather than a
+V	$1M	$xM / $xB	.test_harnesses/convtiming_harness.js	342	string	check('a real $1M spread names the right winner', w === 'FRONT', `w
+V	$2.55M	$xM / $xB	.test_harnesses/endgame_harness.js	29	comment	* balanced, rothheavy; $2.55M constant} x basis 20/50/80% x spend 4/6/8% of tot
+V	$2.55M	$xM / $xB	.test_harnesses/endgame_harness.js	84	comment	MIXES = [                          // non-IRA total held at $2.55M
+V	$2.55M	$xM / $xB	.test_harnesses/endgame_harness.js	276	comment	// The main grid's smallest total is $2.55M, where Brokerage draws overrun the 0% LTCG bracke
+V	$1M	$xM / $xB	.test_harnesses/endgame_harness.js	277	comment	// At ~$1M the 0% bracket can swallow the whole draw and the
+V	$1.02M	$xM / $xB	.test_harnesses/endgame_harness.js	280	string	console.log('LOW-WEALTH CHECK  (x0.4 scale, totals ~$1.02M-$1.32M, basis 50, 36 cells)');
+V	$1.32M	$xM / $xB	.test_harnesses/endgame_harness.js	280	string	console.log('LOW-WEALTH CHECK  (x0.4 scale, totals ~$1.02M-$1.32M, basis 50, 36 cells)');
+S	Scalarising	Scalarizing	.test_harnesses/gk_drawrule_harness.js	26	comment	AND ends with more real terminal wealth, both plans funded. Scalarising with SPENDABLE_WEIGHT was
+V	afterwards	afterward	.test_harnesses/rbg_harness.js	90	comment	* time said the rule used. The source document arrived afterwards and carries two parameter sets,
+V	afterwards	afterward	.test_harnesses/rbg_harness.js	411	comment	// GK run would adjust at that point and move its own ratio afterwards, so the column is the first
+V	24 November	Month D, YYYY	.test_harnesses/rbg_harness.js	12	comment	Guardrails To Project Sustainable Cash Flows", Kitces.com, 24 November 2021. Its
+S	rRaise	rRaize	.test_harnesses/rbg_harness.js	286	code	const rRaise = railReturn(atTarget, set.upper);
+S	rRaise	rRaize	.test_harnesses/rbg_harness.js	287	code	return { set: set.name, rCut, rRaise,
+S	portRaise	portRaize	.test_harnesses/rbg_harness.js	289	code	portRaise: stateAfterYear(atTarget, rows, rRaise).portfolio
+S	rRaise	rRaize	.test_harnesses/rbg_harness.js	289	code	portRaise: stateAfterYear(atTarget, rows, rRaise).portfolio };
+S	rRaise	rRaize	.test_harnesses/rbg_harness.js	367	code	+ '  raise at ' + rpad(pctS(r.rRaise), 8)
+S	portRaise	portRaize	.test_harnesses/rbg_harness.js	368	code	+ '   ' + money(r.portCut) + ' / ' + money(r.portRaise));
+S	labelled	labeled / labeling	.test_harnesses/schedule_replay_harness.js	21	comment	* spend with more wealth is labelled DOMINATES rather than partial. Same spend, same s
+V	backwards	backward	.test_harnesses/schedule_replay_harness.js	19	comment	ER, and calling that a coverage gap gets the whole exercise backwards. So every
+V	$3.2M	$xM / $xB	.test_harnesses/spend_objective_harness.js	21	comment	* one year of it - on the defaults cell it is roughly $3.2M against ~$5.9M of terminal wealth. That
+V	$5.9M	$xM / $xB	.test_harnesses/spend_objective_harness.js	21	comment	r of it - on the defaults cell it is roughly $3.2M against ~$5.9M of terminal wealth. That
+S	neighbour	neighbor	.test_harnesses/split_expressiveness_harness.js	207	comment	// its neighbour, re-score, and the difference is what per-YEAR fr
+S	neighbour	neighbor	.test_harnesses/split_expressiveness_harness.js	304	template	YEAR churn load-bearing? Collapse every 1-year run into its neighbour:`);
+V	$7.4M	$xM / $xB	.test_harnesses/split_expressiveness_harness.js	276	comment	lared 8 of 10 cells invalid on deltas of ONE DOLLAR against $7.4M, because the base plan
+V	$7.4M	$xM / $xB	.test_harnesses/split_fine_harness.js	235	comment	red 8 of 10 cells invalid on ONE DOLLAR of rounding against $7.4M, so report the magnitude.
+V	$7.4M	$xM / $xB	.test_harnesses/split_fine_harness.js	248	comment	// DOLLAR against $7.4M; a pure ratio test does the same thing one decima
+V	$7.3M	$xM / $xB	.test_harnesses/split_fine_harness.js	249	comment	// on a $7.3M lifetime spend tripped 1e-6 here on the first smo
+S	neighbours	neighbor	.test_harnesses/stopyear_stability_harness.js	145	comment	// A local maximum is a cut scoring strictly above both neighbours. Endpoints count when they beat
+S	neighbour	neighbor	.test_harnesses/stopyear_stability_harness.js	146	comment	// their single neighbour, since "convert nothing" and "never stop" are bot
+V	stood	"was stood" (UK) -> standing (vet)	.test_harnesses/stopyear_stability_harness.js	22	comment	fter the first run and before any report. The sentence that stood here
+S	analyse	analyze (check: "analyses" as a plural noun is fine)	.test_harnesses/taxattrib_harness.js	42	code	function analyse(inputs, mode, extra = {}) {
+S	analyse	analyze (check: "analyses" as a plural noun is fine)	.test_harnesses/taxattrib_harness.js	64	code	const s = analyse(p.inputs, 'split'), l = analyse(p.inputs, 'late')
+S	analyse	analyze (check: "analyses" as a plural noun is fine)	.test_harnesses/taxattrib_harness.js	64	code	const s = analyse(p.inputs, 'split'), l = analyse(p.inputs, 'late');
+S	analyse	analyze (check: "analyses" as a plural noun is fine)	.test_harnesses/taxattrib_harness.js	82	code	const a = analyse(p.inputs, 'early'), d = analyse(p.inputs, 'early'
+S	analyse	analyze (check: "analyses" as a plural noun is fine)	.test_harnesses/taxattrib_harness.js	82	code	const a = analyse(p.inputs, 'early'), d = analyse(p.inputs, 'early', { taxSettlement: 'december' })
+V	sat	"was sat" (UK) -> sitting / sits (vet)	.test_harnesses/timingmode_harness.js	15	comment	* distribution sat in month 11, and a conversion may not precede the
+V	tidied up	clean up - UK-leaning	.test_harnesses/which_plan.js	12	comment	* exactly the harnesses that were tidied up. That is a real cost of moving a literal behind a
+V	afterwards	afterward	ARCHITECTURE.md	683	doc	for the duration of a run and restores it afterwards - without that, six byte-identity tests fail in
+I	way round	way around	ARCHITECTURE.md	306	doc	ser's own plan is added once more with the switch the other way round
+S	renormalise	renormalize	ARCHITECTURE.md	636	doc	this repo has no repo-wide EOL policy, and adding one would renormalise every tracked file.
+S	modelling	modeled / modeling	ExperimentalFeatures.md	9	doc	puts** | a query parameter, no form field anywhere | a real modelling input that never got a control |
+S	modelling	modeled / modeling	ExperimentalFeatures.md	145	doc	This is the one most easily lost**, because it is a genuine modelling input with no control
+S	greys	gray	ExperimentalFeatures.md	135	doc	and Ordered, it **never reads the IRA Goal**, so that field greys out when it is selected - a fact that belongs her
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	ExperimentalFeatures.md	64	doc	is ticked, and the plan is run again when the solve lands.
+S	focusses	focused	README.md	652	doc	wyer in Washington DC, I find his pragmatism refreshing. He focusses on retirement topics.
+S	greys	gray	README.md	289	doc	ou chose and therefore has no shortfall rule to change - it greys the switch out rather than hiding it. With **Guar
+I	current account	checking account	README.md	155	doc	. What this tool does is allow you to set your current age, current account balances, growth and inflation, filing status, an
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	README.md	198	doc	| Settings and page errors | ticked | your state, your choices and assumptions (strat
+I	unticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	README.md	199	doc	| Full plan link | unticked | the same link **Share** makes, which holds your
+I	unticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	README.md	200	doc	| Screenshot | unticked | a picture of the whole page behind the dialog,
+I	tick	check / checked / unchecked (a box) - vet: chart "ticks" are fine	README.md	294	doc	ch longer on an older computer) and runs in the background; tick *Auto-run* to keep it current as you edit, and *S
+I	tick	check / checked / unchecked (a box) - vet: chart "ticks" are fine	README.md	311	doc	sits under the charts on the Charts tab. Press **Run**, or tick
+I	way round	way around	README.md	287	doc	ng, plus your own plan with the Guardrails switch the other way round. Apart from Ordered, and apart from ACA Cliff whi
+I	way round	way around	README.md	1137	doc	timizer tests, plus your own plan with Guardrails the other way round. By default, therefore, *Compare All* runs 400 it
+I	way round	way around	README.md	1164	doc	prediction. All start years makes the same point the other way round, by leaving nothing out. Either way it is a durab
+I	knock-on	ripple / downstream (effect)	README.md	455	doc	pal interest never owes, overstating the tax again. The two knock-on effects come out roughly right that way, because
+I	knock-on	ripple / downstream (effect)	README.md	908	doc	money grows, then is taxed once" and ignores the cascade of knock-on effects above. In my tests the true break-even wa
+I	in future	in the future (vet: "in future years" is fine)	README.md	115	doc	n information helps prioritize which state tax rules to add in future releases. You are welcome to see for yourself by
+I	in future	in the future (vet: "in future years" is fine)	README.md	574	doc	One other shortcoming: Boldin likes to present things in future dollars. This is a mistake that gives a false imp
+I	in future	in the future (vet: "in future years" is fine)	README.md	1102	doc	3.6k in tax. In 8 years 162K will be the equivalent of 197k in future dollars. Tax on $197k then will be $21k in future
+I	in future	in the future (vet: "in future years" is fine)	README.md	1102	doc	t of 197k in future dollars. Tax on $197k then will be $21k in future dollars and worth $16.4k in current dollars.
+V	tidy	clean up - UK-leaning	README.md	906	doc	est, full-in break-even, because it captures everything the tidy formula leaves out: the larger required distribut
+I	can do	elliptical "do" (UK) - drop "do"	README.md	444	doc	e the tool less simple. If you've got those situations, you can do some modeling here, but maybe a better tool will
+I	can do	elliptical "do" (UK) - drop "do"	README.md	456	doc	lear that deduction in one year, which a large harvest year can do, state tax is **understated**. Each of the five s
+V	$1.1M	$xM / $xB	README.md	137	doc	Sweeps ordinary income from $0 to $1.1M in $10k steps and plots your true all-in effectiv
+I	faff	fuss	RetirementTaxPlanner.html	233	markup	background: #f5faff;
+V	sat	"was sat" (UK) -> sitting / sits (vet)	RetirementTaxPlanner.html	487	comment	sat in the Rates group between four genuine rates, so
+V	sat	"was sat" (UK) -> sitting / sits (vet)	RetirementTaxPlanner.html	829	comment	nly to input events it is never re-run after Compute, so it sat on screen
+S	recognise	recognize	RetirementTaxPlanner.html	916	comment	lently fell through to the last one for anything it did not recognise.
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	Retirement_Projection.html	1437	code	x:{ grid:{color:'rgba(42,48,72,0.6)'}, ticks:{color:'#7b83a0', font:{family:"'DM Mono',monospa
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	Retirement_Projection.html	1438	code	yBal:{ position:'left',  grid:{color:'rgba(42,48,72,0.6)'}, ticks:{color:'#7b83a0', font:{family:"'DM Mono',monospa
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	Retirement_Projection.html	1439	code	yWd: { position:'right', grid:{display:false}, ticks:{color:'#7b83a0', font:{family:"'DM Mono',monospa
+I	in Future	in the future (vet: "in future years" is fine)	Retirement_Projection.html	329	markup	ored as a negative floor and plotted as a flat nominal line in Future $ mode.</li>
+I	in Future	in the future (vet: "in future years" is fine)	Retirement_Projection.html	338	markup	is <b>not indexed to inflation</b> and plots as a flat line in Future $ mode.</li>
+I	in future	in the future (vet: "in future years" is fine)	Retirement_Projection.html	346	markup	b>Nominal / Real bal</b> — IRA balance at end of projection in future and today's dollars.</li>
+S	behaviour	behavior	displayhelpers.js	68	comment	// Attaches smart numeric behaviour to a <input type="text"> element.
+V	backwards	backward	displayhelpers.js	48	comment	Forward, so the FIRST match is the LARGEST unit that fits; backwards would call a billion "k".
+S	labelled	labeled / labeling	doclinks.js	110	comment	// flatten any markup inside the anchor. Every filename-labelled link here is plain
+S	labelled	labeled / labeling	doclinks.tests.js	186	comment	// ── 8. docLabel: a link labelled with a filename must not lie ──────────────
+I	untick	check / checked / unchecked (a box) - vet: chart "ticks" are fine	doclinks.tests.js	314	comment	// user to untick something that was not on the screen. A `<label>`
+V	afterwards	afterward	feedback.js	111	comment	// a year, so it is masked; the script location is added afterwards and keeps its line number.
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	feedback.js	15	comment	settings    (ticked) the page's pinned values (the state), the share-
+I	unticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	feedback.js	18	comment	plan link   (unticked) the whole share link, numbers and all
+I	unticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	feedback.js	19	comment	screenshot  (unticked) a JPEG of what is on screen behind the dialog
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	feedback.js	154	comment	lt means "not included". shareUrl is read only for what the ticks allow.
+I	unticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	feedback.js	725	comment	if (!el.shot.checked) return;            // unticked while it was being taken
+I	Reckon	think / figure	feedback.js	686	comment	// downscaled. Reckon on 5 to 9 seconds on a laptop of a few years ago.
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	feedback.tests.js	152	string	test('buildPayload leaves the plan link out unless it is ticked', () => {
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	feedback.tests.js	158	string	tings, withheld names and page errors only when settings is ticked', () => {
+I	unticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	feedback.tests.js	188	string	eq(FW.buildPayload(dialogState(), cfg).settings, null, 'unticked settings send no state either');
+I	unticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	feedback.tests.js	277	string	test('the preview marks every unticked part and shows a screenshot only by its size', ()
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	feedback.tests.js	287	string	rt(full.includes(SHARE), 'the plan link is shown when it is ticked');
+S	Cancelled	canceled / canceling	montecarlo/mc_controller.js	214	comment	// Cancelled mid-pass. Report nothing, which is what leaves th
+S	amortised	amortized	montecarlo/mc_controller.js	136	comment	// the input fan are amortised over few simulations -- real cost, but it does no
+S	cancelled	canceled / canceling	montecarlo/mc_engine.js	668	comment	// post or hand back. Returns null if the run was cancelled - the caller reports nothing in that
+S	cancelled	canceled / canceling	montecarlo/mc_engine.js	669	comment	// case, which is what leaves a cancelled run's previous results on screen.
+S	cancelled	canceled / canceling	montecarlo/mc_engine.js	699	comment	if (!stressOnly && main === null) return null;   // cancelled mid-pass
+S	cancelled	canceled / canceling	montecarlo/mc_engine.js	708	comment	if (willRunStress && stress === null) return null;   // cancelled mid-pass
+S	recognise	recognize	montecarlo/mc_engine.js	371	comment	// so the loop can recognise its own variation while it still holds that varia
+S	centre	center	montecarlo/mc_tab.js	1318	comment	// The two synthetic models centre the yearly return distribution differently, and t
+S	centre	center	montecarlo/mc_tab.js	1319	comment	ich one you are looking at. GBM's mu is a log drift, so the centre reported
+S	centre	center	montecarlo/mc_tab.js	1321	comment	// the centre IS that number. Neither changes how volatility dr
+S	cancelled	canceled / canceling	montecarlo/mc_tab.js	718	comment	// Same reason runMonteCarlo() clears it: a cancelled run never delivers its callback, and on the
+S	cancelled	canceled / canceling	montecarlo/mc_tab.js	722	comment	// P91: the user cancelled, so do not quietly start another pass on their be
+S	cancelled	canceled / canceling	montecarlo/mc_tab.js	888	comment	// errors, is cancelled or is terminated draws nothing and records nothin
+S	labelled	labeled / labeling	montecarlo/mc_tab.js	387	comment	// Seed the timing model before the buttons are labelled, so they arrive carrying a cost rather
+S	labelling	labeled / labeling	montecarlo/mc_tab.js	503	comment	// How the sequences on screen were chosen, for labelling. Prefers what the engine actually applied
+S	greyed	gray	montecarlo/mc_tab.js	246	comment	left clickable with nothing to do. Their knobs are already greyed out in that mode.
+S	grey	gray	montecarlo/mc_tab.js	1125	comment	ng is why neither arrow is ever disabled. The alternative - grey them out at the ends - left
+V	afterwards	afterward	montecarlo/mc_tab.js	131	comment	behavior rather than a number, so it goes through the sync afterwards.
+I	tick	check / checked / unchecked (a box) - vet: chart "ticks" are fine	montecarlo/mc_tab.js	682	comment	s its own stress pass (renderMCResults, below, in this same tick),
+I	tick	check / checked / unchecked (a box) - vet: chart "ticks" are fine	montecarlo/mc_tab.js	948	comment	// promises). Read in the same tick as getInputs() below, so it names exactly what th
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	montecarlo/mc_tab.js	2214	code	x: { title: { display: true, text: 'Year' }, ticks: { maxTicksLimit: 10 } },
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	montecarlo/mc_tab.js	2217	code	ticks: {
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	montecarlo/mc_tab.js	2356	code	x: { title: { display: true, text: 'Year' }, ticks: { maxTicksLimit: 10 } },
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	montecarlo/mc_tab.js	2359	code	ticks: {
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	montecarlo/mc_tab.js	2687	code	ticks: { callback: v => (v * 100).toFixed(0) + '%' },
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	montecarlo/mc_tab.js	2690	code	const xAxis = { ticks: { maxTicksLimit: 10 } };
+I	way round	way around	montecarlo/mc_tab.js	22	comment	plan's Guardrails twin (the plan with the switch the other way round), or -1.
+I	way round	way around	montecarlo/mc_tab.js	534	comment	// The sidebar's plan with the Guardrails switch the other way round (P126). Built from the plan
+V	sat	"was sat" (UK) -> sitting / sits (vet)	montecarlo/mc_tab.js	999	comment	// sat at pending with nothing in flight. After the rend
+S	labelled	labeled / labeling	montecarlo/prng.js	464	comment	r, for a reason no reader could have guessed from a control labelled "how many worst
+I	belt and braces	belt and suspenders	montecarlo/prng.js	508	comment	// them, so this never wraps; the modulo is belt and braces.
+S	CANCELLED	canceled / canceling	montecarlo/rails_engine.js	143	code	const _RAILS_CANCELLED = Symbol('rails-cancelled');
+S	cancelled	canceled / canceling	montecarlo/rails_engine.js	143	string	const _RAILS_CANCELLED = Symbol('rails-cancelled');
+S	CANCELLED	canceled / canceling	montecarlo/rails_engine.js	209	code	if (h.shouldCancel()) throw _RAILS_CANCELLED;
+S	CANCELLED	canceled / canceling	montecarlo/rails_engine.js	462	code	if (e === _RAILS_CANCELLED) return null;
+V	sat	"was sat" (UK) -> sitting / sits (vet)	montecarlo/rails_engine.js	701	comment	// across the step sat between two numbers that were both wrong for that
+S	behaviour	behavior	optimizer_changelog.md	1435	doc	- **Compare All Scenarios** is the old behaviour, renamed to say what it actually does.
+S	labelled	labeled / labeling	optimizer_changelog.md	124	doc	**The Guardrails switch is now labelled GK-style.**
+S	greys	gray	optimizer_changelog.md	428	doc	**The IRA Goal greys out for the strategies that ignore it.**
+S	greys	gray	optimizer_changelog.md	431	doc	No value you type there changes their result. The field now greys out and says
+S	greyed	gray	optimizer_changelog.md	699	doc	has already passed 65, the ACA income-cap options are still greyed out but
+S	greyed	gray	optimizer_changelog.md	913	doc	IRMAA tier stay listed, greyed, showing the income where they begin. And a saved
+S	greys	gray	optimizer_changelog.md	969	doc	and the *Ordered* strategy greys the switch out, because it draws in the sequence
+V	afterwards	afterward	optimizer_changelog.md	387	doc	imported but never loaded again afterwards; those files now import and load like any other.
+V	backwards	backward	optimizer_changelog.md	273	doc	there. That was backwards in two ways. What a converting year wants early i
+V	backwards	backward	optimizer_changelog.md	1522	doc	return and backwards for inflation: 8.7% inflation was drawn in the sa
+V	backwards	backward	optimizer_changelog.md	1878	doc	calculation", which was backwards.
+I	untick	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_changelog.md	76	doc	with it.** Your settings and any page errors go unless you untick them:
+I	tick	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_changelog.md	78	doc	plan link and a screenshot of the whole page go only if you tick them.
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_changelog.md	908	doc	saved with the box ticked load as Full COLA; unticked loads as No increase.
+I	unticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_changelog.md	908	doc	saved with the box ticked load as Full COLA; unticked loads as No increase.
+I	topped up	add to / replenish / refill	optimizer_changelog.md	509	doc	It shows the buffer being held, topped up, or broken into, and hides itself when there is n
+I	fiddly	finicky	optimizer_changelog.md	853	doc	, and clicking one replays it. Picking one out there can be fiddly in the early years where
+I	to hand	on hand / at hand (vet)	optimizer_changelog.md	2077	doc	lives in a Markdown file, and clicking through to one used to hand your
+I	can do	elliptical "do" (UK) - drop "do"	optimizer_changelog.md	1642	doc	jobs that one pair of transactions can do.
+I	would do	elliptical "do" (UK) - drop "do"	optimizer_changelog.md	2043	doc	would do. The 17 states the tool models with graduated bra
+V	$2.8M	$xM / $xB	optimizer_changelog.md	574	doc	$2.8M plan at the 22% limit that was $168,500 of room l
+V	$2M	$xM / $xB	optimizer_changelog.md	811	doc	once you set a fee. At 1% of $2M that is roughly $20,000 in the first year, compou
+V	$2.1M	$xM / $xB	optimizer_changelog.md	1969	doc	On a couple aged 66 and 67 at the start with a $2.1M IRA and a $160,000 spending goal, the ACA 400%
+V	sat	"was sat" (UK) -> sitting / sits (vet)	optimizer_changelog.md	546	doc	nual Details a balance column disappeared when that account sat at zero for the whole plan, so
+V	sat	"was sat" (UK) -> sitting / sits (vet)	optimizer_changelog.md	1086	doc	r of unpaid spending while a seven-figure Brokerage balance sat there
+V	sat	"was sat" (UK) -> sitting / sits (vet)	optimizer_changelog.md	1556	doc	The survival table sat between the Stress Test and the chart that goes w
+V	sat	"was sat" (UK) -> sitting / sits (vet)	optimizer_changelog.md	2381	doc	Both only ever affected the Optimizer, but sat in the sidebar next to the strategy settings that
+S	recognisable	recognizable	optimizer_changelog.md	2254	doc	tric in the Best table keeps its marker there too, so it is recognisable as the same row without
+S	neighbouring	neighbor	optimizer_core.js	6201	comment	// family's curve instead of only the neighbouring steps. Returns null when the value is already on
+S	neighbouring	neighbor	optimizer_core.js	6617	comment	Refine on the real $25k grid around the winner, re-testing neighbouring cutoffs since the
+S	neighbouring	neighbor	optimizer_core.js	6749	comment	// for a family whose neighbouring years differ by very little, and every row is pai
+S	licence	license	optimizer_core.js	2761	comment	filling it is the Optimizer ranking's job to surface, not a licence
+S	modelled	modeled / modeling	optimizer_core.js	813	comment	* Not modelled: the mirror case at the other end, where benefits
+S	modelled	modeled / modeling	optimizer_core.js	3229	comment	nRother' fell through to the Roth-first branch and silently modelled the
+S	Labelled	labeled / labeling	optimizer_core.js	2113	comment	/ resumed run counts from the same end the whole plan does. Labelled rather than silent,
+S	ENROLMENT	enroll / enrollment	optimizer_core.js	1675	comment	// PER-PERSON ENROLMENT. Not everyone 65+ is on Medicare: a person may be
+S	greys	gray	optimizer_core.js	5555	comment	// the IRA Goal can change their outcome. The UI greys the IRA Goal field for exactly these.
+S	greys	gray	optimizer_core.js	5568	comment	// or the field greys out on a control that works.
+V	afterwards	afterward	optimizer_core.js	4238	comment	// When applyExtraConversion runs afterwards it recomputes over the same income plus its own
+I	way round	way around	optimizer_core.js	6777	comment	// the switch the other way round (planRuleTwin). Plain text, so it serves the HTML
+V	tidy	clean up - UK-leaning	optimizer_core.js	1470	comment	than reading `balance` at its own call site. That was not a tidy
+V	tidy	clean up - UK-leaning	optimizer_core.js	4017	comment	ver route the fee through netWithdrawals to "keep the books tidy",
+V	$2.1M	$xM / $xB	optimizer_core.js	41	comment	and not one year of it. On the default scenario that is ~$2.1M against ~$5.9M of terminal
+V	$5.9M	$xM / $xB	optimizer_core.js	41	comment	year of it. On the default scenario that is ~$2.1M against ~$5.9M of terminal
+V	$5M	$xM / $xB	optimizer_core.js	710	comment	* peaking at `B*g^2/4` a year - $6,125 on $5M at 7% - and, far worse, peaking in the MIDDLE of
+V	$2.13M	$xM / $xB	optimizer_core.js	1898	comment	// nobody: on a plan where the first spouse died holding $2.13M, the household's whole RMD for
+V	$2.8M	$xM / $xB	optimizer_core.js	3003	comment	income` = 0.150000, min equal to max, worth $168,500 on one $2.8M
+V	$2.16M	$xM / $xB	optimizer_core.js	3551	comment	// the IRA held $2.16M - the 4th iteration was simply one short. 6 clear
+V	$2M	$xM / $xB	optimizer_core.js	4007	comment	// $2M is ~$20,000 in year one and compounds for the who
+V	$1.4M	$xM / $xB	optimizer_core.js	6606	comment	// $225k-$250k out of a $1.4M IRA (~16%), which sits below the first sample of
+V	$3.3M	$xM / $xB	optimizer_core.js	6643	comment	// scenario and 3.3s at a $3.3M IRA, past this project's 2.5s budget. The prune t
+V	$3.3M	$xM / $xB	optimizer_core.js	6650	comment	// silently lost the right answer (a $3.3M scenario reported 25% against a true 5%): a plan
+V	$3.56M	$xM / $xB	optimizer_core.js	7009	comment	🅡 arm is swept for everyone - P28 measured it worth up to +$3.56M and found no heuristic
+V	sat	"was sat" (UK) -> sitting / sits (vet)	optimizer_core.js	1218	comment	gify whole rows. P86: the SumAdvisorFees running total that sat here
+V	sat	"was sat" (UK) -> sitting / sits (vet)	optimizer_core.js	1575	comment	// RMD sat in month 11, and a conversion may not precede the
+V	sat	"was sat" (UK) -> sitting / sits (vet)	optimizer_core.js	4480	comment	// The month the conversion ACTUALLY sat in, after the floor - not the one the mode asked
+V	sat	"was sat" (UK) -> sitting / sits (vet)	optimizer_core.js	4532	comment	// did, for the months the proceeds actually sat there waiting to be spent.
+S	unsanitised	unsanitized	optimizer_core.js	7263	comment	nk-name path produces a timestamp containing colons, so the unsanitised
+S	honours	honor	optimizer_core.tests.js	5349	comment	// computeBracketCeiling only honours an IRMAA-tier ceiling once the household is insid
+S	honoured	honor	optimizer_core.tests.js	7408	comment	// `skipSlow` is honoured ONLY by the browser tier. Node always passes fals
+S	NEIGHBOUR	neighbor	optimizer_core.tests.js	6436	comment	// And it must not match a NEIGHBOUR. Every plan above differs from every other one, s
+S	cancelled	canceled / canceling	optimizer_core.tests.js	5432	comment	// the fix is not cancelled out by its own safety belt.
+S	cancelled	canceled / canceling	optimizer_core.tests.js	8008	string	test('P71: a cancelled job reports nothing at all', async () => {
+S	cancelled	canceled / canceling	optimizer_core.tests.js	8009	comment	// The contract the UI depends on: a cancelled run resolves to null, and the caller reporting
+S	cancelled	canceled / canceling	optimizer_core.tests.js	8015	string	assert(msg === null, 'a cancelled job returned a results message');
+S	cancelled	canceled / canceling	optimizer_core.tests.js	8872	string	test('P128: a cancelled rails job resolves to nothing', async () => {
+S	modelled	modeled / modeling	optimizer_core.tests.js	7331	comment	cause `Infinity <= amount` is never true — and 21 of the 38 modelled
+S	labelled	labeled / labeling	optimizer_core.tests.js	6989	comment	// ...)` was labelled "neither 65 at start" - but the plan cannot start
+S	labelled	labeled / labeling	optimizer_core.tests.js	7932	string	test('P80: every sampled year is labelled with the year that actually produced it', () => {
+S	labelled	labeled / labeling	optimizer_core.tests.js	7976	string	'a wrapped scenario must NOT be labelled start + y; that is the bug this guards');
+S	labelled	labeled / labeling	optimizer_core.tests.js	8254	template	f Object.entries(labels)) assert(P[k].label === l, `${k} is labelled ${P[k].label}, wanted ${l}`);
+S	Enrolment	enroll / enrollment	optimizer_core.tests.js	4679	comment	// couple it is often true of one of them. Enrolment decides the premium and the surcharge
+S	greys	gray	optimizer_core.tests.js	9558	comment	// The UI greys the IRA Goal field for IRA_GOAL_BLIND_STRATEGIES.
+S	greyed	gray	optimizer_core.tests.js	9599	template	`P107: '${label}' reads the IRA Goal and must not be greyed`);
+V	afterwards	afterward	optimizer_core.tests.js	6009	comment	the same as the average, and a capped plan never catches up afterwards.
+V	afterwards	afterward	optimizer_core.tests.js	9051	comment	// afterwards. This is measured, not hypothesised: without it e
+V	backwards	backward	optimizer_core.tests.js	2452	comment	// The case the old basis got backwards: the sizing line puts acaMAGI ON the cap, so the
+V	backwards	backward	optimizer_core.tests.js	5476	comment	// likely to get backwards. `none` means NO MARGIN, not "no forward projecti
+V	backwards	backward	optimizer_core.tests.js	7031	comment	// property so a later change that produces a backwards flip fails here rather than shipping.
+V	backwards	backward	optimizer_core.tests.js	7051	template	, `clamping must never un-set the gate, got ${flipsToFalse} backwards flips`);
+V	backwards	backward	optimizer_core.tests.js	9472	comment	// why the old rule had to reach backwards.
+I	way round	way around	optimizer_core.tests.js	7301	comment	// which is the wrong way round for a tool that ships a widow-RMD objective.
+I	knock-on	ripple / downstream (effect)	optimizer_core.tests.js	1088	comment	// the knock-on and not a second effect - the larger 2053 draw le
+I	to hand	on hand / at hand (vet)	optimizer_core.tests.js	1149	comment	// never fires; the market has to hand it more than it planned for).
+I	to hand	on hand / at hand (vet)	optimizer_core.tests.js	3418	comment	// the code used to hand every year the flat 2025 numbers while its own co
+I	to hand	on hand / at hand (vet)	optimizer_core.tests.js	3616	comment	// the engine forgot to hand it pensionIncome/iraIncome. The third pass (resol
+V	tidying up	clean up - UK-leaning	optimizer_core.tests.js	2856	comment	// break by "tidying up": fee dollars taken from an IRA are NOT taxable d
+V	$1.5M	$xM / $xB	optimizer_core.tests.js	1081	comment	(2026-09-03). This fixture has the first death in 2052 with $1.5M still
+V	$3M	$xM / $xB	optimizer_core.tests.js	1630	comment	// IWR = 50k/1M = 5%. After +200% return, raw portfolio ≈ $3M.
+V	$1M	$xM / $xB	optimizer_core.tests.js	1727	string	[1000000, '$1M'], [1200000, '$1.2M'], [1234567890, '$1.23B'],
+V	$1.2M	$xM / $xB	optimizer_core.tests.js	1727	string	[1000000, '$1M'], [1200000, '$1.2M'], [1234567890, '$1.23B'],
+V	$1M	$xM / $xB	optimizer_core.tests.js	1738	string	assert(formatDollarShort(999500) === '$1M', `got ${formatDollarShort(999500)}`);
+V	$2M	$xM / $xB	optimizer_core.tests.js	2234	comment	// shortfall despite a $2M IRA. Soft caps now draw IRA above the ceiling to
+V	$3M	$xM / $xB	optimizer_core.tests.js	2368	comment	// inherits a household already 74 years old and a $3M IRA whose RMD alone clears the ceiling.
+V	$3M	$xM / $xB	optimizer_core.tests.js	2439	comment	P87c ACA test uses, and deliberately so: a 400% cap with a $3M IRA behind it
+V	$2M	$xM / $xB	optimizer_core.tests.js	2854	comment	// A 1% fee on $2M is ~$20,000 in year one and compounds for the who
+V	$2.13M	$xM / $xB	optimizer_core.tests.js	3191	comment	link, 2026-09-03: on a plan whose first spouse died holding $2.13M, the
+V	$1.68M	$xM / $xB	optimizer_core.tests.js	3273	comment	from the other side. CAP_BASE's person 1 dies at 74 holding $1.68M,
+V	$1M	$xM / $xB	optimizer_core.tests.js	3870	comment	// converts nearly $1M here, so the actual arm's own conversion tax now
+V	$1.2M	$xM / $xB	optimizer_core.tests.js	4448	comment	// carrying it over one. A 3% draw on $1.2M is about $36,000, so $0 pays no surcharge and $10
+V	$1M	$xM / $xB	optimizer_core.tests.js	4546	comment	// from the $1M IRA, not have a slice split off into the $10k one
+V	$2M	$xM / $xB	optimizer_core.tests.js	4869	comment	// Reproduces the observed $2M topology: five cyclic-fixedpct rows hold the five
+V	$1.45M	$xM / $xB	optimizer_core.tests.js	5516	comment	// Security is a plan that cannot fund itself — $1.45M of assets against $1.8M of spending before
+V	$1.8M	$xM / $xB	optimizer_core.tests.js	5516	comment	s a plan that cannot fund itself — $1.45M of assets against $1.8M of spending before
+V	$1.5M	$xM / $xB	optimizer_core.tests.js	6168	comment	// modes the $1.5M fixture's fixed candidate started reporting a thr
+V	$1.2M	$xM / $xB	optimizer_core.tests.js	6170	comment	// shape rather than guessed: at $1.2M fixed reports none and fixedpct reports 0.74, whi
+V	$1M	$xM / $xB	optimizer_core.tests.js	6171	comment	// asymmetry this test exists to catch. Below about $1M neither reports one and the test would go
+V	sat	"was sat" (UK) -> sitting / sits (vet)	optimizer_core.tests.js	1099	comment	The cent-level pins on spend, tax and final net worth that sat here were re-stamped at every
+V	sat	"was sat" (UK) -> sitting / sits (vet)	optimizer_core.tests.js	8604	comment	ld field interpolation, kept for a message without a spine, sat between the two.
+S	Normalised	Normalized	optimizer_core.tests.js	6935	comment	// spread its literals, not a behavior. Normalised on both sides so a faithful extraction
+S	gkRaise	gkRaize	optimizer_core.tests.js	8741	code	const gkRaise = simulate({ ...GK_BASE, returnSequence: Array.fr
+S	gkRaise	gkRaize	optimizer_core.tests.js	8742	code	assert(gkRaise[1].ruleAdj.includes('pros') && gkRaise[1]['-ruleM
+S	gkRaise	gkRaize	optimizer_core.tests.js	8742	code	assert(gkRaise[1].ruleAdj.includes('pros') && gkRaise[1]['-ruleMove'] > 0, `GK raise: ${gkRaise[1].rule
+S	gkRaise	gkRaize	optimizer_core.tests.js	8742	code	cludes('pros') && gkRaise[1]['-ruleMove'] > 0, `GK raise: ${gkRaise[1].ruleAdj} ${gkRaise[1]['-ruleMove']}`);
+S	gkRaise	gkRaize	optimizer_core.tests.js	8742	code	ise[1]['-ruleMove'] > 0, `GK raise: ${gkRaise[1].ruleAdj} ${gkRaise[1]['-ruleMove']}`);
+S	neutralises	neutralizes	optimizer_core.tests.js	9049	comment	// Node neutralises this with a load-time stub. The browser must NOT
+S	hypothesised	hypothesized	optimizer_core.tests.js	9051	comment	// afterwards. This is measured, not hypothesised: without it exactly six byte-identity tests
+S	unsanitised	unsanitized	optimizer_core.tests.js	9437	comment	// interpolated unsanitised, and the blank-name fallback is a timestamp conta
+S	Greyed	gray	optimizer_styles_responsive.css	190	doc	/* A knob the current strategy ignores. Greyed rather than hidden, so it does not appear and
+S	greyed	gray	optimizer_styles_responsive.css	192	doc	ecause the hover-over is the only thing that says WHY it is greyed. */
+S	colour	color	optimizer_tests.js	1819	comment	vertical line STYLE has a legend entry. Compared by stroke colour, not by count:
+S	behaviour	behavior	optimizer_tests.js	992	comment	tionSequence, spend escalates at inputs.inflation (existing behaviour unchanged).
+S	labelled	labeled / labeling	optimizer_tests.js	1495	string	'no entry is labelled "no limit"');
+S	labelled	labeled / labeling	optimizer_tests.js	1852	string	'"Show ACA/FPL" adds the row, labelled ACA / FPL');
+S	greys	gray	optimizer_tests.js	1564	comment	// The ACA gate greys out the FPL options once every person in the plan
+S	grey	gray	optimizer_tests.js	1568	comment	same first year and the same ages in it. The options still grey
+S	greys	gray	optimizer_tests.js	1599	string	'a start age past 65 still greys the ACA rows out');
+S	greys	gray	optimizer_tests.js	1674	comment	// cap to protect, so the gate greys the ACA rows out and the selection has to move.
+V	afterwards	afterward	optimizer_tests.js	1410	comment	// doing to someone's page. Every value is put back afterwards.
+V	backwards	backward	optimizer_tests.js	1762	comment	// column read top to bottom never runs backwards.
+I	tick	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_tests.js	1820	comment	// the ACA row draws one tick per cap and they share a single entry, so countin
+I	ticking	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_tests.js	3190	string	assertEqual(jobs.length, 1, 'P128o: ticking Auto-run starts a solve at once, without the debo
+I	unticking	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_tests.js	3195	string	assertEqual(RailsState.debounce, null, 'P128o: unticking it leaves nothing scheduled');
+I	way round	way around	optimizer_tests.js	1387	comment	// The control follows the state, not only the other way round - a select showing one goal
+I	way round	way around	optimizer_tests.js	2376	comment	he plan as set, and the same plan with Guardrails the other way round =====
+I	way round	way around	optimizer_tests.js	2391	template	Rule, on ? '' : 'gk', `rule '${rule}': and has it the other way round`);
+V	$1M	$xM / $xB	optimizer_tests.js	712	comment	// Example: $1M IRA, want to get down to $200K over 10 years, 6%
+V	$1M	$xM / $xB	optimizer_tests.js	716	comment	// Example: $1M IRA, want to get down to $200K in 1 year, 6% grow
+V	$4M	$xM / $xB	optimizer_tests.js	2008	comment	// Reported against a real plan: a $4M IRA left to a survivor throws off a required dist
+V	sat	"was sat" (UK) -> sitting / sits (vet)	optimizer_tests.js	2401	comment	// rightward every cell sat under the heading to its left, and the rightmost
+S	neighbours	neighbor	optimizer_ui.js	4359	comment	// across its neighbours. The step-up glyph replaces it at a fraction of t
+S	Centre	center	optimizer_ui.js	3271	comment	// Centre the first named column. Centring rather than left
+S	centred	center	optimizer_ui.js	8958	comment	nst mid = y => y + ROW_H / 2 + 4;          // text baseline centred in a row
+S	Centring	centering	optimizer_ui.js	3271	comment	// Centre the first named column. Centring rather than left-aligning also clears the sticky
+S	Cancelling	canceled / canceling	optimizer_ui.js	1261	comment	e flag stuck true and every later click did nothing at all. Cancelling and re-queueing cannot
+S	cancelled	canceled / canceling	optimizer_ui.js	8028	string	showMessage('Import cancelled.', 'warning');
+S	cancelled	canceled / canceling	optimizer_ui.js	8368	string	showMessage('Import cancelled.', 'warning');
+S	modelling	modeled / modeling	optimizer_ui.js	885	comment	// modelling a smaller portfolio than they will actually have,
+S	labelled	labeled / labeling	optimizer_ui.js	4315	comment	//  1. First death - labelled "You" / "Spouse" (filing status flips; the deceas
+S	Labelled	labeled / labeling	optimizer_ui.js	4317	comment	nal row, always someone's death since the plan ends at one. Labelled the
+S	labelled	labeled / labeling	optimizer_ui.js	4321	comment	AA tier INCREASES over the prior year (e.g. Tier 1→Tier 2), labelled with
+S	labelled	labeled / labeling	optimizer_ui.js	4374	comment	ck to the plan still moved spending up, and a GK-style year labelled 'no-cut'
+S	labelled	labeled / labeling	optimizer_ui.js	5974	comment	// labelled "tax" everywhere. The scale is uniform, so it sha
+S	labelled	labeled / labeling	optimizer_ui.js	9386	comment	// labelled "no limit", and selecting it produced $NaN for th
+S	Enrolment	enroll / enrollment	optimizer_ui.js	761	comment	// the engine would not recognize. Enrolment defaults to TRUE, so the value sent is the
+S	greyed	gray	optimizer_ui.js	969	comment	// nothing. Hide it rather than let it sit next to a greyed field.
+S	greyed	gray	optimizer_ui.js	5354	comment	lth, a + b x (wealth / spine wealth). Interpolated rows are greyed.
+S	grey	gray	optimizer_ui.js	5377	code	const grey = r.solved ? '' : 'color:#888;';
+S	grey	gray	optimizer_ui.js	5378	code	rows.push(`<tr style="${grey}"><td style="${td}text-align:left;">${r.year}${r.
+S	greys	gray	optimizer_ui.js	6460	comment	// hiding, the way the Ordered strategy greys out Roth-before-Brokerage.
+S	greyed	gray	optimizer_ui.js	7004	comment	// knob is on, greyed until the switch is, and shown without the knob o
+S	Greyed	gray	optimizer_ui.js	7029	comment	// 🅡 rows. Greyed rather than hidden, and the switch is NOT cleared
+S	Greyed	gray	optimizer_ui.js	7037	comment	// Greyed and disabled rather than hidden, and the VALUE IS
+S	greyed	gray	optimizer_ui.js	9261	comment	// Silent, on instruction. The options are greyed out above and nothing here can be acted
+S	greyed	gray	optimizer_ui.js	9274	comment	// the ACA options are greyed out, and a user who cannot select them could othe
+S	Greyed	gray	optimizer_ui.js	9521	comment	// Greyed the same way updateACAWarning() greys a lapsed AC
+S	greys	gray	optimizer_ui.js	9521	comment	// Greyed the same way updateACAWarning() greys a lapsed ACA entry, so "listed but not
+S	ageing	aging	optimizer_ui.js	9481	comment	// The trailing `(1 + cpi)` is the engine's, ageing a 2025 FPL figure into the plan's first year,
+S	maths	math	optimizer_ui.js	3267	comment	// hide the mirror scrollbar and the scroll maths would land on 0.
+V	backwards	backward	optimizer_ui.js	4081	comment	// would render a third SMALLER than "half" and read backwards. Its family (U+25D0..U+25D7) has no
+V	backwards	backward	optimizer_ui.js	6706	comment	// reader would otherwise get backwards.
+I	tick	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	3210	comment	switch tabs, work out which category the column belongs to, tick that category, then find the
+I	Ticking	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	3258	comment	/ A column of all zeros stays hidden behind its own switch. Ticking the switch - rather than
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	4631	comment	for a log axis: 1k, 10k, 250k, 1M, 2.5M. Chart.js's own log ticks print raw
+I	tick	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	4645	comment	// the geometry is identical - and only the tick generator changes. Registered on first use, so a
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	4655	code	const ticks = [];
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	4656	code	for (let p = p0; p <= p1; p++) ticks.push({ value: Math.pow(2, p) });
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	4659	code	return ticks;
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	4715	code	scales: { y: { ticks: dollarTicks } },
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	4776	code	acked: true,  title: { display: true, text: 'Tax ($)' },    ticks: dollarTicks },
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	4777	code	rea: false }, title: { display: true, text: 'Income ($)' }, ticks: dollarTicks },
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	4814	code	scales: { x: { stacked: true }, y: { stacked: true, ticks: dollarTicks } },
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	4841	code	scales: { x: { stacked: true }, y: { stacked: true, ticks: dollarTicks } },
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	4876	code	y:  { position: 'left', ticks: { callback: v => v + '%' } },
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	4878	code	title: { display: true, text: 'Buying power ($)' }, ticks: dollarTicks },
+I	Ticking	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	5211	comment	// Auto-run. Ticking it on solves at once when what is on screen is no
+I	ticked	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	5263	comment	with it on a solve is scheduled whether or not Auto-run is ticked.
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	5889	code	ticks: { callback: v => '$' + fmtAxisDollars(v) },
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	6043	code	y: { stacked: true, ticks: { callback: v => Math.round(v).toLocaleString()
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	7842	comment	// A column of green ticks next to every other row was three states of nothi
+I	TICK	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	8951	code	const TICK_Y = 22, AXIS_Y = 30, ROW_H = 26, ROW_GAP = 10;
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	9037	comment	// ACA FPL caps, off by default. Four ticks and ONE label: at today's figures the 200% and 40
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	9038	comment	units apart on a 448-unit axis, which is enough to see four ticks and
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	9089	comment	// Scale along the TOP edge: ticks above the line, line above the first row.
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	9090	code	const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => f * maxX);
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	9092	code	for (const t of ticks) axis += `<text x="${x(t).toFixed(1)}" y="${TICK_
+I	TICK	check / checked / unchecked (a box) - vet: chart "ticks" are fine	optimizer_ui.js	9092	code	onst t of ticks) axis += `<text x="${x(t).toFixed(1)}" y="${TICK_Y}" font-size="10" fill="#777" text-anchor="middl
+I	way round	way around	optimizer_ui.js	1671	comment	user's own plan - so this adds it with the switch the other way round. Ranked with
+V	$1M	$xM / $xB	optimizer_ui.js	886	comment	ng 2026 against $1,046,082 starting 2030 for the same typed $1M, where four
+V	$1.26M	$xM / $xB	optimizer_ui.js	887	comment	// years at 6% would be about $1.26M.
+V	$3.3M	$xM / $xB	optimizer_ui.js	1739	comment	// 10 of 12 candidates rescued on a $3.3M-IRA scenario, 5 at a 45% future rate, 0 on the
+V	$4M	$xM / $xB	optimizer_ui.js	6677	comment	// $4M IRA left to a survivor throws off an RMD of $455,
+V	sat	"was sat" (UK) -> sitting / sits (vet)	optimizer_ui.js	258	comment	// the rule written just above. It sat behind the knob only while it was being proven ou
+V	sat	"was sat" (UK) -> sitting / sits (vet)	optimizer_ui.js	1210	comment	taxes, spendable) and were never re-rendered here, so they sat on a fixed basis while
+V	sat	"was sat" (UK) -> sitting / sits (vet)	optimizer_ui.js	3079	comment	// sat under the header to its left and the last column
+V	sat	"was sat" (UK) -> sitting / sits (vet)	optimizer_ui.js	5711	comment	// and the other two are that same spending if wealth sat on a rail - which is why the raise one
+S	recognisable	recognizable	optimizer_ui.js	2531	comment	rry the pinned rows' markers into this table so a winner is recognisable as
+S	Normalising	Normalizing	optimizer_ui.js	7519	comment	ever. Import could manufacture entries Load would not open. Normalising on the
+S	normalise	normalize	optimizer_ui.js	7920	comment	ame to be able to store entries Load would refuse. Both now normalise, then preview, then commit.
+S	unsanitised	unsanitized	optimizer_ui.js	8325	comment	// `${name}.json` was unsanitised, and the blank-name fallback is a timestamp conta
+S	Normalise	Normalize	optimizer_ui.js	8360	comment	// Normalise FIRST. The old test was `if (raw.version && ...)`
+V	$1M	$xM / $xB	plans/README.md	62	doc	a taxable brokerage account. | conversion sizing at scale - $1M of IRA is spent down rather than converted | 33/3
+V	$4.2M	$xM / $xB	plans/README.md	63	doc	e-ira`](high-spend-large-ira.js) | A California couple with $4.2M of IRA and $240k of annual spending. | low-bracke
+V	$4.2M	$xM / $xB	plans/README.md	64	doc	ra-heavy-couple-overreaching.js) | A California couple with $4.2M of IRA who spend $292k a year and run out of mone
+V	$3M	$xM / $xB	plans/README.md	71	doc	zon`](single-filer-long-horizon.js) | A single filer with a $3M IRA and thirty funded years ahead. | the widow pe
+V	$2.6M	$xM / $xB	plans/README.md	74	doc	whose wealth is mostly already taxed: $700k of IRA against $2.6M of brokerage. | conversion sizing at scale - the
+V	$3.44M	$xM / $xB	plans/age-gap-ira-heavy-ca.js	42	string	"a household that must spend its IRA down - $3.44M against a declining $220k spend leaves a large te
+V	$1M	$xM / $xB	plans/brokerage-heavy-couple.js	31	string	"conversion sizing at scale - $1M of IRA is spent down rather than converted",
+V	$4.2M	$xM / $xB	plans/high-spend-large-ira.js	5	comment	* A California couple with $4.2M of IRA and $240k of annual spending.
+V	$4.2M	$xM / $xB	plans/high-spend-large-ira.js	25	string	summary: "A California couple with $4.2M of IRA and $240k of annual spending.",
+V	$4.2M	$xM / $xB	plans/ira-heavy-couple-overreaching.js	5	comment	* A California couple with $4.2M of IRA who spend $292k a year and run out of mone
+V	$4.2M	$xM / $xB	plans/ira-heavy-couple-overreaching.js	25	string	summary: "A California couple with $4.2M of IRA who spend $292k a year and run out of mone
+V	$1.4M	$xM / $xB	plans/ira-heavy-couple.js	27	string	"the ordinary case for conversion work: $1.4M of IRA against $220k of everything else, so the I
+V	$2.5M	$xM / $xB	plans/mixed-portfolio-couple.js	27	string	, which need a brokerage worth drawing: $900k of it against $2.5M of IRA",
+V	$3M	$xM / $xB	plans/single-filer-long-horizon.js	5	comment	* A single filer with a $3M IRA and thirty funded years ahead.
+V	$3M	$xM / $xB	plans/single-filer-long-horizon.js	25	string	summary: "A single filer with a $3M IRA and thirty funded years ahead.",
+V	$2.6M	$xM / $xB	plans/taxable-heavy-new-york.js	5	comment	whose wealth is mostly already taxed: $700k of IRA against $2.6M of brokerage.
+V	$2.6M	$xM / $xB	plans/taxable-heavy-new-york.js	25	string	whose wealth is mostly already taxed: $700k of IRA against $2.6M of brokerage.",
+V	$1.87M	$xM / $xB	research/BETR_RELIABILITY.md	117	doc	is **+$1.87M at a 0% heirs rate**.
+V	$4.8M	$xM / $xB	research/CONVERSION_FRONTIER.md	51	doc	gains $4.8M of Roth, 32.74 to 1 - five to thirteen times bett
+V	$2.6M	$xM / $xB	research/CONVERSION_FRONTIER.md	57	doc	against $2.6M of brokerage there is little to convert and littl
+V	$4.8M	$xM / $xB	research/CONVERSION_FRONTIER.md	112	doc	conversions raise net worth on H2-longwidow (+$95,632 and +$4.8M of
+V	$6.5M	$xM / $xB	research/CONVERSION_FRONTIER.md	134	doc	- H3's board carries a lifetime spend gap of $8,619 on $6.5M, larger than the other four. Small
+V	$3.7M	$xM / $xB	research/CONVERSION_STOP_YEAR.md	14	doc	, lifetime conversions range over 4.5x and ending Roth over $3.7M.
+V	$3.7M	$xM / $xB	research/CONVERSION_STOP_YEAR.md	173	doc	**4.5x in lifetime conversions and $3.7M in ending Roth**, across answers separated by a 1
+V	$3.79M	$xM / $xB	research/CONVERSION_STOP_YEAR.md	199	doc	7.32pp on $3.79M of IRA is **$277,192 of pure valuation difference
+V	$7.0M	$xM / $xB	research/CONVERSION_VALUE.md	58	doc	l**: largest gap across every arm and baseline is **$4** on $7.0M of lifetime
+V	$4.41M	$xM / $xB	research/CONVERSION_VALUE_HOUSEHOLDS.md	29	doc	| **CANON** | the reference household. CA, married, $4.41M, 25 years, 2-year widowhood | the reference row,
+V	$2.41M	$xM / $xB	research/CONVERSION_VALUE_HOUSEHOLDS.md	30	doc	| **H1-single** | single filer, CA, $2.41M, 29 years, **no survivor transition at all** | fi
+V	$3.62M	$xM / $xB	research/CONVERSION_VALUE_HOUSEHOLDS.md	31	doc	| **H2-longwidow** | 13-year age gap, TX, $3.62M, 38 years, **24-year widowhood** | the widow axis
+V	$3.68M	$xM / $xB	research/CONVERSION_VALUE_HOUSEHOLDS.md	32	doc	| **H3-IRAlight** | NY, married, $3.68M, 27 years, **$700k IRA against $2.6M brokerage**
+V	$2.6M	$xM / $xB	research/CONVERSION_VALUE_HOUSEHOLDS.md	32	doc	ight** | NY, married, $3.68M, 27 years, **$700k IRA against $2.6M brokerage** | the IRA-to-taxable ratio, reversed
+V	$1.62M	$xM / $xB	research/CONVERSION_VALUE_HOUSEHOLDS.md	33	doc	| **H4-tight** | CA, married, **$1.62M**, 29 years, little surplus over need | the surpl
+V	$2.6M	$xM / $xB	research/CONVERSION_VALUE_HOUSEHOLDS.md	112	doc	othing at all.** Not less - zero. With $700k of IRA against $2.6M of brokerage, the
+S	labelled	labeled / labeling	research/OPTIMIZER_RANK_STABILITY.md	217	doc	2. **Order in two labelled groups** (`P100b3b`): evaluated rows by conversio
+S	labelled	labeled / labeling	research/OPTIMIZER_RANK_STABILITY.md	218	doc	rest **by net wealth, labelled as such**.
+S	labelled	labeled / labeling	research/OPTIMIZER_RANK_STABILITY.md	222	doc	aded *effectiveness* - a new lie replacing the old one. Two labelled groups
+V	$2.28M	$xM / $xB	research/OPTIMIZER_RANK_STABILITY.md	220	doc	blended number is rejected.** Conversion savings top out at $2.28M on this scenario while
+V	$10M	$xM / $xB	research/OPTIMIZER_RANK_STABILITY.md	221	doc	net wealth runs ~$10M; a naive blend sorts by scale, and "rank 40" woul
+S	neighbour	neighbor	research/PERFECT_FORESIGHT_ORACLE.md	935	doc	its neighbour keeps a median 51% of the gain, but it went NEGAT
+S	labelled	labeled / labeling	research/PERFECT_FORESIGHT_ORACLE.md	22	doc	The old tables are kept for the record and are labelled where they are superseded.
+V	$2.1M	$xM / $xB	research/PERFECT_FORESIGHT_ORACLE.md	446	doc	ACCUMULATES, so this multiplies LIFETIME spend - about $2.1M against $5.9M of terminal wealth on the
+V	$5.9M	$xM / $xB	research/PERFECT_FORESIGHT_ORACLE.md	446	doc	ES, so this multiplies LIFETIME spend - about $2.1M against $5.9M of terminal wealth on the
+V	$1.16M	$xM / $xB	research/PERFECT_FORESIGHT_ORACLE.md	941	doc	t a family state a fixed account-weight vector, worth $140k-$1.16M and the
+V	$1.078M	$xM / $xB	research/PERFECT_FORESIGHT_ORACLE.md	1054	doc	**The headline the old file carried - "+$1.078M left on the table by conversion timing" - is
+V	$6.56M	$xM / $xB	research/PERFECT_FORESIGHT_ORACLE.md	1127	doc	ands. But `P103d`'s bake-off (GK's draw beaten in 24 of 30, $6.56M) and `P103e`'s Monte Carlo
+V	$1.62M	$xM / $xB	research/PERFECT_FORESIGHT_ORACLE.md	1154	doc	| defaults | $1.62M | 86.4% | 4.3% | 6.2% | 50% | $64.8k - $129.6k |
+V	$4.86M	$xM / $xB	research/PERFECT_FORESIGHT_ORACLE.md	1155	doc	| defaults3x | $4.86M | 86.4% | 4.3% | 6.2% | 50% | $194.4k - $388.8k |
+V	$3.90M	$xM / $xB	research/PERFECT_FORESIGHT_ORACLE.md	1156	doc	| round1 | $3.90M | 64.1% | 9.0% | 23.1% | 55.6% | $156k - $312k |
+V	$4.35M	$xM / $xB	research/PERFECT_FORESIGHT_ORACLE.md	1157	doc	| thirds | $4.35M | 32.2% | 32.2% | 32.2% | 50% | $174k - $348k |
+V	$4.55M	$xM / $xB	research/PERFECT_FORESIGHT_ORACLE.md	1158	doc	| brokheavy | $4.55M | 22.0% | 13.2% | 61.5% | 42.9% | $182k - $364k |
+V	$1.62M	$xM / $xB	research/PERFECT_FORESIGHT_ORACLE.md	1160	doc	So: totals **$1.62M - $4.86M**, IRA share 22-86%, Brokerage share 6-6
+V	$4.86M	$xM / $xB	research/PERFECT_FORESIGHT_ORACLE.md	1160	doc	So: totals **$1.62M - $4.86M**, IRA share 22-86%, Brokerage share 6-62%, annua
+V	$1.6M	$xM / $xB	research/PERFECT_FORESIGHT_ORACLE.md	1163	doc	untested below $1.6M and above $4.9M, where bracket-absolute effects (
+V	$4.9M	$xM / $xB	research/PERFECT_FORESIGHT_ORACLE.md	1163	doc	untested below $1.6M and above $4.9M, where bracket-absolute effects (IRMAA cliffs, 0%
+V	$2.45M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	35	doc	(10th-percentile lifetime real spending) is $2.45M to $2.56M for every risk-based set.
+V	$2.56M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	35	doc	(10th-percentile lifetime real spending) is $2.45M to $2.56M for every risk-based set.
+V	$1.48M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	134	doc	s the same way: on `soft-cap-underfunded` GK-style delivers $1.48M in the first
+V	$1.23M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	135	doc	ten years, Normal $1.23M, More Risk $1.45M, Custom $1.41M, against a $1.53
+V	$1.45M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	135	doc	ten years, Normal $1.23M, More Risk $1.45M, Custom $1.41M, against a $1.53M shape.
+V	$1.41M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	135	doc	ten years, Normal $1.23M, More Risk $1.45M, Custom $1.41M, against a $1.53M shape.
+V	$1.53M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	135	doc	, Normal $1.23M, More Risk $1.45M, Custom $1.41M, against a $1.53M shape.
+V	$5.42M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	140	doc	isk-based set beats GK-style on it where the plan is sound: $5.42M to $5.53M
+V	$5.53M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	140	doc	set beats GK-style on it where the plan is sound: $5.42M to $5.53M
+V	$5.27M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	141	doc	against $5.27M on `mixed-portfolio-couple`, $2.53M to $2.62M aga
+V	$2.53M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	141	doc	against $5.27M on `mixed-portfolio-couple`, $2.53M to $2.62M against $2.31M on
+V	$2.62M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	141	doc	against $5.27M on `mixed-portfolio-couple`, $2.53M to $2.62M against $2.31M on
+V	$2.31M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	141	doc	5.27M on `mixed-portfolio-couple`, $2.53M to $2.62M against $2.31M on
+V	$4.79M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	142	doc	`modest-balances-little-surplus`, $4.79M to $4.96M against $3.75M on `long-widowhood`. On
+V	$4.96M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	142	doc	`modest-balances-little-surplus`, $4.79M to $4.96M against $3.75M on `long-widowhood`. On
+V	$3.75M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	142	doc	`modest-balances-little-surplus`, $4.79M to $4.96M against $3.75M on `long-widowhood`. On
+V	$2.59M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	143	doc	`soft-cap-underfunded` GK-style's p10 ($2.59M) sits above the risk-based sets ($2.45M to $2.56M
+V	$2.45M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	143	doc	ed` GK-style's p10 ($2.59M) sits above the risk-based sets ($2.45M to $2.56M)
+V	$2.56M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	143	doc	le's p10 ($2.59M) sits above the risk-based sets ($2.45M to $2.56M)
+V	$2.6M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	146	doc	, and it ends with the most wealth on the sound households: $2.6M to $18.0M against
+V	$18.0M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	146	doc	ends with the most wealth on the sound households: $2.6M to $18.0M against
+V	$2.0M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	147	doc	$2.0M to $15.4M.
+V	$15.4M	$xM / $xB	research/RBG_RULE_THRESHOLDS.md	147	doc	$2.0M to $15.4M.
+S	labelling	labeled / labeling	research/RBG_RULE_VALIDATION.md	127	doc	which the cheap rule stops labelling once its ratio is inside the rails and the exact
+S	labelling	labeled / labeling	research/RBG_RULE_VALIDATION.md	128	doc	labelling while its chance stays at the raise rail - a labe
+V	$1.4M	$xM / $xB	research/RBG_RULE_VALIDATION.md	140	doc	raises spending on `bracket-filler-texas` to $1.4M to $1.9M a year by the 2050s against a $290,000
+V	$1.9M	$xM / $xB	research/RBG_RULE_VALIDATION.md	140	doc	raises spending on `bracket-filler-texas` to $1.4M to $1.9M a year by the 2050s against a $290,000
+V	$12.6M	$xM / $xB	research/RBG_RULE_VALIDATION.md	141	doc	shape, and on `long-widowhood` to lifetime real spending of $12.6M to $19.2M against $5.7M. Out
+V	$19.2M	$xM / $xB	research/RBG_RULE_VALIDATION.md	141	doc	on `long-widowhood` to lifetime real spending of $12.6M to $19.2M against $5.7M. Out
+V	$5.7M	$xM / $xB	research/RBG_RULE_VALIDATION.md	141	doc	hood` to lifetime real spending of $12.6M to $19.2M against $5.7M. Out
+S	labelled	labeled / labeling	research/README.md	43	doc	effectiveness for evaluated rows, net wealth for the rest, labelled - not a blended score, which would sort by scale
+V	$2.5M	$xM / $xB	research/README.md	22	doc	okerage the conversions are DOMINANT (+$484k net worth AND +$2.5M Roth), against never withdrawing at all they cost
+V	$3.7M	$xM / $xB	research/README.md	25	doc	and those years differ by 4.5x in lifetime conversions and $3.7M in ending Roth, costing 1.3% to 4.6% of net worth
+S	modelling	modeled / modeling	research/RISK_BASED_GUARDRAILS.md	575	doc	modelling, and it changes which rule looks better.
+V	afterwards	afterward	research/RISK_BASED_GUARDRAILS.md	236	doc	the same probability of success *is* the normalization, so afterwards they all sit
+V	afterwards	afterward	research/RISK_BASED_GUARDRAILS.md	315	doc	afterwards, so this is the first **divergence**, not a simul
+V	afterwards	afterward	research/RISK_BASED_GUARDRAILS.md	539	doc	document arrived afterwards and carries two parameter sets, neither of them t
+I	way round	way around	research/RISK_BASED_GUARDRAILS.md	144	doc	This was predicted the other way round (`G-P1`), and the prediction was wrong. The artic
+V	24 November	Month D, YYYY	research/RISK_BASED_GUARDRAILS.md	48	doc	Guardrails To Project Sustainable Cash Flows"*, Kitces.com, 24 November 2021. Two claims matter
+V	stood	"was stood" (UK) -> standing (vet)	research/RISK_BASED_GUARDRAILS.md	248	doc	Four divergences, measured on the rule as it stood on 2026-09-15. The first one decides sections 2
+S	centres	center	research/RISK_BASED_RAILS_PRECISION.md	188	doc	Demanding c = q x (N + 1) survivors instead of q x N centres the answer on q at every path count
+S	behaviour	behavior	retirement_optimizer.html	1788	comment	// Attach dollar-input behaviour before captureDefaults/loadFromURL so that
+S	labelled	labeled / labeling	retirement_optimizer.html	1184	markup	<strong>The Guardrails switch is now labelled GK-style.</strong>
+S	Enrolment	enroll / enrollment	retirement_optimizer.html	643	comment	behavior so no saved plan or shared link moves. Enrolment is per person because a
+S	grey	gray	retirement_optimizer.html	38	comment	// Prefers borderColor; falls back to backgroundColor; grey if both transparent.
+S	greys	gray	retirement_optimizer.html	401	markup	d do not use it, with or without Guardrails, and this field greys out when one of those is selected."><span style="
+S	greys	gray	retirement_optimizer.html	1285	markup	</i> and <i>Ordered</i> do not use it at all, and the field greys out when one of them is selected.
+V	afterwards	afterward	retirement_optimizer.html	908	comment	ive one is visible before it is paid rather than discovered afterwards. -->
+I	untick	check / checked / unchecked (a box) - vet: chart "ticks" are fine	retirement_optimizer.html	1163	markup	<li>Your settings and any page errors go with it unless you untick them: strategy, tax limit, filing status, state,
+I	tick	check / checked / unchecked (a box) - vet: chart "ticks" are fine	retirement_optimizer.html	1163	markup	plan link and a screenshot of the whole page go only if you tick them, and <i>Show exactly what will be sent</i> l
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	retirement_optimizer.html	1964	comment	(feedback.js). The share link is read only when the person ticks one of the
+I	way round	way around	retirement_optimizer.html	910	markup	ce: as you set it, and with the Guardrails switch the other way round. About 60 times less work than comparing every st
+I	way round	way around	retirement_optimizer.html	1002	markup	setting except one: your own plan with the switch the other way round. <span id="mc-path-count-tbl"></span>
+I	way round	way around	retirement_optimizer.html	1197	markup	ting, and each adds your own plan with the switch the other way round. Monte Carlo's My Plan Only runs your plan both w
+I	way round	way around	retirement_optimizer.html	1309	markup	rails setting, plus your own plan with the switch the other way round, so you can see what Guardrails are worth to your
+I	way round	way around	retirement_optimizer.html	1659	markup	h. One extra row is your own plan with the switch the other way round, so you can see what Guardrails are worth to your
+I	way round	way around	retirement_optimizer.html	1659	markup	�️ Guardrails on / off: your plan with the switch the other way round</span>
+V	sat	"was sat" (UK) -> sitting / sits (vet)	retirement_optimizer.html	533	comment	ce typed in this same section. UNGATED as of 2026-08-28: it sat behind the
+V	sat	"was sat" (UK) -> sitting / sits (vet)	retirement_optimizer.html	859	comment	er on both sides, so the box could not change the figure it sat next to. It
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	standalone/AfterTaxRealGrowth.html	778	code	ticks: {
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	standalone/AfterTaxRealGrowth.html	794	code	ticks: {
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	standalone/FutureCost.html	685	code	x: { ticks: { autoSkip: false, maxRotation: 0, font: { famil
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	standalone/FutureCost.html	686	code	y: { ticks: { callback: v => '$' + Math.round(v / 1000) + 'k
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	standalone/FutureCost.html	709	code	x: { ticks: { autoSkip: true, maxTicksLimit: 16, maxRotation
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	standalone/FutureCost.html	710	code	y: { ticks: { callback: v => v.toFixed(1) + '%', font: { fam
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	standalone/HYSA.html	420	code	x: { ticks: { font: { size: 10 }, maxRotation: 45, autoSkip:
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	standalone/HYSA.html	422	code	ticks: {
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	standalone/HYSA.html	546	code	ticks: {
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	standalone/HYSA.html	555	code	ticks: {
+S	neighbour	neighbor	standalone/IncomeTaxPlanner.html	550	comment	// prevFedTax === null means "no left neighbour", so no marginal rate; h is the difference width.
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	standalone/IncomeTaxPlanner.html	441	comment	// Label interval for x-axis ticks — more marks when zoomed in
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	standalone/IncomeTaxPlanner.html	586	code	ticks:{ color:'#7b83a0', font:{family:'DM Mono, monospa
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	standalone/IncomeTaxPlanner.html	912	code	ticks: {
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	standalone/IncomeTaxPlanner.html	931	code	ticks:{ color:'#7b83a0', font:{family:'DM Mono, monospa
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	standalone/IncomeTaxPlanner.html	939	code	ticks:{ color:'#7b83a0', font:{family:'DM Mono, monospa
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	standalone/IncomeTaxPlanner.html	947	code	ticks:{ color:'rgba(25,201,157,0.6)', font:{family:'DM
+I	to hand	on hand / at hand (vet)	standalone/IncomeTaxPlanner.html	1442	string	'income, and without a pinned column there is nothing to hand it.');
+V	$1.1M	$xM / $xB	standalone/IncomeTaxPlanner.html	1580	markup	ge (default $30k–$620k; the View slider can extend it up to $1.1M). Ordinary income covers wages, IRA/401k withdraw
+V	$1.1M	$xM / $xB	standalone/IncomeTaxPlanner.html	1591	markup	>Full button</strong> — resets the view back to the full $0–$1.1M range.</li>
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	standalone/RealReturns.html	777	code	ticks: {
+I	ticks	check / checked / unchecked (a box) - vet: chart "ticks" are fine	standalone/RealReturns.html	790	code	ticks: {
+S	labelled	labeled / labeling	taxPaymentPlanner.js	2329	comment	// a plain falsehood: a conversion-only plan was labelled "draws in December" with no draws.
+S	totalling	totaled	taxPaymentPlanner.js	2903	comment	// conversion and owed seven estimated payments totalling the same $7,000. A reader working
+S	grey	gray	taxPaymentPlanner.js	3003	comment	// the IRC 6654 sense, so it gets a neutral grey badge and no red border. Only a genuine
+S	artefact	artifact	taxPaymentPlanner.js	2342	comment	// rounding artefact would be noise dressed as advice.
+I	Belt and braces	belt and suspenders	taxPaymentPlanner.js	2208	comment	ch would otherwise offer a "Split" plan with nothing split. Belt and braces: D is only
+I	FAFF	fuss	taxPaymentPlanner.js	2780	template	h += `<div style="padding:12px 16px;background:#F8FAFF;">`;
+I	FAFF	fuss	taxPaymentPlanner.js	3136	template	h += `<div style="padding:12px 16px;background:#F8FAFF;">`;
+V	$1M	$xM / $xB	taxPaymentPlanner.js	45	comment	*   • State-aware safe-harbor rules (MD always 110%; CA $1M threshold)
+V	sat	"was sat" (UK) -> sitting / sits (vet)	taxPaymentPlanner.js	2724	comment	// sat inches from a Winner badge naming a different pla
+S	maximise	maximize	taxPaymentPlanner.js	39	comment	*     latest-month draw across both IRAs to maximise tax-deferred growth
+S	realises	realizes	taxPaymentPlanner.js	277	string	ide that calculation. Selling shares from a taxable account realises a ' +
+S	initialised	initialized	taxPaymentPlanner.js	989	comment	// 60-day analysis initialised with zero withholding; updated after gap is known
+S	minimise	minimize	taxPaymentPlanner.js	1914	comment	// "Pay now to minimise the penalty" is only true if a penalty is actuall
+S	minimise	minimize	taxPaymentPlanner.js	1921	string	his installment is past due. Make a catch-up payment now to minimise underpayment penalty.')
+S	minimise	minimize	taxPaymentPlanner.js	1951	string	: 'This installment is past due. Pay now to minimise the underpayment penalty.')
+S	realises	realizes	taxPaymentPlanner.js	2391	comment	// realises capital gains, so the sale has to be grossed up t
+S	behaviour	behavior	taxPaymentPlanner.tests.js	1494	comment	// The old behaviour took the entire conversion, which would have left
+S	honoured	honor	taxPaymentPlanner.tests.js	933	string	0.604, 'the raw fraction is still honoured for legacy ?ap= links', 1e-9);
+S	honour	honor	taxPaymentPlanner.tests.js	1519	template	assert(plan.strategy === 'all_quarterly', `plan ${k} should honour the forced strategy`);
+S	honoured	honor	taxPaymentPlanner.tests.js	1648	string	A.summary.safeHarbor.highIncomeStated, 'an explicit flag is honoured');
+S	labelled	labeled / labeling	taxPaymentPlanner.tests.js	474	string	'Both surviving plans should be labelled by what they do');
+V	00 January	Month D, YYYY	taxPaymentPlanner.tests.js	1156	string	assert(cc.anyNegative, 'a $40,000 January conversion should outweigh the timing costs');
+S	synthesises	synthesizes	taxPaymentPlanner.tests.js	568	comment	// Every plan in the matrix, not only the parent's. D synthesises a December tranche date
+S	modelled	modeled / modeling	taxengine.js	1080	comment	// are NOT modelled, so an ACA ceiling in those states is too strict
+I	can do	elliptical "do" (UK) - drop "do"	taxengine.js	1036	string	ngle year clear that deduction - which a large harvest year can do.' };
+V	$1M	$xM / $xB	taxengine.js	172	comment	NJ  top 10.75%  7 brackets  statutory   SS partial  surtax >$1M
+V	$1M	$xM / $xB	taxengine.js	211	comment	B (~2.971% CCPI); 13.3% = 12.3% + 1% MHSA surtax on income >$1M.
+V	$1M	$xM / $xB	taxengine.js	212	comment	// MFJ brackets >$1M: $1M triggers MHSA (+1%), nominal 12.3% bracket s
+V	$1M	$xM / $xB	taxengine.js	212	comment	// MFJ brackets >$1M: $1M triggers MHSA (+1%), nominal 12.3% bracket starts
+V	$1M	$xM / $xB	taxengine.js	1438	comment	// are half a cent on a $40k benefit and eight cents on a $1M one. Stopping on the interval holds
+S	subsidised	subsidized	taxengine.js	1073	comment	// THE YEAR LAG IS DELIBERATE. An ACA plan year is subsidised against the guideline published the
+V	afterwards	afterward	taxengine.tests.js	28	comment	* duration of a run and removed again afterwards, so a page that lists TAXData's states never

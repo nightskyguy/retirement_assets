@@ -1,0 +1,137 @@
+[
+ {
+  "a": "optimizer_core.js",
+  "a0": 3465,
+  "a1": 3480,
+  "b": "optimizer_core.js",
+  "b0": 3504,
+  "b1": 3513,
+  "units": 9,
+  "chars": 889,
+  "sample": [
+   "yr . capitalGains = Math . max ( 0 , ( yr . netWithdrawals . Brokerage ?? 0 ) - ( yr . netWithdrawals . Broker",
+   "yr . tax = calculateTaxes ( {",
+   "filingStatus : yr . status , ages : [ yr . age1 , yr . age2 ] , birthyears : [ birthyear1 , birthyear2 ] ,"
+  ]
+ },
+ {
+  "a": "optimizer_core.js",
+  "a0": 3346,
+  "a1": 3355,
+  "b": "optimizer_core.js",
+  "b0": 3465,
+  "b1": 3478,
+  "units": 8,
+  "chars": 839,
+  "sample": [
+   "yr . capitalGains = Math . max ( 0 , ( yr . netWithdrawals . Brokerage ?? 0 ) - ( yr . netWithdrawals . Broker",
+   "yr . tax = calculateTaxes ( {",
+   "filingStatus : yr . status , ages : [ yr . age1 , yr . age2 ] , birthyears : [ birthyear1 , birthyear2 ] ,"
+  ]
+ },
+ {
+  "a": "optimizer_core.js",
+  "a0": 3346,
+  "a1": 3355,
+  "b": "optimizer_core.js",
+  "b0": 3504,
+  "b1": 3511,
+  "units": 8,
+  "chars": 839,
+  "sample": [
+   "yr . capitalGains = Math . max ( 0 , ( yr . netWithdrawals . Brokerage ?? 0 ) - ( yr . netWithdrawals . Broker",
+   "yr . tax = calculateTaxes ( {",
+   "filingStatus : yr . status , ages : [ yr . age1 , yr . age2 ] , birthyears : [ birthyear1 , birthyear2 ] ,"
+  ]
+ },
+ {
+  "a": "optimizer_core.js",
+  "a0": 3124,
+  "a1": 3132,
+  "b": "optimizer_core.js",
+  "b0": 3349,
+  "b1": 3357,
+  "units": 8,
+  "chars": 739,
+  "sample": [
+   "yr . tax = calculateTaxes ( {",
+   "filingStatus : yr . status , ages : [ yr . age1 , yr . age2 ] , birthyears : [ birthyear1 , birthyear2 ] ,",
+   "totalSS : yr . s1 + yr . s2 , IRMAAAnnualCost : yr . IRMAA ,"
+  ]
+ },
+ {
+  "a": "optimizer_core.js",
+  "a0": 3508,
+  "a1": 3515,
+  "b": "optimizer_core.js",
+  "b0": 3574,
+  "b1": 3581,
+  "units": 7,
+  "chars": 726,
+  "sample": [
+   "earnedIncome : yr . pension + yr . taxableRMD + yr . netWithdrawals . IRA + yr . taxableInterest , inflation :",
+   "pensionIncome : yr . pension , iraIncome : yr . taxableRMD + yr . netWithdrawals . IRA ,",
+   "qualifiedDiv : yr . taxableDividends , capGains : yr . capitalGains , hsaContrib : 0 ,"
+  ]
+ },
+ {
+  "a": "optimizer_core.js",
+  "a0": 3124,
+  "a1": 3130,
+  "b": "optimizer_core.js",
+  "b0": 3472,
+  "b1": 3478,
+  "units": 7,
+  "chars": 710,
+  "sample": [
+   "yr . tax = calculateTaxes ( {",
+   "filingStatus : yr . status , ages : [ yr . age1 , yr . age2 ] , birthyears : [ birthyear1 , birthyear2 ] ,",
+   "totalSS : yr . s1 + yr . s2 , IRMAAAnnualCost : yr . IRMAA ,"
+  ]
+ },
+ {
+  "a": "optimizer_core.js",
+  "a0": 3124,
+  "a1": 3130,
+  "b": "optimizer_core.js",
+  "b0": 3505,
+  "b1": 3511,
+  "units": 7,
+  "chars": 710,
+  "sample": [
+   "yr . tax = calculateTaxes ( {",
+   "filingStatus : yr . status , ages : [ yr . age1 , yr . age2 ] , birthyears : [ birthyear1 , birthyear2 ] ,",
+   "totalSS : yr . s1 + yr . s2 , IRMAAAnnualCost : yr . IRMAA ,"
+  ]
+ },
+ {
+  "a": "optimizer_core.js",
+  "a0": 1017,
+  "a1": 1025,
+  "b": "optimizer_core.js",
+  "b0": 1041,
+  "b1": 1047,
+  "units": 7,
+  "chars": 505,
+  "sample": [
+   "const fedAtLimit = findUpperLimitByAmount ( 'FEDERAL' , status , limit , cpiRate ) ;",
+   "marginalFedTaxRate = fedAtLimit . rate * fedRateCreep ;",
+   "nominalFedTaxRateAtLimit = nominalRateAtLimit ( 'FEDERAL' , status , limit , cpiRate , fedRateCreep ) ;"
+  ]
+ },
+ {
+  "a": "optimizer_core.js",
+  "a0": 2982,
+  "a1": 2988,
+  "b": "optimizer_core.js",
+  "b0": 2995,
+  "b1": 3028,
+  "units": 7,
+  "chars": 413,
+  "sample": [
+   "yr . bracketTarget = yr . limit ;",
+   "const _ssCeilRoom = ( yr . ceilingKind === 'aca' )",
+   "? yr . limit - yr . fixedInc"
+  ]
+ }
+]

@@ -1,0 +1,4097 @@
+[
+ {
+  "line": 113,
+  "endLine": 120,
+  "fn": "combineGains",
+  "expKind": "computed",
+  "expTokens": 13,
+  "touchesDom": false,
+  "name": "combineGains: overlapping keys should sum correctly"
+ },
+ {
+  "line": 123,
+  "endLine": 130,
+  "fn": "combineGains",
+  "expKind": "computed",
+  "expTokens": 17,
+  "touchesDom": false,
+  "name": "combineGains: non-overlapping keys should all be included"
+ },
+ {
+  "line": 133,
+  "endLine": 140,
+  "fn": "combineGains",
+  "expKind": "computed",
+  "expTokens": 17,
+  "touchesDom": false,
+  "name": "combineGains: partial overlap should combine overlapping and preserve unique keys"
+ },
+ {
+  "line": 143,
+  "endLine": 150,
+  "fn": "combineGains",
+  "expKind": "computed",
+  "expTokens": 9,
+  "touchesDom": false,
+  "name": "combineGains: empty first object should return second object values"
+ },
+ {
+  "line": 153,
+  "endLine": 160,
+  "fn": "combineGains",
+  "expKind": "computed",
+  "expTokens": 9,
+  "touchesDom": false,
+  "name": "combineGains: empty second object should return first object values"
+ },
+ {
+  "line": 163,
+  "endLine": 167,
+  "fn": "combineGains",
+  "expKind": "literal",
+  "expTokens": 2,
+  "touchesDom": false,
+  "name": "combineGains: both empty objects should return empty object"
+ },
+ {
+  "line": 170,
+  "endLine": 177,
+  "fn": "combineGains",
+  "expKind": "computed",
+  "expTokens": 10,
+  "touchesDom": false,
+  "name": "combineGains: should handle negative values (losses) correctly"
+ },
+ {
+  "line": 180,
+  "endLine": 187,
+  "fn": "combineGains",
+  "expKind": "computed",
+  "expTokens": 9,
+  "touchesDom": false,
+  "name": "combineGains: should handle zero values correctly"
+ },
+ {
+  "line": 208,
+  "endLine": 209,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 8,
+  "touchesDom": false,
+  "name": "applyGrowth: 3 months with custom account names"
+ },
+ {
+  "line": 210,
+  "endLine": 211,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 8,
+  "touchesDom": false,
+  "name": "applyGrowth: balances updated for custom account names"
+ },
+ {
+  "line": 218,
+  "endLine": 219,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 8,
+  "touchesDom": false,
+  "name": "applyGrowth: 6 months with mixed standard and custom account names"
+ },
+ {
+  "line": 226,
+  "endLine": 227,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 8,
+  "touchesDom": false,
+  "name": "applyGrowth: 1 month with unique account name"
+ },
+ {
+  "line": 234,
+  "endLine": 235,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 8,
+  "touchesDom": false,
+  "name": "applyGrowth: 9 months with completely custom account names"
+ },
+ {
+  "line": 242,
+  "endLine": 243,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 8,
+  "touchesDom": false,
+  "name": "applyGrowth: 4 months negative rate with custom account names"
+ },
+ {
+  "line": 244,
+  "endLine": 245,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 8,
+  "touchesDom": false,
+  "name": "applyGrowth: balances decreased for custom accounts"
+ },
+ {
+  "line": 257,
+  "endLine": 258,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 8,
+  "touchesDom": false,
+  "name": "applyGrowth: first 3 months with custom account names"
+ },
+ {
+  "line": 259,
+  "endLine": 260,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 8,
+  "touchesDom": false,
+  "name": "applyGrowth: last 9 months with custom account names"
+ },
+ {
+  "line": 261,
+  "endLine": 262,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 8,
+  "touchesDom": false,
+  "name": "applyGrowth: combined gains with custom account names"
+ },
+ {
+  "line": 263,
+  "endLine": 264,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 8,
+  "touchesDom": false,
+  "name": "applyGrowth: 3 months then 9 lands exactly where one full year does"
+ },
+ {
+  "line": 271,
+  "endLine": 272,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 8,
+  "touchesDom": false,
+  "name": "applyGrowth: 6 months with special characters in account names"
+ },
+ {
+  "line": 279,
+  "endLine": 283,
+  "fn": "applyGrowth",
+  "expKind": "computed",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "applyGrowth: Single account with 3.5% growth"
+ },
+ {
+  "line": 284,
+  "endLine": 286,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "applyGrowth: Single account with 3.5% growth (realized)"
+ },
+ {
+  "line": 290,
+  "endLine": 294,
+  "fn": "applyGrowth",
+  "expKind": "computed",
+  "expTokens": 10,
+  "touchesDom": false,
+  "name": "applyGrowth: Multiple accounts with positive and negative growth"
+ },
+ {
+  "line": 297,
+  "endLine": 307,
+  "fn": "applyGrowth",
+  "expKind": "literal-object",
+  "expTokens": 17,
+  "touchesDom": false,
+  "name": "applyGrowth: All accounts with positive growth rates"
+ },
+ {
+  "line": 311,
+  "endLine": 315,
+  "fn": "applyGrowth",
+  "expKind": "literal",
+  "expTokens": 10,
+  "touchesDom": false,
+  "name": "applyGrowth: Negative growth rate (20% loss)"
+ },
+ {
+  "line": 316,
+  "endLine": 317,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 9,
+  "touchesDom": false,
+  "name": "applyGrowth: Negative growth rate (20% loss) realized"
+ },
+ {
+  "line": 321,
+  "endLine": 328,
+  "fn": "applyWithdrawals",
+  "expKind": "computed",
+  "expTokens": 21,
+  "touchesDom": false,
+  "name": "applyWithdrawals: Basic IRA withdrawal"
+ },
+ {
+  "line": 331,
+  "endLine": 338,
+  "fn": "applyWithdrawals",
+  "expKind": "computed",
+  "expTokens": 17,
+  "touchesDom": false,
+  "name": "applyWithdrawals: Multiple account withdrawals"
+ },
+ {
+  "line": 341,
+  "endLine": 348,
+  "fn": "applyWithdrawals",
+  "expKind": "computed",
+  "expTokens": 9,
+  "touchesDom": false,
+  "name": "applyWithdrawals: Withdrawal exceeds balance - floor at zero"
+ },
+ {
+  "line": 351,
+  "endLine": 358,
+  "fn": "applyWithdrawals",
+  "expKind": "computed",
+  "expTokens": 9,
+  "touchesDom": false,
+  "name": "applyWithdrawals: Non-matching withdrawal keys ignored"
+ },
+ {
+  "line": 361,
+  "endLine": 368,
+  "fn": "applyWithdrawals",
+  "expKind": "computed",
+  "expTokens": 9,
+  "touchesDom": false,
+  "name": "applyWithdrawals: Empty withdrawals object - no change"
+ },
+ {
+  "line": 371,
+  "endLine": 378,
+  "fn": "applyWithdrawals",
+  "expKind": "computed",
+  "expTokens": 9,
+  "touchesDom": false,
+  "name": "applyWithdrawals: Zero withdrawals - no change"
+ },
+ {
+  "line": 381,
+  "endLine": 388,
+  "fn": "applyWithdrawals",
+  "expKind": "computed",
+  "expTokens": 13,
+  "touchesDom": false,
+  "name": "applyWithdrawals: Mix of matching and non-matching keys"
+ },
+ {
+  "line": 391,
+  "endLine": 398,
+  "fn": "applyWithdrawals",
+  "expKind": "computed",
+  "expTokens": 9,
+  "touchesDom": false,
+  "name": "applyWithdrawals: Exact withdrawal - balance to zero"
+ },
+ {
+  "line": 401,
+  "endLine": 408,
+  "fn": "applyWithdrawals",
+  "expKind": "computed",
+  "expTokens": 21,
+  "touchesDom": false,
+  "name": "applyWithdrawals: Complex scenario with all account types"
+ },
+ {
+  "line": 411,
+  "endLine": 418,
+  "fn": "applyWithdrawals",
+  "expKind": "computed",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "applyWithdrawals: Negative withdrawal adds to balance (edge case)"
+ },
+ {
+  "line": 423,
+  "endLine": 439,
+  "fn": "calculateWithdrawals",
+  "expKind": "literal-object",
+  "expTokens": 21,
+  "touchesDom": false,
+  "name": "calculateWithdrawals: Pass wrong/null/empty values."
+ },
+ {
+  "line": 443,
+  "endLine": 460,
+  "fn": "calculateWithdrawals",
+  "expKind": "literal-object",
+  "expTokens": 33,
+  "touchesDom": false,
+  "name": "calculateWithdrawals: Use balances as weight."
+ },
+ {
+  "line": 463,
+  "endLine": 480,
+  "fn": "calculateWithdrawals",
+  "expKind": "literal-object",
+  "expTokens": 33,
+  "touchesDom": false,
+  "name": "calculateWithdrawals: Weights are missing no shortfall."
+ },
+ {
+  "line": 484,
+  "endLine": 501,
+  "fn": "calculateWithdrawals",
+  "expKind": "literal-object",
+  "expTokens": 33,
+  "touchesDom": false,
+  "name": "calculateWithdrawals: Weights are missing, with shortfall, no change to Roth or Cash."
+ },
+ {
+  "line": 505,
+  "endLine": 524,
+  "fn": "calculateWithdrawals",
+  "expKind": "literal-object",
+  "expTokens": 41,
+  "touchesDom": false,
+  "name": "calculateWithdrawals: Weights are missing, taxrate is short. Shortfall filled by IRA, no change to Roth."
+ },
+ {
+  "line": 529,
+  "endLine": 546,
+  "fn": "calculateWithdrawals",
+  "expKind": "literal-object",
+  "expTokens": 33,
+  "touchesDom": false,
+  "name": "calculateWithdrawals: 50/50 split with tax rates 0.15 and 0.25"
+ },
+ {
+  "line": 549,
+  "endLine": 566,
+  "fn": "calculateWithdrawals",
+  "expKind": "literal-object",
+  "expTokens": 33,
+  "touchesDom": false,
+  "name": "calculateWithdrawals: Normal 50/50 split with no taxes"
+ },
+ {
+  "line": 569,
+  "endLine": 590,
+  "fn": "calculateWithdrawals",
+  "expKind": "literal-object",
+  "expTokens": 49,
+  "touchesDom": false,
+  "name": "calculateWithdrawals: High tax rates causing shortfall"
+ },
+ {
+  "line": 593,
+  "endLine": 612,
+  "fn": "calculateWithdrawals",
+  "expKind": "literal-object",
+  "expTokens": 41,
+  "touchesDom": false,
+  "name": "calculateWithdrawals: Weighted accounts depleted, fallback to IRA with 25% tax"
+ },
+ {
+  "line": 615,
+  "endLine": 629,
+  "fn": "calculateWithdrawals",
+  "expKind": "literal-object",
+  "expTokens": 21,
+  "touchesDom": false,
+  "name": "calculateWithdrawals: 100% from Roth (tax-free)"
+ },
+ {
+  "line": 631,
+  "endLine": 650,
+  "fn": "calculateWithdrawals",
+  "expKind": "literal-object",
+  "expTokens": 41,
+  "touchesDom": false,
+  "name": "calculateWithdrawals: Mixed tax rates with depletion and fallback to IRA"
+ },
+ {
+  "line": 653,
+  "endLine": 668,
+  "fn": "calculateWithdrawals",
+  "expKind": "literal-object",
+  "expTokens": 19,
+  "touchesDom": false,
+  "name": "calculateWithdrawals: Zero gap amount"
+ },
+ {
+  "line": 671,
+  "endLine": 683,
+  "fn": "calculateWithdrawals",
+  "expKind": "literal-object",
+  "expTokens": 13,
+  "touchesDom": false,
+  "name": "calculateWithdrawals: All accounts empty"
+ },
+ {
+  "line": 686,
+  "endLine": 705,
+  "fn": "calculateWithdrawals",
+  "expKind": "literal-object",
+  "expTokens": 41,
+  "touchesDom": false,
+  "name": "calculateWithdrawals: Different order - Roth and IRA prioritized with taxes"
+ },
+ {
+  "line": 713,
+  "endLine": 714,
+  "fn": "calculateAmortizedWithdrawal",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "calculateAmortizedWithdrawal(1000000, 200000, 10, 0.06) = 120694.367"
+ },
+ {
+  "line": 717,
+  "endLine": 718,
+  "fn": "calculateAmortizedWithdrawal",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "calculateAmortizedWithdrawal(1000000, 200000, 1, 0.06) = 860000"
+ },
+ {
+  "line": 721,
+  "endLine": 722,
+  "fn": "calculateAmortizedWithdrawal",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "calculateAmortizedWithdrawal(10000, 2000, 3, -0.05) = 2304.557"
+ },
+ {
+  "line": 724,
+  "endLine": 725,
+  "fn": "calculateAmortizedWithdrawal",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "calculateAmortizedWithdrawal(950, 1000, 5, 0.1) = 86.81"
+ },
+ {
+  "line": 732,
+  "endLine": 733,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "RMD: Age 73 should be ~3.77% (divisor 26.5)"
+ },
+ {
+  "line": 735,
+  "endLine": 736,
+  "fn": "getRMDPercentage",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "getRMDPercentage for age 74, birth year 1960 correct (0)"
+ },
+ {
+  "line": 738,
+  "endLine": 739,
+  "fn": "getRMDPercentage",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "getRMDPercentage for age 76, birth year 1950 correct (4.2%)"
+ },
+ {
+  "line": 742,
+  "endLine": 743,
+  "fn": "calculateInflationAdjustedWithdrawal",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "calculateInflationAdjustedWithdrawal(1000000, 0.07, 0.03, 30) (growth > inflation)"
+ },
+ {
+  "line": 745,
+  "endLine": 746,
+  "fn": "calculateInflationAdjustedWithdrawal",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "calculateInflationAdjustedWithdrawal(1000000, 0.03, 0.03, 30) (growth=inflation)"
+ },
+ {
+  "line": 748,
+  "endLine": 749,
+  "fn": "calculateInflationAdjustedWithdrawal",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "calculateInflationAdjustedWithdrawal(1000000, 0.03, -0.03, 30) (Deflation)"
+ },
+ {
+  "line": 751,
+  "endLine": 752,
+  "fn": "calculateInflationAdjustedWithdrawal",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "calculateInflationAdjustedWithdrawal(1000000, -0.03, 0.00, 30) (growth is negative)"
+ },
+ {
+  "line": 754,
+  "endLine": 755,
+  "fn": "calculateInflationAdjustedWithdrawal",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "calculateInflationAdjustedWithdrawal(-1000, 0.07, 0.03, 30) (principal < 0)"
+ },
+ {
+  "line": 773,
+  "endLine": 773,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Brokerage: annual gain at 6%"
+ },
+ {
+  "line": 774,
+  "endLine": 774,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Brokerage: balance after 6% growth"
+ },
+ {
+  "line": 776,
+  "endLine": 776,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "BrokerageBasis: annual gain at 6%"
+ },
+ {
+  "line": 777,
+  "endLine": 777,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "BrokerageBasis: balance after 6% growth"
+ },
+ {
+  "line": 779,
+  "endLine": 779,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Cash: annual gain at 3%"
+ },
+ {
+  "line": 780,
+  "endLine": 780,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Cash: balance after 3% growth"
+ },
+ {
+  "line": 785,
+  "endLine": 785,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Brokerage dividends (not reinvested) flow to Cash"
+ },
+ {
+  "line": 797,
+  "endLine": 797,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Brokerage: after growth + reinvested dividends"
+ },
+ {
+  "line": 798,
+  "endLine": 798,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "BrokerageBasis: after growth + reinvested dividends (basis steps up)"
+ },
+ {
+  "line": 799,
+  "endLine": 799,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Cash unchanged when dividends reinvested"
+ },
+ {
+  "line": 810,
+  "endLine": 810,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 6,
+  "touchesDom": false,
+  "name": "Brokerage: 10-year compound growth matches formula"
+ },
+ {
+  "line": 818,
+  "endLine": 818,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Cash: annual gain at 3.5%"
+ },
+ {
+  "line": 819,
+  "endLine": 819,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Cash: balance after 3.5% growth"
+ },
+ {
+  "line": 830,
+  "endLine": 830,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 6,
+  "touchesDom": false,
+  "name": "Cash: 5-year compound growth matches formula"
+ },
+ {
+  "line": 838,
+  "endLine": 838,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Roth: annual gain at 6%"
+ },
+ {
+  "line": 839,
+  "endLine": 839,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Roth: balance after 6% growth"
+ },
+ {
+  "line": 848,
+  "endLine": 848,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Roth: does not receive external dividends"
+ },
+ {
+  "line": 859,
+  "endLine": 859,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 6,
+  "touchesDom": false,
+  "name": "Roth: 10-year compound growth matches formula"
+ },
+ {
+  "line": 889,
+  "endLine": 889,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Fixed strategy: shortfall bounded (not catastrophic)"
+ },
+ {
+  "line": 890,
+  "endLine": 890,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Fixed strategy: simulation produces log entries"
+ },
+ {
+  "line": 898,
+  "endLine": 898,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Fixed strategy: IRA balance reduces over N years"
+ },
+ {
+  "line": 907,
+  "endLine": 907,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Fixed strategy: runs when IRA is small"
+ },
+ {
+  "line": 910,
+  "endLine": 910,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Fixed strategy: assets drawn down when IRA small"
+ },
+ {
+  "line": 916,
+  "endLine": 916,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Fixed strategy: adequate portfolio reports success"
+ },
+ {
+  "line": 924,
+  "endLine": 924,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Fixed strategy: RMDs are tracked when age >= 73/75"
+ },
+ {
+  "line": 925,
+  "endLine": 925,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Fixed strategy: rmdTax is non-negative"
+ },
+ {
+  "line": 926,
+  "endLine": 926,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Fixed strategy: rmdTax does not exceed total tax"
+ },
+ {
+  "line": 941,
+  "endLine": 942,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "IRA Goal (today$): IRA lands near the CPI-inflated goal at year N"
+ },
+ {
+  "line": 943,
+  "endLine": 944,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "IRA Goal (today$): final IRA exceeds flat-nominal goal (target was inflated)"
+ },
+ {
+  "line": 961,
+  "endLine": 962,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Cyclic + reduce: no final-year conversion balloon (max < 4x median)"
+ },
+ {
+  "line": 964,
+  "endLine": 964,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Cyclic + reduce: too few conversions to assess balloon (skipped)"
+ },
+ {
+  "line": 988,
+  "endLine": 989,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "inflationSequence: spend goal escalates at sampled rate (10%), not fixed inflation (3%)"
+ },
+ {
+  "line": 997,
+  "endLine": 998,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "inflationSequence absent: spend goal escalates at fixed inputs.inflation (3%)"
+ },
+ {
+  "line": 1008,
+  "endLine": 1009,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "inflationSequence partial: year 0 uses sampled 10%"
+ },
+ {
+  "line": 1010,
+  "endLine": 1011,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "inflationSequence partial: year 1 falls back to fixed 3%"
+ },
+ {
+  "line": 1059,
+  "endLine": 1059,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "optimizeSpend: returns result for comfortably-passing scenario"
+ },
+ {
+  "line": 1060,
+  "endLine": 1061,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "optimizeSpend: optimized spend exceeds baseline spend goal"
+ },
+ {
+  "line": 1064,
+  "endLine": 1065,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "optimizeSpend: result satisfies ending portfolio-covers-required-draw criterion"
+ },
+ {
+  "line": 1071,
+  "endLine": 1071,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "optimizeSpend: returns null when baseline fails the wealth criterion"
+ },
+ {
+  "line": 1077,
+  "endLine": 1077,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "optimizeSpendDown: finds result when lower spend is viable"
+ },
+ {
+  "line": 1078,
+  "endLine": 1079,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "optimizeSpendDown: result spend is below the failing baseline"
+ },
+ {
+  "line": 1080,
+  "endLine": 1081,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "optimizeSpendDown: result passes totals.success (not just end-wealth)"
+ },
+ {
+  "line": 1087,
+  "endLine": 1087,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "optimizeSpendDown: returns null when even MIN_SPEND fails"
+ },
+ {
+  "line": 1098,
+  "endLine": 1098,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "optimizeSpendDown (opt-5): result exists"
+ },
+ {
+  "line": 1099,
+  "endLine": 1100,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "optimizeSpendDown: converged spend is well above MIN_SPEND (binary search is reaching the ceiling)"
+ },
+ {
+  "line": 1111,
+  "endLine": 1112,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "computeBETR identity: r_taxable=r_ira → BETR = t_now"
+ },
+ {
+  "line": 1119,
+  "endLine": 1120,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "computeBETR drag: r_taxable < r_ira → BETR < t_now"
+ },
+ {
+  "line": 1127,
+  "endLine": 1128,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "computeBETR horizon: longer n with drag → lower BETR (conversion more compelling)"
+ },
+ {
+  "line": 1133,
+  "endLine": 1133,
+  "fn": "computeBETR",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "computeBETR: tNow=0 → null"
+ },
+ {
+  "line": 1134,
+  "endLine": 1134,
+  "fn": "computeBETR",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "computeBETR: n=0 → null"
+ },
+ {
+  "line": 1142,
+  "endLine": 1143,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "BETR% appears in log for years with conversions"
+ },
+ {
+  "line": 1145,
+  "endLine": 1146,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "totals.betrAvg is set when conversions occur"
+ },
+ {
+  "line": 1158,
+  "endLine": 1162,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "extraConversionAmount=0: finalNW identical to no-param baseline"
+ },
+ {
+  "line": 1163,
+  "endLine": 1167,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "extraConversionAmount=0: totals.tax identical to no-param baseline"
+ },
+ {
+  "line": 1176,
+  "endLine": 1177,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "extraConversionAmount=50k: Roth balance higher than no-extra-conv baseline in year 0"
+ },
+ {
+  "line": 1186,
+  "endLine": 1187,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "extraConversionAmount=50k: IRA balance reduced by approximately 50k in year 0"
+ },
+ {
+  "line": 1196,
+  "endLine": 1197,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "extraConversionAmount array: year 0 Roth higher with 30k extra conv"
+ },
+ {
+  "line": 1201,
+  "endLine": 1202,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "extraConversionAmount array: year 1 IRA delta not growing (no extra conv after year 0)"
+ },
+ {
+  "line": 1224,
+  "endLine": 1225,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "IRMAA gate: no surcharge in any year before age 65"
+ },
+ {
+  "line": 1226,
+  "endLine": 1227,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "IRMAA gate: tier shows -none- in every year before age 65"
+ },
+ {
+  "line": 1228,
+  "endLine": 1229,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "IRMAA gate: no base Part B+D premium before age 65"
+ },
+ {
+  "line": 1235,
+  "endLine": 1236,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "IRMAA gate: surcharge present at 65 (one spouse on Medicare)"
+ },
+ {
+  "line": 1237,
+  "endLine": 1238,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "IRMAA gate: surcharge present at 67 (both spouses on Medicare)"
+ },
+ {
+  "line": 1241,
+  "endLine": 1243,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 23,
+  "touchesDom": false,
+  "name": "Medicare base: one person at 65 = (202.90 + 38.99) × 12 × (1+cpi+inflation)^5"
+ },
+ {
+  "line": 1244,
+  "endLine": 1246,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 23,
+  "touchesDom": false,
+  "name": "Medicare base: two persons at 67 = 2 × (202.90 + 38.99) × 12 × (1+cpi+inflation)^7"
+ },
+ {
+  "line": 1250,
+  "endLine": 1251,
+  "fn": "pow",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "IRMAA gate: both-spouse surcharge ≈ 2× single-spouse (after CPI+Inflation/yr growth backout)"
+ },
+ {
+  "line": 1274,
+  "endLine": 1275,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "gap-1: no spurious shortfall in early years with large brokerage unrealized gains (propwd strategy)"
+ },
+ {
+  "line": 1302,
+  "endLine": 1303,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "gap-2: no spurious shortfall within 2 years of MFJ→SGL transition (year ${})"
+ },
+ {
+  "line": 1305,
+  "endLine": 1305,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "gap-2: no status change in scenario (skipped)"
+ },
+ {
+  "line": 1317,
+  "endLine": 1318,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "gap-3: genuine shortfall (exhausted portfolio) still marks success=false"
+ },
+ {
+  "line": 1320,
+  "endLine": 1321,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "gap-3: exhausted portfolio produces real shortfall entries in log"
+ },
+ {
+  "line": 1343,
+  "endLine": 1344,
+  "fn": "getComputedStyle",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "#${} is visible without nerdknob"
+ },
+ {
+  "line": 1364,
+  "endLine": 1364,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "all four ACA FPL options are offered without nerdknob"
+ },
+ {
+  "line": 1368,
+  "endLine": 1369,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "no ACA option carries an uncomputed warning triangle"
+ },
+ {
+  "line": 1385,
+  "endLine": 1386,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "a non-default goal is emitted into the share URL"
+ },
+ {
+  "line": 1390,
+  "endLine": 1390,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the selector follows a programmatic goal change"
+ },
+ {
+  "line": 1393,
+  "endLine": 1394,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "the default goal adds no parameter to the share URL"
+ },
+ {
+  "line": 1397,
+  "endLine": 1397,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "an unknown goal falls back to the default"
+ },
+ {
+  "line": 1424,
+  "endLine": 1424,
+  "fn": "_mcIsDefaultState",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "MC presets: every parameter at its default reads as Default"
+ },
+ {
+  "line": 1426,
+  "endLine": 1427,
+  "fn": "getElementById",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "MC presets: the Default button is lit from that state"
+ },
+ {
+  "line": 1431,
+  "endLine": 1431,
+  "fn": "_mcIsDefaultState",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "MC presets: editing one parameter clears Default"
+ },
+ {
+  "line": 1435,
+  "endLine": 1435,
+  "fn": "_mcIsFixedInflationState",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "MC presets: a zero inflation shock reads as Fixed Inflation"
+ },
+ {
+  "line": 1443,
+  "endLine": 1443,
+  "fn": "_mcIsPessimisticState",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "MC presets: the five Pessimistic values read as Pessimistic"
+ },
+ {
+  "line": 1445,
+  "endLine": 1445,
+  "fn": "_mcIsPessimisticState",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "MC presets: changing one of the five clears Pessimistic"
+ },
+ {
+  "line": 1486,
+  "endLine": 1486,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "two unbounded bands are listed but not selectable"
+ },
+ {
+  "line": 1489,
+  "endLine": 1490,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a reference-only entry names the income where it begins, with a trailing +"
+ },
+ {
+  "line": 1491,
+  "endLine": 1492,
+  "fn": "startsWith",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the two are the top federal bracket and the top IRMAA tier"
+ },
+ {
+  "line": 1494,
+  "endLine": 1495,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "no entry is labelled \"no limit\""
+ },
+ {
+  "line": 1501,
+  "endLine": 1501,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a reference entry follows a selectable ceiling"
+ },
+ {
+  "line": 1505,
+  "endLine": 1506,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 10,
+  "touchesDom": false,
+  "name": "a reference entry begins one dollar above the ceiling below it"
+ },
+ {
+  "line": 1513,
+  "endLine": 1513,
+  "fn": "clampStratRateSelection",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "${} is clamped off"
+ },
+ {
+  "line": 1514,
+  "endLine": 1515,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 13,
+  "touchesDom": false,
+  "name": "${} clamps to the ceiling directly below it"
+ },
+ {
+  "line": 1519,
+  "endLine": 1519,
+  "fn": "clampStratRateSelection",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "${} is left alone"
+ },
+ {
+  "line": 1520,
+  "endLine": 1520,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 3,
+  "touchesDom": false,
+  "name": "${} stays selected"
+ },
+ {
+  "line": 1530,
+  "endLine": 1530,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 3,
+  "touchesDom": false,
+  "name": "a saved plan at ${}% reloads at ${}%"
+ },
+ {
+  "line": 1531,
+  "endLine": 1531,
+  "fn": "getInputs",
+  "expKind": "computed",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "and the engine is handed ${}"
+ },
+ {
+  "line": 1537,
+  "endLine": 1538,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 3,
+  "touchesDom": false,
+  "name": "a saved plan on the unbounded top bracket reloads at the highest real ceiling"
+ },
+ {
+  "line": 1592,
+  "endLine": 1593,
+  "fn": "acaOpts",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a household already past 65 cannot select an ACA cap"
+ },
+ {
+  "line": 1594,
+  "endLine": 1595,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and is not told to lower a start age that cannot change anything"
+ },
+ {
+  "line": 1598,
+  "endLine": 1599,
+  "fn": "acaOpts",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a start age past 65 still greys the ACA rows out"
+ },
+ {
+  "line": 1600,
+  "endLine": 1601,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and there the note stays, because lowering the start age really would help"
+ },
+ {
+  "line": 1644,
+  "endLine": 1645,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the share link short code for the Limit is the one loadFromURL decodes"
+ },
+ {
+  "line": 1648,
+  "endLine": 1649,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "all three limit families are offered to a household that is not yet on Medicare"
+ },
+ {
+  "line": 1662,
+  "endLine": 1662,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 2,
+  "touchesDom": false,
+  "name": "all ${} selectable limits round-trip through a share link"
+ },
+ {
+  "line": 1701,
+  "endLine": 1701,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a pre-Medicare household can choose the 400% FPL cap"
+ },
+ {
+  "line": 1706,
+  "endLine": 1707,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and a household past 65 lands on the menu default, not on the tightest row in the list"
+ },
+ {
+  "line": 1708,
+  "endLine": 1709,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "which is a MAGI ceiling, not a federal bracket on the other income basis"
+ },
+ {
+  "line": 1710,
+  "endLine": 1712,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the substitution is recorded, naming the limit asked for and the one loaded"
+ },
+ {
+  "line": 1715,
+  "endLine": 1715,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and reporting it clears it"
+ },
+ {
+  "line": 1747,
+  "endLine": 1747,
+  "fn": "isFinite",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "every option carries a numeric data-limit (${})"
+ },
+ {
+  "line": 1751,
+  "endLine": 1752,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "\"${}\" must name its position on the other ladder as (${})"
+ },
+ {
+  "line": 1755,
+  "endLine": 1755,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the menu offered enough entries for this to mean anything"
+ },
+ {
+  "line": 1764,
+  "endLine": 1765,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the Limit menu runs upward in MAGI: ${, }"
+ },
+ {
+  "line": 1766,
+  "endLine": 1767,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and no entry spells out the basis or a second figure: the sentence under the menu does"
+ },
+ {
+  "line": 1769,
+  "endLine": 1769,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "24% Fed lists after IRMAA Tier 3, whose MAGI top is lower"
+ },
+ {
+  "line": 1770,
+  "endLine": 1770,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "there is a deduction to convert between the two bases with"
+ },
+ {
+  "line": 1771,
+  "endLine": 1772,
+  "fn": "irmaaBandNameAt",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "an enormous income lands in a named tier, not \"below IRMAA\""
+ },
+ {
+  "line": 1773,
+  "endLine": 1774,
+  "fn": "irmaaBandNameAt",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and no income at all is below every tier"
+ },
+ {
+  "line": 1801,
+  "endLine": 1802,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the note names the tier's own span: \"${}\""
+ },
+ {
+  "line": 1803,
+  "endLine": 1803,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and offers the picture"
+ },
+ {
+  "line": 1804,
+  "endLine": 1804,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "which is closed until it is asked for"
+ },
+ {
+  "line": 1806,
+  "endLine": 1806,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "\"Show me\" opens it"
+ },
+ {
+  "line": 1807,
+  "endLine": 1807,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and it draws the ladders"
+ },
+ {
+  "line": 1809,
+  "endLine": 1810,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the DRAWING is a picture: nothing in it is clickable, hoverable or titled"
+ },
+ {
+  "line": 1814,
+  "endLine": 1814,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the picture names the ${} ladder"
+ },
+ {
+  "line": 1818,
+  "endLine": 1818,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "capital-gains band ${} is drawn"
+ },
+ {
+  "line": 1829,
+  "endLine": 1830,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "every line style on the chart is named in the legend (unnamed: ${, none})"
+ },
+ {
+  "line": 1834,
+  "endLine": 1835,
+  "fn": "getAttribute",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the axis is drawn along the top edge, above every row"
+ },
+ {
+  "line": 1838,
+  "endLine": 1838,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the ACA row is off by default"
+ },
+ {
+  "line": 1840,
+  "endLine": 1840,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and the control that adds it sits in the chrome, not the drawing"
+ },
+ {
+  "line": 1847,
+  "endLine": 1848,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "clicking \"Show ACA/FPL\" does not dismiss the panel"
+ },
+ {
+  "line": 1851,
+  "endLine": 1852,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "\"Show ACA/FPL\" adds the row, labelled ACA / FPL"
+ },
+ {
+  "line": 1853,
+  "endLine": 1854,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and the drawing is still a picture with the row on"
+ },
+ {
+  "line": 1860,
+  "endLine": 1860,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the ACA row's own line style is in the legend too (unnamed: ${, none})"
+ },
+ {
+  "line": 1863,
+  "endLine": 1863,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and clicking it again keeps the panel up"
+ },
+ {
+  "line": 1864,
+  "endLine": 1865,
+  "fn": "querySelectorAll",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "with the ACA row gone again"
+ },
+ {
+  "line": 1868,
+  "endLine": 1869,
+  "fn": "getElementById",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "and it carries a close control, because the link that opened it is elsewhere"
+ },
+ {
+  "line": 1871,
+  "endLine": 1871,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "clicking outside dismisses it"
+ },
+ {
+  "line": 1874,
+  "endLine": 1874,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and the link itself toggles it shut"
+ },
+ {
+  "line": 1879,
+  "endLine": 1879,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a strategy with no ceiling raises no basis note"
+ },
+ {
+  "line": 1928,
+  "endLine": 1929,
+  "fn": "near",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the divider is drawn at the NIIT threshold (${})"
+ },
+ {
+  "line": 1930,
+  "endLine": 1931,
+  "fn": "near",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and it stays there when CPI doubles (${} vs ${})"
+ },
+ {
+  "line": 1935,
+  "endLine": 1936,
+  "fn": "near",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the 0% band ends at its own ceiling plus the deduction"
+ },
+ {
+  "line": 1937,
+  "endLine": 1938,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "that ceiling inflates while the divider does not (${} -> ${})"
+ },
+ {
+  "line": 1948,
+  "endLine": 1949,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "the displayed limits are indexed from the year the federal table declares"
+ },
+ {
+  "line": 1951,
+  "endLine": 1952,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "the federal and IRMAA tables are the same vintage"
+ },
+ {
+  "line": 1969,
+  "endLine": 1970,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 6,
+  "touchesDom": false,
+  "name": "the menu's ${}% limit is the one the engine uses for a plan starting this year"
+ },
+ {
+  "line": 1995,
+  "endLine": 1995,
+  "fn": "extraConvCeilingKind",
+  "expKind": "computed",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a \"${}\" limit is named ${}"
+ },
+ {
+  "line": 1999,
+  "endLine": 1999,
+  "fn": "extraConvCeilingKind",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a strategy with no ceiling names nothing"
+ },
+ {
+  "line": 2026,
+  "endLine": 2027,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a limit broken by required income says so: "
+ },
+ {
+  "line": 2028,
+  "endLine": 2029,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and says plainly that spending less will not help"
+ },
+ {
+  "line": 2030,
+  "endLine": 2031,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and names the required distribution that is doing it"
+ },
+ {
+  "line": 2033,
+  "endLine": 2034,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and never tells this reader to lower a Spend Goal that is not the cause"
+ },
+ {
+  "line": 2037,
+  "endLine": 2038,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a limit broken by spending keeps the advice that does work: "
+ },
+ {
+  "line": 2039,
+  "endLine": 2040,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and does not claim required income is involved when it is not"
+ },
+ {
+  "line": 2044,
+  "endLine": 2044,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the mixed case counts the spending years: "
+ },
+ {
+  "line": 2045,
+  "endLine": 2045,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and reports the required-income year separately"
+ },
+ {
+  "line": 2048,
+  "endLine": 2049,
+  "fn": "limitWarningText",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a plan that stayed inside its limit raises no warning"
+ },
+ {
+  "line": 2052,
+  "endLine": 2053,
+  "fn": "limitWarningText",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "an overage a conversion caused belongs to the conversion note, not this one"
+ },
+ {
+  "line": 2058,
+  "endLine": 2059,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the required-income note links both columns it names"
+ },
+ {
+  "line": 2060,
+  "endLine": 2061,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and the spending note links the one it names"
+ },
+ {
+  "line": 2068,
+  "endLine": 2069,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the ACA note links acaBreach, which is now a column: "
+ },
+ {
+  "line": 2080,
+  "endLine": 2081,
+  "fn": "hasOwnProperty",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the note links \"${}\", which has to be a real Annual Details column"
+ },
+ {
+  "line": 2105,
+  "endLine": 2105,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a breach year says so"
+ },
+ {
+  "line": 2106,
+  "endLine": 2107,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and a year that did not breach is BLANK, not the \"0\" an empty string used to print"
+ },
+ {
+  "line": 2130,
+  "endLine": 2131,
+  "fn": "showAnnualColumns",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a link to a real column reports that it showed it"
+ },
+ {
+  "line": 2132,
+  "endLine": 2132,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and turns on the category that column lives in"
+ },
+ {
+  "line": 2133,
+  "endLine": 2134,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "while leaving every category the reader already had, which is the whole contract"
+ },
+ {
+  "line": 2135,
+  "endLine": 2135,
+  "fn": "contains",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and opens Annual Details"
+ },
+ {
+  "line": 2138,
+  "endLine": 2139,
+  "fn": "contains",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and the column itself is on screen, not merely permitted"
+ },
+ {
+  "line": 2144,
+  "endLine": 2145,
+  "fn": "showAnnualColumns",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a link to a column that does not exist reports that it showed nothing"
+ },
+ {
+  "line": 2146,
+  "endLine": 2146,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and changes no checkbox on its way out"
+ },
+ {
+  "line": 2171,
+  "endLine": 2172,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a 12% ceiling cannot fund the default plan, and the plan has to say so"
+ },
+ {
+  "line": 2173,
+  "endLine": 2174,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and it names how many years it could not keep the limit"
+ },
+ {
+  "line": 2178,
+  "endLine": 2178,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a strategy with no ceiling raises no limit warning"
+ },
+ {
+  "line": 2206,
+  "endLine": 2206,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 2,
+  "touchesDom": false,
+  "name": "an unknown strategy leaves the select with nothing chosen"
+ },
+ {
+  "line": 2209,
+  "endLine": 2210,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 8,
+  "touchesDom": false,
+  "name": "an unknown strategy falls back to the first option, which is the default"
+ },
+ {
+  "line": 2213,
+  "endLine": 2214,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 3,
+  "touchesDom": false,
+  "name": "and the default strategy's own parameter comes back with it"
+ },
+ {
+  "line": 2219,
+  "endLine": 2219,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a strategy the dropdown has is never touched"
+ },
+ {
+  "line": 2236,
+  "endLine": 2236,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the retired strategy loads as Proportional"
+ },
+ {
+  "line": 2237,
+  "endLine": 2237,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "at 0% whatever boost the plan carried, because that was the draw it ran"
+ },
+ {
+  "line": 2238,
+  "endLine": 2238,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "with Guardrails on"
+ },
+ {
+  "line": 2239,
+  "endLine": 2239,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "keeping its own band"
+ },
+ {
+  "line": 2240,
+  "endLine": 2240,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and the load report says what was substituted"
+ },
+ {
+  "line": 2242,
+  "endLine": 2242,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a plan from before the switch loads with it off"
+ },
+ {
+  "line": 2243,
+  "endLine": 2243,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and reports nothing, because nothing was substituted"
+ },
+ {
+  "line": 2245,
+  "endLine": 2245,
+  "fn": "foldRetiredGKStrategy",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a plan already on the switch passes through untouched"
+ },
+ {
+  "line": 2262,
+  "endLine": 2262,
+  "fn": "rbgCustomProblems",
+  "expKind": "literal",
+  "expTokens": 2,
+  "touchesDom": false,
+  "name": "the prefilled set is a rule"
+ },
+ {
+  "line": 2266,
+  "endLine": 2266,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "cut 30 back to 10 is one problem: ${}"
+ },
+ {
+  "line": 2267,
+  "endLine": 2267,
+  "fn": "slice",
+  "expKind": "literal",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "and it names the cut and back-to boxes"
+ },
+ {
+  "line": 2268,
+  "endLine": 2268,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "with the gap and a fix: ${}: ${}"
+ },
+ {
+  "line": 2271,
+  "endLine": 2272,
+  "fn": "el",
+  "expKind": "literal",
+  "expTokens": 7,
+  "touchesDom": false,
+  "name": "the two boxes at fault are marked, the others not"
+ },
+ {
+  "line": 2273,
+  "endLine": 2273,
+  "fn": "el",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the fold line turns red"
+ },
+ {
+  "line": 2274,
+  "endLine": 2274,
+  "fn": "el",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and the fix is shown"
+ },
+ {
+  "line": 2275,
+  "endLine": 2275,
+  "fn": "rbgCustomNumbers",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "no rule is handed to the job"
+ },
+ {
+  "line": 2278,
+  "endLine": 2278,
+  "fn": "slice",
+  "expKind": "literal",
+  "expTokens": 3,
+  "touchesDom": false,
+  "name": "back to above the target"
+ },
+ {
+  "line": 2280,
+  "endLine": 2280,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 3,
+  "touchesDom": false,
+  "name": "a target within 5 of the cut is caught (with back-to above it)"
+ },
+ {
+  "line": 2282,
+  "endLine": 2282,
+  "fn": "slice",
+  "expKind": "literal",
+  "expTokens": 3,
+  "touchesDom": false,
+  "name": "a raise level at the target"
+ },
+ {
+  "line": 2284,
+  "endLine": 2284,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a blank box is named alone"
+ },
+ {
+  "line": 2287,
+  "endLine": 2287,
+  "fn": "el",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a rule clears every mark"
+ },
+ {
+  "line": 2307,
+  "endLine": 2307,
+  "fn": "getInputs",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "the switch on sends the Guardrails rule"
+ },
+ {
+  "line": 2308,
+  "endLine": 2308,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and the sentence stating the rule is shown"
+ },
+ {
+  "line": 2309,
+  "endLine": 2309,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the fold's own line names the rule: ${}"
+ },
+ {
+  "line": 2312,
+  "endLine": 2312,
+  "fn": "getInputs",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "off sends no rule"
+ },
+ {
+  "line": 2313,
+  "endLine": 2313,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "and the sentence is hidden"
+ },
+ {
+  "line": 2335,
+  "endLine": 2335,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P132: Risk-based sends the rbg rule"
+ },
+ {
+  "line": 2336,
+  "endLine": 2336,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P132: with its preset"
+ },
+ {
+  "line": 2337,
+  "endLine": 2337,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P132: choosing Risk-based leaves Never above plan as it was (user, 2026-09-19)"
+ },
+ {
+  "line": 2338,
+  "endLine": 2338,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P132: and getInputs carries it"
+ },
+ {
+  "line": 2339,
+  "endLine": 2339,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P132: the note recommends it while it is off"
+ },
+ {
+  "line": 2340,
+  "endLine": 2340,
+  "fn": "contains",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P132: the rule menu shows while the rule runs, knob or not"
+ },
+ {
+  "line": 2341,
+  "endLine": 2341,
+  "fn": "getElementById",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P132: the preset row shows"
+ },
+ {
+  "line": 2342,
+  "endLine": 2342,
+  "fn": "getElementById",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P132: so does the ceiling, without the knob"
+ },
+ {
+  "line": 2343,
+  "endLine": 2344,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P132: the sentence states the rule: ${}"
+ },
+ {
+  "line": 2345,
+  "endLine": 2345,
+  "fn": "getElementById",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P132: the rails panel mirrors the sidebar preset"
+ },
+ {
+  "line": 2346,
+  "endLine": 2346,
+  "fn": "getElementById",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P132: and can still be set there"
+ },
+ {
+  "line": 2347,
+  "endLine": 2347,
+  "fn": "selectionOf",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P132: the table is not identity"
+ },
+ {
+  "line": 2348,
+  "endLine": 2348,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P132: the rule menu travels in the share link"
+ },
+ {
+  "line": 2349,
+  "endLine": 2349,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P132: so does the preset"
+ },
+ {
+  "line": 2350,
+  "endLine": 2350,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P132: the table never does"
+ },
+ {
+  "line": 2351,
+  "endLine": 2352,
+  "fn": "isArray",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P132: the table is absent until the rails are solved for this plan, then a table"
+ },
+ {
+  "line": 2355,
+  "endLine": 2355,
+  "fn": "getInputs",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P132: back to GK-style"
+ },
+ {
+  "line": 2356,
+  "endLine": 2357,
+  "fn": "getElementById",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P132: the rails preset stays in view with GK-style (user, 2026-09-19: the rails are drawn on demand either way"
+ },
+ {
+  "line": 2358,
+  "endLine": 2358,
+  "fn": "contains",
+  "expKind": "computed",
+  "expTokens": 2,
+  "touchesDom": true,
+  "name": "P132: without the rule running, the menu is a nerdknob control"
+ },
+ {
+  "line": 2362,
+  "endLine": 2362,
+  "fn": "getElementById",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P132: and with Guardrails off"
+ },
+ {
+  "line": 2365,
+  "endLine": 2365,
+  "fn": "getElementById",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P132: the panel follows the sidebar with the rule off too"
+ },
+ {
+  "line": 2368,
+  "endLine": 2369,
+  "fn": "getBoundingClientRect",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P132: the preset menu is as wide as its row"
+ },
+ {
+  "line": 2387,
+  "endLine": 2387,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "rule '${}': My Plan Only runs two rows"
+ },
+ {
+  "line": 2388,
+  "endLine": 2388,
+  "fn": "diffs",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "rule '${}': the first row is the plan exactly as set"
+ },
+ {
+  "line": 2389,
+  "endLine": 2389,
+  "fn": "diffs",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "rule '${}': the second differs in the Guardrails switch alone"
+ },
+ {
+  "line": 2391,
+  "endLine": 2391,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "rule '${}': and has it the other way round"
+ },
+ {
+  "line": 2393,
+  "endLine": 2393,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "rule '${}': the row with the rule says so"
+ },
+ {
+  "line": 2394,
+  "endLine": 2394,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "rule '${}': and so does the row without"
+ },
+ {
+  "line": 2422,
+  "endLine": 2422,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Annual Details renders from a live log"
+ },
+ {
+  "line": 2436,
+  "endLine": 2437,
+  "fn": "slice",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "every Annual Details row has one cell per header (${} headers)"
+ },
+ {
+  "line": 2464,
+  "endLine": 2465,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "the stored Spendable column is gone (renamed SumSpendable, computed on demand)"
+ },
+ {
+  "line": 2470,
+  "endLine": 2470,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "${} column renders"
+ },
+ {
+  "line": 2476,
+  "endLine": 2476,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "${} never decreases under Current-$"
+ },
+ {
+  "line": 2484,
+  "endLine": 2485,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "spendGoal cell is the per-row deflated flow (got ${}, want ~${})"
+ },
+ {
+  "line": 2507,
+  "endLine": 2507,
+  "fn": "col",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Future $: All RMDs sorts on the nominal lifetime total"
+ },
+ {
+  "line": 2509,
+  "endLine": 2509,
+  "fn": "col",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "Current $: All RMDs sorts on the sum of deflated years"
+ },
+ {
+  "line": 2543,
+  "endLine": 2544,
+  "fn": "join",
+  "expKind": "computed",
+  "expTokens": 6,
+  "touchesDom": false,
+  "name": "getOptimizerColumns(true) emits exactly OPT_COLUMN_KEYS, in order"
+ },
+ {
+  "line": 2551,
+  "endLine": 2551,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": ": the compare column stays first (the Best table drops column 0)"
+ },
+ {
+  "line": 2554,
+  "endLine": 2555,
+  "fn": "join",
+  "expKind": "computed",
+  "expTokens": 18,
+  "touchesDom": false,
+  "name": ": emits the pinned set unioned with the goal set, in canonical display order"
+ },
+ {
+  "line": 2558,
+  "endLine": 2558,
+  "fn": "indexOf",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": ": Rank is never the leading column"
+ },
+ {
+  "line": 2560,
+  "endLine": 2560,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": ": actually hides something"
+ },
+ {
+  "line": 2571,
+  "endLine": 2572,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "no column is named for a delta any more - Show as Differences does that job"
+ },
+ {
+  "line": 2573,
+  "endLine": 2574,
+  "fn": "join",
+  "expKind": "computed",
+  "expTokens": 6,
+  "touchesDom": false,
+  "name": "relative view changes cell contents, not the column set"
+ },
+ {
+  "line": 2580,
+  "endLine": 2581,
+  "fn": "normalizeSortState",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "normalizeSortState leaves a column that is present alone"
+ },
+ {
+  "line": 2583,
+  "endLine": 2584,
+  "fn": "normalizeSortState",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "normalizeSortState falls back to goal order when the sort column is gone"
+ },
+ {
+  "line": 2599,
+  "endLine": 2599,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P78: replayBannerText and replayCarryOnStep must be defined"
+ },
+ {
+  "line": 2607,
+  "endLine": 2608,
+  "fn": "replayBannerText",
+  "expKind": "computed",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P78: an unedited replay keeps the run's own label"
+ },
+ {
+  "line": 2611,
+  "endLine": 2611,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P78: an edited replay says the plan is modified"
+ },
+ {
+  "line": 2612,
+  "endLine": 2613,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P78: an edited replay must NOT repeat the run's ruin year"
+ },
+ {
+  "line": 2615,
+  "endLine": 2616,
+  "fn": "replayBannerText",
+  "expKind": "computed",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P78: a state with no pathName falls back to its label rather than going blank"
+ },
+ {
+  "line": 2617,
+  "endLine": 2617,
+  "fn": "replayBannerText",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P78: no state, no text"
+ },
+ {
+  "line": 2622,
+  "endLine": 2623,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P78: entering a replay keeps the run's plan fields for the handoff"
+ },
+ {
+  "line": 2627,
+  "endLine": 2628,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P78: stepping must NOT re-impose the run's plan over the edited one"
+ },
+ {
+  "line": 2629,
+  "endLine": 2629,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P78: the modified flag follows the step"
+ },
+ {
+  "line": 2634,
+  "endLine": 2635,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P78: before the handoff, stepping keeps the run's plan fields"
+ },
+ {
+  "line": 2645,
+  "endLine": 2645,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82: ringStep and realReturnOf must be defined"
+ },
+ {
+  "line": 2649,
+  "endLine": 2649,
+  "fn": "ringStep",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82: forward steps forward"
+ },
+ {
+  "line": 2650,
+  "endLine": 2650,
+  "fn": "ringStep",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82: forward past the last stop reaches the first"
+ },
+ {
+  "line": 2653,
+  "endLine": 2653,
+  "fn": "ringStep",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82: back past the first stop reaches the last"
+ },
+ {
+  "line": 2654,
+  "endLine": 2654,
+  "fn": "ringStep",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82: backward steps backward"
+ },
+ {
+  "line": 2656,
+  "endLine": 2656,
+  "fn": "ringStep",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82: an off-ring position steps from the start"
+ },
+ {
+  "line": 2657,
+  "endLine": 2657,
+  "fn": "ringStep",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82: an off-ring position steps from the start either way"
+ },
+ {
+  "line": 2659,
+  "endLine": 2659,
+  "fn": "ringStep",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82: a single-stop ring stays on its one stop"
+ },
+ {
+  "line": 2660,
+  "endLine": 2660,
+  "fn": "ringStep",
+  "expKind": "literal",
+  "expTokens": 2,
+  "touchesDom": false,
+  "name": "P82: an empty ring has nowhere to step"
+ },
+ {
+  "line": 2663,
+  "endLine": 2664,
+  "fn": "realReturnOf",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82: 8% against 3% is 4.854%, the compounded figure"
+ },
+ {
+  "line": 2665,
+  "endLine": 2666,
+  "fn": "realReturnOf",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82: the real return must be BELOW the subtracted 5%, or it is the wrong formula"
+ },
+ {
+  "line": 2667,
+  "endLine": 2667,
+  "fn": "realReturnOf",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82: matching the index leaves nothing real"
+ },
+ {
+  "line": 2670,
+  "endLine": 2671,
+  "fn": "realReturnOf",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82: a flat market against -1% inflation is a +1.01% real gain"
+ },
+ {
+  "line": 2672,
+  "endLine": 2672,
+  "fn": "realReturnOf",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82: missing rates read as zero, not NaN"
+ },
+ {
+  "line": 2683,
+  "endLine": 2683,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82i: stressTooltip must be defined"
+ },
+ {
+  "line": 2690,
+  "endLine": 2691,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82i: the summary-bar tile still points at the Monte Carlo tab"
+ },
+ {
+  "line": 2692,
+  "endLine": 2693,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82i: the headline must NOT point at the tab it is already on"
+ },
+ {
+  "line": 2694,
+  "endLine": 2695,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82i: the headline points at its own fold instead"
+ },
+ {
+  "line": 2696,
+  "endLine": 2697,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82i: the tile must not tell a reader on another tab to expand a header they cannot see"
+ },
+ {
+  "line": 2701,
+  "endLine": 2702,
+  "fn": "body",
+  "expKind": "computed",
+  "expTokens": 4,
+  "touchesDom": false,
+  "name": "P82i: only the closing line differs between the two placements"
+ },
+ {
+  "line": 2703,
+  "endLine": 2704,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82i: the counts survive the split"
+ },
+ {
+  "line": 2705,
+  "endLine": 2705,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82i: the typical ruin year survives the split"
+ },
+ {
+  "line": 2709,
+  "endLine": 2710,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P82i: an unnamed placement adds no destination at all"
+ },
+ {
+  "line": 2720,
+  "endLine": 2720,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P80: marketTooltipTitle must be defined"
+ },
+ {
+  "line": 2724,
+  "endLine": 2725,
+  "fn": "marketTooltipTitle",
+  "expKind": "computed",
+  "expTokens": 3,
+  "touchesDom": false,
+  "name": "P80: a sampled year is named at the end of the heading"
+ },
+ {
+  "line": 2729,
+  "endLine": 2730,
+  "fn": "marketTooltipTitle",
+  "expKind": "computed",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P80: with no source year the heading is untouched ()"
+ },
+ {
+  "line": 2733,
+  "endLine": 2734,
+  "fn": "startsWith",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P80: the heading keeps its plan year, ages and tax rate"
+ },
+ {
+  "line": 2735,
+  "endLine": 2736,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P80: the heading says 'from', not 'drawn from'"
+ },
+ {
+  "line": 2737,
+  "endLine": 2738,
+  "fn": "match",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P80: the source year is stated once, not once per series"
+ },
+ {
+  "line": 2760,
+  "endLine": 2761,
+  "fn": "goalFirstOn",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P102b7: the goal-first panel is never visible without ?nerdknob=goal"
+ },
+ {
+  "line": 2763,
+  "endLine": 2764,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P102b1: the goal-first conversion mode is not a share-URL field"
+ },
+ {
+  "line": 2765,
+  "endLine": 2766,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P102b1: the goal-first objective mirror is not a share-URL field"
+ },
+ {
+  "line": 2768,
+  "endLine": 2769,
+  "fn": "startsWith",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P102b1: no goal-first control reaches the engine inputs"
+ },
+ {
+  "line": 2775,
+  "endLine": 2776,
+  "fn": "contains",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P102b1: the goal-first panel is not inside the Withdrawal Strategy box"
+ },
+ {
+  "line": 2777,
+  "endLine": 2778,
+  "fn": "compareDocumentPosition",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P102b1: and it comes above it"
+ },
+ {
+  "line": 2779,
+  "endLine": 2780,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P102b1: as its sibling, so the sidebar-wide recalc listener still reaches it"
+ },
+ {
+  "line": 2789,
+  "endLine": 2789,
+  "fn": "railsOn",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128o: the rails panel is on without any knob"
+ },
+ {
+  "line": 2794,
+  "endLine": 2795,
+  "fn": "getElementById",
+  "expKind": "computed",
+  "expTokens": 3,
+  "touchesDom": true,
+  "name": "P128o: ${} shows exactly when the nerdknob is on"
+ },
+ {
+  "line": 2799,
+  "endLine": 2802,
+  "fn": "el",
+  "expKind": "literal",
+  "expTokens": 9,
+  "touchesDom": false,
+  "name": "P128o: every 3 years, 100 paths, auto-run off, previous rails hidden by default"
+ },
+ {
+  "line": 2804,
+  "endLine": 2805,
+  "fn": "querySelector",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P128m: the Monte Carlo tab opens on Synthetic lognormal"
+ },
+ {
+  "line": 2808,
+  "endLine": 2808,
+  "fn": "contains",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: the rails panel is not in the sidebar"
+ },
+ {
+  "line": 2810,
+  "endLine": 2811,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: every rails control is data-no-share"
+ },
+ {
+  "line": 2812,
+  "endLine": 2813,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: no rails control is a share-URL field"
+ },
+ {
+  "line": 2815,
+  "endLine": 2816,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: no rails setting reaches the engine inputs, and so none reaches a saved plan"
+ },
+ {
+  "line": 2819,
+  "endLine": 2819,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: the share link carries no rails setting"
+ },
+ {
+  "line": 2823,
+  "endLine": 2823,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: no rail columns before a solve"
+ },
+ {
+  "line": 2828,
+  "endLine": 2829,
+  "fn": "querySelector",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P128: the rails panel folds"
+ },
+ {
+  "line": 2830,
+  "endLine": 2832,
+  "fn": "contains",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: the rails panel sits below both charts on the Charts tab"
+ },
+ {
+  "line": 2834,
+  "endLine": 2834,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: the rails fold is remembered"
+ },
+ {
+  "line": 2839,
+  "endLine": 2839,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P132: Guardrails is a column set"
+ },
+ {
+  "line": 2840,
+  "endLine": 2840,
+  "fn": "getElementById",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P132: with a box in the table toolbar"
+ },
+ {
+  "line": 2843,
+  "endLine": 2844,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 2,
+  "touchesDom": false,
+  "name": "P132: every guardrail column is in the Guardrails set"
+ },
+ {
+  "line": 2848,
+  "endLine": 2848,
+  "fn": "getElementById",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P128: the rails have no market menu of their own"
+ },
+ {
+  "line": 2851,
+  "endLine": 2851,
+  "fn": "railsModelCfg",
+  "expKind": "computed",
+  "expTokens": 3,
+  "touchesDom": true,
+  "name": "P128: the rails solve on the tab\\'s own method"
+ },
+ {
+  "line": 2853,
+  "endLine": 2853,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: and the panel says so"
+ },
+ {
+  "line": 2860,
+  "endLine": 2863,
+  "fn": "lineOf",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P128: Auto-run and Show previous rails sit on their own line, above the settings and Run"
+ },
+ {
+  "line": 2865,
+  "endLine": 2866,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 7,
+  "touchesDom": false,
+  "name": "P128: the panel links to the README\\'s How to Read Risk-Based Rails, in a new tab"
+ },
+ {
+  "line": 2868,
+  "endLine": 2869,
+  "fn": "contains",
+  "expKind": "literal",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "P128: Run is drawn as a green action button"
+ },
+ {
+  "line": 2887,
+  "endLine": 2888,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 17,
+  "touchesDom": false,
+  "name": "P128: the Charts tab keeps its height while its charts are rebuilt, and nothing is left behind"
+ },
+ {
+  "line": 2907,
+  "endLine": 2908,
+  "fn": "railsTooltipNote",
+  "expKind": "literal",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "P128: a wealth rail carries no note, solved or interpolated"
+ },
+ {
+  "line": 2909,
+  "endLine": 2910,
+  "fn": "railsWealthNote",
+  "expKind": "literal",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "P128: the chance of success, as CoS, is on the TotalNetWealth line"
+ },
+ {
+  "line": 2911,
+  "endLine": 2912,
+  "fn": "railsWealthNote",
+  "expKind": "literal",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "P128: a stale one says so, and a year without rails has none"
+ },
+ {
+  "line": 2913,
+  "endLine": 2914,
+  "fn": "railsTooltipValue",
+  "expKind": "literal",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "P128: the raise rail rounds up to $1,000 and the cut rail down"
+ },
+ {
+  "line": 2916,
+  "endLine": 2916,
+  "fn": "railsTooltipNote",
+  "expKind": "literal",
+  "expTokens": 7,
+  "touchesDom": false,
+  "name": "P128: the spending rails add no note"
+ },
+ {
+  "line": 2917,
+  "endLine": 2917,
+  "fn": "railsTooltipValue",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: spending stays in whole dollars"
+ },
+ {
+  "line": 2918,
+  "endLine": 2919,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P129: the first year\\'s target spend is marked, with no rail spending beside it"
+ },
+ {
+  "line": 2920,
+  "endLine": 2920,
+  "fn": "railsTooltipValue",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: every other line keeps whole dollars"
+ },
+ {
+  "line": 2921,
+  "endLine": 2921,
+  "fn": "railsTooltipNote",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: and carries no note"
+ },
+ {
+  "line": 2932,
+  "endLine": 2933,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: the Balances hint names the preset's raise and cut chances, and spells out CoS: ${}"
+ },
+ {
+  "line": 2934,
+  "endLine": 2936,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: the Income vs Net hint says what the spending is measured in: ${}"
+ },
+ {
+  "line": 2937,
+  "endLine": 2938,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: and that nothing above twice the planned spending is drawn"
+ },
+ {
+  "line": 2939,
+  "endLine": 2939,
+  "fn": "railsHints",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: no spending hint on the other views"
+ },
+ {
+  "line": 2940,
+  "endLine": 2940,
+  "fn": "railsHints",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: no Balances hint without wealth rails"
+ },
+ {
+  "line": 2942,
+  "endLine": 2942,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "P128: no hint at all before a solve"
+ },
+ {
+  "line": 2943,
+  "endLine": 2943,
+  "fn": "railsHints",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: nor without a preset"
+ },
+ {
+  "line": 2945,
+  "endLine": 2947,
+  "fn": "getElementById",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P128: each hint sits on the Charts tab, above its chart"
+ },
+ {
+  "line": 2963,
+  "endLine": 2964,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 9,
+  "touchesDom": false,
+  "name": "P128: the target spend is drawn up to twice the planned spending and no higher, in Current $ as well"
+ },
+ {
+  "line": 2965,
+  "endLine": 2965,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "P128: the spending at a rail is cut the same way, marker and all"
+ },
+ {
+  "line": 2966,
+  "endLine": 2967,
+  "fn": "railsSeries",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: the wealth rails are not cut"
+ },
+ {
+  "line": 2982,
+  "endLine": 2983,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: ${}: green from the raise line up, red from the cut line down"
+ },
+ {
+  "line": 2984,
+  "endLine": 2985,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 9,
+  "touchesDom": false,
+  "name": "P128: ${}: green above, light red below"
+ },
+ {
+  "line": 2986,
+  "endLine": 2986,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: two ${} bands, and nothing between the rails"
+ },
+ {
+  "line": 2988,
+  "endLine": 2988,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128: the previous ${} rails carry no band"
+ },
+ {
+  "line": 3031,
+  "endLine": 3032,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P91: a refresh asked for during a pass is remembered, not started beside it"
+ },
+ {
+  "line": 3034,
+  "endLine": 3034,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P91: a successful pass runs the refresh it displaced"
+ },
+ {
+  "line": 3035,
+  "endLine": 3035,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P91: and forgets it once it has"
+ },
+ {
+  "line": 3042,
+  "endLine": 3043,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "a request for the inputs a successful pass just used starts no second pass"
+ },
+ {
+  "line": 3050,
+  "endLine": 3050,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P91: after a FAILED pass the same inputs are asked for again"
+ },
+ {
+  "line": 3119,
+  "endLine": 3119,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "${} with no Stress Test result for this plan starts a pass"
+ },
+ {
+  "line": 3122,
+  "endLine": 3122,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "${} that changes nothing starts no Stress Test pass"
+ },
+ {
+  "line": 3125,
+  "endLine": 3125,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "${} that changes the plan starts one"
+ },
+ {
+  "line": 3131,
+  "endLine": 3132,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "undoing that edit after a full run starts a pass for the plan as it was (${}): its result is not on screen"
+ },
+ {
+  "line": 3161,
+  "endLine": 3161,
+  "fn": "Set",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128n: switching presets changes nothing a solve depends on"
+ },
+ {
+  "line": 3167,
+  "endLine": 3168,
+  "fn": "railsStartFingerprint",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P129: the After-Tax Spend answer does not depend on the goal it started from"
+ },
+ {
+  "line": 3169,
+  "endLine": 3169,
+  "fn": "railsFingerprint",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P129: the rails themselves do"
+ },
+ {
+  "line": 3190,
+  "endLine": 3190,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128o: ticking Auto-run starts a solve at once, without the debounce"
+ },
+ {
+  "line": 3192,
+  "endLine": 3192,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P128o: and never a second solve of a plan already being solved"
+ },
+ {
+  "line": 3195,
+  "endLine": 3195,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P128o: unticking it leaves nothing scheduled"
+ },
+ {
+  "line": 3237,
+  "endLine": 3237,
+  "fn": "railsStartIsCurrent",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P129: an answer solved for this plan is current"
+ },
+ {
+  "line": 3241,
+  "endLine": 3242,
+  "fn": "contains",
+  "expKind": "literal",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "P129: Use it is a green action button, live while its answer is current"
+ },
+ {
+  "line": 3244,
+  "endLine": 3244,
+  "fn": "val",
+  "expKind": "computed",
+  "expTokens": 10,
+  "touchesDom": false,
+  "name": "P129: Use it writes the answer, rounded to $100"
+ },
+ {
+  "line": 3245,
+  "endLine": 3245,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P129: and remembers the goal it replaced"
+ },
+ {
+  "line": 3246,
+  "endLine": 3246,
+  "fn": "railsStartIsCurrent",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P129: using the answer does not make it stale"
+ },
+ {
+  "line": 3248,
+  "endLine": 3250,
+  "fn": "test",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P129c: the ⓘ opens a menu offering the risk-based answer and Restore"
+ },
+ {
+  "line": 3252,
+  "endLine": 3252,
+  "fn": "val",
+  "expKind": "computed",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P129: Restore puts the goal back"
+ },
+ {
+  "line": 3253,
+  "endLine": 3253,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "P129: and forgets it, and the menu closes"
+ },
+ {
+  "line": 3290,
+  "endLine": 3291,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 21,
+  "touchesDom": false,
+  "name": "P130: Income & Expenses\\' Net Income leaves out what the year saved"
+ },
+ {
+  "line": 3295,
+  "endLine": 3297,
+  "fn": "find",
+  "expKind": "computed",
+  "expTokens": 43,
+  "touchesDom": false,
+  "name": "P130: and so do Income vs Net\\'s Total Income and Net (Spendable)"
+ },
+ {
+  "line": 3309,
+  "endLine": 3309,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P127a: the ceiling travels in the share link"
+ },
+ {
+  "line": 3310,
+  "endLine": 3310,
+  "fn": "getInputs",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P127a: getInputs carries the ceiling"
+ },
+ {
+  "line": 3314,
+  "endLine": 3314,
+  "fn": "contains",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P127a: the switch sits in its own row under the rule\\'s controls"
+ },
+ {
+  "line": 3315,
+  "endLine": 3316,
+  "fn": "querySelector",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P127a: inside the sidebar, so a change re-runs the plan"
+ },
+ {
+  "line": 3318,
+  "endLine": 3318,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P127a: off in the page as shipped"
+ },
+ {
+  "line": 3321,
+  "endLine": 3322,
+  "fn": "closest",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P127a: the switch uses the page\\'s toggle markup"
+ },
+ {
+  "line": 3341,
+  "endLine": 3343,
+  "fn": "val",
+  "expKind": "literal",
+  "expTokens": 9,
+  "touchesDom": false,
+  "name": "P102b3: \"Never convert\" switches off all four conversion controls"
+ },
+ {
+  "line": 3344,
+  "endLine": 3345,
+  "fn": "getElementById",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": true,
+  "name": "P102b3: and says so in visible text, because a phone cannot hover over a tooltip"
+ },
+ {
+  "line": 3348,
+  "endLine": 3350,
+  "fn": "val",
+  "expKind": "literal",
+  "expTokens": 9,
+  "touchesDom": false,
+  "name": "P102b3: switching back returns the settings it borrowed, not the defaults"
+ },
+ {
+  "line": 3376,
+  "endLine": 3377,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P102b3: conversions reappearing clears \"Never convert\""
+ },
+ {
+  "line": 3385,
+  "endLine": 3386,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P102b3: conversions being off is never read as the user asking for \"never\""
+ },
+ {
+  "line": 3411,
+  "endLine": 3412,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 3,
+  "touchesDom": false,
+  "name": "P102b7: the \"when they stop paying\" position shows only under ?nerdknob=goal"
+ },
+ {
+  "line": 3417,
+  "endLine": 3418,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P102b2: a scope the user chose leaves the year box theirs to type in"
+ },
+ {
+  "line": 3423,
+  "endLine": 3424,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "P102b2: choosing it makes the box read-only without yet rewriting it"
+ },
+ {
+  "line": 3427,
+  "endLine": 3428,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "P102b2: going back to a manual scope returns the year the user typed"
+ },
+ {
+  "line": 3450,
+  "endLine": 3451,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "P102b2: \"Never convert\" makes the stop-conversions question dead, not live"
+ },
+ {
+  "line": 3454,
+  "endLine": 3455,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "P102b2: and it comes back when conversions do"
+ },
+ {
+  "line": 3484,
+  "endLine": 3485,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P102b6: the mirror offers exactly the goals the ranker knows, in the same order"
+ },
+ {
+  "line": 3486,
+  "endLine": 3488,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 11,
+  "touchesDom": false,
+  "name": "P102b6: and the same labels, so the two menus cannot drift apart"
+ },
+ {
+  "line": 3490,
+  "endLine": 3491,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "P102b6: setting the goal anywhere sets it everywhere"
+ },
+ {
+  "line": 3493,
+  "endLine": 3494,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 5,
+  "touchesDom": false,
+  "name": "P102b6: including from the other direction"
+ },
+ {
+  "line": 3496,
+  "endLine": 3498,
+  "fn": "(expr)",
+  "expKind": "computed",
+  "expTokens": 3,
+  "touchesDom": false,
+  "name": "P102b6: and the panel says what the chosen goal ranks by"
+ },
+ {
+  "line": 3525,
+  "endLine": 3526,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P102b1: goalFirstReset puts the goal-first control back to inert"
+ },
+ {
+  "line": 3530,
+  "endLine": 3533,
+  "fn": "getElementById",
+  "expKind": "literal",
+  "expTokens": 7,
+  "touchesDom": true,
+  "name": "P102b1: and leaves the classic controls holding the plan the panel built"
+ },
+ {
+  "line": 3534,
+  "endLine": 3535,
+  "fn": "(expr)",
+  "expKind": "literal",
+  "expTokens": 1,
+  "touchesDom": false,
+  "name": "P102b1: with the stop question live again, since the panel is no longer driving it"
+ }
+]

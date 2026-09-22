@@ -72,14 +72,14 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1118df"></script>
-	<script src="optimizer_core.js?v=1118df"></script>
+	<script src="optimizer_core.js?v=1118e0a"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
 	<script src="optimizer_ui.js?v=1118e0"></script>
-	<script src="optimizer_tests.js?v=1118e0"></script>
+	<script src="optimizer_tests.js?v=1118e0a"></script>
 </head>
 <body>
 
@@ -1894,13 +1894,16 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
 //
 // ?runtests runs both tiers immediately, slow tests included, for a deliberate full check before
 // a release. ?runtests=fast opts back out of the slow tests while still running everything else.
+// ?runtests=page is the pre-commit hook's headless run (.githooks/page-suite.js): tier 1 at once,
+// with its state-writing tests, and no tier 2, because the hook has just run the node suites.
 (() => {
     const RT = new URLSearchParams(location.search).get('runtests');
     const ALL = RT !== null && RT !== 'fast';
+    const PAGE_ONLY = RT === 'page';
     // Bump with the suites, not with the page: these seven are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1118e0';
+    const V = '?v=1118e0a';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',
@@ -1918,7 +1921,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     function runTier1() {
         // Set BEFORE runTests(), so the badge renders neutral rather than green while the node
         // suites are still outstanding. See the badge protocol in optimizer_tests.js.
-        if (RT !== null) window.TIER2_PENDING = true;
+        if (RT !== null && !PAGE_ONLY) window.TIER2_PENDING = true;
         runTests?.();
     }
 
@@ -1952,7 +1955,9 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
         window.TestTiers.finish(results);
     }
 
-    if (RT !== null) {
+    if (PAGE_ONLY) {
+        runTier1();
+    } else if (RT !== null) {
         runTier1();
         runTier2();                     // asked for explicitly: run now, do not wait for idle
     } else if (typeof requestIdleCallback === 'function') {

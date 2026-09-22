@@ -2241,8 +2241,9 @@ function syncRothContribUI(){
   });
 }
 
-// The annual contributions above which the page shows its limit warning. Not IRS figures: the
-// most each field is expected to hold, one person's IRA and the household's Roth.
+// The annual contributions above which the page shows its limit warning. Built from one member of
+// a couple contributing the maximum to a 401(k) for the IRA field, and both members for the Roth
+// field, so they are arbitrary by construction rather than an IRS figure.
 const CONTRIB_WARN_ABOVE = { IRA: 82500, ROTH: 165000 };
 
 function syncContribLimitWarning(){

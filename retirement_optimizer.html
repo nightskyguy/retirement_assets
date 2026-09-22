@@ -24,7 +24,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.18e2</title>
+    <title>Retirement Optimizer 11.18e3</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -45,7 +45,7 @@
         };
     </script>
 	<script src="displayhelpers.js?v=1118e0"></script>
-	<script src="sharepanel.js?v=1118e2"></script>
+	<script src="sharepanel.js?v=1118e3"></script>
 	<!-- The Send feedback dialog. NOT deferred: it records page errors from here on, so it has to
 	     load before the scripts below. It builds nothing until FeedbackWidget.open(). -->
 	<script src="feedback.js?v=11186c"></script>
@@ -73,14 +73,14 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1118e1"></script>
-	<script src="optimizer_core.js?v=1118e2"></script>
+	<script src="optimizer_core.js?v=1118e3"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=1118e2"></script>
-	<script src="optimizer_tests.js?v=1118e2"></script>
+	<script src="optimizer_ui.js?v=1118e3"></script>
+	<script src="optimizer_tests.js?v=1118e3"></script>
 </head>
 <body>
 
@@ -1137,20 +1137,14 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.18e1</b>
-					<strong>The RMD start age shown for a birth year before 1951.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>Beside a birth year before 1951, the start age now reads 72, which is the age those years reach their first required distribution under the SECURE Act. The estimate beside it is unchanged, and no plan number changes.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.18e1" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="behavior"><b>11.18e0</b>
-					<strong>ACA income limits corrected; Saved Scenarios handles any name.</strong>
+				<li data-flag="behavior"><b>11.18e3</b>
+					<strong>ACA income limits corrected; Saved Scenarios handles any name; the RMD start age for a birth year before 1951.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li>The ACA Cliff limits contained an error that has been corrected. The error was small, and it made each limit slightly too strict. They now use the 2025 Federal Poverty Level figures, the ones 2026 coverage is measured against.</li>
 					<li>A saved scenario whose name contains a double quotation mark can now be opened, loaded, deleted and exported from Saved Scenarios.</li>
+					<li>Beside a birth year before 1951, the RMD start age now reads 72, the age those years reach their first required distribution. The estimate beside it is unchanged.</li>
 					</ul>
-					<a href="optimizer_changelog.md#11.18e0" target="_blank" rel="noopener">Details</a>
+					<a href="optimizer_changelog.md#11.18e3" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="behavior"><b>11.18bf</b>
 					<strong>GK-style Guardrails corrected; the risk-based rails get one preset menu, the article&rsquo;s own set, a replay solve, milestones and a column set.</strong>
@@ -1911,7 +1905,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these seven are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1118e2';
+    const V = '?v=1118e3';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

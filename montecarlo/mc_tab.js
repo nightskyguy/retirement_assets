@@ -2033,6 +2033,27 @@ function _mcTipKeep(item, nBlockDs) {
         || !!item.dataset?._traceLabel;
 }
 
+// The heading every Monte Carlo tooltip opens with. The x labels are plan years already, so this
+// only names what the number beside it is.
+const _mcYearTitle = items => `Year ${items[0]?.label ?? ''}`;
+
+// The axes shared by the balance charts - the fan and the stress plot. Only the y-axis title
+// changes, and only with the Current-$ toggle, because the deflated series is a different
+// quantity and saying so is the whole point of the toggle.
+function _mcBalanceScales(inCurrentDollars) {
+    return {
+        x: { title: { display: true, text: 'Year' }, ticks: { maxTicksLimit: 10 } },
+        y: {
+            title: { display: true, text: inCurrentDollars ? 'Portfolio Balance (Current $)' : 'Portfolio Balance' },
+            ticks: {
+                callback: (v) => '$' + (v >= 1e6
+                    ? (v / 1e6).toFixed(1) + 'M'
+                    : (v / 1e3).toFixed(0) + 'K'),
+            },
+        },
+    };
+}
+
 function renderMCChart(msg) {
     const canvas = document.getElementById('mc-chart');
     if (!canvas || !msg?.variations?.length) return;
@@ -2180,7 +2201,7 @@ function renderMCChart(msg) {
         filter: (item, index, array) => _mcTipKeep(item, nBlockDs)
                                      && array.findIndex(i => _mcTipKeep(i, nBlockDs)) === index,
         callbacks: {
-            title: (items) => `Year ${items[0]?.label ?? ''}`,
+            title: _mcYearTitle,
             label: (ctx) => {
                 // A drawn path names itself and its outcome; it has no percentile to read.
                 if (ctx.dataset?._traceLabel)
@@ -2210,17 +2231,7 @@ function renderMCChart(msg) {
                 legend: { labels: legendLabels, onClick: legendClick, ...datasetHoverHighlight(5) },
                 tooltip: tooltipCfg,
             },
-            scales: {
-                x: { title: { display: true, text: 'Year' }, ticks: { maxTicksLimit: 10 } },
-                y: {
-                    title: { display: true, text: inCurrentDollars ? 'Portfolio Balance (Current $)' : 'Portfolio Balance' },
-                    ticks: {
-                        callback: (v) => '$' + (v >= 1e6
-                            ? (v / 1e6).toFixed(1) + 'M'
-                            : (v / 1e3).toFixed(0) + 'K'),
-                    },
-                },
-            },
+            scales: _mcBalanceScales(inCurrentDollars),
         },
     });
 
@@ -2335,7 +2346,7 @@ function renderStressChart(stress) {
     const tooltipCfg = {
         enabled: false,
         callbacks: {
-            title: items => `Year ${items[0]?.label ?? ''}`,
+            title: _mcYearTitle,
             label: ctx => `  ${ctx.dataset.label}: $${fmt(ctx.parsed.y)}`,
         },
     };
@@ -2352,17 +2363,7 @@ function renderStressChart(stress) {
                 legend: { display: false },
                 tooltip: tooltipCfg,
             },
-            scales: {
-                x: { title: { display: true, text: 'Year' }, ticks: { maxTicksLimit: 10 } },
-                y: {
-                    title: { display: true, text: inCurrentDollars ? 'Portfolio Balance (Current $)' : 'Portfolio Balance' },
-                    ticks: {
-                        callback: (v) => '$' + (v >= 1e6
-                            ? (v / 1e6).toFixed(1) + 'M'
-                            : (v / 1e3).toFixed(0) + 'K'),
-                    },
-                },
-            },
+            scales: _mcBalanceScales(inCurrentDollars),
         },
     });
 
@@ -2702,7 +2703,7 @@ function renderInputFanCharts(inputFan, years, sourceText) {
     const tooltipCfg = {
         filter: () => true,  // include hidden datasets (Min/Max)
         callbacks: {
-            title: items => `Year ${items[0]?.label ?? ''}`,
+            title: _mcYearTitle,
             label: ctx => {
                 const v = ctx.parsed.y;
                 const sign = v >= 0 ? '+' : '';

@@ -394,13 +394,10 @@ const TaxPaymentPlanner = (() => {
       paymentUrl: 'https://www.dor.ms.gov/',
     }),
 
-    CA: {
-      name: 'California',
-      hasIncomeTax: true,
-      iraExempt: false,
-      withholdingCreditedProRata: true,
+    // The three states whose due dates are not the federal ones. Each states only what it
+    // overrides; everything else is _s()'s default.
+    CA: _s('California', {
       safeHarborHighIncomeThreshold: 1000000,
-      safeHarborAlways110: false,
       quarterlySchedule: [
         { month: 4, day: 15, w: 0.30, label: 'Q1 (Jan–Mar)', nextYear: false },
         { month: 6, day: 15, w: 0.40, label: 'Q2 (Apr–May)', nextYear: false },
@@ -409,15 +406,9 @@ const TaxPaymentPlanner = (() => {
       ocWeightedMonths: 8.5,
       paymentNote: 'Pay via FTB Web Pay at ftb.ca.gov. California uses a 30%/40%/30% schedule — there is NO Q3 (September) payment. High-income threshold for 110% safe harbor is $1,000,000 AGI (not $150K).',
       paymentUrl: 'https://www.ftb.ca.gov/pay/index.html',
-    },
+    }),
 
-    OR: {
-      name: 'Oregon',
-      hasIncomeTax: true,
-      iraExempt: false,
-      withholdingCreditedProRata: true,
-      safeHarborHighIncomeThreshold: 150000,
-      safeHarborAlways110: false,
+    OR: _s('Oregon', {
       quarterlySchedule: [
         { month: 4,  day: 15, w: 0.25, label: 'Q1 (Jan–Mar)', nextYear: false },
         { month: 6,  day: 15, w: 0.25, label: 'Q2 (Apr–May)', nextYear: false },
@@ -427,15 +418,9 @@ const TaxPaymentPlanner = (() => {
       ocWeightedMonths: 8.25,
       paymentNote: 'Pay via Revenue Online at oregon.gov/dor. IMPORTANT: Oregon Q4 estimated tax is due December 15 of the tax year (not January 15 of the following year). Oregon also taxes Social Security benefits.',
       paymentUrl: 'https://revenueonline.dor.oregon.gov/',
-    },
+    }),
 
-    VA: {
-      name: 'Virginia',
-      hasIncomeTax: true,
-      iraExempt: false,
-      withholdingCreditedProRata: true,
-      safeHarborHighIncomeThreshold: 150000,
-      safeHarborAlways110: false,
+    VA: _s('Virginia', {
       quarterlySchedule: [
         { month: 5, day: 1,  w: 0.25, label: 'Q1 (Jan–Mar)', nextYear: false },
         { month: 6, day: 15, w: 0.25, label: 'Q2 (Apr–May)', nextYear: false },
@@ -445,7 +430,7 @@ const TaxPaymentPlanner = (() => {
       ocWeightedMonths: 7.875,
       paymentNote: 'Pay via Virginia Tax Online at tax.virginia.gov. IMPORTANT: Virginia Q1 is due May 1 (not April 15).',
       paymentUrl: 'https://www.tax.virginia.gov/',
-    },
+    }),
 
     MD: _s('Maryland', {
       safeHarborAlways110: true,
@@ -1317,6 +1302,45 @@ const TaxPaymentPlanner = (() => {
       return a;
     };
 
+    // One builder for all four runs of quarterly estimates - federal and state, in the shortfall
+    // branch and in the all-quarterly branch. `total` is split across `schedule` by its weights,
+    // and an installment that rounds to nothing is not listed at all.
+    //
+    // `timely` says that withholding already covers every installment on its own. When it does, an
+    // elapsed due date is NOT late in the IRC 6654 sense - the money is owed, but no penalty is
+    // accruing - so the badge is neutral and the note says so instead of inventing urgency. The
+    // all-quarterly branch has no withholding to be timely by, so it leaves it false.
+    const addQuarterlyEstimates = ({ total, schedule, state, basis, timely = false, pastDueNote }) => {
+      const who = state ? stateInfo.name : 'federal';
+      const amounts = splitExact(total, schedule.map(q => q.w));
+      schedule.forEach((q, qi) => {
+        const amt = amounts[qi];
+        if (amt === 0) return;
+        const d      = dueDateFor(q, yr);
+        const isPast = d.dueDate < today;
+        addAction({
+          type: state ? T.Q_STATE : T.Q_FED,
+          date: d.date,
+          amount: amt,
+          [state ? 'stateWithholding' : 'federalWithholding']: amt,
+          noPenalty: timely,
+          description:
+            `Pay ${who} estimated tax of ${fmt$(amt)} by ${fmtDate(d.date.year, d.date.month, d.date.day)} ` +
+            `(${q.label} — ${fmtPct(q.w)} of ${fmt$(total)} ${who} ${basis}).` +
+            (isPast ? (timely ? ' [DATE PASSED]' : ' [PAST DUE — pay immediately]') : ''),
+          notes: [
+            state ? stateInfo.paymentNote : 'Pay via IRS Direct Pay at directpay.irs.gov or EFTPS at eftps.gov.',
+            shiftNote(d),
+            isPast
+              ? (timely
+                  ? `This date has passed, but your ${who} withholding covers every installment on its own, so paying this late does not create an underpayment penalty. It is still owed.`
+                  : pastDueNote)
+              : '',
+          ].filter(Boolean),
+        });
+      });
+    };
+
     // ── 11a. Per-IRA ordering rule notes ─────────────────────────────────────
     for (const [iraNum, ira] of [[1, ira1], [2, ira2]]) {
       const convAmt = iraNum === 1 ? p.ira1RothConversion : p.ira2RothConversion;
@@ -1901,118 +1925,34 @@ const TaxPaymentPlanner = (() => {
           });
         }
 
-        const sfFedAmts = splitExact(sfFed, FED_Q.map(q => q.w));
-        FED_Q.forEach((q, qi) => {
-          const amt = sfFedAmts[qi];
-          if (amt === 0) return;
-          const d      = dueDateFor(q, yr);
-          const isPast = d.dueDate < today;
-          addAction({
-            type: T.Q_FED,
-            date: d.date,
-            amount: amt,
-            federalWithholding: amt,
-            noPenalty: fedTimelyByWithholding,
-            description:
-              `Pay federal estimated tax of ${fmt$(amt)} by ${fmtDate(d.date.year, d.date.month, d.date.day)} ` +
-              `(${q.label} — ${fmtPct(q.w)} of ${fmt$(sfFed)} federal ${isQ ? 'liability' : 'shortfall'}).` +
-              (isPast ? (fedTimelyByWithholding ? ' [DATE PASSED]' : ' [PAST DUE — pay immediately]') : ''),
-            notes: [
-              'Pay via IRS Direct Pay at directpay.irs.gov or EFTPS at eftps.gov.',
-              shiftNote(d),
-              // "Pay now to minimise the penalty" is only true if a penalty is actually accruing.
-              // When federal withholding already clears every installment by itself, this money is
-              // still owed but it is not late in the IRC 6654 sense, and saying otherwise invents
-              // urgency the numbers do not support.
-              isPast
-                ? (fedTimelyByWithholding
-                    ? 'This date has passed, but your federal withholding covers every installment on its own, so paying this late does not create an underpayment penalty. It is still owed.'
-                    : 'This installment is past due. Make a catch-up payment now to minimise underpayment penalty.')
-                : '',
-            ].filter(Boolean),
-          });
+        addQuarterlyEstimates({
+          total: sfFed, schedule: FED_Q, state: false,
+          basis: isQ ? 'liability' : 'shortfall',
+          timely: fedTimelyByWithholding,
+          pastDueNote: 'This installment is past due. Make a catch-up payment now to minimize underpayment penalty.',
         });
 
         if (sfState > 0 && stateInfo.hasIncomeTax && stateInfo.quarterlySchedule.length > 0) {
-          const sfStAmts = splitExact(sfState, stateInfo.quarterlySchedule.map(q => q.w));
-          stateInfo.quarterlySchedule.forEach((q, qi) => {
-            const amt = sfStAmts[qi];
-            if (amt === 0) return;
-            const d      = dueDateFor(q, yr);
-            const isPast = d.dueDate < today;
-            addAction({
-              type: T.Q_STATE,
-              date: d.date,
-              amount: amt,
-              stateWithholding: amt,
-              noPenalty: stateTimelyByWithholding,
-              description:
-                `Pay ${stateInfo.name} estimated tax of ${fmt$(amt)} by ` +
-                `${fmtDate(d.date.year, d.date.month, d.date.day)} ` +
-                `(${q.label} — ${fmtPct(q.w)} of ${fmt$(sfState)} ${stateInfo.name} ${isQ ? 'liability' : 'shortfall'}).` +
-                (isPast ? (stateTimelyByWithholding ? ' [DATE PASSED]' : ' [PAST DUE — pay immediately]') : ''),
-              notes: [
-                stateInfo.paymentNote,
-                shiftNote(d),
-                isPast
-                  ? (stateTimelyByWithholding
-                      ? `This date has passed, but your ${stateInfo.name} withholding covers every installment on its own, so paying this late does not create an underpayment penalty. It is still owed.`
-                      : 'This installment is past due. Pay now to minimise the underpayment penalty.')
-                  : '',
-              ].filter(Boolean),
-            });
+          addQuarterlyEstimates({
+            total: sfState, schedule: stateInfo.quarterlySchedule, state: true,
+            basis: isQ ? 'liability' : 'shortfall',
+            timely: stateTimelyByWithholding,
+            pastDueNote: 'This installment is past due. Pay now to minimize the underpayment penalty.',
           });
         }
       }
 
     } else {
       // ── All quarterly (no IRA withholding) ──────────────────────────────────
-      const fedAmts = splitExact(p.federalTax, FED_Q.map(q => q.w));
-      FED_Q.forEach((q, qi) => {
-        const amt = fedAmts[qi];
-        if (amt === 0) return;
-        const d      = dueDateFor(q, yr);
-        const isPast = d.dueDate < today;
-        addAction({
-          type: T.Q_FED,
-          date: d.date,
-          amount: amt,
-          federalWithholding: amt,
-          description:
-            `Pay federal estimated tax of ${fmt$(amt)} by ${fmtDate(d.date.year, d.date.month, d.date.day)} ` +
-            `(${q.label} — ${fmtPct(q.w)} of ${fmt$(p.federalTax)} federal tax).` +
-            (isPast ? ' [PAST DUE — pay immediately]' : ''),
-          notes: [
-            'Pay via IRS Direct Pay at directpay.irs.gov or EFTPS at eftps.gov.',
-            shiftNote(d),
-            isPast ? 'This installment is past due. Make a catch-up payment immediately.' : '',
-          ].filter(Boolean),
-        });
+      addQuarterlyEstimates({
+        total: p.federalTax, schedule: FED_Q, state: false, basis: 'tax',
+        pastDueNote: 'This installment is past due. Make a catch-up payment immediately.',
       });
 
       if (stateInfo.hasIncomeTax && stateInfo.quarterlySchedule.length > 0 && p.stateTax > 0) {
-        const stAmts = splitExact(p.stateTax, stateInfo.quarterlySchedule.map(q => q.w));
-        stateInfo.quarterlySchedule.forEach((q, qi) => {
-          const amt = stAmts[qi];
-          if (amt === 0) return;
-          const d      = dueDateFor(q, yr);
-          const isPast = d.dueDate < today;
-          addAction({
-            type: T.Q_STATE,
-            date: d.date,
-            amount: amt,
-            stateWithholding: amt,
-            description:
-              `Pay ${stateInfo.name} estimated tax of ${fmt$(amt)} by ` +
-              `${fmtDate(d.date.year, d.date.month, d.date.day)} ` +
-              `(${q.label} — ${fmtPct(q.w)} of ${fmt$(p.stateTax)} ${stateInfo.name} tax).` +
-              (isPast ? ' [PAST DUE — pay immediately]' : ''),
-            notes: [
-              stateInfo.paymentNote,
-              shiftNote(d),
-              isPast ? 'This installment is past due.' : '',
-            ].filter(Boolean),
-          });
+        addQuarterlyEstimates({
+          total: p.stateTax, schedule: stateInfo.quarterlySchedule, state: true, basis: 'tax',
+          pastDueNote: 'This installment is past due.',
         });
       } else if (!stateInfo.hasIncomeTax) {
         addAction({ type: T.NOTE, description: `${stateInfo.name} has no state income tax — no state estimated payments required.` });

@@ -13,7 +13,7 @@
 <title>Retirement Projection Tool</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="displayhelpers.js"></script>
-<script src="sharepanel.js?v=1118e2"></script>
+<script src="sharepanel.js?v=1118e3"></script>
 <script src="taxengine.js?v=1118e1"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
@@ -1751,43 +1751,34 @@ function update(){
     });
   });
 
-  sortedIRMAA.forEach((t) => {
-    if(!t.visible) return;
-    const data = rows.map(r => {
-      const v = threshAmt(t, r, useReal);
-      return v > 0 ? Math.round(v) : null;
+  // One threshold line per visible bracket, on the withdrawal axis. The dash pattern is the only
+  // thing that separates the two families on screen, so it is the only argument.
+  const pushThresholdLines = (list, borderDash) => {
+    list.forEach((t) => {
+      if(!t.visible) return;
+      const data = rows.map(r => {
+        const v = threshAmt(t, r, useReal);
+        return v > 0 ? Math.round(v) : null;
+      });
+      chart.data.datasets.push({
+        label:           t.label,
+        data,
+        borderColor:     t.color,
+        backgroundColor: 'transparent',
+        fill:            false,
+        tension:0, pointRadius:0, borderWidth:1.5, borderDash,
+        yAxisID:         'yWd'
+      });
     });
-    chart.data.datasets.push({
-      label:           t.label,
-      data,
-      borderColor:     t.color,
-      backgroundColor: 'transparent',
-      fill:            false,
-      tension:0, pointRadius:0, borderWidth:1.5, borderDash:[2,3],
-      yAxisID:         'yWd'
-    });
-  });
+  };
+
+  pushThresholdLines(sortedIRMAA, [2,3]);
 
   const sortedState = [...thresholds]
     .filter(t => t.type === 'state')
     .sort((a, b) => Math.abs(a.amount) - Math.abs(b.amount));
 
-  sortedState.forEach((t) => {
-    if(!t.visible) return;
-    const data = rows.map(r => {
-      const v = threshAmt(t, r, useReal);
-      return v > 0 ? Math.round(v) : null;
-    });
-    chart.data.datasets.push({
-      label:           t.label,
-      data,
-      borderColor:     t.color,
-      backgroundColor: 'transparent',
-      fill:            false,
-      tension:0, pointRadius:0, borderWidth:1.5, borderDash:[4,2],
-      yAxisID:         'yWd'
-    });
-  });
+  pushThresholdLines(sortedState, [4,2]);
 
   chart.options.scales.yWd.title.text  = useReal ? "Today's $" : "Future $";
   chart.options.scales.yBal.title.text = useReal ? ['Balances', "Today's $"] : ['Balances', 'Future $'];
@@ -2195,22 +2186,24 @@ function syncEarnedIncomeWarning(){
     rothActive ? 'block' : 'none';
 }
 
-function syncContribUI(){
-  const disabled = parseContribInput('contrib') === 0;
-  ['ctrlContribEndAge','ctrlContribInflate'].forEach(id => {
+// Contributing nothing makes the end-age and inflate controls meaningless, so they grey out and
+// stop taking clicks. Dimmed rather than disabled: the value stays readable, and typing a
+// contribution brings them straight back.
+function syncContribControls(amountField, controlIds){
+  const disabled = parseContribInput(amountField) === 0;
+  controlIds.forEach(id => {
     const el = document.getElementById(id);
     el.style.opacity       = disabled ? '0.4' : '1';
     el.style.pointerEvents = disabled ? 'none' : '';
   });
 }
 
+function syncContribUI(){
+  syncContribControls('contrib', ['ctrlContribEndAge','ctrlContribInflate']);
+}
+
 function syncRothContribUI(){
-  const disabled = parseContribInput('rothContrib') === 0;
-  ['ctrlRothContribEndAge','ctrlRothContribInflate'].forEach(id => {
-    const el = document.getElementById(id);
-    el.style.opacity       = disabled ? '0.4' : '1';
-    el.style.pointerEvents = disabled ? 'none' : '';
-  });
+  syncContribControls('rothContrib', ['ctrlRothContribEndAge','ctrlRothContribInflate']);
 }
 
 // The annual contributions above which the page shows its limit warning. Built from one member of

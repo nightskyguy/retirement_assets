@@ -17,21 +17,11 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.18e1"></a>
+<a id="11.18e3"></a>
 
-## 11.18e1
+## 11.18e3
 
-**The RMD start age shown for a birth year before 1951.**  
-*Nothing changes a plan's numbers.*
-
-Beside a birth year before 1951, the start age now reads 72, which is the age those years reach
-their first required distribution under the SECURE Act. The estimate beside it is unchanged.
-
-<a id="11.18e0"></a>
-
-## 11.18e0
-
-**ACA income limits corrected; Saved Scenarios handles any name.**  
+**ACA income limits corrected; Saved Scenarios handles any name; the RMD start age for a birth year before 1951.**  
 *Correction for plans using an ACA Cliff limit; nothing else changes a plan's numbers.*
 
 **The ACA Cliff limits contained an error that has been corrected.** The error was small, and it
@@ -42,6 +32,9 @@ with your CPI assumption.
 
 **Saved Scenarios**: a saved scenario whose name contains a double quotation mark can now be
 opened, loaded, deleted and exported from the list.
+
+**The RMD start age** shown beside a birth year before 1951 now reads 72, the age those years reach
+their first required distribution. The estimate beside it is unchanged.
 
 <a id="11.18bf"></a>
 

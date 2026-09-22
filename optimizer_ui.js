@@ -1054,6 +1054,21 @@ function marketTooltipTitle(base, srcYear) {
     return srcYear ? `${base}  (from ${srcYear})` : base;
 }
 
+// The heading line every per-year chart tooltip opens with: the plan year, both ages, and the
+// year's tax as a share of its income. A row that is missing (a hovered index past the end of the
+// log) falls back to the axis label. `—` is what the log writes for a person who is not alive that
+// year; the tooltip prints `--` instead, because the em dash reads as a minus sign beside figures.
+function yearAgeTaxTooltipTitle(log, items) {
+    const r = log[items[0]?.dataIndex];
+    if (!r) return { row: null, line: items[0]?.label ?? '' };
+    const a1 = (r.age1 == null || r.age1 === '—') ? '--' : r.age1;
+    const a2 = (r.age2 == null || r.age2 === '—') ? '--' : r.age2;
+    const taxPct = r.totalIncome > 0
+        ? (r.totalTax / r.totalIncome * 100).toFixed(1) + '%'
+        : '--';
+    return { row: r, line: `${r.year}  |  You: ${a1}  Spouse: ${a2}  |  Tax: ${taxPct}` };
+}
+
 // P82g. The market return after inflation. COMPOUNDED, not subtracted: 8% against 3% is 4.85%, not
 // 5%, and the gap widens exactly where it matters - the high-inflation paths. Both arguments and
 // the result are decimals, not percents.
@@ -5856,16 +5871,7 @@ function drawCharts(log) {
             tooltip: {
                 itemSort: (a, b) => b.parsed.y - a.parsed.y,
                 callbacks: {
-                    title: items => {
-                        const r = log[items[0]?.dataIndex];
-                        if (!r) return items[0]?.label ?? '';
-                        const a1 = (r.age1 == null || r.age1 === '—') ? '--' : r.age1;
-                        const a2 = (r.age2 == null || r.age2 === '—') ? '--' : r.age2;
-                        const taxPct = r.totalIncome > 0
-                            ? (r.totalTax / r.totalIncome * 100).toFixed(1) + '%'
-                            : '--';
-                        return `${r.year}  |  You: ${a1}  Spouse: ${a2}  |  Tax: ${taxPct}`;
-                    },
+                    title: items => yearAgeTaxTooltipTitle(log, items).line,
                     label: ctx => ctx.dataset.label + ': ' + railsTooltipValue(ctx).toLocaleString()
                         + railsTooltipNote(ctx)
                 }
@@ -6082,13 +6088,8 @@ function drawCharts(log) {
                                 : `${d.label}: ${rawv.toLocaleString()}`;
                         },
                         title: items => {
-                            const r = log[items[0]?.dataIndex];
-                            if (!r) return items[0]?.label ?? '';
-                            const a1 = (r.age1 == null || r.age1 === '—') ? '--' : r.age1;
-                            const a2 = (r.age2 == null || r.age2 === '—') ? '--' : r.age2;
-                            const taxPct = r.totalIncome > 0
-                                ? (r.totalTax / r.totalIncome * 100).toFixed(1) + '%'
-                                : '--';
+                            const { row: r, line: head } = yearAgeTaxTooltipTitle(log, items);
+                            if (!r) return head;
                             const a = adj(r);
                             const saved = savedOf(r) * a;
                             const totalFmt = Math.round(Math.max(0, r.totalIncome - savedOf(r)) * a).toLocaleString();
@@ -6097,10 +6098,7 @@ function drawCharts(log) {
                             const parts = [];
                             if (cwd > 0.5) parts.push(`Cash ${Math.round(cwd).toLocaleString()}`);
                             if (br  > 0.5) parts.push(`Brokerage ${Math.round(br).toLocaleString()}`);
-                            const lines = [
-                                `${r.year}  |  You: ${a1}  Spouse: ${a2}  |  Tax: ${taxPct}`,
-                                `Total Income: ${totalFmt}`
-                            ];
+                            const lines = [head, `Total Income: ${totalFmt}`];
                             if (parts.length > 0) lines.push(`Untaxed: ${parts.join(' + ')}`);
                             // P130. Named, so the gap between what was withdrawn and what is counted
                             // has a reason on screen.

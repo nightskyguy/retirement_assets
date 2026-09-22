@@ -1,0 +1,17 @@
+[
+ {
+  "a": "optimizer_ui.js",
+  "a0": 5859,
+  "a1": 5866,
+  "b": "optimizer_ui.js",
+  "b0": 6084,
+  "b1": 6091,
+  "units": 8,
+  "chars": 356,
+  "sample": [
+   "title : items => {",
+   "const r = log [ items [ 0 ] ?. dataIndex ] ;",
+   "if ( ! r ) return items [ 0 ] ?. label ?? '' ;"
+  ]
+ }
+]

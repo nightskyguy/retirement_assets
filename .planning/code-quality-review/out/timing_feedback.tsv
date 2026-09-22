@@ -1,0 +1,46 @@
+2.9	pass	splitQuery keeps only the safe keys, in their original order
+1.4	pass	splitQuery names each withheld key once, and withholds keys it does not know
+0.1	pass	splitQuery handles an empty or missing query, with or without "?"
+0.1	pass	keys named after object properties are neither safe nor renamed
+0.2	pass	buildPayload leaves the plan link out unless it is ticked
+0.2	pass	buildPayload sends settings, withheld names and page errors only when settings is ticked
+0.1	pass	buildPayload names withheld fields readably and never carries their values
+0.1	pass	the state always goes with the settings, even at its default, and only a safe key can be pinned
+2.6	pass	the GitHub link fills the message, version and browser, and nothing about the plan
+0.1	pass	buildPayload sends the page address without its query or fragment
+0.1	pass	the message is trimmed, uses plain line breaks, and must be 1 to 5000 characters
+0.2	pass	validReplyTo accepts ordinary addresses and an empty box
+0.1	pass	validReplyTo refuses anything that could add a header or a second recipient
+0.1	pass	maskDigits hides every run of three or more digits
+0.1	pass	errorLine keeps the script file name and never the page query
+0.4	pass	resolveEndpoint honors ?fbdev only on a page served from localhost
+0.1	pass	resolveEndpoint refuses a page opened from disk, and a copy with no site key
+0.1	pass	dataUrlBytes measures the decoded image, padding included
+0.2	pass	the preview marks every unticked part and shows a screenshot only by its size
+0.1	pass	a refusal from the service is shown in plain words, never as raw server text
+3.3	pass	every share-link key is classified as safe or personal, exactly once
+2.0	pass	balances, income, spending, ages, dates and health coverage are all withheld
+1.0	pass	retirement_optimizer.html loads feedback.js early and wires the Feedback button
+0.5	pass	the GitHub issue form has the fields the link fills, and a required privacy check
+0.1	pass	the live page hands feedback.js its safe-key list and share-link builder
+1.0	pass	the dialog and the Worker agree on addresses and limits
+0.2	pass	Worker: only our own page origin is accepted, by exact match
+0.1	pass	Worker: CORS headers name the caller only when it is allowed
+3.7	pass	Worker: a screenshot must be a real JPEG of at most a megabyte
+0.3	pass	Worker: links must lead back to our own pages, and settings must be a plain query
+0.1	pass	Worker: messages are required, errors are capped, and unknown fields are dropped
+0.7	pass	Worker: the email uses CRLF only, and message text cannot start a header
+0.6	pass	Worker: a subject is folded or encoded so that no line is too long
+0.2	pass	Worker: the screenshot is attached only when there is one
+0.1	pass	Worker: the email body lists withheld names and marks what was left out
+0.1	pass	Worker: the bot check needs success, our hostname and the feedback action
+0.0	pass	Worker: a Turnstile test secret passes a local page and never the live site
+17.5	pass	Worker: the browser preflight is answered for our page and refused for others
+5.0	pass	Worker: a wrong method, origin, type or size is refused before anything is checked or sent
+0.9	pass	Worker: a missing address, secret or binding fails closed
+1.5	pass	Worker: the rate limit counts per sender address and stops the send
+0.9	pass	Worker: an invalid report or a failed bot check sends nothing
+0.2	pass	Worker: the daily limit is exact and starts again the next day
+0.9	pass	Worker: a full day refuses every report and sends nothing, and only a passed bot check counts
+0.4	pass	Worker: a good report sends one email to the configured inbox, with Reply-To and the screenshot
+0.6	pass	Worker: a failed send is reported, and every reply is readable by the page and echoes nothing

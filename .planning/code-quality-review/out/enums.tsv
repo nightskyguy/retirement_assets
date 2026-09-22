@@ -1,0 +1,202 @@
+value	comparisons	files	per_file	examples
+"bracket"	23	4	optimizer_core.js=10 optimizer_ui.js=6 montecarlo/mc_tab.js=2 Retirement_Projection.html=5	optimizer_core.js:1989 optimizer_core.js:2025 optimizer_core.js:2839 optimizer_core.js:2869 optimizer_core.js:2991 optimizer_core.js:5888
+"rbg"	20	4	optimizer_core.js=7 optimizer_ui.js=9 montecarlo/mc_tab.js=3 montecarlo/rails_engine.js=1	optimizer_core.js:1405 optimizer_core.js:1406 optimizer_core.js:1409 optimizer_core.js:2399 optimizer_core.js:2405 optimizer_core.js:6155
+"gk"	18	4	optimizer_core.js=8 optimizer_ui.js=6 montecarlo/mc_tab.js=3 montecarlo/rails_engine.js=1	optimizer_core.js:1405 optimizer_core.js:1406 optimizer_core.js:1409 optimizer_core.js:2373 optimizer_core.js:2405 optimizer_core.js:4885
+"aca"	15	3	optimizer_core.js=8 optimizer_ui.js=6 montecarlo/mc_tab.js=1	optimizer_core.js:1981 optimizer_core.js:2515 optimizer_core.js:2596 optimizer_core.js:2765 optimizer_core.js:2983 optimizer_core.js:3020
+"none"	13	3	optimizer_core.js=2 optimizer_ui.js=8 Retirement_Projection.html=3	optimizer_core.js:181 optimizer_core.js:4106 optimizer_ui.js:4024 optimizer_ui.js:6165 optimizer_ui.js:8677 optimizer_ui.js:8684
+"MFJ"	13	4	optimizer_core.js=1 optimizer_ui.js=2 taxengine.js=5 standalone/IncomeTaxPlanner.html=5	optimizer_core.js:1645 optimizer_ui.js:8615 optimizer_ui.js:9363 taxengine.js:1292 taxengine.js:1294 taxengine.js:1305
+"—"	12	1	optimizer_ui.js=12	optimizer_ui.js:481 optimizer_ui.js:481 optimizer_ui.js:3121 optimizer_ui.js:3125 optimizer_ui.js:4343 optimizer_ui.js:4361
+"1"	11	4	optimizer_ui.js=1 RetirementTaxPlanner.html=1 Retirement_Projection.html=8 standalone/IncomeTaxPlanner.html=1	optimizer_ui.js:7311 RetirementTaxPlanner.html:1132 Retirement_Projection.html:2056 Retirement_Projection.html:2059 Retirement_Projection.html:2074 Retirement_Projection.html:2077
+"fixedpct"	10	3	optimizer_core.js=7 optimizer_ui.js=2 montecarlo/mc_tab.js=1	optimizer_core.js:1989 optimizer_core.js:2549 optimizer_core.js:2889 optimizer_core.js:3030 optimizer_core.js:6182 optimizer_core.js:6231
+"asc"	10	3	optimizer_core.js=1 optimizer_ui.js=3 montecarlo/mc_tab.js=6	optimizer_core.js:6354 optimizer_ui.js:2226 optimizer_ui.js:2280 optimizer_ui.js:2688 montecarlo/mc_tab.js:1671 montecarlo/mc_tab.js:1694
+"stress"	10	1	montecarlo/mc_engine.js=10	montecarlo/mc_engine.js:73 montecarlo/mc_engine.js:94 montecarlo/mc_engine.js:126 montecarlo/mc_engine.js:266 montecarlo/mc_engine.js:507 montecarlo/mc_engine.js:561
+"no"	10	2	Retirement_Projection.html=4 standalone/IncomeTaxPlanner.html=6	Retirement_Projection.html:959 Retirement_Projection.html:2238 Retirement_Projection.html:2238 Retirement_Projection.html:2243 standalone/IncomeTaxPlanner.html:1157 standalone/IncomeTaxPlanner.html:1252
+"dollars"	10	1	standalone/IncomeTaxPlanner.html=10	standalone/IncomeTaxPlanner.html:655 standalone/IncomeTaxPlanner.html:659 standalone/IncomeTaxPlanner.html:660 standalone/IncomeTaxPlanner.html:664 standalone/IncomeTaxPlanner.html:665 standalone/IncomeTaxPlanner.html:792
+"ordered"	9	3	optimizer_core.js=4 optimizer_ui.js=4 montecarlo/mc_tab.js=1	optimizer_core.js:1996 optimizer_core.js:3070 optimizer_core.js:6183 optimizer_core.js:7027 optimizer_ui.js:2755 optimizer_ui.js:6995
+"fixed"	9	3	optimizer_core.js=6 optimizer_ui.js=2 montecarlo/mc_tab.js=1	optimizer_core.js:2549 optimizer_core.js:2563 optimizer_core.js:2916 optimizer_core.js:6175 optimizer_core.js:6216 optimizer_core.js:7025
+"split"	9	2	optimizer_core.js=6 optimizer_ui.js=3	optimizer_core.js:3040 optimizer_core.js:3252 optimizer_core.js:6189 optimizer_core.js:6237 optimizer_core.js:6912 optimizer_core.js:7028
+"block"	9	4	optimizer_ui.js=3 RetirementTaxPlanner.html=2 Retirement_Projection.html=2 standalone/IncomeTaxPlanner.html=2	optimizer_ui.js:1885 optimizer_ui.js:7196 optimizer_ui.js:7224 RetirementTaxPlanner.html:667 RetirementTaxPlanner.html:694 Retirement_Projection.html:2125
+"bootstrap"	9	3	montecarlo/mc_tab.js=3 montecarlo/mc_engine.js=5 montecarlo/rails_engine.js=1	montecarlo/mc_tab.js:248 montecarlo/mc_tab.js:354 montecarlo/mc_tab.js:363 montecarlo/mc_engine.js:73 montecarlo/mc_engine.js:94 montecarlo/mc_engine.js:126
+"Brokerage"	8	1	optimizer_core.js=8	optimizer_core.js:490 optimizer_core.js:514 optimizer_core.js:562 optimizer_core.js:610 optimizer_core.js:2631 optimizer_core.js:3818
+"propwd"	8	3	optimizer_core.js=5 optimizer_ui.js=2 montecarlo/mc_tab.js=1	optimizer_core.js:2563 optimizer_core.js:3056 optimizer_core.js:6174 optimizer_core.js:6210 optimizer_core.js:7024 optimizer_ui.js:2719
+"combined"	8	4	optimizer_ui.js=2 montecarlo/mc_tab.js=2 montecarlo/prng.js=2 Retirement_Projection.html=2	optimizer_ui.js:4685 optimizer_ui.js:5994 montecarlo/mc_tab.js:496 montecarlo/mc_tab.js:517 montecarlo/prng.js:275 montecarlo/prng.js:327
+"aam"	8	4	montecarlo/mc_tab.js=2 montecarlo/mc_engine.js=3 montecarlo/rails_engine.js=1 montecarlo/prng.js=2	montecarlo/mc_tab.js:295 montecarlo/mc_tab.js:1323 montecarlo/mc_engine.js:302 montecarlo/mc_engine.js:597 montecarlo/mc_engine.js:696 montecarlo/rails_engine.js:157
+"flat"	7	3	optimizer_core.js=4 optimizer_ui.js=2 Retirement_Projection.html=1	optimizer_core.js:134 optimizer_core.js:138 optimizer_core.js:4048 optimizer_core.js:4113 optimizer_ui.js:7250 optimizer_ui.js:7251
+"all"	7	3	optimizer_core.js=1 montecarlo/mc_tab.js=4 montecarlo/prng.js=2	optimizer_core.js:5513 montecarlo/mc_tab.js:496 montecarlo/mc_tab.js:516 montecarlo/mc_tab.js:1422 montecarlo/mc_tab.js:1466 montecarlo/prng.js:258
+"tax"	7	2	optimizer_ui.js=3 taxPaymentPlanner.js=4	optimizer_ui.js:2312 optimizer_ui.js:4681 optimizer_ui.js:4718 taxPaymentPlanner.js:1737 taxPaymentPlanner.js:2210 taxPaymentPlanner.js:2357
+"plan"	7	1	montecarlo/mc_tab.js=7	montecarlo/mc_tab.js:646 montecarlo/mc_tab.js:654 montecarlo/mc_tab.js:672 montecarlo/mc_tab.js:1192 montecarlo/mc_tab.js:1794 montecarlo/mc_tab.js:2010
+"rails"	7	2	montecarlo/mc_controller.js=6 montecarlo/worker.js=1	montecarlo/mc_controller.js:11 montecarlo/mc_controller.js:49 montecarlo/mc_controller.js:192 montecarlo/mc_controller.js:193 montecarlo/mc_controller.js:203 montecarlo/mc_controller.js:217
+"rates"	7	1	standalone/IncomeTaxPlanner.html=7	standalone/IncomeTaxPlanner.html:654 standalone/IncomeTaxPlanner.html:658 standalone/IncomeTaxPlanner.html:663 standalone/IncomeTaxPlanner.html:671 standalone/IncomeTaxPlanner.html:791 standalone/IncomeTaxPlanner.html:897
+"custom"	6	2	optimizer_core.js=2 optimizer_ui.js=4	optimizer_core.js:134 optimizer_core.js:6164 optimizer_ui.js:860 optimizer_ui.js:6832 optimizer_ui.js:7016 optimizer_ui.js:7187
+"spend"	6	3	optimizer_core.js=1 optimizer_ui.js=4 taxPaymentPlanner.js=1	optimizer_core.js:6445 optimizer_ui.js:2207 optimizer_ui.js:2231 optimizer_ui.js:2314 optimizer_ui.js:5672 taxPaymentPlanner.js:1738
+"spouse"	6	2	optimizer_ui.js=4 Retirement_Projection.html=2	optimizer_ui.js:5894 optimizer_ui.js:5895 optimizer_ui.js:5896 optimizer_ui.js:5897 Retirement_Projection.html:1536 Retirement_Projection.html:2335
+"checkbox"	6	2	optimizer_ui.js=5 montecarlo/mc_tab.js=1	optimizer_ui.js:6312 optimizer_ui.js:6788 optimizer_ui.js:7142 optimizer_ui.js:7158 optimizer_ui.js:7310 montecarlo/mc_tab.js:1784
+"early"	6	1	optimizer_ui.js=6	optimizer_ui.js:7279 optimizer_ui.js:7283 optimizer_ui.js:7284 optimizer_ui.js:8052 optimizer_ui.js:8053 optimizer_ui.js:8060
+"state"	6	1	Retirement_Projection.html=6	Retirement_Projection.html:1420 Retirement_Projection.html:1423 Retirement_Projection.html:1509 Retirement_Projection.html:1559 Retirement_Projection.html:1608 Retirement_Projection.html:1840
+"schedule"	5	1	optimizer_core.js=5	optimizer_core.js:1991 optimizer_core.js:2222 optimizer_core.js:2703 optimizer_core.js:2941 optimizer_core.js:3735
+"fillCashThenRoth"	5	3	optimizer_core.js=3 optimizer_ui.js=1 montecarlo/mc_tab.js=1	optimizer_core.js:3231 optimizer_core.js:3241 optimizer_core.js:6150 optimizer_ui.js:2734 montecarlo/mc_tab.js:1863
+"extra"	5	2	optimizer_core.js=1 optimizer_ui.js=4	optimizer_core.js:3665 optimizer_ui.js:737 optimizer_ui.js:3857 optimizer_ui.js:3984 optimizer_ui.js:3992
+"IRMAA"	5	2	optimizer_ui.js=1 Retirement_Projection.html=4	optimizer_ui.js:4752 Retirement_Projection.html:1512 Retirement_Projection.html:1560 Retirement_Projection.html:1607 Retirement_Projection.html:1792
+"auto"	5	1	optimizer_ui.js=5	optimizer_ui.js:6455 optimizer_ui.js:6483 optimizer_ui.js:6490 optimizer_ui.js:6491 optimizer_ui.js:6551
+"rmd"	5	1	taxPaymentPlanner.js=5	taxPaymentPlanner.js:1037 taxPaymentPlanner.js:1038 taxPaymentPlanner.js:1079 taxPaymentPlanner.js:1687 taxPaymentPlanner.js:1696
+"off"	4	3	optimizer_core.js=2 optimizer_ui.js=1 retirement_optimizer.html=1	optimizer_core.js:3445 optimizer_core.js:3485 optimizer_ui.js:679 retirement_optimizer.html:1810
+"strategy"	4	1	optimizer_ui.js=4	optimizer_ui.js:2351 optimizer_ui.js:2392 optimizer_ui.js:2535 optimizer_ui.js:7715
+"low"	4	2	optimizer_ui.js=1 montecarlo/rails_engine.js=3	optimizer_ui.js:5483 montecarlo/rails_engine.js:397 montecarlo/rails_engine.js:582 montecarlo/rails_engine.js:686
+"mine"	4	1	optimizer_ui.js=4	optimizer_ui.js:5894 optimizer_ui.js:5895 optimizer_ui.js:5896 optimizer_ui.js:5897
+"never"	4	1	optimizer_ui.js=4	optimizer_ui.js:6372 optimizer_ui.js:6411 optimizer_ui.js:6432 optimizer_ui.js:6462
+"late"	4	1	optimizer_ui.js=4	optimizer_ui.js:7279 optimizer_ui.js:7284 optimizer_ui.js:8053 optimizer_ui.js:8060
+"Enter"	4	2	Retirement_Projection.html=3 feedback.js=1	Retirement_Projection.html:2386 Retirement_Projection.html:2413 Retirement_Projection.html:2426 feedback.js:472
+"full"	3	3	optimizer_core.js=1 optimizer_ui.js=1 taxengine.js=1	optimizer_core.js:180 optimizer_ui.js:4169 taxengine.js:1323
+"SGL"	3	2	optimizer_core.js=1 standalone/IncomeTaxPlanner.html=2	optimizer_core.js:1647 standalone/IncomeTaxPlanner.html:1210 standalone/IncomeTaxPlanner.html:1467
+"baseline"	3	1	optimizer_core.js=3	optimizer_core.js:1994 optimizer_core.js:2511 optimizer_core.js:2952
+"fillRothThenCash"	3	1	optimizer_core.js=3	optimizer_core.js:3231 optimizer_core.js:3431 optimizer_core.js:6150
+"brokerageFirst"	3	1	optimizer_core.js=3	optimizer_core.js:3282 optimizer_core.js:3284 optimizer_core.js:3561
+"pct"	3	2	optimizer_core.js=1 optimizer_ui.js=2	optimizer_core.js:4048 optimizer_ui.js:6162 optimizer_ui.js:7250
+"afterTaxNW"	3	1	optimizer_ui.js=3	optimizer_ui.js:2206 optimizer_ui.js:2228 optimizer_ui.js:2315
+"compare"	3	2	optimizer_ui.js=2 montecarlo/mc_tab.js=1	optimizer_ui.js:2336 optimizer_ui.js:2522 montecarlo/mc_tab.js:608
+"year"	3	1	optimizer_ui.js=3	optimizer_ui.js:3593 optimizer_ui.js:3602 optimizer_ui.js:7931
+"-none-"	3	2	optimizer_ui.js=2 Retirement_Projection.html=1	optimizer_ui.js:3644 optimizer_ui.js:4754 Retirement_Projection.html:924
+"transparent"	3	2	optimizer_ui.js=1 retirement_optimizer.html=2	optimizer_ui.js:4214 retirement_optimizer.html:42 retirement_optimizer.html:43
+"high"	3	2	optimizer_ui.js=2 montecarlo/rails_engine.js=1	optimizer_ui.js:5483 optimizer_ui.js:5526 montecarlo/rails_engine.js:684
+"SELECT"	3	1	optimizer_ui.js=3	optimizer_ui.js:6312 optimizer_ui.js:6794 optimizer_ui.js:7322
+"Escape"	3	3	optimizer_ui.js=1 standalone/IncomeTaxPlanner.html=1 feedback.js=1	optimizer_ui.js:8891 standalone/IncomeTaxPlanner.html:1317 feedback.js:489
+"Q"	3	1	taxPaymentPlanner.js=3	taxPaymentPlanner.js:871 taxPaymentPlanner.js:879 taxPaymentPlanner.js:2348
+"gbm"	3	2	montecarlo/mc_tab.js=1 montecarlo/mc_engine.js=2	montecarlo/mc_tab.js:295 montecarlo/mc_engine.js:68 montecarlo/mc_engine.js:590
+"mc"	3	2	montecarlo/mc_tab.js=2 montecarlo/mc_controller.js=1	montecarlo/mc_tab.js:1150 montecarlo/mc_tab.js:1169 montecarlo/mc_controller.js:46
+"balances"	3	1	Retirement_Projection.html=3	Retirement_Projection.html:1472 Retirement_Projection.html:1490 Retirement_Projection.html:1491
+"added"	2	2	optimizer_core.js=1 optimizer_ui.js=1	optimizer_core.js:1703 optimizer_ui.js:763
+"cascade"	2	1	optimizer_core.js=2	optimizer_core.js:1993 optimizer_core.js:2511
+"__objective__"	2	1	optimizer_ui.js=2	optimizer_ui.js:2210 optimizer_ui.js:2681
+"rate"	2	1	optimizer_ui.js=2	optimizer_ui.js:2313 optimizer_ui.js:7930
+"-"	2	1	optimizer_ui.js=2	optimizer_ui.js:3644 optimizer_ui.js:4754
+"log2"	2	1	optimizer_ui.js=2	optimizer_ui.js:4625 optimizer_ui.js:5888
+"net"	2	1	optimizer_ui.js=2	optimizer_ui.js:4702 optimizer_ui.js:5783
+"up"	2	1	optimizer_ui.js=2	optimizer_ui.js:5823 optimizer_ui.js:5827
+"│"	2	1	optimizer_ui.js=2	optimizer_ui.js:6111 optimizer_ui.js:6117
+"tab-tbl"	2	1	optimizer_ui.js=2	optimizer_ui.js:6176 optimizer_ui.js:6194
+"true"	2	2	optimizer_ui.js=1 RetirementTaxPlanner.html=1	optimizer_ui.js:7311 RetirementTaxPlanner.html:1132
+"stratRate"	2	1	optimizer_ui.js=2	optimizer_ui.js:7730 optimizer_ui.js:7732
+"Unknown"	2	1	optimizer_ui.js=2	optimizer_ui.js:7849 optimizer_ui.js:7944
+"fed"	2	2	optimizer_ui.js=1 Retirement_Projection.html=1	optimizer_ui.js:9347 Retirement_Projection.html:1558
+"C"	2	1	taxPaymentPlanner.js=2	taxPaymentPlanner.js:871 taxPaymentPlanner.js:1598
+"D"	2	1	taxPaymentPlanner.js=2	taxPaymentPlanner.js:875 taxPaymentPlanner.js:1074
+"quarterly"	2	1	taxPaymentPlanner.js=2	taxPaymentPlanner.js:1192 taxPaymentPlanner.js:1243
+"B"	2	1	taxPaymentPlanner.js=2	taxPaymentPlanner.js:1531 taxPaymentPlanner.js:1599
+"prior-100"	2	1	taxPaymentPlanner.js=2	taxPaymentPlanner.js:2105 taxPaymentPlanner.js:2106
+"file:"	2	2	montecarlo/mc_controller.js=1 retirement_optimizer.html=1	montecarlo/mc_controller.js:24 retirement_optimizer.html:1922
+"periodic"	2	1	Retirement_Projection.html=2	Retirement_Projection.html:1214 Retirement_Projection.html:2260
+"smile"	2	1	Retirement_Projection.html=2	Retirement_Projection.html:1257 Retirement_Projection.html:2179
+"0"	2	2	Retirement_Projection.html=1 standalone/IncomeTaxPlanner.html=1	Retirement_Projection.html:2108 standalone/IncomeTaxPlanner.html:1526
+"halfcpi"	1	1	optimizer_core.js=1	optimizer_core.js:238
+"cpiminus1"	1	1	optimizer_core.js=1	optimizer_core.js:239
+"flat2000"	1	1	optimizer_core.js=1	optimizer_core.js:252
+"halfstep"	1	1	optimizer_core.js=1	optimizer_core.js:253
+"asneeded"	1	1	optimizer_core.js=1	optimizer_core.js:287
+"shortfall"	1	1	optimizer_core.js=1	optimizer_core.js:643
+"netAmount"	1	1	optimizer_core.js=1	optimizer_core.js:643
+"errors"	1	1	optimizer_core.js=1	optimizer_core.js:643
+"federal"	1	1	optimizer_core.js=1	optimizer_core.js:2515
+"irmaa"	1	1	optimizer_core.js=1	optimizer_core.js:2515
+"IRA"	1	1	optimizer_core.js=1	optimizer_core.js:2630
+"magi"	1	1	optimizer_core.js=1	optimizer_core.js:2765
+"spendonly"	1	1	optimizer_core.js=1	optimizer_core.js:2825
+"bracketfill"	1	1	optimizer_core.js=1	optimizer_core.js:2868
+"unbounded"	1	1	optimizer_core.js=1	optimizer_core.js:3486
+"Cash"	1	1	optimizer_core.js=1	optimizer_core.js:3818
+"allfromira"	1	1	optimizer_core.js=1	optimizer_core.js:4124
+"december"	1	1	optimizer_core.js=1	optimizer_core.js:4370
+"brokerage-first"	1	1	optimizer_core.js=1	optimizer_core.js:5076
+"minTax"	1	1	optimizer_core.js=1	optimizer_core.js:6446
+"baselineScore"	1	1	optimizer_core.js=1	optimizer_core.js:6447
+"b"	1	1	optimizer_core.js=1	optimizer_core.js:7145
+"m"	1	1	optimizer_core.js=1	optimizer_core.js:7146
+"k"	1	1	optimizer_core.js=1	optimizer_core.js:7147
+"goal"	1	1	optimizer_ui.js=1	optimizer_ui.js:33
+"tab-mc"	1	1	optimizer_ui.js=1	optimizer_ui.js:121
+"tab-opt"	1	1	optimizer_ui.js=1	optimizer_ui.js:126
+"pp"	1	1	optimizer_ui.js=1	optimizer_ui.js:490
+"years"	1	1	optimizer_ui.js=1	optimizer_ui.js:491
+"dollar"	1	1	optimizer_ui.js=1	optimizer_ui.js:493
+"neutral"	1	1	optimizer_ui.js=1	optimizer_ui.js:496
+"higher"	1	1	optimizer_ui.js=1	optimizer_ui.js:497
+"busy"	1	1	optimizer_ui.js=1	optimizer_ui.js:1311
+"rmdtax"	1	1	optimizer_ui.js=1	optimizer_ui.js:2316
+"convBE"	1	1	optimizer_ui.js=1	optimizer_ui.js:2317
+"inflationFactor"	1	1	optimizer_ui.js=1	optimizer_ui.js:3088
+"cat-spending"	1	1	optimizer_ui.js=1	optimizer_ui.js:3200
+"BracketOverage"	1	1	optimizer_ui.js=1	optimizer_ui.js:3590
+"netIncome"	1	1	optimizer_ui.js=1	optimizer_ui.js:3590
+"totalTax"	1	1	optimizer_ui.js=1	optimizer_ui.js:3593
+"loopMs"	1	1	optimizer_ui.js=1	optimizer_ui.js:3613
+"IRMAATier"	1	1	optimizer_ui.js=1	optimizer_ui.js:3644
+"neverSustains"	1	1	optimizer_ui.js=1	optimizer_ui.js:3960
+"mc-chart"	1	1	optimizer_ui.js=1	optimizer_ui.js:4117
+"chartAssets"	1	1	optimizer_ui.js=1	optimizer_ui.js:4118
+"chartIncomeSources"	1	1	optimizer_ui.js=1	optimizer_ui.js:4118
+"Medicare"	1	1	optimizer_ui.js=1	optimizer_ui.js:4197
+"bar"	1	1	optimizer_ui.js=1	optimizer_ui.js:4287
+"half"	1	1	optimizer_ui.js=1	optimizer_ui.js:4457
+"log10"	1	1	optimizer_ui.js=1	optimizer_ui.js:4625
+"Cap Gains"	1	1	optimizer_ui.js=1	optimizer_ui.js:4756
+"flows"	1	1	optimizer_ui.js=1	optimizer_ui.js:4784
+"assetflows"	1	1	optimizer_ui.js=1	optimizer_ui.js:4820
+"market"	1	1	optimizer_ui.js=1	optimizer_ui.js:4844
+"y1"	1	1	optimizer_ui.js=1	optimizer_ui.js:4892
+"Market return"	1	1	optimizer_ui.js=1	optimizer_ui.js:4905
+"go-btn"	1	1	optimizer_ui.js=1	optimizer_ui.js:5522
+"previous"	1	1	optimizer_ui.js=1	optimizer_ui.js:5663
+"balance"	1	1	optimizer_ui.js=1	optimizer_ui.js:5704
+"down"	1	1	optimizer_ui.js=1	optimizer_ui.js:5823
+"linear"	1	1	optimizer_ui.js=1	optimizer_ui.js:5879
+"tab-chart"	1	1	optimizer_ui.js=1	optimizer_ui.js:6176
+"the ACA FPL cap"	1	1	optimizer_ui.js=1	optimizer_ui.js:6690
+"taxflex"	1	1	optimizer_ui.js=1	optimizer_ui.js:7181
+"inflation"	1	1	optimizer_ui.js=1	optimizer_ui.js:7186
+"text"	1	1	optimizer_ui.js=1	optimizer_ui.js:7317
+"always"	1	1	optimizer_ui.js=1	optimizer_ui.js:7683
+"optObjective"	1	1	optimizer_ui.js=1	optimizer_ui.js:7710
+"stratIRMAATier"	1	1	optimizer_ui.js=1	optimizer_ui.js:7712
+"stratACAMultiple"	1	1	optimizer_ui.js=1	optimizer_ui.js:7713
+"qcdMode"	1	1	optimizer_ui.js=1	optimizer_ui.js:7717
+"complete"	1	1	optimizer_ui.js=1	optimizer_ui.js:7815
+"count"	1	1	optimizer_ui.js=1	optimizer_ui.js:7931
+"restore"	1	1	optimizer_ui.js=1	optimizer_ui.js:8708
+"risk"	1	1	optimizer_ui.js=1	optimizer_ui.js:8709
+"cap"	1	1	taxengine.js=1	taxengine.js:1328
+"phaseout"	1	1	taxengine.js=1	taxengine.js:1341
+"credit"	1	1	taxengine.js=1	taxengine.js:1367
+"CA"	1	1	taxengine.js=1	taxengine.js:1577
+"FEDERAL"	1	1	taxengine.js=1	taxengine.js:1585
+"A"	1	1	taxPaymentPlanner.js=1	taxPaymentPlanner.js:875
+"ye_ira"	1	1	taxPaymentPlanner.js=1	taxPaymentPlanner.js:1241
+"ye_ira_full"	1	1	taxPaymentPlanner.js=1	taxPaymentPlanner.js:1254
+"ye_ira_partial"	1	1	taxPaymentPlanner.js=1	taxPaymentPlanner.js:1254
+"vol"	1	1	taxPaymentPlanner.js=1	taxPaymentPlanner.js:1697
+"all_quarterly"	1	1	taxPaymentPlanner.js=1	taxPaymentPlanner.js:2130
+"no-tax"	1	1	taxPaymentPlanner.js=1	taxPaymentPlanner.js:2380
+"no-early-leg"	1	1	taxPaymentPlanner.js=1	taxPaymentPlanner.js:2382
+"mc-num-paths"	1	1	montecarlo/mc_tab.js=1	montecarlo/mc_tab.js:73
+"mc-mu"	1	1	montecarlo/mc_tab.js=1	montecarlo/mc_tab.js:219
+"survival"	1	1	montecarlo/mc_tab.js=1	montecarlo/mc_tab.js:1710
+"upper"	1	1	montecarlo/rails_engine.js=1	montecarlo/rails_engine.js:582
+"lower"	1	1	montecarlo/rails_engine.js=1	montecarlo/rails_engine.js:582
+"progress"	1	1	montecarlo/mc_controller.js=1	montecarlo/mc_controller.js:39
+"results"	1	1	montecarlo/mc_controller.js=1	montecarlo/mc_controller.js:41
+"unknown"	1	1	retirement_optimizer.html=1	retirement_optimizer.html:1252
+"behavior"	1	1	retirement_optimizer.html=1	retirement_optimizer.html:1258
+"fast"	1	1	retirement_optimizer.html=1	retirement_optimizer.html:1891
+"DETAILS"	1	1	RetirementTaxPlanner.html=1	RetirementTaxPlanner.html:991
+"infl"	1	1	Retirement_Projection.html=1	Retirement_Projection.html:1256
+"niit"	1	1	Retirement_Projection.html=1	Retirement_Projection.html:1419
+"taxation"	1	1	Retirement_Projection.html=1	Retirement_Projection.html:1473
+"income"	1	1	Retirement_Projection.html=1	Retirement_Projection.html:1474
+"num-pin"	1	1	standalone/IncomeTaxPlanner.html=1	standalone/IncomeTaxPlanner.html:1292
+"https:"	1	1	feedback.js=1	feedback.js:255
+"http:"	1	1	feedback.js=1	feedback.js:255
+"daily"	1	1	feedback.js=1	feedback.js:273
+"bot"	1	1	feedback.js=1	feedback.js:278
+"file"	1	1	feedback.js=1	feedback.js:547
+"setup"	1	1	feedback.js=1	feedback.js:556
+"loading"	1	1	feedback.js=1	feedback.js:748
+"empty"	1	1	feedback.js=1	feedback.js:789
+"AbortError"	1	1	feedback.js=1	feedback.js:832

@@ -1,0 +1,32 @@
+3.3	pass	findLimitByRate and findUpperLimitByAmount on the TEST entity
+1.5	pass	findLimitByRate on FEDERAL and CA, and the Social Security 85% tier (sensitive to the real TAXData)
+0.1	pass	calcIRMAA: tiers, CPI, the Medicare rate and the per-person gate (sensitive to the real TAXData)
+0.2	pass	calculateProgressive: the TEST entity, invalid entities, and which states index their brackets
+0.4	pass	TEST CASE 1: Simple - Only SS income, below taxability threshold
+0.1	pass	TEST CASE 2: SS with 50% taxability (between thresholds)
+0.0	pass	TEST CASE 3: SS with 85% taxability (above second threshold)
+0.1	pass	TEST CASE 4: Large Capital Gains (testing preferential rates)
+0.1	pass	TEST CASE 5: Complex - Multiple income types with HSA
+0.1	pass	TEST CASE 6: High income testing NIIT inclusion in capital gains
+0.1	pass	TEST CASE 6b: LTCG 20% starts at the bracket ceiling, not the NIIT threshold
+0.1	pass	TEST CASE 6c: tax-exempt interest does not create NIIT
+0.2	pass	TEST CASE 6d: declared marginal NIIT equals the measured derivative
+0.1	pass	TEST CASE 6e: NIIT threshold does not inflate, and SGL/below-threshold are covered
+5.3	pass	TEST CASE 6f: the 20% LTCG band always carries NIIT, so it is really 23.8%
+0.1	pass	TEST CASE 7: Single filer with inflation adjustment
+0.1	pass	TEST CASE 8: Edge case - exactly at 50% threshold
+0.0	pass	TEST CASE 9: SS thresholds are NOT CPI-indexed (validates fix vs old bug)
+0.1	pass	TEST CASE 10: OBBBA senior deduction - full (below phase-out)
+0.0	pass	TEST CASE 11: OBBBA senior deduction - partial phase-out
+0.0	pass	TEST CASE 12: OBBBA senior deduction - fully phased out
+0.0	pass	TEST CASE 13: SALT itemizing wins with OBBBA $40k cap
+0.0	pass	TEST CASE 14: SALT $10k cap never beats standard deduction
+0.0	pass	TEST CASE 15: SALT cap mid-phase-out (MAGI $540k → cap reduced to $28k, below std ded)
+0.0	pass	TEST CASE 16: SALT cap fully phased out (MAGI $550k → cap floors at $10k)
+0.4	pass	TEST CASE 17: CT state taxes SS at 25%
+0.1	pass	TEST CASE 18: stateOrdinaryTax / stateCapGainsTax split
+0.1	pass	TEST CASE 19: IL / PA full retirement exclusion regression
+0.0	pass	TEST CASE 20: GA cap mode - per-person age-tiered cap (ageGateTiers)
+0.0	pass	TEST CASE 21: CT phaseout mode - graduated % exclusion by federal AGI
+0.0	pass	TEST CASE 22: OH credit mode - post-tax dollar credit, tiered + MAGI-gated
+0.0	pass	TEST CASE 23: AL array-of-rules - disjoint types, pension full-exempt + IRA capped

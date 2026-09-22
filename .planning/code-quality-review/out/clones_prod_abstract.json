@@ -1,0 +1,1097 @@
+[
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 282,
+  "a1": 323,
+  "b": "standalone/FutureCost.html",
+  "b0": 299,
+  "b1": 340,
+  "units": 34,
+  "chars": 723,
+  "sample": [
+   "background: var(--surface2);",
+   "border: 1px solid var(--border);",
+   "border-radius: 4px;"
+  ]
+ },
+ {
+  "a": "standalone/HYSA.html",
+  "a0": 629,
+  "a1": 666,
+  "b": "standalone/RealReturns.html",
+  "b0": 993,
+  "b1": 1030,
+  "units": 28,
+  "chars": 1425,
+  "sample": [
+   "const base = window . location . origin + window . location . pathname ;",
+   "const q = params . toString ( ) ;",
+   "return q ? base + '?' + q : base ;"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 382,
+  "a1": 419,
+  "b": "taxengine.js",
+  "b0": 729,
+  "b1": 766,
+  "units": 26,
+  "chars": 1252,
+  "sample": [
+   "{ l : Infinity , r : 0.043 }",
+   "IA : {",
+   "STATE : 'Iowa' ,"
+  ]
+ },
+ {
+  "a": "RetirementTaxPlanner.html",
+  "a0": 664,
+  "a1": 688,
+  "b": "optimizer_ui.js",
+  "b0": 7193,
+  "b1": 7217,
+  "units": 22,
+  "chars": 929,
+  "sample": [
+   "function toggleSharePanel ( ) {",
+   "const panel = document . getElementById ( 'share-panel' ) ;",
+   "const input = document . getElementById ( 'share-url-input' ) ;"
+  ]
+ },
+ {
+  "a": "RetirementTaxPlanner.html",
+  "a0": 670,
+  "a1": 697,
+  "b": "Retirement_Projection.html",
+  "b0": 2132,
+  "b1": 2159,
+  "units": 22,
+  "chars": 902,
+  "sample": [
+   "document . getElementById ( 'share-status' ) . textContent = '' ;",
+   "panel . style . display = 'block' ;",
+   "requestAnimationFrame ( ( ) => { input . select ( ) ; } ) ;"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 869,
+  "b1": 890,
+  "units": 20,
+  "chars": 249,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 870,
+  "b1": 891,
+  "units": 20,
+  "chars": 249,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 871,
+  "b1": 892,
+  "units": 20,
+  "chars": 249,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 873,
+  "b1": 893,
+  "units": 20,
+  "chars": 249,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 874,
+  "b1": 894,
+  "units": 20,
+  "chars": 249,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 875,
+  "b1": 895,
+  "units": 20,
+  "chars": 249,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 876,
+  "b1": 896,
+  "units": 20,
+  "chars": 249,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 877,
+  "b1": 897,
+  "units": 20,
+  "chars": 249,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 878,
+  "b1": 898,
+  "units": 20,
+  "chars": 249,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 879,
+  "b1": 899,
+  "units": 20,
+  "chars": 249,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 880,
+  "b1": 900,
+  "units": 20,
+  "chars": 249,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": "standalone/HYSA.html",
+  "a0": 481,
+  "a1": 501,
+  "b": "standalone/HYSA.html",
+  "b0": 504,
+  "b1": 524,
+  "units": 19,
+  "chars": 405,
+  "sample": [
+   "label : 'Roth / 0% tax' ,",
+   "data : cumul0 . rothVals ,",
+   "borderColor : '#ef9f27' ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 550,
+  "b": "feedback.js",
+  "b0": 881,
+  "b1": 900,
+  "units": 19,
+  "chars": 241,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 533,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 869,
+  "b1": 888,
+  "units": 19,
+  "chars": 241,
+  "sample": [
+   "SITEVERIFY ,",
+   "ADDRESS ,",
+   "checkConfig ,"
+  ]
+ },
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 234,
+  "a1": 252,
+  "b": "standalone/FutureCost.html",
+  "b0": 250,
+  "b1": 268,
+  "units": 18,
+  "chars": 352,
+  "sample": [
+   ".help-btn {",
+   "display: inline-flex;",
+   "align-items: center;"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 534,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 869,
+  "b1": 887,
+  "units": 18,
+  "chars": 229,
+  "sample": [
+   "ADDRESS ,",
+   "checkConfig ,",
+   "dailyLimit ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 549,
+  "b": "feedback.js",
+  "b0": 882,
+  "b1": 900,
+  "units": 18,
+  "chars": 227,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 532,
+  "a1": 554,
+  "b": "taxengine.js",
+  "b0": 758,
+  "b1": 781,
+  "units": 17,
+  "chars": 578,
+  "sample": [
+   "NC : {",
+   "STATE : 'North Carolina' ,",
+   "BasisStepUp : 0.50 ,"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 345,
+  "a1": 369,
+  "b": "taxengine.js",
+  "b0": 417,
+  "b1": 440,
+  "units": 17,
+  "chars": 487,
+  "sample": [
+   "FLAT_RATE : 0.0495 ,",
+   "MFJ : {",
+   "std : 5850 ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 535,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 869,
+  "b1": 886,
+  "units": 17,
+  "chars": 220,
+  "sample": [
+   "checkConfig ,",
+   "dailyLimit ,",
+   "takeFromStore ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 548,
+  "b": "feedback.js",
+  "b0": 883,
+  "b1": 900,
+  "units": 17,
+  "chars": 216,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 584,
+  "a1": 606,
+  "b": "taxengine.js",
+  "b0": 787,
+  "b1": 809,
+  "units": 16,
+  "chars": 926,
+  "sample": [
+   "FLAT_RATE : 0.0307 ,",
+   "MFJ : {",
+   "std : 0 ,"
+  ]
+ },
+ {
+  "a": "RetirementTaxPlanner.html",
+  "a0": 670,
+  "a1": 688,
+  "b": "standalone/IncomeTaxPlanner.html",
+  "b0": 1364,
+  "b1": 1382,
+  "units": 16,
+  "chars": 628,
+  "sample": [
+   "document . getElementById ( 'share-status' ) . textContent = '' ;",
+   "panel . style . display = 'block' ;",
+   "requestAnimationFrame ( ( ) => { input . select ( ) ; } ) ;"
+  ]
+ },
+ {
+  "a": "Retirement_Projection.html",
+  "a0": 2132,
+  "a1": 2150,
+  "b": "optimizer_ui.js",
+  "b0": 7199,
+  "b1": 7217,
+  "units": 16,
+  "chars": 628,
+  "sample": [
+   "document . getElementById ( 'share-status' ) . textContent = '' ;",
+   "panel . style . display = 'block' ;",
+   "requestAnimationFrame ( ( ) => { input . select ( ) ; } ) ;"
+  ]
+ },
+ {
+  "a": "Retirement_Projection.html",
+  "a0": 2132,
+  "a1": 2150,
+  "b": "standalone/IncomeTaxPlanner.html",
+  "b0": 1364,
+  "b1": 1382,
+  "units": 16,
+  "chars": 628,
+  "sample": [
+   "document . getElementById ( 'share-status' ) . textContent = '' ;",
+   "panel . style . display = 'block' ;",
+   "requestAnimationFrame ( ( ) => { input . select ( ) ; } ) ;"
+  ]
+ },
+ {
+  "a": "optimizer_ui.js",
+  "a0": 7199,
+  "a1": 7217,
+  "b": "standalone/IncomeTaxPlanner.html",
+  "b0": 1364,
+  "b1": 1382,
+  "units": 16,
+  "chars": 628,
+  "sample": [
+   "document . getElementById ( 'share-status' ) . textContent = '' ;",
+   "panel . style . display = 'block' ;",
+   "requestAnimationFrame ( ( ) => { input . select ( ) ; } ) ;"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 536,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 869,
+  "b1": 885,
+  "units": 16,
+  "chars": 207,
+  "sample": [
+   "dailyLimit ,",
+   "takeFromStore ,",
+   "checkOrigin ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 547,
+  "b": "feedback.js",
+  "b0": 884,
+  "b1": 900,
+  "units": 16,
+  "chars": 204,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 489,
+  "a1": 510,
+  "b": "taxengine.js",
+  "b0": 584,
+  "b1": 605,
+  "units": 15,
+  "chars": 916,
+  "sample": [
+   "FLAT_RATE : 0.0425 ,",
+   "MFJ : {",
+   "std : 5600 ,"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 489,
+  "a1": 510,
+  "b": "taxengine.js",
+  "b0": 764,
+  "b1": 785,
+  "units": 15,
+  "chars": 916,
+  "sample": [
+   "FLAT_RATE : 0.0425 ,",
+   "MFJ : {",
+   "std : 5600 ,"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 489,
+  "a1": 510,
+  "b": "taxengine.js",
+  "b0": 787,
+  "b1": 808,
+  "units": 15,
+  "chars": 916,
+  "sample": [
+   "FLAT_RATE : 0.0425 ,",
+   "MFJ : {",
+   "std : 5600 ,"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 584,
+  "a1": 605,
+  "b": "taxengine.js",
+  "b0": 764,
+  "b1": 785,
+  "units": 15,
+  "chars": 902,
+  "sample": [
+   "FLAT_RATE : 0.0307 ,",
+   "MFJ : {",
+   "std : 0 ,"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 719,
+  "a1": 740,
+  "b": "taxengine.js",
+  "b0": 742,
+  "b1": 763,
+  "units": 15,
+  "chars": 830,
+  "sample": [
+   "FLAT_RATE : 0.025 ,",
+   "MFJ : {",
+   "std : 'FEDERAL' ,"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 395,
+  "a1": 416,
+  "b": "taxengine.js",
+  "b0": 719,
+  "b1": 740,
+  "units": 15,
+  "chars": 550,
+  "sample": [
+   "FLAT_RATE : 0.038 ,",
+   "MFJ : {",
+   "std : 'FEDERAL' ,"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 764,
+  "a1": 785,
+  "b": "taxengine.js",
+  "b0": 787,
+  "b1": 808,
+  "units": 15,
+  "chars": 315,
+  "sample": [
+   "FLAT_RATE : 0.0305 ,",
+   "MFJ : {",
+   "std : 2000 ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 537,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 869,
+  "b1": 884,
+  "units": 15,
+  "chars": 195,
+  "sample": [
+   "takeFromStore ,",
+   "checkOrigin ,",
+   "corsHeaders ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 546,
+  "b": "feedback.js",
+  "b0": 885,
+  "b1": 900,
+  "units": 15,
+  "chars": 192,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": "feedback.js",
+  "a0": 869,
+  "a1": 884,
+  "b": "feedback.js",
+  "b0": 885,
+  "b1": 900,
+  "units": 15,
+  "chars": 179,
+  "sample": [
+   "init ,",
+   "open ,",
+   "close ,"
+  ]
+ },
+ {
+  "a": "taxPaymentPlanner.js",
+  "a0": 400,
+  "a1": 415,
+  "b": "taxPaymentPlanner.js",
+  "b0": 418,
+  "b1": 433,
+  "units": 14,
+  "chars": 712,
+  "sample": [
+   "ocWeightedMonths : 8.5 ,",
+   "paymentNote : 'Pay via FTB Web Pay at ftb.ca.gov. California uses a 30%/40%/30% schedule — there is NO Q3 (Sep",
+   "paymentUrl : 'https://www.ftb.ca.gov/pay/index.html' ,"
+  ]
+ },
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 107,
+  "a1": 122,
+  "b": "standalone/FutureCost.html",
+  "b0": 135,
+  "b1": 150,
+  "units": 14,
+  "chars": 295,
+  "sample": [
+   "border-radius: 50%;",
+   "background: var(--accent);",
+   "cursor: pointer;"
+  ]
+ },
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 255,
+  "a1": 270,
+  "b": "standalone/FutureCost.html",
+  "b0": 271,
+  "b1": 286,
+  "units": 14,
+  "chars": 285,
+  "sample": [
+   ".modal-overlay {",
+   "display: none;",
+   "position: fixed;"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 296,
+  "a1": 317,
+  "b": "taxengine.js",
+  "b0": 346,
+  "b1": 367,
+  "units": 14,
+  "chars": 234,
+  "sample": [
+   "MFJ : {",
+   "std : 24000 ,",
+   "exemption_dependent : 4000 ,"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 296,
+  "a1": 317,
+  "b": "taxengine.js",
+  "b0": 418,
+  "b1": 438,
+  "units": 14,
+  "chars": 234,
+  "sample": [
+   "MFJ : {",
+   "std : 24000 ,",
+   "exemption_dependent : 4000 ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 538,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 869,
+  "b1": 883,
+  "units": 14,
+  "chars": 180,
+  "sample": [
+   "checkOrigin ,",
+   "corsHeaders ,",
+   "allowedHostnames ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 545,
+  "b": "feedback.js",
+  "b0": 886,
+  "b1": 900,
+  "units": 14,
+  "chars": 179,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": "feedback.js",
+  "a0": 869,
+  "a1": 883,
+  "b": "feedback.js",
+  "b0": 886,
+  "b1": 900,
+  "units": 14,
+  "chars": 163,
+  "sample": [
+   "init ,",
+   "open ,",
+   "close ,"
+  ]
+ },
+ {
+  "a": "taxPaymentPlanner.js",
+  "a0": 471,
+  "a1": 483,
+  "b": "taxPaymentPlanner.js",
+  "b0": 485,
+  "b1": 497,
+  "units": 13,
+  "chars": 2102,
+  "sample": [
+   "AL : _s ( 'Alabama' , { paymentUrl : 'https://myalabamataxes.alabama.gov/' , paymentNote : 'Pay via My Alabama",
+   "AZ : _s ( 'Arizona' , { paymentUrl : 'https://www.aztaxes.gov/' , paymentNote : 'Pay via AZTaxes at aztaxes.go",
+   "AR : _s ( 'Arkansas' , { paymentUrl : 'https://atap.arkansas.gov/' , paymentNote : 'Pay via Arkansas Taxpayer "
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 273,
+  "a1": 290,
+  "b": "taxengine.js",
+  "b0": 469,
+  "b1": 487,
+  "units": 13,
+  "chars": 626,
+  "sample": [
+   "{ l : 10000 , r : 0.02 } ,",
+   "{ l : 50000 , r : 0.045 } ,",
+   "{ l : 100000 , r : 0.055 } ,"
+  ]
+ },
+ {
+  "a": "standalone/AfterTaxRealGrowth.html",
+  "a0": 14,
+  "a1": 27,
+  "b": "standalone/FutureCost.html",
+  "b0": 14,
+  "b1": 27,
+  "units": 13,
+  "chars": 429,
+  "sample": [
+   "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
+   "<link href=\"https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&disp",
+   "<style>"
+  ]
+ },
+ {
+  "a": "Retirement_Projection.html",
+  "a0": 1822,
+  "a1": 1835,
+  "b": "Retirement_Projection.html",
+  "b0": 1843,
+  "b1": 1856,
+  "units": 13,
+  "chars": 400,
+  "sample": [
+   "sortedIRMAA . forEach ( ( t ) => {",
+   "if ( ! t . visible ) return ;",
+   "const data = rows . map ( r => {"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 489,
+  "a1": 508,
+  "b": "taxengine.js",
+  "b0": 667,
+  "b1": 686,
+  "units": 13,
+  "chars": 199,
+  "sample": [
+   "FLAT_RATE : 0.0425 ,",
+   "MFJ : {",
+   "std : 5600 ,"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 667,
+  "a1": 686,
+  "b": "taxengine.js",
+  "b0": 764,
+  "b1": 783,
+  "units": 13,
+  "chars": 198,
+  "sample": [
+   "SSTaxation : 0.00 ,",
+   "MFJ : {",
+   "std : 17200 ,"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 667,
+  "a1": 686,
+  "b": "taxengine.js",
+  "b0": 787,
+  "b1": 806,
+  "units": 13,
+  "chars": 198,
+  "sample": [
+   "SSTaxation : 0.00 ,",
+   "MFJ : {",
+   "std : 17200 ,"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 584,
+  "a1": 603,
+  "b": "taxengine.js",
+  "b0": 667,
+  "b1": 686,
+  "units": 13,
+  "chars": 193,
+  "sample": [
+   "FLAT_RATE : 0.0307 ,",
+   "MFJ : {",
+   "std : 0 ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 539,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 869,
+  "b1": 882,
+  "units": 13,
+  "chars": 167,
+  "sample": [
+   "corsHeaders ,",
+   "allowedHostnames ,",
+   "linkOk ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 544,
+  "b": "feedback.js",
+  "b0": 887,
+  "b1": 900,
+  "units": 13,
+  "chars": 165,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": "feedback.js",
+  "a0": 869,
+  "a1": 882,
+  "b": "feedback.js",
+  "b0": 887,
+  "b1": 900,
+  "units": 13,
+  "chars": 149,
+  "sample": [
+   "init ,",
+   "open ,",
+   "close ,"
+  ]
+ },
+ {
+  "a": "taxPaymentPlanner.js",
+  "a0": 471,
+  "a1": 482,
+  "b": "taxPaymentPlanner.js",
+  "b0": 486,
+  "b1": 497,
+  "units": 12,
+  "chars": 1895,
+  "sample": [
+   "AL : _s ( 'Alabama' , { paymentUrl : 'https://myalabamataxes.alabama.gov/' , paymentNote : 'Pay via My Alabama",
+   "AZ : _s ( 'Arizona' , { paymentUrl : 'https://www.aztaxes.gov/' , paymentNote : 'Pay via AZTaxes at aztaxes.go",
+   "AR : _s ( 'Arkansas' , { paymentUrl : 'https://atap.arkansas.gov/' , paymentNote : 'Pay via Arkansas Taxpayer "
+  ]
+ },
+ {
+  "a": "other_tools.js",
+  "a0": 7,
+  "a1": 24,
+  "b": "other_tools.js",
+  "b0": 32,
+  "b1": 49,
+  "units": 12,
+  "chars": 676,
+  "sample": [
+   "name : 'Retirement Projection' ,",
+   "file : 'Retirement_Projection.html' ,",
+   "desc : 'Project multi-account retirement assets (IRA, Roth, brokerage) across your retirement timeline.'"
+  ]
+ },
+ {
+  "a": "RetirementTaxPlanner.html",
+  "a0": 709,
+  "a1": 721,
+  "b": "RetirementTaxPlanner.html",
+  "b0": 722,
+  "b1": 735,
+  "units": 12,
+  "chars": 605,
+  "sample": [
+   "highIncomeFiler : readBool ( 'highIncomeFiler' ) ,",
+   "ira1Rmd : readNum ( 'ira1Rmd' ) ,",
+   "ira1Voluntary : readNum ( 'ira1Voluntary' ) ,"
+  ]
+ },
+ {
+  "a": "taxPaymentPlanner.js",
+  "a0": 384,
+  "a1": 397,
+  "b": "taxPaymentPlanner.js",
+  "b0": 401,
+  "b1": 414,
+  "units": 12,
+  "chars": 498,
+  "sample": [
+   "paymentNote : 'Mississippi exempts retirement income (IRA, pension, SS) for filers age 59½ or older.' ,",
+   "paymentUrl : 'https://www.dor.ms.gov/' ,",
+   "CA : {"
+  ]
+ },
+ {
+  "a": "taxPaymentPlanner.js",
+  "a0": 384,
+  "a1": 397,
+  "b": "taxPaymentPlanner.js",
+  "b0": 419,
+  "b1": 432,
+  "units": 12,
+  "chars": 498,
+  "sample": [
+   "paymentNote : 'Mississippi exempts retirement income (IRA, pension, SS) for filers age 59½ or older.' ,",
+   "paymentUrl : 'https://www.dor.ms.gov/' ,",
+   "CA : {"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 455,
+  "a1": 468,
+  "b": "taxengine.js",
+  "b0": 618,
+  "b1": 631,
+  "units": 12,
+  "chars": 278,
+  "sample": [
+   "{ l : 250000 , r : 0.055 } ,",
+   "{ l : 600000 , r : 0.0575 } ,",
+   "{ l : 600001 , r : 0.0625 } ,"
+  ]
+ },
+ {
+  "a": "taxPaymentPlanner.js",
+  "a0": 3181,
+  "a1": 3192,
+  "b": "taxengine.js",
+  "b0": 1727,
+  "b1": 1740,
+  "units": 12,
+  "chars": 250,
+  "sample": [
+   "iraOcFactor ,",
+   "ROLLOVER_DEADLINE_DAYS ,",
+   "RESTORE_TARGET_DAYS ,"
+  ]
+ },
+ {
+  "a": "taxengine.js",
+  "a0": 871,
+  "a1": 889,
+  "b": "taxengine.js",
+  "b0": 928,
+  "b1": 947,
+  "units": 12,
+  "chars": 207,
+  "sample": [
+   "MFJ : {",
+   "std : 10160 ,",
+   "brackets : ["
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 540,
+  "a1": 551,
+  "b": "feedback.js",
+  "b0": 869,
+  "b1": 881,
+  "units": 12,
+  "chars": 154,
+  "sample": [
+   "allowedHostnames ,",
+   "linkOk ,",
+   "turnstileOk ,"
+  ]
+ },
+ {
+  "a": ".feedback-worker/src/logic.cjs",
+  "a0": 532,
+  "a1": 543,
+  "b": "feedback.js",
+  "b0": 888,
+  "b1": 900,
+  "units": 12,
+  "chars": 148,
+  "sample": [
+   "LIMITS ,",
+   "SITEVERIFY ,",
+   "ADDRESS ,"
+  ]
+ },
+ {
+  "a": "feedback.js",
+  "a0": 869,
+  "a1": 881,
+  "b": "feedback.js",
+  "b0": 888,
+  "b1": 900,
+  "units": 12,
+  "chars": 135,
+  "sample": [
+   "init ,",
+   "open ,",
+   "close ,"
+  ]
+ }
+]

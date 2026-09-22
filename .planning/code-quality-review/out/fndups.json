@@ -1,0 +1,912 @@
+{
+ "sameName": [
+  {
+   "name": "toggleSharePanel",
+   "copies": 7,
+   "pairs": [
+    {
+     "a": "optimizer_ui.js:7193-7202",
+     "b": "RetirementTaxPlanner.html:664-673",
+     "sim": 1,
+     "tokens": [
+      91,
+      91
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:7193-7202",
+     "b": "Retirement_Projection.html:2122-2135",
+     "sim": 0.8,
+     "tokens": [
+      91,
+      133
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:7193-7202",
+     "b": "standalone/IncomeTaxPlanner.html:1353-1367",
+     "sim": 0.86,
+     "tokens": [
+      91,
+      121
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:7193-7202",
+     "b": "standalone/RealReturns.html:998-1006",
+     "sim": 0.93,
+     "tokens": [
+      91,
+      91
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:7193-7202",
+     "b": "standalone/AfterTaxRealGrowth.html:828-841",
+     "sim": 0.85,
+     "tokens": [
+      91,
+      113
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:7193-7202",
+     "b": "standalone/HYSA.html:634-642",
+     "sim": 0.93,
+     "tokens": [
+      91,
+      91
+     ]
+    },
+    {
+     "a": "RetirementTaxPlanner.html:664-673",
+     "b": "Retirement_Projection.html:2122-2135",
+     "sim": 0.8,
+     "tokens": [
+      91,
+      133
+     ]
+    },
+    {
+     "a": "RetirementTaxPlanner.html:664-673",
+     "b": "standalone/IncomeTaxPlanner.html:1353-1367",
+     "sim": 0.86,
+     "tokens": [
+      91,
+      121
+     ]
+    },
+    {
+     "a": "RetirementTaxPlanner.html:664-673",
+     "b": "standalone/RealReturns.html:998-1006",
+     "sim": 0.93,
+     "tokens": [
+      91,
+      91
+     ]
+    },
+    {
+     "a": "RetirementTaxPlanner.html:664-673",
+     "b": "standalone/AfterTaxRealGrowth.html:828-841",
+     "sim": 0.85,
+     "tokens": [
+      91,
+      113
+     ]
+    },
+    {
+     "a": "RetirementTaxPlanner.html:664-673",
+     "b": "standalone/HYSA.html:634-642",
+     "sim": 0.93,
+     "tokens": [
+      91,
+      91
+     ]
+    },
+    {
+     "a": "Retirement_Projection.html:2122-2135",
+     "b": "standalone/IncomeTaxPlanner.html:1353-1367",
+     "sim": 0.86,
+     "tokens": [
+      133,
+      121
+     ]
+    },
+    {
+     "a": "Retirement_Projection.html:2122-2135",
+     "b": "standalone/RealReturns.html:998-1006",
+     "sim": 0.79,
+     "tokens": [
+      133,
+      91
+     ]
+    },
+    {
+     "a": "Retirement_Projection.html:2122-2135",
+     "b": "standalone/AfterTaxRealGrowth.html:828-841",
+     "sim": 0.84,
+     "tokens": [
+      133,
+      113
+     ]
+    },
+    {
+     "a": "Retirement_Projection.html:2122-2135",
+     "b": "standalone/HYSA.html:634-642",
+     "sim": 0.79,
+     "tokens": [
+      133,
+      91
+     ]
+    },
+    {
+     "a": "standalone/IncomeTaxPlanner.html:1353-1367",
+     "b": "standalone/RealReturns.html:998-1006",
+     "sim": 0.86,
+     "tokens": [
+      121,
+      91
+     ]
+    },
+    {
+     "a": "standalone/IncomeTaxPlanner.html:1353-1367",
+     "b": "standalone/AfterTaxRealGrowth.html:828-841",
+     "sim": 0.97,
+     "tokens": [
+      121,
+      113
+     ]
+    },
+    {
+     "a": "standalone/IncomeTaxPlanner.html:1353-1367",
+     "b": "standalone/HYSA.html:634-642",
+     "sim": 0.86,
+     "tokens": [
+      121,
+      91
+     ]
+    },
+    {
+     "a": "standalone/RealReturns.html:998-1006",
+     "b": "standalone/AfterTaxRealGrowth.html:828-841",
+     "sim": 0.85,
+     "tokens": [
+      91,
+      113
+     ]
+    },
+    {
+     "a": "standalone/RealReturns.html:998-1006",
+     "b": "standalone/HYSA.html:634-642",
+     "sim": 1,
+     "tokens": [
+      91,
+      91
+     ]
+    },
+    {
+     "a": "standalone/AfterTaxRealGrowth.html:828-841",
+     "b": "standalone/HYSA.html:634-642",
+     "sim": 0.85,
+     "tokens": [
+      113,
+      91
+     ]
+    }
+   ]
+  },
+  {
+   "name": "copyShareURL",
+   "copies": 7,
+   "pairs": [
+    {
+     "a": "optimizer_ui.js:7204-7219",
+     "b": "RetirementTaxPlanner.html:675-690",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:7204-7219",
+     "b": "Retirement_Projection.html:2137-2152",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:7204-7219",
+     "b": "standalone/IncomeTaxPlanner.html:1369-1384",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:7204-7219",
+     "b": "standalone/RealReturns.html:1008-1019",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:7204-7219",
+     "b": "standalone/AfterTaxRealGrowth.html:843-850",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:7204-7219",
+     "b": "standalone/HYSA.html:644-655",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "RetirementTaxPlanner.html:675-690",
+     "b": "Retirement_Projection.html:2137-2152",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "RetirementTaxPlanner.html:675-690",
+     "b": "standalone/IncomeTaxPlanner.html:1369-1384",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "RetirementTaxPlanner.html:675-690",
+     "b": "standalone/RealReturns.html:1008-1019",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "RetirementTaxPlanner.html:675-690",
+     "b": "standalone/AfterTaxRealGrowth.html:843-850",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "RetirementTaxPlanner.html:675-690",
+     "b": "standalone/HYSA.html:644-655",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "Retirement_Projection.html:2137-2152",
+     "b": "standalone/IncomeTaxPlanner.html:1369-1384",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "Retirement_Projection.html:2137-2152",
+     "b": "standalone/RealReturns.html:1008-1019",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "Retirement_Projection.html:2137-2152",
+     "b": "standalone/AfterTaxRealGrowth.html:843-850",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "Retirement_Projection.html:2137-2152",
+     "b": "standalone/HYSA.html:644-655",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "standalone/IncomeTaxPlanner.html:1369-1384",
+     "b": "standalone/RealReturns.html:1008-1019",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "standalone/IncomeTaxPlanner.html:1369-1384",
+     "b": "standalone/AfterTaxRealGrowth.html:843-850",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "standalone/IncomeTaxPlanner.html:1369-1384",
+     "b": "standalone/HYSA.html:644-655",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "standalone/RealReturns.html:1008-1019",
+     "b": "standalone/AfterTaxRealGrowth.html:843-850",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "standalone/RealReturns.html:1008-1019",
+     "b": "standalone/HYSA.html:644-655",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    },
+    {
+     "a": "standalone/AfterTaxRealGrowth.html:843-850",
+     "b": "standalone/HYSA.html:644-655",
+     "sim": 1,
+     "tokens": [
+      79,
+      79
+     ]
+    }
+   ]
+  },
+  {
+   "name": "buildShareURL",
+   "copies": 6,
+   "pairs": [
+    {
+     "a": "optimizer_ui.js:7152-7191",
+     "b": "RetirementTaxPlanner.html:611-662",
+     "sim": 0.39,
+     "tokens": [
+      314,
+      655
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:7152-7191",
+     "b": "standalone/IncomeTaxPlanner.html:1344-1351",
+     "sim": 0.29,
+     "tokens": [
+      314,
+      67
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:7152-7191",
+     "b": "standalone/RealReturns.html:978-996",
+     "sim": 0.6,
+     "tokens": [
+      314,
+      252
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:7152-7191",
+     "b": "standalone/AfterTaxRealGrowth.html:817-826",
+     "sim": 0.37,
+     "tokens": [
+      314,
+      98
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:7152-7191",
+     "b": "standalone/HYSA.html:624-632",
+     "sim": 0.39,
+     "tokens": [
+      314,
+      100
+     ]
+    },
+    {
+     "a": "RetirementTaxPlanner.html:611-662",
+     "b": "standalone/IncomeTaxPlanner.html:1344-1351",
+     "sim": 0.12,
+     "tokens": [
+      655,
+      67
+     ]
+    },
+    {
+     "a": "RetirementTaxPlanner.html:611-662",
+     "b": "standalone/RealReturns.html:978-996",
+     "sim": 0.42,
+     "tokens": [
+      655,
+      252
+     ]
+    },
+    {
+     "a": "RetirementTaxPlanner.html:611-662",
+     "b": "standalone/AfterTaxRealGrowth.html:817-826",
+     "sim": 0.18,
+     "tokens": [
+      655,
+      98
+     ]
+    },
+    {
+     "a": "RetirementTaxPlanner.html:611-662",
+     "b": "standalone/HYSA.html:624-632",
+     "sim": 0.2,
+     "tokens": [
+      655,
+      100
+     ]
+    },
+    {
+     "a": "standalone/IncomeTaxPlanner.html:1344-1351",
+     "b": "standalone/RealReturns.html:978-996",
+     "sim": 0.29,
+     "tokens": [
+      67,
+      252
+     ]
+    },
+    {
+     "a": "standalone/IncomeTaxPlanner.html:1344-1351",
+     "b": "standalone/AfterTaxRealGrowth.html:817-826",
+     "sim": 0.67,
+     "tokens": [
+      67,
+      98
+     ]
+    },
+    {
+     "a": "standalone/IncomeTaxPlanner.html:1344-1351",
+     "b": "standalone/HYSA.html:624-632",
+     "sim": 0.55,
+     "tokens": [
+      67,
+      100
+     ]
+    },
+    {
+     "a": "standalone/RealReturns.html:978-996",
+     "b": "standalone/AfterTaxRealGrowth.html:817-826",
+     "sim": 0.37,
+     "tokens": [
+      252,
+      98
+     ]
+    },
+    {
+     "a": "standalone/RealReturns.html:978-996",
+     "b": "standalone/HYSA.html:624-632",
+     "sim": 0.53,
+     "tokens": [
+      252,
+      100
+     ]
+    },
+    {
+     "a": "standalone/AfterTaxRealGrowth.html:817-826",
+     "b": "standalone/HYSA.html:624-632",
+     "sim": 0.62,
+     "tokens": [
+      98,
+      100
+     ]
+    }
+   ]
+  },
+  {
+   "name": "loadFromURL",
+   "copies": 5,
+   "pairs": [
+    {
+     "a": "optimizer_ui.js:7232-7347",
+     "b": "standalone/IncomeTaxPlanner.html:1459-1529",
+     "sim": 0.61,
+     "tokens": [
+      643,
+      795
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:7232-7347",
+     "b": "standalone/RealReturns.html:415-432",
+     "sim": 0.49,
+     "tokens": [
+      643,
+      359
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:7232-7347",
+     "b": "standalone/AfterTaxRealGrowth.html:861-867",
+     "sim": 0.24,
+     "tokens": [
+      643,
+      99
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:7232-7347",
+     "b": "standalone/HYSA.html:290-295",
+     "sim": 0.21,
+     "tokens": [
+      643,
+      102
+     ]
+    },
+    {
+     "a": "standalone/IncomeTaxPlanner.html:1459-1529",
+     "b": "standalone/RealReturns.html:415-432",
+     "sim": 0.47,
+     "tokens": [
+      795,
+      359
+     ]
+    },
+    {
+     "a": "standalone/IncomeTaxPlanner.html:1459-1529",
+     "b": "standalone/AfterTaxRealGrowth.html:861-867",
+     "sim": 0.22,
+     "tokens": [
+      795,
+      99
+     ]
+    },
+    {
+     "a": "standalone/IncomeTaxPlanner.html:1459-1529",
+     "b": "standalone/HYSA.html:290-295",
+     "sim": 0.19,
+     "tokens": [
+      795,
+      102
+     ]
+    },
+    {
+     "a": "standalone/RealReturns.html:415-432",
+     "b": "standalone/AfterTaxRealGrowth.html:861-867",
+     "sim": 0.38,
+     "tokens": [
+      359,
+      99
+     ]
+    },
+    {
+     "a": "standalone/RealReturns.html:415-432",
+     "b": "standalone/HYSA.html:290-295",
+     "sim": 0.42,
+     "tokens": [
+      359,
+      102
+     ]
+    },
+    {
+     "a": "standalone/AfterTaxRealGrowth.html:861-867",
+     "b": "standalone/HYSA.html:290-295",
+     "sim": 0.74,
+     "tokens": [
+      99,
+      102
+     ]
+    }
+   ]
+  },
+  {
+   "name": "set",
+   "copies": 4,
+   "pairs": [
+    {
+     "a": "optimizer_ui.js:3714-3714",
+     "b": "montecarlo/mc_tab.js:249-254",
+     "sim": 0.42,
+     "tokens": [
+      32,
+      39
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:3714-3714",
+     "b": "RetirementTaxPlanner.html:615-615",
+     "sim": 0.62,
+     "tokens": [
+      32,
+      33
+     ]
+    },
+    {
+     "a": "optimizer_ui.js:3714-3714",
+     "b": "optimizer_tests.js:2259-2259",
+     "sim": 0.4,
+     "tokens": [
+      32,
+      38
+     ]
+    },
+    {
+     "a": "montecarlo/mc_tab.js:249-254",
+     "b": "RetirementTaxPlanner.html:615-615",
+     "sim": 0.31,
+     "tokens": [
+      39,
+      33
+     ]
+    },
+    {
+     "a": "montecarlo/mc_tab.js:249-254",
+     "b": "optimizer_tests.js:2259-2259",
+     "sim": 0.62,
+     "tokens": [
+      39,
+      38
+     ]
+    },
+    {
+     "a": "RetirementTaxPlanner.html:615-615",
+     "b": "optimizer_tests.js:2259-2259",
+     "sim": 0.25,
+     "tokens": [
+      33,
+      38
+     ]
+    }
+   ]
+  },
+  {
+   "name": "update",
+   "copies": 3,
+   "pairs": [
+    {
+     "a": "Retirement_Projection.html:1614-1944",
+     "b": "standalone/AfterTaxRealGrowth.html:625-810",
+     "sim": 0.44,
+     "tokens": [
+      3188,
+      1325
+     ]
+    },
+    {
+     "a": "Retirement_Projection.html:1614-1944",
+     "b": "standalone/FutureCost.html:619-715",
+     "sim": 0.42,
+     "tokens": [
+      3188,
+      1144
+     ]
+    },
+    {
+     "a": "standalone/AfterTaxRealGrowth.html:625-810",
+     "b": "standalone/FutureCost.html:619-715",
+     "sim": 0.73,
+     "tokens": [
+      1325,
+      1144
+     ]
+    }
+   ]
+  },
+  {
+   "name": "bands",
+   "copies": 2,
+   "pairs": [
+    {
+     "a": "optimizer_ui.js:5698-5702",
+     "b": "montecarlo/stats.js:10-22",
+     "sim": 0.29,
+     "tokens": [
+      68,
+      191
+     ]
+    }
+   ]
+  },
+  {
+   "name": "escapeHtml",
+   "copies": 2,
+   "pairs": [
+    {
+     "a": "optimizer_ui.js:7473-7477",
+     "b": "montecarlo/mc_tab.js:2762-2767",
+     "sim": 0.79,
+     "tokens": [
+      45,
+      31
+     ]
+    }
+   ]
+  },
+  {
+   "name": "onload",
+   "copies": 2,
+   "pairs": [
+    {
+     "a": "optimizer_ui.js:8356-8383",
+     "b": "RetirementTaxPlanner.html:1180-1187",
+     "sim": 0.32,
+     "tokens": [
+      117,
+      88
+     ]
+    }
+   ]
+  },
+  {
+   "name": "onerror",
+   "copies": 2,
+   "pairs": [
+    {
+     "a": "feedback.js:636-640",
+     "b": "montecarlo/mc_controller.js:54-59",
+     "sim": 0.46,
+     "tokens": [
+      25,
+      40
+     ]
+    }
+   ]
+  },
+  {
+   "name": "line",
+   "copies": 2,
+   "pairs": [
+    {
+     "a": "taxPaymentPlanner.js:1345-1357",
+     "b": "montecarlo/rails_engine.js:666-673",
+     "sim": 0.21,
+     "tokens": [
+      97,
+      211
+     ]
+    }
+   ]
+  },
+  {
+   "name": "setStatus",
+   "copies": 2,
+   "pairs": [
+    {
+     "a": "feedback.js:539-543",
+     "b": "standalone/IncomeTaxPlanner.html:1207-1218",
+     "sim": 0.34,
+     "tokens": [
+      33,
+      112
+     ]
+    }
+   ]
+  },
+  {
+   "name": "fmt",
+   "copies": 2,
+   "pairs": [
+    {
+     "a": "montecarlo/mc_tab.js:2757-2760",
+     "b": "Retirement_Projection.html:1016-1021",
+     "sim": 0.36,
+     "tokens": [
+      26,
+      84
+     ]
+    }
+   ]
+  },
+  {
+   "name": "onmessage",
+   "copies": 2,
+   "pairs": [
+    {
+     "a": "montecarlo/mc_controller.js:37-52",
+     "b": "montecarlo/worker.js:37-48",
+     "sim": 0.54,
+     "tokens": [
+      123,
+      101
+     ]
+    }
+   ]
+  },
+  {
+   "name": "updateStateNote",
+   "copies": 2,
+   "pairs": [
+    {
+     "a": "retirement_optimizer.html:1749-1765",
+     "b": "Retirement_Projection.html:2216-2231",
+     "sim": 0.89,
+     "tokens": [
+      144,
+      142
+     ]
+    }
+   ]
+  }
+ ],
+ "twins": [
+  [
+   "toggleSharePanel optimizer_ui.js:7193-7202 (91t)",
+   "toggleSharePanel RetirementTaxPlanner.html:664-673 (91t)"
+  ],
+  [
+   "copyShareURL optimizer_ui.js:7204-7219 (79t)",
+   "copyShareURL RetirementTaxPlanner.html:675-690 (79t)",
+   "copyShareURL Retirement_Projection.html:2137-2152 (79t)",
+   "copyShareURL standalone/IncomeTaxPlanner.html:1369-1384 (79t)",
+   "copyShareURL standalone/RealReturns.html:1008-1019 (79t)",
+   "copyShareURL standalone/AfterTaxRealGrowth.html:843-850 (79t)",
+   "copyShareURL standalone/HYSA.html:644-655 (79t)"
+  ],
+  [
+   "syncContribUI Retirement_Projection.html:2295-2302 (60t)",
+   "syncRothContribUI Retirement_Projection.html:2304-2311 (60t)"
+  ],
+  [
+   "toggleSharePanel standalone/RealReturns.html:998-1006 (91t)",
+   "toggleSharePanel standalone/HYSA.html:634-642 (91t)"
+  ]
+ ],
+ "unref": [
+  "getEffectiveTaxRate optimizer_core.js:489-505 (17 lines)",
+  "sumAccounts optimizer_core.js:769-771 (3 lines)",
+  "deltaRefDescription optimizer_ui.js:449-454 (6 lines)",
+  "exportAllScenarios optimizer_ui.js:8401-8424 (24 lines)",
+  "effectiveStd Retirement_Projection.html:1027-1030 (4 lines)",
+  "showToast Retirement_Projection.html:2163-2170 (8 lines)",
+  "applyURLState standalone/RealReturns.html:807-816 (10 lines)",
+  "fmtDiff standalone/HYSA.html:299-299 (1 lines)",
+  "niitDividerDoesNotInflateOnTheLadder optimizer_tests.js:1897-1939 (43 lines)",
+  "dropdownLimitsMatchTheEngine optimizer_tests.js:1946-1972 (27 lines)",
+  "requiredIncomeGetsItsOwnAdvice optimizer_tests.js:2017-2086 (70 lines)",
+  "guardrailsFoldIsLossless optimizer_tests.js:2231-2246 (16 lines)",
+  "myPlanOnlyRunsThePlanBothWays optimizer_tests.js:2379-2396 (18 lines)",
+  "goalFirstPanelIsGatedInMarkup optimizer_tests.js:2746-2782 (37 lines)",
+  "railsPanelIsGatedAndOwnsNoPlanInput optimizer_tests.js:2785-2870 (86 lines)",
+  "chartRebuildHoldsTheTabHeight optimizer_tests.js:2875-2889 (15 lines)",
+  "railsTooltipChanceOnceAndThousands optimizer_tests.js:2896-2922 (27 lines)",
+  "railsHintsFollowTheirRails optimizer_tests.js:2926-2948 (23 lines)",
+  "railsSpendPlotStopsAtTwiceThePlan optimizer_tests.js:2954-2968 (15 lines)",
+  "railsBandOnBothViews optimizer_tests.js:2972-2990 (19 lines)",
+  "railsPresetSwitchIsARedraw optimizer_tests.js:3153-3170 (18 lines)",
+  "ceilingSwitchIsAPlanInput optimizer_tests.js:3306-3323 (18 lines)",
+  "goalFirstNeverConvertWritesTheFiveControls optimizer_tests.js:3325-3359 (35 lines)",
+  "goalFirstNeverIsClearedButNeverInferred optimizer_tests.js:3361-3393 (33 lines)",
+  "convEndAutoIsAThirdPositionOfTheSameQuestion optimizer_tests.js:3399-3434 (36 lines)",
+  "convEndGoesDeadWhenThePlanConvertsNothing optimizer_tests.js:3436-3467 (32 lines)",
+  "goalFirstObjectiveMirrorsRatherThanDuplicates optimizer_tests.js:3473-3502 (30 lines)",
+  "goalFirstResetLeavesNothingDriving optimizer_tests.js:3504-3548 (45 lines)"
+ ]
+}

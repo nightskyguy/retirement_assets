@@ -1,0 +1,512 @@
+27.5	pass	getLTCGBracketRoom: returns 0% bracket room for MFJ below ceiling
+1.5	pass	getLTCGBracketRoom: returns 0 when ordinary income exceeds 0% ceiling
+11.7	pass	IRMAA: charges from year 0, not year 1 (fixed magiHistory seeding bug)
+4.3	pass	cyclicEnabled=false: output identical to base run (regression)
+2.2	pass	cyclicEnabled: subCycle column present in log rows
+1.3	pass	cyclicEnabled: year 0 is IRA year (IRA), not brokerage year
+1.1	pass	cyclicEnabled: brokerage year (year N) draws from Brokerage, not IRA (beyond RMDs)
+0.9	pass	cyclicEnabled: brokerage year maxes out target LTCG bracket even when spend need is small
+1.6	pass	cyclicEnabled: cycleLTCGTarget=0.20 (target 15% bracket) harvests more than default 0.15 target
+1.1	pass	cyclicEnabled: DRIP forced — dividends flow to Brokerage not Cash (positive dividend rate)
+1.6	pass	cyclicEnabled: surplus reinvested into Brokerage (not Cash) in IRA years
+6.4	pass	P32c: cycleHarvestMode/cycleCoexist absent ≡ off → byte-identical log (two scenarios)
+1.7	pass	P32c: cycleCoexist without cyclicEnabled is inert (leak guard)
+3.1	pass	P32c: cycleCoexist bracketfill — harvest years regain the IRA draw and conversions
+4.6	pass	P32c: cycleCoexist MAGI ceiling (IRMAA tier) — coexist must not push a harvest year into a higher tier
+2.5	pass	P32c: cycleHarvestMode spendonly harvests no more than maxbracket
+11.7	pass	P32h: absent thirdPassBrokerage ≡ bounded (the shipped default); off stays reachable
+2.4	pass	P32c: thirdPassBrokerage bounded draws Brokerage in the third pass, within its cap
+2.6	pass	P32c: thirdPassBrokerage — stalls are counted separately from cap hits (the Q2 signal)
+2.2	pass	P32c: thirdPassBrokerage is inert for Ordered (it runs the user sequence in this pass)
+2.1	pass	P32c: forcedIRAAllowBrokerage brokerageFirst spends Brokerage before forcing IRA
+2.6	pass	P32c: forcedIRAAllowBrokerage keeps the backstop alive after the IRA empties
+3.0	pass	P51b: oracleWithdrawalPlan absent / null entries / all-zero entries → byte-identical log
+0.3	pass	P51b: oracleWithdrawalPlan + cyclicEnabled is an explicit error, not a precedence rule
+2.1	pass	P51b: an IRA-only year draws IRA, not Brokerage; spill covers the rest of the horizon
+0.9	pass	P35n: oracleWithdrawalPlan {seq} entry — strict sequence, IRA-last is a true backstop
+1.0	pass	P35n: oracleWithdrawalPlan {prop} entry — balance-proportional over Brok/Cash/Roth, IRA excluded
+1.9	pass	P51b: fidelity — replaying a run's own realized draw fractions lands near its score
+32.7	pass	P104b1: replay identity - split with V equals propwd 0 + oracleWithdrawalPlan.fill(V), to the dollar
+11.3	pass	P104b1: a malformed or absent vector runs as the baseline draw, byte-identical, and is flagged
+1.0	pass	★ CRITICAL  P104b1x: a year funded from Cash by the primary pass is not funded again by the gap fill
+5.1	pass	★ CRITICAL  P104b1x: Proportional +0% with Max Conversion on converts nothing while the phantom gap would have
+5.9	pass	11.1702: the log reports the reserve held each year - min(target in nominal $, Cash) - and 0 when Off
+2.6	pass	11.1703: Brokerage reconciles on screen - last year minus Brokerage- plus brokerageG plus SurplusBrok
+1.7	pass	P104b1: split composes with cyclic the way propwd does - no throw, harvest years draw Brokerage
+0.8	pass	P104b1: the split binds the gap fill too, not only the primary draw
+2.2	pass	timing: the default mode is Split, and it reads conversion/withdrawal
+1.9	pass	timing: a year that converts nothing reports none, and spends when the mode says
+1.2	pass	★ CRITICAL  timing: a conversion does not change the FOLLOWING year, which is what the old rule got wrong
+0.9	pass	timing: the conversion half tracks whether the year actually converted
+1.0	pass	timing: every row carries a well-formed conversion/withdrawal label
+0.9	pass	wdRate%: equals netOut ÷ prior-year portfolio balance
+1.0	pass	wdRate%: denominator is the raw portfolio, not tax-discounted totalNetWealth
+0.6	pass	wdRate%: never negative, even when SS exceeds the spending goal
+1.2	pass	outflows: reconciliation — netOut = grossOut − rothConv − reinvestedSurplus
+1.7	pass	wdRate%: a pension shows up in inflows only, never in the numerator
+1.5	pass	avgWdRate: simple mean of the yearly rates, including year 0
+0.7	pass	avgWdRateWeighted: equals Σ netOut ÷ Σ prior-year portfolio
+1.2	pass	avgNetDepletion: negative when the portfolio outgrows withdrawals, positive when it shrinks
+5.6	pass	GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses
+6.2	pass	Guardrails: without the ceiling, prosperity raises lift spending above the plan's own shape
+7.5	pass	Guardrails: the shape ceiling holds spending at the plan's own shape, and pays for it in spending
+3.5	pass	Guardrails: the shape ceiling only ever follows a raise, and changes nothing before it binds
+3.3	pass	P127: the inflation raise is capped at 6%, and below the cap it is the full inflation
+8.2	pass	P127: the freeze after a losing year reads the portfolio's return, not the market's
+0.3	pass	P127: the portfolio return is the balance-weighted return of the accounts, dividends included
+9.6	pass	P127: no cut in the plan's last 8 years, and a year the rule wanted one says so
+6.5	pass	★ CRITICAL  P132j: GK-style never cuts in the year Social Security starts, and never adjusts a plan on its own path
+0.3	pass	P127b: the stability floor judges spending against the plan's own path, not year 1
+34.2	pass	P127b: a Guardrails plan with a declining Spend Delta gets an Optimize Spend answer again
+109.5	pass	P127f: converting nothing is always admissible, so the search never ends poorer than $0
+0.2	pass	afterTaxNetWorth: Roth/Cash/basis at face; brokerage gains × (1−capG); IRA × (1−futureRate)
+0.0	pass	afterTaxNetWorth: zero gains and zero rates → plain sum of balances
+1.2	pass	simulate: exposes totals.terminal breakdown + totals.capGainsRate
+0.4	pass	totalNetWealth: IRA discounted by ordinary rate, terminal brokerage at face after the 1014 step-up
+0.1	pass	P35g: every TAXData jurisdiction declares a BasisStepUp of 0.50 or 1.00
+4.1	pass	P35g: first death steps basis up by half in a common-law state
+7.0	pass	P35g: community property steps the whole account up at the first death
+1.0	pass	P35g: a single filer gets the terminal step-up but never a mid-plan one
+1.7	pass	P35g: basis rises exactly twice - once per death, never per year
+2.0	pass	P35g: terminal valuation is stepped up and both pre-step-up bases are preserved
+4.1	pass	P35g: the correction favors NOT converting - the one-sided bias it removes
+1.0	pass	P35f: BrokerageBasis never exceeds Brokerage, including through a market crash
+0.8	pass	no-conversion run: zero Roth conversions over the whole plan
+0.0	pass	baseline metric: higher after-tax NW ranks a richer terminal portfolio higher
+2.1	pass	GK stable market: no guardrail triggers in early years with zero growth/inflation
+1.0	pass	GK capital preservation: catastrophic bear market triggers CP cut
+0.6	pass	GK prosperity rule: strong bull market triggers prosperity raise
+1.6	pass	GK inflation skip: mild negative return + WR > IWR skips CPI adjustment
+0.7	pass	GK regression: with Guardrails off, ruleSpend/ruleAdj are null
+1.6	pass	P126: Guardrails fill the ruleSpend/ruleAdj columns under a non-proportional draw too
+39.6	pass	GK optimize-spend: the stability floor rejects a run the rule slashed, and on the plan's own assumptions the search finds the no-rule answer
+9.6	pass	formatDollarShort: three significant figures, and the suffix follows the magnitude
+0.1	pass	formatDollarShort: rounding up carries into the next unit instead of reading 1000k
+0.1	pass	formatDollarShort is NOT compactNum: it never emits scientific notation
+0.0	pass	formatDollarShort: a non-number is empty, not "$NaN"
+0.2	pass	compactNum: round-trips losslessly through parseShorthand
+0.0	pass	compactNum: never longer than the raw value
+0.0	pass	compactNum: expected compact forms
+0.0	pass	compactNum: 0 and non-finite pass through unchanged
+0.2	pass	loadFromURL decode: compact dollar values set dataset.numVal (not NaN)
+0.0	pass	loadFromURL decode: non-dollar fields (select, number) pass through unchanged
+0.0	pass	stress scoring: Fisher equation gives correct real CAGR
+0.0	pass	stress scoring: deflation clamped to -0.5% floor
+0.0	pass	stress scoring: stagflation decade ranks worse than mild equity bear
+0.0	pass	stress scoring: 1999 ranks worse than 1929 by real CAGR
+0.8	pass	stress bank: default 10yr window picks the documented worst starts
+0.4	pass	stress bank: a longer window selects a different set of start years
+0.1	pass	stress bank: window is clamped to the plan horizon
+0.1	pass	stress bank: the tail is real history wrapping to 1928, not a random draw
+0.2	pass	stress bank: identical arguments give identical banks (no RNG involved)
+0.2	pass	stress bank: reports bond and intl CAGR over the whole plan, not the ranking window
+0.2	pass	stress bank: worst rolling real CAGR scans the whole horizon, not just the opening
+0.9	pass	stress bank: 'combined' is the union of every window's worst, deduped
+0.6	pass	scoreStartYears memoizes without letting a caller corrupt the shared ranking
+0.3	pass	bear pool draws from three opening lengths, each spliced for its own window
+0.3	pass	bear-start overlay splices only its own opening length, and never past the plan
+1.8	pass	bear-start overlay does not read the Stress Test sequence count
+0.3	pass	stress bank: 'all' runs every start year and marks where the record runs out
+2.2	pass	stress bank: a count above the candidate pool caps instead of throwing
+0.4	pass	stress bank: a junk count falls back to the default rather than an empty bank
+0.1	pass	stressOutcomeBand: the line is half the PLAN, and exactly half counts as late
+3.1	pass	soft cap (federal bracket): forced IRA funds spending — no lingering shortfall
+1.2	pass	soft cap: forced IRA never exceeds available IRA (no over-draw past depletion)
+0.7	pass	P92a: a Fill Bracket ceiling reaches the top of the bracket, not one deduction short
+0.6	pass	P92a: the deduction the ceiling used is the one the tax pass charged
+2.4	pass	P92a: an IRMAA tier and an ACA cap get no add-back at all
+0.1	pass	P87c: nonSSIncomeForMAGI inverts the MAGI relation it claims to invert
+0.7	pass	P87c: a Fill Bracket plan with Social Security lands MAGI on its ceiling
+2.3	pass	P87c: filling the ceiling more fully never breaches it
+1.8	pass	P87c: an ACA cap still counts the WHOLE benefit
+5.8	pass	P87d: acaMAGI is MAGI plus the non-taxable share of the benefit, and only under an ACA cap
+1.9	pass	P87d: the overage is decided on acaMAGI, so a cap landed on exactly reads zero, not headroom
+1.8	pass	P87d: a year that breaches only on the add-back is flagged, and a lapsed cap still is not
+1.8	pass	P87c4: a harvest year fills more of its ceiling once the benefit is counted as MAGI does
+5.2	pass	P87c4: an ACA harvest year keeps the FULL benefit, like every other ACA sizing path
+1.4	pass	soft cap (fixedpct): capped % with spend over cap still funds spending from IRA
+1.6	pass	strict ACA (cap in force): cap is never breached — shortfall persists and is flagged untenable
+2.5	pass	ACA lapse: an already-Medicare household simulates identically to Proportional 0%
+2.2	pass	ACA lapse: the cap is what changed, not the fixture — CAP_BASE breached before this
+1.5	pass	ACA lapse: mid-plan crossing stops the breaches instead of releasing the ceiling
+85.1	pass	ACA untenable flag is monotonic: a lower FPL multiple is a STRICTER cap
+1.9	pass	ACA lapse: it is LIVING spouses, not both people — a survivor past 65 lapses alone
+0.7	pass	regression: ample buffers cover the gap → no forced IRA break
+0.7	pass	true ruin: all accounts incl. IRA exhausted → shortfall still reported
+1.1	pass	funding invariant [bracket 22%]: shortfall years with IRA still funded
+0.8	pass	funding invariant [IRMAA tier1]: shortfall years with IRA still funded
+0.8	pass	funding invariant [fixedpct 2%]: shortfall years with IRA still funded
+1.0	pass	funding invariant [propwd 0%]: shortfall years with IRA still funded
+0.7	pass	funding invariant [propwd 10%]: shortfall years with IRA still funded
+0.7	pass	funding invariant [propwd 50%]: shortfall years with IRA still funded
+1.1	pass	funding invariant [split C100]: shortfall years with IRA still funded
+0.8	pass	funding invariant [split I4B3C3]: shortfall years with IRA still funded
+0.9	pass	funding invariant [fixed]: shortfall years with IRA still funded
+1.1	pass	funding invariant [ordered CBIR]: shortfall years with IRA still funded
+0.7	pass	funding invariant [ordered RIBC]: shortfall years with IRA still funded
+4.6	pass	funding invariant [guardrails]: shortfall years with IRA still funded
+1.1	pass	funding invariant [baseline else]: shortfall years with IRA still funded
+0.9	pass	funding invariant [aca lapsed]: shortfall years with IRA still funded
+12.4	pass	funding invariant: the fixture actually drains (guards a vacuous green)
+1.9	pass	P84a: the fee OFF is bit-identical to the field being absent
+6.3	pass	P84b: every scope charges the right basis and pays from the right accounts
+4.2	pass	P84b: scope "none" is the default, and it is a real off switch
+0.7	pass	P84b: Cash is never a basis and never a source
+0.9	pass	★ CRITICAL  P84c: fee dollars taken from an IRA are NOT taxable distributions
+2.6	pass	★ CRITICAL  P84c: the fee never enters netWithdrawals, in any scope
+1.3	pass	P84c: a mid-year fee does not move the SAME year's RMD, only later ones
+0.7	pass	P84d: percent vs dollars is inferred from the amount, and 20 belongs to FLAT
+0.6	pass	P84d: a flat fee is CPI-indexed, and a percent fee is not
+2.5	pass	P84e: the fee is tracked in the totals and three log keys; the running total is P86-computed
+0.8	pass	P86: running-total identities - every lifetime total is the sum of its per-year column, in both bases
+0.8	pass	P86c: lifetime RMD and QCD carry Current-$ twins built the tax/spend way
+2.2	pass	P84f: BOTH counterfactual arms pay the fee, so Opportunity Cost stays about the conversion
+0.9	pass	P84l: the RMD is struck off the PRIOR December 31 balance, not a mid-year one
+1.2	pass	P84l: the RMD basis does not depend on the withdrawal-timing rule
+1.3	pass	P84m: a drained IRA is not taxed on a distribution that never happened
+0.6	pass	P84o: year 0 keys off the balance AS TYPED, and that limitation is pinned not hidden
+2.1	pass	★ CRITICAL  P105: the survivor's first RMD is struck off the inherited balance, not only their own
+1.8	pass	P105: the inheritance term self-extinguishes, so the year after is not double-counted
+1.1	pass	P38: the primary draw funds the tax on guaranteed income, not the backstop
+0.1	pass	P38: sizing by a flat nominal rate would badly over-draw an SS-heavy household
+0.8	pass	OBBBA: the senior deduction reaches a simulated year, and expires after 2028
+1.5	pass	OBBBA: every tax call in a simulation is handed the year-gated flags
+1.5	pass	P64: property tax lowers federal tax while the elevated SALT cap lives, and stops when it dies
+0.1	pass	P64d: the SALT cap and its phase-out threshold are indexed 1%/yr from their 2025 base
+2.9	pass	P64: the three property-tax growth modes are actually three different plans
+2.9	pass	ACA exception: a live cap strands spending only after non-taxable sources are gone
+2.0	pass	ACA exception: give it enough non-taxable money and the cap strands nothing
+2.0	pass	ACA exception ends at Medicare: the lapsed tail IS backstopped
+4.4	pass	P32h: the IRMAA arm no longer strands spending with Brokerage still funded (was the defect)
+0.2	pass	★ CRITICAL  IL exempts IRA/pension distributions from state tax
+0.0	pass	★ CRITICAL  PA exempts IRA/pension distributions from state tax
+1.3	pass	★ CRITICAL  third pass keeps the state retirement-income exclusion (PA, Ordered)
+0.1	pass	pensionAtAge helper gates the pension at the start age
+0.9	pass	★ CRITICAL  engine defers the pension until pensionStartAge (P41c)
+0.1	pass	★ CRITICAL  IL still taxes non-retirement income (interest/dividends not exempt)
+0.0	pass	★ CRITICAL  regression: exclusion params are inert for a non-exclusion state (CA)
+15.1	pass	suggestSustainableSpend sits on the boundary: its spend passes, 15% more fails
+31.5	pass	suggestSustainableSpend: a bigger terminal buffer never raises the suggested spend
+18.5	pass	suggestSustainableSpend: a shorter horizon raises the suggested spend
+10.5	pass	suggestSustainableSpend: terminal buffer holds in inflated dollars (units guard)
+61.7	pass	★ CRITICAL  suggestSpendMenu is strategy-independent (fixed propwd reference)
+19.2	pass	suggestSpendMenu Conservative matches the Bengen year-1 withdrawal rate
+19.8	pass	suggestSpendMenu Aggressive ends holding 5 full years of spending
+19.2	pass	suggestSpendMenu Middle ends holding about half the real starting portfolio
+0.2	pass	bengenRate falls as the horizon lengthens
+3.1	pass	OC: no conversions → convBEYear null and convOC ≈ 0 every year
+5.1	pass	OC: profitable conversions → convBEYear reported; final convOC = finalNW gain
+4.0	pass	OC: counterfactual pays the RMD counter-effect (bigger IRA → bigger RMDs, more tax)
+1.0	pass	OC: counterfactual recursion guard — _cfRun never spawns another counterfactual
+2.5	pass	OC: excess withdrawals → excessBEYear gated on excess actually occurring
+1.1	pass	OC: optimizer/MC path (computeOC unset) skips counterfactual, convOC null
+0.2	pass	P28jg: sustainedBreakEvenYear — a blip that never recovers reports null, not the blip
+0.7	pass	OC: excess-withdrawal double-dip → excessBEYear is the sustained crossing, not the first touch
+21.4	pass	diagnoseConvBreakEvenFailure: boundary — pinpoints the specific conversion year that breaks a sustained lead
+5.1	pass	diagnoseConvBreakEvenFailure: neverSustains — even the first conversion never earns back its tax cost
+1.1	pass	diagnoseConvBreakEvenFailure: no conversions in the log → returns null
+4.0	pass	P24: convEndYear/convEndMode unset → bit-identical to today (load-bearing regression)
+5.6	pass	P24: convEndYear (all mode) stops ALL conversions after the year; earlier years untouched; == internal cutoff
+3.9	pass	P24: convEndMode extra stops only the Extra conversion; the strategy keeps converting past the cutoff
+22.7	pass	P24: bestConversionStopYear finds the interior optimum; best beats both full and none; self-consistent
+34.3	pass	P24: bestConversionStopYear strips any pre-set convEndYear (searches from a full-conversion baseline)
+4.3	pass	representation: array [amt x cut, 0...] === scalar + convEndYear, at cut 0 / interior / n
+1.9	pass	representation: a full array === the plain scalar (the array must not change the timing)
+1.9	pass	representation: a suppressed year 0 is not a conversion year (timing must not claim Early)
+2.2	pass	P24: afterTaxWealthOfLogRow matches the Break Even block valuation (guards the shared-helper extraction)
+2.1	pass	P2 CashReserve: OFF (undefined) is byte-identical and never reinvests or breaches
+0.9	pass	P2 CashReserve: 0 reinvests all surplus into Brokerage (basis step-up); far less terminal Cash
+0.7	pass	P2 CashReserve: 0 differs from OFF (the sentinel distinction is real)
+0.8	pass	P2 CashReserve: positive buffer keeps Cash near the reserve early, reinvests the overflow
+1.4	pass	P2 CashReserve: the buffer is a breakable last resort (protected in normal years, drawn when depleted)
+0.4	pass	P2 CashReserve: a healthy plan with a buffer never breaches
+229.8	pass	optimizeConversionAmount: GK sweep rejects a higher-scoring but spend-unstable conversion amount
+71.3	pass	optimizeConversionAmount: non-GK strategies are unaffected by the stability gate
+2.0	pass	cash-funding: Extra Conversion lands the FULL gross in Roth; Cash pays the tax
+1.9	pass	cash-funding: gross-up satisfies increase = conversion*t/(1-t) and conserves every dollar
+1.2	pass	cash-funding: scales down to available Cash and never overdraws it
+1.4	pass	cash-funding: no-op when Cash is $0 (bit-identical to the flag being off)
+2.3	pass	cash-funding: both mechanisms together — Extra Conversion tax is not understated by the gross-up
+1.6	pass	cash-funding: flag off leaves every balance untouched (regression guard)
+1.2	pass	P88: an Extra Roth Conversion raises the year MAGI by its gross
+1.1	pass	P88: the raised MAGI is what IRMAA is charged on, two years later
+1.3	pass	P88: the cash-funded gross-up also reaches MAGI
+1.2	pass	P88: bracketOverage sees a conversion, and names it separately from a forced draw
+0.6	pass	P88: no conversion and no cash-funding means nothing moved (regression guard)
+2.2	pass	sourcing: an extra conversion is drawn from the larger IRA, spilling only when it cannot cover
+1.3	pass	accounting: withdrawal columns include conversions, decompose correctly, and reconcile the IRA balance
+4.9	pass	★ CRITICAL  P115b: the December tax credit raises the brokerage balance but never its basis
+2.2	pass	Medicare premiums: the default mode is inert, and names today behavior
+2.4	pass	★ CRITICAL  Medicare premiums: charging them removes the premium AND the tax on raising it
+2.3	pass	Medicare premiums: per-person enrollment drops that person premium and their IRMAA share
+0.2	pass	★ CRITICAL  part-year growth compounds: splitting a year cannot manufacture growth
+0.0	pass	growthFactor: full year is exact, and a wipeout does not return NaN
+0.0	pass	timingShift: reverses sign when the move is later in the year, and is zero at no move
+1.4	pass	★ CRITICAL  no free money: a dividend cannot create wealth (same total return, split two ways)
+0.9	pass	★ CRITICAL  no free money: interest leaves Cash only by being spent or taxed
+0.7	pass	★ CRITICAL  no free money: interest cannot compound faster than the yield it is paid at
+1.2	pass	accounting: conversion-gross total equals the actual converted pulls (no reallocation)
+2.0	pass	accounting: Fed + State + IRMAA tax columns reconcile to Total Tax through the conversions
+0.1	pass	baselineScoreOf: real-dollar after-tax NW / deflator + weighted spendable
+0.2	pass	selectConversionCandidates: REGRESSION — a flat top-N would drop the family that benefits
+0.0	pass	selectConversionCandidates: bracket-rate and bracket-IRMAA are distinct families
+0.1	pass	selectConversionCandidates: ineligible rows are excluded
+0.0	pass	selectConversionCandidates: caps at maxPool and returns champions in descending score
+51.6	pass	optimizeConversionAmount: 'finalNW' and 'baselineScore' agree (the T6 gap, closed by P28jg)
+63.7	pass	optimizeConversionAmount: legacy metric modes and the 3-arg signature agree
+0.4	pass	P100b3: rows tied on the objective are ordered by the secondary chain, not array order
+0.1	pass	P100b3: the chain runs in priority order, each key breaking only what the one above left tied
+0.1	pass	P100b3: the ordering does not depend on the order rows arrive in
+0.0	pass	P100b3: a row that never breaks even sorts last on that key, never first
+0.0	pass	P100b3: the DEFAULT chain leads on net wealth
+0.0	pass	P100b3: conveffect OVERRIDES the default and leads on final Roth
+0.0	pass	P100b3: the chain never overrides the objective itself
+0.0	pass	rankRowsByObjective: failed rows always sort last, whatever the metric
+0.0	pass	rankRowsByObjective: networth desc, mintax asc
+0.0	pass	rankRowsByObjective: widowrmd = rmdTax + terminal.ira × rate, minimized
+0.1	pass	rankRowsByObjective: Tax Flexibility prefers the balanced plan among the top-wealth ones
+0.0	pass	rankRowsByObjective: Tax Flexibility cutoff handles negative after-tax NW
+0.0	pass	OPT_OBJECTIVE_COLUMNS covers exactly the objectives that exist
+0.1	pass	every objective's column list names only real columns, with no duplicates
+0.0	pass	compare is first in every objective, and every pinned column is present
+0.0	pass	every objective shows the column its own ranking metric reads
+0.0	pass	every objective has a blurb, and it names the column that objective ranks on
+0.1	pass	OPT_DELTA_COLUMNS names only real columns, with a usable direction and unit
+0.0	pass	the goals needing a converting baseline are exactly the ones ranking on a conversion field
+0.0	pass	afterTaxBucketSpread: 0 for an even three-way split, 1 for a single bucket
+0.0	pass	afterTaxBucketSpread: Infinity when nothing is left, and taxflex ranks on this same number
+0.0	pass	ELIGIBILITY_AGE: the constant exists and ships at 65
+0.1	pass	ELIGIBILITY_AGE: the at-start Medicare helper follows the constant
+4.0	pass	ELIGIBILITY_AGE: the Medicare base premium starts at the constant, not at 65
+2.9	pass	ELIGIBILITY_AGE: the IRMAA-tier ceiling relevance gate is ELIGIBILITY_AGE + LOOKBACK
+0.1	pass	irmaaFwdFactor: |LOOKBACK| years of CPI, and an exact identity at cpi = 0
+1.3	pass	IRMAA tier ceiling targets the threshold that will apply, not the one in force today
+4.4	pass	irmaaMarginMode: every shipped mode is distinct and correctly ordered
+6.7	pass	irmaaMarginMode halfstep: priced off the real tier step, and live at age 63
+3.7	pass	QCD As Needed uses the full projection and ignores the margin setting entirely
+0.2	pass	QCD As Needed: MAGI between today's floor and the projected floor needs no QCD
+6.0	pass	irmaaMarginMode is inert for a plan with no IRMAA ceiling and no QCDs
+0.1	pass	ELIGIBILITY_AGE: the harness restores the constant
+0.1	pass	taxCreepFactor: off, before start, and compounding
+1.5	pass	tax creep: zero creep is byte-identical to no creep at all (regression guard)
+0.4	pass	tax creep: calculateTaxes scales the right walk and nothing else
+3.2	pass	tax creep: escalation reaches the simulation and compounds by calendar year
+2.1	pass	tax creep: start year is respected (earlier years untouched)
+2.2	pass	tax creep: the state path is live even without a UI knob
+20.7	pass	tax creep: reaches the Optimizer surface (buildVariations + optimizeSpend)
+1.8	pass	Annual Details reports the inflation and market return each year was handed
+1.7	pass	tax creep: reaches Monte Carlo and is path-independent
+0.1	pass	nominalRateAtLimit: defined at both ends of a bracket table
+10.7	pass	unbounded ceilings simulate instead of returning NaN
+8.9	pass	P70: a deterministic run is inert under the spread model, at any (cpi, inflation)
+0.8	pass	P70: under a path the index follows inflation MINUS the spread, never the bare path
+0.6	pass	P70: the indexation lag - year t+1 is set from year t inflation
+1.4	pass	P70: fixedTaxIndexing pins the tax code while spending still follows the path
+1.0	pass	P70: Medicare premium growth is the index plus a FIXED excess, not a doubled path
+0.1	pass	P81: the engine floor matches the one the banks are drawn under
+3.9	pass	P81: no top-level name collides across the files the worker shares a scope with
+2.2	pass	P81: no index step falls below the floor, at any spread
+0.7	pass	P81c: Social Security never falls, and absorbs the deflation on the way back up
+2.0	pass	P81c: a capped pension COLA is floored at zero per year, and does not claw back
+7.4	pass	P70i: a capped pension COLA pays the lesser of its cap and CPI, year by year
+0.1	pass	P70i: pensionColaCap reads every shape the input can arrive in
+8.7	pass	P70: every indexed quantity tracks its declared clock
+0.2	pass	breakEvenHeirsRate: no IRA means no threshold
+29.4	pass	breakEvenHeirsRate: returns null when no rate up to the ceiling pays
+145.7	pass	breakEvenHeirsRate: the rate/amount pair it reports is self-consistent
+2624.3	pass	breakEvenHeirsRate: the predicate is monotonic in the rate (binary search precondition)
+211.3	pass	lowestBreakEvenHeirsRate: finds a threshold the best-scoring candidate does not have
+46.6	pass	bestTimeLimitedConversion: finds a convert-then-stop plan and reports it in calendar years
+46.8	pass	bestTimeLimitedConversion: its answer survives being replayed through the sidebar inputs
+0.2	pass	bestTimeLimitedConversion: no IRA means nothing to find
+0.5	pass	sameStrategySelection: matches each family on its own parameter
+0.1	pass	P104b1: splitWeights is a selection field, survives selectionOf, and split is 🅡-excluded
+0.0	pass	sameStrategySelection: bracket identity includes the IRMAA tier and the ACA multiple
+0.0	pass	sameStrategySelection: cyclic and cash-funding modifiers are part of the identity
+0.0	pass	sameStrategySelection: the Roth gap position is part of the identity, unknown values are not
+3.2	pass	rothGapFill: unset is bit-identical, and fillCashThenRoth spends Roth instead of Brokerage
+6.9	pass	gapFillWeights: unset is bit-identical, and anything malformed means unset
+2.7	pass	gapFillWeights: the split moves monotonically, and both endpoints still spill
+0.2	pass	resolveOrderedSeq: any permutation resolves, anything else is CBIR
+0.2	pass	selectionOf: a plan still identifies as itself after a round trip
+0.3	pass	strategySortKey: families stay contiguous, whatever the label starts with
+0.1	pass	P104b3: the shipped split grid is four blends, and no single-account vector
+0.1	pass	P104b3: split weights are RELATIVE - scale does not change the label or the sort value
+0.4	pass	P104b3: the family is OFF by default, in both sweeps
+0.2	pass	P104b3: a gated-off family cannot leak back in through the user's own off-grid mix
+0.1	pass	ORDERED_SEQS: every offered sequence is a real permutation and both sweeps use the list
+4.0	pass	bracketGapOrder: unset is bit-identical, and anything malformed means unset
+7.1	pass	bracketGapOrder: it moves the bracket family and nothing else
+0.2	pass	buildStrategyFamilies: the 🅡 pass clones every family except Ordered
+0.6	pass	sameStrategySelection: finds Guardrails and Ordered users in buildVariations output (the MC regression)
+0.7	pass	plan scope: the sidebar plan resolves to exactly one swept variation
+0.1	pass	plan scope: a plan absent from the sweep yields no match, so the caller must substitute
+0.1	pass	plan scope: compare really is the expensive one — the sweep is far more than one arm
+0.1	pass	offGridParamFor: returns the user parameter only when it is off the grid
+0.4	pass	offGridParamFor: buildVariations gains exactly one non-cyclic row for an off-grid user
+0.3	pass	buildVariations golden [onGridCash]: row inventory and order unchanged
+0.3	pass	buildVariations golden [onGridCash]: base-row strategy selections unchanged
+0.1	pass	buildVariations golden [offGridDraw]: row inventory and order unchanged
+0.1	pass	buildVariations golden [offGridDraw]: base-row strategy selections unchanged
+0.2	pass	buildVariations golden [offGridBracket]: row inventory and order unchanged
+0.1	pass	buildVariations golden [offGridBracket]: base-row strategy selections unchanged
+0.2	pass	buildVariations golden [guardrailsSpouse]: row inventory and order unchanged
+0.2	pass	buildVariations golden [guardrailsSpouse]: base-row strategy selections unchanged
+4.4	pass	Compare All runs exactly the Optimizer's rows, not more, not fewer
+0.4	pass	P126: sweepOptions gates the page flags, and the rule twin is the plan with the switch flipped
+0.3	pass	OPT_GOLDEN [default]: recording is internally consistent
+0.1	pass	OPT_GOLDEN [default]: clone rows carry the modifier their prefix claims
+0.1	pass	OPT_GOLDEN [nerdknob]: recording is internally consistent
+0.1	pass	OPT_GOLDEN [nerdknob]: clone rows carry the modifier their prefix claims
+0.1	pass	OPT_GOLDEN [nerdknobACA]: recording is internally consistent
+0.0	pass	OPT_GOLDEN [nerdknobACA]: clone rows carry the modifier their prefix claims
+0.0	pass	OPT_GOLDEN [nerdknobNoCashOffGrid]: recording is internally consistent
+0.0	pass	OPT_GOLDEN [nerdknobNoCashOffGrid]: clone rows carry the modifier their prefix claims
+0.1	pass	OPT_GOLDEN: the four gates are actually exercised by the captured scenarios
+0.6	pass	buildStrategyFamilies reproduces the Optimizer capture [default]
+0.6	pass	buildStrategyFamilies reproduces the Optimizer capture [nerdknob]
+0.6	pass	buildStrategyFamilies reproduces the Optimizer capture [nerdknobACA]
+0.5	pass	buildStrategyFamilies reproduces the Optimizer capture [nerdknobNoCashOffGrid]
+0.3	pass	buildStrategyFamilies: every option moves the enumeration it names, and nothing else does
+0.0	pass	bothOnMedicareAtStart: AND semantics, single filer, and the missing-input guard
+0.0	pass	P89: planFirstYear clamps a start year that has already passed
+0.0	pass	P89: the ACA age gate reads the clamped year, not the typed age
+0.5	pass	P89: clamping can only make the gate MORE true, never less
+0.1	pass	OPT_GOLDEN: the Optimizer sweeps the two families MC does not, on its own IRA Draw grid
+0.1	pass	earliestbe: earliest year wins; ties break on Final Roth, then net wealth
+0.0	pass	earliestbe shows the balances its ties are decided on
+3.2	pass	earliestbe: a swept row simulated with computeOC actually reports a break-even year
+0.1	pass	ssFirstYearFraction: months remaining after the birth month, December default
+0.7	pass	SS proration: December claimant gets nothing in the claim year, full amount the next
+1.1	pass	SS proration: June claimant gets half the benefit in the claim year
+2.2	pass	SS milestones: flag the first PAYING year, not the age crossing
+1.8	pass	SS milestones: a couple gets one marker per person plus the survivor
+0.8	pass	SS milestones: a single filer is never flagged as a survivor
+1.3	pass	SS milestones: someone already collecting when the plan opens gets no marker
+0.8	pass	SS death year: a June-born decedent splits the year half own benefits, half survivor
+0.7	pass	SS death year: a December-born decedent pays both benefits all year, survivor starts next
+0.7	pass	SS death year: degrades correctly when the survivor has not claimed yet
+0.3	pass	compare pin: a selection captured from one sweep re-finds its row in the next
+0.0	pass	fraMonthsForBirthYear: SSA schedule, two months per year from 1955 to 1959
+0.0	pass	FRA: the old hard-coded 67 over-stated an early-claiming pre-1955 decedent
+0.0	pass	FRA: a 1960-or-later couple is completely unaffected
+0.9	pass	FRA: end to end, a pre-1955 couple pays a smaller survivor benefit
+0.1	pass	findUpperLimitByAmount: a single-row table means NO upper limit, not a zero one
+0.0	pass	findUpperLimitByAmount: below the first bracket returns the top of that band
+0.0	pass	findUpperLimitByAmount: an amount inside the ladder is untouched
+0.1	pass	single-row bracket tables: the affected jurisdictions are pinned
+3.3	pass	★ CRITICAL  Fill Bracket converts in a no-tax state, not just in a graduated one
+1.8	pass	★ CRITICAL  a no-tax state reports honest spend and honest failure
+1.1	pass	P23: GBM return draws are untouched by the inflation model
+0.1	pass	P23: a zero inflation shock leaves inflation flat at the target
+0.0	pass	P23: AR(1) inflation reverts toward the target
+0.0	pass	P23: inflation cannot fall below INFLATION_FLOOR
+7.0	pass	P23: RETURN_FLOOR clamps the arithmetic tail short of -100%
+18.0	pass	P23: AAM centers the yearly return distribution on the number typed
+0.2	pass	P23: AAM with zero volatility is a deterministic run at mu
+19.8	pass	P23: the inflation shock realizes the requested correlation with the return draw
+0.4	pass	P23: the shipped AR(1) constants still match a re-fit of the CPI record
+0.1	pass	P23: Fixed Inflation reproduces the pre-change Synthetic model exactly
+1.8	pass	P23: simulated inflation reaches the persistence the record shows
+68.7	pass	P71: the engine runs a whole job end to end in all three modes
+58.2	pass	P71: one seed, one answer - two runs of the same config agree exactly
+0.5	pass	P71: stress mode banks one path per scenario, not numPaths of them
+40.2	pass	the worker payload keeps each variation identifiable as a strategy
+0.2	pass	P69: capture selector ranks ruined-earliest first, then survivors by wealth
+0.1	pass	P69: capture selector on an all-survivor run and a tiny run
+19.5	pass	P69: every variation of a real run carries its capture rows
+1.2	pass	P69: sliced bank rows rebuild the exact per-path inputs, every mode
+21.1	pass	P69: the message ships replay rows, and a replayed path reproduces the run exactly
+29.6	pass	P79: the capture variation ships one balance trace per captured path
+29.8	pass	P86e: the MC message carries dual-basis twins, and real = each path deflated by ITS OWN inflation
+0.9	pass	P80: every sampled year is labelled with the year that actually produced it
+39.0	pass	P80: recording the source years changes no draw and no number
+0.6	pass	P71: a cancelled job reports nothing at all
+3.2	pass	schedule: replays Fill Bracket 22% to the dollar
+2.0	pass	schedule: replays an IRMAA tier ceiling to the dollar
+5.9	pass	schedule: rateBasis is load-bearing, not decoration
+2.6	pass	schedule: replays IRA Draw 5% to the dollar via the quantity lever
+1.9	pass	schedule: replays Reduce 17 yrs, which takes the OTHER gap-fill
+2.6	pass	schedule: replays an ACA plan ACROSS its lapse
+2.3	pass	schedule: convert caps the surplus routed to Roth, and the rest still banks
+5.8	pass	schedule: the coverage limit that REMAINS is the account split
+7.7	pass	schedule: carries GK by its spend RULE, and beats it
+7.5	pass	schedule: GK spend rule is separable from the GK strategy
+8.8	pass	P126: simulate refuses a strategy name it does not dispatch, and names the replacement for gk
+1.6	pass	P126: a Guardrails plan on Proportional replays through the baseline gap fill, as the old gk plan did
+0.2	pass	P126: the stability floor follows the rule under any draw, wherever the rule was set
+0.3	pass	P126: a Monte Carlo job refuses a retired strategy instead of scoring it as ruin
+14.3	pass	P126: no code outside the load folds still names the retired strategy
+0.3	pass	P128: the rail presets are the four published sets, and each target sits between its rails
+299.3	pass	P128: a resumed run IS the plan continued - every field of every later row, exactly
+2.1	pass	P128: a resumed run reads its market from its own first year, and scaled balances start it there
+45.7	pass	P128: the survival test is ONE helper, and the Monte Carlo run agrees with it path for path
+1427.5	pass	P128: the rails solver solves the cadence it was given, every preset at once, and prices itself
+0.2	pass	P128n: the count a q answer demands is the Monte Carlo tab's own comparison
+5020.4	pass	P128n: every preset's rails, targets and rail spends match a direct search on the same paths
+680.8	pass	P132: a job may bring its own presets, and solves the cut-side spend at each set's cutTo
+1.2	pass	P132: the rule table is the job in ratios - both sides at a solved year, interpolated between, null where unsolved
+0.3	pass	P132: between solves the table interpolates DOLLARS and nets each year's own guaranteed income, so a Social Security start between two solves does not fire a rail
+7.6	pass	P132: beyond a rail the rule holds the rail's spend-to-wealth ratio instead of extrapolating the line
+3.7	pass	P132: vsPlan% is the rule's spending against the plan's shape
+0.3	pass	P132: the rails the rule read along a path are its table in that path's dollars, laid out like the solved rails
+1.8	pass	P132: without a table the risk-based rule leaves the plan on its own path, and says so
+3.8	pass	P132: a cut lands on the cut ratio of the wealth, a raise on the raise ratio, and between the rails only CPI moves
+4.4	pass	P132: the hidden -ruleMove field is what a rule did to the year's goal - the milestones read it
+1027.1	pass	P132: on its own spine, the rule fires at the first solved year exactly when the chance is outside the rails
+6.8	pass	P132: the rule, its table and its state survive a resume, and the table is not part of the plan's identity
+2256.5	pass	P129: the After-Tax Spend answer meets its target, a little more does not, and it ignores the goal it started from
+0.8	pass	P128n: a clamped answer ends its line, and says so on its row
+0.9	pass	P128: TotalNetWealth scales with a scaled resume, which is what lets a rail be stated in it
+51.7	pass	P128: a cancelled rails job resolves to nothing
+0.5	pass	P128: each solve lands on two rows, and the years between solves are interpolated in today's dollars
+603.6	pass	P128: a wealth rail under the search's floor is $0, drawn, and its spending left unsolved
+0.4	pass	P128: the plan's last year is always solved, whatever the cadence
+0.2	pass	P129: the first year's target spend is the After-Tax Spend answer, and nothing else lands there
+2.6	pass	schedule: a per-year spend applies for that year only
+1.3	pass	schedule: an unscheduled year draws nothing voluntarily and still funds spending
+0.3	pass	schedule: malformed entries throw rather than reading as a quiet year
+0.1	pass	schedule: refuses to compose with cyclicEnabled
+4.7	pass	P108b: december tax settlement is opt-in, raises wealth, and leaves spending untouched
+1.7	pass	P108e: the december credit lands after growth, so it is never grown a second time
+7.8	pass	P28jk: the conversion month is separable from the spending withdrawal month
+1.7	pass	★ CRITICAL  P28jk: a conversion can never precede the RMD in a year one is due, and Split still reaches those years
+2.3	pass	★ CRITICAL  withdrawTiming: a conversion that drains the IRA cannot create wealth
+1.5	pass	★ CRITICAL  P115a: over a plan, cash interest taxed equals cash interest earned, in every timing mode
+1.1	pass	P115a: Split no longer under-taxes the distribution it takes in January, and a carry cannot go negative
+0.9	pass	P113: summarizeRun snapshots a run, and diffSummaries reports only what moved
+0.4	pass	P113: export filenames are legal, and the two plan names resolve in order
+7.9	pass	timingConvThreshold moves the CONVERSION, on this year, and never the spending
+0.2	pass	P106g: the terminal IRA rate averages the trailing same-filing-status years, else last 3
+18.2	pass	P107: IRA_GOAL_BLIND_STRATEGIES are unmoved by the goal, and the others are not
+7.2	pass	an absent IRA Goal means no goal, not NaN across the whole run
+1.1	pass	★ CRITICAL  Retirement Start: a calendar year and the matching age name the same first year
+18.9	pass	the plan bank: every card's measured viability still reproduces
+1.4	pass	the plan bank: every plan file can be loaded ALONGSIDE the others in a page
+0.2	pass	the plan bank: the card fields a chooser relies on are all present and honest
+0.2	pass	P104b1x: a year funded from Cash by the primary pass is not funded again by the gap fill
+0.0	pass	P104b1x: Proportional +0% with Max Conversion on converts nothing while the phantom gap would have
+0.0	pass	timing: a conversion does not change the FOLLOWING year, which is what the old rule got wrong
+0.0	pass	P132j: GK-style never cuts in the year Social Security starts, and never adjusts a plan on its own path
+0.0	pass	P84c: fee dollars taken from an IRA are NOT taxable distributions
+0.0	pass	P84c: the fee never enters netWithdrawals, in any scope
+0.0	pass	P105: the survivor's first RMD is struck off the inherited balance, not only their own
+0.0	pass	IL exempts IRA/pension distributions from state tax
+0.0	pass	PA exempts IRA/pension distributions from state tax
+0.0	pass	third pass keeps the state retirement-income exclusion (PA, Ordered)
+0.0	pass	engine defers the pension until pensionStartAge (P41c)
+0.0	pass	IL still taxes non-retirement income (interest/dividends not exempt)
+0.0	pass	regression: exclusion params are inert for a non-exclusion state (CA)
+0.0	pass	suggestSpendMenu is strategy-independent (fixed propwd reference)
+0.0	pass	P115b: the December tax credit raises the brokerage balance but never its basis
+0.0	pass	Medicare premiums: charging them removes the premium AND the tax on raising it
+0.0	pass	part-year growth compounds: splitting a year cannot manufacture growth
+0.0	pass	no free money: a dividend cannot create wealth (same total return, split two ways)
+0.0	pass	no free money: interest leaves Cash only by being spent or taxed
+0.0	pass	no free money: interest cannot compound faster than the yield it is paid at
+0.0	pass	Fill Bracket converts in a no-tax state, not just in a graduated one
+0.0	pass	a no-tax state reports honest spend and honest failure
+0.0	pass	P28jk: a conversion can never precede the RMD in a year one is due, and Split still reaches those years
+0.0	pass	withdrawTiming: a conversion that drains the IRA cannot create wealth
+0.0	pass	P115a: over a plan, cash interest taxed equals cash interest earned, in every timing mode
+0.0	pass	Retirement Start: a calendar year and the matching age name the same first year

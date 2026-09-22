@@ -1,0 +1,1322 @@
+[
+ {
+  "a": ".test_harnesses/oracle_crosscheck.js",
+  "a0": 114,
+  "a1": 159,
+  "b": ".test_harnesses/oracle_harness.js",
+  "b0": 124,
+  "b1": 177,
+  "units": 37,
+  "chars": 2250,
+  "sample": [
+   "let SIMS = 0 ;",
+   "function runSim ( inputs ) { SIMS ++ ; return simulate ( inputs ) ; }",
+   "function scoreOf ( res , sharedRate , baseSpend = null ) {"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_crosscheck.js",
+  "a0": 77,
+  "a1": 106,
+  "b": ".test_harnesses/schedule_oracle_harness.js",
+  "b0": 64,
+  "b1": 93,
+  "units": 28,
+  "chars": 1677,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_crosscheck.js",
+  "a0": 77,
+  "a1": 103,
+  "b": ".test_harnesses/phased_harness.js",
+  "b0": 78,
+  "b1": 106,
+  "units": 26,
+  "chars": 1592,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/phased_harness.js",
+  "a0": 78,
+  "a1": 106,
+  "b": ".test_harnesses/schedule_oracle_harness.js",
+  "b0": 64,
+  "b1": 90,
+  "units": 26,
+  "chars": 1592,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_harness.js",
+  "a0": 54,
+  "a1": 76,
+  "b": ".test_harnesses/magi_edge_gate_harness.js",
+  "b0": 54,
+  "b1": 76,
+  "units": 22,
+  "chars": 1554,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_crosscheck.js",
+  "a0": 161,
+  "a1": 184,
+  "b": ".test_harnesses/oracle_harness.js",
+  "b0": 179,
+  "b1": 203,
+  "units": 22,
+  "chars": 1084,
+  "sample": [
+   "for ( const [ seedName , seed ] of seeds ) {",
+   "let vec = seed . slice ( 0 , horizon ) ;",
+   "while ( vec . length < horizon ) vec . push ( 0 ) ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_crosscheck.js",
+  "a0": 162,
+  "a1": 186,
+  "b": ".test_harnesses/schedule_oracle_harness.js",
+  "b0": 139,
+  "b1": 163,
+  "units": 22,
+  "chars": 1067,
+  "sample": [
+   "let vec = seed . slice ( 0 , horizon ) ;",
+   "while ( vec . length < horizon ) vec . push ( 0 ) ;",
+   "let cur = evalVec ( vec ) ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/phased_harness.js",
+  "a0": 67,
+  "a1": 92,
+  "b": ".test_harnesses/spend_objective_harness.js",
+  "b0": 53,
+  "b1": 77,
+  "units": 21,
+  "chars": 1330,
+  "sample": [
+   "} = core ;",
+   "const GK_ARM = b => ( { family : 'Guyton-Klinger' , modifier : null , strategyLabel : 'Guyton-Klinger' ,",
+   "paramLabel : `Grd:${ Math . round ( ( b . gkGuard ?? 0.20 ) * 100 ) } Adj:${ Math . round ( ( b . gkAdjPct ?? "
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_harness.js",
+  "a0": 180,
+  "a1": 203,
+  "b": ".test_harnesses/schedule_oracle_harness.js",
+  "b0": 139,
+  "b1": 161,
+  "units": 21,
+  "chars": 1040,
+  "sample": [
+   "let vec = seed . slice ( 0 , horizon ) ;",
+   "while ( vec . length < horizon ) vec . push ( 0 ) ;",
+   "let cur = evalVec ( vec ) ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/split_expressiveness_harness.js",
+  "a0": 76,
+  "a1": 93,
+  "b": ".test_harnesses/split_fine_harness.js",
+  "b0": 82,
+  "b1": 101,
+  "units": 17,
+  "chars": 830,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_crosscheck.js",
+  "a0": 1,
+  "a1": 67,
+  "b": ".test_harnesses/oracle_harness.js",
+  "b0": 1,
+  "b1": 76,
+  "units": 16,
+  "chars": 1023,
+  "sample": [
+   "'use strict' ;",
+   "globalThis . performance = { now : ( ) => 0 } ;",
+   "globalThis . window = { } ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/split_expressiveness_harness.js",
+  "a0": 76,
+  "a1": 91,
+  "b": ".test_harnesses/split_mc_harness.js",
+  "b0": 79,
+  "b1": 94,
+  "units": 16,
+  "chars": 815,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/split_fine_harness.js",
+  "a0": 82,
+  "a1": 97,
+  "b": ".test_harnesses/split_mc_harness.js",
+  "b0": 79,
+  "b1": 94,
+  "units": 16,
+  "chars": 815,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_harness.js",
+  "a0": 54,
+  "a1": 69,
+  "b": ".test_harnesses/gk_drawrule_mc_harness.js",
+  "b0": 65,
+  "b1": 80,
+  "units": 16,
+  "chars": 796,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_mc_harness.js",
+  "a0": 65,
+  "a1": 80,
+  "b": ".test_harnesses/magi_edge_gate_harness.js",
+  "b0": 54,
+  "b1": 69,
+  "units": 16,
+  "chars": 796,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/rbg_grid_harness.js",
+  "a0": 1,
+  "a1": 44,
+  "b": ".test_harnesses/rbg_playback_harness.js",
+  "b0": 1,
+  "b1": 62,
+  "units": 16,
+  "chars": 796,
+  "sample": [
+   "'use strict' ;",
+   "globalThis . window = { } ;",
+   "globalThis . document = { getElementById : ( ) => null , addEventListener : ( ) => { } } ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_mc_harness.js",
+  "a0": 1,
+  "a1": 60,
+  "b": ".test_harnesses/split_mc_harness.js",
+  "b0": 1,
+  "b1": 73,
+  "units": 15,
+  "chars": 911,
+  "sample": [
+   "'use strict' ;",
+   "globalThis . performance = { now : ( ) => Date . now ( ) } ;",
+   "globalThis . window = { } ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/convtiming_harness.js",
+  "a0": 95,
+  "a1": 109,
+  "b": ".test_harnesses/oracle_crosscheck.js",
+  "b0": 77,
+  "b1": 91,
+  "units": 15,
+  "chars": 774,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/convtiming_harness.js",
+  "a0": 95,
+  "a1": 109,
+  "b": ".test_harnesses/oracle_harness.js",
+  "b0": 83,
+  "b1": 97,
+  "units": 15,
+  "chars": 774,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/convtiming_harness.js",
+  "a0": 95,
+  "a1": 109,
+  "b": ".test_harnesses/phased_harness.js",
+  "b0": 78,
+  "b1": 92,
+  "units": 15,
+  "chars": 774,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/convtiming_harness.js",
+  "a0": 95,
+  "a1": 109,
+  "b": ".test_harnesses/schedule_oracle_harness.js",
+  "b0": 64,
+  "b1": 78,
+  "units": 15,
+  "chars": 774,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/convtiming_harness.js",
+  "a0": 95,
+  "a1": 109,
+  "b": ".test_harnesses/spend_objective_harness.js",
+  "b0": 63,
+  "b1": 77,
+  "units": 15,
+  "chars": 774,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_crosscheck.js",
+  "a0": 77,
+  "a1": 91,
+  "b": ".test_harnesses/oracle_harness.js",
+  "b0": 83,
+  "b1": 97,
+  "units": 15,
+  "chars": 774,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_crosscheck.js",
+  "a0": 77,
+  "a1": 91,
+  "b": ".test_harnesses/spend_objective_harness.js",
+  "b0": 63,
+  "b1": 77,
+  "units": 15,
+  "chars": 774,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_harness.js",
+  "a0": 83,
+  "a1": 97,
+  "b": ".test_harnesses/phased_harness.js",
+  "b0": 78,
+  "b1": 92,
+  "units": 15,
+  "chars": 774,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_harness.js",
+  "a0": 83,
+  "a1": 97,
+  "b": ".test_harnesses/schedule_oracle_harness.js",
+  "b0": 64,
+  "b1": 78,
+  "units": 15,
+  "chars": 774,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_harness.js",
+  "a0": 83,
+  "a1": 97,
+  "b": ".test_harnesses/spend_objective_harness.js",
+  "b0": 63,
+  "b1": 77,
+  "units": 15,
+  "chars": 774,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/schedule_oracle_harness.js",
+  "a0": 64,
+  "a1": 78,
+  "b": ".test_harnesses/spend_objective_harness.js",
+  "b0": 63,
+  "b1": 77,
+  "units": 15,
+  "chars": 774,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/magi_edge_gate_harness.js",
+  "a0": 1,
+  "a1": 50,
+  "b": ".test_harnesses/spend_objective_harness.js",
+  "b0": 1,
+  "b1": 59,
+  "units": 14,
+  "chars": 863,
+  "sample": [
+   "'use strict' ;",
+   "globalThis . performance = { now : ( ) => 0 } ;",
+   "globalThis . window = { } ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/convtiming_harness.js",
+  "a0": 96,
+  "a1": 109,
+  "b": ".test_harnesses/schedule_replay_harness.js",
+  "b0": 51,
+  "b1": 64,
+  "units": 14,
+  "chars": 758,
+  "sample": [
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,",
+   "birthyear2 : 1964 , birthmonth2 : 3 , die2 : 94 , hasSpouse : true ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_crosscheck.js",
+  "a0": 78,
+  "a1": 91,
+  "b": ".test_harnesses/schedule_replay_harness.js",
+  "b0": 51,
+  "b1": 64,
+  "units": 14,
+  "chars": 758,
+  "sample": [
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,",
+   "birthyear2 : 1964 , birthmonth2 : 3 , die2 : 94 , hasSpouse : true ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_harness.js",
+  "a0": 84,
+  "a1": 97,
+  "b": ".test_harnesses/schedule_replay_harness.js",
+  "b0": 51,
+  "b1": 64,
+  "units": 14,
+  "chars": 758,
+  "sample": [
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,",
+   "birthyear2 : 1964 , birthmonth2 : 3 , die2 : 94 , hasSpouse : true ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/phased_harness.js",
+  "a0": 79,
+  "a1": 92,
+  "b": ".test_harnesses/schedule_replay_harness.js",
+  "b0": 51,
+  "b1": 64,
+  "units": 14,
+  "chars": 758,
+  "sample": [
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,",
+   "birthyear2 : 1964 , birthmonth2 : 3 , die2 : 94 , hasSpouse : true ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/schedule_oracle_harness.js",
+  "a0": 65,
+  "a1": 78,
+  "b": ".test_harnesses/schedule_replay_harness.js",
+  "b0": 51,
+  "b1": 64,
+  "units": 14,
+  "chars": 758,
+  "sample": [
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,",
+   "birthyear2 : 1964 , birthmonth2 : 3 , die2 : 94 , hasSpouse : true ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/schedule_replay_harness.js",
+  "a0": 51,
+  "a1": 64,
+  "b": ".test_harnesses/spend_objective_harness.js",
+  "b0": 64,
+  "b1": 77,
+  "units": 14,
+  "chars": 758,
+  "sample": [
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,",
+   "birthyear2 : 1964 , birthmonth2 : 3 , die2 : 94 , hasSpouse : true ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/conversion_value_general_harness.js",
+  "a0": 53,
+  "a1": 67,
+  "b": ".test_harnesses/conversion_value_harness.js",
+  "b0": 63,
+  "b1": 77,
+  "units": 13,
+  "chars": 582,
+  "sample": [
+   "'use strict' ;",
+   "const path = require ( 'path' ) ;",
+   "globalThis . performance = { now : ( ) => 0 } ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_crosscheck.js",
+  "a0": 93,
+  "a1": 105,
+  "b": ".test_harnesses/oracle_harness.js",
+  "b0": 109,
+  "b1": 121,
+  "units": 12,
+  "chars": 862,
+  "sample": [
+   "const MIXES = [",
+   "{ key : 'defaults' , over : { IRA1 : 1000000 , IRA2 : 400000 , Roth : 50000 , Roth2 : 20000 ,",
+   "Brokerage : 100000 , BrokerageBasis : 50000 , Cash : 50000 } } ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_harness.js",
+  "a0": 109,
+  "a1": 121,
+  "b": ".test_harnesses/schedule_oracle_harness.js",
+  "b0": 80,
+  "b1": 92,
+  "units": 12,
+  "chars": 862,
+  "sample": [
+   "const MIXES = [",
+   "{ key : 'defaults' , over : { IRA1 : 1000000 , IRA2 : 400000 , Roth : 50000 , Roth2 : 20000 ,",
+   "Brokerage : 100000 , BrokerageBasis : 50000 , Cash : 50000 } } ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/rbg_grid_harness.js",
+  "a0": 189,
+  "a1": 200,
+  "b": ".test_harnesses/rbg_playback_harness.js",
+  "b0": 300,
+  "b1": 311,
+  "units": 12,
+  "chars": 614,
+  "sample": [
+   "console . log ( `Per-task results: ${ dir } (re-print with --from <that directory>).\\n` ) ;",
+   "let next = 0 , done = 0 ;",
+   "const results = new Array ( tasks . length ) ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/rails_precision_harness.js",
+  "a0": 1,
+  "a1": 80,
+  "b": ".test_harnesses/rbg_grid_harness.js",
+  "b0": 1,
+  "b1": 40,
+  "units": 12,
+  "chars": 562,
+  "sample": [
+   "'use strict' ;",
+   "globalThis . window = { } ;",
+   "globalThis . document = { getElementById : ( ) => null , addEventListener : ( ) => { } } ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/rails_precision_harness.js",
+  "a0": 1,
+  "a1": 80,
+  "b": ".test_harnesses/rbg_playback_harness.js",
+  "b0": 1,
+  "b1": 58,
+  "units": 12,
+  "chars": 562,
+  "sample": [
+   "'use strict' ;",
+   "globalThis . window = { } ;",
+   "globalThis . document = { getElementById : ( ) => null , addEventListener : ( ) => { } } ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/conversion_frontier_harness.js",
+  "a0": 43,
+  "a1": 56,
+  "b": ".test_harnesses/conversion_value_general_harness.js",
+  "b0": 53,
+  "b1": 66,
+  "units": 12,
+  "chars": 531,
+  "sample": [
+   "'use strict' ;",
+   "const path = require ( 'path' ) ;",
+   "globalThis . performance = { now : ( ) => 0 } ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/conversion_frontier_harness.js",
+  "a0": 43,
+  "a1": 56,
+  "b": ".test_harnesses/conversion_value_harness.js",
+  "b0": 63,
+  "b1": 76,
+  "units": 12,
+  "chars": 531,
+  "sample": [
+   "'use strict' ;",
+   "const path = require ( 'path' ) ;",
+   "globalThis . performance = { now : ( ) => 0 } ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_harness.js",
+  "a0": 109,
+  "a1": 119,
+  "b": ".test_harnesses/phased_harness.js",
+  "b0": 96,
+  "b1": 106,
+  "units": 11,
+  "chars": 818,
+  "sample": [
+   "const MIXES = [",
+   "{ key : 'defaults' , over : { IRA1 : 1000000 , IRA2 : 400000 , Roth : 50000 , Roth2 : 20000 ,",
+   "Brokerage : 100000 , BrokerageBasis : 50000 , Cash : 50000 } } ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_mc_harness.js",
+  "a0": 63,
+  "a1": 74,
+  "b": ".test_harnesses/split_mc_harness.js",
+  "b0": 76,
+  "b1": 88,
+  "units": 11,
+  "chars": 485,
+  "sample": [
+   "const YEARS = 33 ;",
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_harness.js",
+  "a0": 333,
+  "a1": 343,
+  "b": ".test_harnesses/split_expressiveness_harness.js",
+  "b0": 104,
+  "b1": 114,
+  "units": 11,
+  "chars": 394,
+  "sample": [
+   "const ARCH = [",
+   "[ 'family' , null ] ,",
+   "[ 'IRA' , { IRA : 1 } ] ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_mc_harness.js",
+  "a0": 1,
+  "a1": 54,
+  "b": ".test_harnesses/rbg_harness.js",
+  "b0": 1,
+  "b1": 114,
+  "units": 10,
+  "chars": 567,
+  "sample": [
+   "'use strict' ;",
+   "globalThis . performance = { now : ( ) => Date . now ( ) } ;",
+   "globalThis . window = { } ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/rbg_harness.js",
+  "a0": 1,
+  "a1": 114,
+  "b": ".test_harnesses/split_mc_harness.js",
+  "b0": 1,
+  "b1": 67,
+  "units": 10,
+  "chars": 567,
+  "sample": [
+   "'use strict' ;",
+   "globalThis . performance = { now : ( ) => Date . now ( ) } ;",
+   "globalThis . window = { } ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_harness.js",
+  "a0": 54,
+  "a1": 63,
+  "b": ".test_harnesses/split_expressiveness_harness.js",
+  "b0": 76,
+  "b1": 85,
+  "units": 10,
+  "chars": 467,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_harness.js",
+  "a0": 54,
+  "a1": 63,
+  "b": ".test_harnesses/split_fine_harness.js",
+  "b0": 82,
+  "b1": 91,
+  "units": 10,
+  "chars": 467,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_harness.js",
+  "a0": 54,
+  "a1": 63,
+  "b": ".test_harnesses/split_mc_harness.js",
+  "b0": 79,
+  "b1": 88,
+  "units": 10,
+  "chars": 467,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_mc_harness.js",
+  "a0": 65,
+  "a1": 74,
+  "b": ".test_harnesses/split_expressiveness_harness.js",
+  "b0": 76,
+  "b1": 85,
+  "units": 10,
+  "chars": 467,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_mc_harness.js",
+  "a0": 65,
+  "a1": 74,
+  "b": ".test_harnesses/split_fine_harness.js",
+  "b0": 82,
+  "b1": 91,
+  "units": 10,
+  "chars": 467,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/magi_edge_gate_harness.js",
+  "a0": 54,
+  "a1": 63,
+  "b": ".test_harnesses/split_expressiveness_harness.js",
+  "b0": 76,
+  "b1": 85,
+  "units": 10,
+  "chars": 467,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/magi_edge_gate_harness.js",
+  "a0": 54,
+  "a1": 63,
+  "b": ".test_harnesses/split_fine_harness.js",
+  "b0": 82,
+  "b1": 91,
+  "units": 10,
+  "chars": 467,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/magi_edge_gate_harness.js",
+  "a0": 54,
+  "a1": 63,
+  "b": ".test_harnesses/split_mc_harness.js",
+  "b0": 79,
+  "b1": 88,
+  "units": 10,
+  "chars": 467,
+  "sample": [
+   "const COMMON = {",
+   "STATEname : 'CA' , nYears : 20 ,",
+   "birthyear1 : 1962 , birthmonth1 : 6 , die1 : 92 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/conversion_frontier_harness.js",
+  "a0": 43,
+  "a1": 53,
+  "b": ".test_harnesses/stopyear_stability_harness.js",
+  "b0": 69,
+  "b1": 81,
+  "units": 10,
+  "chars": 459,
+  "sample": [
+   "'use strict' ;",
+   "const path = require ( 'path' ) ;",
+   "globalThis . performance = { now : ( ) => 0 } ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/conversion_value_general_harness.js",
+  "a0": 53,
+  "a1": 63,
+  "b": ".test_harnesses/stopyear_stability_harness.js",
+  "b0": 69,
+  "b1": 81,
+  "units": 10,
+  "chars": 459,
+  "sample": [
+   "'use strict' ;",
+   "const path = require ( 'path' ) ;",
+   "globalThis . performance = { now : ( ) => 0 } ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/conversion_value_harness.js",
+  "a0": 63,
+  "a1": 73,
+  "b": ".test_harnesses/stopyear_stability_harness.js",
+  "b0": 69,
+  "b1": 81,
+  "units": 10,
+  "chars": 459,
+  "sample": [
+   "'use strict' ;",
+   "const path = require ( 'path' ) ;",
+   "globalThis . performance = { now : ( ) => 0 } ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/rbg_grid_harness.js",
+  "a0": 202,
+  "a1": 216,
+  "b": ".test_harnesses/rbg_playback_harness.js",
+  "b0": 313,
+  "b1": 327,
+  "units": 9,
+  "chars": 661,
+  "sample": [
+   "child . on ( 'exit' , code => {",
+   "if ( code !== 0 ) { reject ( new Error ( `${ task . plan }: ${ err }` ) ) ; return ; }",
+   "results [ i ] = JSON . parse ( fs . readFileSync ( task . out , 'utf8' ) ) ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_crosscheck.js",
+  "a0": 118,
+  "a1": 126,
+  "b": ".test_harnesses/schedule_oracle_harness.js",
+  "b0": 101,
+  "b1": 109,
+  "units": 9,
+  "chars": 592,
+  "sample": [
+   "function scoreOf ( res , sharedRate , baseSpend = null ) {",
+   "if ( ! res ?. totals ?. success ) return null ;",
+   "if ( ( res . totals . shortfall ?? 0 ) > 1 ) return null ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_harness.js",
+  "a0": 132,
+  "a1": 140,
+  "b": ".test_harnesses/schedule_oracle_harness.js",
+  "b0": 101,
+  "b1": 109,
+  "units": 9,
+  "chars": 592,
+  "sample": [
+   "function scoreOf ( res , sharedRate , baseSpend = null ) {",
+   "if ( ! res ?. totals ?. success ) return null ;",
+   "if ( ( res . totals . shortfall ?? 0 ) > 1 ) return null ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_mc_harness.js",
+  "a0": 133,
+  "a1": 141,
+  "b": ".test_harnesses/split_mc_harness.js",
+  "b0": 162,
+  "b1": 170,
+  "units": 9,
+  "chars": 481,
+  "sample": [
+   "const rec = per . get ( name ) ;",
+   "if ( ! r ?. totals ?. success ) continue ;",
+   "rec . ok ++ ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/rbg_grid_harness.js",
+  "a0": 247,
+  "a1": 257,
+  "b": ".test_harnesses/rbg_playback_harness.js",
+  "b0": 400,
+  "b1": 410,
+  "units": 8,
+  "chars": 492,
+  "sample": [
+   "async function main ( ) {",
+   "let results ;",
+   "if ( FROM ) {"
+  ]
+ },
+ {
+  "a": ".test_harnesses/split_expressiveness_harness.js",
+  "a0": 123,
+  "a1": 130,
+  "b": ".test_harnesses/split_fine_harness.js",
+  "b0": 152,
+  "b1": 159,
+  "units": 8,
+  "chars": 457,
+  "sample": [
+   "function scoreOf ( res , sharedRate ) {",
+   "if ( ! res ?. totals ?. success ) return null ;",
+   "if ( ( res . totals . shortfall ?? 0 ) > 1 ) return null ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/convtiming_harness.js",
+  "a0": 102,
+  "a1": 109,
+  "b": ".test_harnesses/gk_drawrule_harness.js",
+  "b0": 61,
+  "b1": 68,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/convtiming_harness.js",
+  "a0": 102,
+  "a1": 109,
+  "b": ".test_harnesses/gk_drawrule_mc_harness.js",
+  "b0": 72,
+  "b1": 79,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/convtiming_harness.js",
+  "a0": 102,
+  "a1": 109,
+  "b": ".test_harnesses/magi_edge_gate_harness.js",
+  "b0": 61,
+  "b1": 68,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_harness.js",
+  "a0": 61,
+  "a1": 68,
+  "b": ".test_harnesses/oracle_crosscheck.js",
+  "b0": 84,
+  "b1": 91,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_harness.js",
+  "a0": 61,
+  "a1": 68,
+  "b": ".test_harnesses/oracle_harness.js",
+  "b0": 90,
+  "b1": 97,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_harness.js",
+  "a0": 61,
+  "a1": 68,
+  "b": ".test_harnesses/phased_harness.js",
+  "b0": 85,
+  "b1": 92,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_harness.js",
+  "a0": 61,
+  "a1": 68,
+  "b": ".test_harnesses/schedule_oracle_harness.js",
+  "b0": 71,
+  "b1": 78,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_harness.js",
+  "a0": 61,
+  "a1": 68,
+  "b": ".test_harnesses/spend_objective_harness.js",
+  "b0": 70,
+  "b1": 77,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_mc_harness.js",
+  "a0": 72,
+  "a1": 79,
+  "b": ".test_harnesses/oracle_crosscheck.js",
+  "b0": 84,
+  "b1": 91,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_mc_harness.js",
+  "a0": 72,
+  "a1": 79,
+  "b": ".test_harnesses/oracle_harness.js",
+  "b0": 90,
+  "b1": 97,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_mc_harness.js",
+  "a0": 72,
+  "a1": 79,
+  "b": ".test_harnesses/phased_harness.js",
+  "b0": 85,
+  "b1": 92,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_mc_harness.js",
+  "a0": 72,
+  "a1": 79,
+  "b": ".test_harnesses/schedule_oracle_harness.js",
+  "b0": 71,
+  "b1": 78,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_mc_harness.js",
+  "a0": 72,
+  "a1": 79,
+  "b": ".test_harnesses/spend_objective_harness.js",
+  "b0": 70,
+  "b1": 77,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/magi_edge_gate_harness.js",
+  "a0": 61,
+  "a1": 68,
+  "b": ".test_harnesses/oracle_crosscheck.js",
+  "b0": 84,
+  "b1": 91,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/magi_edge_gate_harness.js",
+  "a0": 61,
+  "a1": 68,
+  "b": ".test_harnesses/oracle_harness.js",
+  "b0": 90,
+  "b1": 97,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/magi_edge_gate_harness.js",
+  "a0": 61,
+  "a1": 68,
+  "b": ".test_harnesses/phased_harness.js",
+  "b0": 85,
+  "b1": 92,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/magi_edge_gate_harness.js",
+  "a0": 61,
+  "a1": 68,
+  "b": ".test_harnesses/schedule_oracle_harness.js",
+  "b0": 71,
+  "b1": 78,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/magi_edge_gate_harness.js",
+  "a0": 61,
+  "a1": 68,
+  "b": ".test_harnesses/spend_objective_harness.js",
+  "b0": 70,
+  "b1": 77,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_harness.js",
+  "a0": 61,
+  "a1": 68,
+  "b": ".test_harnesses/schedule_replay_harness.js",
+  "b0": 57,
+  "b1": 64,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/gk_drawrule_mc_harness.js",
+  "a0": 72,
+  "a1": 79,
+  "b": ".test_harnesses/schedule_replay_harness.js",
+  "b0": 57,
+  "b1": 64,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/magi_edge_gate_harness.js",
+  "a0": 61,
+  "a1": 68,
+  "b": ".test_harnesses/schedule_replay_harness.js",
+  "b0": 57,
+  "b1": 64,
+  "units": 8,
+  "chars": 438,
+  "sample": [
+   "inflation : 0.025 , cpi : 0.025 , growth : 0.06 ,",
+   "cashYield : 0.03 , dividendRate : 0.02 ,",
+   "ssFailYear : 2099 , ssFailPct : 1.0 ,"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_crosscheck.js",
+  "a0": 1,
+  "a1": 56,
+  "b": ".test_harnesses/phased_harness.js",
+  "b0": 1,
+  "b1": 64,
+  "units": 8,
+  "chars": 327,
+  "sample": [
+   "'use strict' ;",
+   "globalThis . performance = { now : ( ) => 0 } ;",
+   "globalThis . window = { } ;"
+  ]
+ },
+ {
+  "a": ".test_harnesses/oracle_harness.js",
+  "a0": 1,
+  "a1": 65,
+  "b": ".test_harnesses/phased_harness.js",
+  "b0": 1,
+  "b1": 64,
+  "units": 8,
+  "chars": 327,
+  "sample": [
+   "'use strict' ;",
+   "globalThis . performance = { now : ( ) => 0 } ;",
+   "globalThis . window = { } ;"
+  ]
+ }
+]

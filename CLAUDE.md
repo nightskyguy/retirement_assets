@@ -122,3 +122,27 @@ sentence. Say which, or rename one.
 `research/README.md` is the index: one row per report, a link and one or two sentences on what it
 covers and what it found. A new harness that writes a report and does not add its row has produced a
 file nobody will open. An index nobody updates is worse than no index.
+
+## A code comment says what the code does now, and names functions, never lines
+
+A comment carries two things: what the code does today, and the constraint that would break if
+someone changed it ("applied AFTER `applyGrowth`, because this shift IS growth, so adding it before
+would grow it twice"). Everything else about the code's past goes in the commit message, and in
+`research/` when a later decision will need the evidence.
+
+| write | not |
+|---|---|
+| what the code does, and the one constraint that breaks it | how the constraint was found, what it cost, which version got it wrong |
+| a function or field: "the ACA branch of `computeBracketCeiling`" | a line number: "`optimizer_core.js:1040`" |
+| a pointer to the evidence: "see `research/CONSTANT_SPLIT.md`" | the measurements, dates, phase ids and "(user, ...)" quotes themselves |
+| a file tracked on `main` | a harness or script that has been retired |
+
+A line number is wrong after the next edit above it, and a retired file is a dead end. The
+code-quality review of 2026-09-21 (`.planning/CODE_QUALITY_REVIEW.md`, section 3) found
+`optimizer_core.js` at 3,435 comment lines against 3,429 lines of code, 5,219 comment lines across
+the production files in blocks that narrate history, 15 of 15 line-number cites pointing at the
+wrong line, and eight comments naming harness files that no longer exist.
+
+Existing blocks get trimmed to this shape one at a time (that review's section 3.3 and Appendix A).
+Until a block's turn comes, a comment you edit is rewritten to this shape, and a new one is written
+to it from the start.

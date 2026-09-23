@@ -63,6 +63,26 @@
     return sign + out + SHORT_UNITS[u][1];
   }
 
+  // ── Escaping ─────────────────────────────────────────────────────────────
+
+  // Text for innerHTML, in element content or inside a quoted attribute value. All five characters,
+  // because this one definition serves both positions for every script on the page; a copy that
+  // leaves out the quotes is not safe in an attribute.
+  function escapeHtml(str) {
+    return String(str == null ? '' : str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // A value as a JavaScript string literal, for an inline handler inside a double-quoted attribute:
+  // onclick="loadScenarioByName(${jsStringArg(name)})". JSON.stringify writes the literal, escaping
+  // it for JavaScript, and escapeHtml then makes that safe in the attribute. The browser decodes the
+  // attribute before it parses the handler, so the handler receives the value exactly. Both layers
+  // are needed: a backslash escapes nothing in HTML, and an entity is decoded before JavaScript runs.
+  function jsStringArg(value) {
+    return escapeHtml(JSON.stringify(String(value == null ? '' : value)));
+  }
+
   // ── Input attachment ─────────────────────────────────────────────────────
 
   // Attaches smart numeric behaviour to a <input type="text"> element.
@@ -202,6 +222,8 @@
     parseShorthand: parseShorthand,
     formatDollar: formatDollar,
     formatDollarShort: formatDollarShort,
+    escapeHtml: escapeHtml,
+    jsStringArg: jsStringArg,
     attachNumericDollarInput: attachNumericDollarInput,
     setDollarValue: setDollarValue,
     registerChartDismissal: registerChartDismissal,

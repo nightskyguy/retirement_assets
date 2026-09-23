@@ -194,6 +194,21 @@ test('calcIRMAA: tiers, CPI, the Medicare rate and the per-person gate (sensitiv
 				'😭calcIRMAA SGL under 65 = no surcharge');
 });
 
+test('FPL: HHS figures for GUIDELINE_YEAR, the year before the coverage year the tables serve', () => {
+	// An ACA coverage year is measured against the guideline HHS published the January before, so
+	// TAXData.FPL runs one year behind TAXData.FEDERAL. Moving FEDERAL.YEAR without the FPL block
+	// fails here, and so does a GUIDELINE_YEAR carrying another year's figures. When the block
+	// moves, add that year's row below from HHS's published guidelines (1 person, 2 persons,
+	// contiguous 48 states and DC).
+	const HHS = { 2025: { SGL: 15650, MFJ: 21150 } };
+	const fpl = TAXData.FPL;
+	assertEqual(fpl.PLAN_YEAR, TAXData.FEDERAL.YEAR, 'FPL.PLAN_YEAR is the tax tables\' own year');
+	assertEqual(fpl.GUIDELINE_YEAR, fpl.PLAN_YEAR - 1, 'FPL.GUIDELINE_YEAR is the year before PLAN_YEAR');
+	assertEqual(fpl.GUIDELINE_YEAR in HHS, true, `this test lists HHS's ${fpl.GUIDELINE_YEAR} guideline`);
+	assertEqual({ SGL: fpl.SGL, MFJ: fpl.MFJ }, HHS[fpl.GUIDELINE_YEAR],
+				`TAXData.FPL holds HHS's ${fpl.GUIDELINE_YEAR} guideline`);
+});
+
 test('calculateProgressive: the TEST entity, invalid entities, and which states index their brackets', () => {
 	assertEqual(calculateProgressive('TEST','MFJ',72000), 
 		{"cumulative": 30700, "total": 30700, "marginal": 0.8, "limit": 40000, "nominalRate": 0.4}, 

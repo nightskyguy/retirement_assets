@@ -35,7 +35,7 @@ const PLAN = {
         viability: {
             funded: "39/39",
             fundsEveryYear: true,
-            endingIRA: 10664588,
+            endingIRA: 10638947,
             peakIRAYear: 32,
             acaBreachYears: 7
         },

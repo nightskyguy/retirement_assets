@@ -3547,6 +3547,36 @@ assertEqual(
 		}
 	})();
 
+	(function scenarioNamesReachTheirHandlersExactly() {
+		// A saved plan's name is user text, and an imported file can carry any name at all. Every
+		// handler in the Saved Scenarios dialog - the list row's and the info view's - must receive
+		// it exactly. The markup is parsed in a detached template and each handler runs against
+		// stubs, so neither the live dialog nor storage is touched.
+		if (typeof scenarioRowHtml !== 'function' || typeof scenarioInfoActionsHtml !== 'function') {
+			console.log('SKIP: Saved Scenarios builders absent'); return;
+		}
+		const names = [`My "best" plan`, `Tom's plan`, 'x" onmouseover="alert(1)', "a\\b'c", '<img src=x>', 'two\nlines'];
+		for (const name of names) {
+			const tpl = document.createElement('template');
+			tpl.innerHTML = `<table>${scenarioRowHtml(name, { savedAt: 'Unknown', version: SCENARIO_VERSION })}</table>`
+			              + scenarioInfoActionsHtml(name, true);
+			const calls = [];
+			const stub = kind => arg => calls.push([kind, arg]);
+			for (const el of tpl.content.querySelectorAll('[onclick]')) {
+				new Function('showScenarioInfo', 'loadScenarioByName', 'deleteScenario', 'exportScenario',
+				             'manageScenarios', el.getAttribute('onclick'))(
+					stub('info'), stub('load'), stub('delete'), stub('export'), () => {});
+			}
+			const label = JSON.stringify(name);
+			assertEqual(calls.map(c => c[0]).join(','), 'info,info,load,delete,export,load',
+				`Saved Scenarios ${label}: every handler in the row and the info view ran`);
+			assertEqual(calls.filter(c => c[1] !== name).length, 0,
+				`Saved Scenarios ${label}: every handler received the name exactly`);
+			assertEqual(tpl.content.querySelectorAll('img, [onmouseover]').length, 0,
+				`Saved Scenarios ${label}: the name added no element or attribute of its own`);
+		}
+	})();
+
     console.log('\n========================================');
     console.log(`   RESULTS: ${passed} passed, ${failed} failed`
 		+ (skippedUnsafe ? `, ${skippedUnsafe} unsafe suites skipped (add ?runtests)` : ''));
@@ -3600,7 +3630,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all five suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 486, taxengine: 32, taxPaymentPlanner: 61, doclinks: 27, feedback: 46, slowInCore: 4 },
+    EXPECTED: { optimizer_core: 490, taxengine: 33, taxPaymentPlanner: 61, doclinks: 27, feedback: 46, slowInCore: 4 },
 
     checkCounts(results) {
         const drift = [];

@@ -1029,7 +1029,7 @@ So a shortfall on an ACA row is not a bug and not a failure to find a solution. 
 
 **Known limitations, stated plainly:**
 
-- The poverty level is the 2025 figure ($15,060 single, $20,440 for a couple) inflated forward by your CPI assumption. Real FPL figures are published annually and will not track CPI exactly.
+- The poverty level is the 2025 figure ($15,650 single, $21,150 for a couple), which is what 2026 coverage is measured against, carried forward to later years by your CPI assumption. Real FPL figures are published annually and will not track CPI exactly.
 - Only one-person and two-person households are modeled. If anyone else is in your tax household, your real FPL is higher than the tool's, so the tool's limit is **too strict** and it will understate what you can withdraw.
 - The 400% cliff assumes current law. The enhanced subsidies that were in effect from 2021 through 2025 had a gradual phase-out, but current law is a cliff. If phase-out is restored, a 400% row in this tool will be **more pessimistic** than reality.
 - Alaska and Hawaii have higher poverty guidelines and are not modeled, so for those states the limit is again **too strict**.

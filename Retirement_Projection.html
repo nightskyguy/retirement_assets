@@ -14,7 +14,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="displayhelpers.js"></script>
 <script src="sharepanel.js?v=1118e3"></script>
-<script src="taxengine.js?v=1118eb"></script>
+<script src="taxengine.js?v=1118ef"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
@@ -816,8 +816,14 @@
 </div>
 
 <script>
-const CURRENT_YEAR  = 2026;
-const CURRENT_MONTH = 5;   // May
+// Read once at load, not written down. These were `2026` and `5` until 2026-09-22, so every age
+// on the page was computed as of May 2026 whatever the date: anyone whose birth month fell after
+// May but on or before the current month read a year too young, and the projection's first
+// calendar year stopped advancing. Fixed at load rather than per call so one render cannot
+// straddle midnight on 31 December and mix two years.
+const _TODAY        = new Date();
+const CURRENT_YEAR  = _TODAY.getFullYear();
+const CURRENT_MONTH = _TODAY.getMonth() + 1;   // getMonth() is 0-based; every use here is 1-12
 
 /* ── Age from birth year + month ── */
 function computeAge(birthYear, birthMonth){
@@ -884,7 +890,7 @@ const DEFAULTS = { mfj: buildDefaults('MFJ'), single: buildDefaults('SGL') };
 const STATE_THRESH_COLORS = ['#60a5fa','#34d399','#a78bfa','#f9a8d4','#fcd34d','#6ee7b7','#c4b5fd','#86efac'];
 
 function buildStateThresholds(stateKey, status) {
-  if(!stateKey || stateKey === 'no' || !TAXData[stateKey]) return [];
+  if(!stateKey || !TAXData[stateKey]) return [];
   const stateData = TAXData[stateKey];
   const stateName = stateData.STATE || stateKey;
   const brackets  = stateData[status]?.brackets || [];
@@ -2107,12 +2113,12 @@ function initStateSelect(){
   if(!sel || !window.TAXData) return;
   const stateKeys = Object.keys(TAXData)
     .filter(k => TAXData[k].STATE !== undefined)
-    .sort((a, b) => a === 'no' ? 1 : b === 'no' ? -1 : TAXData[a].STATE.localeCompare(TAXData[b].STATE));
+    .sort((a, b) => TAXData[a].STATE.localeCompare(TAXData[b].STATE));
   stateKeys.forEach(k => {
     if(!TAXData[k]) return;
     const opt = document.createElement('option');
     opt.value = k;
-    opt.textContent = k === 'no' ? 'No income tax' : (TAXData[k].STATE || k);
+    opt.textContent = TAXData[k].STATE || k;
     if(TAXData[k].Default) opt.selected = true;
     sel.appendChild(opt);
   });

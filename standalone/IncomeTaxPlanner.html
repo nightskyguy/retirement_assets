@@ -10,7 +10,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Income Tax Planner · 2026+ · v2.6</title>
+<title>Income Tax Planner · 2026+ · v2.7</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
@@ -142,8 +142,8 @@
 <!-- Shared tax modules — NOTE: these require file:// or http:// (CORS blocks in data: URLs) -->
 <script src="../displayhelpers.js"></script>
 <script src="../sharepanel.js?v=1118e3"></script>
-<script src="../taxengine.js?v=1118eb"></script>
-<script src="../taxengine.tests.js?v=1118eb"></script>
+<script src="../taxengine.js?v=1118ef"></script>
+<script src="../taxengine.tests.js?v=1118ef"></script>
 </head>
 <body>
 <header>
@@ -1161,7 +1161,7 @@ function renderAssumptions() {
   const sn = document.getElementById('sel-state').selectedOptions[0].text;
   document.getElementById('assum-text').innerHTML = `
     <div><strong>Top x-axis:</strong> Total income = ordinary income + Social Security + CG gain at each sweep point (fixed SS and CG amounts).</div>
-    <div><strong>${sn} brackets:</strong> ${cfg.state==='no'?'No state income tax. CG not applicable.':'Most recent data, treated as 2026 base. States treat CG as ordinary income.'}</div>
+    <div><strong>${sn} brackets:</strong> Most recent data, treated as 2026 base. States treat CG as ordinary income.</div>
     <details>
       <summary>More detail &amp; sources</summary>
       <div><strong>Federal brackets:</strong> 2026 IRS Rev. Proc. 2025-32. Future years inflated at configured rate from 2026 base.</div>
@@ -1256,7 +1256,7 @@ function buildStateNotes() {
   const list = document.getElementById('state-notes-list');
   const noted = Object.keys(TAXData)
     .filter(k => TAXData[k].STATE !== undefined && TAXData[k].NOTE)
-    .sort((a, b) => a === 'no' ? 1 : b === 'no' ? -1 : TAXData[a].STATE.localeCompare(TAXData[b].STATE));
+    .sort((a, b) => TAXData[a].STATE.localeCompare(TAXData[b].STATE));
   if (noted.length === 0) { section.style.display = 'none'; return; }
   const curYear = new Date().getFullYear();
   list.innerHTML = noted.map(k => {
@@ -1274,9 +1274,9 @@ function populateStateDropdown() {
     .filter(k => TAXData[k].STATE !== undefined)
     .map(k => ({
       key: k,
-      label: k === 'no' ? 'None (no state income tax)' : (TAXData[k].STATE || k)
+      label: TAXData[k].STATE || k
     }))
-    .sort((a, b) => a.key === 'no' ? 1 : b.key === 'no' ? -1 : a.label.localeCompare(b.label));
+    .sort((a, b) => a.label.localeCompare(b.label));
   sel.innerHTML = opts.map(o => `<option value="${o.key}">${o.label}</option>`).join('');
   sel.value = 'CA';
 }

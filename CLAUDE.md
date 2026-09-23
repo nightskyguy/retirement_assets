@@ -132,6 +132,32 @@ sentence. Say which, or rename one.
 covers and what it found. A new harness that writes a report and does not add its row has produced a
 file nobody will open. An index nobody updates is worse than no index.
 
+## A bracket table's last row is an open top band, and IRMAA's first row is tier ZERO
+
+Two facts about `TAXData` that get re-derived wrongly, and were again on 2026-09-22 by a pass that
+read the IRMAA ladder fresh and reported a defect that is not one (owner corrected it the same day).
+
+**Every bracket table terminates at `{ l: Infinity }`** - FEDERAL, all 51 state tables, IRMAA. `l`
+is a FLOOR, so nothing ever lands on that row: it exists so "the ceiling of band n" can be written
+`brackets[n + 1].l` for every n, including the last. It is not a band, it is the absence of a
+ceiling. A lookup that never returns it is correct, not broken.
+
+**The consequence is what actually bites:** the top band has a floor and no ceiling, and this
+codebase's ceiling-fillers aim AT a ceiling or just under it. Asked to fill the top federal bracket
+or the top IRMAA tier, `computeBracketCeiling` gets `Infinity` and there is nothing to fill up to.
+That is handled, not avoided - `nominalRateAtLimit` has a `limit = Inf` branch returning the
+jurisdiction's top marginal rate, and the `$NaN` it once printed is a shipped fix. Any new code that
+reads a ceiling must cope with `Infinity` rather than assume a number.
+
+**IRMAA's `-none-` row is TIER ZERO.** No fee, no tier. There are five surcharge tiers, 1 to 5, and
+`stratIRMAATier` indexes them that way. Published tables are split on this - some count the
+below-IRMAA band as the first one - so a figure quoted from outside is off by one until you check
+which convention it used.
+
+Both are stated at the table in `taxengine.js` and pinned by `TEST CASE 25c` in
+`taxengine.tests.js`. `Retirement_Projection.html` drops `-none-` and the `Infinity` row when it
+lists tiers to choose from, which is the same judgement made in a different place.
+
 ## A code comment says what the code does now, and names functions, never lines
 
 A comment carries two things: what the code does today, and the constraint that would break if

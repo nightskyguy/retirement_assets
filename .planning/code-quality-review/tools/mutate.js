@@ -1,14 +1,30 @@
 'use strict';
 // Mutation-testing driver. Works ONLY on sandbox copies of the repo, never on the repo itself.
 //   node mutate.js <config.json>
-// config = { repo, sandboxRoot, workers, seed, timeoutMs, target, suites:[...], skipTests:[...],
-//            maxMutants, perFunctionMin, out, statementDeletion, onlyOps:[...]? , siteFilter? }
+// config = { workers, seed, timeoutMs, target, suites:[...], skipTests:[...],
+//            maxMutants, perFunctionMin, statementDeletion, onlyOps:[...]? , siteFilter? }
+//
+// `repo`, `sandboxRoot` and `out` are resolved here and belong in the config only to override
+// them. repo is the checkout this file sits in, so a config works from any worktree; the sandbox
+// and the .jsonl go under MUT_HOME, or a mutation-run folder in the system temp directory. The
+// configs in ../cfg named absolute paths until 2026-09-22, and every one of them pointed at a
+// worktree that had been deleted.
 const fs = require('fs');
 const path = require('path');
 const cp = require('child_process');
+const os = require('os');
 const { sites } = require('./mutsites.js');
 
 const cfg = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+if (!cfg.repo) {
+    cfg.repo = cp.execSync('git rev-parse --show-toplevel', { cwd: __dirname, encoding: 'utf8' }).trim();
+}
+const MUT_HOME = process.env.MUT_HOME || path.join(os.tmpdir(), 'mutation-run');
+if (!cfg.sandboxRoot) cfg.sandboxRoot = path.join(MUT_HOME, 'sb');
+if (!cfg.out) cfg.out = path.join(MUT_HOME, 'out', 'mut_' + path.basename(process.argv[2], '.json') + '.jsonl');
+fs.mkdirSync(path.dirname(cfg.out), { recursive: true });
+console.log('repo', cfg.repo);
+console.log('out ', cfg.out);
 const PASS = String.fromCharCode(0x2713), FAIL = String.fromCharCode(0x2717);
 const STAR = String.fromCharCode(0x2605);
 

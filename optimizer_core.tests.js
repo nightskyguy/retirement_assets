@@ -115,6 +115,8 @@ const irmaaMarginDollars = core.irmaaMarginDollars;
 const getIRMAATierTargetMAGI = taxengine.getIRMAATierTargetMAGI;
 const onMedicareAtCharge = core.onMedicareAtCharge;
 const breakEvenHeirsRate = core.breakEvenHeirsRate;
+const _conversionHelpsAtRate = core._conversionHelpsAtRate;
+const SPENDABLE_WEIGHT = core.SPENDABLE_WEIGHT;
 const lowestBreakEvenHeirsRate = core.lowestBreakEvenHeirsRate;
 const bestTimeLimitedConversion = core.bestTimeLimitedConversion;
 const buildVariations = core.buildVariations;
@@ -3140,6 +3142,23 @@ test('P84f: BOTH counterfactual arms pay the fee, so Opportunity Cost stays abou
         'applyAdvisorFee must not be gated on _cfRun');
 });
 
+test('the advisor fee is sourced from the LARGER IRA first, and the pair pays it exactly once', () => {
+    // splitPreferLarger in applyAdvisorFee, under the allfromira scope. Both Math.max guards there
+    // survived the mutation run: swapped to Math.min they read every balance as 0, and the fee
+    // spills to another account instead of coming out of the IRAs at all.
+    const pair = { ...BASE, hasSpouse: true, birthyear2: 1957, birthmonth2: 6, die2: 90,
+                   IRA1: 300000, IRA2: 700000, Cash: 200000, spendGoal: 60000, nYears: 15 };
+    const off = simulate(pair).log[0];
+    const on  = simulate({ ...pair, advisorFeeAmount: 1.0, advisorFeeMode: 'percent',
+                           advisorFeeScope: 'allfromira' }).log[0];
+    const drop1 = off.IRA1 - on.IRA1, drop2 = off.IRA2 - on.IRA2;
+    assertNear(drop1 + drop2, on['-advisorFeeFromIRA'],
+        'every dollar of the fee charged to the IRAs comes out of exactly one of them', 1);
+    assert(drop2 > drop1 * 10,
+        `IRA2 is more than twice IRA1, so it must carry nearly all of the fee; got IRA1 -${Math.round(drop1)} IRA2 -${Math.round(drop2)}`);
+    assert(on.IRA1 >= 0 && on.IRA2 >= 0, 'no balance may be driven negative to pay a fee');
+});
+
 // ── P84l/m/o: the RMD basis is the prior December 31 balance ──────────────────
 // 26 CFR 1.401(a)(9)-5 sets the year's required distribution as the prior December 31 account
 // balance over the life-expectancy divisor. Before P84l the engine struck it off `balance.IRA1`
@@ -3275,6 +3294,104 @@ test('P105: the inheritance term self-extinguishes, so the year after is not dou
     const charged = (now['RMD1-'] || 0) + (now['RMD2-'] || 0);
     assertNear(charged, now['RMD%'] * (prev.IRA2 || 0),
         "the year after inheritance is the survivor's own balance and nothing more", 1);
+});
+
+// ── The household transitions at a death ──────────────────────────────────────
+// Three things happen the year a spouse dies, each in one line of `computeIncome` or
+// `resolveHousehold`, and the mutation run of 2026-09-21 found all three unpinned: the IRA folds
+// into the survivor's, a pension pays its survivor fraction, and the plan stops. A plan runs to
+// the end either way, so a broken one reports numbers rather than failing.
+const SURVIVOR_BASE = {
+    STATEname: 'CA', strategy: 'fixed', nYears: 40,
+    birthyear1: 1960, birthmonth1: 1, birthyear2: 1962, birthmonth2: 6,
+    IRA1: 400000, IRA2: 300000, Roth: 0, Roth2: 0,
+    Brokerage: 200000, BrokerageBasis: 100000, Cash: 50000,
+    ss1: 30000, ss1Age: 67, ss2: 20000, ss2Age: 67,
+    pensionAnnual: 40000, pensionStartAge: 65, survivorPct: 60, pensionCola: false,
+    spendGoal: 70000, spendChange: 0, iraBaseGoal: 0,
+    inflation: 0, cpi: 0, growth: 0, cashYield: 0, dividendRate: 0,
+    ssFailYear: 2099, ssFailPct: 1.0,
+    convertExcessToRoth: false, propWithdraw: 0, iraWithdrawPct: 0.05,
+    startInYear: 2026, dividendReinvest: false, startYear: 2026, hasSpouse: true,
+};
+// The first year the log shows one survivor. Ages print as an em-dash once a person is gone.
+const _firstSingleRow = log => log.findIndex(r => r.age1 === '—' || r.age2 === '—');
+
+test('a death moves the IRA to the survivor and creates nothing: the pair total carries over', () => {
+    // `balance.IRA1 += balance.IRA2` in computeIncome. A sign flip there still produces a plan,
+    // just a poorer one, so the guard has to be the conservation identity rather than a balance.
+    const r = simulate({ ...SURVIVOR_BASE, die1: 90, die2: 70 });
+    const i = _firstSingleRow(r.log);
+    assert(i > 0, 'fixture must reach a death with a year before it');
+    const before = r.log[i - 1], after = r.log[i];
+    assert(after.IRA2 === 0 && after.IRA1 > 0, `the decedent's IRA must be emptied into the survivor's, got IRA1=${after.IRA1} IRA2=${after.IRA2}`);
+    assertNear(after.TotalIRA, before.TotalIRA - after.IRAwd,
+        'the survivor inherits the whole pair balance, less only what this year drew', 1);
+});
+
+test('a survivor is paid the plan\'s survivorPct of the pension, from the first single year', () => {
+    // The pension belongs to person 1, so only person 1's death reduces it - which is why this
+    // fixture kills person 1 and the one above kills person 2.
+    const r = simulate({ ...SURVIVOR_BASE, die1: 70, die2: 90 });
+    const i = _firstSingleRow(r.log);
+    assert(i > 0, 'fixture must reach a death with a year before it');
+    assertNear(r.log[i].pension, r.log[i - 1].pension * 0.60,
+        'the survivor pension is survivorPct of what the couple was paid', 1);
+    assert(r.log[i - 1].pension > 0, 'test setup: a pension must actually be in payment before the death');
+    // And the fraction is read from the input, not fixed: a full-survivor plan loses nothing.
+    const full = simulate({ ...SURVIVOR_BASE, die1: 70, die2: 90, survivorPct: 100 });
+    assertNear(full.log[i].pension, full.log[i - 1].pension, 'survivorPct 100 pays the pension in full', 1);
+});
+
+test('the death year is the LAST married year, and the single years start after it', () => {
+    // The off-by-one this guards against counted the death year itself as the first single year.
+    // Both years produce numbers, so nothing fails - the survivor is simply taxed as single for a
+    // year they were married, and the 1014 step-up lands a year early with them. `alive` is
+    // `age <= die`, so the whole year age === die is still married.
+    const r = simulate({ ...SURVIVOR_BASE, die1: 90, die2: 70 });
+    const death = r.log.find(row => row.age2 === 70);
+    const after = r.log[r.log.indexOf(death) + 1];
+    assert(death && after, 'fixture must run at least one year past the death');
+    assert(death.status === 'MFJ', `the year of the death is still married filing jointly, got ${death.status}`);
+    assert(after.status === 'SGL', `the year after it is the first single one, got ${after.status}`);
+    assert(death['-lastMFJ'] === true && death['-firstSGL'] === false,
+        'the death year is flagged last-MFJ and not first-single');
+    assert(after['-firstSGL'] === true && after['-lastMFJ'] === false,
+        'the year after is flagged first-single and not last-MFJ');
+    // Exactly one of each over the whole plan: a flag that fires twice is as wrong as one that
+    // fires in the wrong year, and only a whole-run count says so.
+    assert(r.log.filter(x => x['-lastMFJ']).length === 1, 'exactly one year is the last married one');
+    assert(r.log.filter(x => x['-firstSGL']).length === 1, 'exactly one year is the first single one');
+});
+
+test('the plan runs to the SECOND death, and nYears does not extend it', () => {
+    // The horizon is `max(birthyear1 + die1, birthyear2 + die2) - currentYear + 1`, so the plan
+    // ends at the later death whichever spouse it belongs to, and nYears - which a reader can
+    // easily take for the horizon - does not lengthen or shorten it.
+    //
+    // NOT a test of resolveHousehold's `if (!yr.alive1 && !yr.alive2) return false`. Section 4.8
+    // asks for one, on the strength of that line's mutants surviving. They survive because the
+    // line cannot run: `alive` is `age <= die`, so the last year of the horizon is the death year
+    // and both spouses are alive through it. The guard is a backstop the horizon makes
+    // unreachable, and no test can kill those mutants. Measured 2026-09-22: flipped to `return
+    // true`, all 525 tests still pass.
+    const endsAt = (over) => {
+        const r = simulate({ ...SURVIVOR_BASE, ...over });
+        return r.log[r.log.length - 1];
+    };
+    const secondIsP2 = endsAt({ die1: 70, die2: 90 });
+    assert(secondIsP2.age2 === 90 && secondIsP2.age1 === '—',
+        `the plan ends the year the second spouse reaches 90, got age1=${secondIsP2.age1} age2=${secondIsP2.age2}`);
+    const secondIsP1 = endsAt({ die1: 90, die2: 70 });
+    assert(secondIsP1.age1 === 90 && secondIsP1.age2 === '—',
+        `and the same when it is the first spouse who outlives, got age1=${secondIsP1.age1} age2=${secondIsP1.age2}`);
+    // nYears is not the horizon. Both of these must produce the identical run.
+    const short = simulate({ ...SURVIVOR_BASE, die1: 70, die2: 90, nYears: 5 });
+    const long  = simulate({ ...SURVIVOR_BASE, die1: 70, die2: 90, nYears: 60 });
+    assert(short.log.length === long.log.length,
+        `nYears must not move the horizon: ${short.log.length} rows at 5, ${long.log.length} at 60`);
+    assert(short.log.every(row => !(row.age1 === '—' && row.age2 === '—')),
+        'no year may be logged with nobody alive in it');
 });
 
 // ── P38 PR 3: the primary draw is sized net of the tax on guaranteed income ───
@@ -3754,6 +3871,35 @@ test('suggestSustainableSpend sits on the boundary: its spend passes, 15% more f
     assert(!suggestPassesAt(BASE, r.spend * 1.15, K),
         `a spend 15% above the suggestion must fail the ${K}-year buffer (got a still-passing ` +
         `${Math.round(r.spend * 1.15)} vs suggestion ${Math.round(r.spend)})`);
+});
+
+test('suggestSustainableSpend: the terminal buffer is years of the PORTFOLIO-funded need', () => {
+    // The rule is `portfolioBalance >= bufferYears x (spendGoal - guaranteedIncome)` in the last
+    // year's own inflated dollars. Only monotonicity in bufferYears was pinned, which a sign flip
+    // in that subtraction survives: it makes the rule stricter, so the suggestion falls and the
+    // ordering still holds. Stating the rule needs BOTH halves - the answer satisfies it, and a
+    // little more does not, which is what makes it the largest such spend and not merely a safe one.
+    const S_BASE = { ...BASE, strategy: 'fixed', nYears: 25,
+                     birthyear1: 1960, die1: 90, IRA1: 1200000,
+                     Brokerage: 400000, BrokerageBasis: 200000, Cash: 100000,
+                     ss1: 30000, ss1Age: 67, spendGoal: 80000,
+                     inflation: 0.025, cpi: 0.025, growth: 0.05 };
+    const leftAndNeeded = (spend, bufferYears) => {
+        const last = simulate({ ...S_BASE, spendGoal: spend }).log.slice(-1)[0];
+        const need = Math.max(0, (last.spendGoal || 0) - (last.guaranteedIncome || 0));
+        return { left: last.portfolioBalance || 0, needed: bufferYears * need };
+    };
+    for (const bufferYears of [3, 6]) {
+        const s = suggestSustainableSpend(S_BASE, { bufferYears });
+        assert(s && s.spend > 0, `fixture must produce a suggestion at bufferYears ${bufferYears}`);
+        const at = leftAndNeeded(s.spend, bufferYears);
+        assert(at.needed > 0, 'test setup: the household must still need portfolio money in its last year');
+        assert(at.left >= at.needed,
+            `bufferYears ${bufferYears}: the suggestion must leave ${Math.round(at.needed)}, left ${Math.round(at.left)}`);
+        const more = leftAndNeeded(s.spend * 1.10, bufferYears);
+        assert(more.left < more.needed,
+            `bufferYears ${bufferYears}: 10% more must break the rule, or the answer was not the largest one`);
+    }
 });
 
 test('suggestSustainableSpend: a bigger terminal buffer never raises the suggested spend', () => {
@@ -4627,6 +4773,31 @@ test('accounting: withdrawal columns include conversions, decompose correctly, a
     }
 });
 
+test('a conversion out of IRA2 lands in Roth2, not in the other spouse\'s Roth', () => {
+    // `balance.Roth2 += yr.surplus.Roth2` in growAndSettle is deletable without any test noticing:
+    // the conversion still leaves the IRA and is still taxed, so only the destination goes missing.
+    const r = simulate({ ...BASE, hasSpouse: true, birthyear2: 1957, birthmonth2: 6, die2: 90,
+                         IRA1: 0, IRA2: 1000000, Cash: 200000, spendGoal: 60000, nYears: 15,
+                         convertExcessToRoth: true, extraConversionAmount: 50000 });
+    const y0 = r.log[0];
+    assert(y0['-iraConvGross1'] === 0 && y0['-iraConvGross2'] > 0,
+        'test setup: with IRA1 empty every converted dollar must come from IRA2');
+    assert(y0.Roth1 === 0, `nothing was converted out of IRA1, so Roth1 must stay empty, got ${y0.Roth1}`);
+    assertNear(y0.Roth2, y0.rothConv, "the whole conversion arrives in the second spouse's Roth", 1);
+});
+
+test('totals.futureIRARate is the FIRST year\'s marginal rate, not the last', () => {
+    // evaluateYearOutcome captures it under `if (yr.ySeq === 0)`. Negate that and the optimizer
+    // values every strategy's terminal IRA at the final year's rate, which on a draw-down plan is
+    // the lowest one the run ever saw - so a cross-strategy comparison silently tilts.
+    const r = simulate({ ...BASE, IRA1: 2000000, spendGoal: 200000, Cash: 200000, nYears: 15 });
+    const first = r.log[0], last = r.log[r.log.length - 1];
+    assertNear(r.totals.futureIRARate, first['FedRate%'] + first['StateRate%'],
+        'the shared rate is the one the plan opened at', 1e-9);
+    assert(first['FedRate%'] + first['StateRate%'] !== last['FedRate%'] + last['StateRate%'],
+        'test setup: the rate must actually move over the plan, or this proves nothing');
+});
+
 // ── Dividends and interest must never be credited twice ──────────────────────
 // These exist because the suite ran 209 green while every plan with a non-zero cashYield or
 // dividendRate created money. yr.taxableDividends and yr.taxableInterest were credited to a balance
@@ -4731,6 +4902,26 @@ test('Medicare premiums: per-person enrollment drops that person premium and the
         'dropping one of two enrolees must halve the premium', 1);
     assert((none.Medicare ?? 0) === 0, 'nobody enrolled must owe no premium at all');
     assert((none.IRMAA ?? 0) === 0, 'nobody enrolled must owe no surcharge either');
+});
+
+test('Medicare enrolment defaults to ON: an unset flag is enrolled, only an explicit false is not', () => {
+    if (!_planBank) return;
+    // The engine spells this `inputs.medicareEnroll1 !== false` in two places - the premium and the
+    // IRMAA ceiling's safety margin - so an absent flag means enrolled and only a literal false
+    // opts out. Flip either `!==` to `===` and every plan that never touched the control silently
+    // stops enrolling, which changes the ceiling as well as the premium. Both survived the run.
+    const base = { ...MED_BASE(), medicarePremiumMode: 'added' };
+    const unset = simulate({ ...base }).log[0];
+    const explicit = simulate({ ...base, medicareEnroll1: true, medicareEnroll2: true }).log[0];
+    assertNear(unset.Medicare, explicit.Medicare, 'an unset flag is the same as an explicit true', 0.01);
+    assertNear(unset.IRMAA ?? 0, explicit.IRMAA ?? 0, 'and the surcharge follows it', 0.01);
+    const opted = simulate({ ...base, medicareEnroll2: false }).log[0];
+    assert(opted.Medicare < unset.Medicare, 'and an explicit false really does opt that person out');
+    // onMedicareAtCharge is the helper both sites hand the resolved flags to; it counts people,
+    // never ages alone, so a plan where one spouse has other coverage prices as one enrolee.
+    assert(onMedicareAtCharge(70, 68, true, true, true, true) === 2, 'two enrolled is two');
+    assert(onMedicareAtCharge(70, 68, true, true, true, false) === 1, 'one opted out is one');
+    assert(onMedicareAtCharge(70, 68, true, true, false, false) === 0, 'both opted out is none');
 });
 
 // ── Part-year growth is MULTIPLICATIVE ────────────────────────────────────────────────────────
@@ -5536,6 +5727,24 @@ test('QCD As Needed: MAGI between today\'s floor and the projected floor needs n
         'above the projected floor As Needed must still trim');
 });
 
+test('QCD eligibility is per person: only the spouse who is old enough gives', () => {
+    // computeAnnualQCDs builds elig1/elig2 as `alive && isQCDEligible(...)`. Either && swapped to
+    // || lets the younger spouse's IRA give, which is a deduction the IRS would not allow.
+    const q = { ...BASE, hasSpouse: true, strategy: 'fixed', nYears: 15,
+                birthyear1: 1950, birthmonth1: 1, die1: 95,
+                birthyear2: 1965, birthmonth2: 6, die2: 95,
+                IRA1: 500000, IRA2: 500000, Cash: 200000, spendGoal: 60000,
+                qcdHHMax: 40000, qcdMode: 'max' };
+    const y0 = simulate(q).log[0];
+    assert(y0.age1 >= 71 && y0.age2 < 70, `test setup: one spouse past 70.5 and one short of it, got ${y0.age1} and ${y0.age2}`);
+    assert(y0.QCD1 > 0, 'the eligible spouse gives');
+    assert(y0.QCD2 === 0, `the spouse under 70.5 may not give, got ${y0.QCD2}`);
+    // Swap the birth years and the giving swaps with them, so this is the age and not the account.
+    const swapped = simulate({ ...q, birthyear1: 1965, birthyear2: 1950 }).log[0];
+    assert(swapped.QCD1 === 0 && swapped.QCD2 > 0,
+        `with the ages reversed only IRA2 may give, got QCD1=${swapped.QCD1} QCD2=${swapped.QCD2}`);
+});
+
 test('irmaaMarginMode is inert for a plan with no IRMAA ceiling and no QCDs', () => {
     // The leak guard. `fixed` never consults an IRMAA threshold, so no margin mode may move it.
     const run = m => JSON.stringify(simulate({ ...BASE, cpi: 0.03, irmaaMarginMode: m }).log);
@@ -6228,17 +6437,25 @@ test.slow('breakEvenHeirsRate: the rate/amount pair it reports is self-consisten
     assert(r.gain > 0, 'and a positive gain');
 });
 
-test.slow('breakEvenHeirsRate: the predicate is monotonic in the rate (binary search precondition)', () => {
+test('breakEvenHeirsRate: the predicate is monotonic in the rate (binary search precondition)', () => {
     // The search is a binary search, which is only valid because "conversions pay" never turns
     // back off as the assumed future rate rises. nominalTaxRate is a bracket STEP function, so
     // this is a measured property, not an obvious one -- if a change breaks it the search starts
     // returning wrong thresholds silently. This test is the tripwire.
+    //
+    // It samples _conversionHelpsAtRate, the predicate itself. Sweeping breakEvenHeirsRate instead
+    // would run a whole binary search per rate to learn one predicate value, which is why this cost
+    // 2.6 s and carried test.slow. Mutation testing cannot express the failure it guards - no
+    // single-token change to either function makes the predicate non-monotonic without also
+    // breaking the siblings - so a zero-kill score is not evidence against it (see
+    // .planning/CODE_QUALITY_REVIEW.md section 4.7).
     const seq = [];
     for (let r = 0.05; r <= 0.75001; r += 0.025) {
-        seq.push(breakEvenHeirsRate(CONV_BASE, FIXEDPCT_OV, { maxRate: +r.toFixed(4) }) ? 1 : 0);
+        seq.push(_conversionHelpsAtRate(CONV_BASE, FIXEDPCT_OV, +r.toFixed(4), SPENDABLE_WEIGHT) ? 1 : 0);
     }
     const first = seq.indexOf(1);
-    assert(first === -1 || seq.slice(first).every(x => x === 1),
+    assert(first !== -1, 'setup: this fixture must pay at SOME rate, or the sweep proves nothing');
+    assert(seq.slice(first).every(x => x === 1),
         `once conversions start paying they must keep paying as the rate rises; got ${seq.join('')}`);
 });
 
@@ -6897,53 +7114,56 @@ test('P126: sweepOptions gates the page flags, and the rule twin is the plan wit
 const CLONE_PFX = /🗘|🔄|💵|🅡|🛡/;
 const optBaseRows = rows => rows.filter(r => !CLONE_PFX.test(r[0]));
 
-for (const [name, g] of Object.entries(OPT_GOLDEN)) {
-    test(`OPT_GOLDEN [${name}]: recording is internally consistent`, () => {
-        assert(g.rows.length === g.rowCount, `rows ${g.rows.length}, rowCount ${g.rowCount}`);
+// The recording's own sanity, all four captures in one test. It was ten - two generated per
+// capture plus two standalone - and every one of them asserts a property of the FIXTURE, never of
+// the code, so none of them can fail on an engine change and none earned a separate count pin.
+// The tests that do guard the code are the extraction proofs below (`buildStrategyFamilies
+// reproduces the Optimizer capture`), which are what a corrupt golden would actually break.
+test('OPT_GOLDEN: the recording is internally consistent, and covers the gates it was captured for', () => {
+    for (const [name, g] of Object.entries(OPT_GOLDEN)) {
+        const where = msg => `[${name}] ${msg}`;
+        assert(g.rows.length === g.rowCount, where(`rows ${g.rows.length}, rowCount ${g.rowCount}`));
         assert(optBaseRows(g.rows).length === g.baseRowCount,
-            `un-prefixed rows ${optBaseRows(g.rows).length}, baseRowCount ${g.baseRowCount}`);
+            where(`un-prefixed rows ${optBaseRows(g.rows).length}, baseRowCount ${g.baseRowCount}`));
         assert(g.base && typeof g.base === 'object' && g.base.strategy,
-            'the capture must carry the base it was recorded against');
+            where('the capture must carry the base it was recorded against'));
         // Every clone pass is accounted for exactly, rather than by a row-count multiple: the 🅡
         // pass skips Ordered rather than cloning every base row, so the total
         // stopped being a whole multiple of the base count when it landed.
         const n = pfx => g.rows.filter(r => r[0].includes(pfx)).length;
         const reachable = optBaseRows(g.rows).filter(r => r[3].strategy !== 'ordered').length;
         assert(n('🗘') === g.baseRowCount && n('🔄') === g.baseRowCount,
-            `cyclic passes clone every base row: 🗘 ${n('🗘')}, 🔄 ${n('🔄')}, base ${g.baseRowCount}`);
+            where(`cyclic passes clone every base row: 🗘 ${n('🗘')}, 🔄 ${n('🔄')}, base ${g.baseRowCount}`));
         assert(n('💵') === (g.nerdKnobs && g.base.Cash > 0 ? g.baseRowCount : 0),
-            `💵 clones are gated on nerdknob AND Cash, got ${n('💵')}`);
+            where(`💵 clones are gated on nerdknob AND Cash, got ${n('💵')}`));
         assert(n('🅡') === ((g.base.Roth > 0 || g.base.Roth2 > 0) ? reachable : 0),
-            `🅡 clones the ${reachable} reachable base rows, got ${n('🅡')}`);
+            where(`🅡 clones the ${reachable} reachable base rows, got ${n('🅡')}`));
         assert(g.baseRowCount + n('🗘') + n('🔄') + n('💵') + n('🅡') === g.rowCount,
-            'the four clone passes plus the base rows must account for every row');
-    });
+            where('the four clone passes plus the base rows must account for every row'));
 
-    test(`OPT_GOLDEN [${name}]: clone rows carry the modifier their prefix claims`, () => {
+        // And every clone row carries the modifier its prefix claims.
         for (const [label, , , ov] of g.rows) {
             assert((ov.spendRule === 'gk') === label.includes('🛡'),
-                `${label}: the 🛡️ prefix and spendRule 'gk' must go together`);
+                where(`${label}: the 🛡️ prefix and spendRule 'gk' must go together`));
             if (label.includes('🗘'))
                 assert(ov.cyclicEnabled === true && ov.cyclicOrder === 'ira-first',
-                    `${label}: 🗘 must be cyclic ira-first, got ${JSON.stringify(ov.cyclicOrder)}`);
+                    where(`${label}: 🗘 must be cyclic ira-first, got ${JSON.stringify(ov.cyclicOrder)}`));
             else if (label.includes('🔄'))
                 assert(ov.cyclicEnabled === true && ov.cyclicOrder === 'brokerage-first',
-                    `${label}: 🔄 must be cyclic brokerage-first, got ${JSON.stringify(ov.cyclicOrder)}`);
+                    where(`${label}: 🔄 must be cyclic brokerage-first, got ${JSON.stringify(ov.cyclicOrder)}`));
             else if (label.includes('💵'))
                 assert(ov.fundConversionWithCash === true && !ov.cyclicEnabled,
-                    `${label}: 💵 must fund with cash and must not be cyclic`);
+                    where(`${label}: 💵 must fund with cash and must not be cyclic`));
             else if (label.includes('🅡'))
                 assert(ov.rothGapFill === 'fillCashThenRoth' && !ov.cyclicEnabled,
-                    `${label}: 🅡 must draw Roth after cash and must not be cyclic`);
+                    where(`${label}: 🅡 must draw Roth after cash and must not be cyclic`));
             else
                 assert(!ov.cyclicEnabled && ov.fundConversionWithCash !== true
                     && ov.rothGapFill !== 'fillCashThenRoth',
-                    `${label}: an un-prefixed row must carry no modifier`);
+                    where(`${label}: an un-prefixed row must carry no modifier`));
         }
-    });
-}
+    }
 
-test('OPT_GOLDEN: the four gates are actually exercised by the captured scenarios', () => {
     const has = (g, pfx) => g.rows.some(r => r[0].includes(pfx));
     const acaRows = g => optBaseRows(g.rows).filter(r => r[0].includes('ACA'));
 
@@ -6978,6 +7198,22 @@ test('OPT_GOLDEN: the four gates are actually exercised by the captured scenario
     // this scenario silently stopped exercising the gate it was captured for.
     assertSameList([last[0], last[1]], ['IRA Draw', '14%'], 'the off-grid row');
     assert(o.baseRowCount - a.baseRowCount === 1, 'an off-grid parameter adds exactly one base row');
+
+    // And the two families MC does not sweep, on the Optimizer's own IRA Draw grid. The mirror of
+    // the buildVariations divergence test above: together they declare the gap rather than leaving
+    // it accidental, so P35 PR 2 cannot collapse the two sweeps onto one grid without failing one
+    // side or the other. "Wider" until v11.162J, when the Optimizer's IRA Draw grid was trimmed to
+    // odd steps: MC still tries 6% and 8%, which the Optimizer no longer does, so neither grid
+    // contains the other.
+    const nrows = optBaseRows(OPT_GOLDEN.nerdknob.rows);
+    const draws = nrows.filter(r => r[3].strategy === 'fixedpct')
+                       .map(r => Math.round(r[3].iraWithdrawPct * 100));
+    assertSameList(draws, [5, 7, 9, 11, 13], 'Optimizer IRA Draw grid');
+    assertSameList(nrows.filter(r => r[0] === 'IRMAA Ceil').map(r => r[3].stratIRMAATier),
+        [0, 1, 2, 3, 4], 'IRMAA ceiling tiers');
+    // Its Fill Bracket rows pin the tier OFF, which is what keeps the two families apart.
+    assert(nrows.filter(r => r[0] === 'Fill Bracket').every(r => r[3].stratIRMAATier === -1),
+        'a Fill Bracket row must disable the IRMAA ceiling explicitly');
 });
 
 // ── P35 PR 2: the extraction, proved against the PR 1 recording ───────────────
@@ -7080,6 +7316,20 @@ test('bothOnMedicareAtStart: AND semantics, single filer, and the missing-input 
     assert(both(0, 65, true, 1952, Y) === false,    'missing inputs are not an assertion of anything');
 });
 
+test('a plan that starts in a future year opens with the brackets already aged to it', () => {
+    // simulate pre-compounds cpi/inflation/medicare over `gapYears`, the distance from the wall
+    // clock to the plan's first year, so year 0 of a 2031 plan is not priced in today's brackets.
+    // The wall clock is read inside the engine, so the expectation is computed from the same clock:
+    // a pinned year would start failing on 1 January. Both Math.max and the subtraction survived
+    // the mutation run.
+    const here = new Date().getFullYear();
+    const at = y => simulate({ ...BASE, IRA1: 1000000, cpi: 0.03, startInYear: y, startYear: y }).log[0]['-cpiFactor'];
+    assertNear(at(here), 1, 'a plan starting this year has no gap to close', 1e-9);
+    assertNear(at(here + 5), Math.pow(1.03, 5), 'five years out opens five years of CPI ahead', 1e-6);
+    // Math.max(0, ...) is the floor: a start year already behind us cannot wind the brackets back.
+    assertNear(at(here - 5), 1, 'a start year in the past is clamped, never negative', 1e-9);
+});
+
 // ── P89: the plan's first year has one definition, and the ACA age gate uses it ────────────────
 // `startAge` is the user's real-world age, so the year they ARE that age is birthyear + startAge -
 // clamped forward, because a simulation cannot start in the past. getInputs() always clamped when
@@ -7133,23 +7383,6 @@ test('P89: clamping can only make the gate MORE true, never less', () => {
     assert(flipsToTrue > 0, 'test setup: the grid must contain cases the clamp actually changes');
 });
 
-test('OPT_GOLDEN: the Optimizer sweeps the two families MC does not, on its own IRA Draw grid', () => {
-    // The mirror of the buildVariations divergence test above. Together they declare the gap
-    // rather than leaving it accidental, so P35 PR 2 cannot collapse the two sweeps onto one grid
-    // without failing one side or the other.
-    //
-    // "Wider" until v11.162J, when the Optimizer's IRA Draw grid was trimmed to odd steps: MC still
-    // tries 6% and 8%, which the Optimizer no longer does, so neither grid contains the other.
-    const rows = optBaseRows(OPT_GOLDEN.nerdknob.rows);
-    const draws = rows.filter(r => r[3].strategy === 'fixedpct')
-                      .map(r => Math.round(r[3].iraWithdrawPct * 100));
-    assertSameList(draws, [5, 7, 9, 11, 13], 'Optimizer IRA Draw grid');
-    const irmaa = rows.filter(r => r[0] === 'IRMAA Ceil');
-    assertSameList(irmaa.map(r => r[3].stratIRMAATier), [0, 1, 2, 3, 4], 'IRMAA ceiling tiers');
-    // Its Fill Bracket rows pin the tier OFF, which is what keeps the two families apart.
-    assert(rows.filter(r => r[0] === 'Fill Bracket').every(r => r[3].stratIRMAATier === -1),
-        'a Fill Bracket row must disable the IRMAA ceiling explicitly');
-});
 
 test('earliestbe: earliest year wins; ties break on Final Roth, then net wealth', () => {
     // The user's order, 2026-09-03, and Roth LEADS net wealth: `wealthLead` is five times richer

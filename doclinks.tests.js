@@ -83,86 +83,56 @@ function maps(input, expected) {
   assert(local === input, `local: "${input}" was rewritten to "${local}"`);
 }
 
-function unchanged(input) {
-  maps(input, input);
-}
+// ── 1 to 5 as one table ────────────────────────────────────────────────────
+// Every href shape the rewrite has to get right, in one test. It was thirteen tests of one or
+// two lines each, which cost thirteen entries in the count pins to say what a table says once.
+// Each row carries the reason it is here, because that is the part a list of calls loses.
+// Rows whose two halves are equal assert the href is left exactly as authored.
+const HREF_CASES = [
+    // 1. Plain .md -> .html
+    ['optimizer_changelog.md', 'optimizer_changelog.html', 'a bare .md becomes .html'],
+    ['optimizer_changelog.md#11.13bd', 'optimizer_changelog.html#11.13bd', 'a per-version anchor is preserved'],
+    ['ARCHITECTURE.md#1-module-dependency-graph', 'ARCHITECTURE.html#1-module-dependency-graph', 'a section anchor is preserved'],
+    ['ARCHITECTURE.md?v=1', 'ARCHITECTURE.html?v=1', 'a query string is preserved'],
+    ['ARCHITECTURE.md?v=1#top', 'ARCHITECTURE.html?v=1#top', 'a query string and an anchor together'],
+    ['docs/notes.md', 'docs/notes.html', 'a subdirectory keeps its prefix'],
+    ['../ARCHITECTURE.md', '../ARCHITECTURE.html', 'a parent-relative path keeps its prefix'],
+    ['./ARCHITECTURE.md#x', './ARCHITECTURE.html#x', 'an explicit ./ keeps its prefix'],
+    ['ARCHITECTURE.MD', 'ARCHITECTURE.html', 'an uppercase extension is still an extension'],
+    // 2. README.md is the index, not README.html. Verified against the live site:
+    //    /README.html returns 404, / returns the rendered README.
+    ['README.md', './', 'the root README is the site index, not a page'],
+    ['readme.md', './', 'and the name is matched without regard to case'],
+    ['standalone/README.md', 'standalone/', "a subdirectory's README is that directory"],
+    ['../README.md#faq', '../#faq', 'an anchor survives the directory rewrite'],
+    // 3. Absolute URLs untouched, EXCEPT a site-absolute path, which is ours.
+    ['https://github.com/nightskyguy/retirement_assets/edit/main/optimizer_changelog.md', null, 'the theme edit link points at the source and must stay .md'],
+    ['http://example.com/x.md', null, 'another origin is not ours to rewrite'],
+    ['//example.com/x.md', null, 'nor a protocol-relative one'],
+    ['mailto:someone@example.com', null, 'nor another scheme entirely'],
+    ['/optimizer_changelog.md#11.1370', '/optimizer_changelog.html#11.1370', 'a site-absolute path IS ours'],
+    // 4. Non-.md hrefs untouched
+    ['retirement_optimizer.html', null, 'a page is already a page'],
+    ['optimizer_changelog.html#11.13bd', null, 'even an anchored one'],
+    ['#faq', null, 'a bare fragment names this page'],
+    ['doclinks.js?v=1113c5', null, 'a script is not a document'],
+    ['', null, 'an empty href is returned as it arrived'],
+    ['notes.md.html', null, 'a path that merely CONTAINS .md is not a match'],
+    ['mdfile.txt', null, 'nor one that merely starts with md'],
+    // 5. Dot-directories untouched: Jekyll never publishes them, so both the .md and a
+    //    hypothetical .html 404 there. Do not pretend otherwise.
+    ['.planning/retirement-optimizer/task_plan.md', null, 'a dot-directory is unpublished'],
+    ['./.planning/retirement-optimizer/findings.md', null, 'including when reached through ./'],
+];
 
-// ── 1. Plain .md -> .html ──────────────────────────────────────────────────
-
-test('bare .md becomes .html', () => {
-  maps('optimizer_changelog.md', 'optimizer_changelog.html');
-});
-
-test('per-version anchor is preserved', () => {
-  maps('optimizer_changelog.md#11.13bd', 'optimizer_changelog.html#11.13bd');
-  maps('ARCHITECTURE.md#1-module-dependency-graph', 'ARCHITECTURE.html#1-module-dependency-graph');
-});
-
-test('query string is preserved', () => {
-  maps('ARCHITECTURE.md?v=1', 'ARCHITECTURE.html?v=1');
-  maps('ARCHITECTURE.md?v=1#top', 'ARCHITECTURE.html?v=1#top');
-});
-
-test('subdirectory and parent-relative paths keep their prefix', () => {
-  maps('docs/notes.md', 'docs/notes.html');
-  maps('../ARCHITECTURE.md', '../ARCHITECTURE.html');
-  maps('./ARCHITECTURE.md#x', './ARCHITECTURE.html#x');
-});
-
-test('uppercase extension is handled', () => {
-  maps('ARCHITECTURE.MD', 'ARCHITECTURE.html');
-});
-
-// ── 2. README.md is the index, not README.html ─────────────────────────────
-
-test('root README.md maps to the directory, not README.html', () => {
-  // Verified against the live site: /README.html returns 404, / returns the rendered README.
-  maps('README.md', './');
-  maps('readme.md', './');
-});
-
-test('README.md in a subdirectory maps to that directory', () => {
-  maps('standalone/README.md', 'standalone/');
-  maps('../README.md#faq', '../#faq');
-});
-
-// ── 3. Absolute URLs untouched ─────────────────────────────────────────────
-
-test('the theme edit link is left alone', () => {
-  unchanged('https://github.com/nightskyguy/retirement_assets/edit/main/optimizer_changelog.md');
-});
-
-test('other schemes and protocol-relative URLs are left alone', () => {
-  unchanged('http://example.com/x.md');
-  unchanged('//example.com/x.md');
-  unchanged('mailto:someone@example.com');
-});
-
-test('site-absolute .md is still rewritten', () => {
-  maps('/optimizer_changelog.md#11.1370', '/optimizer_changelog.html#11.1370');
-});
-
-// ── 4. Non-.md hrefs untouched ─────────────────────────────────────────────
-
-test('html, js and fragment hrefs are left alone', () => {
-  unchanged('retirement_optimizer.html');
-  unchanged('optimizer_changelog.html#11.13bd');
-  unchanged('#faq');
-  unchanged('doclinks.js?v=1113c5');
-  unchanged('');
-});
-
-test('a path that merely contains .md is not a match', () => {
-  unchanged('notes.md.html');
-  unchanged('mdfile.txt');
-});
-
-// ── 5. Dot-directories untouched ───────────────────────────────────────────
-
-test('.planning links are left as-is because Jekyll never publishes them', () => {
-  // Both the .md and a hypothetical .html 404 there, so do not pretend otherwise.
-  unchanged('.planning/retirement-optimizer/task_plan.md');
-  unchanged('./.planning/retirement-optimizer/findings.md');
+test('docHref: every href shape, rewritten on the rendered site and untouched locally', () => {
+    for (const [input, expected, why] of HREF_CASES) {
+        try {
+            maps(input, expected === null ? input : expected);
+        } catch (e) {
+            throw new Error(`${why}: ${e.message}`);
+        }
+    }
 });
 
 // ── 6. Pass-through and bad input ──────────────────────────────────────────

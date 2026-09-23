@@ -127,6 +127,29 @@ var TAXData = {
 		// NOTE these are MONTHLY values, it is NOT progressive, and these are the actual tax, not rates.
 		// Also note that brackets increase at the rate of CPI, while Medicare and IRMAA rates
 		// increase at the ANNUAL_INCREASE rate above.
+		//
+		// HOW TO COUNT THESE TIERS, because both halves are re-derived wrongly by every fresh
+		// reader (owner, 2026-09-22):
+		//
+		// 1. `-none-` is TIER ZERO, not Tier 1. No fee means no tier. Published tables are split
+		//    on this - some call the below-IRMAA band the first one - so a figure quoted from
+		//    outside is off by one until you check which convention it used. There are FIVE
+		//    surcharge tiers, numbered 1 to 5, and `stratIRMAATier` indexes them that way.
+		//
+		// 2. `{ l: Infinity }` is the LAST TIER'S ABSENT CEILING, not a sixth band. `l` is a
+		//    floor, so no MAGI ever lands on this row: `getIRMAATier` cannot return it and
+		//    `findUpperLimitByAmount` cannot charge its rate. It is the terminator FEDERAL, every
+		//    state and IRMAA all carry, and it is there so that "the ceiling of tier n" can be
+		//    written `brackets[n + 1].l` for every n including the last.
+		//
+		//    THE CONSEQUENCE IS THE PART THAT BITES: the top tier has a floor and no ceiling, the
+		//    same shape as the top federal bracket, and this file's callers aim AT a ceiling (or
+		//    just under it). Asked to fill the top tier, `computeBracketCeiling` gets Infinity and
+		//    there is nothing to fill up to. That path is handled rather than avoided - see
+		//    `nominalRateAtLimit` in optimizer_core.js, whose `limit = Inf` branch returns the
+		//    jurisdiction's top marginal rate - and the $NaN it used to print is a shipped fix.
+		//    `Retirement_Projection.html` drops both this row and `-none-` when it lists tiers to
+		//    choose from, which is the same judgement made in a different place.
 				MFJ: {
 			brackets: [
 				{ l: 218000 - 1, r: 0, tier: "-none-"}, { l: 218000, r: (2 * 202.90), tier: "Tier 1" },

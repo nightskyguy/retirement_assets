@@ -366,13 +366,19 @@
         function renderIRMAAThresholdsInfo() {
             const year = TAXData.IRMAA.YEAR;
             document.getElementById('IRMAAThresholdsHeading').textContent = `IRMAA Thresholds as of ${year} brackets:`;
-            const mfjTiers = TAXData.IRMAA.MFJ.brackets.slice(1);
-            const sglTiers = TAXData.IRMAA.SGL.brackets.slice(1);
+            // Drop `-none-` (tier zero, no surcharge to list) and the trailing l: Infinity row,
+            // which is the top tier standing in for the ceiling it does not have - listing it
+            // printed a second "Tier 5" against a threshold of infinity. Retirement_Projection.html
+            // filters the same two rows for the same reason.
+            const listable  = b => isFinite(b.l);
+            const mfjTiers = TAXData.IRMAA.MFJ.brackets.slice(1).filter(listable);
+            const sglTiers = TAXData.IRMAA.SGL.brackets.slice(1).filter(listable);
             const lines = mfjTiers.map((mfj, i) => {
                 const sgl = sglTiers[i];
                 const mfjThreshold = mfj.l === Infinity ? '∞' : `$${mfj.l.toLocaleString()}`;
                 const sglThreshold = sgl.l === Infinity ? '∞' : `$${sgl.l.toLocaleString()}`;
-                return `<strong>${mfj.tier}:</strong> MFJ ${mfjThreshold} | Single ${sglThreshold} → Surcharge: $${mfj.r.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}/year (household)`;
+                // x 12: the table stores MONTHLY dollars, and this line has always said "/year".
+                return `<strong>${mfj.tier}:</strong> MFJ ${mfjThreshold} | Single ${sglThreshold} → Surcharge: $${(mfj.r * 12).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}/year (household)`;
             });
             document.getElementById('IRMAAThresholdsBody').innerHTML = lines.join('<br>');
         }

@@ -127,97 +127,64 @@ var TAXData = {
 		// (FEDERAL.*.age above) or a state's retirement-income ageGate — separate statutes that
 		// happen to share a number today, so changing one must not move the others.
 		ELIGIBILITY_AGE: 65,
-		// Assumed annual growth of the Medicare premium and IRMAA dollar amounts, which run ahead of
-		// CPI. Never applied to the bracket thresholds, which index at CPI.
+		// Assumed annual growth of the Medicare premium and IRMAA surcharge DOLLARS. Never applied to
+		// the bracket thresholds, which index at CPI - those are two different axes, and calcIRMAA
+		// takes them as two different arguments.
 		//
-		// FOUR TOOLS LOAD THIS FILE AND THEY GROW MEDICARE THREE DIFFERENT WAYS. Checked tool by
-		// tool on 2026-09-23, after the assumption that the Optimizer reads this turned out to be
-		// wrong (owner). Every calcIRMAA caller passes its own rate, so the default below is
-		// reached only by a taxengine test:
+		// ONLY Retirement_Projection.html READS THIS. The Optimizer has its own rate, `medicareRate`
+		// in optimizer_core.js, built from cpi + inflation; standalone/IncomeTaxPlanner has a slider;
+		// standalone/irmaa_and_rmds passes 1 for today's nominal rates. Changing the number below
+		// moves one tool of four. Every calcIRMAA caller passes its own rate, so the default
+		// parameter is reached only by a test.
 		//
-		//   Retirement_Projection.html      THE ONLY LIVE READER of this constant:
-		//                                   `(1 + ANNUAL_INCREASE)^(y-1)`, so 5.6%/yr
-		//   retirement_optimizer.html       its own `medicareRate`, `(1 + cpi + inflation)` per
-		//                                   year - 5.8%/yr on the page defaults. Changing the
-		//                                   number below does NOTHING to an Optimizer run; that
-		//                                   is proven by flipping it to 0.25 and getting an
-		//                                   identical log
-		//   standalone/IncomeTaxPlanner     its own slider, "Medicare cost increase above
-		//                                   inflation", default +2.5%
-		//   standalone/irmaa_and_rmds       passes 1, deliberately: today's nominal rates only
+		// 5.6% HAS NO SOURCE. It is a modeling assumption, not a published figure, and the comment
+		// that once stood here broke off mid-sentence without naming what it was fitted to. It is
+		// defensible but not derived: the CMS standard Part B premium record gives a CAGR of 3.87%
+		// over 2010-2026 and 5.81% over 2020-2026, and the Medicare Trustees project 6.60% for the
+		// premium through 2035, decaying to about 3.8% (GDP per capita plus a fraction) in the long
+		// run.
 		//
-		// Three models for one quantity is itself the finding. Anyone changing the number below is
-		// changing one of four tools.
-		//
-		// THIS IS A MODELING ASSUMPTION, NOT A PUBLISHED FIGURE. The comment here read "based on
-		// analysis of" and stopped mid sentence; whatever that analysis was is lost, and 5.6% has
-		// no source anywhere in the tree.
-		//
-		// Both this AND the Optimizer's cpi + inflation are BELOW what Medicare has actually done,
-		// so a projection understates Medicare and IRMAA rather than overstating them:
-		//   5.60%  this constant
-		//   5.80%  the Optimizer's own rate on the page defaults, CPI 2.8 + inflation 3.0
-		//   8.80%  average annual Part B COST growth over the next five years, projected by the
-		//          2025 Medicare Trustees Report (cost, not premium, but the premium is set to
-		//          cover about a quarter of it, so the two track)
-		//   9.68%  the actual 2025 -> 2026 standard Part B premium rise, $185.00 to $202.90 (CMS,
-		//          "2026 Medicare Parts A & B Premiums and Deductibles")
-		// Over a 25-year retirement that is a premium multiplier of about 4x at 5.8% against 8x at
-		// 8.8% - less than half the cost by the end. See the note at `medicareRate` in
-		// optimizer_core.js, which is the number that would have to move.
-		//
-		// Left at 0.056 pending a deliberate re-fit: a single year is a weak anchor, premium rises
-		// are lumpy (2023 FELL), and raising either rate moves every plan that reaches an IRMAA
-		// tier. That is a modeling decision, not a correction to make in passing.
+		// DO NOT "correct" this toward a five-year Part B COST growth figure, which runs 8-9%. That
+		// is program cost over a short horizon, not the premium a retiree pays over thirty years,
+		// and the two are not comparable. Raising this moves every plan that reaches an IRMAA tier,
+		// so it is a modeling decision rather than a data refresh.
 		ANNUAL_INCREASE: 0.056,
 		standardPartB: 202.90,	// 2026 standard Part B premium (CMS); set at 25% of Part B cost for aged enrollees
 		standardPartD: 38.99,	// 2026 Part D base beneficiary premium (CMS, 6% IRA cap); plan premiums vary
 		
-		// NOTE these are MONTHLY values, it is NOT progressive, and these are the actual tax, not rates.
-		// Also note that brackets increase at the rate of CPI, while Medicare and IRMAA rates
-		// increase at the ANNUAL_INCREASE rate above.
+		// THESE ROWS ARE NOT LIKE THE OTHER TABLES IN THIS FILE, in three ways that have each caused
+		// a misreading:
 		//
-		// HOW TO COUNT THESE TIERS, because both halves are re-derived wrongly by every fresh
-		// reader (owner, 2026-09-22):
+		//   NOT A RATE.  `r` is MONTHLY DOLLARS. Every other table here carries an annual marginal
+		//                rate. calcIRMAA multiplies by 12.
+		//   NOT CUMULATIVE.  A row is the whole charge for that band, not a marginal slice added to
+		//                the bands below it.
+		//   THE SURCHARGE ALONE, not the total premium. The base Part B + Part D premium is charged
+		//                separately as `yr.medicareBase` in optimizer_core.js, so a row carrying the
+		//                total would count the base twice. Each figure is the Part B income-related
+		//                adjustment plus the Part D IRMAA for that band, per person; the MFJ rows are
+		//                those same per-person amounts doubled, because a couple pays two of them.
 		//
-		// 1. `-none-` is TIER ZERO, not Tier 1. No fee means no tier. Published tables are split
-		//    on this - some call the below-IRMAA band the first one - so a figure quoted from
-		//    outside is off by one until you check which convention it used. There are FIVE
-		//    surcharge tiers, numbered 1 to 5, and `stratIRMAATier` indexes them that way.
-		//
-		// 2. `{ l: Infinity }` is the LAST TIER'S ABSENT CEILING, not a sixth band. `l` is a
-		//    floor, so no MAGI ever lands on this row: `getIRMAATier` cannot return it and
-		//    `findUpperLimitByAmount` cannot charge its rate. It is the terminator FEDERAL, every
-		//    state and IRMAA all carry, and it is there so that "the ceiling of tier n" can be
-		//    written `brackets[n + 1].l` for every n including the last.
-		//
-		//    THE CONSEQUENCE IS THE PART THAT BITES: the top tier has a floor and no ceiling, the
-		//    same shape as the top federal bracket, and this file's callers aim AT a ceiling (or
-		//    just under it). Asked to fill the top tier, `computeBracketCeiling` gets Infinity and
-		//    there is nothing to fill up to. That path is handled rather than avoided - see
-		//    `nominalRateAtLimit` in optimizer_core.js, whose `limit = Inf` branch returns the
-		//    jurisdiction's top marginal rate - and the $NaN it used to print is a shipped fix.
-		//    `Retirement_Projection.html` drops both this row and `-none-` when it lists tiers to
-		//    choose from, which is the same judgment made in a different place.
-		// `r` IS THE SURCHARGE ALONE, NOT THE TOTAL PREMIUM, and it is MONTHLY DOLLARS, not a rate.
-		// The base Part B + Part D premium is charged separately as `yr.medicareBase` in
-		// optimizer_core.js, so a row carrying the total would count the base twice. Each figure is
-		// the Part B income-related adjustment plus the Part D IRMAA for that band, per person;
-		// the MFJ rows are the same per-person amounts doubled, because a couple pays two of them.
-		//
-		// `l` is the FIRST DOLLAR of the band. CMS states the bands as "<= 218,000" and
+		// `l` IS THE FIRST DOLLAR OF THE BAND. CMS publishes the bands as "<= 218,000" and
 		// "> 218,000 - <= 274,000", so the no-surcharge row ends AT 218,000 and Tier 1 begins at
-		// 218,001. Written out rather than as `218000 - 1`, which put every boundary a dollar low.
+		// 218,001. Write the number out; expressing it as `218000 - 1` is what put every boundary a
+		// dollar low.
 		//
-		// Corrected 2026-09-23 against the CMS fact sheet "2026 Medicare Parts A & B Premiums and
-		// Deductibles". Three faults were fixed together: the dollar-low boundaries; a Tier 3 floor
-		// of 348,000 / 174,000 where CMS publishes 342,001 / 171,001; and an amount column that
-		// carried each band's TOTAL premium one row too low, which overstated the charge by $1,400
-		// to $3,700 a year for a couple.
+		// `-none-` IS TIER ZERO. No fee, no tier. There are FIVE surcharge tiers and `stratIRMAATier`
+		// indexes them 1 to 5. Published tables disagree about this - some count the below-IRMAA band
+		// as the first - so a figure quoted from outside is off by one until you check its convention.
 		//
-		// The trailing `l: Infinity` row is the top tier's ABSENT CEILING, not a band - no MAGI
-		// reaches it. It is what lets computeBracketCeiling read `brackets[stratIRMAATier + 1].l`
-		// for every tier including the last, and its amount is never charged.
+		// THE TRAILING `l: Infinity` ROW IS TIER 5 AGAIN, standing in for the ceiling it does not
+		// have. `l` is a floor, so nothing ever lands on it and its amount is never charged; it
+		// exists so "the ceiling of tier n" can be written `brackets[n + 1].l` for every n including
+		// the last. FEDERAL and the state tables carry the same terminator. The consequence is real:
+		// asked to fill the top tier, computeBracketCeiling gets Infinity and has nothing to fill up
+		// to - handled by nominalRateAtLimit's `limit = Inf` branch, which returns the top marginal
+		// rate rather than the $NaN it once printed. Anything that LISTS tiers must drop this row and
+		// `-none-`; Retirement_Projection.html and standalone/irmaa_and_rmds.html both do.
+		//
+		// Figures are tax year 2026 from the CMS fact sheet "2026 Medicare Parts A & B Premiums and
+		// Deductibles". Check every band and both boundaries against it when refreshing.
 				MFJ: {
 			brackets: [
 				{ l: 218000, r: 0,                      tier: "-none-" },
@@ -226,7 +193,7 @@ var TAXData = {
 				{ l: 342001, r: 2 * (324.60 + 60.60),   tier: "Tier 3" },
 				{ l: 410001, r: 2 * (446.30 + 83.70),   tier: "Tier 4" },
 				{ l: 750000, r: 2 * (487.00 + 91.00),   tier: "Tier 5" },
-				{ l: Infinity, r: 2 * (487.00 + 91.00), tier: "(top tier has no ceiling)" }
+				{ l: Infinity, r: 2 * (487.00 + 91.00), tier: "Tier 5" }
 			]
 		},
 		
@@ -238,7 +205,7 @@ var TAXData = {
 				{ l: 171001, r: 324.60 + 60.60,     tier: "Tier 3" },
 				{ l: 205001, r: 446.30 + 83.70,     tier: "Tier 4" },
 				{ l: 500000, r: 487.00 + 91.00,     tier: "Tier 5" },
-				{ l: Infinity, r: 487.00 + 91.00,   tier: "(top tier has no ceiling)" }
+				{ l: Infinity, r: 487.00 + 91.00,   tier: "Tier 5" }
 			]
 		}
 	}, // IRMAA

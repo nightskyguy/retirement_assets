@@ -4602,6 +4602,19 @@ function simulate(inputs) {
     const gapYears = Math.max(0, currentYear - new Date().getFullYear());
     let cpiRate      = Math.pow(1 + inputs.cpi,      gapYears);
     let inflation    = Math.pow(1 + inputs.inflation, gapYears);
+    // THE OPTIMIZER'S MEDICARE GROWTH RATE, and it is this, not TAXData.IRMAA.ANNUAL_INCREASE,
+    // which this engine never reads. Compounded once a year below at `(1 + cpi_t + inflation)`,
+    // and handed to calcIRMAA and to `yr.medicareBase`.
+    //
+    // ON THE PAGE DEFAULTS THAT IS 5.8%/yr (CPI 2.8 + inflation 3.0), which is well under what
+    // Medicare has been doing: the 2025 -> 2026 standard Part B premium rose 9.68% ($185.00 to
+    // $202.90, CMS) and the 2025 Trustees Report projects 8.8% average annual Part B cost growth
+    // over five years. Over a 25-year retirement the premium multiplier is about 4x here against
+    // 8x at 8.8%, so Medicare and IRMAA are understated late in a long plan. Adding the two inputs
+    // is a proxy for "medical runs ahead of CPI" rather than a fitted figure.
+    //
+    // Deliberately unchanged pending a decision: raising it moves every plan that reaches an IRMAA
+    // tier. See TAXData.IRMAA.ANNUAL_INCREASE for the same numbers and who does read that one.
     let medicareRate = Math.pow(1 + inputs.cpi + inputs.inflation, gapYears);
     // P70i. A capped COLA cannot be read off cpiRate, because the cap bites YEAR BY YEAR: a run
     // of 1% years followed by a 9% year is not the same as the average. So it carries its own

@@ -14,7 +14,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="displayhelpers.js"></script>
 <script src="sharepanel.js?v=1118e3"></script>
-<script src="taxengine.js?v=1118ef"></script>
+<script src="taxengine.js?v=1118f8"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
@@ -2190,10 +2190,18 @@ function syncRothContribUI(){
   syncContribControls('rothContrib', ['ctrlRothContribEndAge','ctrlRothContribInflate']);
 }
 
-// The annual contributions above which the page shows its limit warning. Built from one member of
-// a couple contributing the maximum to a 401(k) for the IRA field, and both members for the Roth
-// field, so they are arbitrary by construction rather than an IRS figure.
-const CONTRIB_WARN_ABOVE = { IRA: 82500, ROTH: 165000 };
+// The annual contributions above which the page shows its limit warning. A DISPLAY THRESHOLD, not
+// an IRS limit: it is set well above any real one so it catches a typo - an extra zero - without
+// nagging a reader who is genuinely maxing out. Built from one member of a couple contributing the
+// maximum to a workplace plan for the IRA field, and both members for the Roth field.
+//
+// YEAR is what makes it auditable: it says when the figures were last sized against the published
+// limits, so a reader can tell a deliberately generous threshold from one nobody has looked at
+// since. For 2026 the employee deferral is $24,500 with a $8,000 catch-up at 50+ and $11,250 at
+// ages 60 to 63 (IRS Notice 2025-67); employer contributions lift the total well above that, which
+// is why the trigger sits where it does. These are round numbers on purpose - do not treat them as
+// a limit, and re-stamp YEAR when they are next checked.
+const CONTRIB_WARN_ABOVE = { YEAR: 2026, IRA: 82500, ROTH: 165000 };
 
 function syncContribLimitWarning(){
   const v = parseContribInput('contrib');

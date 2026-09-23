@@ -129,6 +129,22 @@ var TAXData = {
 		ELIGIBILITY_AGE: 65,
 		// Assumed annual growth of the Medicare premium and IRMAA dollar amounts, which run ahead of
 		// CPI. Applied to the premiums and surcharges below, never to the bracket thresholds.
+		//
+		// THIS IS A MODELING ASSUMPTION, NOT A PUBLISHED FIGURE, and it is the one number in this
+		// block with no source. The comment beside it read "based on analysis of" and stopped mid
+		// sentence; whatever that analysis was is lost. Stated plainly here rather than left to
+		// look official (2026-09-23).
+		//
+		// It is BELOW both figures it can be checked against, so Medicare and IRMAA costs in a
+		// projection are more likely understated than overstated:
+		//   9.68%  the actual 2025 -> 2026 standard Part B premium rise, $185.00 to $202.90 (CMS,
+		//          "2026 Medicare Parts A & B Premiums and Deductibles")
+		//   8.80%  average annual Part B COST growth over the next five years, projected by the
+		//          2025 Medicare Trustees Report (cost, not premium, but the premium is set to
+		//          cover about a quarter of it, so the two track)
+		// A single year is a weak anchor and premium rises are lumpy - 2023 fell - so this is left
+		// at 0.056 pending a deliberate re-fit rather than moved on one data point. Raising it
+		// moves every plan that reaches an IRMAA tier, which is a decision, not a correction.
 		ANNUAL_INCREASE: 0.056,
 		standardPartB: 202.90,
 		standardPartD: 38.99,	// 2026 Part D base beneficiary premium (CMS, 6% IRA cap); plan premiums vary

@@ -56,7 +56,9 @@ A California resident built these with [Google gemini](https://gemini.google.com
     - [ThunderHarbor.net by yanyan80](#thunderharbornet-by-yanyan80)
     - [Boldin](#boldin) - Probably the leading tool
     - [MaxiFi](#maxifi) - Lesser known tool
+    - [IncomeLabs](#incomelabs) - Priced for professionals
     - [Projection Lab](#projection-lab) - Best of Breed?!
+    - [Ready Aim Retire](#ready-aim-retire) - Not yet tried
     - [Roth Done Right (Stonewood)](#roth-done-right-stonewood)
     - [Others](#others)
       - [Number Crunch Nerds](#number-crunch-nerds) (spreadsheets)
@@ -618,7 +620,7 @@ It is definitely more "geeky" than say Boldin, but I already know it does two th
 More later.
 
 ---
-### Ready Aim Retire
+#### Ready Aim Retire
 **In Summary**: New software that I haven't used/tried yet.
 
 [![ReadyAimRetire](https://www.readyaimretire.com/images/logos/rar/rar_white_black.png)](https://www.readyaimretire.com/about) created by Greg Simmons and Ross Williams for the DIY person. Pricing is $115/yr; $1200 for "lifetime". They also target CFPs/CFAs with a $550/year plan.

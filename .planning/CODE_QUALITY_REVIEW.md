@@ -21,7 +21,7 @@ How the evidence was gathered (tools are in the session scratchpad, not the repo
 | 3 | **Half of `optimizer_core.js` is comment**: 3,435 comment-only lines against 3,429 code lines; 125 blocks of 8+ lines hold 2,199 of them. Across production files, 5,219 comment lines sit in blocks that narrate history (dates, phase ids, "used to", measurements, who asked). Every line-number cite checked (15 of 15) points at the wrong line today; eight comments name harness files that were deleted; three name identifiers that do not exist. | section 3 | The rule the repo already states (comments say what the code does now; history goes in commits) is not what the files contain. |
 | 4 | **The share panel is copied into seven pages** (`copyShareURL` byte-identical in 7 files, `toggleSharePanel` in 7, `buildShareURL` / `loadFromURL` re-implemented in 5-6). `escapeHtml` is defined twice and the weaker copy wins at load time. Five `calculateTaxes({...})` call sites in the engine pass a byte-identical 9-line argument object. | section 2 | One fix per copy; the `escapeHtml` collision is a latent attribute-injection hole. |
 | 5 | **The in-page suite is not a gate.** `optimizer_tests.js` (595 assertions at run time, incl. the only tests of `calculateWithdrawals`, `applyWithdrawals`, `combineGains`, `calculateAmortizedWithdrawal`, `computeBETR`, `getRMDPercentage`) runs only when a browser opens the page at idle. The pre-commit hook runs the node suites only. So `optimizer_ui.js` (9,538 lines) and `mc_tab.js` (2,768) have no automated gate at all, and several pure engine functions are guarded only by a badge nobody reads before a commit. | section 4 | **Fixed in the step-2 PR.** The engine groups moved to `optimizer_core.tests.js` (28 tests); the 14 `calculateWithdrawals` goldens became rules checked on every scenario, and the node suite now kills 126 of that function's 173 mutants (100 before, 107 for the page goldens; 0 lost). The hook runs the page suite headless (`.githooks/page-suite.js`, `?runtests=page`) and checks the count pins (`check-pins.js`). |
-| 6 | **Mutation testing: the node suite misses 41% of single-token changes to `optimizer_core.js`** (5,011 mutants, 2,915 killed, 18 crashed, 2,078 survived), and the misses cluster: 75% of relational-operator swaps survive, 63% of numeric changes, 31% of arithmetic sign swaps, 30% of deleted statements. 812 survivors are high-signal (a deleted balance update, a flipped sign, a negated condition). 85 of the 486 tests killed nothing; 401 took part; a greedy cover of 185 tests kills everything the suite kills, and 60 tests have no kill of their own. Whole functions have no test that reacts to any change: `attributeIncrementalTaxes` (56 of 56 survive), the IRA-inheritance and survivor-pension lines in `computeIncome`, the Roth-first third pass, the QCD "as needed" mode. | section 4 | This is the evidence behind "many tests are dead weight", with names, and the list of what is missing. |
+| 6 | **Mutation testing: the node suite misses 41% of single-token changes to `optimizer_core.js`** (5,011 mutants, 2,915 killed, 18 crashed, 2,078 survived), and the misses cluster: 75% of relational-operator swaps survive, 63% of numeric changes, 31% of arithmetic sign swaps, 30% of deleted statements. 812 survivors are high-signal (a deleted balance update, a flipped sign, a negated condition). 85 of the 486 tests killed nothing; 401 took part; a greedy cover of 185 tests kills everything the suite kills, and 60 tests have no kill of their own. Whole functions have no test that reacts to any change: `attributeIncrementalTaxes` (56 of 56 survive), the IRA-inheritance and survivor-pension lines in `computeIncome`, the Roth-first third pass, the QCD "as needed" mode. | section 4 | **Addressed in the step-6 PR, and the headline did not hold.** The ten targets that were never mutated are measured now: 4,079 further mutants, scores from 16% (`montecarlo/stats.js`) to 78% (the feedback Worker's `logic.cjs`). **60 of the 85 "killed nothing" tests kill something once their own subject is mutated**, and seven more were in the run's own `skipTests` and never ran at all. Real dead weight: the ten OPT_GOLDEN fixture tests, now one. Eleven tests added from 4.8, each verified by injecting the mutation it targets. |
 | 7 | **`Retirement_Projection.html` computes ages as of May 2026 forever**: `CURRENT_YEAR = 2026; CURRENT_MONTH = 5` (`:878-879`) feed `computeAge`. It also embeds a full copy of the federal and IRMAA tables "as a fallback" and a copy of the RMD table, and still special-cases a `'no'` state key that `TAXData` no longer has. | `Retirement_Projection.html:16-70, 878-905, 2238-2243` | Wrong age after 2026-05, and three tables that drift independently of `taxengine.js`. **The tables are gone in the step-3 PR** (the page reads `taxengine.js`, and its RMD divisors past age 100 are the IRS ones); the dates and the `'no'` branch are still open. |
 | 8 | **Dead code and dead data**: 7 functions defined and never referenced (`getEffectiveTaxRate`, `sumAccounts`, `deltaRefDescription`, `exportAllScenarios`, `effectiveStd`, `showToast`, `fmtDiff`); `TAXData` keys read by nothing (`partBDeductible`, `FLAT_RATE` in 13 state rows, `exemption_dependent`, `FPL.PLAN_YEAR`, `FPL.GUIDELINE_YEAR`); a `TEST` fixture state inside the production `TAXData`; a `yeIraWins` branch pair in `taxPaymentPlanner.js` whose both arms equal the `else`. | sections 1.2, 2, 3 | Cheap to delete; each one is a place a reader stops to wonder. |
 | 9 | **State tables stamped 2026 carry 2024/2025 figures with a note saying so**: WI `YEAR: 2025`, MT standard deductions "(2024)", NE "approx. 2025 value; verify", KY "(2025)", ME header "2025"; and `SOCIALSECURITY` uses the key `Year` where every other block uses `YEAR`, so a script that checks year stamps skips it. | `taxengine.js:94, 669, 789, 802, 872, 879, 982` | Same failure mode as #1, one state at a time. |
@@ -290,20 +290,29 @@ A mutant is one token changed in one production file, with every test re-run. "K
 | File | Mutants | Killed | Survived | Crash/timeout | Score | Survival by operator (survived/total) |
 |---|---|---|---|---|---|---|
 | `optimizer_core.js` | 5011 | 2915 | 2078 | 18 | 59% | rel 252/337, num 1014/1605, bool 30/86, arith 364/1171, stmtdel 170/558, logic 121/414, minmax 59/205, eq 30/250, ifneg 38/385 |
-| `taxengine.js` | not run in this pass (skipped for time; config ready) | | | | | |
-| `taxPaymentPlanner.js` | not run in this pass (skipped for time; config ready) | | | | | |
-| `montecarlo/mc_engine.js` | not run in this pass (skipped for time; config ready) | | | | | |
-| `montecarlo/prng.js` | not run in this pass (skipped for time; config ready) | | | | | |
-| `montecarlo/stats.js` | not run in this pass (skipped for time; config ready) | | | | | |
-| `montecarlo/rails_engine.js` | not run in this pass (skipped for time; config ready) | | | | | |
-| `feedback.js` | not run in this pass (skipped for time; config ready) | | | | | |
-| `.feedback-worker/src/logic.cjs` | not run in this pass (skipped for time; config ready) | | | | | |
-| `doclinks.js` | not run in this pass (skipped for time; config ready) | | | | | |
-| `displayhelpers.js` | not run in this pass (skipped for time; config ready) | | | | | |
+| `taxengine.js` | 1358 | 636 | 720 | 2 | 47% | num 631/1007, arith 34/163, ifneg 5/39, rel 23/36, minmax 2/27, logic 11/25, stmtdel 1/24, eq 7/24, bool 6/13 |
+| `taxPaymentPlanner.js` | 2112 | 911 | 1197 | 4 | 43% | num 404/561, arith 192/498, stmtdel 233/311, rel 146/169, logic 72/158, ifneg 50/156, eq 56/150, bool 37/71, minmax 7/38 |
+| `montecarlo/mc_engine.js` | 485 | 186 | 299 | 0 | 38% | arith 84/134, num 97/119, stmtdel 25/65, ifneg 25/51, rel 40/48, eq 11/32, logic 10/22, bool 3/8, minmax 4/6 |
+| `montecarlo/prng.js` | 343 | 231 | 108 | 4 | 67% | arith 31/127, num 40/92, stmtdel 7/40, rel 16/25, minmax 1/19, ifneg 4/17, logic 6/13, eq 3/10 |
+| `montecarlo/stats.js` | 83 | 13 | 70 | 0 | 16% | num 28/30, arith 15/21, stmtdel 13/15, minmax 7/8, rel 4/4, ifneg 1/2, eq 1/2, logic 1/1 |
+| `montecarlo/rails_engine.js` | 320 | 175 | 142 | 3 | 55% | num 44/80, arith 31/80, logic 14/33, eq 3/31, bool 21/29, rel 19/26, ifneg 5/24, stmtdel 4/12, minmax 1/5 |
+| `feedback.js` | 458 | 133 | 325 | 0 | 29% | stmtdel 125/139, logic 49/79, num 52/77, ifneg 35/60, eq 24/48, bool 20/23, arith 10/21, rel 5/6, minmax 5/5 |
+| `.feedback-worker/src/logic.cjs` | 332 | 258 | 72 | 2 | 78% | num 22/74, ifneg 1/59, logic 16/55, eq 2/50, stmtdel 6/36, arith 5/24, rel 16/18, bool 3/15, minmax 1/1 |
+| `doclinks.js` | 93 | 45 | 48 | 0 | 48% | ifneg 10/22, eq 7/20, num 6/16, logic 6/13, stmtdel 12/13, arith 2/4, bool 3/3, rel 2/2 |
+| `displayhelpers.js` | 152 | 69 | 83 | 0 | 45% | num 16/43, ifneg 18/29, stmtdel 18/22, eq 12/21, rel 7/14, logic 7/11, arith 0/7, bool 5/5 |
 
 Operator keys: num = numeric literal changed; rel = `<`/`<=`/`>`/`>=` swapped; eq = `===`/`!==` flipped; logic = `&&`/`||` swapped; arith = `+`/`-`/`*`/`/` swapped; minmax = `Math.min`/`Math.max` swapped; bool = `true`/`false` flipped; ifneg = an `if` condition negated; stmtdel = one assignment or call statement deleted.
 
 ### 4.2 Tests that killed no mutant in any run
+
+> **Corrected in the step-6 PR, and the table below is left as it was written so the correction is
+> legible.** Two things make most of these rows wrong. First, only `optimizer_core.js` had been
+> mutated; the other ten targets are measured now (4.1), and **60 of the 85 kill something once
+> their own subject is mutated** - up to 74 prng mutants for one stress-bank test, 41 taxengine
+> mutants for the SALT indexing test. Second, the run's own `skipTests` holds seven test names, and
+> the sandbox patch removes a skipped name from the TESTS array entirely, so it can appear in
+> neither `passed` nor `failed`. **All seven are in this table.** They killed nothing because they
+> were switched off. See 4.7 for what that does to the nominations.
 
 
 **optimizer_core.tests.js**: 486 tests, 85 killed nothing; 2915 mutants were killed by this suite, 401 tests took part, and a greedy cover of **185 tests** kills every one of them.
@@ -575,6 +584,29 @@ Mutants only the in-page suite caught (first 25):
 | 632 | `calculateWithdrawals` | arith:-→+ | `const grossNeeded = netRemaining / (1 - taxRate);` |
 
 ### 4.7 Reading 4.2 honestly: which of the 85 are dead weight
+
+> **Three of the four DROP nominations below did not survive the step-6 PR.**
+> - `breakEvenHeirsRate: the predicate is monotonic` was nominated because it "failed on none of the
+>   5,011 mutants". It was in that run's `skipTests`, so it ran on none of them. Re-run with nothing
+>   skipped over all 53 mutants in the predicate and its search, it kills one, which a sibling also
+>   kills - so the numbers do not defend it either. But mutation cannot express what it guards: no
+>   single-token change makes the predicate non-monotonic without breaking a sibling, while a
+>   rewrite of the scoring could, and the siblings would not notice. KEPT, and made to sample the
+>   predicate directly instead of inferring it through a whole binary search per rate - the property
+>   its name claims, without the 2.6 s or the `test.slow`.
+> - `P126` is a tombstone "that can go with the fold". The folds have not gone: `GK-FOLD-BEGIN` is
+>   still in `optimizer_ui.js` twice and in `optimizer_tests.js`. KEPT until they do.
+> - `ELIGIBILITY_AGE: the harness restores the constant` is called a test of the test file. Its
+>   subject is live: `withEligibilityAge` writes `TAXData.IRMAA.ELIGIBILITY_AGE` and restores it in a
+>   `finally`, and a leak would change every later scenario rather than fail anywhere. KEPT, 0 ms.
+>   Its sibling `the constant exists and ships at 65` kills 4 taxengine mutants.
+>
+> The MERGE proposals held and are done: the ten OPT_GOLDEN fixture tests are one, and doclinks is
+> 27 pins to 15. **Section 4.8 also asks for one test that cannot be written:** `resolveHousehold`'s
+> `if (!yr.alive1 && !yr.alive2) return false` cannot run, because the horizon is
+> `max(birthyear1 + die1, birthyear2 + die2)` and `alive` is `age <= die`, so both spouses are alive
+> through the last year of it. Flipped to `return true`, all 525 tests still pass. What replaced it
+> pins the horizon itself, and records why the guard is unkillable.
 
 Only `optimizer_core.js` was mutated in full. A test whose subject is another file killed nothing here for the wrong reason, and the secondary targets were skipped to keep this review to one day (the configs are ready; each is 2-10 minutes of local CPU). Splitting the 85:
 

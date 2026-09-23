@@ -57,6 +57,9 @@ const isQCDEligible = (...a) => _engine().isQCDEligible(...a);
 const rmdStartAge = (...a) => _engine().rmdStartAge(...a);
 const rmdDivisor = (...a) => _engine().rmdDivisor(...a);
 const calculateTaxableSocialSecurity = (...a) => _engine().calculateTaxableSocialSecurity(...a);
+const getRateBracket = (...a) => _engine().getRateBracket(...a);
+const getIRMAATier = (...a) => _engine().getIRMAATier(...a);
+const getQCDLimit = (...a) => _engine().getQCDLimit(...a);
 
 let passed = 0, failed = 0;
 
@@ -1257,6 +1260,101 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 		// stateAGI = 30000 - 26000 = 4000; std 3000 -> taxable 1000
 		assertEqual(result.stateAGI, 4000, 'AL stateAGI: pension fully excluded, IRA capped at $6,000');
 		assertEqual(result.stateTax, 30, 'AL state tax on the remaining $1,000 taxable (2%*500 + 4%*500)');
+	});
+
+	// ============================================================================
+	// TEST CASE 24: the Social Security taxation tiers, called directly
+	// ============================================================================
+	// Every other test here reaches these tiers through calculateTaxes, which means a change to
+	// the thresholds or the two rates shows up only as a different total tax. This states the
+	// statute itself: below the first threshold none of the benefit is taxable, between the two
+	// thresholds half of the excess is, above the second 85% of the further excess is, and the
+	// taxable share is capped at 85% of the benefit however large the income gets.
+	test('TEST CASE 24: Social Security taxability - both thresholds, both rates, both statuses', () => {
+		const ss = calculateTaxableSocialSecurity;
+		// MFJ thresholds are $32,000 and $44,000; SGL $25,000 and $34,000. Benefit $40,000 MFJ.
+		assertEqual(ss('MFJ', 30000, 40000), 0, 'MFJ below $32,000: none of the benefit is taxable');
+		assertEqual(ss('MFJ', 32000, 40000), 0, 'MFJ exactly at the first threshold is still zero');
+		// 0.50 x (40,000 - 32,000) = 4,000, which is under 0.50 x 40,000 so the excess rule binds.
+		assertEqual(ss('MFJ', 40000, 40000), 4000, 'MFJ in the 50% band: half the excess over $32,000');
+		// 0.50 x (44,000 - 32,000) = 6,000, then 0.85 x (60,000 - 44,000) = 13,600. Total 19,600.
+		assertEqual(ss('MFJ', 60000, 40000), 19600, 'MFJ in the 85% band: the 50% band in full, then 85% of the rest');
+		// The cap: 0.85 x 40,000 = 34,000, and no amount of income taxes more of the benefit.
+		assertEqual(ss('MFJ', 200000, 40000), 34000, 'never more than 85% of the benefit itself');
+		// The same provisional income, filed single, is taxable - which is the whole MFJ/SGL point.
+		assertEqual(ss('SGL', 30000, 20000), 2500, 'SGL at $30,000: half the excess over $25,000');
+		assertEqual(ss('SGL', 24999, 20000), 0, 'SGL below $25,000: none of it');
+		// 0.50 x (34,000 - 25,000) = 4,500, then 0.85 x (50,000 - 34,000) = 13,600. Total 18,100,
+		// which is above 0.85 x 20,000 = 17,000, so the cap is what is returned.
+		assertEqual(ss('SGL', 50000, 20000), 17000, 'SGL: the 85% cap binds before the band arithmetic does');
+	});
+
+	// ============================================================================
+	// TEST CASE 25: getIRMAATier and getQCDLimit
+	// ============================================================================
+	// Both are exported and neither had a direct test in any suite. getIRMAATier names the tier a
+	// MAGI falls in; getQCDLimit indexes the per-person annual limit by the cumulative CPI factor.
+	test('TEST CASE 25: the IRMAA tier LABEL names the band whose surcharge is charged', () => {
+		// getIRMAATier and calcIRMAA read the same ladder through different helpers -
+		// findBracketIndex and findUpperLimitByAmount - so an off-by-one in either would print a
+		// tier beside a surcharge belonging to a different one. Walking every band, on both sides
+		// of every floor, is what pins them together.
+		for (const status of ['MFJ', 'SGL']) {
+			const brks = getRateBracket('IRMAA', status);
+			for (let i = 0; i < brks.length; i++) {
+				if (!isFinite(brks[i].l)) continue;        // see TEST CASE 25c
+				// Probe the floor and the middle of the band. NOT floor + a fixed amount: the
+				// no-surcharge row's floor is one dollar under the first surcharge floor, so any
+				// fixed step off it lands in the next band.
+				const ceil = brks[i + 1] ? brks[i + 1].l : Infinity;
+				const mid = isFinite(ceil) ? Math.floor((brks[i].l + ceil) / 2) : brks[i].l + 1e6;
+				for (const magi of [brks[i].l, mid]) {
+					assertEqual(getIRMAATier(magi, status, 1), brks[i].tier,
+						`${status} MAGI ${magi} is in ${brks[i].tier}`);
+					assertEqual(findUpperLimitByAmount('IRMAA', status, magi, 1).rate, brks[i].r,
+						`${status} MAGI ${magi} is charged the ${brks[i].tier} surcharge`);
+				}
+				if (i > 0) assertEqual(getIRMAATier(brks[i].l - 1, status, 1), brks[i - 1].tier,
+					`${status}: a dollar under the ${brks[i].tier} floor is still ${brks[i - 1].tier}`);
+			}
+			// The floors index, so the same MAGI buys a lower tier once they have inflated.
+			assertEqual(getIRMAATier(brks[1].l, status, 1.10), brks[0].tier,
+				`${status}: with the floors 10% higher, a MAGI at last year's floor is back under the line`);
+		}
+	});
+
+	test('TEST CASE 25c: the top tier has a floor and no ceiling, and the l:Infinity row is not a band', () => {
+		// Counting these tiers wrongly is a standing trap, so the shape is pinned here as well as
+		// described at the table (taxengine.js, TAXData.IRMAA). `-none-` is tier ZERO - no fee, no
+		// tier - and there are five surcharge tiers after it. The final `{ l: Infinity }` row is
+		// the last tier's ABSENT CEILING, the terminator every table in this file carries so that
+		// "the ceiling of tier n" can be written brackets[n + 1].l for every n; `l` is a floor, so
+		// no MAGI is ever in it. An income above the top floor is in tier 5 and pays tier 5.
+		for (const status of ['MFJ', 'SGL']) {
+			const brks = getRateBracket('IRMAA', status);
+			assertEqual(brks[0].tier, '-none-', `${status}: the first row is the no-surcharge band`);
+			assertEqual(brks[0].r, 0, `${status}: and it charges nothing, which is why it is tier zero`);
+			assertEqual(isFinite(brks[brks.length - 1].l), false,
+				`${status}: the last row is the terminator, not a band`);
+			const surcharge = brks.slice(1).filter(b => isFinite(b.l));
+			assertEqual(surcharge.length, 5, `${status}: five surcharge tiers, numbered 1 to 5`);
+			const top = surcharge[surcharge.length - 1];
+			assertEqual(getIRMAATier(9e9, status, 1), top.tier,
+				`${status}: an unbounded income is in the top tier, never in the terminator`);
+			assertEqual(findUpperLimitByAmount('IRMAA', status, 9e9, 1).rate, top.r,
+				`${status}: and pays the top tier's surcharge`);
+			// The consequence: asked for the ceiling of the top tier, the ladder has none to give.
+			// Callers that aim at a ceiling must cope with Infinity rather than assume a number.
+			assertEqual(brks[surcharge.length + 1].l, Infinity,
+				`${status}: the ceiling of the top tier is Infinity, which is the thing to handle`);
+		}
+	});
+
+	test('TEST CASE 25b: getQCDLimit is the table amount times the cumulative CPI factor', () => {
+		// cpiFactor is the CUMULATIVE index, not a rate - the trap the function\'s own comment names.
+		assertEqual(getQCDLimit(1), TAXData.QCD.AMOUNT, 'an unindexed year is the table amount');
+		assertEqual(getQCDLimit(1.03), TAXData.QCD.AMOUNT * 1.03, 'one year at 3% is one multiplication');
+		assertEqual(getQCDLimit(), TAXData.QCD.AMOUNT, 'a missing factor is 1, never NaN');
 	});
 
 // ── Runner ───────────────────────────────────────────────────────────────────────────────────

@@ -445,13 +445,6 @@ function deltaRefSuffix() {
     return OptimizerState.compareRow ? ' vs ⚖' : '';
 }
 
-function deltaRefDescription() {
-    const row = OptimizerState.compareRow;
-    return row
-        ? `the ⚖ comparison row (${row._strategyLabel}${row._paramLabel ? ' - ' + row._paramLabel : ''})`
-        : 'the ⚓ baseline (the strongest plan with no Roth conversions and no cyclic brokerage maneuvering)';
-}
-
 // The ⚖ glyph. Highlighted on whichever row the Δ columns are CURRENTLY measured against, which is
 // the ⚓ baseline until something else is picked -- so the table opens already showing where the
 // comparison point is, rather than looking like the feature is switched off.
@@ -8305,38 +8298,6 @@ function importScenario() {
 
     input.click();
 }
-
-/**
- * Exports all scenarios from new storage to single JSON file
- * Downloads with date-stamped filename (format: all-scenarios-YYYY-MM-DD.json)
- * Shows warning if no scenarios exist, otherwise shows success or error message
- * No parameters
- */
-function exportAllScenarios() {
-    try {
-        const scenarios = getSavedScenarios();
-
-        if (Object.keys(scenarios).length === 0) {
-            showMessage('No scenarios to export.', 'warning');
-            return;
-        }
-
-        const dataStr = JSON.stringify(scenarios, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(dataBlob);
-
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `all-scenarios-${new Date().toISOString().split('T')[0]}.json`;
-        link.click();
-
-        URL.revokeObjectURL(url);
-        showMessage(`All scenarios exported successfully.`, 'success');
-    } catch (error) {
-        showMessage(`Failed to export scenarios: ${error.message}`, 'error');
-    }
-}
-
 
 // Scan the TAXData for state tax tables and add them to the choice list.
 function generateStateOptions() {

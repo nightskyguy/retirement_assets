@@ -123,7 +123,6 @@ var TAXData = {
 		ANNUAL_INCREASE: 0.056,
 		standardPartB: 202.90,
 		standardPartD: 38.99,	// 2026 Part D base beneficiary premium (CMS, 6% IRA cap); plan premiums vary
-		partBDeductible: 283,
 		
 		// NOTE these are MONTHLY values, it is NOT progressive, and these are the actual tax, not rates.
 		// Also note that brackets increase at the rate of CPI, while Medicare and IRMAA rates
@@ -168,7 +167,7 @@ var TAXData = {
 	//     AZ  2.5%    CO  4.4%    GA  4.99%  IA  3.8%  ID  5.3% (with income threshold)
 	//     IL  4.95%   IN  3.05%   KY  4.0%   MA  5.0%
 	//     MI  4.25%   NC  3.99%   NE  4.55%  PA  3.07%
-	//   Scheduled/possible reductions (FLAT_RATE field is metadata; brackets govern):
+	//   Scheduled or possible reductions (the brackets govern; these are notes on where they head):
 	//     GA — 4.99%(2026) → 4.89%(2027) → 4.79%(2028), targeting 3.99%
 	//     NE — LB754 phase-down continuing toward 3.99% target
 	//     IN — HEA 1002/1001 phase-down ongoing
@@ -309,17 +308,14 @@ var TAXData = {
 			mode: 'cap', types: ['pension', 'ira'],
 			ageGateTiers: [ { minAge: 62, capPerPerson: 35000 }, { minAge: 65, capPerPerson: 65000 } ]
 		},
-		FLAT_RATE: {2026: 0.0499, 2027: 0.0489, 2028: 0.0479 }, // Decreasing 0.1%/yr (10bp) toward 3.99%
 		MFJ: {
 			std: 24000,  // Increases to $30,000 in 2027 per HB 463
-			exemption_dependent: 4000,  // $4,000 per dependent
 			brackets: [
 				{ l: Infinity, r: 0.0499 }  // Single flat rate
 			]
 		},
 		SGL: {
 			std: 12000,  // Increases to $15,000 in 2027 per HB 463
-			exemption_dependent: 4000,
 			brackets: [
 				{ l: Infinity, r: 0.0499 }
 			]
@@ -359,7 +355,6 @@ var TAXData = {
 		// IL Schedule M subtracts federally-taxed retirement income (qualified plans, IRA distributions,
 		// govt/RR/military pensions). Assumes retirees are past plan-qualification age.
 		RETIREMENT_EXCLUSION: { mode: 'full', types: ['pension', 'ira'] },
-		FLAT_RATE: 0.0495,  // 4.95% flat rate for all filers (unchanged)
 		MFJ: {
 			std: 5850,  // Illinois personal exemption: 2 × $2,925 per person
 			exemption: 5850,  // $2,925 per person (up from $2,850 in 2025)
@@ -409,7 +404,6 @@ var TAXData = {
 		NOTE: 'Iowa fully exempts pension, IRA, 401(k), and other retirement-plan income for filers 55+ (Social Security is already separately exempt). Most Iowa school districts also levy a surtax (a percentage of the Iowa income tax owed, up to about 20%), plus a small emergency-services surtax; because Iowa still taxes interest, dividends, and capital gains, this calculator understates tax by that surtax on the investment-income portion for residents of surtax districts.',
 		SSTaxation: 0.00,
 		RETIREMENT_EXCLUSION: { mode: 'full', types: ['pension', 'ira'], ageGate: 55 },
-		FLAT_RATE: 0.038,
 		MFJ: {
 			std: 'FEDERAL',
 			brackets: [
@@ -431,7 +425,6 @@ var TAXData = {
 		YEAR: 2026,  // Flat 5% rate; personal exemption $4,400/person
 		NOTE: 'Retirement income: Massachusetts fully exempts pensions from federal, state, and municipal government employers (private pensions, IRA, and 401(k) distributions remain taxable at the flat 5% rate). This calculator does not apply that exclusion, so tax may be overstated for retirees with a government pension.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
-		FLAT_RATE: 0.05,
 		MFJ: {
 			std: 8800,  // 2 × $4,400 personal exemption
 			exemption: 8800,
@@ -503,7 +496,6 @@ var TAXData = {
 		NOTE: 'Retirement income: 2026 is the final phase-in year of Michigan\'s retirement-income tax relief — pension/IRA/401(k) income is exempt up to $67,610/person ($135,220 for a married couple). Filers born before 1946 have unlimited exemption, but only for government pensions; this calculator can\'t tell government from private pensions, so it only grants the unlimited exemption when both spouses were born before 1946, and applies the standard per-person cap otherwise. Tax may be overstated for a household born before 1946 with a private pension and only one qualifying spouse. Separately, about two dozen Michigan cities (Detroit at 2.4%, most others near 1%) levy a resident income tax that exempts pension and Social Security income but does tax interest, dividends, and capital gains; this calculator does not include it, so total tax is understated for residents of those cities who hold taxable brokerage income.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: { mode: 'cap', types: ['pension', 'ira'], capPerPerson: 67610, birthYearFullExemptBefore: 1946 },
-		FLAT_RATE: 0.0425,  // 4.25% — general fund did not exceed inflation so no rate reduction triggered
 		MFJ: {
 			std: 5600,
 			brackets: [
@@ -552,7 +544,6 @@ var TAXData = {
 		YEAR: 2026,
 		NOTE: 'Retirement income: North Carolina fully exempts government and military pension income for retirees with 5+ years of service credit as of August 12, 1989 (the Bailey settlement); other retirement income is fully taxable. This calculator does not apply that exclusion, so tax may be overstated for qualifying retirees.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
-		FLAT_RATE: 0.0399,  // 3.99% flat rate — final step in phasedown enacted by NC law
 		MFJ: {
 			std: 25500,
 			brackets: [
@@ -598,7 +589,6 @@ var TAXData = {
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		// PA does not tax distributions from eligible employer plans or IRAs after 59½/retirement.
 		RETIREMENT_EXCLUSION: { mode: 'full', types: ['pension', 'ira'] },
-		FLAT_RATE: 0.0307,  // 3.07% flat rate (unchanged since 2004)
 		MFJ: {
 			std: 0,  // Pennsylvania has no standard deduction
 			brackets: [
@@ -733,7 +723,6 @@ var TAXData = {
 		YEAR: 2026,
 		NOTE: 'Retirement income: Arizona exempts up to $2,500/person of government pension income (Arizona, other states, or the U.S. government), and fully exempts military retirement pay. Private pension, IRA, and 401(k) income remain fully taxable. This calculator does not apply the government-pension exclusion, so tax may be overstated for qualifying retirees.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
-		FLAT_RATE: 0.025,
 		MFJ: {
 			std: 'FEDERAL',  // AZ uses federal standard deduction
 			brackets: [
@@ -756,7 +745,6 @@ var TAXData = {
 		NOTE: 'Retirement income: as of 2026, Colorado removed all dollar caps on the pension/annuity/IRA subtraction for filers 55+ (the prior $20,000 age 55–64 / $24,000 age 65+ caps no longer apply). Fully exempt once at least one spouse is 55 or older. Social Security: Colorado is treated here as not taxing benefits, which is correct from age 65, where the subtraction is unlimited. From 55 to 64 the full subtraction applies only below $75,000 AGI (single) or $95,000 (joint) and is capped at $20,000 above that, so tax is understated for a Colorado retiree in that age band with income over the limit.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: { mode: 'full', types: ['pension', 'ira'], ageGate: 55 },
-		FLAT_RATE: 0.044,
 		MFJ: {
 			std: 'FEDERAL',  // CO uses federal standard deduction
 			brackets: [
@@ -778,7 +766,6 @@ var TAXData = {
 		YEAR: 2026,
 		NOTE: 'Indiana county income taxes (roughly 0.5% to 3% depending on county) apply to Indiana adjusted gross income, including IRA/401(k) distributions, interest, dividends, and capital gains, and all 92 counties levy one; this calculator does not include them, so total tax is understated for essentially every Indiana resident.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
-		FLAT_RATE: 0.0305,
 		MFJ: {
 			std: 2000,  // $1,000 personal exemption per taxpayer
 			brackets: [
@@ -801,7 +788,6 @@ var TAXData = {
 		NOTE: 'Retirement income: Kentucky exempts up to $31,110/person of pension/IRA/401(k) income.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: { mode: 'cap', types: ['pension', 'ira'], capPerPerson: 31110 },
-		FLAT_RATE: 0.04,
 		MFJ: {
 			std: 3270,  // KY standard deduction per return (same amount for all filing statuses, 2025)
 			brackets: [
@@ -1020,13 +1006,6 @@ var TAXData = {
 		},
 	}, // WISCONSIN
 
-	TEST: {
-		// Data used for testing only.
-		YEAR: 2026,
-		SSTaxation: 0.50,  // Taxes SS at 50%
-		MFJ: { std: 100, brackets: [{l: 1000, r: 0.1, nr: 0.1},  {l: 2000, r: 0.2, nr: 0.15}, {l: 40000, r: 0.8, nr: 0.4} ]	},
-		SGL: { std: 100/2, brackets: [{l: 1000/2, r: 0.1, nr: 0.1},  {l: 2000/2, r: 0.2, nr: 0.15}, {l: 40000/2, r: 0.8, nr: 0.45} ]}
-	}
 
 }; // TAXdata
 
@@ -1035,7 +1014,6 @@ var TAXData = {
 // so any future per-state divergence (e.g. NH's now-repealed interest/dividends tax) is safe.
 const NO_TAX_SHELL = {
     YEAR: 2026,
-    FLAT_RATE: 0.0,
     SSTaxation: 0.00,  // no tax on Social Security benefits
     BasisStepUp: 0.50, // common law; the 3 community-property no-tax states override below
     MFJ: { std: 0, brackets: [ { l: Infinity, r: 0 } ] },

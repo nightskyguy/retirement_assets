@@ -451,25 +451,6 @@ function calculateWithdrawals(balances, gapAmount, withdrawStrategy) {
         netTargets[account] = weight > 0 ? (originalGapAmount * weight) : 0;
     }
 
-    // Helper function to calculate effective tax rate for an account
-    function getEffectiveTaxRate(account, grossWithdrawal) {
-        if (account !== 'Brokerage') {
-            // For non-brokerage accounts, use the full tax rate
-            return taxrates[order.indexOf(account)] ?? 0;
-        }
-
-        // For brokerage, only tax the capital gains portion
-        const brokerageInfo = calculateBrokerageWithdrawal(
-            grossWithdrawal,
-            balances.Brokerage,
-            balances.BrokerageBasis
-        );
-
-        // Effective tax rate = (capital gains / total withdrawal) * tax rate
-        const taxRate = taxrates[order.indexOf(account)] ?? 0;
-        return grossWithdrawal > 0 ? (brokerageInfo.capitalGains / grossWithdrawal) * taxRate : 0;
-    }
-
     // Helper function to perform a withdrawal from an account
     function performWithdrawal(account, grossWithdrawal, accountIndex) {
         if (grossWithdrawal <= 0.01) return { netWithdrawal: 0, tax: 0 };
@@ -729,10 +710,6 @@ function timingShift(amount, rate, shiftMonths, postMonths) {
     return amount * (growthFactor(rate, shiftMonths) - 1) * growthFactor(rate, postMonths);
 }
 
-
-function sumAccounts(obj, keys = ['IRA', 'IRA1', 'IRA2', 'Roth', 'Brokerage', 'Cash']) {
-    return keys.reduce((sum, key) => sum + (obj[key] ?? 0), 0);
-}
 
 /////////////////////////////
 
@@ -3217,18 +3194,12 @@ function resolveResidualAndForcedIRA(sim, yr) {
             // wanted a seventh. Barring it strands spending the plan promised, in IRMAA Ceiling
             // plans above all, where Brokerage is the only money left.
             //
-            // Only 'fillRothThenCash' changes this pass. It is already Cash then Roth, which IS the
-            // 'fillCashThenRoth' order, so that mode leaves it untouched; neither carries cap gains,
-            // so this only picks which tax-free account drains first.
-            let _thirdGap = residualGap;
-            if (inputs.rothGapFill === 'fillRothThenCash' && yr.curBalances.Roth > 0) {
-                const rothFirst3 = calculateWithdrawals(yr.curBalances, _thirdGap,
-                    { order: ['Roth'], weight: [1], taxrate: [0] });
-                yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, rothFirst3]);
-                applyWithdrawals(yr.curBalances, rothFirst3);
-                _thirdGap = rothFirst3.shortfall ?? 0;
-            }
-            const thirdWd = calculateWithdrawals(yr.curBalances, _thirdGap,
+            // `rothGapFill` does NOT reach this pass, in either position. It is already Cash then
+            // Roth, which is the 'fillCashThenRoth' order; and 'fillRothThenCash' drains Roth in the
+            // SECOND pass, so a year that gets this far has either no Roth left or no residual to
+            // fund with it. A Roth-first branch here was measured as unreachable-with-effect and
+            // removed in 11.18e4.
+            const thirdWd = calculateWithdrawals(yr.curBalances, residualGap,
                 { order: ['Cash'], weight: [1], taxrate: [0] });
             yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, thirdWd]);
             applyWithdrawals(yr.curBalances, thirdWd);
@@ -5094,8 +5065,8 @@ function bestConversionStopYear(inputs, opts) {
                    _cfSuppressConversions: false, _cfSuppressConversionsFromYear: undefined };
     const probe = simulate({ ...base, computeOC: false });
     const n = probe.log.length;
-    const start = probe.log[0].year;
     if (n === 0) return null;
+    const start = probe.log[0].year;
     const scoreOf = (res) => afterTaxWealthOfLogRow(res.log[res.log.length - 1], rate);
 
     const runAtCutoff = (cut, computeOC) => {
@@ -5255,6 +5226,8 @@ function bengenRate(years) {
             return r0 + (r1 - r0) * (years - y0) / (y1 - y0);
         }
     }
+    // Only reachable for a non-finite `years`: every comparison above is then false. Returns
+    // the 30-year knot rather than undefined, so a bad input cannot put NaN into a spend menu.
     return 0.045;
 }
 

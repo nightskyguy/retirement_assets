@@ -311,7 +311,6 @@ const TaxPaymentPlanner = (() => {
       safeHarborHighIncomeThreshold: 150000,
       safeHarborAlways110: false,
       quarterlySchedule: _STD_Q,
-      ocWeightedMonths: 8.0,
       paymentNote: `Pay ${name} estimated tax to the state revenue department.`,
       paymentUrl: null,
     }, extra);
@@ -326,7 +325,6 @@ const TaxPaymentPlanner = (() => {
       safeHarborHighIncomeThreshold: null,
       safeHarborAlways110: false,
       quarterlySchedule: [],
-      ocWeightedMonths: 0,
       paymentNote: `${name} has no state income tax — no estimated payments or state withholding required.`,
       paymentUrl: null,
     };
@@ -379,7 +377,6 @@ const TaxPaymentPlanner = (() => {
         { month: 6, day: 15, w: 0.40, label: 'Q2 (Apr–May)', nextYear: false },
         { month: 1, day: 15, w: 0.30, label: 'Q4 (Sep–Dec)', nextYear: true  },
       ],
-      ocWeightedMonths: 8.5,
       paymentNote: 'Pay via FTB Web Pay at ftb.ca.gov. California uses a 30%/40%/30% schedule — there is NO Q3 (September) payment. High-income threshold for 110% safe harbor is $1,000,000 AGI (not $150K).',
       paymentUrl: 'https://www.ftb.ca.gov/pay/index.html',
     }),
@@ -391,7 +388,6 @@ const TaxPaymentPlanner = (() => {
         { month: 9,  day: 15, w: 0.25, label: 'Q3 (Jun–Aug)', nextYear: false },
         { month: 12, day: 15, w: 0.25, label: 'Q4 (Sep–Nov)', nextYear: false },
       ],
-      ocWeightedMonths: 8.25,
       paymentNote: 'Pay via Revenue Online at oregon.gov/dor. IMPORTANT: Oregon Q4 estimated tax is due December 15 of the tax year (not January 15 of the following year). Oregon also taxes Social Security benefits.',
       paymentUrl: 'https://revenueonline.dor.oregon.gov/',
     }),
@@ -403,7 +399,6 @@ const TaxPaymentPlanner = (() => {
         { month: 9, day: 15, w: 0.25, label: 'Q3 (Jun–Aug)', nextYear: false },
         { month: 1, day: 15, w: 0.25, label: 'Q4 (Sep–Dec)', nextYear: true  },
       ],
-      ocWeightedMonths: 7.875,
       paymentNote: 'Pay via Virginia Tax Online at tax.virginia.gov. IMPORTANT: Virginia Q1 is due May 1 (not April 15).',
       paymentUrl: 'https://www.tax.virginia.gov/',
     }),
@@ -1214,11 +1209,9 @@ const TaxPaymentPlanner = (() => {
       strategy = 'all_quarterly';
     } else if (allDrawsTotal === 0 && p.ira1RothConversion === 0 && p.ira2RothConversion === 0) {
       strategy = 'all_quarterly';
-    } else if (yeIraWins && iraWCap >= totalTax) {
-      strategy = 'ye_ira_full';
-    } else if (yeIraWins) {
-      strategy = 'ye_ira_partial';
     } else {
+      // NOT gated on yeIraWins: the choice is the same either way, and the priced comparison
+      // table below is what judges whether year-end IRA withholding was the better plan.
       strategy = iraWCap >= totalTax ? 'ye_ira_full' : 'ye_ira_partial';
     }
     const usesIraWithholding = strategy === 'ye_ira_full' || strategy === 'ye_ira_partial';
@@ -2659,7 +2652,7 @@ const TaxPaymentPlanner = (() => {
       // fmt$ is Math.abs by design, so a plan whose Roth growth outweighs its costs printed a gain
       // as a cost here while the table twelve lines below printed it correctly as negative.
       h += badge(t < -0.5 ? 'First-year net gain' : 'First-year cost',
-                 (t < -0.5 ? '' : '') + fmt$(t), '#596A2F');
+                 fmt$(t), '#596A2F');
       // Ranking is by first-year cost, which does not price an underpayment penalty. If the
       // cheapest plan misses safe harbor, that omission is exactly what a reader would act on.
       if (!comparison.safeHarbor[comparison.best].met) {

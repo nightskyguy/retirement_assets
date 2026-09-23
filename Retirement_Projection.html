@@ -14,7 +14,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="displayhelpers.js"></script>
 <script src="sharepanel.js?v=1118e3"></script>
-<script src="taxengine.js?v=1118e1"></script>
+<script src="taxengine.js?v=1118eb"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
@@ -46,8 +46,6 @@
   .help-close:hover { color:var(--text); }
 
   /* ── Toast ── */
-  #toast { position:fixed; bottom:2rem; left:50%; transform:translateX(-50%) translateY(16px); background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--teal); font-family:var(--mono); font-size:12px; padding:8px 22px; opacity:0; pointer-events:none; transition:opacity .25s, transform .25s; z-index:400; white-space:nowrap; }
-  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 
   /* ── Share panel ── */
   .share-panel { display:none; position:fixed; top:56px; right:1.5rem; z-index:800; background:var(--surface); border:1px solid var(--teal); border-radius:8px; padding:.85rem 1rem; width:min(480px,calc(100vw - 3rem)); box-shadow:0 8px 32px rgba(0,0,0,.5); }
@@ -318,8 +316,6 @@
     </ul>
   </div>
 </div>
-
-<div id="toast"></div>
 
 <!-- ── Share overlay ── -->
 <div class="help-overlay" id="shareOverlay" onclick="if(event.target===this)closeShare()">
@@ -950,15 +946,6 @@ function fmt(v){
   const abs=Math.abs(v);
   if(abs>=1e6)return(v<0?'-':'')+'$'+(abs/1e6).toFixed(2)+'M';
   return(v<0?'-$':'$')+Math.round(abs).toLocaleString();
-}
-
-/* Age-adjusted standard deduction from TAXData.
-   For MFJ, one stdbump is applied when the user's age >= the threshold age
-   (conservative: counts one known spouse; actual MFJ may be higher if both
-   spouses are 65+, but spouse age is not tracked here). */
-function effectiveStd(age, status){
-  const td = TAXData.FEDERAL[status];
-  return td.std + (age >= td.age ? td.stdbump : 0);
 }
 
 /* Returns the effective threshold value for a given row.
@@ -2053,15 +2040,6 @@ SharePanel.init({
     return (href.startsWith('data:') || href.startsWith('blob:')) ? qs : href.split('?')[0] + qs;
   },
 });
-
-function showToast(msg){
-  const el = document.getElementById('toast');
-  if (!el) return;
-  el.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(el._t);
-  el._t = setTimeout(() => el.classList.remove('show'), 2800);
-}
 
 function closeShare(){ document.getElementById('shareOverlay').classList.remove('open'); }
 

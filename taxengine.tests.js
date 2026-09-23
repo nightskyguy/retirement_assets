@@ -24,9 +24,9 @@
  * The bodies are kept as they were written. assertEqual() compares JSON after rounding every
  * number to three decimals, and the first mismatch inside a test is the failure it reports.
  *
- * TESTTAXATION is a synthetic state with round-number brackets, installed into TAXData for the
- * duration of a run and removed again afterwards, so a page that lists TAXData's states never
- * sees it.
+ * TESTTAXATION and TEST are synthetic jurisdictions with round-number brackets, installed into
+ * TAXData for the duration of a run and removed again afterwards, so a page that lists TAXData's
+ * states never sees either. TEST moved here from taxengine.js's own tables in 11.18e4.
  */
 
 // Wrapped in an IIFE so the top-level names here do not collide with the page's own global
@@ -122,8 +122,22 @@ function installTestState() {
 			}
 		};
 }
+
+// The bracket-lookup fixture: round numbers chosen so findLimitByRate, findUpperLimitByAmount
+// and calculateProgressive can be asserted by hand. It lived in taxengine.js's own tables until
+// 11.18e4; every dropdown filtered it out by name length, which is not a guarantee anyone should
+// have to rely on.
+function installBracketFixture() {
+	TAXData.TEST = {
+		YEAR: 2026,
+		SSTaxation: 0.50,
+		MFJ: { std: 100,   brackets: [{ l: 1000,   r: 0.1, nr: 0.1 }, { l: 2000,   r: 0.2, nr: 0.15 }, { l: 40000,   r: 0.8, nr: 0.4  }] },
+		SGL: { std: 100/2, brackets: [{ l: 1000/2, r: 0.1, nr: 0.1 }, { l: 2000/2, r: 0.2, nr: 0.15 }, { l: 40000/2, r: 0.8, nr: 0.45 }] },
+	};
+}
 function removeTestState() {
 	delete TAXData.TESTTAXATION;
+	delete TAXData.TEST;
 }
 
 // ── Bracket and limit lookups ────────────────────────────────────────────────────────────────
@@ -1252,6 +1266,7 @@ function runTaxEngineTests() {
 	failed = 0;
 	const failures = [];
 	installTestState();
+	installBracketFixture();
 	try {
 		TESTS.forEach(([name, fn]) => {
 			try {

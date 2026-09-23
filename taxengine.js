@@ -93,7 +93,16 @@ var TAXData = {
 	},
 		
 	SOCIALSECURITY: {
-		Year: 2026,
+		// YEAR, not Year: every other block in this file spells it in capitals, and this one did
+		// not, so a script auditing year stamps across TAXData skipped it silently. Nothing reads
+		// the key either way (2026-09-22).
+		//
+		// The stamp is the year the BENEFIT rules below were checked against SSA, not the year of
+		// the taxability thresholds beneath it. Those thresholds - $25,000/$34,000 single,
+		// $32,000/$44,000 joint - are statutory and have never been indexed, which is why an ever
+		// larger share of benefits becomes taxable as incomes rise. TEST CASE 9 pins that they do
+		// not move with CPI; do not "refresh" them with the rest of the tables.
+		YEAR: 2026,
 		SGL: { brackets: [{ l: 25000-1, r: 0.0}, { l: 25000, r: 0.5}, { l: 34000, r: 0.85}] },
 		MFJ: { brackets: [{ l: 32000-1, r: 0.0}, { l: 32000, r: 0.5}, { l: 44000, r: 0.85}] },
 		// Benefit rules (SSA). Full retirement age in months, keyed by the first birth year each row
@@ -407,14 +416,14 @@ var TAXData = {
 			std: 'FEDERAL',
 			brackets: [
 				{ l: 10000, r: 0.0 },
-				{ l: Infinity, r: 0.043 }
+				{ l: Infinity, r: 0.04 }
 			]
 		},
 		SGL: {
 			std: 'FEDERAL',
 			brackets: [
 				{ l: 10000, r: 0.0 },
-				{ l: Infinity, r: 0.043 }
+				{ l: Infinity, r: 0.04 }
 			]
 		},
 	}, // MISSISSIPPI
@@ -631,7 +640,7 @@ var TAXData = {
 		STATE: 'Virginia',
 		BasisStepUp: 0.50,
 		YEAR: 2026,
-		NOTE: 'Retirement income: Virginia offers a $12,000/person age deduction for filers 65+, phased out dollar-for-dollar above $75,000 AGI (MFJ, zero at $99,000) / $50,000 AGI (Single). This calculator approximates that phase-out in steps rather than a smooth dollar-for-dollar reduction, so tax may be slightly over- or understated depending on exactly where your income falls within the phase-out range; it also applies the deduction only to pension/IRA income rather than all income, which understates the deduction (overstates tax) for filers with other income sources. Elevated standard deduction ($24,000 MFJ / $12,000 Single) sunsets after TY2026 unless extended by the legislature.',
+		NOTE: 'Retirement income: Virginia offers a $12,000/person age deduction for filers 65+, phased out dollar-for-dollar above $75,000 AGI (MFJ, zero at $99,000) / $50,000 AGI (Single). This calculator approximates that phase-out in steps rather than a smooth dollar-for-dollar reduction, so tax may be slightly over- or understated depending on exactly where your income falls within the phase-out range; it also applies the deduction only to pension/IRA income rather than all income, which understates the deduction (overstates tax) for filers with other income sources. Standard deduction is the tax year 2026 amount published by Virginia Tax ($17,500 MFJ / $8,750 Single); the elevated amount sunsets after TY2026 unless extended by the legislature. The top marginal rate is 5.75% on taxable income over $17,000, and there is no bracket above it.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: {
 			mode: 'phaseout', types: ['pension', 'ira'], capPerPerson: 12000, ageGate: 65,
@@ -643,23 +652,21 @@ var TAXData = {
 		// HB1754: std deduction raised to $12,000/$24,000 (TY2025-2026, indexed for inflation); sunset after 2026 unless extended.
 		// HB1754 also adds 7% top bracket on income > $600,000 beginning TY2026.
 		MFJ: {
-			std: 24000,
+			std: 17500,
 			brackets: [
 				{ l: 3000, r: 0.02 },
 				{ l: 5000, r: 0.03 },
 				{ l: 17000, r: 0.05 },
-				{ l: 600000, r: 0.0575 },
-				{ l: Infinity, r: 0.07 }
+				{ l: Infinity, r: 0.0575 }
 			]
 		},
 		SGL: {
-			std: 12000,
+			std: 8750,
 			brackets: [
 				{ l: 3000, r: 0.02 },
 				{ l: 5000, r: 0.03 },
 				{ l: 17000, r: 0.05 },
-				{ l: 600000, r: 0.0575 },
-				{ l: Infinity, r: 0.07 }
+				{ l: Infinity, r: 0.0575 }
 			]
 		}
 	}, // VIRGINIA
@@ -792,13 +799,13 @@ var TAXData = {
 		MFJ: {
 			std: 2000,  // $1,000 personal exemption per taxpayer
 			brackets: [
-				{ l: Infinity, r: 0.0305 }
+				{ l: Infinity, r: 0.0295 }
 			]
 		},
 		SGL: {
 			std: 1000,
 			brackets: [
-				{ l: Infinity, r: 0.0305 }
+				{ l: Infinity, r: 0.0295 }
 			]
 		},
 	}, // INDIANA
@@ -808,19 +815,19 @@ var TAXData = {
 		STATE: 'Kentucky',
 		BasisStepUp: 0.50,
 		YEAR: 2026,
-		NOTE: 'Retirement income: Kentucky exempts up to $31,110/person of pension/IRA/401(k) income.',
+		NOTE: 'Rate and standard deduction are tax year 2026 values from the Kentucky Department of Revenue; the flat rate fell from 4.0% to 3.5% on 2026-01-01 under the 2022 tax triggers. Retirement income: Kentucky exempts up to $31,110/person of pension/IRA/401(k) income.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: { mode: 'cap', types: ['pension', 'ira'], capPerPerson: 31110 },
 		MFJ: {
-			std: 3270,  // KY standard deduction per return (same amount for all filing statuses, 2025)
+			std: 3360,  // KY standard deduction per return, same for every filing status (2026)
 			brackets: [
-				{ l: Infinity, r: 0.04 }
+				{ l: Infinity, r: 0.035 }
 			]
 		},
 		SGL: {
-			std: 3270,
+			std: 3360,
 			brackets: [
-				{ l: Infinity, r: 0.04 }
+				{ l: Infinity, r: 0.035 }
 			]
 		},
 	}, // KENTUCKY
@@ -863,23 +870,28 @@ var TAXData = {
 		STATE: 'Minnesota',
 		BasisStepUp: 0.50,
 		YEAR: 2026,
-		NOTE: 'Brackets reflect 2026 values (inflation-adjusted +2.369% from 2025; rates unchanged). Minnesota taxes Social Security — 85% of SS is included in state taxable income at moderate-to-high incomes. Lower-income filers may qualify for a Social Security subtraction that this calculator does not apply, so tax may be overstated for those filers.',
+		NOTE: 'Brackets and standard deduction are tax year 2026 values published by the Minnesota Department of Revenue (inflation-adjusted +2.369% from 2025; rates unchanged). Minnesota taxes Social Security — 85% of SS is included in state taxable income at moderate-to-high incomes. Lower-income filers may qualify for a Social Security subtraction that this calculator does not apply, so tax may be overstated for those filers.',
 		SSTaxation: 0.85,
+		// MN does NOT conform to the federal standard deduction; it publishes its own, which is
+		// lower. `std: 'FEDERAL'` was set here on 2026-06-30 alongside a comment saying MN used the
+		// federal amount, which handed every MN plan $800 single / $1,600 joint too much deduction.
+		// Source: MN DOR, "Minnesota income tax brackets, standard deduction and dependent exemption
+		// amounts for tax year 2026", 2025-12-16.
 		MFJ: {
-			std: 'FEDERAL',  // MN uses federal standard deduction
+			std: 30600,
 			brackets: [
-				{ l: 46330, r: 0.0535 },
-				{ l: 184040, r: 0.0680 },
-				{ l: 321450, r: 0.0785 },
+				{ l: 48700, r: 0.0535 },
+				{ l: 193480, r: 0.0680 },
+				{ l: 337930, r: 0.0785 },
 				{ l: Infinity, r: 0.0985 },
 			]
 		},
 		SGL: {
-			std: 'FEDERAL',
+			std: 15300,
 			brackets: [
-				{ l: 31690, r: 0.0535 },
-				{ l: 104090, r: 0.0680 },
-				{ l: 193240, r: 0.0785 },
+				{ l: 33310, r: 0.0535 },
+				{ l: 109430, r: 0.0680 },
+				{ l: 203150, r: 0.0785 },
 				{ l: Infinity, r: 0.0985 },
 			]
 		},
@@ -892,20 +904,25 @@ var TAXData = {
 		BasisStepUp: 0.50,
 		YEAR: 2026,
 		INFLATION_INDEXED: false,
-		NOTE: 'Retirement income: Montana allows a small income-tested retirement subtraction (being phased out) that this calculator does not apply, so tax may be overstated for lower-income retirees. Separately, the standard deduction (20% of AGI, capped at $10,160 MFJ / $5,080 Single) is approximated using the cap, which may understate tax at lower incomes where the true 20%-of-AGI amount would be smaller than the cap. Bracket thresholds are not inflation-adjusted. Capital gains: this calculator taxes capital gains at the full ordinary state rate. Montana instead taxes long-term capital gains at reduced rates below its ordinary top rate. Tax on a brokerage withdrawal is therefore overstated for this state, and the overstatement grows with the size of the gain realized, so a plan that harvests a large gain in one year is penalized most.',
+		NOTE: 'Retirement income: Montana allows a small income-tested retirement subtraction (being phased out) that this calculator does not apply, so tax may be overstated for lower-income retirees. Rates, bracket thresholds and the standard deduction are tax year 2026 values (HB 337; the standard deduction conforms to the federal amount). Bracket thresholds are not inflation-adjusted, so they move only when the legislature moves them; the top rate falls again to 5.4% in 2027. Capital gains: this calculator taxes capital gains at the full ordinary state rate. Montana instead taxes long-term capital gains at reduced rates below its ordinary top rate. Tax on a brokerage withdrawal is therefore overstated for this state, and the overstatement grows with the size of the gain realized, so a plan that harvests a large gain in one year is penalized most.',
 		SSTaxation: 0.85,
+		// HB 337 (2025) widened the 4.7% band and cut the top rate: for 2026 the 5.65% rate starts
+		// above $47,500 single / $95,000 joint, falling again to 5.4% in 2027. The figures here were
+		// the 2024 ones - a $20,500 single threshold and a 5.9% top rate - until 2026-09-22.
+		// Montana also stopped using its own 20%-of-AGI standard deduction when SB 399 conformed it
+		// to the federal amount, so the cap approximation the NOTE describes no longer applies.
 		MFJ: {
-			std: 10160,  // MT: 20% of AGI, capped at $10,160 (2024); using cap as approximation
+			std: 'FEDERAL',
 			brackets: [
-				{ l: 41000, r: 0.047 },
-				{ l: Infinity, r: 0.059 },
+				{ l: 95000, r: 0.047 },
+				{ l: Infinity, r: 0.0565 },
 			]
 		},
 		SGL: {
-			std: 5080,  // cap at $5,080 (2024)
+			std: 'FEDERAL',
 			brackets: [
-				{ l: 20500, r: 0.047 },
-				{ l: Infinity, r: 0.059 },
+				{ l: 47500, r: 0.047 },
+				{ l: Infinity, r: 0.0565 },
 			]
 		},
 	}, // MONTANA
@@ -1005,25 +1022,29 @@ var TAXData = {
 	WI: {
 		STATE: 'Wisconsin',
 		BasisStepUp: 1.00,
-		YEAR: 2025,
-		NOTE: 'Retirement income: starting with the 2025 tax year (filed 2026), Wisconsin exempts up to $24,000/person ($48,000 for a married couple) of pension/IRA income for filers 67+, with no income limit. Brackets reflect 2025 values. Standard deduction phases out at higher incomes; base amounts are used here, so results may understate tax for high-income filers. Capital gains: this calculator taxes capital gains at the full ordinary state rate. Wisconsin instead excludes 30% of net long-term capital gains (60% for qualifying farm assets). Tax on a brokerage withdrawal is therefore overstated for this state, and the overstatement grows with the size of the gain realized, so a plan that harvests a large gain in one year is penalized most.',
+		YEAR: 2026,
+		NOTE: 'Retirement income: starting with the 2025 tax year (filed 2026), Wisconsin exempts up to $24,000/person ($48,000 for a married couple) of pension/IRA income for filers 67+, with no income limit. Brackets and the standard deduction maximum are tax year 2026 values from the Wisconsin Department of Revenue, and include the 2025 Act 15 widening of the 4.40% band. Standard deduction phases out at higher incomes; base amounts are used here, so results may understate tax for high-income filers. Capital gains: this calculator taxes capital gains at the full ordinary state rate. Wisconsin instead excludes 30% of net long-term capital gains (60% for qualifying farm assets). Tax on a brokerage withdrawal is therefore overstated for this state, and the overstatement grows with the size of the gain realized, so a plan that harvests a large gain in one year is penalized most.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: { mode: 'cap', types: ['pension', 'ira'], capPerPerson: 24000, ageGate: 67 },
+		// 2025 Wis. Act 15 widened the 4.40% band a long way - single from $29,370 to $50,480, joint
+		// from $39,150 to $67,300 - for tax years after 2024. This table missed it until 2026-09-22
+		// and taxed the whole gap at 5.30% instead. Figures are tax year 2026 from the WI DOR 2026
+		// Form 1-ES instructions; `std` is the MAXIMUM, which phases out with income (see NOTE).
 		MFJ: {
-			std: 25200,
+			std: 25840,
 			brackets: [
-				{ l: 19660, r: 0.035 },
-				{ l: 39310, r: 0.044 },
-				{ l: 432830, r: 0.053 },
+				{ l: 20150, r: 0.035 },
+				{ l: 69260, r: 0.044 },
+				{ l: 443630, r: 0.053 },
 				{ l: Infinity, r: 0.0765 },
 			]
 		},
 		SGL: {
-			std: 13610,
+			std: 13960,
 			brackets: [
-				{ l: 14750, r: 0.035 },
-				{ l: 29490, r: 0.044 },
-				{ l: 324750, r: 0.053 },
+				{ l: 15110, r: 0.035 },
+				{ l: 51950, r: 0.044 },
+				{ l: 332720, r: 0.053 },
 				{ l: Infinity, r: 0.0765 },
 			]
 		},

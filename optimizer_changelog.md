@@ -17,12 +17,18 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.18ec"></a>
+<a id="11.18ef"></a>
 
-## 11.18ec
+## 11.18ef
 
-**ACA income limits corrected; Saved Scenarios handles any name.**  
-*Correction for plans using an ACA Cliff limit; nothing else changes a plan's numbers.*
+**State tax tables and ACA income limits corrected; Saved Scenarios handles any name.**  
+*Corrections for seven states and for plans using an ACA Cliff limit.*
+
+**The tax tables for seven states contained errors that have been corrected**, and the rates and
+brackets now match what each state publishes for 2026. Minnesota, Montana and Wisconsin were the
+largest: each was charging more state tax than it should. Indiana, Kentucky and Mississippi have
+had rate cuts since the tables were last set, and Virginia carried a top bracket that does not
+exist. If your plan uses one of those states, its numbers will move.
 
 **The ACA Cliff limits contained an error that has been corrected.** The error was small, and it
 made each limit slightly too strict. The limits now use the 2025 Federal Poverty Level figures,

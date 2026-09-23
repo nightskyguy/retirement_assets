@@ -362,7 +362,7 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
     const varResults = [];
     // P79. Which variation the survival chart may draw individual paths for: the same one whose
     // replay rows ship below, i.e. the sidebar's own plan. Clamped here rather than after the loop
-    // so the loop can recognise its own variation while it still holds that variation's paths.
+    // so the loop can recognize its own variation while it still holds that variation's paths.
     const captureVi = Math.min(Math.max(cfg.captureVariationIndex ?? 0, 0), varsToUse.length - 1);
 
     for (let vi = 0; vi < varsToUse.length; vi++) {
@@ -659,8 +659,8 @@ function buildStressMsg(stress) {
 }
 
 // One whole Monte Carlo job: the main pass, the stress pass, and the results message both callers
-// post or hand back. Returns null if the run was cancelled - the caller reports nothing in that
-// case, which is what leaves a cancelled run's previous results on screen.
+// post or hand back. Returns null if the run was canceled - the caller reports nothing in that
+// case, which is what leaves a canceled run's previous results on screen.
 async function runJob(cfg, hooks) {
     const h  = _hooksOf(hooks);
     const t0 = performance.now();
@@ -690,7 +690,7 @@ async function runJob(cfg, hooks) {
     const mainMode = (simulationMode === 'bootstrap' || simulationMode === 'aam') ? simulationMode : 'gbm';
 
     const main = stressOnly ? null : await runPass(cfg, rng, mainMode, 0, mainWeight, null, h);
-    if (!stressOnly && main === null) return null;   // cancelled mid-pass
+    if (!stressOnly && main === null) return null;   // canceled mid-pass
 
     // Stress runs against ONLY the current withdrawal strategy (mc_tab.js's runMonteCarlo() builds
     // this), not the full variations sweep - cfg.stressVariations falls back to the full array if
@@ -699,7 +699,7 @@ async function runJob(cfg, hooks) {
     const stress = willRunStress
         ? await runPass(cfg, rng, 'stress', mainWeight, 1 - mainWeight, stressVars, h)
         : null;
-    if (willRunStress && stress === null) return null;   // cancelled mid-pass
+    if (willRunStress && stress === null) return null;   // canceled mid-pass
 
     if (stressOnly) {
         return {

@@ -552,7 +552,7 @@ const TT_BASE = {
 };
 
 // Derived fields shared by the sweep and by the exact (off-grid) pinned row.
-// prevFedTax === null means "no left neighbour", so no marginal rate; h is the difference width.
+// prevFedTax === null means "no left neighbor", so no marginal rate; h is the difference width.
 function deriveRow(p, prevFedTax, h) {
   const denom    = Math.max(p.ordInc + cfg.ssIncome + p.cgGain, 1);
   const totalTax = p.fedTax + p.fedCGTax + p.niit + p.IRMAA + p.stTaxOrd + p.stTaxCG;

@@ -45,7 +45,7 @@
     var sign = n < 0 ? '-$' : '$';
     n = Math.abs(n);
     var u = -1;
-    // Forward, so the FIRST match is the LARGEST unit that fits; backwards would call a billion "k".
+    // Forward, so the FIRST match is the LARGEST unit that fits; backward would call a billion "k".
     for (var i = 0; i < SHORT_UNITS.length; i++) if (n >= SHORT_UNITS[i][0]) { u = i; break; }
     if (u < 0) return sign + Math.round(n).toLocaleString('en-US');
     // 3 significant figures across the scaled value's whole 1..999 range.
@@ -85,7 +85,7 @@
 
   // ── Input attachment ─────────────────────────────────────────────────────
 
-  // Attaches smart numeric behaviour to a <input type="text"> element.
+  // Attaches smart numeric behavior to a <input type="text"> element.
   // opts: { min, max, onChange(val) }
   function attachNumericDollarInput(el, opts) {
     opts = opts || {};

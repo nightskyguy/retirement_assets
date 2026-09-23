@@ -149,13 +149,13 @@ test('keys named after object properties are neither safe nor renamed', () => {
   eq(FW.fieldName('odd key!', null), 'odd_key_');
 });
 
-test('buildPayload leaves the plan link out unless it is ticked', () => {
+test('buildPayload leaves the plan link out unless it is checked', () => {
   eq(FW.buildPayload(dialogState(), CFG).planUrl, null);
   eq(FW.buildPayload(dialogState({ includePlan: true }), CFG).planUrl, SHARE);
   eq(FW.buildPayload(dialogState({ includePlan: true, shareUrl: '' }), CFG).planUrl, null);
 });
 
-test('buildPayload sends settings, withheld names and page errors only when settings is ticked', () => {
+test('buildPayload sends settings, withheld names and page errors only when settings is checked', () => {
   const off = FW.buildPayload(dialogState(), CFG);
   eq(off.settings, null);
   eq(off.withheld, null);
@@ -185,7 +185,7 @@ test('the state always goes with the settings, even at its default, and only a s
   assert(!JSON.stringify(p).includes('999999'), 'a pinned key that is not marked safe was sent');
   eq(FW.buildPayload(dialogState({ includeSettings: true, shareUrl: 'https://x.test/r.html?s=NY&g=6' }), cfg).settings,
     's=NY&g=6', 'a state already in the link is neither repeated nor replaced');
-  eq(FW.buildPayload(dialogState(), cfg).settings, null, 'unticked settings send no state either');
+  eq(FW.buildPayload(dialogState(), cfg).settings, null, 'unchecked settings send no state either');
 });
 
 test('the GitHub link fills the message, version and browser, and nothing about the plan', () => {
@@ -274,7 +274,7 @@ test('dataUrlBytes measures the decoded image, padding included', () => {
   eq(FW.dataUrlBytes('nonsense'), 0);
 });
 
-test('the preview marks every unticked part and shows a screenshot only by its size', () => {
+test('the preview marks every unchecked part and shows a screenshot only by its size', () => {
   const quiet = FW.describePayload(FW.buildPayload(dialogState(), CFG));
   for (const line of ['Settings: (not included)', 'Page errors: (not included)',
                       'Full plan link: (not included)', 'Screenshot: (not included)']) {
@@ -284,7 +284,7 @@ test('the preview marks every unticked part and shows a screenshot only by its s
   const full = FW.describePayload(FW.buildPayload(
     dialogState({ includeSettings: true, includePlan: true, screenshot: shot }), CFG));
   assert(full.includes('Withheld, names only: IRA1, spendGoal, birthyear1'), full);
-  assert(full.includes(SHARE), 'the plan link is shown when it is ticked');
+  assert(full.includes(SHARE), 'the plan link is shown when it is checked');
   assert(/Screenshot: \d+ KB image/.test(full) && !full.includes('AAAA'), 'the image appears by size only');
 });
 

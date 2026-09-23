@@ -158,7 +158,7 @@ var TAXData = {
 		//    `nominalRateAtLimit` in optimizer_core.js, whose `limit = Inf` branch returns the
 		//    jurisdiction's top marginal rate - and the $NaN it used to print is a shipped fix.
 		//    `Retirement_Projection.html` drops both this row and `-none-` when it lists tiers to
-		//    choose from, which is the same judgement made in a different place.
+		//    choose from, which is the same judgment made in a different place.
 				MFJ: {
 			brackets: [
 				{ l: 218000 - 1, r: 0, tier: "-none-"}, { l: 218000, r: (2 * 202.90), tier: "Tier 1" },

@@ -303,7 +303,7 @@ in the adjustment above, and the draw the rule used to be stuck with is the leas
 the engine. `research/PERFECT_FORESIGHT_ORACLE.md` (`P103d`, `P103e`) priced that: keeping the spend
 rule and replacing the draw was worth +$57k to +$800k of median real terminal wealth at 95-100%
 survival, measured on an engine that has changed since. In the page every swept row follows the
-Guardrails switch, and the user's own plan is added once more with the switch the other way round
+Guardrails switch, and the user's own plan is added once more with the switch the other way around
 (`planRuleTwin`), in the Optimizer table and in Monte Carlo's Compare All alike.
 
 ### The carrier: compile a run, replay it under a different draw
@@ -686,7 +686,7 @@ state-writing tests included, which is the hook's headless run.
 `globalThis` but leaves top-level `const` (`OPTIMIZER_GRIDS`, `RMD_TABLE`) as global
 *lexical* bindings a property lookup cannot see. Related: the engine writes wall clock into its own
 output (`yr.loopStart`, the `loopMs` log field and the third-pass timing), so the browser runner stubs
-`performance.now()` for the duration of a run and restores it afterwards - without that, six
+`performance.now()` for the duration of a run and restores it afterward - without that, six
 byte-identity tests fail in the browser while passing in node, on the clock rather than the engine.
 
 ### Shared globals crossing file boundaries

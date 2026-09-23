@@ -68,7 +68,7 @@ account, choose the one with `netcitizen.us` every time, including in step 3.
 1. **Check the destination inbox.**
    [Email Routing](https://dash.cloudflare.com/?to=/:account/email-service/routing), then
    **Destination addresses** (**Compute**, **Email Service**, **Email Routing**). The inbox the help
-   address forwards to must show **Verified**. If it is not listed, add it and open the link in the
+   address forward to must show **Verified**. If it is not listed, add it and open the link in the
    mail Cloudflare sends to it. A Worker can send only to a verified destination, not to a routing
    address such as the help address itself.
 

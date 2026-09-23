@@ -482,7 +482,7 @@ test('Draw-only — the December plan appears and wins, and B is omitted with a 
   assert(/Plan B \(hybrid\) is not shown/.test(plan.html), 'HTML must explain why B is absent');
   assert(!/Plan B —/.test(plan.text), 'Draw-only text must not render a Plan B section');
   assert(/Plan A — Early/.test(plan.text) && /Plan C — Late/.test(plan.text),
-    'Both surviving plans should be labelled by what they do');
+    'Both surviving plans should be labeled by what they do');
 });
 
 // An already-taken draw is locked to its actual month and offers no timing choice, so it must
@@ -576,7 +576,7 @@ test('No action lands on a non-business day, tax years 2026 to 2035', () => {
         priorYearStateTax: 5000,
         todayDate: new Date(2026, 6, 29),
       });
-      // Every plan in the matrix, not only the parent's. D synthesises a December tranche date
+      // Every plan in the matrix, not only the parent's. D synthesizes a December tranche date
       // and Q emits a full estimate schedule, and neither of those emission points existed when
       // this sweep was written.
       const lists = plan.plans
@@ -941,7 +941,7 @@ test('brokerageValue/brokerageBasis derive appreciationPct, and clamp sanely', (
   assertNear(run({ brokerageValue: 0, brokerageBasis: 0 }).params.appreciationPct,
     0.40, 'a zero-value position cannot give a ratio, so the default stands', 1e-9);
   assertNear(run({ appreciationPct: 0.604 }).params.appreciationPct,
-    0.604, 'the raw fraction is still honoured for legacy ?ap= links', 1e-9);
+    0.604, 'the raw fraction is still honored for legacy ?ap= links', 1e-9);
 
   // The direction that matters: a higher gain share must cost more to sell, monotonically.
   const cgOf = ap => run({ brokerageValue: 100000, brokerageBasis: 100000 * (1 - ap) })
@@ -1502,7 +1502,7 @@ test('A conversion already done cannot have withholding elected on it either', (
     assert(w === 0, `plan ${k} withheld ${w} on a conversion that already happened`);
     assertNear(paidBy58(plan.actions), 57000, `plan ${k} still pays the whole liability`, 2);
   });
-  // The old behaviour took the entire conversion, which would have left nothing in the Roth.
+  // The old behavior took the entire conversion, which would have left nothing in the Roth.
   assert(convOf(silent.plans.A).every(a => (a.federalWithholding || 0) < 40000),
     'and certainly not the whole conversion');
 
@@ -1527,7 +1527,7 @@ test('A plan forced to quarterly pays the liability once, not twice', () => {
   });
   Object.entries(forced.plans).filter(([, v]) => v).forEach(([k, plan]) => {
     assertNear(paidBy58(plan.actions), 57000, `plan ${k} must pay 57000 exactly`, 2);
-    assert(plan.strategy === 'all_quarterly', `plan ${k} should honour the forced strategy`);
+    assert(plan.strategy === 'all_quarterly', `plan ${k} should honor the forced strategy`);
   });
 });
 
@@ -1656,7 +1656,7 @@ test('The safe-harbor verdict names its multiplier and flags what it cannot veri
 
   // An explicit flag still wins, and the requirement moves with it.
   const stated = TaxPaymentPlanner.computePaymentPlan({ ...base, ira1Voluntary: 5000, highIncomeFiler: true });
-  assert(stated.plans.A.summary.safeHarbor.highIncomeStated, 'an explicit flag is honoured');
+  assert(stated.plans.A.summary.safeHarbor.highIncomeStated, 'an explicit flag is honored');
   assertNear(stated.plans.A.summary.safeHarbor.federal.required, 22000, 'and raises the bar', 1);
 });
 

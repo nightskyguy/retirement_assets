@@ -6,7 +6,7 @@ and the difference between them matters:
 | kind | reached by | who it is for |
 |---|---|---|
 | **knob-gated UI** | `?nerdknob`, and two deeper variants | a curious user, at their own risk |
-| **URL-only inputs** | a query parameter, no form field anywhere | a real modelling input that never got a control |
+| **URL-only inputs** | a query parameter, no form field anywhere | a real modeling input that never got a control |
 | **research inputs** | node only, no URL, no UI | harnesses. Not reachable from a browser at all |
 
 **Why this file exists:** every one of these was added for a reason that made sense at the time and
@@ -61,7 +61,7 @@ carrying it runs the rule for a reader without the knob, with the menu shown so 
 invisible.
 
 While the rule is on the rails solve themselves whenever the plan changes, whether or not Auto-run
-is ticked, and the plan is run again when the solve lands. Until then the Guardrails columns in
+is checked, and the plan is run again when the solve lands. Until then the Guardrails columns in
 Annual Details read *no rails* and spending stays on the plan's path. Monte Carlo and the Optimizer
 run the rule too: every path and every swept row follows the same rails, which is what makes the
 rule cheap enough to sweep. The rails themselves are solved on the plan without the rule, so turning
@@ -132,7 +132,7 @@ be on); the Fixed Split menu entry ignores it.
 | URL | what it unlocks |
 |---|---|
 | `?nerdknob=goal` | **Goal-first mode** (`P102`). An alternative planning surface that drives the classic controls rather than replacing them. Experimental, kept deliberately, and not something to stumble into. |
-| `?nerdknob=split` | **Fixed Split** withdrawal family (`P104b3`), **on probation**. Adds the strategy menu entry, its panel, and its sweep rows. Like Proportional Withdraw and Ordered, it **never reads the IRA Goal**, so that field greys out when it is selected - a fact that belongs here rather than in the changelog, because a reader without this knob has no way to select the strategy it describes. |
+| `?nerdknob=split` | **Fixed Split** withdrawal family (`P104b3`), **on probation**. Adds the strategy menu entry, its panel, and its sweep rows. Like Proportional Withdraw and Ordered, it **never reads the IRA Goal**, so that field grays out when it is selected - a fact that belongs here rather than in the changelog, because a reader without this knob has no way to select the strategy it describes. |
 
 Both still count as the plain knob for everything else, because `has('nerdknob')` is true for them.
 
@@ -142,7 +142,7 @@ Both still count as the plain knob for everything else, because `has('nerdknob')
 
 ### Property and local tax, for the SALT test
 
-**This is the one most easily lost**, because it is a genuine modelling input with no control
+**This is the one most easily lost**, because it is a genuine modeling input with no control
 anywhere on the page. `calculateTaxes()` had always accepted `propTax` and always computed
 `min(stateTax + propTax, saltCap)` correctly, but no caller passed it, so SALT was state income tax
 alone and any household that would itemize was charged too much federal tax **in every year**

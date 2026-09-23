@@ -456,7 +456,7 @@ const BEAR_OVERLAY_WINDOWS = [3, 5, 10];
 // Deliberately a CONSTANT and not the user's "Stress sequences" input, which is what it used to read.
 // That reuse coupled two unrelated things: the overlay runs in the MAIN bootstrap pass, so a change
 // to a Stress Test display setting silently moved every Historical result and raised the "Out of
-// date" banner, for a reason no reader could have guessed from a control labelled "how many worst
+// date" banner, for a reason no reader could have guessed from a control labeled "how many worst
 // sequences the Stress Test chart shows".
 const BEAR_OVERLAY_POOL = 10;
 

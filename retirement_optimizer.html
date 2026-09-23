@@ -35,7 +35,7 @@
         Chart.defaults.plugins.tooltip.borderWidth      = 0;
         Chart.defaults.plugins.tooltip.padding          = 10;
         // Solid filled color swatch - replaces the default white box with border.
-        // Prefers borderColor; falls back to backgroundColor; grey if both transparent.
+        // Prefers borderColor; falls back to backgroundColor; gray if both transparent.
         Chart.defaults.plugins.tooltip.callbacks.labelColor = function(ctx) {
             const bc = ctx.dataset.borderColor;
             const bg = ctx.dataset.backgroundColor;
@@ -44,17 +44,17 @@
             return { backgroundColor: c, borderColor: c, borderWidth: 0 };
         };
     </script>
-	<script src="displayhelpers.js?v=1118e0"></script>
+	<script src="displayhelpers.js?v=1118ef"></script>
 	<script src="sharepanel.js?v=1118e3"></script>
 	<!-- The Send feedback dialog. NOT deferred: it records page errors from here on, so it has to
 	     load before the scripts below. It builds nothing until FeedbackWidget.open(). -->
-	<script src="feedback.js?v=11186c"></script>
+	<script src="feedback.js?v=1118ef"></script>
 	<!-- Upgrades the .md doc links below to the .html pages GitHub Pages generates from
 	     them. MUST keep `defer`: the changelog script further down copies the newest
 	     entry's HTML into the LATEST CHANGE banner during parse, and this has to sweep
 	     the document after that copy exists. See doclinks.js. -->
-	<script src="doclinks.js?v=1113d0" defer></script>
-	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=1118bf">
+	<script src="doclinks.js?v=1118ef" defer></script>
+	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=1118ef">
 	<style>
     .toggle { display: flex !important; }
     /* The two page-level buttons, stacked at the top left. Matching widths so the stack lines up;
@@ -399,7 +399,7 @@
 		</div>  <!-- strategy-container -->
 
 		<div class="row" style="margin-top:8px;">
-			<label id="iraBaseGoal-label" title="The balance to bring your IRA down to, in today's dollars (raised with inflation each year). It is a target, not a minimum to keep: required distributions, an Extra Annual Roth Conversion, and spending your other accounts cannot cover can all take the IRA below it. 'Reduce IRA in N Years' sizes its withdrawals to reach it in N years. 'Fill Fed/IRMAA Bracket' and 'IRA Draw' take their planned IRA withdrawals only from the part above it, so it matters only once the IRA gets close to it. Proportional Withdraw and Ordered do not use it, with or without Guardrails, and this field greys out when one of those is selected."><span style="white-space:nowrap;">IRA Goal (today's $)<span id="suggest-ira-icon" title="" style="cursor:pointer;font-size:1.05em;margin-left:4px;display:none;" onclick="applySuggestIraGoal()">ⓘ</span></span>
+			<label id="iraBaseGoal-label" title="The balance to bring your IRA down to, in today's dollars (raised with inflation each year). It is a target, not a minimum to keep: required distributions, an Extra Annual Roth Conversion, and spending your other accounts cannot cover can all take the IRA below it. 'Reduce IRA in N Years' sizes its withdrawals to reach it in N years. 'Fill Fed/IRMAA Bracket' and 'IRA Draw' take their planned IRA withdrawals only from the part above it, so it matters only once the IRA gets close to it. Proportional Withdraw and Ordered do not use it, with or without Guardrails, and this field grays out when one of those is selected."><span style="white-space:nowrap;">IRA Goal (today's $)<span id="suggest-ira-icon" title="" style="cursor:pointer;font-size:1.05em;margin-left:4px;display:none;" onclick="applySuggestIraGoal()">ⓘ</span></span>
 			<input type="text" id="iraBaseGoal" value="750000" style="width:110px;font-size:14px;"></label>
 			<span id="iraGoal-na-note" style="display:none;font-size:12px;color:#666;margin-left:8px;">Not used by this strategy.</span>
 		</div>
@@ -641,7 +641,7 @@
         <div id="cpi-spread-info" style="margin-top:-4px;margin-bottom:6px;font-size:0.82em;color:#555;"></div>
         <!-- Medicare base premiums. The figure has always been computed and shown; what is new is
              the choice of whether it is money OUT on top of the spend goal. Default keeps the old
-             behavior so no saved plan or shared link moves. Enrolment is per person because a
+             behavior so no saved plan or shared link moves. Enrollment is per person because a
              spouse's employer plan, the VA or retiree coverage commonly covers just one of them,
              and it drives the IRMAA surcharge as well as the premium. -->
         <div class="row">
@@ -906,9 +906,9 @@
 			     "My Plan Only" comes first and is the default: it answers "how did MY plan do",
 			     which is the question almost everyone arrives with, for about 1/60 of the work: the plan run with Guardrails on and off.
 			     Each button states its own expected wall time on THIS machine, so the cost of the
-			     expensive one is visible before it is paid rather than discovered afterwards. -->
+			     expensive one is visible before it is paid rather than discovered afterward. -->
 			<div style="margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-				<button id="mc-run-plan-btn" onclick="runMonteCarlo('plan')" style="padding:6px 18px;font-size:0.95em;font-weight:600;" title="Run the plan currently in the sidebar twice: as you set it, and with the Guardrails switch the other way round. About 60 times less work than comparing every strategy. You get your own chance of success, the percentile chart and a two-row table, but no ranking of other strategies.">My Plan Only</button>
+				<button id="mc-run-plan-btn" onclick="runMonteCarlo('plan')" style="padding:6px 18px;font-size:0.95em;font-weight:600;" title="Run the plan currently in the sidebar twice: as you set it, and with the Guardrails switch the other way around. About 60 times less work than comparing every strategy. You get your own chance of success, the percentile chart and a two-row table, but no ranking of other strategies.">My Plan Only</button>
 				<button id="mc-run-btn" onclick="runMonteCarlo('compare')" style="padding:6px 18px;font-size:0.95em;" title="Run every withdrawal strategy the Optimizer knows how to build and rank them against each other. This is the expensive one: the path count below is PER STRATEGY.">Compare All Scenarios</button>
 				<!-- Describes the Compare button only. It sat after both buttons before, which read
 				     as applying to either, and the number only ever described the sweep. -->
@@ -1000,7 +1000,7 @@
 			<div id="mc-table-wrap" style="display:none;margin-bottom:16px;">
 				<div id="mc-table-title" style="font-size:0.9em;font-weight:600;color:#333;margin-bottom:3px;"></div>
 				<div style="font-size:0.85em;color:#555;margin-bottom:4px;">
-					Check rows to add/remove from chart. Click a column heading to sort; the 📍 row is your own plan and stays on top whatever the sort. Every row runs with your Guardrails setting except one: your own plan with the switch the other way round. <span id="mc-path-count-tbl"></span>
+					Check rows to add/remove from chart. Click a column heading to sort; the 📍 row is your own plan and stays on top whatever the sort. Every row runs with your Guardrails setting except one: your own plan with the switch the other way around. <span id="mc-path-count-tbl"></span>
 				</div>
 				<div style="font-size:0.8em;margin-bottom:6px;">
 					Row shading:
@@ -1170,7 +1170,7 @@
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li>The &#9993; Feedback button, under Share, sends a note to the author. No plan's numbers change.
 						<ul style="margin:4px 0 0 0;padding-left:18px;">
-						<li>Your settings and any page errors go with it unless you untick them: strategy, tax limit, filing status, state, growth and inflation, never balances, income, spending, ages or birth dates. Your full plan link and a screenshot of the whole page go only if you tick them, and <i>Show exactly what will be sent</i> lists everything first.</li>
+						<li>Your settings and any page errors go with it unless you uncheck them: strategy, tax limit, filing status, state, growth and inflation, never balances, income, spending, ages or birth dates. Your full plan link and a screenshot of the whole page go only if you tick them, and <i>Show exactly what will be sent</i> lists everything first.</li>
 						<li>An email address is optional and is used only to reply to you; without one there is no way to answer. The <a href="README.md#sending-feedback" target="_blank" rel="noopener">README&rsquo;s <i>Sending Feedback</i></a> section says where a message goes.</li>
 						<li>Prefer GitHub? The same box links to a feedback form for a public GitHub issue.</li>
 						</ul>
@@ -1191,7 +1191,7 @@
 					<a href="optimizer_changelog.md#11.1859" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="display"><b>11.1824</b>
-					<strong>The Guardrails switch is now labelled GK-style.</strong>
+					<strong>The Guardrails switch is now labeled GK-style.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li>No plan's numbers change. The label, the help text and the sentence under the switch are all that moved.</li>
 					<li>Guardrails measures your whole spending against your savings. The published Guyton-Klinger rule watches what your portfolio withdraws instead, which is a different number for anyone whose Social Security starts later.</li>
@@ -1204,7 +1204,7 @@
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
 					<li>Guardrails sit under Spend Delta. Turned on, spending is cut when your savings fall far enough that your spending is no longer safe, and raised when they grow far enough to spend more.</li>
 					<li>A plan or link saved with the Guyton-Klinger strategy loads as Proportional Withdraw at 0% with Guardrails on, which gives the same numbers.</li>
-					<li>The Optimizer and Monte Carlo follow your Guardrails setting, and each adds your own plan with the switch the other way round. Monte Carlo's My Plan Only runs your plan both ways.</li>
+					<li>The Optimizer and Monte Carlo follow your Guardrails setting, and each adds your own plan with the switch the other way around. Monte Carlo's My Plan Only runs your plan both ways.</li>
 					<li>Dollar amounts show in today's dollars (Current $) by default, and the Optimizer shows each column as the difference from the ⚓ baseline. The Future $ / Current $ toggle and the Show as Differences switch turn either off.</li>
 					<li>My Plan Only and the Stress Test run your plan exactly as you set it, including your Extra Annual Roth Conversion and conversion switches.</li>
 					<li>The IRA Goal's help describes it as the balance to bring your IRA down to.</li>
@@ -1292,7 +1292,7 @@
 			</details>
 			<h3>How to Use</h3>
 			<div class="log-entry"><ul>
-				<li><strong>Withdrawal Strategy:</strong> The <em>Withdrawal Strategy</em> box (top of sidebar) controls how the simulation draws from your accounts each year. Set the <i>After-Tax Spend</i> goal (annual after-tax income needed) and <i>Spend Delta</i> (yearly change - default −1% per <A HREF="https://retirementresearcher.com/retirement-spending-smile">historical data</A>). The <i>IRA Goal</i> field (just below the strategy box) is the balance to bring your IRA down <strong>to</strong>, entered <strong>in today's dollars</strong> and inflation-adjusted (CPI) to each year so it tracks the inflation-indexed brackets, IRMAA tiers, and ACA cliffs it is meant to manage. It is a target, not a minimum to keep: required distributions, an <i>Extra Annual Roth Conversion</i>, and spending your other accounts cannot cover can all take the IRA below it. <em>Reduce IRA in N Years</em> sizes its withdrawals to reach it in N years; <i>Fill Fed/IRMAA Bracket</i> and <i>IRA Draw %</i> take their planned IRA withdrawals only from the part of the IRA above it, so it matters only once the balance nears it. <i>Proportional Withdraw</i> and <i>Ordered</i> do not use it at all, and the field greys out when one of them is selected.
+				<li><strong>Withdrawal Strategy:</strong> The <em>Withdrawal Strategy</em> box (top of sidebar) controls how the simulation draws from your accounts each year. Set the <i>After-Tax Spend</i> goal (annual after-tax income needed) and <i>Spend Delta</i> (yearly change - default −1% per <A HREF="https://retirementresearcher.com/retirement-spending-smile">historical data</A>). The <i>IRA Goal</i> field (just below the strategy box) is the balance to bring your IRA down <strong>to</strong>, entered <strong>in today's dollars</strong> and inflation-adjusted (CPI) to each year so it tracks the inflation-indexed brackets, IRMAA tiers, and ACA cliffs it is meant to manage. It is a target, not a minimum to keep: required distributions, an <i>Extra Annual Roth Conversion</i>, and spending your other accounts cannot cover can all take the IRA below it. <em>Reduce IRA in N Years</em> sizes its withdrawals to reach it in N years; <i>Fill Fed/IRMAA Bracket</i> and <i>IRA Draw %</i> take their planned IRA withdrawals only from the part of the IRA above it, so it matters only once the balance nears it. <i>Proportional Withdraw</i> and <i>Ordered</i> do not use it at all, and the field grays out when one of them is selected.
 					<details style="margin-top:8px;">
 					<summary style="font-size:0.88em;color:#555;cursor:pointer;user-select:none;font-weight:600;">Detailed Strategy Discussion…</summary>
 					<div style="margin-top:6px;font-size:0.88em;line-height:1.5;">
@@ -1316,7 +1316,7 @@
 					<p><strong>Cycle Brokerage</strong> - a toggle that layers on top of any strategy. When enabled, the simulation alternates between IRA draw years and brokerage harvest years. The cycle length N is recomputed each year as round(IRA&nbsp;÷&nbsp;Brokerage), so the ratio self-corrects as balances evolve. In a harvest year, spending is funded from brokerage capital gains instead of IRA withdrawals, realizing gains at the preferential LTCG rate (often 0% for many retirees) rather than as ordinary income. Advantages: (1)&nbsp;steps up the cost basis each cycle, reducing future LTCG tax; (2)&nbsp;frees the full IRA bracket headroom for Roth conversions in harvest years; (3)&nbsp;lower MAGI in IRA years can keep IRMAA tiers lower. DRIP (dividend reinvestment) is automatically forced on so dividends reinvest into brokerage rather than leaking to Cash as ordinary income. Two orderings are available: <em>IRA-first</em> (🗘 red) runs N IRA years then harvests - better when the brokerage has high unrealized gains (delay harvest to let IRA deplete first); <em>Brokerage-first</em> (🔄) harvests immediately at the start of each cycle - better when brokerage basis is high (low gains) so the tax cost of harvesting is small. The Optimizer and Monte Carlo always evaluate all three variants. Caveats: harvest years raise MAGI, triggering IRMAA surcharges 2 years later and potentially causing ACA cliff loss; with a very high-gains brokerage the strategy can become less effective as effective LTCG rate rises over time.</p>
 				<p><strong>Strategy panel controls</strong> - these sit with your strategy in the sidebar and affect every tab:</p>
 					<ul style="margin:4px 0 8px 16px;">
-						<li><strong>Guardrails</strong> - a switch under <i>Spend Delta</i> that lets spending move with your savings instead of holding it fixed, under whichever withdrawal strategy you choose. It is a Guyton-Klinger-<i>style</i> rule rather than the published one: what it measures is your whole spending against your savings, where the published rule watches what your portfolio withdraws - a different number for anyone whose Social Security or pension starts later. The <a href="README.md#limitations-and-restrictions" target="_blank" rel="noopener">README&rsquo;s <i>Limitations and Restrictions</i></a> section names all four places the two differ. Your first year sets the safe level: what you spend for each dollar you have saved. Each year after that, your spending is compared with the safe level for the savings you have then. If your savings have fallen far enough that spending is more than a set band above it, spending is cut; if they have grown far enough that spending is more than the band below it, spending is raised, by the same amount either way. After a year with a negative return, the inflation raise is also skipped while spending is above the safe level. The tool uses a band of &plusmn;20% and a step of 10%, and the sentence under the switch states the values in force; the two settings can be changed only in the advanced view. <i>Spend Delta</i> still applies on top, so with the default of &minus;1% a year both shape your spending. The Optimizer and Monte Carlo run every strategy with your Guardrails setting, plus your own plan with the switch the other way round, so you can see what Guardrails are worth to your plan, and Monte Carlo's <i>My Plan Only</i> runs just your plan both ways. Because the two spend differently, compare them on Spendable as well as ending wealth. A plan saved when Guyton-Klinger was a withdrawal strategy loads as <i>Proportional Withdraw</i> at 0% with Guardrails on, which gives the same numbers.</li><li><strong>Maximize Conversions</strong> - gets as much into Roth as the plan allows, two ways at once. First, any IRA withdrawal surplus beyond the spend goal is converted to Roth rather than left in Cash. That is a same-dollar move: the money was already withdrawn and taxed on its way out, so this only changes where it lands, and nothing is lost to tax by doing it. Second, it uses available Cash to cover conversion taxes rather than letting those taxes come out of the conversion itself - the standard advice for Roth conversions, and what makes an <em>Extra Annual Roth Conversion $</em> of $20,000 actually deliver $20,000 to the Roth instead of roughly $13,700 (see the field below). It only ever uses Cash you have: when Cash is short it covers what it can, and at $0 Cash it changes nothing. The two switches beneath it, <em>Convert Excess to Roth</em> and <em>Use Cash</em>, split it into its halves so you can run either alone. On by default in the Optimizer (see note below); toggle it on in single-scenario mode to match.</li>
+						<li><strong>Guardrails</strong> - a switch under <i>Spend Delta</i> that lets spending move with your savings instead of holding it fixed, under whichever withdrawal strategy you choose. It is a Guyton-Klinger-<i>style</i> rule rather than the published one: what it measures is your whole spending against your savings, where the published rule watches what your portfolio withdraws - a different number for anyone whose Social Security or pension starts later. The <a href="README.md#limitations-and-restrictions" target="_blank" rel="noopener">README&rsquo;s <i>Limitations and Restrictions</i></a> section names all four places the two differ. Your first year sets the safe level: what you spend for each dollar you have saved. Each year after that, your spending is compared with the safe level for the savings you have then. If your savings have fallen far enough that spending is more than a set band above it, spending is cut; if they have grown far enough that spending is more than the band below it, spending is raised, by the same amount either way. After a year with a negative return, the inflation raise is also skipped while spending is above the safe level. The tool uses a band of &plusmn;20% and a step of 10%, and the sentence under the switch states the values in force; the two settings can be changed only in the advanced view. <i>Spend Delta</i> still applies on top, so with the default of &minus;1% a year both shape your spending. The Optimizer and Monte Carlo run every strategy with your Guardrails setting, plus your own plan with the switch the other way around, so you can see what Guardrails are worth to your plan, and Monte Carlo's <i>My Plan Only</i> runs just your plan both ways. Because the two spend differently, compare them on Spendable as well as ending wealth. A plan saved when Guyton-Klinger was a withdrawal strategy loads as <i>Proportional Withdraw</i> at 0% with Guardrails on, which gives the same numbers.</li><li><strong>Maximize Conversions</strong> - gets as much into Roth as the plan allows, two ways at once. First, any IRA withdrawal surplus beyond the spend goal is converted to Roth rather than left in Cash. That is a same-dollar move: the money was already withdrawn and taxed on its way out, so this only changes where it lands, and nothing is lost to tax by doing it. Second, it uses available Cash to cover conversion taxes rather than letting those taxes come out of the conversion itself - the standard advice for Roth conversions, and what makes an <em>Extra Annual Roth Conversion $</em> of $20,000 actually deliver $20,000 to the Roth instead of roughly $13,700 (see the field below). It only ever uses Cash you have: when Cash is short it covers what it can, and at $0 Cash it changes nothing. The two switches beneath it, <em>Convert Excess to Roth</em> and <em>Use Cash</em>, split it into its halves so you can run either alone. On by default in the Optimizer (see note below); toggle it on in single-scenario mode to match.</li>
 						<li><strong>Extra Annual Roth Conversion $</strong> - a fixed dollar amount converted from IRA to Roth every year, on top of whatever your strategy and Maximize Conversions already do. Two things to know. (1) The amount you enter is the <em>gross</em> withdrawal from the IRA, and a conversion owes tax on it. Without <em>Use Cash</em>, that tax comes out of the conversion, so less arrives in Roth than you typed - $20,000 entered lands about $13,700 at a 31% marginal rate. With <em>Use Cash</em> on, Cash covers the tax and the full $20,000 lands. Either way, the Roth Conv column in Annual Details shows what actually arrived; the extraConv column (Opp. Cost category) shows the gross. (2) It is capped only by your remaining IRA balance each year - it does <em>not</em> stop at your IRA Goal, because a conversion moves money IRA-to-Roth rather than out of the household, and drawing the IRA down is usually the point. This is the same amount the Optimizer's <em>Optimize Conversions</em> search solves for, and loading a ⇌ row fills it in for you.</li>
 						<li><strong>Stop conversions after</strong> - the last year Roth conversions run. Enter a calendar year (for example 2031) or your age (for example 71); conversions stop the year after. Leave it blank to convert for the whole plan. The choice beside it sets what stops: <i>all conversions</i> stops both your strategy&rsquo;s own bracket filling and the <i>Extra Annual Roth Conversion $</i>, while <i>extra only</i> stops just the Extra Annual Roth Conversion and lets the strategy keep filling brackets. Converting past the point where the tax paid stops earning its keep can leave you worse off than not converting at all.</li>
 						<li><strong>Roth before Brokerage</strong> - when a year&rsquo;s spending needs more than your strategy itself withdraws, the shortfall is filled from Cash, then Brokerage, then Roth. Switch this on to take Roth ahead of Brokerage; Cash still comes first. Drawing Roth avoids realizing capital gains, but it spends the account that grows tax-free, so it helps some plans and hurts others, and nothing about a plan predicts which. The Optimizer runs it both ways and marks the alternative &#x1F161;. <i>Ordered</i> ignores it and draws in the sequence you chose.</li>
@@ -1666,7 +1666,7 @@
                     <span title="Cyclic brokerage maneuvering, IRA drawn first."><span style="color:#cc0000;">🗘</span> Cyclic, IRA-first</span>
                     <span title="Cyclic brokerage maneuvering, brokerage drawn first.">🔄 Cyclic, brokerage-first</span>
                     <span title="The Roth before Brokerage switch, turned on: when a year's spending needs more than the strategy withdraws, Roth is drawn ahead of the brokerage account rather than last. Cash still comes first. Swept as its own dimension, so every strategy but Ordered appears both ways. Only shown when you have Roth to draw.">🅡 Roth before Brokerage</span>
-                    <span title="Every row follows your Guardrails switch. One extra row is your own plan with the switch the other way round, so you can see what Guardrails are worth to your plan. With Guardrails on, spending is cut when your savings fall far enough that it is no longer safe, and raised when they grow far enough to spend more, so compare Spendable as well as End Wealth.">🛡️ Guardrails on / off: your plan with the switch the other way round</span>
+                    <span title="Every row follows your Guardrails switch. One extra row is your own plan with the switch the other way around, so you can see what Guardrails are worth to your plan. With Guardrails on, spending is cut when your savings fall far enough that it is no longer safe, and raised when they grow far enough to spend more, so compare Spendable as well as End Wealth.">🛡️ Guardrails on / off: your plan with the switch the other way around</span>
                     <span title="Optimize Conversions row: swept extra fixed annual Roth conversions ($25k steps) on top of Max Conversions.">⇌ Optimize Conversions</span>
                     <span title="Conversions stop after the year shown. These rows convert only up to that year and then stop, which often beats converting for the rest of the plan. Clicking the row fills in both the amount and the stop year.">⏹2026 Conversions stop after</span>
                     <span title="Plan success - every year of the plan was fully funded.">🟢 Success</span>
@@ -1696,16 +1696,16 @@
      block, the deferred test tier never registered and the self-check badge stayed neutral forever
      on that one URL. Nothing here has a load-time side effect, so loading earlier is free. -->
 <script src="montecarlo/historical_returns.js?v=11150b"></script>
-<script src="montecarlo/prng.js?v=111671"></script>
+<script src="montecarlo/prng.js?v=1118ef"></script>
 <script src="montecarlo/stats.js?v=11161f"></script>
 <!-- The Monte Carlo model itself. The worker importScripts() the same file; on file://, where a
      worker cannot load its scripts, mc_controller.js runs it here on the main thread. -->
-<script src="montecarlo/mc_engine.js?v=111857"></script>
+<script src="montecarlo/mc_engine.js?v=1118ef"></script>
 <!-- P128. The risk-based rails solver. Same arrangement as mc_engine.js: the worker imports it too,
      and on file:// the controller runs it here. -->
-<script src="montecarlo/rails_engine.js?v=1118bf"></script>
-<script src="montecarlo/mc_controller.js?v=111857"></script>
-<script src="montecarlo/mc_tab.js?v=1118df"></script>
+<script src="montecarlo/rails_engine.js?v=1118ef"></script>
+<script src="montecarlo/mc_controller.js?v=1118ef"></script>
+<script src="montecarlo/mc_tab.js?v=1118ef"></script>
 
 <script type="text/javascript">
 function clampIntlInput(intlId, equityPct) {
@@ -1795,7 +1795,7 @@ window.addEventListener('DOMContentLoaded', function () {
         startAgeEl.value = now.getFullYear() - by1 - (birthdayPassedThisYear ? 0 : 1);
     }
     setupChartSync();
-    // Attach dollar-input behaviour before captureDefaults/loadFromURL so that
+    // Attach dollar-input behavior before captureDefaults/loadFromURL so that
     // (a) defaults are snapshotted in formatted state and (b) loadFromURL's
     // parseShorthand decode lands on already-attached elements, keeping
     // dataset.numVal consistent regardless of init order.

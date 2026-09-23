@@ -745,7 +745,7 @@ function fraMonthsForBirthYear(birthYear) {
  * Age tooltip; the default is deliberately not moved, because the birth month also drives QCD 70.5
  * eligibility (taxengine.js isQCDEligible).
  *
- * Not modelled: the mirror case at the other end, where benefits stop the month of death rather
+ * Not modeled: the mirror case at the other end, where benefits stop the month of death rather
  * than at the end of the death year.
  * @param {number} birthMonth 1-12; anything missing or out of range is treated as December.
  * @returns {number} 0..1
@@ -1583,7 +1583,7 @@ function resolveHousehold(sim, yr) {
     // the surcharge - a 61-year-old household pays nothing no matter how large the conversion
     // income.
     const medicareAge = TAXData.IRMAA.ELIGIBILITY_AGE;
-    // PER-PERSON ENROLMENT. Not everyone 65+ is on Medicare: a person may be covered by a spouse's
+    // PER-PERSON ENROLLMENT. Not everyone 65+ is on Medicare: a person may be covered by a spouse's
     // employer plan, by the VA, or by retiree coverage, and in a couple that is often true of ONE
     // of them. Age alone therefore cannot decide who pays, and it decides two things at once - the
     // base premium AND the IRMAA surcharge - so both follow the same flag. Absent means enrolled,
@@ -1998,7 +1998,7 @@ function resolveSpendTarget(sim, yr) {
             const high = banded && _cwr > ref * (1 + _guard);
             const low  = banded && _cwr < ref * (1 - _guard);
             // P127. No cut in the plan's last GK_NO_CUT_FINAL_YEARS years. `y` is the plan year, so a
-            // resumed run counts from the same end the whole plan does. Labelled rather than silent,
+            // resumed run counts from the same end the whole plan does. Labeled rather than silent,
             // because the reader of the ruleAdj column would otherwise see a year over the band and no cut.
             const _cutAllowed = (sim.planYears - y) > GK_NO_CUT_FINAL_YEARS;
             if (high && !_cutAllowed) {
@@ -2618,7 +2618,7 @@ function planPrimaryWithdrawals(sim, yr) {
         // Filling the ceiling costs a little lifetime tax and a little ending net worth. That is a
         // consequence to disclose, not a reason to decline: a named ceiling is a contract to FILL,
         // and whether filling a 22% bracket is the better plan is the Optimizer ranking's job to
-        // surface, not a licence for the engine to under-deliver the strategy that was selected.
+        // surface, not a license for the engine to under-deliver the strategy that was selected.
         // `harvestCeilSSBasis: 'full'` restores the old arm so the choice stays measurable.
         const _ceilRoomAbove = (ceil, ordFloor) => {
             if ((inputs.harvestCeilSSBasis ?? 'magi') !== 'magi' || ceil.kind === 'aca') {
@@ -3041,7 +3041,7 @@ function fillSpendingGap(sim, yr) {
     // and not a default (research/CONSTANT_SPLIT.md).
     //
     // VALIDATED AGAINST THE KNOWN VALUES, not for truthiness: with `|| null` a typo such as
-    // 'fillCashThenRother' fell through to the Roth-first branch and silently modelled the other
+    // 'fillCashThenRother' fell through to the Roth-first branch and silently modeled the other
     // mode. Anything unrecognized means "leave today's behavior alone".
     const _rothPos = (inputs.rothGapFill === 'fillCashThenRoth' || inputs.rothGapFill === 'fillRothThenCash')
         ? inputs.rothGapFill : null;
@@ -3944,7 +3944,7 @@ function applyConversionGrossUp(sim, yr) {
     //
     // Argument shape is the main tax pass's (`yr.tax = calculateTaxes(...)`), with the gross-up's
     // IRA dollars added to both legs, and `IRMAAAnnualCost: 0` for the reason in adoptTaxBasis.
-    // When applyExtraConversion runs afterwards it recomputes over the same income plus its own
+    // When applyExtraConversion runs afterward it recomputes over the same income plus its own
     // gross and adopts that instead, so the two never disagree - this call is what makes the basis
     // right for a plan that grosses up and has no extra conversion.
     adoptTaxBasis(yr, calculateTaxes(taxArgs(sim, yr, {
@@ -5119,7 +5119,7 @@ function bestConversionStopYear(inputs, opts) {
 }
 
 // Strategies whose withdrawal branch never reads `yr.curIRA` or `yr.iraGoalNominal`, so no value of
-// the IRA Goal can change their outcome. The UI greys the IRA Goal field for exactly these.
+// the IRA Goal can change their outcome. The UI grays the IRA Goal field for exactly these.
 //
 // Sweep the goal as a MULTIPLE of the starting IRA, not in absolute dollars: an absolute grid tests
 // whether the floor BINDS, not whether the strategy reads it, and a coarse one reports `bracket` as
@@ -5130,7 +5130,7 @@ function bestConversionStopYear(inputs, opts) {
 //   never reads it ................ everything below
 // 'bracket' covers the Fed, IRMAA-tier and ACA-multiple sub-modes, which are parameters on it rather
 // than separate strategies. Pinned by a test; if a strategy starts honoring the goal, remove it here
-// or the field greys out on a control that works.
+// or the field grays out on a control that works.
 const IRA_GOAL_BLIND_STRATEGIES = Object.freeze(['propwd', 'ordered', 'split']);
 
 // When ALL strategies fail at baseline, searches downward across every strategy to find
@@ -5763,7 +5763,7 @@ function sameStrategySelection(a, b) {
 
 // The user's current family parameter as a sweep row, when it does NOT sit on that family's
 // standard grid -- so a user at Proportional 7% or Reduce 18 yrs sees their own setting on the
-// family's curve instead of only the neighbouring steps. Returns null when the value is already on
+// family's curve instead of only the neighboring steps. Returns null when the value is already on
 // the grid, or the family has no numeric grid (ordered/gk/aca: gk already sweeps the user's own
 // guardrails, ordered is a small fixed set). Shared by buildVariations() and the Optimizer's own
 // sweep so the two cannot drift; the grids themselves are passed in because they differ (the
@@ -6172,7 +6172,7 @@ function bestTimeLimitedConversion(baseInputs, strategyOverrides = {}, opts = {}
     }
     if (best.gain <= 0) return null;
 
-    // Refine on the real $25k grid around the winner, re-testing neighbouring cutoffs since the
+    // Refine on the real $25k grid around the winner, re-testing neighboring cutoffs since the
     // best cutoff shifts as the amount moves.
     const span = Math.max(25000, Math.round(totalIRA / 16));
     const coarseBest = { ...best };
@@ -6294,7 +6294,7 @@ function splitVectorSortVal(v) {
 const OPTIMIZER_GRIDS = {
     propwd:   [0, 5, 10, 20, 50],
     // Five steps rather than sixteen, and deliberately. Reduce was 37% of the table on a 16-step grid,
-    // for a family whose neighbouring years differ by very little, and every row is paid for several
+    // for a family whose neighboring years differ by very little, and every row is paid for several
     // times over once the 🗘/🔄 and 🅡 clone passes and the no-conversion baseline have had it. A user
     // sitting between steps still gets their own value as a row: offGridParamFor adds it.
     fixed:    [3, 7, 11, 17, 23],
@@ -6322,7 +6322,7 @@ const MODIFIER_PREFIX = {
     'rothgap':         '\u{1F161} ',
 };
 // Marks the one row with Guardrails on that the table has to point out: the user's own plan run with
-// the switch the other way round (planRuleTwin). Plain text, so it serves the HTML label and MC's plain
+// the switch the other way around (planRuleTwin). Plain text, so it serves the HTML label and MC's plain
 // `_label` alike.
 const GUARDRAILS_PREFIX = '\u{1F6E1}️ ';
 
@@ -6802,7 +6802,7 @@ function diffSummaries(saved, fresh) {
 }
 
 // Windows rejects < > : " / \ | ? * and control characters in a filename, and also trailing dots or
-// spaces. The blank-name path produces a timestamp containing colons, so the unsanitised
+// spaces. The blank-name path produces a timestamp containing colons, so the unsanitized
 // `${name}.json` this replaces could not be saved on Windows at all.
 const _WIN_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 

@@ -156,7 +156,7 @@ which convention it used.
 
 Both are stated at the table in `taxengine.js` and pinned by `TEST CASE 25c` in
 `taxengine.tests.js`. `Retirement_Projection.html` drops `-none-` and the `Infinity` row when it
-lists tiers to choose from, which is the same judgement made in a different place.
+lists tiers to choose from, which is the same judgment made in a different place.
 
 ## A code comment says what the code does now, and names functions, never lines
 

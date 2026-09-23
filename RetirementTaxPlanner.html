@@ -542,9 +542,9 @@
 
 </div><!-- end .layout -->
 
-<script src="displayhelpers.js?v=15a2"></script>
+<script src="displayhelpers.js?v=1118ef"></script>
 <script src="sharepanel.js?v=1118e3"></script>
-<script src="taxPaymentPlanner.js?v=1118eb"></script>
+<script src="taxPaymentPlanner.js?v=1118ef"></script>
 <script>
   // Version readout — parsed out of <title> so the number lives in exactly one place.
   (() => {
@@ -881,7 +881,7 @@
   function downloadPlanIcs(which) {
     if (!_planData) return;
     // A/B/C/D/Q, straight off the map the engine returned. The old three-way ternary hard-coded
-    // the letters and silently fell through to the last one for anything it did not recognise.
+    // the letters and silently fell through to the last one for anything it did not recognize.
     const actions = _planData.actions[which];
     if (!actions) return;
     const label = `plan-${which.toLowerCase()}`;

@@ -19,7 +19,7 @@ let _mcBase              = null;      // getInputs() snapshot captured at run ti
 // is not among the swept strategies. Set once per run by renderMCResults; the survival table, the
 // main chart and the plan headline all pin off this one value so they cannot disagree.
 let _mcPinIdx            = -1;
-// Index of the sidebar plan's Guardrails twin (the plan with the switch the other way round), or -1.
+// Index of the sidebar plan's Guardrails twin (the plan with the switch the other way around), or -1.
 // Set beside _mcPinIdx; the chart gives it a color of its own, since it shares the plan's family.
 let _mcTwinIdx           = -1;
 // Variation indices in the order renderMCChart drew them (pinned plan first). The chart tooltip
@@ -127,7 +127,7 @@ function initMCTab() {
 
 // Put every Advanced Parameter back to its default. MC_PARAMS is the single source of those
 // defaults, so this cannot drift from what the clamped reads fall back to. mu's real default is
-// "synced from Growth %", a behavior rather than a number, so it goes through the sync afterwards.
+// "synced from Growth %", a behavior rather than a number, so it goes through the sync afterward.
 function resetMCParams() {
     for (const [id, spec] of Object.entries(MC_PARAMS)) {
         const el = document.getElementById(id);
@@ -242,7 +242,7 @@ function _mcIsFixedInflationState() { return _mcParamIs('mc-inflation-shock-sd',
 
 // Paint the three buttons. Historical mode does not use the synthetic model at all - it samples real
 // inflation out of the record - so Fixed Inflation and Pessimistic are disabled there rather than
-// left clickable with nothing to do. Their knobs are already greyed out in that mode.
+// left clickable with nothing to do. Their knobs are already grayed out in that mode.
 function updateMCPresetState() {
     const synthetic = document.getElementById('mc-sim-mode')?.value !== 'bootstrap';
     const set = (id, on, enabled) => {
@@ -383,7 +383,7 @@ function mcTabActivated() {
     // Always sync mode UI — handles scenario-load case where mc-sim-mode was restored
     // but the tab wasn't visible when applyScenario() ran.
     updateMCModeUI();
-    // Seed the timing model before the buttons are labelled, so they arrive carrying a cost rather
+    // Seed the timing model before the buttons are labeled, so they arrive carrying a cost rather
     // than filling one in later. This is ~144 simulations, a fraction of the run it is describing,
     // and it only happens until a real run has replaced it.
     if (!mcTimingIsMeasured()) {
@@ -498,7 +498,7 @@ function stressWindowMode() {
     return Number.isFinite(n) ? n : 'combined';
 }
 
-// How the sequences on screen were chosen, for labelling. Prefers what the engine actually applied
+// How the sequences on screen were chosen, for labeling. Prefers what the engine actually applied
 // (it clamps windows to the record and the plan length) over the input, which may have moved on.
 // Returns { mode, windows } where windows is the list of ranking windows in play.
 function stressModeOf(stress) {
@@ -529,7 +529,7 @@ function planOnlyVariations(variations, base) {
               _paramSortVal:   v ? v._paramSortVal : undefined }];
 }
 
-// The sidebar's plan with the Guardrails switch the other way round (P126). Built from the plan
+// The sidebar's plan with the Guardrails switch the other way around (P126). Built from the plan
 // itself, so it keeps the plan's Extra Conversion, stop year and conversion switches: the rule is the
 // only difference, which is what makes the pair a measure of the switch.
 function ruleTwinVariation(base) {
@@ -713,11 +713,11 @@ function runMonteCarlo(scope) {
 
 function cancelMC() {
     cancelMCWorker();
-    // Same reason runMonteCarlo() clears it: a cancelled run never delivers its callback, and on the
+    // Same reason runMonteCarlo() clears it: a canceled run never delivers its callback, and on the
     // file:// path a stress-only refresh can be the thing in flight. Leaving the flag set freezes
     // every later refresh at its own guard.
     _mcStressRefreshing = false;
-    // P91: the user cancelled, so do not quietly start another pass on their behalf. A later edit
+    // P91: the user canceled, so do not quietly start another pass on their behalf. A later edit
     // re-requests one; forgetting it here is a choice rather than the oversight this phase fixed.
     _mcStressPending = false;
     setMCRunning(false);
@@ -876,7 +876,7 @@ let _mcStress = null;
 // The `_buildMCHash()` the Stress Test on screen was computed from: the inputs the last SUCCESSFUL
 // stress pass read when it started, recorded at the moment its result is drawn, so the two can never
 // disagree. A full run records its own, because its stress pass replaces what is drawn. A pass that
-// errors, is cancelled or is terminated draws nothing and records nothing, so the next request for
+// errors, is canceled or is terminated draws nothing and records nothing, so the next request for
 // those inputs runs.
 //
 // It is what lets refreshMCStressOnly skip a pass that would redraw the same answer (2026-09-16).
@@ -1113,7 +1113,7 @@ function _stressDisplayRanks() {
 // forward past the last stress scenario reaches the first captured path, and back past the first
 // captured path reaches the last stress scenario. At the defaults that is about 46 stops.
 //
-// A ring is why neither arrow is ever disabled. The alternative - grey them out at the ends - left
+// A ring is why neither arrow is ever disabled. The alternative - gray them out at the ends - left
 // the reader at a dead end in the middle of comparing paths, having to go back to a table to cross
 // from one list to the other.
 //
@@ -1306,10 +1306,10 @@ function renderMCMainMetrics(msg) {
     // Synthetic: one blended return series, so there is nothing per-asset to report. CAGR first,
     // then the range, matching the Historical line below.
     if (!msg.assetRanges) {
-        // The two synthetic models centre the yearly return distribution differently, and the label
-        // has to say which one you are looking at. GBM's mu is a log drift, so the centre reported
+        // The two synthetic models center the yearly return distribution differently, and the label
+        // has to say which one you are looking at. GBM's mu is a log drift, so the center reported
         // here sits below the growth rate typed in Assumptions; AAM's mu is the plain average, so
-        // the centre IS that number. Neither changes how volatility drags on compounded growth, so
+        // the center IS that number. Neither changes how volatility drags on compounded growth, so
         // this is a statement about one year, not about where the plan ends up.
         const _centreLabel = (msg.simulationMode === 'aam') ? 'arithmetic' : 'geometric';
         if (grow != null) parts.push(`Median growth <strong>${grow}%/yr</strong> <span style="color:#888;font-size:0.85em;">(${_centreLabel})</span>`);

@@ -140,7 +140,7 @@ function railsCutTo(P) {
     return P.cutTo ?? P.target;
 }
 
-const _RAILS_CANCELLED = Symbol('rails-cancelled');
+const _RAILS_CANCELLED = Symbol('rails-canceled');
 const _RAILS_SKIP_START = Symbol('rails-skip-start');
 
 // One whole rails job. Resolves to the results message, or null if shouldCancel() went true.

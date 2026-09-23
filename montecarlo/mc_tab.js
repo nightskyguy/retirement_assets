@@ -125,7 +125,6 @@ function initMCTab() {
     updateMCPresetState();
 }
 
-// Returns true when NERD_KNOBS is active.
 // Put every Advanced Parameter back to its default. MC_PARAMS is the single source of those
 // defaults, so this cannot drift from what the clamped reads fall back to. mu's real default is
 // "synced from Growth %", a behavior rather than a number, so it goes through the sync afterwards.
@@ -421,13 +420,12 @@ function mcTabActivated() {
 
 // Two hashes, because the tab has two passes with different costs and different inputs.
 //
-// _buildSweepHash covers everything the expensive main sweep depends on. It is what the "Out of
+// `_buildSweepHash` covers everything the expensive main sweep depends on. It is what the "Out of
 // date" banner is keyed to, and it deliberately does NOT include the two Stress Test controls: the
 // stress pass re-runs itself on every edit, so flagging the ~30-second sweep as stale over a change
-// only the stress chart consumed offered a Re-run button that re-ran the whole thing for nothing.
-// (The Stress sequences count genuinely did feed the main pass until now, through the bear-start
-// overlay's sample pool. That coupling is gone - see BEAR_OVERLAY_POOL in prng.js - which is what
-// makes leaving it out correct rather than merely convenient.)
+// only the stress chart consumed would offer a Re-run button that re-ran everything for nothing. The
+// Stress sequences count no longer feeds the main pass at all - see BEAR_OVERLAY_POOL in prng.js -
+// which is what makes leaving it out correct rather than merely convenient.
 //
 // _buildMCHash adds the stress controls on top. It answers "did anything change at all", which is
 // what decides whether the stress pass needs re-running.
@@ -852,22 +850,15 @@ function renderDemoTable(rows) {
 // --- Reacting to sidebar edits --------------------------------------------
 
 let _mcStressRefreshing = false;
-// P91. A stress refresh requested while one is in flight used to be DROPPED, and nothing ever
-// went back for it. That is how the Stress Test came to answer about a plan nobody was looking at:
-// the page primes the pass once on load, the share URL or a saved scenario lands while that prime
-// is still running, the refresh it asks for hits the guard below and is forgotten, and the headline
-// settles on the PREVIOUS plan's horizon. Measured on a shared link: the first result was computed
-// over 25 years while the plan on screen ran 36, and the verdict read "runs out of money in 8 of
-// the 36 worst historical periods" where the right answer is "survives all 40".
+// A stress refresh requested while one is IN FLIGHT must be remembered, not dropped. The page primes
+// the pass once on load; a share URL or a saved scenario can land while that prime is still running,
+// and the refresh it asks for hits the guard below. Dropped, the Stress Test settles on the PREVIOUS
+// plan's horizon and answers about a plan nobody is looking at.
 //
-// The guard itself is correct - two in-flight stress passes would race to render. What was missing
-// is that a dropped request has to be REMEMBERED. This flag is that memory, and every path that
-// clears `_mcStressRefreshing` drains it.
-//
-// Two earlier fixes in this file (runMonteCarlo and cancelMC, both commented below) also came from
-// this guard, and both fixed the flag rather than the lost request. That is why this is a third
-// visit: clearing a stuck flag lets the NEXT request through, but nothing was ever going to make
-// one when the plan had already finished loading.
+// The guard itself is correct - two in-flight stress passes would race to render. This flag is the
+// memory, and every path that clears `_mcStressRefreshing` drains it. Clearing a stuck flag is not
+// enough on its own: it lets the NEXT request through, and nothing makes one once the plan has
+// finished loading.
 let _mcStressPending = false;
 
 // Run the refresh that was dropped while another was in flight, if there was one. Clears the flag
@@ -1349,7 +1340,7 @@ function renderMCMainMetrics(msg) {
 }
 
 // Stress-pass metrics — same Min/CAGR/Max grid, sourced from the ~10-20 worst historical decades
-// instead of the full bootstrap sample. `stress` is msg.stress (null in Synthetic mode).
+// instead of the full bootstrap sample. `stress` is msg.stress; every mode runs a stress pass.
 function renderMCStressMetrics(stress) {
     // Always refresh the summary-bar tile from here, including the empty case, so a mode switch to
     // Synthetic blanks it rather than leaving a stale Historical number on every tab.
@@ -2033,6 +2024,27 @@ function _mcTipKeep(item, nBlockDs) {
         || !!item.dataset?._traceLabel;
 }
 
+// The heading every Monte Carlo tooltip opens with. The x labels are plan years already, so this
+// only names what the number beside it is.
+const _mcYearTitle = items => `Year ${items[0]?.label ?? ''}`;
+
+// The axes shared by the balance charts - the fan and the stress plot. Only the y-axis title
+// changes, and only with the Current-$ toggle, because the deflated series is a different
+// quantity and saying so is the whole point of the toggle.
+function _mcBalanceScales(inCurrentDollars) {
+    return {
+        x: { title: { display: true, text: 'Year' }, ticks: { maxTicksLimit: 10 } },
+        y: {
+            title: { display: true, text: inCurrentDollars ? 'Portfolio Balance (Current $)' : 'Portfolio Balance' },
+            ticks: {
+                callback: (v) => '$' + (v >= 1e6
+                    ? (v / 1e6).toFixed(1) + 'M'
+                    : (v / 1e3).toFixed(0) + 'K'),
+            },
+        },
+    };
+}
+
 function renderMCChart(msg) {
     const canvas = document.getElementById('mc-chart');
     if (!canvas || !msg?.variations?.length) return;
@@ -2180,7 +2192,7 @@ function renderMCChart(msg) {
         filter: (item, index, array) => _mcTipKeep(item, nBlockDs)
                                      && array.findIndex(i => _mcTipKeep(i, nBlockDs)) === index,
         callbacks: {
-            title: (items) => `Year ${items[0]?.label ?? ''}`,
+            title: _mcYearTitle,
             label: (ctx) => {
                 // A drawn path names itself and its outcome; it has no percentile to read.
                 if (ctx.dataset?._traceLabel)
@@ -2210,17 +2222,7 @@ function renderMCChart(msg) {
                 legend: { labels: legendLabels, onClick: legendClick, ...datasetHoverHighlight(5) },
                 tooltip: tooltipCfg,
             },
-            scales: {
-                x: { title: { display: true, text: 'Year' }, ticks: { maxTicksLimit: 10 } },
-                y: {
-                    title: { display: true, text: inCurrentDollars ? 'Portfolio Balance (Current $)' : 'Portfolio Balance' },
-                    ticks: {
-                        callback: (v) => '$' + (v >= 1e6
-                            ? (v / 1e6).toFixed(1) + 'M'
-                            : (v / 1e3).toFixed(0) + 'K'),
-                    },
-                },
-            },
+            scales: _mcBalanceScales(inCurrentDollars),
         },
     });
 
@@ -2255,7 +2257,7 @@ function _hookTraceClicks(canvas) {
 }
 
 // Stress-test chart — auto-computed alongside Historical mode (Item 7). `stress` is msg.stress
-// (the nested stress-pass payload from the worker), or null in Synthetic mode.
+// (the nested stress-pass payload from the worker).
 function renderStressChart(stress) {
     const wrap   = document.getElementById('mc-stress-chart-wrap');
     const canvas = document.getElementById('mc-stress-chart');
@@ -2335,7 +2337,7 @@ function renderStressChart(stress) {
     const tooltipCfg = {
         enabled: false,
         callbacks: {
-            title: items => `Year ${items[0]?.label ?? ''}`,
+            title: _mcYearTitle,
             label: ctx => `  ${ctx.dataset.label}: $${fmt(ctx.parsed.y)}`,
         },
     };
@@ -2352,17 +2354,7 @@ function renderStressChart(stress) {
                 legend: { display: false },
                 tooltip: tooltipCfg,
             },
-            scales: {
-                x: { title: { display: true, text: 'Year' }, ticks: { maxTicksLimit: 10 } },
-                y: {
-                    title: { display: true, text: inCurrentDollars ? 'Portfolio Balance (Current $)' : 'Portfolio Balance' },
-                    ticks: {
-                        callback: (v) => '$' + (v >= 1e6
-                            ? (v / 1e6).toFixed(1) + 'M'
-                            : (v / 1e3).toFixed(0) + 'K'),
-                    },
-                },
-            },
+            scales: _mcBalanceScales(inCurrentDollars),
         },
     });
 
@@ -2702,7 +2694,7 @@ function renderInputFanCharts(inputFan, years, sourceText) {
     const tooltipCfg = {
         filter: () => true,  // include hidden datasets (Min/Max)
         callbacks: {
-            title: items => `Year ${items[0]?.label ?? ''}`,
+            title: _mcYearTitle,
             label: ctx => {
                 const v = ctx.parsed.y;
                 const sign = v >= 0 ? '+' : '';

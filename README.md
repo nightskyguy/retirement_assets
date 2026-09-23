@@ -56,7 +56,9 @@ A California resident built these with [Google gemini](https://gemini.google.com
     - [ThunderHarbor.net by yanyan80](#thunderharbornet-by-yanyan80)
     - [Boldin](#boldin) - Probably the leading tool
     - [MaxiFi](#maxifi) - Lesser known tool
+    - [IncomeLabs](#incomelabs) - Priced for professionals
     - [Projection Lab](#projection-lab) - Best of Breed?!
+    - [Ready Aim Retire](#ready-aim-retire) - Not yet tried
     - [Roth Done Right (Stonewood)](#roth-done-right-stonewood)
     - [Others](#others)
       - [Number Crunch Nerds](#number-crunch-nerds) (spreadsheets)
@@ -577,13 +579,34 @@ Final comment: at $144/year it's a great deal compared to a ruinous retirement. 
 
 ---
 #### MaxiFi
-**In Summary**: I am undecided.
+**In Summary**: I do not recommend it.
 
-I've not had this subscription for very long, so I'll withhold my comments until I've kicked the tires more aggressively.  I will offer for now, that it's less "polished" than Boldin (I run into reference errors pretty often). So far the main quirk I noticed:
+It's less "polished" than Boldin (I run into reference errors pretty often). 
 
-It wants to know ONLY the IRA balances at the end of last year. I understand this, but I do NOT. Why it wants prior year end of year balances is no doubt so it can compute RMDs for IRAs and 401K accounts. But if my accounts soared or took a beating, the current value is what I care about. 
+It also has quirks: 
 
-More later.
+It wants to know ONLY the IRA balances (and brokerage) "balance/value at the end of last year". I do NOT think it makes sense. Why it wants prior year end of year balances is no doubt so it can compute RMDs for IRAs and 401K accounts. But if my accounts soared or took a beating, the current value is what I care about. Also, it implies that I can really only take stock of my situation after year end of THIS year. Too late to make any decisions.
+
+It does a reasonable job of computing "optimal spending" and has an "optimizer for withdrawals" (that they warn can take up to 1/2 hour to compute), but the result doesn't distinguish "Non-Roth" from Roth witdrawals. That's maddening because it clearly lists that "after 2033 to make Roth withdrawals first" for my spouse's account. For my accounts it suggest proportional withdrawals - but doesn't compute them! The only output I can find that tells the story of actual withdrawals is listed under "Year at a Glance" beneath a Sankey Diagram. If you fully expand the Cash Flow, you can tell which "Retirement Assets" are Roth and Non-Roth. However the "Spending" and "Income" summaries do not spell out which asset. There is a separate chart that spells out: "Retirement Account Saving/Withdrawal Plan" and has two plotted values: "Roth" and "Non-Roth" but not by account or by spouse. In short, it seems to have the right logic, but presentation is 2 out of 5. And after the about 2 minutes of computation "Optimized Withdrawals" nets 0.09% more lifetime spending in my case - it's immaterial. Likely that's a function of my asset mix not a flaw in the code. However comparing it to the [Retirement Optimizer]() shows that it can be done much more quickly and clearly.
+
+Likewise, I can see "Non-asset Income" (Social Security, Pensions), but I can't see what income is being projected for "(Retirement) Assets".  I'd like to know how much of a $10k withdrawal comes from growth, and how much is an actual deduction. 
+
+The navigation has some curious, and confusing misses - even after a recent navigation improvement release. For example, Select "Alt Profiles" and a saved profile that was previously built. Now select "Plan" and it goes back to "Base Profile" unless you change there, too.  Other navigational curiousities include warnings about how "settings affect Roth optimization", but do NOT provide links to those settings - you have to guess where where to look.
+
+Part of the problem is it's not really clear what "Report" and "Plan" do differently. I like that you have a "Base Plan" and can create alternatives from that Base (and updating the Base updates all the derived plans).
+
+I also notice that "discretionary spending" takes a huge dive in year 2052 through 2056. I can't figure out why. No milestones, no explanations, no clarity.
+
+One offputting thing about this tool, the author (Laurence Kotlikoff), has repeatedly used the email address I supplied when I signed up as a target of his personal rants. It MAY be because I assumed registering would get me notices about "Office hours and such", and even though I tend to agree with his sentiments, it's not what I expect of a professional tool.  Here are some examples that have little or nothing to do with retirement planning:
+
+* "War, Not Peace is at Hand. Texting Is No Strategy. Fire Hegseth and Send in the Marines."
+* "Now Is the Time for Cuban and Stavridis to Come to the Aid of Their Country"
+
+---
+#### IncomeLabs
+**In Summary**: This tools is expensive and geared to professionals. Otherwise I have no opinion as I have not used it.
+
+[Income Laboratory](https://incomelaboratory.com/pricing/) has been mentioned a lot recently. It's minimum $200/month price clearly targets CPAs rather than individual clients. There is also a $300/month plan with more features.  Oddly I notice the tool name and the website differ and if you try to go to the "IncomeLab" site, you'll find it's not theirs.
 
 ---
 #### Projection Lab
@@ -595,6 +618,14 @@ It is definitely more "geeky" than say Boldin, but I already know it does two th
 2. It has INFLATION built in to its Monte Carlo engine
 
 More later.
+
+---
+#### Ready Aim Retire
+**In Summary**: New software that I haven't used/tried yet.
+
+[![ReadyAimRetire](https://www.readyaimretire.com/images/logos/rar/rar_white_black.png)](https://www.readyaimretire.com/about) created by Greg Simmons and Ross Williams for the DIY person. Pricing is $115/yr; $1200 for "lifetime". They also target CFPs/CFAs with a $550/year plan.
+
+It mentions historical modeling, but not synthetic models - something I'll look into once I get free time.
 
 ---
 #### Roth Done Right (Stonewood)

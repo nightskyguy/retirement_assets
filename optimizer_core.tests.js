@@ -143,12 +143,10 @@ const { SWEEP_BASES, MC_GOLDEN, OPT_GOLDEN } = IS_NODE ? require('./sweep_golden
 // ── Test harness ──────────────────────────────────────────────────────────────
 let passed = 0, failed = 0;
 
-// Tests tagged slow are the ones the browser tier is allowed to skip. They ALWAYS run in node,
-// unconditionally - the tag is a hint to the browser runner, never a way to stop testing something.
-//
-// Only three tests are tagged, and they are tagged on measurement, not on suspicion: the
-// breakEvenHeirsRate binary searches account for 1792 ms of this suite's ~2.9 s. The remaining 179
-// finish in well under a second, which is what makes an after-paint browser run affordable at all.
+// Tests tagged slow are the ones the browser tier skips under ?runtests=fast. They ALWAYS run in
+// node, unconditionally - the tag is a hint to the browser runner, never a way to stop testing
+// something. Tag on measurement, not on suspicion: a test worth tagging takes seconds, not
+// milliseconds. TestTiers.EXPECTED.slowInCore pins how many carry the tag.
 const SLOW = new Set();
 
 // Tests tagged critical are the regression guards for defects that actually SHIPPED and silently
@@ -5910,21 +5908,19 @@ test('P81: the engine floor matches the one the banks are drawn under', () => {
         `the engine floor (${core.CPI_INDEX_FLOOR}) and the draw floor (${drawn}) have drifted apart`);
 });
 
-// Names declared at column 0 of each file, for the two shared-scope tests below: `name: fileA and
-// fileB` for every name two of the files declare. Node gives each file its own module scope, so
-// these collisions are invisible to every other test here.
-function _topLevelClashes(files) {
-    const fs = require('fs'), path = require('path');
-    const topLevel = src => new Set(
-        [...src.matchAll(/^(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]));
-    const seen = new Map();   // name -> first file that declared it
+// Names declared at column 0, for the two shared-scope tests below. `units` is a list of [label,
+// source text]; the result has `name: labelA and labelB` for every name two units both declare.
+// A unit wrapped in an IIFE declares no globals at column 0, so it is skipped whole. Node gives
+// each file its own module scope, so these collisions are invisible to every other test here.
+function _topLevelClashes(units) {
+    const topLevel = src => /^\((?:\(\)\s*=>|function[\s(])/m.test(src) ? new Set()
+        : new Set([...src.matchAll(/^(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]));
+    const seen = new Map();   // name -> first unit that declared it
     const clashes = [];
-    for (const f of files) {
-        const p = path.join(__dirname, f);
-        if (!fs.existsSync(p)) continue;
-        for (const name of topLevel(fs.readFileSync(p, 'utf8'))) {
-            if (seen.has(name)) clashes.push(`${name}: ${seen.get(name)} and ${f}`);
-            else seen.set(name, f);
+    for (const [label, text] of units) {
+        for (const name of topLevel(text)) {
+            if (seen.has(name)) clashes.push(`${name}: ${seen.get(name)} and ${label}`);
+            else seen.set(name, label);
         }
     }
     return clashes;
@@ -5937,27 +5933,42 @@ test('P81: no top-level name collides across the files the worker shares a scope
     // module scope there. A duplicated INFLATION_FLOOR shipped exactly this way and took the whole
     // Monte Carlo tab down; only the in-page suite noticed.
     if (!IS_NODE) return;   // the browser tier has already proven it by loading
-    const clashes = _topLevelClashes(['taxengine.js', 'optimizer_core.js', 'montecarlo/prng.js',
-        'montecarlo/historical_returns.js', 'montecarlo/stats.js', 'montecarlo/mc_engine.js']);
+    const fs = require('fs'), path = require('path');
+    const files = ['taxengine.js', 'optimizer_core.js', 'montecarlo/prng.js',
+                   'montecarlo/historical_returns.js', 'montecarlo/stats.js', 'montecarlo/mc_engine.js'];
+    const clashes = _topLevelClashes(files.map(f => [f, fs.readFileSync(path.join(__dirname, f), 'utf8')]));
     assert(clashes.length === 0,
         'the worker shares one scope, so these top-level names collide: ' + clashes.join(' | '));
 });
 
-test('no top-level name collides across the scripts retirement_optimizer.html loads', () => {
-    // Every classic <script> on the page shares one global scope. A duplicated `const` or `let` is
-    // a SyntaxError that stops the later file; a duplicated `function` fails nothing at all, and
-    // the later file's copy silently replaces the earlier one for every caller on the page. The
-    // list is read from the page itself, so a script added there is covered without an edit here.
+test('no top-level name collides across the scripts each page loads, inline scripts included', () => {
+    // Every classic <script> on a page shares one global scope. A duplicated `const` or `let` is a
+    // SyntaxError that stops the later script; a duplicated `function` fails nothing at all, and
+    // the later copy silently replaces the earlier one for every caller on the page, which is how
+    // a page's own helper can shadow the engine's. Script lists are read from the pages
+    // themselves, so a page or a script added later is covered without an edit here.
     if (!IS_NODE) return;   // the browser tier has already proven the const/let half by loading
     const fs = require('fs'), path = require('path');
-    const html = fs.readFileSync(path.join(__dirname, 'retirement_optimizer.html'), 'utf8');
-    const files = [...html.matchAll(/<script\b[^>]*\bsrc="([^"?]+)[^"]*"/g)].map(m => m[1])
-        .filter(f => !/^https?:/.test(f));
-    assert(files.includes('optimizer_ui.js') && files.includes('montecarlo/mc_tab.js'),
-        `the page's script list did not parse: ${files.join(', ')}`);
-    const clashes = _topLevelClashes(files);
-    assert(clashes.length === 0,
-        'the page\'s scripts share one scope, so these top-level names collide: ' + clashes.join(' | '));
+    const pages = [...fs.readdirSync(__dirname).filter(f => f.endsWith('.html')),
+                   ...fs.readdirSync(path.join(__dirname, 'standalone')).filter(f => f.endsWith('.html'))
+                       .map(f => 'standalone/' + f)];
+    const problems = [];
+    let optimizerUnits = 0;
+    for (const page of pages) {
+        const html = fs.readFileSync(path.join(__dirname, page), 'utf8');
+        const units = [];
+        for (const m of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)) {
+            const src = (m[1].match(/\ssrc="([^"?]+)/) || [])[1];
+            if (!src) { units.push([`${page} inline`, m[2]]); continue; }
+            if (/^https?:/.test(src)) continue;
+            const file = path.join(__dirname, path.dirname(page), src);
+            if (fs.existsSync(file)) units.push([src, fs.readFileSync(file, 'utf8')]);
+        }
+        if (page === 'retirement_optimizer.html') optimizerUnits = units.length;
+        for (const c of _topLevelClashes(units)) problems.push(`${page}: ${c}`);
+    }
+    assert(optimizerUnits > 10, `the Optimizer page's script list did not parse: ${optimizerUnits} scripts`);
+    assert(problems.length === 0, 'these top-level names collide within a page: ' + problems.join(' | '));
 });
 
 test('P81: no index step falls below the floor, at any spread', () => {
@@ -7372,6 +7383,23 @@ test('FRA: the old hard-coded 67 over-stated an early-claiming pre-1955 decedent
     assert(newWay < oldWay, 'deriving FRA from birth year must reduce, not raise, this benefit');
 });
 
+test('calculateSurvivorBenefit: the SSA claiming adjustments, worked by hand', () => {
+    // Deceased born 1960 (FRA 67). Claimed at 70: 36 months of delayed credit at 8%/yr, so $3,720
+    // unwinds to a $3,000 PIA, and the survivor at FRA receives the whole enhanced $3,720.
+    assert(calculateSurvivorBenefit(80, 70, 3720, 67, 0, 1960, 1960) === 3720, 'delayed credit passes to the survivor');
+    // Claimed at 62, 60 months early: 36 x 5/9% + 24 x 5/12% = 30%, so $1,400 unwinds to a $2,000
+    // PIA, and a survivor at FRA receives the PIA, not the reduced benefit.
+    assert(calculateSurvivorBenefit(80, 62, 1400, 67, 0, 1960, 1960) === 2000, 'an early claim does not reduce the survivor');
+    // The survivor's own early claim: the full 28.5% at 60, spread over the months from 60 to FRA.
+    assert(calculateSurvivorBenefit(80, 62, 1400, 60, 0, 1960, 1960) === 1430, 'survivor at 60 takes 28.5% less');
+    assert(calculateSurvivorBenefit(80, 62, 1400, 62, 0, 1960, 1960) === 1592, 'survivor at 62: 60 of the 84 months');
+    assert(calculateSurvivorBenefit(80, 62, 1400, 58, 0, 1960, 1960) === 1430, 'a claim before 60 is taken at 60');
+    // A survivor born 1954 has FRA 66, so the same 28.5% spreads over 72 months: 36 early is 14.25%.
+    assert(calculateSurvivorBenefit(80, 62, 1400, 63, 0, 1960, 1954) === 1715, 'FRA 66 survivor at 63');
+    assert(calculateSurvivorBenefit(80, 62, 1400, 67, 2500, 1960, 1960) === 2500, 'a larger own benefit is kept');
+    assert(fraMonthsForBirthYear(NaN) === 792 && fraMonthsForBirthYear(undefined) === 792, 'an unknown birth year is FRA 66');
+});
+
 test('FRA: a 1960-or-later couple is completely unaffected', () => {
     const a = calculateSurvivorBenefit(85, 62, 2000, 67, 1000, 1960, 1962);
     const b = calculateSurvivorBenefit(85, 62, 2000, 67, 1000);   // omitted birth years default to 67
@@ -7471,11 +7499,6 @@ test.critical('a no-tax state reports honest spend and honest failure', () => {
     }
 });
 
-// ── Runner ────────────────────────────────────────────────────────────────────
-// Returns the counts instead of setting process.exitCode, so the browser can render them. The node
-// entry point below is what still sets the exit code.
-//
-// `skipSlow` is honoured ONLY by the browser tier. Node always passes false: a tag must never be
 // -- Synthetic Monte Carlo: arithmetic returns and AR(1) inflation (P23) ------
 // The synthetic modes draw one standard normal per path-year and differ only in the transform.
 // Everything below asserts against the real prng.js helpers, not a reimplementation.
@@ -9103,6 +9126,11 @@ test('schedule: refuses to compose with cyclicEnabled', () => {
     assert(threw, 'schedule + cyclicEnabled should be an explicit error, not a precedence rule');
 });
 
+// ── Runner ────────────────────────────────────────────────────────────────────
+// Returns the counts instead of setting process.exitCode, so the browser can render them; the node
+// entry point below is what sets the exit code.
+//
+// `skipSlow` is honoured ONLY by the browser tier. Node always passes false: a tag must never be
 // able to stop a test from running in the place that gates commits.
 async function runOptimizerCoreTests(opts) {
     const skipSlow = !!(opts && opts.skipSlow);
@@ -9764,10 +9792,9 @@ test("the plan bank: every card's measured viability still reproduces", () => {
 });
 
 test('the plan bank: every plan file can be loaded ALONGSIDE the others in a page', () => {
-    // Each file declares `PLAN`. A classic script declaring `const PLAN` at global scope throws a
-    // redeclaration SyntaxError the moment a SECOND one is loaded, so the bank required cleanly in
-    // node while only ever ONE file could reach a browser - every load after the first died
-    // silently. Found by trying to run the Optimizer against all 19 households; the page had one.
+    // Every file declares `PLAN`, so each one must keep that declaration inside an IIFE: two
+    // classic scripts declaring `const PLAN` in the one global scope a page has is a redeclaration
+    // SyntaxError, and every load after the first dies.
     //
     // A source check, because `require()` cannot reproduce the failure: node gives every module its
     // own scope, so the bug is invisible to the very suite that covers the bank.
@@ -9777,11 +9804,12 @@ test('the plan bank: every plan file can be loaded ALONGSIDE the others in a pag
     const bad = [];
     for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.js') && f !== 'index.js')) {
         const src = fs.readFileSync(path.join(dir, f), 'utf8');
-        // The declaration must not sit at column 0, which is the only place it would collide.
-        if (/^const PLAN/m.test(src)) bad.push(f);
+        const wrapped = /^\((?:\(\)\s*=>|function[\s(])/m.test(src);
+        if (!wrapped || /^const PLAN[\s=]/m.test(src.slice(0, src.search(/^\((?:\(\)\s*=>|function[\s(])/m))))
+            bad.push(f);
     }
     assert(bad.length === 0,
-        'these plan files declare PLAN at global scope and cannot be loaded together: ' + bad.join(', '));
+        'these plan files declare PLAN outside an IIFE and cannot be loaded together: ' + bad.join(', '));
 });
 
 test('the plan bank: the card fields a chooser relies on are all present and honest', () => {
@@ -9808,6 +9836,559 @@ test('the plan bank: the card fields a chooser relies on are all present and hon
             'and at least one whose IRA drains, or withLiveIRA() proves nothing');
     }
 });
+
+// ── Engine building blocks: growth, withdrawals, amortization, RMD, BETR, the spend search ──────
+// Direct calls into optimizer_core.js, no DOM. `same` compares the way these expectations are
+// written: equal after rounding every number to three decimals, or exactly equal as given.
+{
+const { combineGains, applyWithdrawals, calculateWithdrawals, calculateAmortizedWithdrawal,
+        getRMDPercentage, calculateInflationAdjustedWithdrawal, optimizeSpendDown, computeBETR } = core;
+const round3 = v => typeof v === 'number' ? (isFinite(v) ? parseFloat(v.toFixed(3)) : v)
+    : Array.isArray(v) ? v.map(round3)
+    : (v && typeof v === 'object') ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, round3(x)]))
+    : v;
+const same = (actual, expected, what) => {
+    const a = JSON.stringify(round3(actual)), e = JSON.stringify(round3(expected));
+    assert(a === e || JSON.stringify(actual) === JSON.stringify(expected), `${what}: expected ${e}, got ${a}`);
+};
+
+test('combineGains: shared keys add, the rest pass through, losses and zeros included', () => {
+    same(combineGains({ IRA1: 100, Roth: 200, Cash: 50 }, { IRA1: 150, Roth: 100, Cash: 25 }),
+         { IRA1: 250, Roth: 300, Cash: 75 }, 'overlapping keys sum');
+    same(combineGains({ IRA1: 100, Roth: 200 }, { Brokerage: 300, Cash: 150 }),
+         { IRA1: 100, Roth: 200, Brokerage: 300, Cash: 150 }, 'non-overlapping keys are all kept');
+    same(combineGains({ IRA1: 100, Roth: 200, Cash: 50 }, { Roth: 100, Brokerage: 300 }),
+         { IRA1: 100, Roth: 300, Cash: 50, Brokerage: 300 }, 'partial overlap');
+    same(combineGains({}, { IRA1: 100, Roth: 200 }), { IRA1: 100, Roth: 200 }, 'empty first object');
+    same(combineGains({ IRA1: 100, Roth: 200 }, {}), { IRA1: 100, Roth: 200 }, 'empty second object');
+    same(combineGains({}, {}), {}, 'both empty');
+    same(combineGains({ IRA1: -50, Roth: 100 }, { IRA1: -25, Roth: -30 }), { IRA1: -75, Roth: 70 }, 'losses');
+    same(combineGains({ IRA1: 0, Roth: 100 }, { IRA1: 50, Roth: 0 }), { IRA1: 50, Roth: 100 }, 'zeros');
+});
+
+test('applyGrowth: a part year compounds, for any account name', () => {
+    // The Growth input is a CAGR, so m/12 of a year earns (1+r)^(m/12) - 1. Written with Math.pow
+    // rather than growthFactor: an expectation built from the function under test agrees with
+    // itself whatever it does.
+    const expGains = (bals, rates, m) => Object.fromEntries(
+        Object.keys(bals).map(k => [k, bals[k] * (Math.pow(1 + rates[k], m / 12) - 1)]));
+    const expBals = (bals, rates, m) => Object.fromEntries(
+        Object.keys(bals).map(k => [k, bals[k] * Math.pow(1 + rates[k], m / 12)]));
+    const cases = [
+        [{ TreasuryBonds: 10000, MuniBonds: 5000, Checking: 2000 }, { TreasuryBonds: 0.08, MuniBonds: 0.08, Checking: 0.04 }, 3],
+        [{ IRA1: 10000, CryptoAccount: 5000, RealEstate: 20000 }, { IRA1: 0.06, CryptoAccount: 0.20, RealEstate: 0.04 }, 6],
+        [{ HighYieldSavings: 12000 }, { HighYieldSavings: 0.048 }, 1],
+        [{ Portfolio_A: 10000, Portfolio_B: 8000, EmergencyFund: 5000 }, { Portfolio_A: 0.08, Portfolio_B: 0.08, EmergencyFund: 0.03 }, 9],
+        [{ HedgeFund: 50000, Commodities: 30000 }, { HedgeFund: -0.12, Commodities: -0.08 }, 4],
+        [{ '401k_Main': 25000, '529_College': 15000, 'IRA-Spouse': 10000 }, { '401k_Main': 0.10, '529_College': 0.07, 'IRA-Spouse': 0.08 }, 6],
+    ];
+    for (const [bals, rates, m] of cases) {
+        const start = { ...bals };
+        const what = `${m} months on ${Object.keys(start).join('/')}`;
+        same(applyGrowth(bals, rates, m), expGains(start, rates, m), `${what}: gains`);
+        same(bals, expBals(start, rates, m), `${what}: balances`);
+    }
+    // 3 months then 9 lands exactly where one 12-month call does: compounding is multiplicative.
+    const bals = { SEP_IRA: 10000, HSA: 5000 }, rates = { SEP_IRA: 0.12, HSA: 0.05 };
+    const start = { ...bals };
+    const first3 = applyGrowth(bals, rates, 3);
+    const mid = { ...bals };
+    const last9 = applyGrowth(bals, rates, 9);
+    same(first3, expGains(start, rates, 3), 'first 3 months');
+    same(last9, expGains(mid, rates, 9), 'last 9 months');
+    same(combineGains(first3, last9), expGains(start, rates, 12), 'the two parts add to a full year');
+    same(bals, expBals(start, rates, 12), '3 months then 9 lands where one full year does');
+});
+
+test('applyGrowth: a full year by default; gains come back and balances move, losses included', () => {
+    let bal = { Cash: 100 };
+    same(applyGrowth(bal, { IRA: 0.04, Brokerage: -0.01, Cash: 0.035 }), { Cash: 3.5 }, 'one account at 3.5%');
+    same(bal, { Cash: 103.5 }, 'one account, balance moved');
+    bal = { Cash: 100, Brokerage: 100 };
+    same(applyGrowth(bal, { IRA: 0.04, Brokerage: -0.01, Cash: 0.035 }), { Cash: 3.5, Brokerage: -1 },
+         'a gain and a loss in one call');
+    same(applyGrowth({ IRA: 1000000, Roth: 500000, Brokerage: 200000, Cash: 50000 },
+                     { IRA: 0.07, Roth: 0.07, Brokerage: 0.05, Cash: 0.04 }),
+         { IRA: 70000, Roth: 35000, Brokerage: 10000, Cash: 2000 }, 'every account positive');
+    bal = { IRA: 1000000, Cash: 50000 };
+    same(applyGrowth(bal, { IRA: -0.20, Cash: 0.02 }), { IRA: -200000, Cash: 1000 }, 'a 20% loss');
+    same(bal, { IRA: 800000, Cash: 51000 }, 'a 20% loss, balance moved');
+});
+
+test('applyGrowth: Brokerage and its basis, Cash and Roth each grow at their own rate', () => {
+    const bal = { Brokerage: 100000, BrokerageBasis: 60000, Cash: 10000 };
+    const g = applyGrowth(bal, { Brokerage: 0.06, BrokerageBasis: 0.06, Cash: 0.03 }, 12);
+    same([g.Brokerage, bal.Brokerage], [6000, 106000], 'Brokerage at 6%');
+    same([g.BrokerageBasis, bal.BrokerageBasis], [3600, 63600], 'the basis grows with it');
+    same([g.Cash, bal.Cash], [300, 10300], 'Cash at its own 3%');
+    const cash = { Cash: 50000 };
+    same(applyGrowth(cash, { Cash: 0.035 }, 12), { Cash: 1750 }, 'Cash at 3.5%');
+    same(cash, { Cash: 51750 }, 'Cash balance after 3.5%');
+    const roth = { Roth: 80000, Cash: 10000 };
+    same(applyGrowth(roth, { Roth: 0.06, Cash: 0.03 }, 12), { Roth: 4800, Cash: 300 }, 'Roth at 6%, Cash at 3%');
+    same(roth.Roth, 84800, 'Roth grows only at its own rate');
+});
+
+test('applyGrowth: repeated full years compound to (1 + r)^n', () => {
+    for (const [acct, start, rate, years] of [['Brokerage', 100000, 0.06, 10], ['Cash', 50000, 0.035, 5], ['Roth', 80000, 0.06, 10]]) {
+        const bal = { [acct]: start };
+        for (let i = 0; i < years; i++) applyGrowth(bal, { [acct]: rate }, 12);
+        same(Math.round(bal[acct]), Math.round(start * Math.pow(1 + rate, years)), `${acct}: ${years} years at ${rate}`);
+    }
+});
+
+test('applyWithdrawals: subtracts the keys the balances hold, ignores the rest, floors at zero', () => {
+    same(applyWithdrawals({ Brokerage: 0, BrokerageBasis: 0, Cash: 0, IRA: 2000000, Roth: 0 },
+                          { IRA: 116250, IRATax: 23250, netAmount: 93000, shortfall: 0, totalTax: 23250 }),
+         { Brokerage: 0, BrokerageBasis: 0, Cash: 0, IRA: 1883750, Roth: 0 }, 'an IRA draw');
+    same(applyWithdrawals({ Brokerage: 50000, Cash: 10000, IRA: 500000, Roth: 100000 },
+                          { Brokerage: 5000, IRA: 50000, Roth: 10000 }),
+         { Brokerage: 45000, Cash: 10000, IRA: 450000, Roth: 90000 }, 'several accounts at once');
+    same(applyWithdrawals({ IRA: 10000, Roth: 5000 }, { IRA: 15000, Roth: 6000 }),
+         { IRA: 0, Roth: 0 }, 'a draw larger than the balance floors at zero');
+    same(applyWithdrawals({ IRA: 100000, Roth: 50000 }, { Brokerage: 10000, Cash: 5000, totalTax: 1000 }),
+         { IRA: 100000, Roth: 50000 }, 'keys the balances do not hold are ignored');
+    same(applyWithdrawals({ IRA: 100000, Roth: 50000 }, {}), { IRA: 100000, Roth: 50000 }, 'no withdrawals');
+    same(applyWithdrawals({ IRA: 100000, Roth: 50000 }, { IRA: 0, Roth: 0 }), { IRA: 100000, Roth: 50000 },
+         'zero withdrawals');
+    same(applyWithdrawals({ Brokerage: 100000, IRA: 200000, Roth: 50000 },
+                          { IRA: 25000, Cash: 10000, netAmount: 15000, Roth: 5000 }),
+         { Brokerage: 100000, IRA: 175000, Roth: 45000 }, 'matching and non-matching keys together');
+    same(applyWithdrawals({ IRA: 50000, Roth: 25000 }, { IRA: 50000, Roth: 25000 }), { IRA: 0, Roth: 0 },
+         'an exact draw empties the account');
+    same(applyWithdrawals({ Brokerage: 100000, BrokerageBasis: 60000, Cash: 50000, IRA: 500000, Roth: 200000 },
+                          { Brokerage: 10000, BrokerageBasis: 6000, Cash: 100000, IRA: 50000, taxAmount: 15000 }),
+         { Brokerage: 90000, BrokerageBasis: 54000, Cash: 0, IRA: 450000, Roth: 200000 }, 'every account type');
+    same(applyWithdrawals({ IRA: 100000 }, { IRA: -10000 }), { IRA: 110000 }, 'a negative draw adds to the balance');
+});
+
+// calculateWithdrawals(balances, gap, { order, weight, taxrate }): the NET gap split by weight
+// (by the ordered balances when no weights are given), then any remainder taken from the ordered
+// accounts in sequence. Brokerage is taxed on gains only, with basis drawn pro rata. Each scenario
+// below is checked against those rules rather than against recorded figures, so a correct change
+// to the arithmetic cannot turn them red and a wrong one cannot keep them green.
+const WD_BAL = { IRA: 2000, Brokerage: 1000, BrokerageBasis: 360, Cash: 5000, Roth: 5000 };
+const WD_CASES = [
+    ['weights given', WD_BAL, 1000, { order: ['Brokerage', 'IRA'], weight: [1000, 2000], taxrate: [0.10, 0.20] }],
+    ['no weights: split by balance', WD_BAL, 1000, { order: ['Brokerage', 'IRA'], taxrate: [0.10, 0.20] }],
+    ['no weights, short of funds', WD_BAL, 5000, { order: ['Brokerage', 'IRA'], taxrate: [0.10, 0.20] }],
+    ['a rate missing for the last account', WD_BAL, 5000, { order: ['Brokerage', 'IRA', 'Cash'], taxrate: [0.10, 0.20] }],
+    ['50/50 at 15% and 25%', { IRA: 1000, Brokerage: 600, BrokerageBasis: 360, Cash: 5000, Roth: 5000 }, 1000,
+        { order: ['Brokerage', 'IRA', 'Cash', 'Roth'], weight: [50, 50, 0, 0], taxrate: [0.15, 0.25, 0, 0] }],
+    ['50/50 with no tax', { IRA: 100000, Brokerage: 50000, BrokerageBasis: 30000, Cash: 10000, Roth: 25000 }, 1000,
+        { order: ['Cash', 'Brokerage', 'IRA', 'Roth'], weight: [50, 50, 0, 0], taxrate: [0, 0, 0, 0] }],
+    ['50% tax, everything drawn and still short', { IRA: 1000, Brokerage: 1000, BrokerageBasis: 200, Cash: 1000, Roth: 1000 }, 4000,
+        { order: ['Brokerage', 'IRA', 'Cash', 'Roth'], weight: [50, 50, 0, 0], taxrate: [0.50, 0.5, 0, 0] }],
+    ['weighted accounts run dry, IRA fills the rest', { Cash: 1000, Brokerage: 1000, BrokerageBasis: 200, IRA: 10000, Roth: 5000 }, 4000,
+        { order: ['Cash', 'Brokerage', 'IRA', 'Roth'], weight: [50, 50, 0, 0], taxrate: [0, 0.10, 0.25, 0] }],
+    ['all from Roth', { IRA: 100000, Brokerage: 50000, BrokerageBasis: 30000, Cash: 10000, Roth: 25000 }, 5000,
+        { order: ['Roth', 'Cash', 'Brokerage', 'IRA'], weight: [100, 0, 0, 0], taxrate: [0, 0, 0.15, 0.25] }],
+    ['mixed rates, depletion, IRA fallback', { IRA: 100000, Brokerage: 3000, BrokerageBasis: 1800, Cash: 3000, Roth: 25000 }, 8000,
+        { order: ['Cash', 'Brokerage', 'IRA', 'Roth'], weight: [50, 50, 0, 0], taxrate: [0, 0.20, 0.30, 0] }],
+    ['every account empty', { IRA: 0, Brokerage: 0, BrokerageBasis: 0, Cash: 0, Roth: 0 }, 5000,
+        { order: ['Cash', 'Brokerage', 'IRA', 'Roth'], weight: [50, 50, 0, 0], taxrate: [0, 0.15, 0.25, 0] }],
+    ['Roth and IRA first, three weights', { IRA: 10000, Brokerage: 10000, BrokerageBasis: 6000, Cash: 10000, Roth: 10000 }, 12000,
+        { order: ['Roth', 'IRA', 'Brokerage', 'Cash'], weight: [40, 40, 20, 0], taxrate: [0, 0.25, 0.15, 0] }],
+];
+const WD_EPS = 0.02;
+// One run, with the quantities every rule is stated in.
+function wdRun([label, balances, gap, strategy]) {
+    const r = calculateWithdrawals(balances, gap, strategy);
+    const order = strategy.order;
+    const bal = a => balances[a] ?? 0;
+    const drawn = a => r[a] ?? 0;
+    const tax = a => r[a + 'Tax'] ?? 0;
+    const rate = a => strategy.taxrate?.[order.indexOf(a)] ?? 0;
+    const raw = strategy.weight?.length > 0 ? strategy.weight : order.map(bal);
+    const wsum = raw.reduce((s, w) => s + w, 0);
+    const weight = a => raw[order.indexOf(a)] / wsum;
+    const empty = a => drawn(a) >= bal(a) - WD_EPS;
+    return { label, balances, gap, order, r, bal, drawn, tax, rate, weight, empty,
+             net: a => drawn(a) - tax(a) };
+}
+
+test('calculateWithdrawals: invalid input is reported, and nothing is drawn', () => {
+    same(calculateWithdrawals({}, 1000, { taxrate: [0.10, 0.20] }),
+         { totalTax: 0, netAmount: 0, shortfall: 0, errors: ['balances is null or empty', 'withdrawal.order is null or empty'] },
+         'empty balances and no order');
+    same(calculateWithdrawals({ IRA: 100000, Brokerage: 50000, BrokerageBasis: 30000, Cash: 10000, Roth: 25000 }, 0,
+                              { order: ['Cash', 'Brokerage', 'IRA', 'Roth'], weight: [50, 50, 0, 0], taxrate: [0, 0.15, 0.25, 0] }),
+         { totalTax: 0, netAmount: 0, shortfall: 0, errors: ['gapAmount is null or <= 0'] }, 'a zero gap');
+});
+
+test('calculateWithdrawals: delivered plus shortfall is the request, and every tax dollar is accounted for', () => {
+    for (const c of WD_CASES.map(wdRun)) {
+        const { label, r, order, drawn, tax, rate, net } = c;
+        const sumNet = order.reduce((s, a) => s + net(a), 0);
+        const sumTax = order.reduce((s, a) => s + tax(a), 0);
+        assert(Math.abs(sumNet - r.netAmount) < WD_EPS, `${label}: netAmount ${r.netAmount} is not the sum of nets ${sumNet}`);
+        assert(Math.abs(sumTax - r.totalTax) < WD_EPS, `${label}: totalTax ${r.totalTax} is not the sum of taxes ${sumTax}`);
+        assert(Math.abs(r.netAmount + r.shortfall - c.gap) < WD_EPS,
+            `${label}: delivered ${r.netAmount} + shortfall ${r.shortfall} is not the request ${c.gap}`);
+        for (const a of order) {
+            if (a === 'Brokerage') {
+                const basis = c.bal('Brokerage') > 0 ? drawn(a) * c.balances.BrokerageBasis / c.bal('Brokerage') : 0;
+                assert(Math.abs((r.BrokerageBasis ?? 0) - basis) < WD_EPS,
+                    `${label}: basis drawn ${r.BrokerageBasis} is not pro rata ${basis}`);
+                assert(Math.abs(tax(a) - rate(a) * (drawn(a) - basis)) < WD_EPS,
+                    `${label}: Brokerage tax ${tax(a)} is not ${rate(a)} x its gains`);
+            } else {
+                assert(Math.abs(tax(a) - rate(a) * drawn(a)) < WD_EPS,
+                    `${label}: ${a} tax ${tax(a)} is not ${rate(a)} x ${drawn(a)}`);
+            }
+        }
+    }
+});
+
+test('calculateWithdrawals: nothing is overdrawn or taken from outside the order, and a shortfall empties the order', () => {
+    let short = 0;
+    for (const c of WD_CASES.map(wdRun)) {
+        const { label, r, order, bal, drawn, empty } = c;
+        for (const a of order)
+            assert(drawn(a) >= 0 && drawn(a) <= bal(a) + WD_EPS, `${label}: ${a} drew ${drawn(a)} of ${bal(a)}`);
+        for (const a of Object.keys(c.balances).filter(k => k !== 'BrokerageBasis' && !order.includes(k)))
+            assert(r[a] === undefined && r[a + 'Tax'] === undefined, `${label}: ${a} is outside the order and was touched`);
+        if (r.shortfall > WD_EPS) {
+            short++;
+            for (const a of order) assert(empty(a), `${label}: short by ${r.shortfall} while ${a} still holds ${bal(a) - drawn(a)}`);
+        }
+    }
+    assert(short >= 3, `the scenarios must include shortfalls, got ${short}`);
+});
+
+test('calculateWithdrawals: weights split the net while every weighted account can pay its share', () => {
+    let checked = 0;
+    for (const c of WD_CASES.map(wdRun)) {
+        const { label, order, weight, empty, drawn, net } = c;
+        const weighted = order.filter(a => weight(a) > 0);
+        if (weighted.some(empty)) continue;          // a weighted account ran dry: the fallback rule applies
+        checked++;
+        for (const a of weighted)
+            assert(Math.abs(net(a) - c.gap * weight(a)) < WD_EPS,
+                `${label}: ${a} delivered ${net(a)}, its share is ${c.gap * weight(a)}`);
+        for (const a of order.filter(x => !weighted.includes(x)))
+            assert(drawn(a) === 0, `${label}: zero-weight ${a} drew ${drawn(a)} though no weighted account ran dry`);
+    }
+    assert(checked >= 4, `the scenarios must include splits where every weighted account can pay, got ${checked}`);
+});
+
+test('calculateWithdrawals: the fallback takes accounts in the order given', () => {
+    let fallbacks = 0;
+    for (const c of WD_CASES.map(wdRun)) {
+        const { label, order, weight, drawn, empty } = c;
+        order.forEach((a, i) => {
+            if (weight(a) > 0 || drawn(a) <= WD_EPS) return;
+            fallbacks++;
+            for (const before of order.slice(0, i))
+                assert(empty(before), `${label}: fell back to ${a} while ${before}, earlier in the order, still had money`);
+        });
+    }
+    assert(fallbacks >= 3, `the scenarios must reach zero-weight accounts, got ${fallbacks}`);
+});
+
+test('calculateAmortizedWithdrawal: the level draw that takes a balance to its goal over n years', () => {
+    same(calculateAmortizedWithdrawal(1000000, 200000, 10, 0.06), 120694.367, '$1M to $200k over 10 years at 6%');
+    same(calculateAmortizedWithdrawal(1000000, 200000, 1, 0.06), 860000, '$1M to $200k in one year at 6%');
+    same(calculateAmortizedWithdrawal(10000, 2000, 3, -0.05), 2304.557, '$10k to $2k over 3 years at -5%');
+    same(calculateAmortizedWithdrawal(950, 1000, 5, 0.1), 86.81, 'a goal above the balance, growth covers part of it');
+});
+
+test('getRMDPercentage: zero before the start age, the Uniform Lifetime divisor after', () => {
+    const rmd73 = getRMDPercentage(1952 + 73, 1952);
+    assert(rmd73 > 0.037 && rmd73 < 0.038, `born 1952, age 73 (divisor 26.5) is about 3.77%, got ${rmd73}`);
+    same(getRMDPercentage(1960 + 73, 1960), 0, 'born 1960, age 73: nothing yet, the start age is 75');
+    same(getRMDPercentage(1950 + 76, 1950), 0.042, 'born 1950, age 76: 4.2%');
+    same(getRMDPercentage(1950 + 72, 1950), 1 / 27.4, 'born 1950, age 72: RMDs begin at 72');
+    same(getRMDPercentage(1951 + 72, 1951), 0, 'born 1951, age 72: nothing until 73');
+    same(getRMDPercentage(1945 + 125, 1945), 1 / 2.0, 'past the table, the last divisor holds');
+});
+
+test('calculateInflationAdjustedWithdrawal: the first-year draw that lasts n years rising with inflation', () => {
+    const draw = (p, g, i, n) => Math.round(calculateInflationAdjustedWithdrawal(p, g, i, n));
+    same(draw(1000000, 0.07, 0.03, 30), 57830, 'growth above inflation');
+    same(draw(1000000, 0.03, 0.03, 30), 33333, 'growth equal to inflation');
+    same(draw(1000000, 0.03, -0.03, 30), 72649, 'deflation');
+    same(draw(1000000, -0.03, 0.00, 30), 20084, 'negative growth');
+    same(draw(-1000, -0.03, 0.00, 30), 0, 'a negative principal draws nothing');
+});
+
+// A single filer born 1955, $600k across the accounts, spending $60k, on the Reduce strategy.
+const REDUCE_BASE = {
+    STATEname: 'CA', strategy: 'fixed', nYears: 5,
+    birthyear1: 1955, birthmonth1: 1, die1: 80,
+    birthyear2: 0,    birthmonth2: 12, die2: 0,
+    IRA1: 250000, IRA2: 0, Roth: 50000,
+    Brokerage: 200000, BrokerageBasis: 200000, Cash: 100000,
+    ss1: 0, ss1Age: 70, ss2: 0, ss2Age: 70,
+    pensionAnnual: 0, survivorPct: 0, pensionCola: false,
+    spendGoal: 60000, spendChange: 0, iraBaseGoal: 0,
+    inflation: 0.03, cpi: 0.028, growth: 0.06,
+    cashYield: 0.03, dividendRate: 0.005,
+    ssFailYear: 2099, ssFailPct: 1.0,
+    convertExcessToRoth: false, propWithdraw: 0,
+    startInYear: 0, dividendReinvest: false,
+    startYear: 2026
+};
+
+test('Reduce: an adequate plan is funded, and the IRA comes down over its N years', () => {
+    const result = simulate(REDUCE_BASE);
+    assert(result.log.length > 0, 'the plan produces a log');
+    // IRA-only draws are taxed, so the Brokerage and Cash fallback may leave a small gap.
+    assert(result.totals.shortfall > -5000, `shortfall is bounded, got ${result.totals.shortfall}`);
+    assert(result.totals.success === true, 'an adequate portfolio reports success');
+    const afterN = result.log[Math.min(5, result.log.length - 1)];
+    assert(afterN.TotalIRA < 250000, `the IRA falls over the N years, got ${afterN.TotalIRA}`);
+});
+
+test('Reduce: a small IRA leaves the spending to Brokerage and Cash', () => {
+    const result = simulate({ ...REDUCE_BASE, IRA1: 30000, IRA2: 0, nYears: 3 });
+    assert(result.log.length > 0, 'the plan still runs');
+    const startingTotal = 30000 + 200000 + 100000 + 50000;
+    const last = result.log[result.log.length - 1];
+    assert(last.totalNetWealth < startingTotal, `assets are drawn down, ending at ${last.totalNetWealth}`);
+});
+
+test('Reduce: RMDs are tracked, and their tax is part of the total', () => {
+    const result = simulate({ ...REDUCE_BASE, birthyear1: 1945, die1: 90, IRA1: 500000 });
+    assert(result.totals.rmd > 0, 'RMDs accumulate once the start age is reached');
+    assert(result.totals.rmdTax >= 0, `rmdTax is not negative, got ${result.totals.rmdTax}`);
+    assert(result.totals.rmdTax <= result.totals.tax + 1, `rmdTax ${result.totals.rmdTax} is within total tax ${result.totals.tax}`);
+});
+
+test("Reduce: the IRA Goal is in today's dollars, inflated by CPI to year N", () => {
+    // startYear is at or before the current year, so there is no gap year and the factor is (1+cpi)^(N-1).
+    const goalToday = 150000;
+    const inp = { ...REDUCE_BASE, IRA1: 600000, IRA2: 0, nYears: 6, iraBaseGoal: goalToday, birthyear1: 1955, die1: 92 };
+    const result = simulate(inp);
+    const finalIdx = Math.min(inp.nYears - 1, result.log.length - 1);
+    const inflatedGoal = goalToday * Math.pow(1 + inp.cpi, finalIdx);
+    const iraAtN = result.log[finalIdx].TotalIRA;
+    assert(Math.abs(iraAtN - inflatedGoal) / inflatedGoal < 0.08, `IRA at year N is ${iraAtN}, the inflated goal ${inflatedGoal}`);
+    assert(iraAtN > goalToday * 1.02, `and above the flat-dollar goal, got ${iraAtN}`);
+});
+
+test('Reduce with cyclic Brokerage years: no final-year conversion balloon', () => {
+    const inp = { ...REDUCE_BASE, IRA1: 600000, IRA2: 0, nYears: 6, iraBaseGoal: 150000, convertExcessToRoth: true,
+                  cyclicEnabled: true, cyclicOrder: 'ira-first', birthyear1: 1955, die1: 92 };
+    const convs = simulate(inp).log.slice(0, inp.nYears).map(e => e.rothConv || 0).filter(c => c > 1000);
+    assert(convs.length >= 3, `the fixture must convert in at least three years, got ${convs.length}`);
+    const sorted = [...convs].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    assert(Math.max(...convs) < median * 4, `largest conversion ${Math.max(...convs)} is under 4x the median ${median}`);
+});
+
+test('inflationSequence: a sampled rate drives spending, and the fixed rate takes over where it ends', () => {
+    const base = { ...REDUCE_BASE, returnSequence: new Float64Array(40).fill(0.06), IRA1: 800000, Cash: 200000 };
+    const growth = (log, i) => log[i + 1].spendGoal / log[i].spendGoal;
+    let log = simulate({ ...base, inflation: 0.03, inflationSequence: new Float64Array(40).fill(0.10) }).log;
+    assert(Math.abs(growth(log, 0) - 1.10) < 0.001, `spending follows the sampled 10%, got ${growth(log, 0)}`);
+    log = simulate({ ...base, inflation: 0.03 }).log;
+    assert(Math.abs(growth(log, 0) - 1.03) < 0.001, `with no sequence it follows inputs.inflation, got ${growth(log, 0)}`);
+    log = simulate({ ...base, inflation: 0.03, inflationSequence: new Float64Array(1).fill(0.10) }).log;
+    assert(Math.abs(growth(log, 0) - 1.10) < 0.001, `a one-year sequence covers year 0, got ${growth(log, 0)}`);
+    assert(Math.abs(growth(log, 1) - 1.03) < 0.001, `and year 1 falls back to 3%, got ${growth(log, 1)}`);
+});
+
+// Three households for the spend search: comfortable, strained (fails at its goal, works lower),
+// and impossible (fails even at the search's floor).
+const SPEND_CASES = {
+    wealthy:    { ...REDUCE_BASE, IRA1: 1500000, IRA2: 0, Roth: 300000, Brokerage: 500000, BrokerageBasis: 400000, Cash: 200000,
+                  spendGoal: 50000, birthyear1: 1960, die1: 90 },
+    strained:   { ...REDUCE_BASE, IRA1: 800000, IRA2: 0, Roth: 0, Brokerage: 0, BrokerageBasis: 0, Cash: 0,
+                  spendGoal: 300000, birthyear1: 1960, die1: 90 },
+    impossible: { ...REDUCE_BASE, IRA1: 3000, IRA2: 0, Roth: 0, Brokerage: 0, BrokerageBasis: 0, Cash: 0,
+                  spendGoal: 150000, birthyear1: 1960, die1: 90 },
+};
+const SPEND_STRATEGIES = [
+    { strategyLabel: 'Proportional', paramLabel: '0%', paramSortVal: 0,
+      overrides: { strategy: 'propwd', propWithdraw: 0, convertExcessToRoth: false } },
+    { strategyLabel: 'Fill Bracket', paramLabel: '22%', paramSortVal: 0.22,
+      overrides: { strategy: 'bracket', stratRate: 0.22, convertExcessToRoth: false } },
+    { strategyLabel: 'Reduce', paramLabel: '5 yrs', paramSortVal: 5,
+      overrides: { strategy: 'fixed', nYears: 5, convertExcessToRoth: false } },
+];
+
+test('optimizeSpend: raises a comfortable plan, keeps its last year funded, and refuses a failing one', () => {
+    const opt = optimizeSpend(SPEND_CASES.wealthy, { strategy: 'bracket', stratRate: 0.22, convertExcessToRoth: false });
+    assert(opt !== null, 'a comfortably funded plan gets an answer');
+    assert(opt.optimizedSpend > SPEND_CASES.wealthy.spendGoal, `the answer ${opt.optimizedSpend} is above the goal`);
+    const last = opt.result.log[opt.result.log.length - 1];
+    const required = Math.max(0, last.spendGoal - (last.guaranteedIncome ?? 0));
+    assert((last.portfolioBalance ?? 0) >= required, 'the last year still covers its required draw');
+    assert(optimizeSpend(SPEND_CASES.strained, { strategy: 'propwd', propWithdraw: 0, convertExcessToRoth: false }) === null,
+        'a plan that fails at its own goal gets null');
+});
+
+test('optimizeSpendDown: finds a lower spend that works, near the ceiling, and gives up only when nothing does', () => {
+    const opt = optimizeSpendDown(SPEND_CASES.strained, SPEND_STRATEGIES);
+    assert(opt !== null, 'a lower viable spend is found');
+    assert(opt.optimizedSpend < SPEND_CASES.strained.spendGoal, `the answer ${opt.optimizedSpend} is below the failing goal`);
+    assert(opt.result.totals.success === true, 'the answer passes totals.success, not only the ending-wealth test');
+    // $800k sustains roughly $30-40k; four times the search floor rules out stopping at the floor.
+    const minSpend = Math.max(500, SPEND_CASES.strained.spendGoal * 0.02);
+    assert(opt.optimizedSpend > minSpend * 4, `the search reaches the ceiling, got ${opt.optimizedSpend}`);
+    assert(optimizeSpendDown(SPEND_CASES.impossible, SPEND_STRATEGIES) === null, 'null when even the floor fails');
+});
+
+test('computeBETR: the tax rate today when growth matches, lower with taxable drag, lower still over longer horizons', () => {
+    assert(Math.abs(computeBETR(0.22, 0.07, 0.07, 10) - 0.22) < 0.0001, 'equal growth: BETR is the rate today');
+    // Drag of dividend yield x capital-gains rate: 0.02 x 0.15 = 0.003, so taxable grows at 6.7%.
+    const betr10 = computeBETR(0.22, 0.07, 0.067, 10), betr20 = computeBETR(0.22, 0.07, 0.067, 20);
+    assert(betr10 < 0.22, `taxable drag lowers BETR, got ${betr10}`);
+    assert(betr20 < betr10, `a longer horizon lowers it further: ${betr20} vs ${betr10}`);
+    assert(computeBETR(0, 0.07, 0.07, 10) === null && computeBETR(0.22, 0.07, 0.07, 0) === null,
+        'null for a zero rate today or a zero horizon');
+});
+
+test('computeBETR: the log carries BETR% in conversion years, and the totals carry its average', () => {
+    const r = simulate({ ...REDUCE_BASE, IRA1: 600000, convertExcessToRoth: true });
+    const convYears = r.log.filter(row => (row.rothConv ?? 0) > 0 || (row.extraConv ?? 0) > 0);
+    assert(convYears.some(row => row['BETR%'] !== null && row['BETR%'] !== undefined), 'BETR% is logged in conversion years');
+    assert(r.totals.betrAvg !== null && r.totals.betrAvg !== undefined, 'totals.betrAvg is set');
+});
+
+test('extraConversionAmount: zero changes nothing, a number converts in year 0, an array converts by year', () => {
+    const conv = { ...REDUCE_BASE, IRA1: 500000, convertExcessToRoth: true };
+    const base = simulate(conv), zero = simulate({ ...conv, extraConversionAmount: 0 });
+    assert(Math.abs(base.finalNW - zero.finalNW) < 1, 'zero leaves final net worth where it was');
+    assert(Math.abs(base.totals.tax - zero.totals.tax) < 1, 'zero leaves total tax where it was');
+    const plain = { ...REDUCE_BASE, IRA1: 800000, convertExcessToRoth: false };
+    const off = simulate(plain), extra = simulate({ ...plain, extraConversionAmount: 50000 });
+    assert(extra.log[0].Roth > off.log[0].Roth, 'a $50k extra conversion raises year-0 Roth');
+    assert(off.log[0].TotalIRA - extra.log[0].TotalIRA > 40000, 'and takes about $50k out of the IRA');
+    const sched = simulate({ ...plain, extraConversionAmount: [30000, 0] });
+    assert(sched.log[0].Roth > off.log[0].Roth, 'a schedule converts its year-0 amount');
+    const d0 = off.log[0].TotalIRA - sched.log[0].TotalIRA, d1 = off.log[1].TotalIRA - sched.log[1].TotalIRA;
+    assert(d1 < d0 + 5000, `and nothing more in year 1: IRA gap ${d0} then ${d1}`);
+});
+
+test('IRMAA and Medicare premiums start at 65, per person on Medicare', () => {
+    // A couple aged 60 and 58 in 2026 converting heavily every year, so MAGI is far above every threshold.
+    const r = simulate({ ...REDUCE_BASE, startInYear: 2026, hasSpouse: true,
+        birthyear1: 1966, birthmonth1: 1, die1: 95, birthyear2: 1968, birthmonth2: 1, die2: 95,
+        IRA1: 10000000, IRA2: 0, nYears: 10, convertExcessToRoth: true, spendGoal: 80000 });
+    const pre65 = r.log.filter(row => row.age1 !== '—' && row.age1 < 65);
+    assert(pre65.every(row => row.IRMAA === 0), 'no surcharge before 65');
+    assert(pre65.every(row => row.IRMAATier === '-none-'), 'no tier before 65');
+    assert(pre65.every(row => row.Medicare === 0), 'no base Part B and D premium before 65');
+    const row65 = r.log.find(row => row.age1 === 65), row67 = r.log.find(row => row.age1 === 67);
+    assert(row65.IRMAA > 0 && row67.IRMAA > 0, 'a surcharge at 65 (one on Medicare) and at 67 (both)');
+    // Base premium: persons on Medicare x ($202.90 Part B + $38.99 Part D) x 12, grown by (1+cpi+inflation)/yr.
+    const g = 1 + REDUCE_BASE.cpi + REDUCE_BASE.inflation;
+    same(Math.round(row65.Medicare), Math.round(1 * (202.90 + 38.99) * 12 * Math.pow(g, 5)), 'one person on Medicare at 65');
+    same(Math.round(row67.Medicare), Math.round(2 * (202.90 + 38.99) * 12 * Math.pow(g, 7)), 'two people at 67');
+    assert(row67.IRMAA / Math.pow(g, 2) > row65.IRMAA * 1.5, 'two people on Medicare pay about twice the surcharge of one');
+});
+
+test('Brokerage gap-fill: no spurious shortfall from large unrealized gains, around a death either', () => {
+    // A Brokerage draw raises capital gains, which raises taxable Social Security; the residual must
+    // not send the fill back to Brokerage again and again.
+    const single = simulate({ ...REDUCE_BASE, strategy: 'propwd', propWithdraw: 0, convertExcessToRoth: false,
+        IRA1: 400000, Brokerage: 500000, BrokerageBasis: 80000, Cash: 20000, Roth: 30000,
+        spendGoal: 110000, ss1: 35000, ss2: 0, hasSpouse: false });
+    const early = single.log.filter(row => (row.shortfall ?? 0) < -100 && row.year <= REDUCE_BASE.birthyear1 + REDUCE_BASE.die1 - 10);
+    assert(early.length === 0, `no shortfall in the early years, got ${early.map(r => r.year).join(', ')}`);
+    const couple = simulate({ ...REDUCE_BASE, strategy: 'fixedpct', iraWithdrawPct: 0.10, convertExcessToRoth: false,
+        birthyear1: 1955, die1: 88, birthyear2: 1952, die2: 75, hasSpouse: true,
+        IRA1: 600000, IRA2: 100000, Roth: 80000, Roth2: 10000, Brokerage: 400000, BrokerageBasis: 60000,
+        Cash: 50000, spendGoal: 100000, ss1: 28000, ss2: 18000 });
+    const t = couple.log.findIndex((row, i) => i > 0 && row.status !== couple.log[i - 1].status);
+    assert(t > 0, 'the fixture must change filing status');
+    const year = couple.log[t].year;
+    const near = couple.log.filter(row => Math.abs(row.year - year) <= 2 && (row.shortfall ?? 0) < -100);
+    assert(near.length === 0, `no shortfall within two years of the change in ${year}, got ${near.map(r => r.year).join(', ')}`);
+});
+
+test('Brokerage gap-fill: an exhausted portfolio still reports its shortfall', () => {
+    const r = simulate({ ...REDUCE_BASE, strategy: 'propwd', propWithdraw: 0, convertExcessToRoth: false,
+        IRA1: 20000, Brokerage: 5000, BrokerageBasis: 5000, Cash: 2000, Roth: 0,
+        spendGoal: 150000, ss1: 15000, ss2: 0, hasSpouse: false });
+    assert(r.totals.success === false, 'the plan is not a success');
+    assert(r.log.some(row => (row.shortfall ?? 0) < -1000), 'and the log shows real shortfall years');
+});
+
+// ── The shared tax-call shape: what every calculateTaxes site in the engine has to preserve ──
+// Written before the `taxArgs` / `repriceYear` / `ratesAtLimit` extraction, and kept: these are the
+// only assertions on `attributeIncrementalTaxes` (which had no test reacting to any change), on the
+// ceiling rate lookups, and on the forced-IRA backstop's own reprice.
+const TAXCALL_BASE = {
+    ...BASE, IRA1: 1500000, spendGoal: 90000, growth: 0.04, cpi: 0.02, inflation: 0.02,
+    stratIRMAATier: -1, stratACAMultiple: 0,
+};
+
+test('the conversion tax is attributed to the years that converted, and to no others', () => {
+    // A Fill Bracket 22% plan converts the headroom above spending every year, so `convTax` should
+    // be a real figure in most years and exactly 0 in the rest. It is a SHARE of the year's own
+    // tax - the year's tax minus the tax the same year would have paid without the conversion - so
+    // it can never exceed it.
+    const r = simulate({ ...TAXCALL_BASE, strategy: 'bracket', stratRate: 0.22, convertExcessToRoth: true });
+    let converted = 0;
+    for (const row of r.log) {
+        // Read WITHOUT `?? 0`: the field is initialized to 0 on every row, and a missing
+        // initializer has to read as a failure here rather than as a zero.
+        assert(typeof row.convTax === 'number', `convTax must be a number, got ${row.convTax}`);
+        const ownTax = row.totalTax - row.IRMAA;
+        assert(row.convTax >= 0 && row.convTax <= ownTax + 0.01,
+            `convTax ${row.convTax} outside [0, ${ownTax}] in ${row.year}`);
+        if (row.rothConv > 1) { converted++; assert(row.convTax > 0, `a conversion year with no attributed tax: ${row.year}`); }
+        else assert(row.convTax === 0, `no conversion in ${row.year} but convTax is ${row.convTax}`);
+    }
+    assert(converted >= 10, `the fixture must convert in most years, got ${converted}`);
+    // Nothing converted anywhere: every year reads 0, not undefined.
+    const none = simulate({ ...TAXCALL_BASE, strategy: 'fixed', spendGoal: 70000, convertExcessToRoth: false });
+    assert(none.log.every(row => row.rothConv === 0 && row.convTax === 0), 'a plan that converts nothing attributes nothing');
+});
+
+test('the banked-excess tax is a share of the year that banked it', () => {
+    const r = simulate({ ...TAXCALL_BASE, strategy: 'fixed', spendGoal: 70000 });
+    let attributed = 0;
+    for (const row of r.log) {
+        assert(typeof row.excessTax === 'number', `excessTax must be a number, got ${row.excessTax}`);
+        const ownTax = row.totalTax - row.IRMAA;
+        assert(row.excessTax >= 0 && row.excessTax <= ownTax + 0.01,
+            `excessTax ${row.excessTax} outside [0, ${ownTax}] in ${row.year}`);
+        if (row.excessTax > 0) attributed++;
+    }
+    assert(attributed > 0, 'the fixture must bank surplus in at least one year');
+});
+
+test('a ceiling reads its rates at RateBasis: the statutory top for a bracket, the limit itself for IRMAA and ACA', () => {
+    // The three ceilings derive their marginal and nominal rates from ONE block of lookups keyed on
+    // `rateBasis`. For IRMAA and ACA the basis IS the limit. A federal-bracket ceiling is the odd
+    // one out: the lookups stay on the statutory bracket top while the limit is lifted by the
+    // deduction add-back, so its basis sits strictly below its target. Deriving a federal ceiling's
+    // rates at the lifted limit picks the next bracket up.
+    const rows = f => simulate(f).log.filter(row => row.BracketTarget > 0);
+    const fed = rows({ ...TAXCALL_BASE, strategy: 'bracket', stratRate: 0.22 });
+    assert(fed.length > 5, 'the federal fixture must run bracket-ceiling years');
+    assert(fed.every(row => row.RateBasis < row.BracketTarget),
+        'a federal ceiling derives its rates BELOW its own target');
+    for (const f of [{ stratRate: 0, stratIRMAATier: 1 },
+                     { stratRate: 0, stratACAMultiple: 400, birthyear1: 1968, die1: 95, nYears: 12 }]) {
+        const got = rows({ ...TAXCALL_BASE, strategy: 'bracket', ...f });
+        assert(got.length > 5, `the ${f.stratACAMultiple ? 'ACA' : 'IRMAA'} fixture must run ceiling years`);
+        assert(got.every(row => Math.abs(row.RateBasis - row.BracketTarget) < 0.005),
+            `an ${f.stratACAMultiple ? 'ACA' : 'IRMAA'} ceiling derives its rates AT its own target`);
+    }
+});
+
+test('the forced-IRA backstop funds spending from the IRA once the other accounts are empty', () => {
+    // Cash, Brokerage and Roth all zero and a spending goal far above a 10% bracket ceiling: the
+    // only money left is IRA above that ceiling, which is what makes a soft cap soft. The draw
+    // reprices the year, so the tax it creates has to be in `totalTax` and not left behind.
+    const r = simulate({ ...TAXCALL_BASE, strategy: 'bracket', stratRate: 0.10,
+        IRA1: 2000000, Cash: 0, Brokerage: 0, BrokerageBasis: 0, Roth: 0, spendGoal: 150000 });
+    const forced = r.log.filter(row => row.ForcedIRA > 1);
+    assert(forced.length > 5, `the backstop must fire, got ${forced.length} years`);
+    for (const row of forced) {
+        assert(row.BracketOverage > 0, `a forced draw must breach its own ceiling in ${row.year}`);
+        assert(row.totalTax > 0, `a forced draw is ordinary income and must be taxed in ${row.year}`);
+    }
+    // While the IRA lasts the backstop funds the whole goal; the shortfall years come later, once
+    // it is gone. The first forced year is the one that proves the funding, not the last.
+    assert((forced[0].shortfall ?? 0) >= -1, `the first forced year must be fully funded, got ${forced[0].shortfall}`);
+});
+}
 
 if (IS_NODE) {
     // Exported BEFORE the run, not after: the runner is async now, so `await` inside it yields to

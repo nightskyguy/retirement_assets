@@ -24,9 +24,9 @@
  * The bodies are kept as they were written. assertEqual() compares JSON after rounding every
  * number to three decimals, and the first mismatch inside a test is the failure it reports.
  *
- * TESTTAXATION is a synthetic state with round-number brackets, installed into TAXData for the
- * duration of a run and removed again afterwards, so a page that lists TAXData's states never
- * sees it.
+ * TESTTAXATION and TEST are synthetic jurisdictions with round-number brackets, installed into
+ * TAXData for the duration of a run and removed again afterwards, so a page that lists TAXData's
+ * states never sees either. TEST moved here from taxengine.js's own tables in 11.18e4.
  */
 
 // Wrapped in an IIFE so the top-level names here do not collide with the page's own global
@@ -53,6 +53,10 @@ const findLimitByRate = (...a) => _engine().findLimitByRate(...a);
 const findUpperLimitByAmount = (...a) => _engine().findUpperLimitByAmount(...a);
 const calculateProgressive = (...a) => _engine().calculateProgressive(...a);
 const calcIRMAA = (...a) => _engine().calcIRMAA(...a);
+const isQCDEligible = (...a) => _engine().isQCDEligible(...a);
+const rmdStartAge = (...a) => _engine().rmdStartAge(...a);
+const rmdDivisor = (...a) => _engine().rmdDivisor(...a);
+const calculateTaxableSocialSecurity = (...a) => _engine().calculateTaxableSocialSecurity(...a);
 
 let passed = 0, failed = 0;
 
@@ -118,8 +122,22 @@ function installTestState() {
 			}
 		};
 }
+
+// The bracket-lookup fixture: round numbers chosen so findLimitByRate, findUpperLimitByAmount
+// and calculateProgressive can be asserted by hand. It lived in taxengine.js's own tables until
+// 11.18e4; every dropdown filtered it out by name length, which is not a guarantee anyone should
+// have to rely on.
+function installBracketFixture() {
+	TAXData.TEST = {
+		YEAR: 2026,
+		SSTaxation: 0.50,
+		MFJ: { std: 100,   brackets: [{ l: 1000,   r: 0.1, nr: 0.1 }, { l: 2000,   r: 0.2, nr: 0.15 }, { l: 40000,   r: 0.8, nr: 0.4  }] },
+		SGL: { std: 100/2, brackets: [{ l: 1000/2, r: 0.1, nr: 0.1 }, { l: 2000/2, r: 0.2, nr: 0.15 }, { l: 40000/2, r: 0.8, nr: 0.45 }] },
+	};
+}
 function removeTestState() {
 	delete TAXData.TESTTAXATION;
+	delete TAXData.TEST;
 }
 
 // ── Bracket and limit lookups ────────────────────────────────────────────────────────────────
@@ -207,6 +225,49 @@ test('FPL: HHS figures for GUIDELINE_YEAR, the year before the coverage year the
 	assertEqual(fpl.GUIDELINE_YEAR in HHS, true, `this test lists HHS's ${fpl.GUIDELINE_YEAR} guideline`);
 	assertEqual({ SGL: fpl.SGL, MFJ: fpl.MFJ }, HHS[fpl.GUIDELINE_YEAR],
 				`TAXData.FPL holds HHS's ${fpl.GUIDELINE_YEAR} guideline`);
+});
+
+test('rmdStartAge and rmdDivisor: the start age by birth year, and the Uniform Lifetime Table clamped at both ends', () => {
+	assertEqual([1948, 1950, 1951, 1959, 1960, 1975].map(y => rmdStartAge(y)), [72, 72, 73, 73, 75, 75],
+				'72 before 1951, 73 from 1951, 75 from 1960');
+	assertEqual([60, 72, 100, 101, 120, 125].map(a => rmdDivisor(a)), [27.4, 27.4, 6.4, 6.0, 2.0, 2.0],
+				'the divisor for an age, clamped into the table');
+});
+
+test('isQCDEligible: 70½ falls in the year of the 70th birthday for a January-June birth, the next year otherwise', () => {
+	// Born June 1955: 70½ in December 2025. Born July 1955: 70½ in January 2026. No birth month
+	// counts as the later half.
+	assertEqual([isQCDEligible(1955, 6, 2024), isQCDEligible(1955, 6, 2025)], [false, true], 'born June 1955');
+	assertEqual([isQCDEligible(1955, 7, 2025), isQCDEligible(1955, 7, 2026)], [false, true], 'born July 1955');
+	assertEqual([isQCDEligible(1955, 1, 2025), isQCDEligible(1955, 12, 2025), isQCDEligible(1955, 12, 2026)],
+				[true, false, true], 'born January and December 1955');
+	assertEqual([isQCDEligible(1955, undefined, 2025), isQCDEligible(1955, undefined, 2026)], [false, true],
+				'no birth month');
+});
+
+test('calculateTaxableSocialSecurity: the 50% and 85% tiers, both thresholds, both statuses (worked by hand)', () => {
+	// SGL: 50% of provisional income over $25,000, 85% over $34,000. MFJ: $32,000 and $44,000. The
+	// first tier never takes more than half the benefit, and the total never more than 85% of it.
+	const t = calculateTaxableSocialSecurity;
+	assertEqual(t('SGL', 25000, 20000), 0, 'SGL at the first threshold');
+	assertEqual(t('SGL', 30000, 20000), 2500, 'SGL, first tier: 50% of the $5,000 over');
+	assertEqual(t('SGL', 33000, 4000), 2000, 'SGL, first tier capped at half the benefit');
+	assertEqual(t('SGL', 40000, 20000), 9600, 'SGL, second tier: $4,500 + 85% of the $6,000 over $34,000');
+	assertEqual(t('SGL', 100000, 20000), 17000, 'SGL, capped at 85% of the benefit');
+	assertEqual(t('MFJ', 32000, 30000), 0, 'MFJ at the first threshold');
+	assertEqual(t('MFJ', 38000, 30000), 3000, 'MFJ, first tier');
+	assertEqual(t('MFJ', 44000, 30000), 6000, 'MFJ at the second threshold: first tier only');
+	assertEqual(t('MFJ', 60000, 30000), 19600, 'MFJ, second tier: $6,000 + 85% of the $16,000 over $44,000');
+	assertEqual(t('MFJ', 200000, 30000), 25500, 'MFJ, capped at 85% of the benefit');
+});
+
+test('HSA contributions: deductible federally and by the states that follow, but not by California', () => {
+	const base = { filingStatus: 'MFJ', ages: [60, 58], earnedIncome: 150000, totalSS: 0, ordDivInterest: 0,
+	               qualifiedDiv: 0, capGains: 0, inflation: 1.0 };
+	const tax = (state, hsa) => calculateTaxes({ ...base, state, hsaContrib: hsa });
+	assertEqual(tax('CA', 10000).AGI, tax('CA', 0).AGI - 10000, 'federal AGI falls by the contribution');
+	assertEqual(tax('CA', 10000).stateTax, tax('CA', 0).stateTax, 'California taxes the contribution anyway');
+	assertEqual(tax('NY', 10000).stateTax < tax('NY', 0).stateTax, true, 'a state that follows federal deducts it');
 });
 
 test('calculateProgressive: the TEST entity, invalid entities, and which states index their brackets', () => {
@@ -1205,6 +1266,7 @@ function runTaxEngineTests() {
 	failed = 0;
 	const failures = [];
 	installTestState();
+	installBracketFixture();
 	try {
 		TESTS.forEach(([name, fn]) => {
 			try {

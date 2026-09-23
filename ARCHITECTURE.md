@@ -575,7 +575,7 @@ Guardrails (GK-style) switch says; the knob shows only its cadence, path count a
 | `_includes/head-custom.html` | docs | Jekyll theme hook: CSS + `doclinks.js` for rendered `.md` pages |
 | `.test_harnesses/` | research | investigative **scripts** that are **not** part of any suite - see the note below. Holds `.js` only. A dot-directory, so Jekyll never publishes it |
 | `research/` | research | the **write-ups** those scripts produce: [`README.md`](research/README.md) (the index, one line per report), [`HARNESSES.md`](research/HARNESSES.md) (the harness index) and one report per study, named for its SUBJECT rather than for the phase that raised it. Split out of `.test_harnesses/` on 2026-08-28 - a directory holding both the scripts and their prose was hard to scan, and the prose is worth publishing while the scripts are not |
-| `.githooks/pre-commit` | test gate | runs all three `node` suites, blocks the commit on a failure or a missing suite. Install once with `sh .githooks/install` - see below |
+| `.githooks/pre-commit` | test gate | runs the five `node` suites, checks their counts against the pins (`check-pins.js`), runs the Optimizer's page suite in a headless browser (`page-suite.js`), and blocks the commit on any failure or a missing suite. Install once with `sh .githooks/install` - see below |
 
 ### Where a test file belongs
 
@@ -609,20 +609,28 @@ path, or it lands on a 404.
 The test that decides it: **would the suite fail without this file?** Yes goes at root; no goes in
 `.test_harnesses/` (the script) and `research/` (its report).
 
-### The pre-commit gate, and what it is compensating for
+### The pre-commit gate
 
 ```sh
 sh .githooks/install
 ```
 
-Run once per clone. The hook runs all three node suites (~3.5 s) and blocks the commit on a failure,
-on a **missing** suite, or on a `*.tests.js` file that exists but is not in its `suites=` list - a
-renamed, deleted or unlisted suite would otherwise look identical to a green run.
-`git commit --no-verify` is the deliberate escape hatch.
+Run once per clone. On every commit the hook runs these in order and blocks on a failure:
 
-The hook is the guarantee; the badge is the convenience. Both now cover the same 513 tests, and they
-fail independently, which is the point: the hook catches breakage at the commit, the badge catches
-it at the release.
+1. **the five node suites.** It also blocks on a **missing** suite, or on a `*.tests.js` file that
+   exists but is not in its `suites=` list: a renamed, deleted or unlisted suite would otherwise look
+   identical to a green run.
+2. **`check-pins.js`**, which compares the counts the suites just reported with
+   `TestTiers.EXPECTED` in `optimizer_tests.js` and with the suite table in `.githooks/README.md`.
+3. **`page-suite.js`**, which runs the Optimizer page's own suite in a headless Chrome or Edge, with
+   `?runtests=page` (below). It serves the repo from 127.0.0.1 with caching off, answers the Chart.js
+   CDN request from a local copy, and refuses every other outside request, analytics included.
+4. **the markdown preview gate**, `md-html-scan.js`.
+
+About 20 seconds on a fast machine, most of it the core node suite. `git commit --no-verify` is the
+deliberate escape hatch; `SKIP_PAGE_SUITE=1` skips only step 3, for a machine with no Chrome or Edge,
+and says so on every commit. The hook is the gate for every tier the page's badge reports; the badge
+is what a reader of the live page sees.
 
 Two mechanics worth knowing before touching it, both discovered the hard way:
 
@@ -633,55 +641,53 @@ Two mechanics worth knowing before touching it, both discovered the hard way:
   of whichever working tree is committing.
 - **`.gitattributes` pins `.githooks/**` to `eol=lf`.** `core.autocrlf` is true on Windows and `sh`
   cannot execute a script whose shebang ends in CR. That pin is scoped to `.githooks/` on purpose -
-  this repo has no repo-wide EOL policy, and adding one would renormalise every tracked file.
+  this repo has no repo-wide EOL policy, and adding one would renormalize every tracked file.
 
-### The three test tiers, and the badge that reports them
+### The test tiers, and the badge that reports them
 
-| tier | what | when |
+| tier | what | where it runs |
 |---|---|---|
-| 1 | `optimizer_tests.js`, 245 tests, ~55 ms | blocking, at page load |
-| 2 | the three node suites, 265 fast tests | injected from `requestIdleCallback` **after** first paint |
-| 3 | 3 slow tests tagged `test.slow` | node always; browser only on `?runtests` |
+| 1 | `optimizer_tests.js`, the page suite: what only a live page can check - controls and their gating, the Limit menu and ladder, share links and saved scenarios, the rails panel, goal-first mode | every page load, from `requestIdleCallback` after first paint, without its state-writing tests; the pre-commit hook, headless, with them |
+| 2 | the five node suites: the engines, the tax payment planner, doc links, Send feedback | the pre-commit hook; a browser only with `?runtests` |
+| slow | tests in `optimizer_core.tests.js` tagged `test.slow` | node always; a browser with `?runtests`, skipped under `?runtests=fast` |
 
-Tier 2 is not on the critical path and that is measured: `loadEventEnd` lands around 760 ms while the
-tier-2 script requests start around 3.7 s. They are injected scripts, not `<script>` tags.
+**Badge states.** `⏳` tier 1 passed, tier 2 still running · `🟢` everything that ran passed (without
+`?runtests` it also says the node suites run on every commit) · `🟢⚠` tier 1 passed but tier 2 could
+not be fetched (`file://` blocks it) · `❌` something failed · `❌ test counts changed` the staleness
+guard fired. A pending badge must never read as green: green is a claim that everything passed. Tier
+2 is **opt-in per page** via `window.TIER2_PENDING`; `standalone/IncomeTaxPlanner.html` loads
+`taxengine.tests.js` and does not opt in, so it keeps the two-state badge.
 
-**Badge states.** `⏳` tier 1 passed, tier 2 still running · `🟢` everything passed · `🟢⚠` tier 1
-passed but tier 2 could not be fetched (`file://` blocks it) · `❌` something failed ·
-`❌ test counts changed` the staleness guard fired. A pending badge must never read as green - green
-is a claim that everything passed, and rendering it early is the false-green this whole phase exists
-to remove. Tier 2 is **opt-in per page** via `window.TIER2_PENDING`; `standalone/IncomeTaxPlanner.html`
-loads the same file and does not opt in, so it keeps the original two-state badge.
+**`?runtests`** runs both tiers at once, the slow tests and the state-writing page tests included;
+**`?runtests=fast`** does the same but skips the slow tests; **`?runtests=page`** runs tier 1 alone,
+state-writing tests included, which is the hook's headless run.
 
-**`?runtests`** forces tier 2 synchronously with the slow tests included (513 total);
-**`?runtests=fast`** runs it now but keeps skipping them.
+**Before adding a test:**
 
-**Three things to know before adding a test:**
-
-- **Adding a test means editing `TestTiers.EXPECTED` in `optimizer_tests.js` in the same commit.**
-  The staleness guard compares the counts on disk against that object and turns the badge red on any
-  drift, naming it. That friction is deliberate - it is what stops a suite being added and silently
-  never run.
-  **Reconcile every entry in that object, not just the one for the tool you are working on.** It is
-  the single pin for all three node suites, and they belong to different tools: `taxPaymentPlanner`
+- **Adding or removing a test means updating `TestTiers.EXPECTED` in `optimizer_tests.js` and the
+  suite table in [.githooks/README.md](.githooks/README.md) in the same commit.** `check-pins.js`
+  blocks the commit when either differs from what the suites report, and the page badge turns red on
+  the same difference. **Reconcile every entry, not just the one for the tool you are working on.**
+  The object pins all five node suites, and they belong to different tools: `taxPaymentPlanner`
   counts `RetirementTaxPlanner.html`'s suite, which the Optimizer page never loads. A Tax Payment
   Planner release on 2026-08-17 added 2 tests, left `taxPaymentPlanner: 32` alone, and turned the
-  Optimizer's badge red without touching the Optimizer. The counts have a second home in the suite
-  table in [.githooks/README.md](.githooks/README.md) - update that in the same commit as well.
+  Optimizer's badge red without touching the Optimizer.
+- **An engine function is tested in node**, in the suite for its file. `optimizer_tests.js` is for
+  what needs the live page.
 - **`test.critical(name, fn)`** marks a regression guard for a defect that actually shipped. Those
   are printed as `✓ ★ CRITICAL <name>` and repeated in their own end-of-run block, so their status is
-  readable without scrolling. Ten exist today: dividend/interest double-counting, and the state
-  retirement-income exemptions including no-income-tax states.
-- **`test.slow(name, fn)`** exempts a test from the browser tier only. Node always runs it. Use it on
-  measurement, not suspicion - the three tagged today are 71% of the suite's runtime.
+  readable without scrolling: dividend/interest double-counting, the state retirement-income
+  exemptions and the no-income-tax states among them.
+- **`test.slow(name, fn)`** exempts a test from the browser tier under `?runtests=fast` only. Node
+  always runs it. Tag on measurement, not suspicion.
 
 **Trap, seen for real.** The suites resolve the engine through `window.TaxEngine` / `OptimizerCore` /
 `SweepGolden` rather than bare globals, because a classic script puts `function` declarations on
 `globalThis` but leaves top-level `const` (`OPTIMIZER_GRIDS`, `RMD_TABLE`) as global
 *lexical* bindings a property lookup cannot see. Related: the engine writes wall clock into its own
-output (`optimizer_core.js:928`, `:2381`, `:1739`), so the browser runner stubs `performance.now()`
-for the duration of a run and restores it afterwards - without that, six byte-identity tests fail in
-the browser while passing in node, on the clock rather than the engine.
+output (`yr.loopStart`, the `loopMs` log field and the third-pass timing), so the browser runner stubs
+`performance.now()` for the duration of a run and restores it afterwards - without that, six
+byte-identity tests fail in the browser while passing in node, on the clock rather than the engine.
 
 ### Shared globals crossing file boundaries
 

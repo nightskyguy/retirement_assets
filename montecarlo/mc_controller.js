@@ -97,12 +97,11 @@ function cancelMCWorker(kind = 'mc') {
 //
 //   wall  =  fixed  +  msPerSim x paths x variations
 //
-// The fixed term is not small and used to be ignored entirely. Spawning the worker and running
-// importScripts over taxengine.js, optimizer_core.js and four more (~370KB) measured 938ms on its
-// own, and the stress pass and input fan ride along on every run whatever its size. Measured here:
-// a 500-path plan run was 1543ms wall against 390ms inside the worker, and a 72,000-sim compare run
-// was 43,283ms wall against 42,256ms. Dropping the fixed term told a plan run it would take 0.6s
-// when it takes 1.5s -- fine as a relative hint, useless as the promise a button label makes.
+// THE FIXED TERM IS NOT SMALL. Spawning the worker and running importScripts over taxengine.js,
+// optimizer_core.js and four more (~370KB) is most of a second on its own, and the stress pass and
+// input fan ride along on every run whatever its size. Dropping it tells a short plan run it will
+// take under a second when it takes one and a half - fine as a relative hint, useless as the promise
+// a button label makes.
 //
 // Both terms are learned from real runs on the actual machine. The seeds are a mid-range desktop and
 // only ever describe the very first estimate, before any run has completed.
@@ -123,18 +122,16 @@ function mcTimingIsMeasured() { return _mcTimingMeasured; }
 // the worker reports for its own work.
 //
 // The two terms are measured SEPARATELY, from two numbers that do not depend on each other. Solving
-// for both from wall time alone cannot work: one equation, two unknowns, so it just redistributes
-// the wall clock according to whatever the fixed term already was and learns nothing. That is not
-// hypothetical -- doing it that way read 0.41ms/sim off a plan run when the true figure was 0.59,
-// and told the Compare button 30 seconds for a 43 second run.
+// for both from wall time alone cannot work - one equation, two unknowns - so it would only
+// redistribute the wall clock according to whatever the fixed term already was, and learn nothing.
 //
 //   fixed   = wall - workerMs. Directly the part no code inside the worker can see: spawning it,
 //             importScripts over ~370KB, transferring results back, rendering.
 //   perSim  = workerMs / sims. No fixed term involved at all.
 //
 // The largest run seen wins for perSim. A small run's figure is inflated because the stress pass and
-// the input fan are amortised over few simulations -- real cost, but it does not scale, so
-// extrapolating from it over-predicts a big run by about a third.
+// the input fan are amortised over few simulations - a real cost, but one that does not scale, so
+// extrapolating from it over-predicts a big run.
 function recordMCTiming(wallMs, workerMs, numPaths, numVariations) {
     const sims = numPaths * numVariations;
     if (!(wallMs > 0) || !(sims > 0)) return;

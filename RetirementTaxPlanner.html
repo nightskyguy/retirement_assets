@@ -543,7 +543,8 @@
 </div><!-- end .layout -->
 
 <script src="displayhelpers.js?v=15a2"></script>
-<script src="taxPaymentPlanner.js?v=15a2"></script>
+<script src="sharepanel.js?v=1118e3"></script>
+<script src="taxPaymentPlanner.js?v=1118eb"></script>
 <script>
   // Version readout — parsed out of <title> so the number lives in exactly one place.
   (() => {
@@ -661,42 +662,9 @@
     return `${location.origin}${location.pathname}?${sp.toString()}`;
   }
 
-  function toggleSharePanel() {
-    const panel = document.getElementById('share-panel');
-    const input = document.getElementById('share-url-input');
-    const isOpen = panel.style.display === 'block';
-    if (isOpen) { panel.style.display = 'none'; return; }
-    input.value = buildShareURL();
-    document.getElementById('share-status').textContent = '';
-    panel.style.display = 'block';
-    requestAnimationFrame(() => { input.select(); });
-  }
-
-  async function copyShareURL() {
-    const input  = document.getElementById('share-url-input');
-    const status = document.getElementById('share-status');
-    input.select();
-    try {
-      await navigator.clipboard.writeText(input.value);
-      status.textContent = '✓ Copied to clipboard';
-      return;
-    } catch {}
-    try {
-      document.execCommand('copy');
-      status.textContent = '✓ Copied to clipboard';
-    } catch {
-      status.textContent = 'Select the URL above and press Ctrl+C / Cmd+C';
-    }
-  }
-
-  document.addEventListener('click', e => {
-    const panel = document.getElementById('share-panel');
-    if (panel && panel.style.display === 'block' &&
-        !panel.contains(e.target) &&
-        !e.target.closest('#btn-copy-link')) {
-      panel.style.display = 'none';
-    }
-  });
+  // The panel's open/copy/dismiss behavior is sharepanel.js; this page supplies the URL and names
+  // its own toggle so a click on it is not read as a click outside.
+  SharePanel.init({ build: buildShareURL, toggle: '#btn-copy-link' });
 
   function getParams() {
     return {

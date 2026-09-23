@@ -13,8 +13,8 @@
 <title>NPV — Growing Payment Calculator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tool.css?v=1118e3">
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
     --bg: #f5f3ee;
@@ -31,65 +31,10 @@
     --sans: 'DM Sans', sans-serif;
   }
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    font-size: 15px;
-    line-height: 1.6;
-    min-height: 100vh;
-    padding: 2rem 1rem 4rem;
-  }
-
-  .container {
-    max-width: 720px;
-    margin: 0 auto;
-  }
-
   header {
     border-bottom: 1px solid var(--border);
     padding-bottom: 1.25rem;
     margin-bottom: 2rem;
-  }
-
-  header h1 {
-    font-family: var(--mono);
-    font-size: 1.1rem;
-    font-weight: 500;
-    letter-spacing: 0.04em;
-    color: var(--accent);
-    text-transform: uppercase;
-    margin-bottom: 0.25rem;
-  }
-
-  header p {
-    font-size: 13px;
-    color: var(--muted);
-    font-weight: 300;
-  }
-
-  .formula-box {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.875rem 1.25rem;
-    margin-bottom: 2rem;
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--muted);
-  }
-
-  .formula-box strong {
-    color: var(--text);
-    font-weight: 500;
-  }
-
-  .controls {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
   }
 
   .control-row {
@@ -98,56 +43,6 @@
     align-items: center;
     gap: 12px;
     margin-bottom: 1.25rem;
-  }
-
-  .control-row:last-child { margin-bottom: 0; }
-
-  .control-row label {
-    font-size: 13px;
-    color: var(--muted);
-    font-weight: 400;
-  }
-
-  input[type="range"] {
-    -webkit-appearance: none;
-    width: 100%;
-    height: 4px;
-    background: var(--surface2);
-    border-radius: 2px;
-    outline: none;
-    cursor: pointer;
-  }
-
-  input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: var(--accent);
-    cursor: pointer;
-    border: 2px solid var(--surface);
-    box-shadow: 0 0 0 1px var(--accent);
-  }
-
-  input[type="range"]::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: var(--accent);
-    cursor: pointer;
-    border: 2px solid var(--surface);
-  }
-
-  .readout {
-    font-family: var(--mono);
-    font-size: 13px;
-    font-weight: 500;
-    text-align: right;
-    color: var(--text);
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 3px 8px;
   }
 
   .divider {
@@ -224,27 +119,10 @@
     padding: 1.5rem;
   }
 
-  .chart-title {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--muted);
-    font-family: var(--mono);
-    margin-bottom: 1rem;
-  }
-
   .chart-wrap {
     position: relative;
     width: 100%;
     height: 220px;
-  }
-
-  footer {
-    margin-top: 2rem;
-    font-size: 12px;
-    color: var(--muted);
-    text-align: center;
-    font-family: var(--mono);
   }
 
   .help-btn {
@@ -265,7 +143,6 @@
     cursor: pointer;
     transition: opacity 0.15s;
   }
-  .help-btn:hover { opacity: 0.85; }
 
   /* Modal overlay */
   .modal-overlay {
@@ -278,7 +155,6 @@
     justify-content: center;
     padding: 1rem;
   }
-  .modal-overlay.open { display: flex; }
 
   .modal {
     background: var(--surface);
@@ -292,83 +168,11 @@
     position: relative;
   }
 
-  .modal-close {
-    position: absolute;
-    top: 1rem;
-    right: 1rem;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    font-family: var(--mono);
-    font-size: 12px;
-    padding: 3px 10px;
-    cursor: pointer;
-    color: var(--muted);
-  }
-  .modal-close:hover { color: var(--text); }
-
-  .modal h2 {
-    font-family: var(--mono);
-    font-size: 0.95rem;
-    font-weight: 500;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--accent);
-    margin-bottom: 0.5rem;
-  }
-
-  .modal .modal-lead {
-    font-size: 14px;
-    color: var(--muted);
-    margin-bottom: 1.5rem;
-    line-height: 1.6;
-  }
-
-  .modal h3 {
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--muted);
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 4px;
-    margin: 1.25rem 0 0.75rem;
-  }
-
   .modal dl {
     display: grid;
     grid-template-columns: 180px 1fr;
     gap: 6px 16px;
     font-size: 13px;
-  }
-
-  .modal dt {
-    font-family: var(--mono);
-    font-weight: 500;
-    color: var(--text);
-    padding-top: 2px;
-  }
-
-  .modal dd {
-    color: var(--muted);
-    line-height: 1.55;
-  }
-
-  .modal .example-box {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.875rem 1.1rem;
-    font-size: 13px;
-    color: var(--text);
-    line-height: 1.65;
-    margin-top: 0.75rem;
-  }
-
-  .modal .example-box strong {
-    font-family: var(--mono);
-    font-weight: 500;
   }
 
   @media (max-width: 540px) {
@@ -381,8 +185,7 @@
     .control-row { grid-template-columns: 1fr 60px; }
     .control-row label { grid-column: 1 / -1; margin-bottom: -8px; }
     .results { grid-template-columns: 1fr; }
-  }
-</style>
+  }</style>
 </head>
 <body>
 <div class="container">

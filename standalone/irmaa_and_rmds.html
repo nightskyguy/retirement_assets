@@ -241,23 +241,25 @@
         </div>
     </div>
 
-    <script src="../taxengine.js?v=1118df"></script>
+    <script src="../taxengine.js?v=1118eb"></script>
     <script>
         // RMD_TABLE and TAXData.IRMAA / TAXData.SOCIALSECURITY come from taxengine.js (loaded
         // above) — no local hardcoded copies, so this tool stays in sync with the rest of the site.
 
         function calculateTaxableSS(socialSecurity, otherIncome) {
-            // Provisional income + tier math now shared with taxengine.js calculateTaxes() STEP 2
-            // via calculateTaxableSocialSecurity(), instead of a separate hand-rolled copy.
-            const provisionalIncome = otherIncome + (0.5 * socialSecurity);
+            // Provisional income counts the benefit at the first tier's rate (half), as
+            // calculateTaxes() does, and the tier math is taxengine.js's own.
             const filingStatus = document.getElementById('maritalStatus').value;
+            const ssShare = TAXData.SOCIALSECURITY[filingStatus].brackets[1].r;
+            const provisionalIncome = otherIncome + (ssShare * socialSecurity);
             return calculateTaxableSocialSecurity(filingStatus, provisionalIncome, socialSecurity);
         }
 
         function solveForMaxRMD(socialSecurity, otherIncome, IRMAATreshold) {
-            // Iterative solver since taxable SS depends on RMD amount
-            // Start with an estimate
-            let rmdEstimate = IRMAATreshold - otherIncome - (0.85 * socialSecurity);
+            // Iterative solver since taxable SS depends on RMD amount. It starts from the benefit at
+            // its largest taxable share, the top SOCIALSECURITY rate.
+            const ssMaxTaxable = TAXData.SOCIALSECURITY[document.getElementById('maritalStatus').value].brackets[2].r;
+            let rmdEstimate = IRMAATreshold - otherIncome - (ssMaxTaxable * socialSecurity);
 
             // Iterate to find exact solution
             for (let i = 0; i < 10; i++) {

@@ -15,18 +15,35 @@ Runs the five `node`-only suites and blocks the commit if any of them fails:
 
 | suite | tests | approx |
 |---|---|---|
-| `optimizer_core.tests.js` | 490 | 14 s |
-| `taxengine.tests.js` | 33 | 0.1 s |
-| `taxPaymentPlanner.tests.js` | 61 | 0.5 s |
+| `optimizer_core.tests.js` | 523 | 14 s |
+| `taxengine.tests.js` | 37 | 0.1 s |
+| `taxPaymentPlanner.tests.js` | 62 | 0.5 s |
 | `doclinks.tests.js` | 27 | 0.1 s |
 | `feedback.tests.js` | 46 | 0.1 s |
 
-About 15 s total. `taxengine.tests.js` is the tax engine's own suite, moved out of the in-page
-`optimizer_tests.js` in 11.17b0; `doclinks.tests.js` also carries the page-markup check (an
-unclosed inline tag in the changelog) since the same release. `feedback.tests.js` covers the Send
-feedback dialog (`feedback.js`), which share-link keys it may send, the GitHub issue form it links to
+`taxengine.tests.js` is the tax engine's own suite; `doclinks.tests.js` also carries the page-markup
+check (an unclosed inline tag in the changelog). `feedback.tests.js` covers the Send feedback dialog
+(`feedback.js`), which share-link keys it may send, the GitHub issue form it links to
 (`.github/ISSUE_TEMPLATE/feedback.yml`), and the Cloudflare Worker that receives it
 (`.feedback-worker/src/logic.cjs`).
+
+Then, in order:
+
+- **`check-pins.js`** compares the counts the suites just printed with `TestTiers.EXPECTED` in
+  `optimizer_tests.js` and with the table above, and blocks on any difference. The slow-test count is
+  read from the `test.slow(` registrations in `optimizer_core.tests.js`.
+- **`page-suite.js`** runs `retirement_optimizer.html`'s own suite, `optimizer_tests.js`, in a
+  headless Chrome or Edge. It opens the page with `?runtests=page`: the in-page tier with its
+  state-writing tests, and not the node tier, which has just run. The repo is served from 127.0.0.1
+  with caching off; Chart.js is answered from a local copy (downloaded on the first run, refreshed
+  weekly, so a commit works offline after that), and every other outside request, analytics
+  included, is refused. It needs node 22 or newer; `PAGE_SUITE_BROWSER` names a browser explicitly.
+  This is the only automated check of `optimizer_ui.js` and the Monte Carlo tab.
+- **the markdown preview gate**, below.
+
+About 20 s total on a fast machine, most of it `optimizer_core.tests.js`. Run the page suite alone
+with `node .githooks/page-suite.js`. **`SKIP_PAGE_SUITE=1`** skips only the browser run, for a machine
+with no Chrome or Edge, and prints that it did on every commit.
 
 **These counts are documentation, and they rot.** The enforced copy is `TestTiers.EXPECTED` in
 `optimizer_tests.js`, which pins all five suites at once plus the slow-tagged subset of
@@ -126,16 +143,10 @@ not touch code. It is not the way past a red suite.
 
 ## Why this exists
 
-Release gating relies on the Red X badge that `optimizer_tests.js` renders at page load. That badge
-used to cover only the 245 in-page tests, so a change breaking one of the 268 node tests was
-invisible at the moment of release. Both now cover the same 513 tests.
-
-They are still worth having separately, and the hook came first on purpose:
-
-- The **hook** catches breakage when it would enter history, on every commit, whether or not anyone
-  opens a browser. It is the guarantee.
-- The **badge** catches it at the moment of release, and reports the counts. It is the convenience,
-  and it only helps when someone is looking at it.
+The Optimizer page renders a self-check badge, but a badge only helps when someone is looking at it,
+and nobody reads it before a commit. The hook runs every tier that badge reports - the node suites,
+their pinned counts and the page's own suite - at the moment a breakage would enter history, whether
+or not anyone opens a browser. It is the guarantee; the badge is what a reader of the live page sees.
 
 The hook also covers what the badge cannot: on a `file://` URL the browser blocks the node suites
 from loading at all, and the badge honestly reports `🟢⚠` rather than a full green.

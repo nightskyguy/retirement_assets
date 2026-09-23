@@ -1,13 +1,13 @@
 #!/bin/sh
 #
-# pre-commit - run the five node-only test suites and the markdown preview gate,
-#              block the commit on any failure.
+# pre-commit - run the five node test suites, check the counts they report against the places
+#              that pin them, run the Optimizer page's own suite in a headless browser, and run
+#              the markdown preview gate; block the commit on any failure.
 #
-# WHY THIS EXISTS (P39, work item 1). Release gating relies on the Red X badge that
-# `optimizer_tests.js` renders at page load, and that badge covers only the 245 in-page tests.
-# The 268 tests in the three suites below never run in the browser at all, so a change that
-# breaks one of them is invisible at the moment of release and can be published by accident.
-# This hook moves the check to the moment the breakage would enter history instead.
+# WHY THIS EXISTS. A breakage is caught at the moment it would enter history, not when someone
+# next opens the page and reads its self-check badge. The node suites cover the engines. The page
+# suite (optimizer_tests.js, run by .githooks/page-suite.js) is the only automated check of
+# optimizer_ui.js and the Monte Carlo tab, which no node suite can load.
 #
 # INSTALL: sh .githooks/install
 # This file is NOT the file git runs. `core.hooksPath` is pinned to an absolute path in this
@@ -16,7 +16,8 @@
 # is committing. See .githooks/README.md.
 #
 # ESCAPE HATCH: `git commit --no-verify` skips this deliberately. Use it for a commit you know
-# does not touch code; do not use it to get past a red suite.
+# does not touch code; do not use it to get past a red suite. SKIP_PAGE_SUITE=1 skips only the
+# browser run, for a machine with no Chrome or Edge, and says so on every commit.
 
 set -u
 
@@ -58,6 +59,7 @@ fi
 
 failed=""
 missing=""
+counts=""
 started=$(date +%s)
 
 for suite in $suites; do
@@ -68,8 +70,12 @@ for suite in $suites; do
 	printf 'pre-commit: %-28s ' "$suite"
 	# Tested as the `if` condition rather than via $? so the status cannot be clobbered.
 	if output=$(node "$suite" 2>&1); then
-		# Suites print "Results: N passed, M failed" as their last summary line.
-		echo "$output" | grep -m1 '^Results:' || echo "ok"
+		# Suites print "Results: N passed, M failed" as their last summary line. N is the suite's
+		# test count when it passes, which check-pins.js compares with the pinned counts.
+		result=$(echo "$output" | grep -m1 '^Results:')
+		echo "${result:-ok}"
+		n=$(echo "$result" | sed -n 's/^Results: \([0-9][0-9]*\) passed.*/\1/p')
+		counts="$counts ${suite%.tests.js}=${n:-0}"
 	else
 		echo "FAILED"
 		failed="$failed $suite"
@@ -100,6 +106,21 @@ if [ -n "$failed" ]; then
 fi
 
 echo "pre-commit: all five node suites passed in ${elapsed}s."
+
+# The counts just reported, against TestTiers.EXPECTED (the page badge turns red on a difference)
+# and the suite table in .githooks/README.md.
+if ! node .githooks/check-pins.js $counts; then
+	exit 1
+fi
+
+# The page's own suite in a headless Chrome or Edge, including its state-writing tests. See the
+# header of .githooks/page-suite.js for what it serves and what it refuses.
+if [ "${SKIP_PAGE_SUITE:-}" = "1" ]; then
+	echo "pre-commit: page suite SKIPPED (SKIP_PAGE_SUITE=1) - optimizer_ui.js and the Monte Carlo tab were not checked." >&2
+elif ! node .githooks/page-suite.js; then
+	echo "            Re-run it directly for the same output: node .githooks/page-suite.js" >&2
+	exit 1
+fi
 
 # Markdown that silently hides the rest of itself. A bare <select> in task_plan.md cost 4,430
 # lines of VS Code preview on 2026-08-28, and a bare <details> cost progress.md ~1,944.

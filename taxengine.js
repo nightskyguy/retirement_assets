@@ -1,6 +1,10 @@
 var TAXData = {
 	FEDERAL: {
 		YEAR: 2026,  // Official IRS Revenue Procedure 2025-32
+		// Estimated-tax safe harbor, IRC 6654(d)(1)(C): 110% of last year's tax, not 100%, once last
+		// year's AGI was above this. Not indexed. taxPaymentPlanner.js carries the whole rule as
+		// SAFE_HARBOR for its own page, and taxPaymentPlanner.tests.js pins the two to one figure.
+		SAFE_HARBOR_HIGH_INCOME_AGI: 150000,
 		REFERENCE: 'https://www.irs.gov/newsroom/irs-releases-tax-inflation-adjustments-for-tax-year-2026-including-amendments-from-the-one-big-beautiful-bill',
 		REF_2: 'https://taxfoundation.org/data/all/federal/2026-tax-brackets/',
 		// Net Investment Income Tax (3.8% surtax). MAGI thresholds — not indexed to inflation.
@@ -36,9 +40,7 @@ var TAXData = {
 			//
 			// That split point DRIFTS every year, which is why it must never be written into this
 			// table as a bracket line: these ceilings are inflation-indexed and the NIIT threshold
-			// is not. An earlier version of this block carried the 15% ceiling as $250,000/$200,000
-			// - the NIIT thresholds - trying to mark exactly that transition, and so it was both
-			// mis-valued and, being fixed, only ever right in a single year.
+			// is not, so any fixed figure is right in at most one year.
 			//
 			// The one regime where a bare 20% becomes reachable is sustained DEFLATION shrinking
 			// these ceilings toward the fixed threshold: the crossover is a cumulative CPI factor
@@ -93,7 +95,18 @@ var TAXData = {
 	SOCIALSECURITY: {
 		Year: 2026,
 		SGL: { brackets: [{ l: 25000-1, r: 0.0}, { l: 25000, r: 0.5}, { l: 34000, r: 0.85}] },
-		MFJ: { brackets: [{ l: 32000-1, r: 0.0}, { l: 32000, r: 0.5}, { l: 44000, r: 0.85}] }
+		MFJ: { brackets: [{ l: 32000-1, r: 0.0}, { l: 32000, r: 0.5}, { l: 44000, r: 0.85}] },
+		// Benefit rules (SSA). Full retirement age in months, keyed by the first birth year each row
+		// applies to: 66 through 1954, two months more per year to 1959, 67 from 1960. Earlier
+		// cohorts are treated as 66; they are past any claiming age in a plan this tool runs.
+		FRA_MONTHS: [[1960, 67 * 12], [1959, 66 * 12 + 10], [1958, 66 * 12 + 8], [1957, 66 * 12 + 6],
+		             [1956, 66 * 12 + 4], [1955, 66 * 12 + 2], [0, 66 * 12]],
+		DELAYED_CREDIT_PER_YEAR: 0.08,          // each year claimed past FRA, to 70 (born 1943 or later)
+		// Claiming before FRA: 5/9 of 1% a month for the first 36 months early, 5/12 of 1% after.
+		EARLY_REDUCTION: { FIRST_MONTHS: 36, FIRST_RATE: 5 / 9 / 100, LATER_RATE: 5 / 12 / 100 },
+		// A widow(er) may claim from 60, at a reduction reaching 28.5% at 60 and spread evenly
+		// over the months from 60 to their own FRA.
+		SURVIVOR: { MIN_AGE: 60, MAX_REDUCTION: 0.285 },
 	},
 
 	IRMAA: {
@@ -105,10 +118,11 @@ var TAXData = {
 		// (FEDERAL.*.age above) or a state's retirement-income ageGate — separate statutes that
 		// happen to share a number today, so changing one must not move the others.
 		ELIGIBILITY_AGE: 65,
-		ANNUAL_INCREASE: 0.056,	// based on analysis of 
+		// Assumed annual growth of the Medicare premium and IRMAA dollar amounts, which run ahead of
+		// CPI. Applied to the premiums and surcharges below, never to the bracket thresholds.
+		ANNUAL_INCREASE: 0.056,
 		standardPartB: 202.90,
 		standardPartD: 38.99,	// 2026 Part D base beneficiary premium (CMS, 6% IRA cap); plan premiums vary
-		partBDeductible: 283,
 		
 		// NOTE these are MONTHLY values, it is NOT progressive, and these are the actual tax, not rates.
 		// Also note that brackets increase at the rate of CPI, while Medicare and IRMAA rates
@@ -134,6 +148,7 @@ var TAXData = {
 
 	QCD: {
 		YEAR: 2026,
+		ELIGIBILITY_AGE: 70.5,   // IRC 408(d)(8): the IRA owner must have attained 70½
 		AMOUNT: 111000,       // per person per year (SECURE 2.0, permanently CPI-indexed from 2024)
 		ANNUAL_INCREASE: 'cpi', // sentinel: use simulation's CPI assumption (same as bracket growth)
 		// REFERENCE: IRS Notice 2025-49; $105k 2024, $108k 2025, $111k 2026
@@ -152,7 +167,7 @@ var TAXData = {
 	//     AZ  2.5%    CO  4.4%    GA  4.99%  IA  3.8%  ID  5.3% (with income threshold)
 	//     IL  4.95%   IN  3.05%   KY  4.0%   MA  5.0%
 	//     MI  4.25%   NC  3.99%   NE  4.55%  PA  3.07%
-	//   Scheduled/possible reductions (FLAT_RATE field is metadata; brackets govern):
+	//   Scheduled or possible reductions (the brackets govern; these are notes on where they head):
 	//     GA — 4.99%(2026) → 4.89%(2027) → 4.79%(2028), targeting 3.99%
 	//     NE — LB754 phase-down continuing toward 3.99% target
 	//     IN — HEA 1002/1001 phase-down ongoing
@@ -161,7 +176,7 @@ var TAXData = {
 	//     LA  3.0%  constitutional amendment, effective 2025
 	//     UT  4.65% cut from 4.85% in 2022; no further changes scheduled
 	//
-	// GRADUATED — 16 states + DC included  (27 total across all 51 jurisdictions)
+	// GRADUATED — 15 states + DC included  (27 total across all 51 jurisdictions)
 	//   Included: AL, CA, CT, DC, MD, ME, MN, MS, MT, ND, NY, OH, OR, SC, VA, WI
 	//   Not yet coded (11 graduated states):
 	//     AR  top 3.9%    2 brackets  statutory   SS partial  major 2024 reform
@@ -208,6 +223,7 @@ var TAXData = {
 		Default: true,
 		NOTE: 'Excludes CA SDI and CA personal exemption credits. Because those credits are not applied, the California tax shown here is slightly over-calculated — your actual California tax would be a bit lower.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		HSA_DEDUCTIBLE: false,   // CA does not conform to the federal HSA deduction; absent means deductible
 		// Thresholds inflation-adjusted by CA FTB (~2.971% CCPI); 13.3% = 12.3% + 1% MHSA surtax on income >$1M.
 		// MFJ brackets >$1M: $1M triggers MHSA (+1%), nominal 12.3% bracket starts at $1,442,628 (= 2×SGL).
         MFJ: {
@@ -292,17 +308,14 @@ var TAXData = {
 			mode: 'cap', types: ['pension', 'ira'],
 			ageGateTiers: [ { minAge: 62, capPerPerson: 35000 }, { minAge: 65, capPerPerson: 65000 } ]
 		},
-		FLAT_RATE: {2026: 0.0499, 2027: 0.0489, 2028: 0.0479 }, // Decreasing 0.1%/yr (10bp) toward 3.99%
 		MFJ: {
 			std: 24000,  // Increases to $30,000 in 2027 per HB 463
-			exemption_dependent: 4000,  // $4,000 per dependent
 			brackets: [
 				{ l: Infinity, r: 0.0499 }  // Single flat rate
 			]
 		},
 		SGL: {
 			std: 12000,  // Increases to $15,000 in 2027 per HB 463
-			exemption_dependent: 4000,
 			brackets: [
 				{ l: Infinity, r: 0.0499 }
 			]
@@ -342,7 +355,6 @@ var TAXData = {
 		// IL Schedule M subtracts federally-taxed retirement income (qualified plans, IRA distributions,
 		// govt/RR/military pensions). Assumes retirees are past plan-qualification age.
 		RETIREMENT_EXCLUSION: { mode: 'full', types: ['pension', 'ira'] },
-		FLAT_RATE: 0.0495,  // 4.95% flat rate for all filers (unchanged)
 		MFJ: {
 			std: 5850,  // Illinois personal exemption: 2 × $2,925 per person
 			exemption: 5850,  // $2,925 per person (up from $2,850 in 2025)
@@ -392,7 +404,6 @@ var TAXData = {
 		NOTE: 'Iowa fully exempts pension, IRA, 401(k), and other retirement-plan income for filers 55+ (Social Security is already separately exempt). Most Iowa school districts also levy a surtax (a percentage of the Iowa income tax owed, up to about 20%), plus a small emergency-services surtax; because Iowa still taxes interest, dividends, and capital gains, this calculator understates tax by that surtax on the investment-income portion for residents of surtax districts.',
 		SSTaxation: 0.00,
 		RETIREMENT_EXCLUSION: { mode: 'full', types: ['pension', 'ira'], ageGate: 55 },
-		FLAT_RATE: 0.038,
 		MFJ: {
 			std: 'FEDERAL',
 			brackets: [
@@ -414,7 +425,6 @@ var TAXData = {
 		YEAR: 2026,  // Flat 5% rate; personal exemption $4,400/person
 		NOTE: 'Retirement income: Massachusetts fully exempts pensions from federal, state, and municipal government employers (private pensions, IRA, and 401(k) distributions remain taxable at the flat 5% rate). This calculator does not apply that exclusion, so tax may be overstated for retirees with a government pension.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
-		FLAT_RATE: 0.05,
 		MFJ: {
 			std: 8800,  // 2 × $4,400 personal exemption
 			exemption: 8800,
@@ -486,7 +496,6 @@ var TAXData = {
 		NOTE: 'Retirement income: 2026 is the final phase-in year of Michigan\'s retirement-income tax relief — pension/IRA/401(k) income is exempt up to $67,610/person ($135,220 for a married couple). Filers born before 1946 have unlimited exemption, but only for government pensions; this calculator can\'t tell government from private pensions, so it only grants the unlimited exemption when both spouses were born before 1946, and applies the standard per-person cap otherwise. Tax may be overstated for a household born before 1946 with a private pension and only one qualifying spouse. Separately, about two dozen Michigan cities (Detroit at 2.4%, most others near 1%) levy a resident income tax that exempts pension and Social Security income but does tax interest, dividends, and capital gains; this calculator does not include it, so total tax is understated for residents of those cities who hold taxable brokerage income.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: { mode: 'cap', types: ['pension', 'ira'], capPerPerson: 67610, birthYearFullExemptBefore: 1946 },
-		FLAT_RATE: 0.0425,  // 4.25% — general fund did not exceed inflation so no rate reduction triggered
 		MFJ: {
 			std: 5600,
 			brackets: [
@@ -535,7 +544,6 @@ var TAXData = {
 		YEAR: 2026,
 		NOTE: 'Retirement income: North Carolina fully exempts government and military pension income for retirees with 5+ years of service credit as of August 12, 1989 (the Bailey settlement); other retirement income is fully taxable. This calculator does not apply that exclusion, so tax may be overstated for qualifying retirees.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
-		FLAT_RATE: 0.0399,  // 3.99% flat rate — final step in phasedown enacted by NC law
 		MFJ: {
 			std: 25500,
 			brackets: [
@@ -581,7 +589,6 @@ var TAXData = {
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		// PA does not tax distributions from eligible employer plans or IRAs after 59½/retirement.
 		RETIREMENT_EXCLUSION: { mode: 'full', types: ['pension', 'ira'] },
-		FLAT_RATE: 0.0307,  // 3.07% flat rate (unchanged since 2004)
 		MFJ: {
 			std: 0,  // Pennsylvania has no standard deduction
 			brackets: [
@@ -716,7 +723,6 @@ var TAXData = {
 		YEAR: 2026,
 		NOTE: 'Retirement income: Arizona exempts up to $2,500/person of government pension income (Arizona, other states, or the U.S. government), and fully exempts military retirement pay. Private pension, IRA, and 401(k) income remain fully taxable. This calculator does not apply the government-pension exclusion, so tax may be overstated for qualifying retirees.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
-		FLAT_RATE: 0.025,
 		MFJ: {
 			std: 'FEDERAL',  // AZ uses federal standard deduction
 			brackets: [
@@ -739,7 +745,6 @@ var TAXData = {
 		NOTE: 'Retirement income: as of 2026, Colorado removed all dollar caps on the pension/annuity/IRA subtraction for filers 55+ (the prior $20,000 age 55–64 / $24,000 age 65+ caps no longer apply). Fully exempt once at least one spouse is 55 or older. Social Security: Colorado is treated here as not taxing benefits, which is correct from age 65, where the subtraction is unlimited. From 55 to 64 the full subtraction applies only below $75,000 AGI (single) or $95,000 (joint) and is capped at $20,000 above that, so tax is understated for a Colorado retiree in that age band with income over the limit.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: { mode: 'full', types: ['pension', 'ira'], ageGate: 55 },
-		FLAT_RATE: 0.044,
 		MFJ: {
 			std: 'FEDERAL',  // CO uses federal standard deduction
 			brackets: [
@@ -761,7 +766,6 @@ var TAXData = {
 		YEAR: 2026,
 		NOTE: 'Indiana county income taxes (roughly 0.5% to 3% depending on county) apply to Indiana adjusted gross income, including IRA/401(k) distributions, interest, dividends, and capital gains, and all 92 counties levy one; this calculator does not include them, so total tax is understated for essentially every Indiana resident.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
-		FLAT_RATE: 0.0305,
 		MFJ: {
 			std: 2000,  // $1,000 personal exemption per taxpayer
 			brackets: [
@@ -784,7 +788,6 @@ var TAXData = {
 		NOTE: 'Retirement income: Kentucky exempts up to $31,110/person of pension/IRA/401(k) income.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: { mode: 'cap', types: ['pension', 'ira'], capPerPerson: 31110 },
-		FLAT_RATE: 0.04,
 		MFJ: {
 			std: 3270,  // KY standard deduction per return (same amount for all filing statuses, 2025)
 			brackets: [
@@ -1003,13 +1006,6 @@ var TAXData = {
 		},
 	}, // WISCONSIN
 
-	TEST: {
-		// Data used for testing only.
-		YEAR: 2026,
-		SSTaxation: 0.50,  // Taxes SS at 50%
-		MFJ: { std: 100, brackets: [{l: 1000, r: 0.1, nr: 0.1},  {l: 2000, r: 0.2, nr: 0.15}, {l: 40000, r: 0.8, nr: 0.4} ]	},
-		SGL: { std: 100/2, brackets: [{l: 1000/2, r: 0.1, nr: 0.1},  {l: 2000/2, r: 0.2, nr: 0.15}, {l: 40000/2, r: 0.8, nr: 0.45} ]}
-	}
 
 }; // TAXdata
 
@@ -1018,7 +1014,6 @@ var TAXData = {
 // so any future per-state divergence (e.g. NH's now-repealed interest/dividends tax) is safe.
 const NO_TAX_SHELL = {
     YEAR: 2026,
-    FLAT_RATE: 0.0,
     SSTaxation: 0.00,  // no tax on Social Security benefits
     BasisStepUp: 0.50, // common law; the 3 community-property no-tax states override below
     MFJ: { std: 0, brackets: [ { l: Infinity, r: 0 } ] },
@@ -1121,7 +1116,24 @@ TAXData.OBBBA = {
     }
 };
 
-// Uniform Lifetime Table (Simplified)
+// RMD start age by birth year, keyed by the first birth year each row applies to: 75 from 1960 and
+// 73 from 1951 (SECURE 2.0), 72 before (SECURE Act). Owners born before July 1949 began at 70½, but
+// they are past every start age in a plan this tool runs, so the table stops at 72.
+const RMD_START_AGE = [[1960, 75], [1951, 73], [0, 72]];
+
+function rmdStartAge(birthYear) {
+    const row = RMD_START_AGE.find(([from]) => birthYear >= from);
+    return (row || RMD_START_AGE[RMD_START_AGE.length - 1])[1];
+}
+
+// The divisor for an age, clamped into the table: the youngest row for any age below it, the
+// oldest for any age past it.
+function rmdDivisor(age) {
+    const ages = Object.keys(RMD_TABLE).map(Number);
+    return RMD_TABLE[Math.min(Math.max(age, Math.min(...ages)), Math.max(...ages))];
+}
+
+// IRS Uniform Lifetime Table, Treas. Reg. 1.401(a)(9)-9(c), in effect for distribution years from 2022.
 const RMD_TABLE = {
     72: 27.4, 73: 26.5, 74: 25.5, 75: 24.6, 76: 23.7, 77: 22.9, 78: 22.0, 79: 21.1,
     80: 20.2, 81: 19.4, 82: 18.5, 83: 17.7, 84: 16.8, 85: 16.0, 86: 15.2, 87: 14.4,
@@ -1288,7 +1300,7 @@ function calculateProgressive(entity, status, amount, inflation = 1, ratecreep =
 // ============================================================================
 
 // Counts filers whose age qualifies (>= minAge), reusing the same shape as the federal
-// `nSeniors` count in calculateTaxes() below (taxengine.js ~1135-1136), generalized to an
+// `nSeniors` count in `calculateTaxes` below, generalized to an
 // arbitrary threshold.
 function countQualifyingFilers(ages, status, minAge) {
     if (minAge == null) return (status === 'MFJ' && ages.length > 1) ? 2 : 1;
@@ -1575,13 +1587,9 @@ function calculateTaxes(params = {}) {
         pensionIncome, iraIncome, totalSS, ages, birthyears, status, federalAGI
     });
 
-    let stateAGI;
-    if (state === 'CA') {
-        // CA does not allow HSA deduction
-        stateAGI = earnedIncome + stateTaxableSS + ordDivInterest + qualifiedDiv + capGains - stateRetExcl;
-    } else {
-        stateAGI = earnedIncome - hsaContrib + stateTaxableSS + ordDivInterest + qualifiedDiv + capGains - stateRetExcl;
-    }
+    // A state row with HSA_DEDUCTIBLE: false taxes HSA contributions; every other state deducts them.
+    const stateHSADeduction = stateData.HSA_DEDUCTIBLE === false ? 0 : hsaContrib;
+    const stateAGI = earnedIncome - stateHSADeduction + stateTaxableSS + ordDivInterest + qualifiedDiv + capGains - stateRetExcl;
 
     const rawStateStd = stateData[status].std;
     const stateStdDeduction = rawStateStd === 'FEDERAL'
@@ -1786,12 +1794,14 @@ function getQCDLimit(cpiFactor) {
 	return TAXData.QCD.AMOUNT * (cpiFactor ?? 1);
 }
 
-// Returns true if a person is QCD-eligible (age 70½+) during simYear.
-// Uses birth month for precision: born Jan–Jun → turns 70.5 in (birthYear+70);
-// born Jul–Dec → turns 70.5 in (birthYear+71).
+// True if a person has reached TAXData.QCD.ELIGIBILITY_AGE (70½) during simYear. A half-year age
+// falls in the same calendar year as the whole birthday for a January-June birth and in the next
+// year otherwise; a missing birth month counts as the later half.
 function isQCDEligible(birthYear, birthMonth, simYear) {
-	const eligible70_5Year = birthYear + 70 + (birthMonth <= 6 ? 0 : 1);
-	return simYear >= eligible70_5Year;
+	const age = TAXData.QCD.ELIGIBILITY_AGE;
+	const whole = Math.floor(age);
+	const nextYear = age > whole && !(birthMonth <= 6);
+	return simYear >= birthYear + whole + (nextYear ? 1 : 0);
 }
 
 // For QCD "As Needed" mode: returns the target MAGI ceiling to reduce to in order to drop
@@ -1817,7 +1827,7 @@ function getIRMAATierTargetMAGI(magi, status, cpiRate, tiersDown) {
 // Dual-mode export: inert in browser/worker (classic script); lets Node tests require() this file.
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
-        TAXData, RMD_TABLE, getRateBracket,
+        TAXData, RMD_TABLE, RMD_START_AGE, rmdStartAge, rmdDivisor, getRateBracket,
         findLimitByRate, findUpperLimitByAmount, calculateProgressive,
         calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATierTargetMAGI,
         getQCDLimit, isQCDEligible,
@@ -1831,7 +1841,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // test reading RMD_TABLE off globalThis would get undefined and fail somewhere unrelated
     // rather than at the point of the mistake.
     window.TaxEngine = {
-        TAXData, RMD_TABLE, getRateBracket,
+        TAXData, RMD_TABLE, RMD_START_AGE, rmdStartAge, rmdDivisor, getRateBracket,
         findLimitByRate, findUpperLimitByAmount, calculateProgressive,
         calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATierTargetMAGI,
         getQCDLimit, isQCDEligible,

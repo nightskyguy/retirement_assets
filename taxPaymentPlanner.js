@@ -1,49 +1,25 @@
 /**
- * taxPaymentPlanner.js — v5
- * =========================
- * Retirement Tax Payment Strategy Planner — Dual-IRA Edition
+ * taxPaymentPlanner.js
+ * =====================
+ * Retirement Tax Payment Strategy Planner - Dual-IRA Edition
  *
- * Enhancements over v4:
- *   • Business-day arithmetic. Every date the planner prints is one you have to act on,
- *     and nothing used to check that you could. A future tax year forces nextMonth to
- *     January, and the same-month RMD/conversion split was day 1 / day 8, so tax year
- *     2028 scheduled the draw on January 1 (a federal holiday AND a Saturday). January
- *     now starts on the first Monday after New Year's Day; every other target is day 15
- *     nudged forward. The restore date is nudged too.
- *     Models weekends plus New Year's Day and Christmas Day only — see OBSERVED_HOLIDAYS.
- *   • IRC 7503 applied to federal and state estimated-tax due dates, for both the printed
- *     deadline and the past-due check, so an installment is no longer flagged late while
- *     the real deadline is still ahead.
+ * Two independent IRAs, each with its own RMD, voluntary withdrawal and Roth conversion amounts and
+ * timing. A cross-IRA withholding optimizer concentrates withholding in the latest-month draw across
+ * both, to keep money tax-deferred as long as possible, and tax payments may come from either.
  *
- * Enhancements over v3:
- *   • Rule correction: the 60-day cash replacement after a Roth conversion is a
- *     traditional-to-Roth CONVERSION rollover, which the IRS excludes from the
- *     one-rollover-per-12-months limit of IRC 408(d)(3)(B). v3 wrongly warned that
- *     it was limited to once per rolling 12 months. It is repeatable per conversion.
- *   • December conversion withholding is no longer skipped outright. It now fires
- *     when the shortfall would breach safe harbor, because withholding is deemed
- *     paid ratably across all four due dates under IRC 6654(g)(1).
- *   • Restore-cash deadline follows the real 60-day window and may cross year end.
- *   • RULE_CITES — sources rendered in both the HTML and plain-text output.
- *   • _sixtyDayAnalysis replaced by _replacementAnalysis (summary key sixtyDay →
- *     replacement). The old version weighted the Roth side by the rest of the year and
- *     the cash side by 60 days, which overstated the gain by 20-50% and went negative in
- *     December. It is one differential over one period:
- *         gain = withheld × (portfolioRate − hysaNet) × yearsFromRestoreToYearEnd
- *     Growth now accrues from the restore date, not the conversion date.
+ * Dates are BUSINESS days, because every date this prints is one the reader has to act on: January
+ * targets the first Monday after New Year's Day, every other target is day 15 nudged forward, and
+ * IRC 7503 is applied to federal and state estimated-tax due dates for both the printed deadline and
+ * the past-due check. Weekends plus New Year's Day and Christmas Day only - see OBSERVED_HOLIDAYS.
  *
- * Enhancements over v2:
- *   • Two independent IRAs (IRA 1 and IRA 2), each with separate RMD,
- *     voluntary withdrawal, and Roth conversion amounts and timing
- *   • Cross-IRA withholding optimizer — concentrates tax withholding in the
- *     latest-month draw across both IRAs to maximise tax-deferred growth
- *   • Per-IRA RMD → Roth ordering rule applied independently
- *   • Tax payments can come from either IRA (optimizer decides)
- *   • Comprehensive STATE_DB for all 50 states, DC, and 5 territories
- *   • todayDate — enables "missed payment" detection and warnings
- *   • State-aware quarterly schedules (CA 30/40/30, VA May 1, OR Dec 15)
- *   • State-aware safe-harbor rules (MD always 110%; CA $1M threshold)
- *   • IRA-exempt state handling (IL, PA, MI, IA, MS)
+ * State-aware throughout: quarterly schedules (CA 30/40/30, VA May 1, OR Dec 15), safe-harbor rules
+ * (MD always 110%, CA a $1M threshold) and IRA-exempt states (IL, PA, MI, IA, MS), for all 50 states,
+ * DC and 5 territories.
+ *
+ * The 60-day cash replacement after a Roth conversion is a traditional-to-Roth CONVERSION rollover,
+ * which IRC 408(d)(3)(B) excludes from the one-rollover-per-12-months limit, so it is repeatable per
+ * conversion. December conversion withholding fires when the shortfall would breach safe harbor,
+ * because withholding is deemed paid ratably across all four due dates under IRC 6654(g)(1).
  *
  * API
  * ---
@@ -92,7 +68,7 @@
  *
  *   Rates
  *   portfolioRate        {Number}   annual portfolio return (default 0.07)
- *   hysaGross            {Number}   gross HYSA yield (default 0.045)
+ *   hysaGross            {Number}   gross HYSA yield (default 0.038)
  *   marginalOrdRate      {Number}   marginal ordinary rate, fed+state (default 0.30)
  *   cgRateBlended        {Number}   blended LTCG rate, fed + state (default 0.20)
  *   brokerageValue       {Number}   brokerage market value, dollars (optional)
@@ -147,6 +123,15 @@ const TaxPaymentPlanner = (() => {
   // numbers rather than hardcoding them and are evaluated at module init.
   const ROLLOVER_DEADLINE_DAYS = 60;
   const RESTORE_TARGET_DAYS    = 45;
+
+  // Federal estimated-tax safe harbor, IRC 6654(d)(1)(B)-(C): the required annual payment is the
+  // lesser of 90% of this year's tax and 100% of last year's, or 110% of last year's when last
+  // year's AGI was above HIGH_INCOME_AGI. STATE_DB's states use the same percentages at their own
+  // thresholds. TAXData.FEDERAL.SAFE_HARBOR_HIGH_INCOME_AGI is the Optimizer page's copy of the
+  // threshold, and taxPaymentPlanner.tests.js pins the two to one figure.
+  const SAFE_HARBOR = Object.freeze({
+    CURRENT_YEAR: 0.90, PRIOR_YEAR: 1.00, PRIOR_YEAR_HIGH_INCOME: 1.10, HIGH_INCOME_AGI: 150000,
+  });
 
   // Gap between an RMD and a same-month Roth conversion. The RMD must be distributed
   // before the conversion; this leaves room for it to settle first.
@@ -326,7 +311,6 @@ const TaxPaymentPlanner = (() => {
       safeHarborHighIncomeThreshold: 150000,
       safeHarborAlways110: false,
       quarterlySchedule: _STD_Q,
-      ocWeightedMonths: 8.0,
       paymentNote: `Pay ${name} estimated tax to the state revenue department.`,
       paymentUrl: null,
     }, extra);
@@ -341,7 +325,6 @@ const TaxPaymentPlanner = (() => {
       safeHarborHighIncomeThreshold: null,
       safeHarborAlways110: false,
       quarterlySchedule: [],
-      ocWeightedMonths: 0,
       paymentNote: `${name} has no state income tax — no estimated payments or state withholding required.`,
       paymentUrl: null,
     };
@@ -385,58 +368,40 @@ const TaxPaymentPlanner = (() => {
       paymentUrl: 'https://www.dor.ms.gov/',
     }),
 
-    CA: {
-      name: 'California',
-      hasIncomeTax: true,
-      iraExempt: false,
-      withholdingCreditedProRata: true,
+    // The three states whose due dates are not the federal ones. Each states only what it
+    // overrides; everything else is _s()'s default.
+    CA: _s('California', {
       safeHarborHighIncomeThreshold: 1000000,
-      safeHarborAlways110: false,
       quarterlySchedule: [
         { month: 4, day: 15, w: 0.30, label: 'Q1 (Jan–Mar)', nextYear: false },
         { month: 6, day: 15, w: 0.40, label: 'Q2 (Apr–May)', nextYear: false },
         { month: 1, day: 15, w: 0.30, label: 'Q4 (Sep–Dec)', nextYear: true  },
       ],
-      ocWeightedMonths: 8.5,
       paymentNote: 'Pay via FTB Web Pay at ftb.ca.gov. California uses a 30%/40%/30% schedule — there is NO Q3 (September) payment. High-income threshold for 110% safe harbor is $1,000,000 AGI (not $150K).',
       paymentUrl: 'https://www.ftb.ca.gov/pay/index.html',
-    },
+    }),
 
-    OR: {
-      name: 'Oregon',
-      hasIncomeTax: true,
-      iraExempt: false,
-      withholdingCreditedProRata: true,
-      safeHarborHighIncomeThreshold: 150000,
-      safeHarborAlways110: false,
+    OR: _s('Oregon', {
       quarterlySchedule: [
         { month: 4,  day: 15, w: 0.25, label: 'Q1 (Jan–Mar)', nextYear: false },
         { month: 6,  day: 15, w: 0.25, label: 'Q2 (Apr–May)', nextYear: false },
         { month: 9,  day: 15, w: 0.25, label: 'Q3 (Jun–Aug)', nextYear: false },
         { month: 12, day: 15, w: 0.25, label: 'Q4 (Sep–Nov)', nextYear: false },
       ],
-      ocWeightedMonths: 8.25,
       paymentNote: 'Pay via Revenue Online at oregon.gov/dor. IMPORTANT: Oregon Q4 estimated tax is due December 15 of the tax year (not January 15 of the following year). Oregon also taxes Social Security benefits.',
       paymentUrl: 'https://revenueonline.dor.oregon.gov/',
-    },
+    }),
 
-    VA: {
-      name: 'Virginia',
-      hasIncomeTax: true,
-      iraExempt: false,
-      withholdingCreditedProRata: true,
-      safeHarborHighIncomeThreshold: 150000,
-      safeHarborAlways110: false,
+    VA: _s('Virginia', {
       quarterlySchedule: [
         { month: 5, day: 1,  w: 0.25, label: 'Q1 (Jan–Mar)', nextYear: false },
         { month: 6, day: 15, w: 0.25, label: 'Q2 (Apr–May)', nextYear: false },
         { month: 9, day: 15, w: 0.25, label: 'Q3 (Jun–Aug)', nextYear: false },
         { month: 1, day: 15, w: 0.25, label: 'Q4 (Sep–Dec)', nextYear: true  },
       ],
-      ocWeightedMonths: 7.875,
       paymentNote: 'Pay via Virginia Tax Online at tax.virginia.gov. IMPORTANT: Virginia Q1 is due May 1 (not April 15).',
       paymentUrl: 'https://www.tax.virginia.gov/',
-    },
+    }),
 
     MD: _s('Maryland', {
       safeHarborAlways110: true,
@@ -644,13 +609,7 @@ const TaxPaymentPlanner = (() => {
     return STATE_DB[code] || STATE_DB._DEFAULT;
   }
 
-  // IRC 6654(g)(1) credits withholding as if an equal part were paid on each due date, whatever
-  // date it actually happened. So "does withholding alone make me timely" is a CUMULATIVE question,
-  // not one comparison: at every due date, is the cumulative ratable credit at least the cumulative
-  // required installment? A uniform credit against a WEIGHTED schedule can clear the annual total
-  // and still miss an early date — California is 30/40/30 — which is the case a single
-  // total-versus-total test gets wrong.
-  // P59. The full safe-harbor question, which withholdingCoversSchedule only half answers: it
+  // The full safe-harbor question, which `withholdingCoversSchedule` only half answers: it
   // asks whether WITHHOLDING alone clears each installment, and says nothing about a plan that
   // pays by estimates. Both credit rules apply here:
   //   withholding is deemed paid in equal parts on every due date, whatever date it happened
@@ -696,6 +655,12 @@ const TaxPaymentPlanner = (() => {
     return { met: missedAt === null, required: reqAnnual, missedAt, shortBy };
   }
 
+  // IRC 6654(g)(1) credits withholding as if an equal part were paid on each due date, whatever
+  // date it actually happened. So "does withholding alone make me timely" is a CUMULATIVE question,
+  // not one comparison: at every due date, is the cumulative ratable credit at least the cumulative
+  // required installment? A uniform credit against a WEIGHTED schedule can clear the annual total and
+  // still miss an early date - California is 30/40/30 - which is the case a single total-versus-total
+  // test gets wrong.
   function withholdingCoversSchedule(withheldTotal, reqAnnual, schedule) {
     if (reqAnnual <= 0) return true;
     const n = schedule.length;
@@ -1135,16 +1100,16 @@ const TaxPaymentPlanner = (() => {
     // So when the caller has not said, infer rather than assume the lower bar, because assuming
     // 100% where 110% applies UNDERSTATES what is owed, and that is the expensive direction to be
     // wrong in. Inferring the other way overstates it, which costs a refund rather than a penalty.
-    const FED_HIGH_INCOME_AGI = 150000;
+    const SH = SAFE_HARBOR;
     const highIncomeStated    = p.highIncomeFiler === true;
-    const highIncomeInferred  = !highIncomeStated && grossIncome > FED_HIGH_INCOME_AGI;
+    const highIncomeInferred  = !highIncomeStated && grossIncome > SH.HIGH_INCOME_AGI;
     const treatHighIncome     = highIncomeStated || highIncomeInferred;
-    const sfFedMult   = treatHighIncome ? 1.10 : 1.00;
-    const sfStateMult = stateInfo.safeHarborAlways110 ? 1.10
+    const sfFedMult   = treatHighIncome ? SH.PRIOR_YEAR_HIGH_INCOME : SH.PRIOR_YEAR;
+    const sfStateMult = stateInfo.safeHarborAlways110 ? SH.PRIOR_YEAR_HIGH_INCOME
                       : (treatHighIncome && p.stateTax >= (stateInfo.safeHarborHighIncomeThreshold || Infinity))
-                        ? 1.10 : 1.00;
-    const shFed   = p.priorYearFedTax   != null ? p.priorYearFedTax   * sfFedMult   : p.federalTax * 0.90;
-    const shState = p.priorYearStateTax != null ? p.priorYearStateTax * sfStateMult : p.stateTax   * 0.90;
+                        ? SH.PRIOR_YEAR_HIGH_INCOME : SH.PRIOR_YEAR;
+    const shFed   = p.priorYearFedTax   != null ? p.priorYearFedTax   * sfFedMult   : p.federalTax * SH.CURRENT_YEAR;
+    const shState = p.priorYearStateTax != null ? p.priorYearStateTax * sfStateMult : p.stateTax   * SH.CURRENT_YEAR;
     const safeHarborTotal = shFed + shState;
 
     // Required annual payment, IRC 6654(d)(1)(B): the LESSER of 90% of this year's tax and
@@ -1159,11 +1124,11 @@ const TaxPaymentPlanner = (() => {
     // work (TPP-1), which has to unify them anyway. What follows is used ONLY to decide whether
     // withholding alone makes the taxpayer timely, and that question needs the real number.
     const reqAnnualFed = p.priorYearFedTax != null
-      ? Math.min(p.federalTax * 0.90, p.priorYearFedTax * sfFedMult)
-      : p.federalTax * 0.90;
+      ? Math.min(p.federalTax * SH.CURRENT_YEAR, p.priorYearFedTax * sfFedMult)
+      : p.federalTax * SH.CURRENT_YEAR;
     const reqAnnualState = p.priorYearStateTax != null
-      ? Math.min(p.stateTax * 0.90, p.priorYearStateTax * sfStateMult)
-      : p.stateTax * 0.90;
+      ? Math.min(p.stateTax * SH.CURRENT_YEAR, p.priorYearStateTax * sfStateMult)
+      : p.stateTax * SH.CURRENT_YEAR;
 
 
     // Gap fill — applies to ALL plans.
@@ -1244,11 +1209,9 @@ const TaxPaymentPlanner = (() => {
       strategy = 'all_quarterly';
     } else if (allDrawsTotal === 0 && p.ira1RothConversion === 0 && p.ira2RothConversion === 0) {
       strategy = 'all_quarterly';
-    } else if (yeIraWins && iraWCap >= totalTax) {
-      strategy = 'ye_ira_full';
-    } else if (yeIraWins) {
-      strategy = 'ye_ira_partial';
     } else {
+      // NOT gated on yeIraWins: the choice is the same either way, and the priced comparison
+      // table below is what judges whether year-end IRA withholding was the better plan.
       strategy = iraWCap >= totalTax ? 'ye_ira_full' : 'ye_ira_partial';
     }
     const usesIraWithholding = strategy === 'ye_ira_full' || strategy === 'ye_ira_partial';
@@ -1306,6 +1269,45 @@ const TaxPaymentPlanner = (() => {
       if (a.date) a.dateLabel = fmtDate(a.date.year, a.date.month, a.date.day);
       actions.push(a);
       return a;
+    };
+
+    // One builder for all four runs of quarterly estimates - federal and state, in the shortfall
+    // branch and in the all-quarterly branch. `total` is split across `schedule` by its weights,
+    // and an installment that rounds to nothing is not listed at all.
+    //
+    // `timely` says that withholding already covers every installment on its own. When it does, an
+    // elapsed due date is NOT late in the IRC 6654 sense - the money is owed, but no penalty is
+    // accruing - so the badge is neutral and the note says so instead of inventing urgency. The
+    // all-quarterly branch has no withholding to be timely by, so it leaves it false.
+    const addQuarterlyEstimates = ({ total, schedule, state, basis, timely = false, pastDueNote }) => {
+      const who = state ? stateInfo.name : 'federal';
+      const amounts = splitExact(total, schedule.map(q => q.w));
+      schedule.forEach((q, qi) => {
+        const amt = amounts[qi];
+        if (amt === 0) return;
+        const d      = dueDateFor(q, yr);
+        const isPast = d.dueDate < today;
+        addAction({
+          type: state ? T.Q_STATE : T.Q_FED,
+          date: d.date,
+          amount: amt,
+          [state ? 'stateWithholding' : 'federalWithholding']: amt,
+          noPenalty: timely,
+          description:
+            `Pay ${who} estimated tax of ${fmt$(amt)} by ${fmtDate(d.date.year, d.date.month, d.date.day)} ` +
+            `(${q.label} — ${fmtPct(q.w)} of ${fmt$(total)} ${who} ${basis}).` +
+            (isPast ? (timely ? ' [DATE PASSED]' : ' [PAST DUE — pay immediately]') : ''),
+          notes: [
+            state ? stateInfo.paymentNote : 'Pay via IRS Direct Pay at directpay.irs.gov or EFTPS at eftps.gov.',
+            shiftNote(d),
+            isPast
+              ? (timely
+                  ? `This date has passed, but your ${who} withholding covers every installment on its own, so paying this late does not create an underpayment penalty. It is still owed.`
+                  : pastDueNote)
+              : '',
+          ].filter(Boolean),
+        });
+      });
     };
 
     // ── 11a. Per-IRA ordering rule notes ─────────────────────────────────────
@@ -1892,118 +1894,34 @@ const TaxPaymentPlanner = (() => {
           });
         }
 
-        const sfFedAmts = splitExact(sfFed, FED_Q.map(q => q.w));
-        FED_Q.forEach((q, qi) => {
-          const amt = sfFedAmts[qi];
-          if (amt === 0) return;
-          const d      = dueDateFor(q, yr);
-          const isPast = d.dueDate < today;
-          addAction({
-            type: T.Q_FED,
-            date: d.date,
-            amount: amt,
-            federalWithholding: amt,
-            noPenalty: fedTimelyByWithholding,
-            description:
-              `Pay federal estimated tax of ${fmt$(amt)} by ${fmtDate(d.date.year, d.date.month, d.date.day)} ` +
-              `(${q.label} — ${fmtPct(q.w)} of ${fmt$(sfFed)} federal ${isQ ? 'liability' : 'shortfall'}).` +
-              (isPast ? (fedTimelyByWithholding ? ' [DATE PASSED]' : ' [PAST DUE — pay immediately]') : ''),
-            notes: [
-              'Pay via IRS Direct Pay at directpay.irs.gov or EFTPS at eftps.gov.',
-              shiftNote(d),
-              // "Pay now to minimise the penalty" is only true if a penalty is actually accruing.
-              // When federal withholding already clears every installment by itself, this money is
-              // still owed but it is not late in the IRC 6654 sense, and saying otherwise invents
-              // urgency the numbers do not support.
-              isPast
-                ? (fedTimelyByWithholding
-                    ? 'This date has passed, but your federal withholding covers every installment on its own, so paying this late does not create an underpayment penalty. It is still owed.'
-                    : 'This installment is past due. Make a catch-up payment now to minimise underpayment penalty.')
-                : '',
-            ].filter(Boolean),
-          });
+        addQuarterlyEstimates({
+          total: sfFed, schedule: FED_Q, state: false,
+          basis: isQ ? 'liability' : 'shortfall',
+          timely: fedTimelyByWithholding,
+          pastDueNote: 'This installment is past due. Make a catch-up payment now to minimize underpayment penalty.',
         });
 
         if (sfState > 0 && stateInfo.hasIncomeTax && stateInfo.quarterlySchedule.length > 0) {
-          const sfStAmts = splitExact(sfState, stateInfo.quarterlySchedule.map(q => q.w));
-          stateInfo.quarterlySchedule.forEach((q, qi) => {
-            const amt = sfStAmts[qi];
-            if (amt === 0) return;
-            const d      = dueDateFor(q, yr);
-            const isPast = d.dueDate < today;
-            addAction({
-              type: T.Q_STATE,
-              date: d.date,
-              amount: amt,
-              stateWithholding: amt,
-              noPenalty: stateTimelyByWithholding,
-              description:
-                `Pay ${stateInfo.name} estimated tax of ${fmt$(amt)} by ` +
-                `${fmtDate(d.date.year, d.date.month, d.date.day)} ` +
-                `(${q.label} — ${fmtPct(q.w)} of ${fmt$(sfState)} ${stateInfo.name} ${isQ ? 'liability' : 'shortfall'}).` +
-                (isPast ? (stateTimelyByWithholding ? ' [DATE PASSED]' : ' [PAST DUE — pay immediately]') : ''),
-              notes: [
-                stateInfo.paymentNote,
-                shiftNote(d),
-                isPast
-                  ? (stateTimelyByWithholding
-                      ? `This date has passed, but your ${stateInfo.name} withholding covers every installment on its own, so paying this late does not create an underpayment penalty. It is still owed.`
-                      : 'This installment is past due. Pay now to minimise the underpayment penalty.')
-                  : '',
-              ].filter(Boolean),
-            });
+          addQuarterlyEstimates({
+            total: sfState, schedule: stateInfo.quarterlySchedule, state: true,
+            basis: isQ ? 'liability' : 'shortfall',
+            timely: stateTimelyByWithholding,
+            pastDueNote: 'This installment is past due. Pay now to minimize the underpayment penalty.',
           });
         }
       }
 
     } else {
       // ── All quarterly (no IRA withholding) ──────────────────────────────────
-      const fedAmts = splitExact(p.federalTax, FED_Q.map(q => q.w));
-      FED_Q.forEach((q, qi) => {
-        const amt = fedAmts[qi];
-        if (amt === 0) return;
-        const d      = dueDateFor(q, yr);
-        const isPast = d.dueDate < today;
-        addAction({
-          type: T.Q_FED,
-          date: d.date,
-          amount: amt,
-          federalWithholding: amt,
-          description:
-            `Pay federal estimated tax of ${fmt$(amt)} by ${fmtDate(d.date.year, d.date.month, d.date.day)} ` +
-            `(${q.label} — ${fmtPct(q.w)} of ${fmt$(p.federalTax)} federal tax).` +
-            (isPast ? ' [PAST DUE — pay immediately]' : ''),
-          notes: [
-            'Pay via IRS Direct Pay at directpay.irs.gov or EFTPS at eftps.gov.',
-            shiftNote(d),
-            isPast ? 'This installment is past due. Make a catch-up payment immediately.' : '',
-          ].filter(Boolean),
-        });
+      addQuarterlyEstimates({
+        total: p.federalTax, schedule: FED_Q, state: false, basis: 'tax',
+        pastDueNote: 'This installment is past due. Make a catch-up payment immediately.',
       });
 
       if (stateInfo.hasIncomeTax && stateInfo.quarterlySchedule.length > 0 && p.stateTax > 0) {
-        const stAmts = splitExact(p.stateTax, stateInfo.quarterlySchedule.map(q => q.w));
-        stateInfo.quarterlySchedule.forEach((q, qi) => {
-          const amt = stAmts[qi];
-          if (amt === 0) return;
-          const d      = dueDateFor(q, yr);
-          const isPast = d.dueDate < today;
-          addAction({
-            type: T.Q_STATE,
-            date: d.date,
-            amount: amt,
-            stateWithholding: amt,
-            description:
-              `Pay ${stateInfo.name} estimated tax of ${fmt$(amt)} by ` +
-              `${fmtDate(d.date.year, d.date.month, d.date.day)} ` +
-              `(${q.label} — ${fmtPct(q.w)} of ${fmt$(p.stateTax)} ${stateInfo.name} tax).` +
-              (isPast ? ' [PAST DUE — pay immediately]' : ''),
-            notes: [
-              stateInfo.paymentNote,
-              shiftNote(d),
-              isPast ? 'This installment is past due.' : '',
-            ].filter(Boolean),
-          });
+        addQuarterlyEstimates({
+          total: p.stateTax, schedule: stateInfo.quarterlySchedule, state: true, basis: 'tax',
+          pastDueNote: 'This installment is past due.',
         });
       } else if (!stateInfo.hasIncomeTax) {
         addAction({ type: T.NOTE, description: `${stateInfo.name} has no state income tax — no state estimated payments required.` });
@@ -2081,10 +1999,10 @@ const TaxPaymentPlanner = (() => {
         return { rule: '90% of this year, because last year\'s tax was not supplied', tag: '90%',
                  basis: 'current-year-only' };
       }
-      if (cur * 0.90 < prior * mult) {
+      if (cur * SAFE_HARBOR.CURRENT_YEAR < prior * mult) {
         return { rule: '90% of this year', tag: '90%', basis: 'current' };
       }
-      return mult >= 1.10
+      return mult >= SAFE_HARBOR.PRIOR_YEAR_HIGH_INCOME
         ? { rule: '110% of last year', tag: '110%', basis: 'prior-110' }
         : { rule: '100% of last year', tag: '100%', basis: 'prior-100' };
     };
@@ -2438,12 +2356,12 @@ const TaxPaymentPlanner = (() => {
     const out = [];
     if (sh.highIncomeInferred) {
       out.push(`The 110% bar was applied because the income entered here totals ${fmt$(sh.agiProxy)}, ` +
-        `over the $150,000 AGI threshold. That threshold is measured on LAST year's AGI, which this ` +
+        `over the ${fmt$(SAFE_HARBOR.HIGH_INCOME_AGI)} AGI threshold. That threshold is measured on LAST year's AGI, which this ` +
         `planner is not given, so if last year was the quieter year the real bar is 100% and this ` +
         `overstates what you must pay.`);
     } else if (sh.provisional) {
       out.push(`This rests on the 100% bar. The bar rises to 110% when LAST year's AGI was over ` +
-        `$150,000, and this planner is not given AGI, so it cannot check. If last year was above it, ` +
+        `${fmt$(SAFE_HARBOR.HIGH_INCOME_AGI)}, and this planner is not given AGI, so it cannot check. If last year was above it, ` +
         `the real requirement is 10% higher than shown and a plan marked met may not clear it.`);
     }
     if (sh.priorYearMissing) {
@@ -2734,7 +2652,7 @@ const TaxPaymentPlanner = (() => {
       // fmt$ is Math.abs by design, so a plan whose Roth growth outweighs its costs printed a gain
       // as a cost here while the table twelve lines below printed it correctly as negative.
       h += badge(t < -0.5 ? 'First-year net gain' : 'First-year cost',
-                 (t < -0.5 ? '' : '') + fmt$(t), '#596A2F');
+                 fmt$(t), '#596A2F');
       // Ranking is by first-year cost, which does not price an underpayment penalty. If the
       // cheapest plan misses safe harbor, that omission is exactly what a reader would act on.
       if (!comparison.safeHarbor[comparison.best].met) {
@@ -3093,7 +3011,7 @@ const TaxPaymentPlanner = (() => {
     // built from a prior year at all.
     const shNote = (mult, given, always110) =>
       !given ? 'estimated at 90% of this year; enter last year\'s tax for the real test'
-      : mult >= 1.10
+      : mult >= SAFE_HARBOR.PRIOR_YEAR_HIGH_INCOME
         ? (always110 ? `110% of prior-year (${stateInfo.name} applies 110% to every filer)`
                      : '110% of prior-year (high-income filer)')
         : '100% of prior-year';
@@ -3182,6 +3100,7 @@ const TaxPaymentPlanner = (() => {
     ROLLOVER_DEADLINE_DAYS,
     RESTORE_TARGET_DAYS,
     ORDERING_BUFFER_DAYS,
+    SAFE_HARBOR,
     restoreDateFor,
     _withholdingCoversSchedule: withholdingCoversSchedule,
     OBSERVED_HOLIDAYS,

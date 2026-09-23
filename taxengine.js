@@ -170,7 +170,7 @@ var TAXData = {
 		// are lumpy (2023 FELL), and raising either rate moves every plan that reaches an IRMAA
 		// tier. That is a modeling decision, not a correction to make in passing.
 		ANNUAL_INCREASE: 0.056,
-		standardPartB: 202.90,
+		standardPartB: 202.90,	// 2026 standard Part B premium (CMS); set at 25% of Part B cost for aged enrollees
 		standardPartD: 38.99,	// 2026 Part D base beneficiary premium (CMS, 6% IRA cap); plan premiums vary
 		
 		// NOTE these are MONTHLY values, it is NOT progressive, and these are the actual tax, not rates.
@@ -199,21 +199,46 @@ var TAXData = {
 		//    jurisdiction's top marginal rate - and the $NaN it used to print is a shipped fix.
 		//    `Retirement_Projection.html` drops both this row and `-none-` when it lists tiers to
 		//    choose from, which is the same judgment made in a different place.
+		// `r` IS THE SURCHARGE ALONE, NOT THE TOTAL PREMIUM, and it is MONTHLY DOLLARS, not a rate.
+		// The base Part B + Part D premium is charged separately as `yr.medicareBase` in
+		// optimizer_core.js, so a row carrying the total would count the base twice. Each figure is
+		// the Part B income-related adjustment plus the Part D IRMAA for that band, per person;
+		// the MFJ rows are the same per-person amounts doubled, because a couple pays two of them.
+		//
+		// `l` is the FIRST DOLLAR of the band. CMS states the bands as "<= 218,000" and
+		// "> 218,000 - <= 274,000", so the no-surcharge row ends AT 218,000 and Tier 1 begins at
+		// 218,001. Written out rather than as `218000 - 1`, which put every boundary a dollar low.
+		//
+		// Corrected 2026-09-23 against the CMS fact sheet "2026 Medicare Parts A & B Premiums and
+		// Deductibles". Three faults were fixed together: the dollar-low boundaries; a Tier 3 floor
+		// of 348,000 / 174,000 where CMS publishes 342,001 / 171,001; and an amount column that
+		// carried each band's TOTAL premium one row too low, which overstated the charge by $1,400
+		// to $3,700 a year for a couple.
+		//
+		// The trailing `l: Infinity` row is the top tier's ABSENT CEILING, not a band - no MAGI
+		// reaches it. It is what lets computeBracketCeiling read `brackets[stratIRMAATier + 1].l`
+		// for every tier including the last, and its amount is never charged.
 				MFJ: {
 			brackets: [
-				{ l: 218000 - 1, r: 0, tier: "-none-"}, { l: 218000, r: (2 * 202.90), tier: "Tier 1" },
-				{ l: 274000, r: 2 * (284.10 + 14.50), tier: "Tier 2" },	{ l: 348000, r: 2 * (405.90 + 37.60), tier: "Tier 3" },
-				{ l: 410000, r: 2 * (527.70 + 60.60), tier: "Tier 4" },	{ l: 750000, r: 2 * (649.50 + 83.70), tier: "Tier 5" },
-				{ l: Infinity, r: 2 * (689.90 + 91.00), tier: "Tier 6 (TOP)" }
+				{ l: 218000, r: 0,                      tier: "-none-" },
+				{ l: 218001, r: 2 * (81.20 + 14.50),    tier: "Tier 1" },
+				{ l: 274001, r: 2 * (202.90 + 37.60),   tier: "Tier 2" },
+				{ l: 342001, r: 2 * (324.60 + 60.60),   tier: "Tier 3" },
+				{ l: 410001, r: 2 * (446.30 + 83.70),   tier: "Tier 4" },
+				{ l: 750000, r: 2 * (487.00 + 91.00),   tier: "Tier 5" },
+				{ l: Infinity, r: 2 * (487.00 + 91.00), tier: "(top tier has no ceiling)" }
 			]
 		},
 		
 		SGL: {
 			brackets: [
-				{ l: 109000 - 1, r: 0, tier: "-none-"}, { l: 109000, r: 202.90 +0, tier: "Tier 1" },
-				{ l: 137000, r: 284.10 +14.50, tier: "Tier 2" }, { l: 174000, r: 405.90 + 37.60, tier: "Tier 3" },
-				{ l: 205000, r: 527.70 + 60.60, tier: "Tier 4" }, { l: 500000, r: 649.50 + 83.70 , tier: "Tier 5"},
-				{ l: Infinity, r: 689.90 + 91.00, tier: "Tier 6 (TOP)" }
+				{ l: 109000, r: 0,                  tier: "-none-" },
+				{ l: 109001, r: 81.20 + 14.50,      tier: "Tier 1" },
+				{ l: 137001, r: 202.90 + 37.60,     tier: "Tier 2" },
+				{ l: 171001, r: 324.60 + 60.60,     tier: "Tier 3" },
+				{ l: 205001, r: 446.30 + 83.70,     tier: "Tier 4" },
+				{ l: 500000, r: 487.00 + 91.00,     tier: "Tier 5" },
+				{ l: Infinity, r: 487.00 + 91.00,   tier: "(top tier has no ceiling)" }
 			]
 		}
 	}, // IRMAA

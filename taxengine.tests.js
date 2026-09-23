@@ -182,13 +182,23 @@ test('calcIRMAA: tiers, CPI, the Medicare rate and the per-person gate (sensitiv
 	assertEqual(calcIRMAA(100, 'SGL', 1), 0,
 				'😭calcIRMAA  0 for SGL at 100 income');
 
-	assertEqual(calcIRMAA(109001, 'SGL', 1, 1), 12 * 202.9,
-				'😭calcIRMAA  202.9 for 109001 SGL income');
+	// Every figure below is the SURCHARGE alone, from the CMS 2026 fact sheet: the Part B
+	// income-related adjustment plus the Part D IRMAA for that band. The base premium is NOT in
+	// here - optimizer_core.js charges it separately as yr.medicareBase - and the amounts are
+	// monthly, hence the * 12.
+	const SGL_T1 = 81.20 + 14.50, SGL_T2 = 202.90 + 37.60;
 
-	assertEqual(calcIRMAA(273999, 'MFJ', 1, 1.5), 1.5 * 2 * (12 * 202.90),
+	// 109,001 is the FIRST dollar of Tier 1; 109,000 itself is still no-surcharge.
+	assertEqual(calcIRMAA(109000, 'SGL', 1, 1), 0,
+				'😭calcIRMAA  the Tier 1 floor itself is below the band');
+
+	assertEqual(calcIRMAA(109001, 'SGL', 1, 1), 12 * SGL_T1,
+				'😭calcIRMAA  Tier 1 surcharge for 109001 SGL income');
+
+	assertEqual(calcIRMAA(273999, 'MFJ', 1, 1.5), 1.5 * 2 * (12 * SGL_T1),
 				'😭calcIRMAA no CPI, 1.5 medicareRate @ 273999 MFJ income');    
 
-	assertEqual(calcIRMAA(274000, 'MFJ', 1, 1), 12 * 2 * (284.10 + 14.50),
+	assertEqual(calcIRMAA(274001, 'MFJ', 1, 1), 12 * 2 * SGL_T2,
 				'😭calcIRMAA  2 * (284.10 + 14.50) for 274000 MFJ income');
 
 	assertEqual(calcIRMAA(218000, 'MFJ', 2, 1), 0,
@@ -196,19 +206,19 @@ test('calcIRMAA: tiers, CPI, the Medicare rate and the per-person gate (sensitiv
 
 	// Per-person Medicare gate (onMedicareCount param). MFJ bracket rates are household
 	// (2x per-person) totals; count scales them to who is actually 65+.
-	assertEqual(calcIRMAA(274000, 'MFJ', 1, 1, 1), 12 * (284.10 + 14.50),
+	assertEqual(calcIRMAA(274001, 'MFJ', 1, 1, 1), 12 * SGL_T2,
 				'😭calcIRMAA MFJ one spouse on Medicare = half the household surcharge');
 
-	assertEqual(calcIRMAA(274000, 'MFJ', 1, 1, 0), 0,
+	assertEqual(calcIRMAA(274001, 'MFJ', 1, 1, 0), 0,
 				'😭calcIRMAA MFJ neither spouse 65+ = no surcharge');
 
-	assertEqual(calcIRMAA(274000, 'MFJ', 1, 1, 2), 12 * 2 * (284.10 + 14.50),
+	assertEqual(calcIRMAA(274001, 'MFJ', 1, 1, 2), 12 * 2 * SGL_T2,
 				'😭calcIRMAA MFJ both on Medicare = full household surcharge');
 
-	assertEqual(calcIRMAA(274000, 'MFJ', 1, 1, 3), 12 * 2 * (284.10 + 14.50),
+	assertEqual(calcIRMAA(274001, 'MFJ', 1, 1, 3), 12 * 2 * SGL_T2,
 				'😭calcIRMAA MFJ count clamps at 2 persons');
 
-	assertEqual(calcIRMAA(109001, 'SGL', 1, 1, 1), 12 * 202.9,
+	assertEqual(calcIRMAA(109001, 'SGL', 1, 1, 1), 12 * SGL_T1,
 				'😭calcIRMAA SGL on Medicare = full single surcharge');
 
 	assertEqual(calcIRMAA(109001, 'SGL', 1, 1, 0), 0,

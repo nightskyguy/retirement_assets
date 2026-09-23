@@ -17,12 +17,19 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.18f8"></a>
+<a id="11.18fc"></a>
 
-## 11.18f8
+## 11.18fc
 
-**State tax tables and ACA income limits corrected; Saved Scenarios handles any name.**  
-*Corrections for seven states and for plans using an ACA Cliff limit.*
+**IRMAA, state tax tables and ACA income limits corrected; Saved Scenarios handles any name.**  
+*Corrections to the Medicare IRMAA surcharge, to seven states, and to the ACA Cliff limits.*
+
+**The Medicare IRMAA surcharge contained an error that has been corrected.** It was charged at the
+wrong tier and included the standard premium, so it came out too high for every income above the
+first threshold. The surcharge and the base Medicare premium are now separate figures that match
+what Medicare publishes for 2026, and the income thresholds now match to the dollar. If your plan
+reaches an IRMAA tier, its numbers will move, and a plan that was close to the line may now fund
+where it did not before. See the Details.
 
 **The tax tables for seven states contained errors that have been corrected**, and the rates and
 brackets now match what each state publishes for 2026. Minnesota, Montana and Wisconsin were the

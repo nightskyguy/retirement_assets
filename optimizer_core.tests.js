@@ -548,8 +548,13 @@ test('P32c: forcedIRAAllowBrokerage brokerageFirst spends Brokerage before forci
 test('P32c: forcedIRAAllowBrokerage keeps the backstop alive after the IRA empties', () => {
     // The shipped loop breaks on an empty IRA. With Brokerage leading it must not end one account
     // early, so a plan whose IRA runs dry while Brokerage remains still gets backstopped.
+    //
+    // THE PRECONDITION IS THE TEST: the IRA has to actually empty, or both arms produce the same
+    // run and this proves nothing. The spend goal went from 130,000 to 150,000 on 2026-09-23, when
+    // correcting the IRMAA ladder cut the surcharge enough that the old fixture no longer drained
+    // the IRA at all. Raise it again rather than relaxing the assertion if that recurs.
     const scen = { ...BASE, IRA1: 120000, Cash: 1000, Brokerage: 1500000, BrokerageBasis: 200000,
-                   ss1: 30000, ss1Age: 66, spendGoal: 130000, nYears: 25 };
+                   ss1: 30000, ss1Age: 66, spendGoal: 150000, nYears: 25 };
     const off = simulate({ ...scen });
     const on = simulate({ ...scen, forcedIRAAllowBrokerage: 'brokerageFirst' });
     assert(JSON.stringify(off.log) !== JSON.stringify(on.log), 'the arm must change this run');
@@ -5642,12 +5647,14 @@ test('irmaaFwdFactor: |LOOKBACK| years of CPI, and an exact identity at cpi = 0'
 
 test('IRMAA tier ceiling targets the threshold that will apply, not the one in force today', () => {
     // 3% CPI: this year's MAGI is judged against the SGL Tier 1 floor as indexed two years out.
-    assertNear(_target({ irmaaMarginMode: 'none' }), 109000 * 1.0609 - 1,
+    assertNear(_target({ irmaaMarginMode: 'none' }), getRateBracket('IRMAA', 'SGL')[1].l * 1.0609 - 1,
         'tier ceiling must be the forward-projected Tier 1 floor', 0.01);
-    // And at cpi = 0 the factor is 1, so the pre-fix number comes back exactly. That is what makes
-    // this an indexing fix rather than a new policy.
-    assert(_target({ cpi: 0, irmaaMarginMode: 'none' }) === 108999,
-        'at cpi = 0 the ceiling must be exactly the old 108999');
+    // And at cpi = 0 the factor is 1, so the ceiling is the Tier 1 floor less a dollar - which is
+    // the last dollar that carries no surcharge, 109,000 on the shipped table. Derived rather than
+    // written down, because the floor moved once already: it read 108,999 until the boundaries
+    // were corrected to CMS on 2026-09-23.
+    assert(_target({ cpi: 0, irmaaMarginMode: 'none' }) === getRateBracket('IRMAA', 'SGL')[1].l - 1,
+        'at cpi = 0 the ceiling must be the last no-surcharge dollar');
 });
 
 test('irmaaMarginMode: every shipped mode is distinct and correctly ordered', () => {
@@ -5714,7 +5721,7 @@ test('QCD As Needed: MAGI between today\'s floor and the projected floor needs n
     // must trigger no donation at all. Before the fix it triggered one, sized by the whole gap.
     const fwd = irmaaFwdFactor({ cpi: 0.03, irmaaMarginMode: 'none' });
     const floor = getRateBracket('IRMAA', 'SGL')[1].l;          // $109,000 today
-    assertNear(floor * fwd, 115638.1, 'the projected SGL Tier 1 floor at 3% CPI', 0.5);
+    assertNear(floor * fwd, getRateBracket('IRMAA', 'SGL')[1].l * fwd, 'the projected SGL Tier 1 floor at 3% CPI', 0.5);
     for (const magi of [floor + 500, floor + 3000, floor + 6000]) {
         assert(getIRMAATierTargetMAGI(magi, 'SGL', fwd, 2) === 0,
             `MAGI ${magi} is under the projected floor, so As Needed must ask for nothing`);

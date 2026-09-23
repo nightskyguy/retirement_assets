@@ -130,7 +130,7 @@ function mcTimingIsMeasured() { return _mcTimingMeasured; }
 //   perSim  = workerMs / sims. No fixed term involved at all.
 //
 // The largest run seen wins for perSim. A small run's figure is inflated because the stress pass and
-// the input fan are amortised over few simulations - a real cost, but one that does not scale, so
+// the input fan are amortized over few simulations - a real cost, but one that does not scale, so
 // extrapolating from it over-predicts a big run.
 function recordMCTiming(wallMs, workerMs, numPaths, numVariations) {
     const sims = numPaths * numVariations;
@@ -208,7 +208,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         },
     });
 
-    // Cancelled mid-pass. Report nothing, which is what leaves the previous results on screen.
+    // Canceled mid-pass. Report nothing, which is what leaves the previous results on screen.
     if (!msg) return;
 
     if (kind === 'rails') {

@@ -2477,7 +2477,7 @@ test('P87d: the overage is decided on acaMAGI, so a cap landed on exactly reads 
         assertNear(e.BracketOverage, Math.max(0, e['-acaMAGI'] - e.BracketTarget),
             'the reported overage must be the one acaMAGI implies', 1);
     }
-    // The case the old basis got backwards: the sizing line puts acaMAGI ON the cap, so the year is
+    // The case the old basis got backward: the sizing line puts acaMAGI ON the cap, so the year is
     // exactly full. Read against tax.MAGI it looked like a year with the whole untaxed benefit still
     // spare - headroom the household does not have.
     const onTheCap = live.filter(e => Math.abs(e['-acaMAGI'] - e.BracketTarget) <= 1);
@@ -4891,7 +4891,7 @@ test.critical('Medicare premiums: charging them removes the premium AND the tax 
 test('Medicare premiums: per-person enrollment drops that person premium and their IRMAA share', () => {
     if (!_planBank) return;
     // Not everyone 65+ is enrolled - a spouse's employer plan, the VA, retiree coverage - and in a
-    // couple it is often true of one of them. Enrolment decides the premium and the surcharge
+    // couple it is often true of one of them. Enrollment decides the premium and the surcharge
     // together, so both must follow the flag.
     const base = { ...MED_BASE(), medicarePremiumMode: 'added' };
     const both = simulate({ ...base }).log[0];
@@ -4904,7 +4904,7 @@ test('Medicare premiums: per-person enrollment drops that person premium and the
     assert((none.IRMAA ?? 0) === 0, 'nobody enrolled must owe no surcharge either');
 });
 
-test('Medicare enrolment defaults to ON: an unset flag is enrolled, only an explicit false is not', () => {
+test('Medicare enrollment defaults to ON: an unset flag is enrolled, only an explicit false is not', () => {
     if (!_planBank) return;
     // The engine spells this `inputs.medicareEnroll1 !== false` in two places - the premium and the
     // IRMAA ceiling's safety margin - so an absent flag means enrolled and only a literal false
@@ -5581,7 +5581,7 @@ test('ELIGIBILITY_AGE: the Medicare base premium starts at the constant, not at 
 });
 
 test('ELIGIBILITY_AGE: the IRMAA-tier ceiling relevance gate is ELIGIBILITY_AGE + LOOKBACK', () => {
-    // computeBracketCeiling only honours an IRMAA-tier ceiling once the household is inside the
+    // computeBracketCeiling only honors an IRMAA-tier ceiling once the household is inside the
     // 2-year MAGI lookback (65 - 2 = 63 today); before that it falls back to the federal bracket
     // lookup, a much higher ceiling. A 63-year-old sits exactly on that boundary.
     const inputs = { ...BASE, birthyear1: 1963, die1: 95, strategy: 'bracket',
@@ -5664,7 +5664,7 @@ test('irmaaMarginMode: every shipped mode is distinct and correctly ordered', ()
     assert(t.none > t.cpiminus1 && t.cpiminus1 > t.halfcpi,
         `CPI-haircut ordering broke at 3% CPI: ${JSON.stringify(t)}`);
     // Every margin still leaves the ceiling well above the unprojected threshold it replaced, so
-    // the fix is not cancelled out by its own safety belt.
+    // the fix is not canceled out by its own safety belt.
     for (const [m, v] of Object.entries(t))
         assert(v > 108999, `${m} fell back below the old un-projected ceiling: ${v}`);
 });
@@ -5708,7 +5708,7 @@ test('QCD As Needed uses the full projection and ignores the margin setting enti
 
 test('QCD As Needed: MAGI between today\'s floor and the projected floor needs no QCD', () => {
     // The clearest statement of what the forward projection buys, and the one a reader is most
-    // likely to get backwards. `none` means NO MARGIN, not "no forward projection" - every mode
+    // likely to get backward. `none` means NO MARGIN, not "no forward projection" - every mode
     // aims at the projected threshold. So a MAGI sitting between today's tier floor and the floor
     // as it will be indexed |LOOKBACK| years out is already under the line that will judge it, and
     // must trigger no donation at all. Before the fix it triggered one, sized by the whole gap.
@@ -6296,7 +6296,7 @@ test('P81c: a capped pension COLA is floored at zero per year, and does not claw
 
 test('P70i: a capped pension COLA pays the lesser of its cap and CPI, year by year', () => {
     // The cap bites PER YEAR, which is the whole point: a run of quiet years followed by a hot one
-    // is not the same as the average, and a capped plan never catches up afterwards.
+    // is not the same as the average, and a capped plan never catches up afterward.
     const inflation = 0.030, cpi = 0.028, spread = cpi - inflation;
     const seq = CLOCK_INFL;                       // lumpy, 1% to 13%
     const base = { ...CLOCK_BASE, inflation, cpi, pensionAnnual: 30000, pensionStartAge: 60,
@@ -6731,7 +6731,7 @@ test('selectionOf: a plan still identifies as itself after a round trip', () => 
     for (const p of plans) {
         assert(sameStrategySelection(selectionOf(p), p),
             `${JSON.stringify(p)} must still be itself after selectionOf()`);
-        // And it must not match a NEIGHBOUR. Every plan above differs from every other one, so a
+        // And it must not match a NEIGHBOR. Every plan above differs from every other one, so a
         // key that dropped a field would collapse two of them together here.
         for (const q of plans) if (q !== p)
             assert(!sameStrategySelection(selectionOf(p), q),
@@ -7249,7 +7249,7 @@ for (const [name, g] of Object.entries(OPT_GOLDEN)) {
         const viaShared = buildStrategyFamilies(g.base, sweepOptions(g.base, { nerdKnobs: nerd, year: 2026 }));
         assert(JSON.stringify(viaShared) === JSON.stringify(rows), `sweepOptions reproduces the [${name}] options`);
         // Key ORDER inside an overrides object is an artifact of how the old block happened to
-        // spread its literals, not a behavior. Normalised on both sides so a faithful extraction
+        // spread its literals, not a behavior. Normalized on both sides so a faithful extraction
         // is not reported as a failure — and so a real change still is.
         const norm = o => JSON.stringify(Object.keys(o).sort().map(k => [k, o[k]]));
         assertSameList(
@@ -7303,7 +7303,7 @@ test('bothOnMedicareAtStart: AND semantics, single filer, and the missing-input 
     // eitherOnMedicareAtStart, deleted once P35 PR 3c left it without a caller. The one-of-two row
     // below is the case the twin used to contrast against, so it is asserted on its own terms.
     // P89: every call pins the year, and one comment here was WRONG before that. `both(1960, 60,
-    // ...)` was labelled "neither 65 at start" - but the plan cannot start in 1960+60=2020, it
+    // ...)` was labeled "neither 65 at start" - but the plan cannot start in 1960+60=2020, it
     // starts in 2026, when person 1 is 66 and IS on Medicare. The row still returns false, on the
     // spouse rather than on the filer, which is why the mislabel survived.
     const both = bothOnMedicareAtStart, Y = 2026;
@@ -7359,7 +7359,7 @@ test('P89: clamping can only make the gate MORE true, never less', () => {
     // The direction is provable rather than incidental - the clamp only moves the start year
     // forward, so ages at start can only rise, so "both on Medicare" can only become more true.
     // Measured at 1,423 flips one way and 0 the other over a 6,396-combination grid; this pins the
-    // property so a later change that produces a backwards flip fails here rather than shipping.
+    // property so a later change that produces a backward flip fails here rather than shipping.
     const medAge = TAXData.IRMAA.ELIGIBILITY_AGE, Y = 2026;
     const unclamped = (by1, sa, hs, by2) => {
         if (!by1 || !sa) return false;
@@ -7379,7 +7379,7 @@ test('P89: clamping can only make the gate MORE true, never less', () => {
             }
         }
     }
-    assert(flipsToFalse === 0, `clamping must never un-set the gate, got ${flipsToFalse} backwards flips`);
+    assert(flipsToFalse === 0, `clamping must never un-set the gate, got ${flipsToFalse} backward flips`);
     assert(flipsToTrue > 0, 'test setup: the grid must contain cases the clamp actually changes');
 });
 
@@ -7612,7 +7612,7 @@ test('FRA: the old hard-coded 67 over-stated an early-claiming pre-1955 decedent
     assert(oldWay === 2857, `old hard-coded FRA 67 gives $2,857/mo, got ${oldWay}`);
     assert(newWay === 2666, `real FRAs give $2,666/mo, got ${newWay}`);
     // The error direction is what matters: the hard-code paid the survivor MORE than they are due,
-    // which is the wrong way round for a tool that ships a widow-RMD objective.
+    // which is the wrong way around for a tool that ships a widow-RMD objective.
     assert(newWay < oldWay, 'deriving FRA from birth year must reduce, not raise, this benefit');
 });
 
@@ -7659,7 +7659,7 @@ test('FRA: end to end, a pre-1955 couple pays a smaller survivor benefit', () =>
 // ── Bracket-lookup floor: "below the first bracket" is not "no room at all" ───
 // findBracketIndex returns -1 when the amount is below every bracket's lower bound, and
 // findUpperLimitByAmount used to turn that into `limit: 0`. A single-row table `[{l: Infinity}]`
-// hits it on EVERY lookup, because `Infinity <= amount` is never true — and 21 of the 38 modelled
+// hits it on EVERY lookup, because `Infinity <= amount` is never true — and 21 of the 38 modeled
 // jurisdictions have one. `limit: 0` then propagates into `Math.min(stateLimit, limit)` and zeroes
 // the federal ceiling, so the bracket-filling strategies convert nothing at all in those states.
 
@@ -8255,7 +8255,7 @@ test('P86e: the MC message carries dual-basis twins, and real = each path deflat
     }
 });
 
-test('P80: every sampled year is labelled with the year that actually produced it', () => {
+test('P80: every sampled year is labeled with the year that actually produced it', () => {
     // The claim the tooltip makes is "this number came from that year". So the test is not that
     // srcYears is populated - it is that the VALUE in the bank equals the historical record at the
     // year srcYears names. A label that is merely present but off by one block would pass any
@@ -8299,7 +8299,7 @@ test('P80: every sampled year is labelled with the year that actually produced i
     const wrapped = sb.startYears.findIndex((_, k) => sb.realYears[k] < YEARS);
     const naive = sb.startYears[wrapped] + (YEARS - 1);
     assert(sb.srcYears[wrapped * YEARS + YEARS - 1] !== naive,
-        'a wrapped scenario must NOT be labelled start + y; that is the bug this guards');
+        'a wrapped scenario must NOT be labeled start + y; that is the bug this guards');
 });
 
 test('P80: recording the source years changes no draw and no number', async () => {
@@ -8331,14 +8331,14 @@ test('P80: recording the source years changes no draw and no number', async () =
     }
 });
 
-test('P71: a cancelled job reports nothing at all', async () => {
-    // The contract the UI depends on: a cancelled run resolves to null, and the caller reporting
+test('P71: a canceled job reports nothing at all', async () => {
+    // The contract the UI depends on: a canceled run resolves to null, and the caller reporting
     // nothing is what leaves the previous results on screen instead of blanking them.
     let calls = 0;
     const msg = await _mcEngine.runJob(_p71Cfg('gbm'), {
         shouldCancel: () => { calls++; return calls > 1; },
     });
-    assert(msg === null, 'a cancelled job returned a results message');
+    assert(msg === null, 'a canceled job returned a results message');
     assert(calls > 1, 'shouldCancel was never consulted');
 });
 
@@ -8577,7 +8577,7 @@ test('P128: the rail presets are the four published sets, and each target sits b
     const want = { tight: [0.95, 0.99, 0.80], normal: [0.90, 0.99, 0.70], loose: [0.80, 0.995, 0.40, 0.70],
                    paper: [0.80, 0.995, 0.25, 0.45] };
     const labels = { tight: 'High Safety', normal: 'Normal', loose: 'More Tolerant', paper: 'More Risk' };
-    for (const [k, l] of Object.entries(labels)) assert(P[k].label === l, `${k} is labelled ${P[k].label}, wanted ${l}`);
+    for (const [k, l] of Object.entries(labels)) assert(P[k].label === l, `${k} is labeled ${P[k].label}, wanted ${l}`);
     assert(JSON.stringify(Object.keys(P)) === JSON.stringify(Object.keys(want)), `presets ${Object.keys(P)}`);
     for (const [k, [t, u, l, c]] of Object.entries(want)) {
         assert(P[k].target === t && P[k].upper === u && P[k].lower === l && P[k].cutTo === c,
@@ -9195,7 +9195,7 @@ test('P128: TotalNetWealth scales with a scaled resume, which is what lets a rai
     }
 });
 
-test('P128: a cancelled rails job resolves to nothing', async () => {
+test('P128: a canceled rails job resolves to nothing', async () => {
     let checks = 0;
     const msg = await _railsEngine.runRailsJob({ base: { ...CEIL_BASE }, cadence: 5, numPaths: 20, startPaths: 20,
         simulationMode: 'gbm', seed: 7, mu: 0.07, sigma: 0.12 }, { shouldCancel: () => ++checks > 3 });
@@ -9363,7 +9363,7 @@ test('schedule: refuses to compose with cyclicEnabled', () => {
 // Returns the counts instead of setting process.exitCode, so the browser can render them; the node
 // entry point below is what sets the exit code.
 //
-// `skipSlow` is honoured ONLY by the browser tier. Node always passes false: a tag must never be
+// `skipSlow` is honored ONLY by the browser tier. Node always passes false: a tag must never be
 // able to stop a test from running in the place that gates commits.
 async function runOptimizerCoreTests(opts) {
     const skipSlow = !!(opts && opts.skipSlow);
@@ -9377,9 +9377,9 @@ async function runOptimizerCoreTests(opts) {
     // totals.thirdPassTime. Several tests here assert that two simulation logs are byte-identical,
     // and a live clock makes those two logs differ by construction.
     //
-    // Node neutralises this with a load-time stub. The browser must NOT stub at load - that would
+    // Node neutralizes this with a load-time stub. The browser must NOT stub at load - that would
     // freeze the real page's timing - so it is stubbed for the duration of the run and restored
-    // afterwards. This is measured, not hypothesised: without it exactly six byte-identity tests
+    // afterward. This is measured, not hypothesized: without it exactly six byte-identity tests
     // fail in the browser while passing in node, and they fail on the clock, not on the engine.
     const realNow = globalThis.performance && globalThis.performance.now;
     if (globalThis.performance) globalThis.performance.now = () => 0;
@@ -9765,7 +9765,7 @@ test('P113: summarizeRun snapshots a run, and diffSummaries reports only what mo
 });
 
 // Filenames and the two names a plan carries. Both replace live defects: the export filename was
-// interpolated unsanitised, and the blank-name fallback is a timestamp containing colons, which
+// interpolated unsanitized, and the blank-name fallback is a timestamp containing colons, which
 // cannot be saved on Windows at all.
 test('P113: export filenames are legal, and the two plan names resolve in order', () => {
     assert(!safeExportFilename('2026-09-06 14:22:01').includes(':'),
@@ -9800,7 +9800,7 @@ test('P113: export filenames are legal, and the two plan names resolve in order'
 //
 // This is only implementable because it moves the conversion. The conversion amount is known by the
 // time the year settles; the spending month has to be fixed before the year starts, which is exactly
-// why the old rule had to reach backwards.
+// why the old rule had to reach backward.
 test('timingConvThreshold moves the CONVERSION, on this year, and never the spending', () => {
     const CONV = {
         ...BASE, strategy: 'bracket', stratRate: 0.22, convertExcessToRoth: true,
@@ -9886,7 +9886,7 @@ test('P106g: the terminal IRA rate averages the trailing same-filing-status year
 });
 
 // ── IRA Goal sensitivity partition (Phase P107) ──────────────────────────────────────────────
-// The UI greys the IRA Goal field for IRA_GOAL_BLIND_STRATEGIES. That is a claim about the ENGINE,
+// The UI grays the IRA Goal field for IRA_GOAL_BLIND_STRATEGIES. That is a claim about the ENGINE,
 // so it is pinned here in BOTH directions: a blind strategy must be unmoved by any goal, and a
 // goal-reading strategy must actually move. Without the second half, deleting the goal logic from
 // `bracket` would leave the field enabled on a control that no longer does anything.
@@ -9927,7 +9927,7 @@ test('P107: IRA_GOAL_BLIND_STRATEGIES are unmoved by the goal, and the others ar
         ['fixedpct', { strategy: 'fixedpct' }],
     ]) {
         assert(!core.IRA_GOAL_BLIND_STRATEGIES.includes(over.strategy),
-            `P107: '${label}' reads the IRA Goal and must not be greyed`);
+            `P107: '${label}' reads the IRA Goal and must not be grayed`);
         assert(spread(finals(over)) > 1,
             `P107: '${label}' should respond to the IRA Goal and did not`);
     }

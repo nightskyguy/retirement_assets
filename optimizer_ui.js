@@ -748,7 +748,7 @@ function getInputs() {
         taxSettlement: val('taxSettlement') || undefined,
         // Medicare base premiums. 'in-spend' is today's behavior and the engine acts only on
         // 'added', so an empty or missing select must arrive as undefined rather than as a string
-        // the engine would not recognize. Enrolment defaults to TRUE, so the value sent is the
+        // the engine would not recognize. Enrollment defaults to TRUE, so the value sent is the
         // checkbox state and an absent control reads as enrolled.
         medicarePremiumMode: (val('medicarePremiumMode') === 'added') ? 'added' : undefined,
         medicareEnroll1: valChecked('medicareEnroll1') !== false,
@@ -871,7 +871,7 @@ function rbgRuleTable(base) {
 // The heading over the balance fields says "Assets at Retirement Age", and the year it means is not
 // on screen anywhere. That matters more here than a label usually does, because THE TOOL HAS NO
 // ACCUMULATION PHASE: it never grows the typed balances between today and a later retirement year. A
-// reader who types today's balances and a Retirement Start Age still ahead of them is modelling a
+// reader who types today's balances and a Retirement Start Age still ahead of them is modeling a
 // smaller portfolio than they will actually have, and nothing else says so.
 //
 // Naming the year turns that from a hidden assumption into an instruction: these are the balances AS
@@ -955,7 +955,7 @@ function updateIRAGoalHint() {
     const icon = document.getElementById('suggest-ira-icon');
     if (!icon) return;
     // P107: offering to set a goal the selected strategy never reads would be a suggestion to do
-    // nothing. Hide it rather than let it sit next to a greyed field.
+    // nothing. Hide it rather than let it sit next to a grayed field.
     if (OptimizerCore.IRA_GOAL_BLIND_STRATEGIES.includes(val('strategy'))) {
         icon.style.display = 'none';
         return;
@@ -1262,7 +1262,7 @@ function isBaselineRow(r) {
 // Handles for a sweep that is queued but has not started yet. Deliberately NOT a boolean "already
 // scheduled, skip" latch: that version could only be cleared by the queued work actually running, so
 // anything that stopped it running (a hidden tab that never fires frames, a torn-down context) left
-// the flag stuck true and every later click did nothing at all. Cancelling and re-queueing cannot
+// the flag stuck true and every later click did nothing at all. Canceling and re-queueing cannot
 // wedge, and it also does the more useful thing when inputs change twice quickly -- the newest wins.
 let _optPendingTimer = null;
 let _optPendingFrame = null;
@@ -1667,7 +1667,7 @@ function _runOptimizerNow() {
         }
 
         // P126, user 2026-09-14: every row above follows the Guardrails switch, and the ONE row run both
-        // ways is the user's own plan - so this adds it with the switch the other way round. Ranked with
+        // ways is the user's own plan - so this adds it with the switch the other way around. Ranked with
         // the rest rather than pinned, so the table shows what the switch is worth to this plan. Monte
         // Carlo's withCurrentPlan() adds the same row, so Compare All runs it too.
         const _twin = planRuleTwin(userPlan);
@@ -2524,7 +2524,7 @@ function renderOptimizerTable(results) {
                     const cellWin = col.key === w.key;
                     const bg = cellWin ? '#4CAF5080' : '#90EE90';
                     let cellVal = col.getValue(r);
-                    // Carry the pinned rows' markers into this table so a winner is recognisable as
+                    // Carry the pinned rows' markers into this table so a winner is recognizable as
                     // the SAME row the reader already saw pinned above. The marker alone does that;
                     // repeating "BASELINE -" / "CURRENT -" here would just be noise, and 📍 is
                     // already on the current row's own label.
@@ -3246,7 +3246,7 @@ function showAnnualColumns(...keys) {
         else if (showAll) showAll.checked = true;   // categorized outside the pickers
     });
 
-    // A column of all zeros stays hidden behind its own switch. Ticking the switch - rather than
+    // A column of all zeros stays hidden behind its own switch. Checking the switch - rather than
     // stripping .hidden-column off the one cell - keeps updateColumnVisibility() the single
     // authority, and shows the reader why the rest of the table changed with it.
     const showEmpty = document.getElementById('show-empty-columns');
@@ -3255,11 +3255,11 @@ function showAnnualColumns(...keys) {
     }
 
     // BEFORE the two steps below: inside a hidden card every rect reads 0, so syncTopScroll() would
-    // hide the mirror scrollbar and the scroll maths would land on 0.
+    // hide the mirror scrollbar and the scroll math would land on 0.
     showTab('tab-tbl');
     updateColumnVisibility();
 
-    // Centre the first named column. Centring rather than left-aligning also clears the sticky
+    // Center the first named column. Centering rather than left-aligning also clears the sticky
     // `year` column, which would otherwise sit on top of it.
     const sc = document.getElementById('tbl-scroll');
     if (sc) {
@@ -4068,7 +4068,7 @@ let showTaxThresholds = true;
 
 // Half / full basis step-up mark for a death milestone, DRAWN rather than typed. Appending a
 // character will not work: at the chart's 10px, U+25D0 (half) inks 9x7 while U+25CF (full) inks 6x4,
-// so "full" renders a third SMALLER than "half" and reads backwards, and the half glyph's family
+// so "full" renders a third SMALLER than "half" and reads backward, and the half glyph's family
 // (U+25D0..U+25D7) has no fully-black member to pair with. Drawing both from one radius makes them
 // identical by construction, matches the marker's own color exactly, and does not depend on what
 // `sans-serif` resolves to on the reader's machine.
@@ -4303,13 +4303,13 @@ function makeChartLegendInteraction(groupSize = 1) {
 }
 
 // Compute milestone markers from the simulation log:
-//  1. First death - labelled "You" / "Spouse" (filing status flips; the deceased's age becomes
+//  1. First death - labeled "You" / "Spouse" (filing status flips; the deceased's age becomes
 //     '—'), carrying a half or full basis step-up glyph per the state's property law.
-//  8. Last death - the final row, always someone's death since the plan ends at one. Labelled the
+//  8. Last death - the final row, always someone's death since the plan ends at one. Labeled the
 //     same way, always a FULL step-up (heirs), and it is the only death marker a single filer gets.
 //  2. Every Guardrails spending CUT and RAISE, by the GK-style or the risk-based rule (the hidden
 //     -ruleMove field: what the rule did to the year's goal).
-//  3. Every year the IRMAA tier INCREASES over the prior year (e.g. Tier 1→Tier 2), labelled with
+//  3. Every year the IRMAA tier INCREASES over the prior year (e.g. Tier 1→Tier 2), labeled with
 //     the new tier ("IRMAA Tier 2"). Same-or-lower tiers are not marked.
 //  4. Every year net income falls short of the spend goal by more than 10%.
 //  5. Roth conversion break-even - the year the converting plan permanently overtakes the
@@ -4347,7 +4347,7 @@ function computeMilestones(log) {
         // 1. First death - first filing-status flip; name who passed (their age shows '—'). The
         // word "Passing" is carried by the legend rather than the label: these markers sit at the
         // right-hand end of the chart where a long label is drawn right-aligned and sweeps left
-        // across its neighbours. The step-up glyph replaces it at a fraction of the width.
+        // across its neighbors. The step-up glyph replaces it at a fraction of the width.
         if (!deathDone && prevStatus && status && status !== prevStatus) {
             const youGone = (r.age1 == null || r.age1 === '—');
             ms.push({ x: i, label: youGone ? 'You' : 'Spouse', color: '#7b1fa2',
@@ -4362,7 +4362,7 @@ function computeMilestones(log) {
         const isShort = (sg > 0 && ni != null && ni < sg * 0.90);
         // 2. A spend-rule cut or raise, by either rule (GK-style or risk-based), from what the rule
         // actually did to the goal (the hidden -ruleMove field): a risk-based raise the ceiling
-        // trims back to the plan still moved spending up, and a GK-style year labelled 'no-cut'
+        // trims back to the plan still moved spending up, and a GK-style year labeled 'no-cut'
         // did not move it. A cut is skipped when the same year is already flagged as a shortfall.
         // Rows without the field (a result loaded from an older file) fall back to the GK label.
         const move = r['-ruleMove'];
@@ -5198,7 +5198,7 @@ function railsSettingsChanged() {
     railsScheduleAutoRun();
 }
 
-// Auto-run. Ticking it on solves at once when what is on screen is not current (user, 2026-09-16:
+// Auto-run. Checking it on solves at once when what is on screen is not current (user, 2026-09-16:
 // "'Clicking it on' should cause the build to run").
 function railsAutoToggled() {
     railsRenderPanel();
@@ -5250,7 +5250,7 @@ function applyRbgSelection(sel) {
 
 // Debounced, and only when a solve would answer something new: a fingerprint already solved, or
 // already being solved, starts nothing. P132: the risk-based rule needs current rails to run at
-// all, so with it on a solve is scheduled whether or not Auto-run is ticked.
+// all, so with it on a solve is scheduled whether or not Auto-run is checked.
 function railsScheduleAutoRun() {
     if (!railsOn() || _replayState) return;
     if (!railsSettings().auto && !rbgRuleOn()) return;
@@ -5341,7 +5341,7 @@ function railsRenderPanel() {
 // Nerdknob. The rule's table for the preset on screen - the plan's, or the path's while a replayed
 // path has its own solve - one row per plan year. Ratios are net spending (after Social Security and
 // pension) over the wealth at the end of the year before; a landing line is net spending as a share
-// of the spine's wealth, a + b x (wealth / spine wealth). Interpolated rows are greyed.
+// of the spine's wealth, a + b x (wealth / spine wealth). Interpolated rows are grayed.
 function railsRenderTable() {
     const el = document.getElementById('rails-table');
     if (!el) return;
@@ -5950,7 +5950,7 @@ function drawCharts(log) {
     // paid, not what it looks like after that device.
     //
     // `taxed` says whether the source bears any tax at all, and it is why the difference is not
-    // labelled "tax" everywhere. The scale is uniform, so it shaves Cash withdrawals, Roth
+    // labeled "tax" everywhere. The scale is uniform, so it shaves Cash withdrawals, Roth
     // withdrawals and return of basis by the same fraction as an IRA draw, and none of those three is
     // taxable; printing "- $2,800 tax" beside a Roth withdrawal would invent a charge that does not
     // exist. Those sources report their raw amount and stop there.
@@ -6427,7 +6427,7 @@ function convEndIsAuto() {
 
 // The Stop-conversions row as a whole is meaningless when the plan converts nothing, and a live
 // control that cannot do anything is worse than a disabled one that says so. Disabling rather than
-// hiding, the way the Ordered strategy greys out Roth-before-Brokerage.
+// hiding, the way the Ordered strategy grays out Roth-before-Brokerage.
 function refreshConvEndEnabled() {
     const never = document.getElementById('gf-conv-mode')?.value === 'never';
     const yearEl = document.getElementById('convEndYear');
@@ -6664,7 +6664,7 @@ function limitWarningText(rows, kind, totalYears) {
     const ceiling = isACA ? 'the cap' : kind;
 
     // The structural half first when it is the bigger one, because it is the half whose advice the
-    // reader would otherwise get backwards.
+    // reader would otherwise get backward.
     if (structural.length && structural.length >= spendDriven.length) {
         const worstRow = structural.reduce((a, b) => (forced(a) > forced(b) ? a : b));
         const rmd = worstRow.RMDwd ?? 0;
@@ -6962,7 +6962,7 @@ function toggleStrategyUI() {
     {
         const on = valChecked('spendRule'), rbg = rbgRuleOn();
         // The rule menu is a nerdknob control (user, 2026-09-19): beside the switch whenever the
-        // knob is on, greyed until the switch is, and shown without the knob only for a plan or a
+        // knob is on, grayed until the switch is, and shown without the knob only for a plan or a
         // link that already carries the risk-based rule, so a running rule is never invisible.
         const kindEl = document.getElementById('spendRuleKind');
         if (kindEl) {
@@ -6987,7 +6987,7 @@ function toggleStrategyUI() {
     updateSplitMixNote();
     // "Roth before Brokerage" reaches every strategy except Ordered, which runs the sequence the
     // user chose - the same line fillSpendingGap draws, and the one ROTH_GAP_EXCLUDED draws for the
-    // 🅡 rows. Greyed rather than hidden, and the switch is NOT cleared: switching to Ordered and
+    // 🅡 rows. Grayed rather than hidden, and the switch is NOT cleared: switching to Ordered and
     // back would otherwise silently throw the setting away.
     const rgLabel = document.getElementById('rothGapFill-label');
     if (rgLabel) {
@@ -6995,7 +6995,7 @@ function toggleStrategyUI() {
         document.getElementById('rothGapFill').disabled = (m === 'ordered');
     }
     // P107: three strategies never read the IRA Goal, so no value of it can change their result.
-    // Greyed and disabled rather than hidden, and the VALUE IS NOT CLEARED - switching away and back
+    // Grayed and disabled rather than hidden, and the VALUE IS NOT CLEARED - switching away and back
     // would otherwise throw the number away, the same reasoning as rothGapFill above. The visible
     // note carries the reason, because a tooltip alone cannot be read on a phone.
     const goalBlind = OptimizerCore.IRA_GOAL_BLIND_STRATEGIES.includes(m);
@@ -7422,7 +7422,7 @@ function currentRunSummary() {
  * Load and Import used to validate differently: Load demanded an exact version match, while Import
  * tested `if (scenario.version && ...)` so a payload with NO version key skipped the check entirely,
  * was applied, and was then stored unversioned - after which the list rendered it incompatible and
- * Load refused it forever. Import could manufacture entries Load would not open. Normalising on the
+ * Load refused it forever. Import could manufacture entries Load would not open. Normalizing on the
  * way in removes that class of entry rather than teaching two code paths to disagree politely.
  */
 function normalizeScenarioEntry(raw, { sourceFile = null } = {}) {
@@ -7820,7 +7820,7 @@ function manageScenarios() {
 // PREVIEW AND COMMIT - the one path Load and Import both take
 // ============================================================================
 // Load and Import used to differ in validation, naming, storage and messaging, which is how Import
-// came to be able to store entries Load would refuse. Both now normalise, then preview, then commit.
+// came to be able to store entries Load would refuse. Both now normalize, then preview, then commit.
 
 /** An imported file waiting for the user to confirm it, so preview can show it before it is applied. */
 let _pendingImport = null;
@@ -7932,7 +7932,7 @@ function previewImport() {
 function cancelImport() {
     _pendingImport = null;
     closeScenarioModal();
-    showMessage('Import cancelled.', 'warning');
+    showMessage('Import canceled.', 'warning');
 }
 
 /**
@@ -8229,7 +8229,7 @@ function exportScenario(name) {
 
         const link = document.createElement('a');
         link.href = url;
-        // `${name}.json` was unsanitised, and the blank-name fallback is a timestamp containing
+        // `${name}.json` was unsanitized, and the blank-name fallback is a timestamp containing
         // colons - a filename Windows will not accept.
         link.download = OptimizerCore.safeExportFilename(name);
         link.click();
@@ -8264,7 +8264,7 @@ function importScenario() {
             try {
                 const raw = JSON.parse(event.target.result);
 
-                // Normalise FIRST. The old test was `if (raw.version && ...)`, so a payload with no
+                // Normalize FIRST. The old test was `if (raw.version && ...)`, so a payload with no
                 // version key skipped the check, was applied, and was stored unversioned - after
                 // which the list rendered it incompatible and Load refused it for good. An entry
                 // that Import accepts must be one Load will open.
@@ -8272,7 +8272,7 @@ function importScenario() {
 
                 if (raw.version && raw.version !== SCENARIO_VERSION) {
                     if (!confirm(`Warning: This scenario is from version ${raw.version}, current version is ${SCENARIO_VERSION}.\n\nIt may not load correctly. Continue anyway?`)) {
-                        showMessage('Import cancelled.', 'warning');
+                        showMessage('Import canceled.', 'warning');
                         return;
                     }
                 }
@@ -8830,7 +8830,7 @@ function buildLimitLadderSVG(status, cpiAdj, selectedLimit) {
     const LAST_ROW_BOTTOM = ROW_Y[ROW_ORDER[ROW_ORDER.length - 1]] + ROW_H;
     const LEG_Y1 = LAST_ROW_BOTTOM + 24, LEG_Y2 = LEG_Y1 + 20;
     const H = LEG_Y2 + 14;
-    const mid = y => y + ROW_H / 2 + 4;          // text baseline centred in a row
+    const mid = y => y + ROW_H / 2 + 4;          // text baseline centered in a row
     const x = v => L + Math.max(0, Math.min(1, v / maxX)) * (W - L - R);
     const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
     const money = n => DisplayHelpers.formatDollarShort(n);
@@ -9133,7 +9133,7 @@ function updateACAWarning() {
     }
 
     if (bothMedicare && medicareAlready) {
-        // Silent, on instruction. The options are greyed out above and nothing here can be acted
+        // Silent, on instruction. The options are grayed out above and nothing here can be acted
         // on, so the box says nothing rather than describing a control that will not help.
         warnEl.style.display = 'none';
     } else if (bothMedicare) {
@@ -9146,7 +9146,7 @@ function updateACAWarning() {
         // that is using one; it was previously shown for every selection, so choosing a federal
         // bracket or an IRMAA tier produced an unprompted paragraph about a cap the plan does not
         // have. The bothMedicare branch above is NOT gated the same way on purpose: it explains why
-        // the ACA options are greyed out, and a user who cannot select them could otherwise never
+        // the ACA options are grayed out, and a user who cannot select them could otherwise never
         // find out why.
         // Was "ACA income limits apply only to the other person", which was wrong in both
         // directions: the FPL cap is tested against HOUSEHOLD MAGI, so the Medicare spouse's
@@ -9258,7 +9258,7 @@ function generateStratRateOptions() {
     // ── Federal brackets ──────────────────────────────────────────────────────
     // Every entry names a CEILING to fill up to, so the top bracket cannot be one of them: its
     // `l` is the Infinity sentinel, meaning "nothing above this". It used to be offered anyway,
-    // labelled "no limit", and selecting it produced $NaN for the whole plan - there is no rate
+    // labeled "no limit", and selecting it produced $NaN for the whole plan - there is no rate
     // at a ceiling that is nowhere.
     //
     // It stays in the list, disabled, showing the income where it BEGINS rather than a ceiling it
@@ -9379,7 +9379,7 @@ function generateStratRateOptions() {
     let html = `<optgroup label="${statusLabel} · ${cpiLabel}${yearLabel}">`;
     for (const opt of options) {
         const selected = opt.defaultSelected ? ' selected' : '';
-        // Greyed the same way updateACAWarning() greys a lapsed ACA entry, so "listed but not
+        // Grayed the same way updateACAWarning() grays a lapsed ACA entry, so "listed but not
         // choosable" looks like one thing in this control rather than two.
         const off = opt.disabled ? ' disabled style="color:#aaa"' : '';
         // P92e. The numeric limit travels as a data attribute. updateBracketFeedback() used to

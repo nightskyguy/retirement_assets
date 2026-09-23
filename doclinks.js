@@ -107,7 +107,7 @@
       if (next !== raw) {
         links[i].setAttribute('href', next);
         // Guard on childElementCount: relabelling reads and rewrites textContent, which would
-        // flatten any markup inside the anchor. Every filename-labelled link here is plain
+        // flatten any markup inside the anchor. Every filename-labeled link here is plain
         // text (the <strong> at retirement_optimizer.html:631 wraps the <a>, not the reverse).
         if (links[i].childElementCount === 0) {
           var label = docLabel(links[i].textContent, raw, next);

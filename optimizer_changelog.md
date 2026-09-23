@@ -95,7 +95,7 @@ own line, and changing the preset or market paths no longer scrolls the page awa
 
 **The ✉ Feedback button**, under Share and on the Documentation tab, sends a note to the author.
 
-**You choose what goes with it.** Your settings and any page errors go unless you untick them:
+**You choose what goes with it.** Your settings and any page errors go unless you uncheck them:
 strategy, tax limit, filing status, state, growth and inflation, never balances, income, spending,
 ages or birth dates. Your full plan link and a screenshot of the whole page go only if you tick them.
 *Show exactly what will be sent* lists everything before it leaves your browser.
@@ -143,7 +143,7 @@ undo.
 
 ## 11.1824
 
-**The Guardrails switch is now labelled GK-style.**  
+**The Guardrails switch is now labeled GK-style.**  
 *No plan's numbers change.*
 
 Guardrails follows a Guyton-Klinger-*style* rule rather than the published one, and the label now
@@ -292,7 +292,7 @@ plan reproduces exactly.
 
 The tool used to pick the month for you with a rule you could not see: a year in which you had
 converted more than $1,000 pushed the NEXT year's whole withdrawal into January, and it stayed
-there. That was backwards in two ways. What a converting year wants early is the conversion, not
+there. That was backward in two ways. What a converting year wants early is the conversion, not
 the spending - and one year's conversion should have no bearing on the next year's timing at all.
 
 In its place, one choice with three options:
@@ -406,7 +406,7 @@ imported now offers its own name back the next time you save or export it.
 
 Two smaller fixes came with it. An exported file whose name contained a colon, which is what an
 unnamed plan gets, could not be saved on Windows. And a scenario file with no version stamp could be
-imported but never loaded again afterwards; those files now import and load like any other.
+imported but never loaded again afterward; those files now import and load like any other.
 
 A Roth conversion was credited to the account only after the year's growth had already been applied, so the converted amount
 earned nothing in the year you converted it. Surplus banked to Cash or Brokerage instead was credited before growth and did
@@ -447,10 +447,10 @@ Spending, taxes and withdrawals do not move by a cent. A saved plan or a shared 
 End Wealth than it did before this release, and where *Optimize for* ranks plans by wealth, the order can
 change with it.
 
-**The IRA Goal greys out for the strategies that ignore it.**
+**The IRA Goal grays out for the strategies that ignore it.**
 
 Three strategies never read the *IRA Goal* at all: Proportional Withdraw, Ordered and
-Guyton-Klinger. No value you type there changes their result. The field now greys out and says
+Guyton-Klinger. No value you type there changes their result. The field now grays out and says
 "Not used by this strategy" when one of those is selected, and the number you had is kept rather
 than cleared, so switching away and back does not lose it.
 
@@ -718,7 +718,7 @@ naming a strategy that IS in the menu is unaffected.
 
 ### Smaller
 
-If everyone in your plan has already passed 65, the ACA income-cap options are still greyed out but
+If everyone in your plan has already passed 65, the ACA income-cap options are still grayed out but
 the note beside them is gone. It ended by telling you to lower your Retirement Start Age to model
 pre-Medicare years, and that cannot work once the age is behind you: the plan always starts this year
 at the earliest, so no start age reaches a year before Medicare. Where the start age is what puts you
@@ -927,12 +927,12 @@ COLA. A capped pension pays the lesser of its cap and that year's CPI, so it fal
 behind in a high-inflation stretch instead of catching up later. That is how federal FERS and most
 state and municipal plans actually pay, and a checkbox could only call them uncapped or nothing. A
 pension also follows CPI now rather than general inflation, as Social Security already did. Plans
-saved with the box ticked load as Full COLA; unticked loads as No increase.
+saved with the box checked load as Full COLA; unchecked loads as No increase.
 
 Also fixed: choosing **Fill Bracket** at the top federal bracket produced no plan at all, with every
 figure reading `$NaN`. That bracket has no upper limit, so there was nothing to fill up to. The
 ceiling menu now ends at the highest bracket that has a top; the top federal bracket and the top
-IRMAA tier stay listed, greyed, showing the income where they begin. And a saved plan using Fill
+IRMAA tier stay listed, grayed, showing the income where they begin. And a saved plan using Fill
 Bracket came back with its ceiling reset to "Below IRMAA" instead of the bracket you chose, so it
 ran a different strategy than the one you saved. Reload any such plan to get your own ceiling back.
 
@@ -988,7 +988,7 @@ sequences the run scored, never re-created approximations.
    cuts both ways, and not gently: across 60 test plans it gained as much as $471,000 and lost as
    much as $634,000, and it was negative in 26 of them. Spending Roth preserves the brokerage
    account but drains the one that grows tax-free. Your numbers do not move until you turn it on,
-   and the *Ordered* strategy greys the switch out, because it draws in the sequence you chose.
+   and the *Ordered* strategy grays the switch out, because it draws in the sequence you chose.
 
 2. **The Optimizer sweeps both.** Every strategy except *Ordered* appears a second time in the
    table, marked 🅡, so the comparison is in front of you rather than something to run twice. Those
@@ -1454,7 +1454,7 @@ own plan.
 - **My Plan Only** is listed first and is the new default. It answers "how did my plan do", which is the
   question most people want to answer. It costs about one 144th of the work. You get your chance of success
   and the percentile chart, but no strategy ranking table.
-- **Compare All Scenarios** is the old behaviour, renamed to say what it actually does.
+- **Compare All Scenarios** is the old behavior, renamed to say what it actually does.
 
 Each button carries its own expected time, measured on the machine you are running on rather than
 guessed: "My Plan Only (1.3 sec)", "Compare All Scenarios (43 sec)". The first figure shown is an estimate; 
@@ -1541,7 +1541,7 @@ drawn anywhere in it. The seed tooltip now says so.
 **Inflation is colored by whether it hurts you, not by its sign.**
 
 Every figure in these summaries was green when positive and red when negative, which is right for a
-return and backwards for inflation: 8.7% inflation was drawn in the same green as a good year for
+return and backward for inflation: 8.7% inflation was drawn in the same green as a good year for
 equities. Inflation now reads red when it is above zero and green when it is at or below zero,
 everywhere it appears. The other series are unchanged.
 
@@ -1897,7 +1897,7 @@ because the account sequence is the one you picked and it will not step outside 
 remaining shortfall on a CBIR, RIBC or BIRC row is the answer, not a bug. That is now said in the
 README, in the strategy description, on the Annual Details legend and in the shortfall column
 tooltip. The shortfall tooltip also used to say a shortfall was "likely due to errors in the
-calculation", which was backwards.
+calculation", which was backward.
 
 One of the Ordered strategies was leaving a small amount of spending unfunded in two years; the
 amounts moved and now sit between $10 and $161 across three years on the test plan. These are
@@ -2273,7 +2273,7 @@ Your current plan is now marked (📍) in exactly one place when there is nothin
 appears it indicates a slightly DIFFERENT variation from your plan.
 
 The pinned rows read ⚓ BASELINE and 📍 CURRENT, marker first in all cases, and a row that wins a
-metric in the Best table keeps its marker there too, so it is recognisable as the same row without
+metric in the Best table keeps its marker there too, so it is recognizable as the same row without
 repeating the words.
 
 The ⚖ control has its own column at the start of each row, and the outcome marker beside it is part

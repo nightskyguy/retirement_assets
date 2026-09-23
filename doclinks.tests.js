@@ -153,7 +153,7 @@ test('sourceFile maps a rendered page back to its source .md', () => {
   assert(src('/') === 'README.md', 'root');
 });
 
-// ── 8. docLabel: a link labelled with a filename must not lie ──────────────
+// ── 8. docLabel: a link labeled with a filename must not lie ──────────────
 // Rewriting the href alone left the page reading "optimizer_changelog.md" while the link
 // went to the .html. Only filename labels get swapped; descriptive text never does.
 
@@ -281,7 +281,7 @@ test('every changelog version stamp sits in its own <li>', () => {
 // `.toggle-switch` sibling in its place. So a `.toggle` label that carries a checkbox but no switch
 // renders its text and NOTHING to click. That is how the Medicare "Enrolled at 65" controls shipped
 // in 11.17f4: two labels reading "You" and "Spouse", no control at all, and a help line telling the
-// user to untick something that was not on the screen. A `<label>` nested inside another `<label>`
+// user to uncheck something that was not on the screen. A `<label>` nested inside another `<label>`
 // came with it, and is its own fault: invalid HTML, where a click can activate the OUTER label's
 // control instead of the one under the pointer.
 //

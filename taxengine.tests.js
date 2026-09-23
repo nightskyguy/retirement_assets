@@ -25,7 +25,7 @@
  * number to three decimals, and the first mismatch inside a test is the failure it reports.
  *
  * TESTTAXATION and TEST are synthetic jurisdictions with round-number brackets, installed into
- * TAXData for the duration of a run and removed again afterwards, so a page that lists TAXData's
+ * TAXData for the duration of a run and removed again afterward, so a page that lists TAXData's
  * states never sees either. TEST moved here from taxengine.js's own tables in 11.18e4.
  */
 

@@ -12,11 +12,11 @@
    What a report contains is the person's choice, made in the dialog, and "Show exactly what will be
    sent" prints it before anything leaves the browser:
      always      tool, version, page address WITHOUT its query, browser, window size, open tab
-     settings    (ticked) the page's pinned values (the state), the share-link keys the page marks
+     settings    (checked) the page's pinned values (the state), the share-link keys the page marks
                  safe, the NAMES of the rest, and up to five page errors with every run of 3+ digits
                  masked
-     plan link   (unticked) the whole share link, numbers and all
-     screenshot  (unticked) a JPEG of what is on screen behind the dialog
+     plan link   (unchecked) the whole share link, numbers and all
+     screenshot  (unchecked) a JPEG of what is on screen behind the dialog
      email       (optional) used only as the reply address
 
    Load it WITHOUT defer and early in <head>: the error listeners have to exist before the page's
@@ -108,7 +108,7 @@
   }
 
   // An error message can quote a value. Any run of three or more digits could be a dollar amount or
-  // a year, so it is masked; the script location is added afterwards and keeps its line number.
+  // a year, so it is masked; the script location is added afterward and keeps its line number.
   function maskDigits(s) {
     return String(s).replace(/\d{3,}/g, m => '#'.repeat(m.length));
   }
@@ -722,7 +722,7 @@
     el.shotBox.hidden = true;
     setShotStatus('Taking the screenshot...');
     capturePage().then(url => {
-      if (!el.shot.checked) return;            // unticked while it was being taken
+      if (!el.shot.checked) return;            // unchecked while it was being taken
       if (!url) {
         el.shot.checked = false;
         setShotStatus('The screenshot came out too large to send.');

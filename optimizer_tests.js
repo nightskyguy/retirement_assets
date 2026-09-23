@@ -171,7 +171,7 @@ function runTests() {
 			setOptObjective('mintax');
 			assertEqual(/[?&]obj=mintax(&|$)/.test(buildShareURL()), true,
 				'a non-default goal is emitted into the share URL');
-			// The control follows the state, not only the other way round - a select showing one goal
+			// The control follows the state, not only the other way around - a select showing one goal
 			// while the table is ranked by another is worse than not restoring it at all.
 			const sel = document.getElementById('opt-objective');
 			if (sel) assertEqual(sel.value, 'mintax', 'the selector follows a programmatic goal change');
@@ -194,7 +194,7 @@ function runTests() {
 	//
 	// The predicates are exercised directly, by writing the boxes, rather than by clicking the
 	// preset functions - those re-run the simulation as a side effect, which a test has no business
-	// doing to someone's page. Every value is put back afterwards.
+	// doing to someone's page. Every value is put back afterward.
 	// ⚠ UNSAFE - MUTATES: every Monte Carlo parameter input (MC_PARAMS). Restores them in a finally,
 	// and those fields ride along in saved scenarios and share links, so a leak is not cosmetic.
 	(function mcPresetStateFollowsTheParameters() {
@@ -279,7 +279,7 @@ function runTests() {
 				'the two are the top federal bracket and the top IRMAA tier');
 			// No entry may still claim to have no limit; that was the label that read as a target.
 			assertEqual(opts.some(o => /no limit/i.test(o.textContent)), false,
-				'no entry is labelled "no limit"');
+				'no entry is labeled "no limit"');
 
 			// Each reference entry sorts directly above the ceiling it succeeds, and shows that
 			// ceiling plus a dollar - so the ladder reads continuously.
@@ -348,11 +348,11 @@ function runTests() {
 	})();
 
 	// ===== Advice nobody can follow is not shown =====
-	// The ACA gate greys out the FPL options once every person in the plan is on Medicare at
+	// The ACA gate grays out the FPL options once every person in the plan is on Medicare at
 	// retirement start, and the note explaining it ended "Lower Retirement Start Age to model
 	// pre-Medicare years". For a household ALREADY past 65 this calendar year that instruction cannot
 	// be followed by anyone: planFirstYear clamps a start year in the past up to the current one, so
-	// every start age produces the same first year and the same ages in it. The options still grey
+	// every start age produces the same first year and the same ages in it. The options still gray
 	// out; the sentence about the control that cannot help is gone. When the start age is what pushes
 	// them past 65, the advice IS followable and the note stays.
 	// ⚠ UNSAFE - MUTATES: the birth years, spouse flag and Retirement Start Age. All restored below.
@@ -383,7 +383,7 @@ function runTests() {
 			// Both under 65 today, but the start age puts them past it: the advice works, so it stays.
 			setUp(nowYear - 50, nowYear - 48, 70);
 			assertEqual(acaOpts().every(o => o.disabled), true,
-				'a start age past 65 still greys the ACA rows out');
+				'a start age past 65 still grays the ACA rows out');
 			assertEqual(warn.style.display !== 'none', true,
 				'and there the note stays, because lowering the start age really would help');
 		} finally {
@@ -458,7 +458,7 @@ function runTests() {
 	// ===== A limit that is taken away is replaced by the default, and said out loud =====
 	// P95a. The one case that does NOT round-trip, and should not: a link carrying an ACA cap opened
 	// by a household already on Medicare at retirement start. There is no premium subsidy left for a
-	// cap to protect, so the gate greys the ACA rows out and the selection has to move.
+	// cap to protect, so the gate grays the ACA rows out and the selection has to move.
 	//
 	// Where it moves is the point. It used to take the first enabled option in a list sorted by
 	// dollars, which is "10% Fed - $24.8k" - three times tighter than the $84k that was asked for,
@@ -546,7 +546,7 @@ function runTests() {
 			const ded = dropdownDeduction(status);
 			// The list is in order of the MAGI each entry caps (user, 2026-09-20: 24% Fed's top is above
 			// IRMAA Tier 3's, so it lists after it), and every entry prints that MAGI figure so the
-			// column read top to bottom never runs backwards.
+			// column read top to bottom never runs backward.
 			const magis = [...rate.options].map(o => Number(o.dataset.limit) + (/^\d+$/.test(o.value) ? ded : 0));
 			assertEqual(magis.every((m, i) => i === 0 || m >= magis[i - 1]), true,
 				`the Limit menu runs upward in MAGI: ${magis.map(Math.round).join(', ')}`);
@@ -603,7 +603,7 @@ function runTests() {
 			// whole reason it is one row and not an LTCG row plus a NIIT row.
 			for (const lbl of ['0%', '15%', '18.8%', '23.8%'])
 				assertEqual(rowNames.includes(lbl), true, `capital-gains band ${lbl} is drawn`);
-			// Every vertical line STYLE has a legend entry. Compared by stroke colour, not by count:
+			// Every vertical line STYLE has a legend entry. Compared by stroke color, not by count:
 			// the ACA row draws one tick per cap and they share a single entry, so counting lines
 			// would demand four identical swatches. What must not happen is a line style on the
 			// chart that the legend never names.
@@ -636,7 +636,7 @@ function runTests() {
 				const svg2 = panel.querySelector('svg');
 				const names2 = [...svg2.querySelectorAll('text')].map(t => t.textContent);
 				assertEqual(names2.includes('ACA') && names2.includes('FPL'), true,
-					'"Show ACA/FPL" adds the row, labelled ACA / FPL');
+					'"Show ACA/FPL" adds the row, labeled ACA / FPL');
 				assertEqual(/onclick|<a[\s>]|title=/i.test(svg2.outerHTML), false,
 					'and the drawing is still a picture with the row on');
 				const l2 = [...svg2.querySelectorAll('line')];
@@ -1160,7 +1160,7 @@ function runTests() {
 		}
 	})();
 
-	// ===== My Plan Only: the plan as set, and the same plan with Guardrails the other way round =====
+	// ===== My Plan Only: the plan as set, and the same plan with Guardrails the other way around =====
 	// user, 2026-09-14. The two rows may differ in the spend rule and nothing else: the second is a fair
 	// measure of the switch only if it carries the plan's own conversions and stop year.
 	(function myPlanOnlyRunsThePlanBothWays() {
@@ -1175,7 +1175,7 @@ function runTests() {
 			assertEqual(diffs(rows[0]), '', `rule '${rule}': the first row is the plan exactly as set`);
 			assertEqual(diffs(rows[1]), 'spendRule', `rule '${rule}': the second differs in the Guardrails switch alone`);
 			// P132: the twin of a plan with either rule on is the plan with none.
-			assertEqual(rows[1].spendRule, on ? '' : 'gk', `rule '${rule}': and has it the other way round`);
+			assertEqual(rows[1].spendRule, on ? '' : 'gk', `rule '${rule}': and has it the other way around`);
 			const onLabel = rule === 'rbg' ? /Risk-based on$/ : /Guardrails on$/;
 			assertEqual(onLabel.test(rows[on ? 0 : 1]._paramLabel), true, `rule '${rule}': the row with the rule says so`);
 			assertEqual(/Guardrails off$/.test(rows[on ? 1 : 0]._paramLabel), true, `rule '${rule}': and so does the row without`);
@@ -1974,12 +1974,12 @@ function runTests() {
 			Object.assign(RailsState, { result: null, fingerprint: null, running: false, runFingerprint: null });
 			auto.checked = true;
 			railsAutoToggled();
-			assertEqual(jobs.length, 1, 'P128o: ticking Auto-run starts a solve at once, without the debounce');
+			assertEqual(jobs.length, 1, 'P128o: checking Auto-run starts a solve at once, without the debounce');
 			railsAutoToggled();
 			assertEqual(jobs.length, 1, 'P128o: and never a second solve of a plan already being solved');
 			auto.checked = false;
 			railsAutoToggled();
-			assertEqual(RailsState.debounce, null, 'P128o: unticking it leaves nothing scheduled');
+			assertEqual(RailsState.debounce, null, 'P128o: unchecking it leaves nothing scheduled');
 		} finally {
 			runMCWorker = realRun;
 			railsStopTicker();

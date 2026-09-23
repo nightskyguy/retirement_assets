@@ -259,7 +259,7 @@ const TaxPaymentPlanner = (() => {
       label: 'Anything that raises your income after the plan is built is not in these numbers',
       long: 'The federal and state tax on this page was calculated elsewhere and handed to the planner, ' +
             'which decides only when to draw and when to pay. Any money you raise on top of the draws ' +
-            'entered here sits outside that calculation. Selling shares from a taxable account realises a ' +
+            'entered here sits outside that calculation. Selling shares from a taxable account realizes a ' +
             'gain, and an extra IRA withdrawal is ordinary income. Either one lifts the bill above the ' +
             'figure every plan here is sized against, and the difference turns up as a balance due when ' +
             'you file. Where the prior-year safe harbor is the test protecting you, that extra tax is ' +
@@ -951,7 +951,7 @@ const TaxPaymentPlanner = (() => {
     let convWithholdFed = 0, convWithholdState = 0;
     let ira1ConvFedW = 0, ira1ConvStW = 0;
     let ira2ConvFedW = 0, ira2ConvStW = 0;
-    // 60-day analysis initialised with zero withholding; updated after gap is known.
+    // 60-day analysis initialized with zero withholding; updated after gap is known.
     let ira1Replacement = _replacementAnalysis(p.ira1RothConversion, ira1.planAConvMonth, ira1.planAConvDay, { total: 0, fed: 0, state: 0 });
     let ira2Replacement = _replacementAnalysis(p.ira2RothConversion, ira2.planAConvMonth, ira2.planAConvDay, { total: 0, fed: 0, state: 0 });
 
@@ -2244,7 +2244,7 @@ const TaxPaymentPlanner = (() => {
     };
     const mName = m => (m ? MONTH_NAMES[m - 1] : 'December');
     // An empty month list means the plan does nothing of that kind, and saying "December" would be
-    // a plain falsehood: a conversion-only plan was labelled "draws in December" with no draws.
+    // a plain falsehood: a conversion-only plan was labeled "draws in December" with no draws.
     const mList = ms => (ms.length === 0 ? null
       : ms.length === 1 ? MONTH_NAMES[ms[0] - 1]
       : ms.slice(0, -1).map(m => MONTH_NAMES[m - 1]).join(', ') + ' and ' + MONTH_NAMES[ms[ms.length - 1] - 1]);
@@ -2257,7 +2257,7 @@ const TaxPaymentPlanner = (() => {
     let best = null;
     letters.forEach(k => { if (best === null || perPlan[k].total < perPlan[best].total - 0.5) best = k; });
     // Everything within a dollar of the cheapest is a co-winner: starring one of them on a
-    // rounding artefact would be noise dressed as advice.
+    // rounding artifact would be noise dressed as advice.
     const bestSet = letters.filter(k => Math.abs(perPlan[k].total - perPlan[best].total) <= 1);
     const anyNegative = letters.some(k => perPlan[k].total < -0.5);
     // Late in the year "early" IS December, so the TIMING plans collapse onto the same dates.
@@ -2306,7 +2306,7 @@ const TaxPaymentPlanner = (() => {
 
     // Funding the same estimates by selling in a taxable brokerage account instead of holding
     // cash: the whole balance stays invested at r rather than the HYSA rate, and the sale itself
-    // realises capital gains, so the sale has to be grossed up to net the tax.
+    // realizes capital gains, so the sale has to be grossed up to net the tax.
     const extraCg = n => {
       if (n <= 0) return 0;
       const denom = 1 - p.appreciationPct * p.cgRateBlended;
@@ -2818,7 +2818,7 @@ const TaxPaymentPlanner = (() => {
     // P57. This table is a pay checklist, and it used to be rendered ONCE from the top-level
     // summary, which is Plan A's. On a reported scenario it listed conversion withholding of
     // $7,000 and no estimates at all, while the recommended plan withheld nothing on the
-    // conversion and owed seven estimated payments totalling the same $7,000. A reader working
+    // conversion and owed seven estimated payments totaling the same $7,000. A reader working
     // from it would have skipped all seven. It is now built per plan.
     const coverageBlock = sum => {
       let out = '';
@@ -2918,7 +2918,7 @@ const TaxPaymentPlanner = (() => {
 
         stepNum++;
         // An elapsed date on a schedule that withholding already covers is owed, but not late in
-        // the IRC 6654 sense, so it gets a neutral grey badge and no red border. Only a genuine
+        // the IRC 6654 sense, so it gets a neutral gray badge and no red border. Only a genuine
         // underpayment gets the alarm.
         const lateBadge = isPast && !a.noPenalty;
         const pastBadge = !isPast ? ''

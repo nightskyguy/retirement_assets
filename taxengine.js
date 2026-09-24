@@ -128,7 +128,47 @@ var TAXData = {
 		// happen to share a number today, so changing one must not move the others.
 		ELIGIBILITY_AGE: 65,
 		// Assumed annual growth of the Medicare premium and IRMAA dollar amounts, which run ahead of
-		// CPI. Applied to the premiums and surcharges below, never to the bracket thresholds.
+		// CPI. Never applied to the bracket thresholds, which index at CPI.
+		//
+		// FOUR TOOLS LOAD THIS FILE AND THEY GROW MEDICARE THREE DIFFERENT WAYS. Checked tool by
+		// tool on 2026-09-23, after the assumption that the Optimizer reads this turned out to be
+		// wrong (owner). Every calcIRMAA caller passes its own rate, so the default below is
+		// reached only by a taxengine test:
+		//
+		//   Retirement_Projection.html      THE ONLY LIVE READER of this constant:
+		//                                   `(1 + ANNUAL_INCREASE)^(y-1)`, so 5.6%/yr
+		//   retirement_optimizer.html       its own `medicareRate`, `(1 + cpi + inflation)` per
+		//                                   year - 5.8%/yr on the page defaults. Changing the
+		//                                   number below does NOTHING to an Optimizer run; that
+		//                                   is proven by flipping it to 0.25 and getting an
+		//                                   identical log
+		//   standalone/IncomeTaxPlanner     its own slider, "Medicare cost increase above
+		//                                   inflation", default +2.5%
+		//   standalone/irmaa_and_rmds       passes 1, deliberately: today's nominal rates only
+		//
+		// Three models for one quantity is itself the finding. Anyone changing the number below is
+		// changing one of four tools.
+		//
+		// THIS IS A MODELING ASSUMPTION, NOT A PUBLISHED FIGURE. The comment here read "based on
+		// analysis of" and stopped mid sentence; whatever that analysis was is lost, and 5.6% has
+		// no source anywhere in the tree.
+		//
+		// Both this AND the Optimizer's cpi + inflation are BELOW what Medicare has actually done,
+		// so a projection understates Medicare and IRMAA rather than overstating them:
+		//   5.60%  this constant
+		//   5.80%  the Optimizer's own rate on the page defaults, CPI 2.8 + inflation 3.0
+		//   8.80%  average annual Part B COST growth over the next five years, projected by the
+		//          2025 Medicare Trustees Report (cost, not premium, but the premium is set to
+		//          cover about a quarter of it, so the two track)
+		//   9.68%  the actual 2025 -> 2026 standard Part B premium rise, $185.00 to $202.90 (CMS,
+		//          "2026 Medicare Parts A & B Premiums and Deductibles")
+		// Over a 25-year retirement that is a premium multiplier of about 4x at 5.8% against 8x at
+		// 8.8% - less than half the cost by the end. See the note at `medicareRate` in
+		// optimizer_core.js, which is the number that would have to move.
+		//
+		// Left at 0.056 pending a deliberate re-fit: a single year is a weak anchor, premium rises
+		// are lumpy (2023 FELL), and raising either rate moves every plan that reaches an IRMAA
+		// tier. That is a modeling decision, not a correction to make in passing.
 		ANNUAL_INCREASE: 0.056,
 		standardPartB: 202.90,
 		standardPartD: 38.99,	// 2026 Part D base beneficiary premium (CMS, 6% IRA cap); plan premiums vary

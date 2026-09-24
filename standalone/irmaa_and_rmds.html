@@ -246,6 +246,12 @@
         // RMD_TABLE and TAXData.IRMAA / TAXData.SOCIALSECURITY come from taxengine.js (loaded
         // above) — no local hardcoded copies, so this tool stays in sync with the rest of the site.
 
+        // The IRMAA ladder's last row is `l: Infinity`: the top tier's ABSENT CEILING, not a band.
+        // It repeats the top tier's label and amount, so anything that LISTS tiers must drop it or
+        // print the top tier twice. Both listings on this page go through here.
+        // Retirement_Projection.html makes the same judgment in its own way.
+        const listableTier = b => isFinite(b.l);
+
         function calculateTaxableSS(socialSecurity, otherIncome) {
             // Provisional income counts the benefit at the first tier's rate (half), as
             // calculateTaxes() does, and the tier math is taxengine.js's own.
@@ -313,10 +319,10 @@
 
             noteDiv.style.display = 'block';
 
-            // TAXData.IRMAA[status].brackets[0] is the "-none-" no-surcharge tier; the rest are the
-            // real surcharge tiers, in ascending order, with `l` = MAGI threshold and `r` = the
-            // already-correct total annual $ surcharge for this filing status.
-            const IRMAATiers = TAXData.IRMAA[maritalStatus].brackets.slice(1);
+            // brackets[0] is `-none-`, tier zero: no surcharge, so nothing to solve a balance for.
+            // `l` is the first dollar of the band; the amount is `monthlyCost`, MONTHLY dollars for
+            // this filing status (MFJ rows already carry both spouses).
+            const IRMAATiers = TAXData.IRMAA[maritalStatus].brackets.slice(1).filter(listableTier);
 
             // Build results table
             let html = '<h2>Results</h2>';
@@ -366,19 +372,13 @@
         function renderIRMAAThresholdsInfo() {
             const year = TAXData.IRMAA.YEAR;
             document.getElementById('IRMAAThresholdsHeading').textContent = `IRMAA Thresholds as of ${year} brackets:`;
-            // Drop `-none-` (tier zero, no surcharge to list) and the trailing l: Infinity row,
-            // which is the top tier standing in for the ceiling it does not have - listing it
-            // printed a second "Tier 5" against a threshold of infinity. Retirement_Projection.html
-            // filters the same two rows for the same reason.
-            const listable  = b => isFinite(b.l);
-            const mfjTiers = TAXData.IRMAA.MFJ.brackets.slice(1).filter(listable);
-            const sglTiers = TAXData.IRMAA.SGL.brackets.slice(1).filter(listable);
+            // Drop `-none-` (tier zero, no surcharge to list) and, via listableTier, the terminator.
+            const mfjTiers = TAXData.IRMAA.MFJ.brackets.slice(1).filter(listableTier);
+            const sglTiers = TAXData.IRMAA.SGL.brackets.slice(1).filter(listableTier);
             const lines = mfjTiers.map((mfj, i) => {
                 const sgl = sglTiers[i];
-                const mfjThreshold = mfj.l === Infinity ? '∞' : `$${mfj.l.toLocaleString()}`;
-                const sglThreshold = sgl.l === Infinity ? '∞' : `$${sgl.l.toLocaleString()}`;
                 // x 12: the table stores MONTHLY dollars, and this line has always said "/year".
-                return `<strong>${mfj.tier}:</strong> MFJ ${mfjThreshold} | Single ${sglThreshold} → Surcharge: $${(mfj.monthlyCost * 12).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}/year (household)`;
+                return `<strong>${mfj.tier}:</strong> MFJ $${mfj.l.toLocaleString()} | Single $${sgl.l.toLocaleString()} → Surcharge: $${(mfj.monthlyCost * 12).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}/year (household)`;
             });
             document.getElementById('IRMAAThresholdsBody').innerHTML = lines.join('<br>');
         }

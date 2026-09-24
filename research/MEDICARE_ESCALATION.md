@@ -261,6 +261,34 @@ decay. The two claims are about different questions and only the second one gove
 | IncomeTaxPlanner's 2.5% | understates the 30-year bill by 35.7%. It is also applied alone while its own label promises "bracket inflation plus this rate". |
 | 8.5% is aggregate spending | never a premium escalator, in code or in a comment |
 
+### What shipped, in 11.1917
+
+All five tools now share `medicare_costs.js`, with `g0 = 6.6%`, `gLong = 3.8%` and `decay = 0.90`.
+
+| tool | before | after |
+|---|---|---|
+| `retirement_optimizer.html` | `cpi + inflation`, 5.8% on defaults | the model, plus a gated three-field override |
+| `Retirement_Projection.html` | `ANNUAL_INCREASE`, 5.6% flat | the model |
+| `standalone/IncomeTaxPlanner.html` | a slider applied alone, 2.5% | the model; the slider is gone |
+| `standalone/irmaa_and_rmds.html` | no growth at all | the model, with an optional current age |
+| `standalone/FutureCost.html` | its own two sliders | unchanged; it cites the model beside them |
+
+`TAXData.IRMAA.ANNUAL_INCREASE` is deleted, and `calcIRMAA`'s `medicareRate` now defaults to the
+identity rather than silently applying a year of growth to a caller that omits it.
+
+**What it cost the plan bank**, from `.test_harnesses/medicare_delta_harness.js`: 17 of 19
+households moved on IRMAA, between **-17.9%** and **+5.0%**, and ending wealth by -3.9% to +2.0%.
+IRMAA falls on most and rises on some, because the model starts ABOVE the flat rates those
+households used and ends well below them, so the direction depends on how much of a household's
+Medicare life is early. One household funds a different number of years.
+
+**Two things the implementation found that this report had not.** The Optimizer seeded its growth
+factor from `new Date().getFullYear()` while the premiums it scaled were stated in 2026 dollars, so
+a plan starting in a later year charged 2026 premiums with no catch-up. And in `irmaa_and_rmds`,
+ageing a threshold while leaving `calcIRMAA`'s `cpiRate` at 1 looks right and is not: the ladder is
+then un-indexed, and an aged Tier 1 threshold sails past the un-indexed Tier 2 floor, so the row
+labelled Tier 1 charges Tier 2's surcharge. Both axes have to be aged together.
+
 ### What this report does not establish
 
 - **`d` is not measured against data.** No published year-by-year premium path exists past 2035, so

@@ -122,6 +122,36 @@ onto the nearest mode, and the substitution is reported rather than made quietly
 year's conversion, and its `$1,000` trigger. `timingConvThreshold` survives as a URL-only research
 input, corrected to read THIS year's conversion and to move the CONVERSION rather than the spending.
 
+### The Medicare growth model, overridden
+
+Three boxes in the sidebar, all blank by default: **start**, **long-run** and **decay**. They open
+up the rate the tool uses for Medicare premiums and IRMAA surcharge dollars, which is otherwise not
+a setting at all.
+
+The shipped model is `g(t) = long-run + (start - long-run) * decay^t`: a rate that begins near 6.6%
+a year, the figure the Medicare Trustees project through 2035, and eases toward 3.8%, their
+long-run assumption. The evidence for that shape, and for what it does not establish, is in
+[research/MEDICARE_ESCALATION.md](research/MEDICARE_ESCALATION.md).
+
+| box | shipped | what it is |
+|---|---|---|
+| start | 6.6% | the first projected year's rate. Published data. |
+| long-run | 3.8% | the rate it eases toward. The Trustees' assumption, and the parameter the 30-year answer is most sensitive to. |
+| decay | 0.90 | how fast one becomes the other. **The weakest of the three:** no year-by-year premium path is published past 2035, so it is fitted rather than sourced. |
+
+**Setting start and long-run to the same number gives a flat rate**, which is how the tool behaved
+before this model existed. That is also how the test suite proves the override is live rather than
+ignored.
+
+Each box is independent: fill one and the other two keep their shipped values. A blank box is not a
+zero, and a typed **0 means premiums hold flat**, which is a real assumption someone might want to
+test. The line under the boxes reports the 30-year multiplier, because two rates cannot be compared
+by eye when one of them changes every year.
+
+Share keys `mgs`, `mgl`, `mgd`. An untouched field emits no parameter, so a link from a plan that
+never opened these is unchanged. A link that DOES carry them applies them to a reader without the
+knob, who cannot see the controls - the same behavior as every other gated field here.
+
 ### The two deeper variants
 
 Both are gated one notch below the plain knob: they respond only to the **literal value**, and

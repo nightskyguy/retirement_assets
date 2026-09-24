@@ -24,7 +24,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.18fc</title>
+    <title>Retirement Optimizer 11.1917</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -1146,6 +1146,15 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="behavior"><b>11.1917</b>
+					<strong>Medicare and IRMAA costs now grow on a published path instead of your inflation rate.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>Medicare premiums and IRMAA surcharges used to grow at your CPI plus your Inflation, about 5.8% a year on the defaults. They now follow the path the Medicare Trustees publish: about 6.6% a year to start, easing toward 3.8% in the long run. The new path starts higher and ends lower, so whether your plan pays more or less depends on how much of your Medicare life is early. If your plan reaches an IRMAA tier, its numbers will move.</li>
+					<li>Medicare cost no longer varies from one Monte Carlo path to another, which narrows the spread slightly.</li>
+					<li>Two places offered six IRMAA tiers. There are five.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.1917" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="behavior"><b>11.18fc</b>
 					<strong>IRMAA, state tax tables and ACA income limits corrected; Saved Scenarios handles any name.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1199,48 +1208,6 @@
 					<li>The Stress Test and Monte Carlo's out-of-date notice keep up with your edits, including one you undo.</li>
 					</ul>
 					<a href="optimizer_changelog.md#11.1859" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="display"><b>11.1824</b>
-					<strong>The Guardrails switch is now labeled GK-style.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>No plan's numbers change. The label, the help text and the sentence under the switch are all that moved.</li>
-					<li>Guardrails measures your whole spending against your savings. The published Guyton-Klinger rule watches what your portfolio withdraws instead, which is a different number for anyone whose Social Security starts later.</li>
-					<li>The <a href="README.md#limitations-and-restrictions" target="_blank" rel="noopener">README&rsquo;s <i>Limitations and Restrictions</i></a> section names all four places this rule departs from the published one.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.1824" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="display"><b>11.1823</b>
-					<strong>Guyton-Klinger is now Guardrails, a switch that works with any withdrawal strategy.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>Guardrails sit under Spend Delta. Turned on, spending is cut when your savings fall far enough that your spending is no longer safe, and raised when they grow far enough to spend more.</li>
-					<li>A plan or link saved with the Guyton-Klinger strategy loads as Proportional Withdraw at 0% with Guardrails on, which gives the same numbers.</li>
-					<li>The Optimizer and Monte Carlo follow your Guardrails setting, and each adds your own plan with the switch the other way around. Monte Carlo's My Plan Only runs your plan both ways.</li>
-					<li>Dollar amounts show in today's dollars (Current $) by default, and the Optimizer shows each column as the difference from the ⚓ baseline. The Future $ / Current $ toggle and the Show as Differences switch turn either off.</li>
-					<li>My Plan Only and the Stress Test run your plan exactly as you set it, including your Extra Annual Roth Conversion and conversion switches.</li>
-					<li>The IRA Goal's help describes it as the balance to bring your IRA down to.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.1823" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="behavior"><b>11.1807</b>
-					<strong>Growth within a year now compounds, so every plan ends with slightly less.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>The Growth rate you enter is a compound annual rate, and a plan year is always split in two because money moves partway through it. Each part got a flat share of the year&rsquo;s return, and two parts came to slightly more than the whole year. <strong>Across the sample plans ending wealth falls between about 0.5% and 7%, and it falls in every one of them.</strong> A plan that ends with very little can fall further in percentage terms. Your inputs have not changed.</li>
-					<li>Medicare premiums can now be charged to your plan. Leave the Part B and Part D premiums inside your spending goal, which is what the tool has always assumed, or put them on top so your goal is what you have left after paying them. Either person can be marked as not enrolling at 65, which drops their premium and their surcharge.</li>
-					<li>Five states carry new capital-gains warnings. Washington taxes brokerage gains above roughly $278,000 a year and that is not modeled here. South Carolina, Wisconsin, North Dakota and Montana tax long-term gains more lightly than this tool does.</li>
-					<li>More limitations are now written down in the <a href="README.md#limitations-and-restrictions" target="_blank" rel="noopener">README</a>: required distributions for an age-gapped couple are overstated, losses are not carried forward, inflation-protected bonds cannot be represented, all dividends are priced at qualified rates, and the ACA subsidy is not modeled, only its income ceiling.</li>
-					<li>After you save or load a plan, its name and notes stay in the Import/Export boxes, so you can save over it, or change the name slightly to keep a variant, without retyping. Saving over an existing name says it replaced that plan.</li>
-					<li>When you load a saved plan, what changed since it was saved now appears on the Import/Export tab and stays there until you load or save again, instead of flashing past in the status bar. Retirement Start also accepts a calendar year, such as 2031, as well as an age.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.1807" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="behavior"><b>11.17c2</b>
-					<strong>Two corrections to how gains are taxed, and to which account the tool decides to spend from.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>Long-term capital gains now switch to the 20% rate at $613,700 of taxable income for a couple filing jointly and $545,500 for a single filer, which is what the 2026 federal tables say. It was happening at $250,000 and $200,000, so a plan realizing large gains was charged 5 extra points of federal tax on every dollar between those figures.</li>
-					<li>The 3.8% surtax on investment income now counts when the tool picks an account to draw from. It was always charged correctly in your totals, but it never influenced the choice between selling from the brokerage account and withdrawing from an IRA, so above roughly $250,000 of income a brokerage sale looked cheaper than it is. A conversion is treated differently on purpose: it usually does not pay the surtax, and pretending it did would have made conversions look worse than they are.</li>
-					<li><strong>Ending wealth can move in either direction</strong>, even where the tax owed falls, because both changes alter which account a plan spends from.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.17c2" target="_blank" rel="noopener">Details</a>
 				</li>
 				</ul>
 				<script>

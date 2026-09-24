@@ -6,13 +6,29 @@
 //   1. retirement_optimizer.html (before optimizer_ui.js, after taxengine.js)
 //   2. montecarlo/worker.js via importScripts (no DOM available there)
 //   3. optimizer_core.tests.js via vm.runInContext (no DOM stubs needed)
-// Depends on taxengine.js (calculateTaxes, calcIRMAA, TAXData, RMD_TABLE, ...).
+// Depends on taxengine.js (calculateTaxes, calcIRMAA, TAXData, RMD_TABLE, ...) and on
+// medicare_costs.js (medicareGrowthRate, medicareGrowthFactor).
 //
 // Shared globals owned by this file (optimizer_ui.js reads/writes cross-file):
 //   STATEname       - set from inputs.STATEname on every simulate() call
 //   simulationCount - incremented per simulate(); runOptimizer resets/reads it
 //   SPEND_SEARCH_*  - MIN_DELTA is read by the UI spend banner
 // ============================================================================
+// medicare_costs.js is the one dependency this file fetches for itself, and only under node.
+//
+// The convention everywhere else is that the CALLER wires the globals before requiring this engine
+// - that is how taxengine.js arrives, via Object.assign(globalThis, require('./taxengine.js')).
+// But about twenty harnesses in .test_harnesses/ require this file directly, and a forgotten line
+// in any one of them would be a runtime throw deep inside a simulation rather than at load. Since
+// medicare_costs.js has zero dependencies of its own, self-installing costs nothing and cannot
+// create a cycle.
+//
+// Inert in the browser and in the worker, where a preceding <script>/importScripts has already put
+// the names in scope as bare globals.
+if (typeof module !== 'undefined' && module.exports && typeof medicareGrowthFactor === 'undefined') {
+    require('./medicare_costs.js');   // installs itself on globalThis
+}
+
 // Spend optimizer constants
 const SPEND_SEARCH_CEILING   = 1.50;  // Binary search upper bound: 150% above baseline spend (2.5× input)
 const SPEND_SEARCH_TOLERANCE = 0.005; // Stop binary search when bounds are within 0.5%
@@ -1599,13 +1615,14 @@ function resolveHousehold(sim, yr) {
     // (the log row used to recompute this AFTER the year's MAGI push, showing the tier a
     // year early).
     yr.IRMAATier = yr.onMedicare > 0 ? getIRMAATier(magiLookback, yr.status, sim.cpiRate) : '-none-';
-    // Base Medicare Part B + Part D premiums. Grows at CPI + Inflation (user inputs), not CPI alone.
+    // Base Medicare Part B + Part D premiums, on the Medicare clock from medicare_costs.js - not
+    // CPI, and not the typed inflation rate.
     //
     // WHETHER THIS IS AN OUTFLOW IS A CHOICE, and it did not used to be one. The figure was tracked
     // and never deducted, on the assumption that it lives inside the spend goal - an assumption
     // nothing checked and nothing showed the user. A household that entered its spend goal net of
     // premiums was silently handed about $5,800 a year (2026 rates, a couple), and the gap WIDENS
-    // every year because `medicareRate` compounds at CPI + Inflation while the spend goal tracks
+    // every year because `medicareRate` compounds on the Medicare clock while the spend goal tracks
     // CPI alone. `medicarePremiumMode: 'added'` charges it as real money out instead. The default
     // stays 'in-spend', so no existing plan, golden or saved URL moves.
     //
@@ -4472,7 +4489,17 @@ function endYear(sim, yr) {
 
     sim.inflation    *= (1 + yr.yearInflation);   // spending always follows the path
     sim.cpiRate      *= (1 + cpi_t);
-    sim.medicareRate *= (1 + cpi_t + inputs.inflation);
+    // Medicare dollars grow on their OWN clock, not the drawn path's. `sim.currentYear` was already
+    // advanced above, so the rate carrying year Y into Y+1 is the one for Y: hence the -1.
+    //
+    // This line used to be `*= (1 + cpi_t + inputs.inflation)`, which tied premiums to the path's
+    // CPI. That is now known to be backwards, not merely weak: premium growth has no measurable
+    // relationship to CPI in any window, and hold harmless gives it the WRONG SIGN, because a small
+    // COLA protects most beneficiaries and the whole increase lands on the minority who are not
+    // protected. See research/MEDICARE_ESCALATION.md. The consequence here is that Medicare no
+    // longer varies path to path under Monte Carlo, which slightly narrows the spread.
+    sim.medicareRate *= (1 + medicareGrowthRate(sim.currentYear - 1 - MEDICARE_COSTS.ANCHOR_YEAR,
+                                                inputs.medicareGrowth));
     // P81c. A COLA is an INCREASE, never a decrease, and the two instruments floor differently.
     //
     // Social Security rides a HIGH-WATER MARK of the index. 42 U.S.C. 415(i) measures each
@@ -4602,20 +4629,21 @@ function simulate(inputs) {
     const gapYears = Math.max(0, currentYear - new Date().getFullYear());
     let cpiRate      = Math.pow(1 + inputs.cpi,      gapYears);
     let inflation    = Math.pow(1 + inputs.inflation, gapYears);
-    // THE OPTIMIZER'S MEDICARE GROWTH RATE, and it is this, not TAXData.IRMAA.ANNUAL_INCREASE,
-    // which this engine never reads. Compounded once a year below at `(1 + cpi_t + inflation)`,
-    // and handed to calcIRMAA and to `yr.medicareBase`.
+    // Medicare and IRMAA DOLLARS, from medicare_costs.js. Compounded once a year in `endYear` and
+    // handed to calcIRMAA and to `yr.medicareBase`. It never touches the THRESHOLDS, which index at
+    // CPI on `cpiRate` above - two axes, and calcIRMAA takes them as two arguments.
     //
-    // ON THE PAGE DEFAULTS THAT IS 5.8%/yr (CPI 2.8 + inflation 3.0), which is well under what
-    // Medicare has been doing: the 2025 -> 2026 standard Part B premium rose 9.68% ($185.00 to
-    // $202.90, CMS) and the 2025 Trustees Report projects 8.8% average annual Part B cost growth
-    // over five years. Over a 25-year retirement the premium multiplier is about 4x here against
-    // 8x at 8.8%, so Medicare and IRMAA are understated late in a long plan. Adding the two inputs
-    // is a proxy for "medical runs ahead of CPI" rather than a fitted figure.
+    // NOT `gapYears`, deliberately. Every other factor here is 1.0 at TODAY, but the premiums this
+    // one scales are stated in TAXData.IRMAA.YEAR dollars, so it is anchored there instead. The two
+    // agreed only while the wall clock happened to read 2026; a plan starting in 2030 was charging
+    // 2026 premiums with no catch-up.
     //
-    // Deliberately unchanged pending a decision: raising it moves every plan that reaches an IRMAA
-    // tier. See TAXData.IRMAA.ANNUAL_INCREASE for the same numbers and who does read that one.
-    let medicareRate = Math.pow(1 + inputs.cpi + inputs.inflation, gapYears);
+    // A LOOP, not Math.pow: the rate changes every year, so there is no single rate to raise to a
+    // power. This replaced `(1 + inputs.cpi + inputs.inflation)`, which was 5.8% on the page
+    // defaults and had no source; research/MEDICARE_ESCALATION.md has the measured case for the
+    // shape that replaced it.
+    let medicareRate = medicareGrowthFactor(currentYear - MEDICARE_COSTS.ANCHOR_YEAR,
+                                            inputs.medicareGrowth);
     // P70i. A capped COLA cannot be read off cpiRate, because the cap bites YEAR BY YEAR: a run
     // of 1% years followed by a 9% year is not the same as the average. So it carries its own
     // compounding factor, seeded over the gap years at the same capped rate.

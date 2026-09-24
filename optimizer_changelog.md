@@ -37,8 +37,7 @@ Medicare cost also no longer varies from one Monte Carlo path to another, which 
 slightly.
 
 The Medicare column tooltip, the Inflation and CPI tooltips and the Documentation all described the
-old behavior and have been corrected, along with two places that offered six IRMAA tiers. There are
-five.
+old behavior and have been corrected.
 
 ---
 

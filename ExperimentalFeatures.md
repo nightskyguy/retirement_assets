@@ -122,6 +122,38 @@ onto the nearest mode, and the substitution is reported rather than made quietly
 year's conversion, and its `$1,000` trigger. `timingConvThreshold` survives as a URL-only research
 input, corrected to read THIS year's conversion and to move the CONVERSION rather than the spending.
 
+### The IRMAA safety margin
+
+One select, URL key `imm`, that chooses how much room the **IRMAA Ceiling** strategy leaves below
+the threshold it aims at.
+
+**The forward projection is NOT gated and is not part of this.** IRMAA bills this year's premium
+against the MAGI you reported two years ago, judged against the thresholds published for the premium
+year, so a ceiling capping this year's MAGI has to aim two years out - about 6% higher at 3%
+inflation. Every reader gets that, including on *No margin*. This control only picks the extra room
+below that projected threshold, because a tier is a cliff and one dollar over costs a full year's
+surcharge.
+
+| choice | aims at |
+|---|---|
+| **Half the projected increase** (default, `halfcpi`) | half way between today's threshold and the projected one |
+| The projected increase, less 1 percentage point (`cpiminus1`) | 1 point short of the projection |
+| Half the next-tier surcharge below the projected threshold (`halfstep`) | a dollar amount set by what the next tier costs |
+| $2,000 below the projected threshold (`flat2000`) | a flat dollar cushion |
+| No margin (`none`) | the projected threshold exactly |
+
+The default moved from `halfstep` to `halfcpi` in 11.15cc: at a 1.5-point CPI miss `halfstep`
+prevented 5 breaching years of 92 where `halfcpi` prevented 21, and `halfcpi` saves surcharge in 59
+of the 60 windows measured.
+
+The two inflation-based choices leave room as a share of the *projected increase* rather than as
+dollars, which is why they hold up over a long plan where a fixed dollar amount does not: a forecast
+error is proportional, so the room they leave is too.
+
+Applies to the IRMAA Ceiling strategy **only**. QCD *As Needed* aims at the fully projected
+threshold with no margin, because there the margin is bought with money that leaves the household -
+measured at $82,764 donated to avoid $3,348 of surcharge, about 25 to 1 against.
+
 ### The Medicare growth model, overridden
 
 Three boxes in the sidebar, all blank by default: **start**, **long-run** and **decay**. They open

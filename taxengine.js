@@ -1,3 +1,19 @@
+// The IRMAA surcharge ladder: per person, MONTHLY dollars, the Part B income-related adjustment
+// plus the Part D IRMAA for each band. CMS, "2026 Medicare Parts A & B Premiums and Deductibles".
+//
+// Out here rather than inside TAXData because TAXData.IRMAA.MFJ is built from it, and an object
+// literal cannot refer to a sibling it is still defining. See the notes above TAXData.IRMAA for
+// what monthlyCost and l mean and why the last row is a terminator rather than a band.
+const IRMAA_SGL_BRACKETS = [
+	{ l: 109000,   monthlyCost: 0,              tier: "-none-" },
+	{ l: 109001,   monthlyCost: 81.20 + 14.50,  tier: "Tier 1" },
+	{ l: 137001,   monthlyCost: 202.90 + 37.60, tier: "Tier 2" },
+	{ l: 171001,   monthlyCost: 324.60 + 60.60, tier: "Tier 3" },
+	{ l: 205001,   monthlyCost: 446.30 + 83.70, tier: "Tier 4" },
+	{ l: 500000,   monthlyCost: 487.00 + 91.00, tier: "Tier 5" },
+	{ l: Infinity, monthlyCost: 487.00 + 91.00, tier: "Tier 5" },
+];
+
 var TAXData = {
 	FEDERAL: {
 		YEAR: 2026,  // Official IRS Revenue Procedure 2025-32
@@ -186,27 +202,21 @@ var TAXData = {
 		// Figures are tax year 2026 from the CMS fact sheet "2026 Medicare Parts A & B Premiums and
 		// Deductibles". Check every band and both boundaries against it when refreshing.
 				MFJ: {
-			brackets: [
-				{ l: 218000, r: 0,                      tier: "-none-" },
-				{ l: 218001, r: 2 * (81.20 + 14.50),    tier: "Tier 1" },
-				{ l: 274001, r: 2 * (202.90 + 37.60),   tier: "Tier 2" },
-				{ l: 342001, r: 2 * (324.60 + 60.60),   tier: "Tier 3" },
-				{ l: 410001, r: 2 * (446.30 + 83.70),   tier: "Tier 4" },
-				{ l: 750000, r: 2 * (487.00 + 91.00),   tier: "Tier 5" },
-				{ l: Infinity, r: 2 * (487.00 + 91.00), tier: "Tier 5" }
-			]
+			// A couple pays TWO of the same per-person surcharge, so the amounts are doubled from SGL
+			// rather than restated - one place to be wrong instead of two.
+			//
+			// The FLOORS are not derivable and are listed. They double for the first four bands
+			// (109,001 -> 218,001 and so on) and then stop: the top band begins at 500,000 single but
+			// 750,000 joint, not 1,000,000.
+			brackets: IRMAA_SGL_BRACKETS.map((b, i) => ({
+				l: [218000, 218001, 274001, 342001, 410001, 750000, Infinity][i],
+				monthlyCost: 2 * b.monthlyCost,
+				tier: b.tier,
+			}))
 		},
 		
 		SGL: {
-			brackets: [
-				{ l: 109000, r: 0,                  tier: "-none-" },
-				{ l: 109001, r: 81.20 + 14.50,      tier: "Tier 1" },
-				{ l: 137001, r: 202.90 + 37.60,     tier: "Tier 2" },
-				{ l: 171001, r: 324.60 + 60.60,     tier: "Tier 3" },
-				{ l: 205001, r: 446.30 + 83.70,     tier: "Tier 4" },
-				{ l: 500000, r: 487.00 + 91.00,     tier: "Tier 5" },
-				{ l: Infinity, r: 487.00 + 91.00,   tier: "Tier 5" }
-			]
+			brackets: IRMAA_SGL_BRACKETS
 		}
 	}, // IRMAA
 
@@ -1295,7 +1305,9 @@ function findUpperLimitByAmount(entity, status, amount, inflation = 1) {
     // `targetSpend`) for every strategy outside the bracket/ordered/GK set.
     if (idx === -1) return { limit: brks[0].l * inflation - 1, rate: 0, nominalRate: 0 };
 
-    const rate = brks[idx].r;
+    // IRMAA rows carry monthlyCost - flat monthly DOLLARS - where every other table carries
+    // r, an annual marginal rate. One coalescing read rather than a second lookup function.
+    const rate = brks[idx].monthlyCost ?? brks[idx].r;
     const nominalRate = brks[idx].nr ?? 0;
     const nextB = brks[idx + 1];
     // Asymmetry kept on purpose: 0 here means "no upper limit" for the LAST bracket, the opposite

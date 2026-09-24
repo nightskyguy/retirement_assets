@@ -378,7 +378,7 @@
                 const mfjThreshold = mfj.l === Infinity ? '∞' : `$${mfj.l.toLocaleString()}`;
                 const sglThreshold = sgl.l === Infinity ? '∞' : `$${sgl.l.toLocaleString()}`;
                 // x 12: the table stores MONTHLY dollars, and this line has always said "/year".
-                return `<strong>${mfj.tier}:</strong> MFJ ${mfjThreshold} | Single ${sglThreshold} → Surcharge: $${(mfj.r * 12).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}/year (household)`;
+                return `<strong>${mfj.tier}:</strong> MFJ ${mfjThreshold} | Single ${sglThreshold} → Surcharge: $${(mfj.monthlyCost * 12).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}/year (household)`;
             });
             document.getElementById('IRMAAThresholdsBody').innerHTML = lines.join('<br>');
         }

@@ -5679,7 +5679,7 @@ test('irmaaMarginMode: every shipped mode is distinct and correctly ordered', ()
 test('irmaaMarginMode halfstep: priced off the real tier step, and live at age 63', () => {
     // SGL Tier 1 is $202.90/month in TAXData, so the step a filer avoids is $2,434.80/yr and the
     // setback is half of it. Not a guessed constant: change the table and this moves with it.
-    const step = getRateBracket('IRMAA', 'SGL')[1].r * 12;
+    const step = getRateBracket('IRMAA', 'SGL')[1].monthlyCost * 12;
     assertNear(_target({ irmaaMarginMode: 'none' }) - _target({ irmaaMarginMode: 'halfstep' }),
         step / 2, 'halfstep must hold back half the tier step', 0.01);
     // The gate that makes this hard: the tier ceiling switches on at ELIGIBILITY_AGE + LOOKBACK

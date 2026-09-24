@@ -1321,7 +1321,7 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 				for (const magi of [brks[i].l, mid]) {
 					assertEqual(getIRMAATier(magi, status, 1), brks[i].tier,
 						`${status} MAGI ${magi} is in ${brks[i].tier}`);
-					assertEqual(findUpperLimitByAmount('IRMAA', status, magi, 1).rate, brks[i].r,
+					assertEqual(findUpperLimitByAmount('IRMAA', status, magi, 1).rate, brks[i].monthlyCost,
 						`${status} MAGI ${magi} is charged the ${brks[i].tier} surcharge`);
 				}
 				if (i > 0) assertEqual(getIRMAATier(brks[i].l - 1, status, 1), brks[i - 1].tier,
@@ -1343,7 +1343,7 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 		for (const status of ['MFJ', 'SGL']) {
 			const brks = getRateBracket('IRMAA', status);
 			assertEqual(brks[0].tier, '-none-', `${status}: the first row is the no-surcharge band`);
-			assertEqual(brks[0].r, 0, `${status}: and it charges nothing, which is why it is tier zero`);
+			assertEqual(brks[0].monthlyCost, 0, `${status}: and it charges nothing, which is why it is tier zero`);
 			assertEqual(isFinite(brks[brks.length - 1].l), false,
 				`${status}: the last row is the terminator, not a band`);
 			const surcharge = brks.slice(1).filter(b => isFinite(b.l));
@@ -1351,7 +1351,7 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 			const top = surcharge[surcharge.length - 1];
 			assertEqual(getIRMAATier(9e9, status, 1), top.tier,
 				`${status}: an unbounded income is in the top tier, never in the terminator`);
-			assertEqual(findUpperLimitByAmount('IRMAA', status, 9e9, 1).rate, top.r,
+			assertEqual(findUpperLimitByAmount('IRMAA', status, 9e9, 1).rate, top.monthlyCost,
 				`${status}: and pays the top tier's surcharge`);
 			// The consequence: asked for the ceiling of the top tier, the ladder has none to give.
 			// Callers that aim at a ceiling must cope with Infinity rather than assume a number.

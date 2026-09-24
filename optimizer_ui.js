@@ -202,6 +202,11 @@ function applyNerdKnobVisibility() {
     // Cycle Brokerage LTCG bracket target (0%/15%)
     const cycleLTCGWrap = document.getElementById('cycleLTCGTarget-wrap');
     if (cycleLTCGWrap) cycleLTCGWrap.style.display = NERD_KNOBS ? '' : 'none';
+    // The Medicare growth override. Gated because the published path is the answer for everyone,
+    // and the one parameter worth arguing about - the long-run rate - is an argument most readers
+    // should not have to have. Hiding it leaves the model in force, not "no growth".
+    const medGrowthWrap = document.getElementById('medicareGrowth-wrap');
+    if (medGrowthWrap) medGrowthWrap.style.display = NERD_KNOBS ? '' : 'none';
     // P104b3. The Fixed Split menu entry. `hidden` alone is not enough - a hidden <option> is still
     // keyboard-selectable in some browsers - so it is disabled too. If the knob goes off while it
     // is the live selection the strategy is NOT rewritten: silently switching someone's plan to a
@@ -768,6 +773,21 @@ function getInputs() {
         comp_Roth2_ratio: +val('comp_Roth2_ratio'),
         comp_Roth2_intl: +val('comp_Roth2_intl'),
         futureIRATaxRate: (() => { const v = val('futureIRATaxRate'); return (v && +v > 0) ? +v / 100.0 : undefined; })(),
+        // The Medicare growth override: an object, or undefined for "use the published path".
+        // Deliberately NOT the `+v > 0` idiom used just above. A typed 0 here means "Medicare
+        // premiums hold flat", which is a real assumption someone might want to test, so blank and
+        // zero have to be told apart. Each key is independently overridable, so the engine keeps
+        // the shipped value for any box left empty.
+        medicareGrowth: (() => {
+            const num = id => { const v = val(id); return (v !== '' && v != null && isFinite(+v)) ? +v : undefined; };
+            const g0 = num('medGrowthStart'), gLong = num('medGrowthLong'), decay = num('medGrowthDecay');
+            if (g0 === undefined && gLong === undefined && decay === undefined) return undefined;
+            const o = {};
+            if (g0    !== undefined) o.g0    = g0 / 100;
+            if (gLong !== undefined) o.gLong = gLong / 100;
+            if (decay !== undefined) o.decay = decay;      // a ratio, not a percent
+            return o;
+        })(),
         qcdHHMax: +val('qcdHHMax') || 0,
         qcdMode: valChecked('qcdAlways') ? 'always' : 'asneeded',
         gkGuard:  +val('gkGuard')  / 100 || 0.20,
@@ -7034,6 +7054,7 @@ const OPT_LONG_TO_SHORT = {
     STATEname:'s', ssFailYear:'sfy', ssFailPct:'sfp',
     taxRateCreep:'trc', taxCreepStartYear:'tcy',
     growth:'g', cashYield:'cy', inflation:'inf', cpi:'cpi', futureIRATaxRate:'fitr',
+    medGrowthStart:'mgs', medGrowthLong:'mgl', medGrowthDecay:'mgd',
     comp_IRA1_ratio:'c1r', comp_IRA1_intl:'c1x',
     comp_IRA2_ratio:'c2r', comp_IRA2_intl:'c2x',
     comp_Brokerage_ratio:'cbr', comp_Brokerage_intl:'cbx',
@@ -7067,7 +7088,7 @@ const OPT_SHARE_PRIVACY = {
     safe: [
         'sc', 'str', 'ny', 'pw', 'sr', 'iwp', 'os', 'rgf', 'mc', 'fcc', 'cem', 'imm', 'fti', 'wt', 'txs',
         'mpm', 'afm', 'afs', 'hs', 'dr', 'div', 's', 'sfy', 'sfp', 'trc', 'tcy',
-        'g', 'cy', 'inf', 'cpi', 'fitr',
+        'g', 'cy', 'inf', 'cpi', 'fitr', 'mgs', 'mgl', 'mgd',
         'c1r', 'c1x', 'c2r', 'c2x', 'cbr', 'cbx', 'cr1r', 'cr1x', 'cr2r', 'cr2x',
         'cd', 'opt', 'copt', 'cyc', 'qa', 'gkg', 'gka', 'gr', 'gsc',
         'grk', 'rbp', 'rbt', 'rbu', 'rbl', 'rbc',                         // the spend rule's menu and preset
@@ -7611,6 +7632,25 @@ function applyScenario(data) {
         setOptObjective(data.optObjective);
     }
 
+    // Same shape again. getInputs() NESTS the Medicare growth override as one object, so `data`
+    // carries `medicareGrowth`, never the three field ids - the generic loop below would find no
+    // element called that and drop it silently on every load. Each key is restored only if the
+    // saved scenario carried it, so a scenario saved before this existed leaves all three blank and
+    // runs on the published path, which is what it ran on when it was saved.
+    //
+    // g0 and gLong are stored as decimals and shown as percents; `decay` is a plain ratio and is
+    // NOT scaled. That asymmetry is why these three are not in the x100 list further down.
+    if (data.medicareGrowth !== undefined) {
+        const mg = data.medicareGrowth || {};
+        const put = (id, v, scale) => {
+            const el = document.getElementById(id);
+            if (el) el.value = (v === undefined || v === null) ? '' : +(v * scale).toFixed(3);
+        };
+        put('medGrowthStart', mg.g0,    100);
+        put('medGrowthLong',  mg.gLong, 100);
+        put('medGrowthDecay', mg.decay, 1);
+    }
+
     for (const [key, value] of Object.entries(data)) {
         // optObjective is UI state restored above, and has no form element of its own
         if (key === 'optObjective') continue;
@@ -7621,6 +7661,8 @@ function applyScenario(data) {
         if (key === 'strategy' && value === 'aca') continue;
         // qcdMode maps to qcdAlways checkbox; handled above
         if (key === 'qcdMode') continue;
+        // medicareGrowth is one nested object over three fields; unpacked above
+        if (key === 'medicareGrowth') continue;
         const element = document.getElementById(key);
         if (element) {
             // Handle percentage values (multiply by 100 for display). getInputs() stores these as
@@ -8424,6 +8466,25 @@ function updateCpiSpreadDisplay() {
         + ` <span style="color:#888;">Brackets, IRMAA tiers and Social Security follow CPI;`
         + ` spending follows Inflation. Under Monte Carlo the tax code is indexed at each path's own`
         + ` inflation, carrying this same gap.</span>`;
+}
+
+// The readout under the gated Medicare growth override. It exists because the three boxes are
+// blank by default and a blank box is the one state a reader cannot check: this says what the plan
+// is actually using, whether that is the published path or something they typed.
+function updateMedicareGrowthDisplay() {
+    const el = document.getElementById('medGrowth-readout');
+    if (!el || typeof MEDICARE_COSTS === 'undefined') return;
+    const over = (typeof getInputs === 'function') ? getInputs().medicareGrowth : undefined;
+    const g0    = over?.g0    ?? MEDICARE_COSTS.g0;
+    const gLong = over?.gLong ?? MEDICARE_COSTS.gLong;
+    const pc = x => (x * 100).toFixed(1) + '%';
+    // The 30-year multiplier is the number that actually differs between these models, and it is
+    // not readable off the two rates: a rate that decays and one that does not can start together
+    // and end four times apart.
+    const mult = medicareGrowthFactor(30, over).toFixed(2);
+    el.textContent = over
+        ? `In use: ${pc(g0)} easing to ${pc(gLong)}. Premiums multiply ${mult}x over 30 years.`
+        : `Premiums multiply ${mult}x over 30 years.`;
 }
 
 /**

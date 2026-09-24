@@ -695,6 +695,14 @@
                 <span id="future-ira-tax-auto" style="font-size:0.8em;color:#888;margin-left:4px;"></span>
             </label></div>
         </div>
+        <div class="row" id="medicareGrowth-wrap" style="display:none;">
+            <div style="font-size:0.85em;" title="Medicare premiums and IRMAA surcharges grow on a published path rather than at your inflation rate: it starts near 6.6% a year, the rate the Medicare Trustees project through 2035, and eases toward 3.8%, their long-run assumption. Leave all three blank to use it. Start and Long-run are the two ends; Decay is how fast one becomes the other, and it is the least well-sourced of the three. Setting Start and Long-run to the same number gives a flat rate.">Medicare growth %
+                <label style="font-weight:normal;">start<input type="number" id="medGrowthStart" oninput="updateMedicareGrowthDisplay()" min="0" max="20" step="0.1" placeholder="6.6" style="width:52px;"></label>
+                <label style="font-weight:normal;">long-run<input type="number" id="medGrowthLong" oninput="updateMedicareGrowthDisplay()" min="0" max="20" step="0.1" placeholder="3.8" style="width:52px;"></label>
+                <label style="font-weight:normal;">decay<input type="number" id="medGrowthDecay" oninput="updateMedicareGrowthDisplay()" min="0.5" max="1" step="0.01" placeholder="0.90" style="width:52px;"></label>
+                <div style="font-size:0.78em;color:#666;margin-top:2px;">Blank uses the published path. <span id="medGrowth-readout"></span></div>
+            </div>
+        </div>
         </details>
 
     </div> <!-- sidebar -->
@@ -1849,6 +1857,7 @@ window.addEventListener('DOMContentLoaded', function () {
     updateProfileAgeDisplay();
     updateGrowthDisplay();
     updateCpiSpreadDisplay();
+    updateMedicareGrowthDisplay();
     syncMCMuFromGrowth();
     updateCompAdvisory();
     updateSuggestSpendTooltip();

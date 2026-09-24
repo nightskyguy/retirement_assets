@@ -20,24 +20,24 @@
 (function () {
 const PLAN = {
     id: "soft-cap-underfunded",
-    title: "Underfunded couple against a soft cap",
+    title: "Couple spending through a soft cap",
     notes: {
         summary: "A California couple whose spending cannot be met inside their chosen bracket ceiling.",
         exercises: [
-            "the third-pass forced IRA draw above a soft ceiling, and the bracket overage it records",
+            "a soft ceiling breached to fund spending: 9 of its 24 years run over the cap, by up to $14,575",
             "the difference between a soft cap (breaches to fund spending) and the strict ACA cap (does not)",
         ],
         cannotShow: [
-            "ranking against other households. It does not fund its last year, ON PURPOSE - the shortfall is the subject",
+            "the third-pass FORCED IRA draw. It used to force one and no longer does - correcting the IRMAA ladder on 2026-09-23 cut the surcharge enough that this household funds every year on its own. Use `ira-heavy-couple-overreaching` for a genuine shortfall",
         ],
         viability: {
-            funded: "23/24",
-            fundsEveryYear: false,
+            funded: "24/24",
+            fundsEveryYear: true,
             endingIRA: 0,
             peakIRAYear: 0,
             acaBreachYears: 0
         },
-        origin: "READ BY `brokerage_harness.js` (as `CAP_BASE`), retired in P116. **Measured not fully funded**, by design.",
+        origin: "READ BY `brokerage_harness.js` (as `CAP_BASE`), retired in P116. Built as a household that could not fund itself; it now funds 24/24 after the IRMAA ladder was corrected to the CMS bands, so the name is historical. Still breaches its soft cap, which is the half of its purpose that survives.",
     },
     inputs: {
         STATEname: "CA",

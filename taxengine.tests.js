@@ -1446,6 +1446,18 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 		assertEqual(medicareGrowthFactor(40, { g0: 0, gLong: 0 }), 1, 'zero growth is flat forever');
 	});
 
+	test('TEST CASE 26f: calcIRMAA\'s medicareRate default is the identity, and grows nothing', () => {
+		// It used to default to `1 + ANNUAL_INCREASE`, so a caller that forgot the argument got a
+		// year of growth it never asked for. Every live caller passes it, which is exactly why the
+		// trap could sit there. Pinned so the convenience is never re-added.
+		const SGL_T1 = 12 * (81.20 + 14.50);
+		assertEqual(calcIRMAA(109001, 'SGL', 1), SGL_T1, 'omitted medicareRate charges 2026 dollars');
+		assertEqual(calcIRMAA(109001, 'SGL', 1), calcIRMAA(109001, 'SGL', 1, 1),
+			'omitting it and passing 1 are the same thing');
+		assertEqual(calcIRMAA(109001, 'SGL', 1, medicareGrowthFactor(0)), SGL_T1,
+			'and medicareGrowthFactor(0) is that same identity, from the other file');
+	});
+
 // ── Runner ───────────────────────────────────────────────────────────────────────────────────
 // Returns the counts instead of setting process.exitCode, so the browser can render them.
 function runTaxEngineTests() {

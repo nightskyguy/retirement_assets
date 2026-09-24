@@ -143,28 +143,15 @@ var TAXData = {
 		// (FEDERAL.*.age above) or a state's retirement-income ageGate — separate statutes that
 		// happen to share a number today, so changing one must not move the others.
 		ELIGIBILITY_AGE: 65,
-		// Assumed annual growth of the Medicare premium and IRMAA surcharge DOLLARS. Never applied to
-		// the bracket thresholds, which index at CPI - those are two different axes, and calcIRMAA
-		// takes them as two different arguments.
+		// Medicare premium and IRMAA surcharge growth USED TO LIVE HERE, as `ANNUAL_INCREASE: 0.056`.
+		// It is now medicare_costs.js, which every tool shares: a two-phase rate rather than a flat
+		// one, because the officially projected future has two phases and no single rate can be both.
 		//
-		// ONLY Retirement_Projection.html READS THIS. The Optimizer has its own rate, `medicareRate`
-		// in optimizer_core.js, built from cpi + inflation; standalone/IncomeTaxPlanner has a slider;
-		// standalone/irmaa_and_rmds passes 1 for today's nominal rates. Changing the number below
-		// moves one tool of four. Every calcIRMAA caller passes its own rate, so the default
-		// parameter is reached only by a test.
+		// It moved OUT of TAXData on purpose. This table is statute - figures a government published,
+		// refreshed by looking them up - and that was a fitted assumption with no source at all. Put a
+		// growth rate back here and it acquires the authority of the numbers around it.
 		//
-		// 5.6% HAS NO SOURCE. It is a modeling assumption, not a published figure, and the comment
-		// that once stood here broke off mid-sentence without naming what it was fitted to. It is
-		// defensible but not derived: the CMS standard Part B premium record gives a CAGR of 3.87%
-		// over 2010-2026 and 5.81% over 2020-2026, and the Medicare Trustees project 6.60% for the
-		// premium through 2035, decaying to about 3.8% (GDP per capita plus a fraction) in the long
-		// run.
-		//
-		// DO NOT "correct" this toward a five-year Part B COST growth figure, which runs 8-9%. That
-		// is program cost over a short horizon, not the premium a retiree pays over thirty years,
-		// and the two are not comparable. Raising this moves every plan that reaches an IRMAA tier,
-		// so it is a modeling decision rather than a data refresh.
-		ANNUAL_INCREASE: 0.056,
+		// YEAR above is what medicare_costs.js anchors to; TEST CASE 26 pins the two equal.
 		standardPartB: 202.90,	// 2026 standard Part B premium (CMS); set at 25% of Part B cost for aged enrollees
 		standardPartD: 38.99,	// 2026 Part D base beneficiary premium (CMS, 6% IRA cap); plan premiums vary
 		
@@ -1852,7 +1839,14 @@ function calculateTaxes(params = {}) {
 // sees an age.
 // null (default) keeps the legacy household-total behavior. The bracket `r` values are
 // household totals (MFJ tables are 2x the per-person surcharge), so per-person = r / persons.
-function calcIRMAA(magi, status, cpiRate, medicareRate = (1 + TAXData.IRMAA.ANNUAL_INCREASE), onMedicareCount = null) {
+// `medicareRate` is a cumulative FACTOR, not a rate: medicare_costs.js's medicareGrowthFactor(n),
+// or 1 for today's published dollars. It defaults to 1 - the identity - so an omitted argument
+// changes nothing. It used to default to `1 + ANNUAL_INCREASE`, which silently applied a year of
+// growth to any caller that forgot it, and every live caller passes it explicitly anyway.
+//
+// `cpiRate` is the OTHER axis and is not interchangeable: it indexes the income THRESHOLDS, which
+// move at CPI, while medicareRate scales the DOLLARS, which do not.
+function calcIRMAA(magi, status, cpiRate, medicareRate = 1, onMedicareCount = null) {
 
 	let IRMAALimit = findUpperLimitByAmount( 'IRMAA', status, magi, cpiRate)
 	if (onMedicareCount === null) return IRMAALimit.rate * medicareRate * 12

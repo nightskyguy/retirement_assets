@@ -7768,7 +7768,7 @@ test('single-row bracket tables: the affected jurisdictions are pinned', () => {
     // whatever the lookup does at its edges.
     const single = Object.keys(TAXData).filter(k => k.length === 2)
         .filter(k => (getRateBracket(k, 'MFJ') || []).length === 1).sort();
-    const expected = ['AK','AZ','CO','FL','GA','IA','IL','IN','KY','MA','MI','NC','NE','NH','NV','PA','SD','TN','TX','WA','WY'];
+    const expected = ['AK','AZ','CO','FL','GA','IA','IL','IN','KY','MA','MI','NC','NH','NV','PA','SD','TN','TX','WA','WY'];
     assert(JSON.stringify(single) === JSON.stringify(expected),
         `single-row tables changed:\n         expected ${JSON.stringify(expected)}\n         actual   ${JSON.stringify(single)}`);
 });

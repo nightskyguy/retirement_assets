@@ -5802,3 +5802,39 @@ decision is the user's.
 A defect of my own, caught by the scanner in the same pass: a trimmed comment cited
 `research/IRMAA_MARGIN.md`, a report that does not exist. Replaced with the claim itself. That is
 exactly the failure #236 spent a commit removing, and it took one careless edit to reintroduce.
+
+## 2026-09-25 (continued) - finding #9's six states, each against its own form (P135, v11.1933)
+
+User: "do finding #9". The remainder the #239 commit listed and deliberately did not touch: AZ, GA,
+NC, ND, NE, SC standard deductions and ND / NE / SC bracket structure.
+
+**Four were wrong, two were already right.** ND carried 1.1% / 2.04% with no zero band - a pre-2023
+schedule - against the published 0% / 1.95% / 2.50%. NE was modeled flat at 4.55% where the state is
+graduated (2.46 / 3.51 / 4.55), and its standard deduction was a year behind. SC rewrote its whole
+tax for 2026 under H. 4216: two rates, and a state deduction (SCIAD) replacing the federal standard
+deduction, from federal AGI - which is the base this engine already builds, so it modeled cleanly. GA's
+standard deduction rise was recorded in the table as landing in 2027; HB 463 as passed says
+"applicable to all taxable years beginning on or after January 1, 2026". AZ (`std: 'FEDERAL'`) and NC
+(25,500 / 12,750, not indexed) needed no change, and AZ's form of the answer is better than a literal
+because it updates itself.
+
+**Sources, all primary:** Form ND-1ES SFN 28709 (12-2025) for ND's schedule, read out of the PDF with
+pypdf after WebFetch returned only the compressed stream; the 2026 Nebraska Tax Calculation Schedule
+(8-460-2026) and the Department's own rate chronology for NE; SCDOR's H. 4216 page and IIT page for SC;
+and HB 463 as passed for GA's amounts and its effective date. Georgia's DOR page and our own comment
+disagreed about the year, which is why the bill text was the thing that settled it.
+
+**Every corrected table now reproduces a figure printed on the form** - ND 3,916.09 and 4,329.98, NE
+1,514.58 and 3,029.16, SC's "5.21% minus $966" at four incomes - as `TEST CASE 27`. Two existing tests
+had to move with the data: the indexing test used ND as its non-indexed example (ND indexes, so SC took
+that role and ND moved to the indexed side), and the single-row-table pin listed NE as flat.
+
+**Direction, measured on a couple drawing 60k / 120k / 250k:** every correction CUTS tax. ND to zero,
+-91%, -30%; SC -54%, -25%, -19%; NE -28%, -13%, -6%; GA -0, -0, -6%. The identity harness reports
+IDENTICAL, because the plan bank is TX, CA and NY only - which is the proof that nothing outside these
+six states moved. Suites 528 / 48 / 62 / 15 / 46, page suite 497, badge green, and the four corrected
+states verified again in the live page.
+
+Changelog: its own entry, since #239's shipped months ago and this fixes states a user has already
+been given wrong numbers for. It leads with the direction and the per-income table, and states the one
+thing now understated: SC reduces the SCIAD at higher AGI and the tool does not.

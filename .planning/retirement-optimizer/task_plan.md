@@ -18,7 +18,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P28j | `jg`/`jh`/`ji`/`jk` SHIPPED, and `jo`'s Split/Early/Late menu shipped in `a5d8aa9`. `jf` MEASURED and NOT acted on - the trigger is unchanged, and its removal case was withdrawn | `P28jn` / `P28jo` Automatic |
 | **O1** | P115 | **tax-payment attribution** (user, 2026-09-09). `a` SHIPPED v11.17b1: cash interest trued up to what the cash earned; `b` CLOSED v11.17f4. Priority is mine, not the user's | `P115c` |
 | **O1** | P132 | **MERGED in PR #230, v11.18bf.** The risk-based spend rule with its presets and a box-by-box checked Custom, GK-style made plan-relative (`P132j`), the cut-side landing overshoot closed (`P132g`), the Limit menu ordered by the MAGI each entry caps. Reports: `research/RBG_RULE_VALIDATION.md`, `research/RBG_RULE_THRESHOLDS.md`. Open: the server question, which is the user's call, and the terminal-reserve success test offered as a phase | user: server? |
-| **O1** | review F/#9 | **Step D SHIPPED as `P133`**, step **F** first pass as `P134`, both v11.193x. `P134` measured the step-F budget and it does not hold: the two files carry **502 history-marked lines**, not the ~2,900 the 1,500-line target implies, so that target means deleting working explanation. Three options in the phase, A recommended. Finding **#9** still owes AZ, GA, NC, ND, NE and SC standard deductions and ND/NE/SC bracket structure | user: `P134` A, B or C? |
+| **O1** | review F | **Step D shipped as `P133`, step F's first pass as `P134`, finding #9 CLOSED as `P135`** (v11.1933: ND, NE, SC and GA corrected against their own 2026 forms; AZ and NC checked and correct). Step **F** is what is left of the campaign: ~320 blocks carrying one marked line each, and the Monte Carlo files unswept (`mc_tab.js` 53 marked lines, the rest 37). The ceiling in `.githooks/check-comment-history.js` makes a regression visible meanwhile | step F slices |
 | **O1** | Medicare | The model shipped (#244) and `medicare_costs.js` is the one home. `.planning/MEDICARE_TWO_PHASE_PLAN.md` section 9 is undecided: does `Retirement_Projection.html` need an override of its own? The plan assumed no. Section 8 also leaves hold-harmless unmodeled and asks for it as a README limitation | user: section 9 |
 
 **Live carry-overs from finished phases** - the rest of what those phases did is in their stubs below:
@@ -83,6 +83,37 @@ The plan bank is **19 households**, and #244 added none: correcting the IRMAA la
 `ira-heavy-couple-overreaching` for a genuine shortfall - a household the bank has held since it was
 built in `3c30911`. Measured with `plans.list()` on 2026-09-25, after the 2026-09-24 entry in
 `progress.md` said 20 and said the household had been restored. Both halves of that were wrong.
+
+## P135: the six states finding #9 left open  *(2026-09-25. CLOSED, v11.1933)*
+
+Finding #9's remainder, from the `P133`-era list: AZ, GA, NC, ND, NE and SC standard deductions, and
+ND / NE / SC bracket structure. The #239 commit deliberately left them - "writing an unverified tax
+figure into this tool is worse than leaving a known-stale one with a note" - so each was checked
+against the state's own 2026 form or schedule before it moved.
+
+| state | was | is, and the source |
+|---|---|---|
+| **ND** | 1.1% / 2.04%, no zero band, thresholds from a pre-2023 schedule | 0% to 49,575 single and 82,800 joint, then 1.95%, then 2.50% - 2026 Forms ND-1/ND-EZ Tax Rate Schedules, Form ND-1ES SFN 28709 (12-2025). Thresholds index annually, so ND leaves the `INFLATION_INDEXED: false` list |
+| **NE** | flat 4.55%, std 8,600 / 17,200 | graduated 2.46% / 3.51% / 4.55% at 4,130 and 24,760 single, 8,250 and 49,530 joint - 2026 Nebraska Tax Calculation Schedule (8-460-2026); std 8,850 / 17,700 - the Department's own rate chronology |
+| **SC** | six bands 0-6.1% at 3,200-16,040, std FEDERAL | 1.99% below 30,000 and 5.21% above, std 15,000 / 30,000 - H. 4216 from TY2026, which replaced the federal standard deduction with the SCIAD and moved the starting point to federal AGI |
+| **GA** | std 24,000 / 12,000, comment saying the rise lands in 2027 | 30,000 / 15,000 - HB 463 as passed, Section 5-1: "applicable to all taxable years beginning on or after January 1, 2026". The +$750/yr toward 36,000 is what starts in 2027 |
+| **AZ** | std `'FEDERAL'` | CORRECT and better than a literal: Arizona's 2025 figures are the federal ones (15,750 / 31,500), so tracking federal updates itself |
+| **NC** | std 25,500 / 12,750, 3.99% | CORRECT: NCDOR publishes those figures as current and they are not indexed; 3.99% applies to taxable years after 2025 |
+
+**Every corrected table reproduces a figure PRINTED ON THE FORM** - ND's 3,916.09 and 4,329.98, NE's
+1,514.58 and 3,029.16, and SC's "5.21% minus $966" at four incomes. That is `TEST CASE 27` in
+`taxengine.tests.js`, and it is the kind of literal worth pinning: it is the state's own arithmetic,
+not an engine output.
+
+**All four corrections cut tax**, measured on a couple drawing 60k / 120k / 250k: ND to zero, -91%,
+-30%; SC -54%, -25%, -19%; NE -28%, -13%, -6%; GA unchanged, unchanged, -6% (Georgia's retirement
+exclusion zeroes the first two). The identity harness reports IDENTICAL, because the plan bank is TX,
+CA and NY only - which is itself the proof that nothing outside these states moved.
+
+**Not modeled, and now stated in the SC note:** the SCIAD is reduced at higher federal AGI by a
+formula in SCDOR Information Letter #26-20 (an encrypted PDF; SCDOR says a calculator is coming). The
+full deduction is always applied, so a higher-income South Carolina plan understates its tax. SC's
+30,000 threshold is also held flat rather than indexed, which overstates tax in later plan years.
 
 ## P134: comments say what the code does (review step F)  *(2026-09-25. FIRST PASS v11.1931. The budget is the open question)*
 

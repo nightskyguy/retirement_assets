@@ -2488,7 +2488,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all five suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 528, taxengine: 47, taxPaymentPlanner: 62, doclinks: 15, feedback: 46, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 528, taxengine: 48, taxPaymentPlanner: 62, doclinks: 15, feedback: 46, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

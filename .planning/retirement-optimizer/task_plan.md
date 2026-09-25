@@ -118,6 +118,20 @@ says "measured on 20xx" puts its whole length in that column.
 - **C. Stop here.** The defects are gone, the worst blocks are trimmed, and the rest is a slow
   background job taken a block at a time as the code is edited, which `CLAUDE.md` already requires.
 
+**Option A taken (user, 2026-09-25).** The sweep ran across both files and the target is now "no
+history in a comment", enforced: `.githooks/check-comment-history.js` counts history-marked comment
+lines per file against a ceiling and blocks a commit that raises one. Measured with that script, which
+counts marked LINES rather than the scanner's whole-block attribution, the ten production files hold
+**305** such lines - `optimizer_core.js` 58 and `optimizer_ui.js` 97. Comment totals after the sweep:
+core **3,091** (from 3,175) and UI **2,677** (from 2,753).
+
+**What is left of step F**, for whoever picks it up: the ~320 blocks carrying ONE marked line each,
+most of them a stray phrase the regex catches rather than narration ("now reads", "by construction",
+a phase id used as a pointer). Working them is worth doing a block at a time as the code is edited,
+which is what `CLAUDE.md` already requires, and the ceiling makes a regression visible either way.
+The Monte Carlo files were not swept at all: `mc_tab.js` holds 53 marked lines, the rest 37 between
+them.
+
 **This pass** trimmed the five largest blocks in the engine, the twelve blocks in the UI where history
 was the dominant content, and eighteen more blocks whose opening sentences narrated a fix. Nothing
 else changed: the identity harness reports 769,128 values identical, and `git diff` shows no
@@ -2465,6 +2479,31 @@ What nobody had measured is the thing that decides what to BUILD: per-year freed
             (which vectors ship as rows) and the family label. Label candidates: **"Fixed Split"**
             (recommended: plain words, no acronym), "Set Split", "Custom Mix". The panel is four
             fields, IRA / Brokerage / Cash / Roth, relative, any scale.
+      - **REMOVAL MANIFEST for Fixed Split**, moved here from the header of `optimizer_ui.js`
+            on 2026-09-25 (P134): a checklist of file positions rots in source and belongs with the
+            phase that would act on it. Every site is tagged `P104b3` (the sweep family, on probation)
+            or `P104b1` (the engine input, which stays if only the family goes).
+            - `optimizer_core.js` ENGINE (`P104b1`): `_splitWeightsFor()` (the vector validator and the
+              order/weight shape), the `strategy === 'split'` branch of `planPrimaryWithdrawals`, the
+              gap-fill mirror of the same weights in `fillSpendingGap`, `totals.splitWeightsInvalid`,
+              `'splitWeights'` in `STRATEGY_SELECTION_FIELDS`, the element-wise `'split'` compare in
+              `sameStrategySelection`, and `'split'` in `ROTH_GAP_EXCLUDED`.
+            - `optimizer_core.js` SWEEP (`P104b3`): `SPLIT_VECTORS`, `SPLIT_ACCOUNT_LABELS`,
+              `splitVectorLabel`, `splitVectorSortVal`, `OPTIMIZER_GRIDS.split`, the `splitFeature`
+              flag to `splitFamily` in `sweepOptions`, `describeSelection`'s `case 'split'`, the
+              `splitFamily` option and family loop and `addOffGrid` guard in `buildStrategyFamilies`,
+              `offGridParamFor`'s `case 'split'`, and the three exports.
+            - `optimizer_ui.js`: `SPLIT_FEATURE` and the flag it passes to `sweepOptions`, `getInputs`
+              `splitWeights`, `toggleStrategyUI`'s `#ui-split` line, `applyNerdKnobVisibility`'s menu
+              entry, the `loadOptimizerResult` adopt branch, the four `OPT_LONG_TO_SHORT` keys, the
+              `applyScenario` array case, and `generateSplitPresetOptions` / `onSplitPresetChange` /
+              `syncSplitPresetFromFields` / `onSplitFieldInput` / `updateSplitMixNote` /
+              `SPLIT_FIELD_IDS`.
+            - `retirement_optimizer.html`: the `#strategy-opt-split` option, the `#ui-split` panel, the
+              DOMContentLoaded menu build.
+            - `optimizer_core.tests.js`: the four `P104b3:` tests. `P104b1`'s engine tests stay.
+            - `research/CONSTANT_SPLIT.md`, `.test_harnesses/split_fine_harness.js`,
+              `.test_harnesses/split_mc_harness.js`.
       - [x] **P104b3 SHIPPED 2026-09-03, v11.1719, NERDKNOB-GATED** (user: *"any new
             strategy/experimental feature should be guarded by nerdknob until it's been fully
             fleshed out"*). Four vectors in `SPLIT_VECTORS`; family emitted only on

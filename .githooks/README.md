@@ -47,6 +47,12 @@ Then, in order:
   release stamp itself has one home, the page `<title>`, which `optimizer_ui.js` reads into
   `APP_VERSION` for the Monte Carlo worker's URL. It also blocks a reference to a file that is not
   there.
+- **`check-comment-history.js`** counts comment lines that narrate history - "used to", "replaced",
+  "measured on", a bare phase id - against a per-file ceiling, and blocks a commit that raises one. The
+  rule it enforces is `CLAUDE.md`'s: a comment says what the code does now and the one constraint that
+  would break it, and what was measured or corrected goes in the commit message. `--list <file>` prints
+  the lines. The ceiling may fall freely; raising one needs a sentence in the commit saying why the
+  history had to stay.
 - **the markdown preview gate**, below.
 
 About 20 s total on a fast machine, most of it `optimizer_core.tests.js`. Run the page suite alone

@@ -39,6 +39,14 @@ Then, in order:
   weekly, so a commit works offline after that), and every other outside request, analytics
   included, is refused. It needs node 22 or newer; `PAGE_SUITE_BROWSER` names a browser explicitly.
   This is the only automated check of `optimizer_ui.js` and the Monte Carlo tab.
+- **`check-asset-tokens.js`** blocks a commit in which a staged script or stylesheet kept the `?v=`
+  cache token a page loads it with. A browser keys its cache on that token, so the page would be
+  served new against the cached old file - not a failure, a silently wrong answer, and only on the
+  machine that had the page open. Tokens here are deliberately PER ASSET (an unchanged file keeps its
+  cache), so nothing is asserted about a token's value, only that a changed file got a new one. The
+  release stamp itself has one home, the page `<title>`, which `optimizer_ui.js` reads into
+  `APP_VERSION` for the Monte Carlo worker's URL. It also blocks a reference to a file that is not
+  there.
 - **the markdown preview gate**, below.
 
 About 20 s total on a fast machine, most of it `optimizer_core.tests.js`. Run the page suite alone

@@ -10,6 +10,14 @@
 // Version constant - increment this when data structure changes
 const SCENARIO_VERSION = 4;
 
+// The release stamp, read off the page <title> so it is written in exactly one place. The Monte Carlo
+// worker's URL carries it (montecarlo/mc_controller.js), and worker.js passes its own query string
+// down to every script it importScripts, which is what stops a refreshed worker from running a cached
+// copy of an engine that has changed. mc_controller read APP_VERSION before this existed and found
+// nothing, so it fell back to Date.now() and re-fetched all eight worker scripts on every page load.
+// A title without a version - any page but this one - keeps that fallback.
+const APP_VERSION = (document.title.match(/(\d+)\.(\w+)\s*$/) || []).slice(1, 3).join('') || null;
+
 // New storage key for current version scenarios
 const STORAGE_KEY = 'SLCRetireOptimizeScenario';
 

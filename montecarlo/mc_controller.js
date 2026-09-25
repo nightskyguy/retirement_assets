@@ -31,7 +31,11 @@ function runMCWorker(cfg, onProgress, onComplete) {
     // Wall clock starts BEFORE the worker exists, because worker startup is the fixed term the
     // estimate needs and nothing inside the worker can see it.
     const _wallT0 = performance.now();
-    const w = new Worker('montecarlo/worker.js?v=' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : Date.now()));
+    // APP_VERSION is the release stamp optimizer_ui.js reads off the page title. A page that does not
+    // carry one (or a null stamp) falls back to the clock, which is correct but re-fetches every
+    // worker script on every load.
+    const _v = (typeof APP_VERSION !== 'undefined' && APP_VERSION) ? APP_VERSION : Date.now();
+    const w = new Worker('montecarlo/worker.js?v=' + _v);
     _mcWorkers[kind] = w;
 
     w.onmessage = function (e) {

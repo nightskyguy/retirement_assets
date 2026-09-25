@@ -5729,3 +5729,50 @@ on its own, so the card now points at `ira-heavy-couple-overreaching` for a genu
 commit message on `d795511` carries the wrong figure and cannot be edited; this is the record.
 
 Planning files only. No page, script or suite changed, so no version bump and no changelog entry.
+
+## 2026-09-25 - review step D, one home per knob (P133, v11.1930, branch `worktrees/planning-with-files-faf086`)
+
+User: "do step D". Sections 1.3-1.6 of `.planning/CODE_QUALITY_REVIEW.md`, the one step of the A-G
+plan that never ran. Seven commits, each proved by the same check.
+
+**`P133a`, the check itself, first.** `.test_harnesses/identity_harness.js` walks 769,128 values over
+all 19 `plans/` households - `simulate()` field by field, both optimizers, `breakEvenHeirsRate`,
+`suggestSustainableSpend`, eight sweep variations summarized, and `runJob` in gbm, bootstrap and aam
+with the stress pass - and `--check` names the first values that moved, by path. Every slice below
+reports IDENTICAL against the snapshot taken before any of them. Clock reads are dropped, and path
+arrays are folded to count, sum, INDEX-WEIGHTED sum and extremes so a reordering still shows.
+
+**What shipped, by slice:** `b` the engine's rule defaults, tolerances and seeds plus `defaultNumOf`
+in the UI (twelve fallbacks that restated a markup default now read it); `c` six epsilons that stay
+six, `BREAK_EVEN_SEARCH`, the conversion grid, the iteration caps; `d` the enums with a guard at every
+boundary a key arrives through; `e` `MC_DEFAULTS` read from both sides of the worker boundary, the two
+percentile sets, `SURVIVAL_BANDS`; `f` one `TIMING` block, `INPUT_LIMITS`, `EMPTY_CELL`; `g` the cache
+tokens.
+
+**Five of the review's own recommendations did not survive checking**, which is the pattern every
+earlier step in this campaign hit too:
+
+1. A frozen enum object does NOT make a typo throw - a misspelled property is `undefined` and the
+   comparison is false. The guards at the boundaries are what throw, and a `Proxy` was rejected on
+   cost: it would sit in comparisons inside the per-year loop.
+2. `MC_PARAMS` is NOT loaded in the worker. It is declared in `montecarlo/mc_tab.js`, which
+   `worker.js` never imports. The shared defaults went to `prng.js`, the first file every host loads.
+3. "The percentile list, twice" is two DIFFERENT lists, 10/50/90 and 5/25/50/75/95. One shared
+   `PERCENTILES` would have been wrong.
+4. The stress "10 x8" is two numbers sharing a value: the fallback count is 10, the job default is 20.
+5. One `ASSET_VERSION` would invalidate every asset on every release. The chore it was aiming at is
+   FORGETTING a token, so `.githooks/check-asset-tokens.js` blocks that instead - and it caught two of
+   my own missed bumps the first time it ran.
+
+**Two defects found while naming, both recorded in `findings.md`:** the 0.14 / 0.07 ceiling rates are
+not inert placeholders - the strategy families that price no ceiling leave them in place and the draw
+ordering READS them, so part of the draw is ordered on rates nobody computed; and `base.startYear ??
+2026` froze the fallback start year the way `Retirement_Projection.html` froze May 2026, disagreeing
+with the engine's own `inputs.startInYear || new Date().getFullYear()` from 2027 on. Now the clock.
+Also: `APP_VERSION` was referenced by `mc_controller.js` and defined nowhere, so every page load
+re-fetched all eight worker scripts. It is read off the `<title>` now, and the worker URL was verified
+in the browser as `worker.js?v=111930`.
+
+Suites: 528 / 47 / 62 / 15 / 46 node, 497 in-page, badge green. Four new tests (two node guards, two
+in-page pins), `TestTiers.EXPECTED` and `.githooks/README.md` updated with them. No changelog entry:
+nothing in the whole step is visible to a user, which the identity check is the proof of.

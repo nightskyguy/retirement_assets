@@ -202,6 +202,24 @@
         </div>
 
         <div class="input-group">
+            <label for="currentAge">Your Age Today (optional):
+                <span class="tooltip-container">
+                  <span class="tooltip-icon">?</span>
+                        <span class="tooltip-text">
+                            Leave blank to price everything at today's published rates.
+                            <br><br>
+                            Fill it in and each age above becomes a future year, so the thresholds,
+                            your Social Security and the surcharge are all carried forward to it.
+                            The surcharge is then shown twice: in that year's dollars, and in
+                            today's, because Medicare grows faster than prices and the gap between
+                            those two columns is the whole point.
+                        </span>
+                </span>
+            </label>
+            <input type="text" id="currentAge" value="" placeholder="e.g., 65" autocomplete="off">
+        </div>
+
+        <div class="input-group">
 		
             <label for="otherIncome">Other Taxable Income (pensions, interest, etc.):
 				<span class="tooltip-container">
@@ -237,14 +255,27 @@
             <strong id="IRMAAThresholdsHeading">IRMAA Thresholds:</strong><br>
             <span id="IRMAAThresholdsBody"></span>
 
-			<STRONG>IMPORTANT NOTE</STRONG> The consumer price index increases at a rate of about 2.8% per year annually for the last 20 years, while the IRMAA tax increases at a rate of about 5.6% per year (it's tied to Medicare costs). This means that in the future the brackets will be adjusted, however the TAX will also be adjusted by about twice as much.  Example: <i>Tier 1 at 106k and 1K</i> annual additional tax will become <b>109K with an 11K tax</b>.
+			<br><br>
+			<STRONG>IMPORTANT NOTE</STRONG> The IRMAA Thresholds and Penalties move at different rates, and that is what makes IRMAA worse over time. The income <em>thresholds</em> are indexed to CPI. The <em>penalty</em> is not: it is tied to Medicare, which grows faster. This tool carries thresholds forward at <b>3.2%</b> a year, the ten-year average of the US consumer price index, and the penalty on the Medicare Trustees' own published path, which starts near <b>6.6%</b> a year and eases toward 3.8% in the long run. Enter your age above to see both, side by side, in that year’s dollars and in today’s. The gap between those two columns is the part that compounds against you.
         </div>
     </div>
 
-    <script src="../taxengine.js?v=1118fc"></script>
+    <script src="../taxengine.js?v=111917"></script>
+    <script src="../medicare_costs.js?v=111917"></script>
     <script>
         // RMD_TABLE and TAXData.IRMAA / TAXData.SOCIALSECURITY come from taxengine.js (loaded
         // above) — no local hardcoded copies, so this tool stays in sync with the rest of the site.
+
+        // CPI, for carrying thresholds and Social Security into a future year. A STATED CONSTANT,
+        // deliberately not a control: the reader is told the assumption rather than asked to supply
+        // one they have no better basis for than this does.
+        //
+        // 3.2% is the geometric mean of the repository's own BLS CPI-U series over the last ten
+        // years, 2016 to 2025 (3.214%). 2026 is excluded because that series marks it an estimate.
+        // The window matters and is not a detail: twenty years gives 2.53%, and five gives 4.48%.
+        // An earlier draft used 2.5%, which is the Trustees' long-run CPI FORECAST rather than the
+        // realized record - a forecast standing in for a measurement nobody had looked up.
+        const CPI_ASSUMED = 0.032;
 
         // The IRMAA ladder's last row is `l: Infinity`: the top tier's ABSENT CEILING, not a band.
         // It repeats the top tier's label and amount, so anything that LISTS tiers must drop it or
@@ -286,6 +317,12 @@
             const socialSecurity = DisplayHelpers.parseShorthand(document.getElementById('socialSecurity').value) || 0;
             const otherIncome = DisplayHelpers.parseShorthand(document.getElementById('otherIncome').value) || 0;
             const agesInput = document.getElementById('ages').value;
+            // Blank is not zero: blank means "price everything today", which is what this tool did
+            // before it could project at all. Only a real number turns the projection on.
+            const rawAge = document.getElementById('currentAge').value.trim();
+            const parsedAge = parseInt(rawAge, 10);
+            const projecting = rawAge !== '' && !isNaN(parsedAge) && parsedAge > 0;
+            const currentAge = projecting ? parsedAge : null;
             
             // Parse ages
             const ages = agesInput.split(',').map(a => parseInt(a.trim())).filter(a => !isNaN(a) && a >= 72);
@@ -305,6 +342,7 @@
             assumptionsList.innerHTML = `
                 <li>Social Security: $${socialSecurity.toLocaleString()}/year</li>
                 <li>Other taxable income: $${otherIncome.toLocaleString()}/year</li>
+                ${projecting ? '<li>Thresholds and Social Security carried forward at ' + (CPI_ASSUMED * 100).toFixed(1) + '%/yr; the IRMAA surcharge on the published Medicare path. <b>Other taxable income is NOT inflated</b> - it is used exactly as typed, because a fixed pension and an indexed one grow differently.</li>' : ''}
                 <li>No tax-exempt interest or other MAGI adjustments</li>
                 <li>RMD is the only withdrawal from the IRA</li>
                 <li>Taxable Social Security calculated based on provisional income rules</li>
@@ -336,22 +374,43 @@
                     return;
                 }
 
-                html += `<h3>Age ${age} (RMD Divisor: ${divisor.toFixed(1)})</h3>`;
+                // How far ahead this age is. Never negative: an age already behind the reader is
+                // priced at today rather than extrapolated backwards through a table that does not
+                // describe it.
+                const yearsAhead = projecting ? Math.max(0, age - currentAge) : 0;
+                const calYear    = TAXData.IRMAA.YEAR + yearsAhead;
+                // Two axes, moving at different speeds. That difference IS the finding.
+                const cpiFactor  = Math.pow(1 + CPI_ASSUMED, yearsAhead);   // thresholds, and SS
+                const medFactor  = medicareGrowthFactor(yearsAhead);        // the surcharge dollars
+                // Social Security has a statutory COLA, so it is carried forward. "Other taxable
+                // income" deliberately is NOT: it is a fixed pension for some readers and an indexed
+                // one for others, and guessing would be worse than saying so, which the note does.
+                const ssAtAge    = socialSecurity * cpiFactor;
+
+                html += `<h3>Age ${age} (RMD Divisor: ${divisor.toFixed(1)})` +
+                        (projecting ? ` in ${calYear}, ${yearsAhead} year${yearsAhead === 1 ? '' : 's'} from now` : '') +
+                        '</h3>';
                 html += '<table>';
-                html += '<tr><th>IRMAA Tier</th><th>Maximum IRA Balance</th><th>RMD Amount</th><th>Estimated MAGI</th><th>Annual IRMAA Surcharge</th></tr>';
+                html += '<tr><th>IRMAA Tier</th><th>Maximum IRA Balance</th><th>RMD Amount</th><th>Estimated MAGI</th>' +
+                        (projecting ? `<th>Surcharge (${calYear} $)</th><th>Surcharge (${TAXData.IRMAA.YEAR} $)</th>`
+                                    : '<th>Annual IRMAA Surcharge</th>') + '</tr>';
 
                 // Calculate for each tier
                 IRMAATiers.forEach((bracket) => {
-                    const threshold = bracket.l;
-                    const maxRMD = solveForMaxRMD(socialSecurity, otherIncome, threshold);
+                    const threshold = bracket.l * cpiFactor;
+                    const maxRMD = solveForMaxRMD(ssAtAge, otherIncome, threshold);
                     const maxIRABalance = maxRMD * divisor;
                     const rmdAmount = maxIRABalance / divisor;
-                    const taxableSS = calculateTaxableSS(socialSecurity, otherIncome + rmdAmount);
+                    const taxableSS = calculateTaxableSS(ssAtAge, otherIncome + rmdAmount);
                     const estimatedMAGI = otherIncome + rmdAmount + taxableSS;
-                    // cpiRate=1, medicareRate=1: this tool shows today's nominal rates only, no
-                    // future-year growth — must pass both explicitly or calcIRMAA()'s default
-                    // medicareRate would apply one year of ANNUAL_INCREASE growth.
-                    const IRMAACharge = calcIRMAA(threshold, maritalStatus, 1, 1);
+                    // BOTH arguments are aged, and they have to be. `threshold` is a future-year
+                    // MAGI, so the ladder it is looked up against must be indexed to the same year
+                    // or the lookup lands in the wrong band: with cpiRate left at 1, an aged Tier 1
+                    // threshold of $298,714 sailed past the un-indexed Tier 2 floor of $274,001 and
+                    // the row labelled Tier 1 was charging Tier 2's surcharge.
+                    //
+                    // cpiFactor indexes the THRESHOLDS, medFactor scales the DOLLARS. Two axes.
+                    const IRMAACharge = calcIRMAA(threshold, maritalStatus, cpiFactor, medFactor);
 
                     html += '<tr>';
                     html += `<td>${bracket.tier}</td>`;
@@ -359,6 +418,12 @@
                     html += `<td class="currency">$${rmdAmount.toLocaleString('en-US', {maximumFractionDigits: 0})}</td>`;
                     html += `<td class="currency">$${estimatedMAGI.toLocaleString('en-US', {maximumFractionDigits: 0})}</td>`;
                     html += `<td class="currency">$${IRMAACharge.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`;
+                    // Today's dollars: the same charge deflated by the CPI that moved everything
+                    // else. It still rises, and it rises only because Medicare outruns prices,
+                    // which is the one thing the nominal column cannot show.
+                    if (projecting) {
+                        html += `<td class="currency">$${(IRMAACharge / cpiFactor).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`;
+                    }
                     html += '</tr>';
                 });
 

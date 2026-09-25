@@ -17,6 +17,30 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1917"></a>
+
+## 11.1917
+
+**Medicare and IRMAA costs now grow on a published path instead of your inflation rate.**  
+*Plans that reach an IRMAA tier will move, in both directions.*
+
+**Medicare premiums and IRMAA surcharges used to grow at your CPI plus your Inflation, about 5.8% a
+year on the defaults.** They now follow the path the Medicare Trustees publish: about 6.6% a year to
+start, easing toward 3.8% over the long run. Premium growth has no measurable relationship to
+inflation, so tying it to your two rates was a coincidence rather than a model.
+
+The effect depends on how much of your Medicare life is early. The new path starts higher and ends
+lower, so a plan with a short horizon pays more and a long one pays less. Across the reference
+households IRMAA moved between 18% down and 5% up, and ending wealth by about 4% either way.
+
+Medicare cost also no longer varies from one Monte Carlo path to another, which narrows the spread
+slightly.
+
+The Medicare column tooltip, the Inflation and CPI tooltips and the Documentation all described the
+old behavior and have been corrected.
+
+---
+
 <a id="11.18fc"></a>
 
 ## 11.18fc

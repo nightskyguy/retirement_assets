@@ -45,6 +45,7 @@ same stub pattern, just within `standalone/` rather than at root.)
 | File | What it is |
 |---|---|
 | `taxengine.js` | Shared Federal + state tax calculation engine (`TAXData`, `calculateProgressive`, IRMAA, NIIT, SS taxation, retirement-income exclusions). Used by the Optimizer, Retirement Projection, and Income Tax Planner. |
+| `medicare_costs.js` | How fast Medicare premium and IRMAA surcharge DOLLARS grow: the two-phase model `g(t) = gLong + (g0 - gLong) * decay^t`, plus the published Part B premium series it was fitted to. Zero dependencies on purpose, so `standalone/FutureCost.html` can load it without `taxengine.js`. Measured case in `research/MEDICARE_ESCALATION.md`. |
 | `optimizer_core.js` | Pure simulation engine for the Optimizer — no DOM/localStorage access, so it's independently `node`-testable. Year-by-year withdrawal/conversion/tax simulation, optimizer sweep, Break-Even/Stop-Year diagnostics. |
 | `optimizer_ui.js` | All DOM/chart/share-URL/scenario-persistence code for `retirement_optimizer.html`. Depends on `optimizer_core.js` + `taxengine.js` being loaded first; shares global scope (not a module). |
 | `optimizer_styles_responsive.css` | Responsive/mobile layout CSS for the Optimizer. |

@@ -14,7 +14,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="displayhelpers.js"></script>
 <script src="sharepanel.js?v=1118e3"></script>
-<script src="taxengine.js?v=1118fc"></script>
+<script src="taxengine.js?v=111917"></script>
+<script src="medicare_costs.js?v=111917"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
@@ -1195,7 +1196,11 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
     // Medicare age. Sourced from taxengine.js so the two tools cannot diverge.
     const medicareAge     = TAXData.IRMAA?.ELIGIBILITY_AGE ?? 65;
     const onMedicareCount = (age >= medicareAge ? 1 : 0) + (!isSingle && spouseCurrentAge >= medicareAge ? 1 : 0);
-    const medicareGrowth  = Math.pow(1 + (TAXData.IRMAA?.ANNUAL_INCREASE ?? 0), y - 1);
+    // Measured from the year TAXData.IRMAA's dollars are stated in, NOT from the first plan year:
+    // the table is 2026 dollars whatever year the plan starts, so anchoring to `y` would leave a
+    // plan starting in 2030 charging 2026 premiums. medicareGrowthFactor is a loop over a rate that
+    // changes every year, so it cannot be written as one rate to a power - see medicare_costs.js.
+    const medicareGrowth  = medicareGrowthFactor(calYear - MEDICARE_COSTS.ANCHOR_YEAR);
     const IRMAAAnnualCost = calcIRMAA(prevPrevMagi, filingStatus, inflMult, medicareGrowth, onMedicareCount);
 
     // OBBBA (P.L. 119-21) provisions are calendar-year-gated, not permanent — mirrors

@@ -122,6 +122,68 @@ onto the nearest mode, and the substitution is reported rather than made quietly
 year's conversion, and its `$1,000` trigger. `timingConvThreshold` survives as a URL-only research
 input, corrected to read THIS year's conversion and to move the CONVERSION rather than the spending.
 
+### The IRMAA safety margin
+
+One select, URL key `imm`, that chooses how much room the **IRMAA Ceiling** strategy leaves below
+the threshold it aims at.
+
+**The forward projection is NOT gated and is not part of this.** IRMAA bills this year's premium
+against the MAGI you reported two years ago, judged against the thresholds published for the premium
+year, so a ceiling capping this year's MAGI has to aim two years out - about 6% higher at 3%
+inflation. Every reader gets that, including on *No margin*. This control only picks the extra room
+below that projected threshold, because a tier is a cliff and one dollar over costs a full year's
+surcharge.
+
+| choice | aims at |
+|---|---|
+| **Half the projected increase** (default, `halfcpi`) | half way between today's threshold and the projected one |
+| The projected increase, less 1 percentage point (`cpiminus1`) | 1 point short of the projection |
+| Half the next-tier surcharge below the projected threshold (`halfstep`) | a dollar amount set by what the next tier costs |
+| $2,000 below the projected threshold (`flat2000`) | a flat dollar cushion |
+| No margin (`none`) | the projected threshold exactly |
+
+The default moved from `halfstep` to `halfcpi` in 11.15cc: at a 1.5-point CPI miss `halfstep`
+prevented 5 breaching years of 92 where `halfcpi` prevented 21, and `halfcpi` saves surcharge in 59
+of the 60 windows measured.
+
+The two inflation-based choices leave room as a share of the *projected increase* rather than as
+dollars, which is why they hold up over a long plan where a fixed dollar amount does not: a forecast
+error is proportional, so the room they leave is too.
+
+Applies to the IRMAA Ceiling strategy **only**. QCD *As Needed* aims at the fully projected
+threshold with no margin, because there the margin is bought with money that leaves the household -
+measured at $82,764 donated to avoid $3,348 of surcharge, about 25 to 1 against.
+
+### The Medicare growth model, overridden
+
+Three boxes in the sidebar, all blank by default: **start**, **long-run** and **decay**. They open
+up the rate the tool uses for Medicare premiums and IRMAA surcharge dollars, which is otherwise not
+a setting at all.
+
+The shipped model is `g(t) = long-run + (start - long-run) * decay^t`: a rate that begins near 6.6%
+a year, the figure the Medicare Trustees project through 2035, and eases toward 3.8%, their
+long-run assumption. The evidence for that shape, and for what it does not establish, is in
+[research/MEDICARE_ESCALATION.md](research/MEDICARE_ESCALATION.md).
+
+| box | shipped | what it is |
+|---|---|---|
+| start | 6.6% | the first projected year's rate. Published data. |
+| long-run | 3.8% | the rate it eases toward. The Trustees' assumption, and the parameter the 30-year answer is most sensitive to. |
+| decay | 0.90 | how fast one becomes the other. **The weakest of the three:** no year-by-year premium path is published past 2035, so it is fitted rather than sourced. |
+
+**Setting start and long-run to the same number gives a flat rate**, which is how the tool behaved
+before this model existed. That is also how the test suite proves the override is live rather than
+ignored.
+
+Each box is independent: fill one and the other two keep their shipped values. A blank box is not a
+zero, and a typed **0 means premiums hold flat**, which is a real assumption someone might want to
+test. The line under the boxes reports the 30-year multiplier, because two rates cannot be compared
+by eye when one of them changes every year.
+
+Share keys `mgs`, `mgl`, `mgd`. An untouched field emits no parameter, so a link from a plan that
+never opened these is unchanged. A link that DOES carry them applies them to a reader without the
+knob, who cannot see the controls - the same behavior as every other gated field here.
+
 ### The two deeper variants
 
 Both are gated one notch below the plain knob: they respond only to the **literal value**, and

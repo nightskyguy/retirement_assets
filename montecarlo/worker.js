@@ -6,7 +6,8 @@
 // Propagate the worker's own cache-bust token (?v=… from new Worker(...)) to its imported
 // scripts so prng.js / core.js etc. never serve a stale cached copy when the worker refreshes.
 const _v = self.location.search || '';
-importScripts('../taxengine.js' + _v, '../optimizer_core.js' + _v, 'prng.js' + _v, 'stats.js' + _v,
+importScripts('../taxengine.js' + _v, '../medicare_costs.js' + _v, '../optimizer_core.js' + _v,
+              'prng.js' + _v, 'stats.js' + _v,
               'historical_returns.js' + _v, 'mc_engine.js' + _v, 'rails_engine.js' + _v);
 
 // P128. Two kinds of job share this shell: the Monte Carlo sweep, and the risk-based rails solve.

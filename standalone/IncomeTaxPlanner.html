@@ -10,7 +10,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Income Tax Planner · 2026+ · v2.7</title>
+<title>Income Tax Planner · 2026+ · v2.8</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
@@ -142,8 +142,9 @@
 <!-- Shared tax modules — NOTE: these require file:// or http:// (CORS blocks in data: URLs) -->
 <script src="../displayhelpers.js"></script>
 <script src="../sharepanel.js?v=1118e3"></script>
-<script src="../taxengine.js?v=1118fc"></script>
-<script src="../taxengine.tests.js?v=1118ef"></script>
+<script src="../taxengine.js?v=111917"></script>
+<script src="../medicare_costs.js?v=111917"></script>
+<script src="../taxengine.tests.js?v=111917"></script>
 </head>
 <body>
 <header>
@@ -250,10 +251,11 @@
     </div>
 
     <div class="ctrl">
-      <div class="ctrl-hdr"><label>Medicare cost increase above inflation</label><span class="val" id="med-val">+2.5%</span></div>
-      <input type="range" id="sl-med" min="0" max="6.0" step="0.5" value="2.5" oninput="updMed(); run()">
-      <div class="range-ends"><span>0%</span><span>+6%</span></div>
-      <div class="note">IRMAA cost growth = bracket inflation + this rate</div>
+      <div class="ctrl-hdr"><label>Medicare cost growth</label><span class="val" id="med-val"></span></div>
+      <div class="note">Not a setting. Medicare premiums and IRMAA surcharges follow a published
+      path shared with the other tools here: it starts near 6.6% a year, the rate the Medicare
+      Trustees project through 2035, and eases toward 3.8%, their long-run assumption. Premium
+      growth has no measurable relationship to inflation, so there is nothing to tie it to.</div>
     </div>
 
     <hr class="divider">
@@ -362,7 +364,7 @@ const cfg = {
   ssIncome:0, propTax:0,
   retirementIncome:0, retirementSwept:false,
   cgSale:0, cgBasisPct:60,
-  year:2026, inflation:2.5, medicareExtra:2.5,
+  year:2026, inflation:2.5,
   // OBBBA is current law, so it is always on and never user-switchable. The provisions still
   // switch themselves off by year: calcAt() gates each one on its own sunsetYear.
   obbaOn:true, saltHigh:true
@@ -373,10 +375,16 @@ const cfg = {
 // to match the shape expected by sweep(), renderChart(), and renderSummary().
 function calcAt(ordInc) {
   const {status, state, ages, ssIncome, propTax, obbaOn, saltHigh,
-         year, inflation, cgSale, cgBasisPct, medicareExtra} = cfg;
+         year, inflation, cgSale, cgBasisPct} = cfg;
 
   const inf       = Math.pow(1 + inflation / 100, year - BASE_YEAR);
-  const medGrowth = Math.pow(1 + medicareExtra / 100, year - BASE_YEAR);
+  // Medicare dollars are on their own clock, from medicare_costs.js, and NOT on `inf` above:
+  // the IRMAA income thresholds index at CPI, the surcharge dollars do not. Anchored to the year
+  // the IRMAA table states its dollars in, which is not necessarily BASE_YEAR (the federal one).
+  //
+  // This replaced `Math.pow(1 + medicareExtra / 100, ...)`, which applied the slider rate ALONE
+  // while both the slider's label and the note under the chart promised inflation PLUS that rate.
+  const medGrowth = medicareGrowthFactor(year - MEDICARE_COSTS.ANCHOR_YEAR);
   const cgGain    = cgSale > 0 ? cgSale * (1 - cgBasisPct / 100) : 0;
 
   // Suppress saltHigh after OBBBA SALT provisions sunset (2030+)
@@ -403,7 +411,7 @@ function calcAt(ordInc) {
     IRMAAAnnualCost: 0   // computed below from MAGI
   });
 
-  // IRMAA: step-function on MAGI, costs grow at inflation + medicareExtra
+  // IRMAA: step-function on MAGI. Thresholds index at inflation, the surcharge does not.
   const IRMAA = calcIRMAA(r.MAGI, status, inf, medGrowth);
 
   return {
@@ -1167,7 +1175,7 @@ function renderAssumptions() {
       <div><strong>Federal brackets:</strong> 2026 IRS Rev. Proc. 2025-32. Future years inflated at configured rate from 2026 base.</div>
       <div><strong>Social Security:</strong> Provisional income = ordinary income + CG + ½ SS (real treatment). Thresholds $32k/$44k MFJ; $25k/$34k SGL — NOT inflation-adjusted per current law.</div>
       <div><strong>Capital gains:</strong> Federal uses combined CG+NIIT brackets (stacked on top of ordinary taxable income). State taxes CG at ordinary income rates (marginal increase). CG adds to MAGI and SS provisional income.</div>
-      <div><strong>IRMAA:</strong> Step function applied to MAGI at each income level (2-year lookback "cheated" to current year). IRMAA costs grow at inflation + Medicare extra rate; expressed in 2026-base dollars. <span class="warn">IRMAA bracket values from TAXData — verify against CMS for exact 2026 amounts.</span></div>
+      <div><strong>IRMAA:</strong> Step function applied to MAGI at each income level (2-year lookback "cheated" to current year). The income thresholds index at inflation, but the surcharge dollars do NOT: they follow the published Medicare path, which starts near 6.6% a year and eases toward 3.8%. Expressed in 2026-base dollars.</div>
       <div><strong>OBBBA senior ded.:</strong> $${obbaSen.perSenior.toLocaleString()}/person ≥ 65. Phase-out at ${(obbaSen.phaseoutRate*100).toFixed(0)}¢/$1 above $${obbaSen.phaseoutAGI[cfg.status].toLocaleString()} AGI (P.L. 119-21; expires after ${obbaSen.sunsetYear}).</div>
       <div><strong>SALT:</strong> max(std ded. + age bumps, min(total state taxes incl. CG + property tax, cap)). Age bumps forfeited when itemizing. OBBBA $${obbaSalt.capHigh.toLocaleString()} cap phases out ${(obbaSalt.phaseoutRate*100).toFixed(0)}¢/$1 above $${obbaSalt.phaseoutThreshold.toLocaleString()} MAGI, flooring at $${obbaSalt.capLow.toLocaleString()} (fully phased out at $${(obbaSalt.phaseoutThreshold + Math.round((obbaSalt.capHigh - obbaSalt.capLow)/obbaSalt.phaseoutRate)).toLocaleString()} MAGI); sunsets after ${obbaSalt.sunsetYear}.</div>
       <div><strong>Excluded:</strong> AMT, SE tax, CA SDI, muni interest, qualif. dividends, CA personal exemption credits. Effective rate denominator = ordinary + SS + CG gain.</div>
@@ -1191,7 +1199,14 @@ function updProp()   { document.getElementById('prop-val').textContent = Display
 function updRetInc() { document.getElementById('retinc-val').textContent = DisplayHelpers.formatDollar(DisplayHelpers.parseShorthand(document.getElementById('num-retinc').value) || 0); }
 function updYear()   { document.getElementById('year-display').textContent = document.getElementById('sl-year').value; }
 function updInf()    { document.getElementById('inf-val').textContent  = document.getElementById('sl-inf').value+'%'; }
-function updMed()    { document.getElementById('med-val').textContent  = '+'+document.getElementById('sl-med').value+'%'; }
+function updMed() {
+  // Reports what the projection is using for the selected year rather than echoing a control.
+  // A single rate would not describe it: the growth is not uniform.
+  const el = document.getElementById('med-val');
+  if (!el) return;
+  const n = cfg.year - MEDICARE_COSTS.ANCHOR_YEAR;
+  el.textContent = n > 0 ? medicareGrowthFactor(n).toFixed(2) + 'x by ' + cfg.year : 'today';
+}
 function updCgBasis(){
   const b = +document.getElementById('sl-cg-basis').value;
   document.getElementById('cg-basis-val').textContent = b+'%';
@@ -1236,12 +1251,13 @@ function readCfg() {
   cfg.cgBasisPct  = +document.getElementById('sl-cg-basis').value;
   cfg.year        = +document.getElementById('sl-year').value;
   cfg.inflation   = +document.getElementById('sl-inf').value;
-  cfg.medicareExtra = +document.getElementById('sl-med').value;
+
 }
 
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 function run() {
   readCfg();
+  updMed();     // depends on cfg.year, which only readCfg() sets, so it belongs here and not on a control
   const data = sweep();
   renderChart(data);
   syncPinControls();
@@ -1335,10 +1351,10 @@ function buildShareParams() {
     cs: cfg.cgSale,
     cb: cfg.cgBasisPct,
     yr: cfg.year,
-    'in': cfg.inflation,
-    me: cfg.medicareExtra
-    // ob / sh (OBBBA + SALT-cap switches) are gone; both provisions are always on and expire
-    // by year. Legacy links carrying them still load, the params are simply ignored.
+    'in': cfg.inflation
+    // me (Medicare cost increase) is gone: Medicare growth is a published model now, not a
+    // setting. ob / sh (OBBBA + SALT-cap switches) are gone too; both provisions are always on
+    // and expire by year. Legacy links carrying any of them still load, ignoring the parameter.
   };
   if (cfg.retirementIncome) p.ri = cfg.retirementIncome;
   if (cfg.retirementSwept)  p.rw = 1;
@@ -1482,10 +1498,6 @@ function loadFromURL() {
   if (p.has('in')) {
     document.getElementById('sl-inf').value = p.get('in');
     document.getElementById('inf-val').textContent = p.get('in')+'%';
-  }
-  if (p.has('me')) {
-    document.getElementById('sl-med').value = p.get('me');
-    document.getElementById('med-val').textContent = '+'+p.get('me')+'%';
   }
   // 'ob' and 'sh' from pre-v2.5 links are intentionally ignored: OBBBA is current law and is
   // always applied, sunsetting by tax year rather than by switch.

@@ -549,15 +549,24 @@ test('P32c: forcedIRAAllowBrokerage keeps the backstop alive after the IRA empti
     // The shipped loop breaks on an empty IRA. With Brokerage leading it must not end one account
     // early, so a plan whose IRA runs dry while Brokerage remains still gets backstopped.
     //
-    // THE PRECONDITION IS THE TEST: the IRA has to actually empty, or both arms produce the same
-    // run and this proves nothing. The spend goal went from 130,000 to 150,000 on 2026-09-23, when
-    // correcting the IRMAA ladder cut the surcharge enough that the old fixture no longer drained
-    // the IRA at all. Raise it again rather than relaxing the assertion if that recurs.
+    // THE PRECONDITION IS THE TEST, and it is now asserted directly rather than through the log:
+    // the backstop must FIRE on the default arm (forcedIRATotal > 0) and the Brokerage-first arm
+    // must actually redirect it. "The logs differ" was too weak - it passes on any incidental
+    // difference, and it fails on a fixture that is merely unlucky without saying which.
+    //
+    // The spend goal has moved twice for this reason. 130,000 -> 150,000 on 2026-09-23, when
+    // correcting the IRMAA ladder cut the surcharge enough that the IRA no longer drained;
+    // 150,000 -> 155,000 on 2026-09-24 with the two-phase Medicare model, where 150,000 landed on a
+    // spot that drains the IRA but leaves Brokerage unable to take the draw, so both arms forced the
+    // same $65,762. Raise it again rather than relaxing the assertions.
     const scen = { ...BASE, IRA1: 120000, Cash: 1000, Brokerage: 1500000, BrokerageBasis: 200000,
-                   ss1: 30000, ss1Age: 66, spendGoal: 150000, nYears: 25 };
+                   ss1: 30000, ss1Age: 66, spendGoal: 155000, nYears: 25 };
     const off = simulate({ ...scen });
     const on = simulate({ ...scen, forcedIRAAllowBrokerage: 'brokerageFirst' });
-    assert(JSON.stringify(off.log) !== JSON.stringify(on.log), 'the arm must change this run');
+    assert(off.totals.forcedIRATotal > 0,
+        'the default arm must actually force an IRA draw, or there is nothing to redirect');
+    assert(on.totals.forcedIRATotal < off.totals.forcedIRATotal,
+        `brokerageFirst must redirect the forced draw: ${off.totals.forcedIRATotal} -> ${on.totals.forcedIRATotal}`);
     assert(on.totals.yearsfunded >= off.totals.yearsfunded,
         `${off.totals.yearsfunded} -> ${on.totals.yearsfunded} funded years`);
 });
@@ -6087,32 +6096,78 @@ test('P70: fixedTaxIndexing pins the tax code while spending still follows the p
         'pinning the tax code must change the tax paid under a variable path');
 });
 
-test('P70: Medicare premium growth is the index plus a FIXED excess, not a doubled path', () => {
-    // A deliberate modeling choice, pinned so it cannot be "simplified" back. Medicare grows at
-    // cpi_t + inputs.inflation: the statutory index plus a constant excess-medical spread. At the
-    // shipped defaults that is 2.8 + 3.0 = 5.8%, i.e. about 3 points of excess over the index.
+test('P70: Medicare premium growth is on its OWN clock, untouched by the inflation path', () => {
+    // A deliberate modeling choice, pinned so it cannot be "simplified" into an inflation-linked
+    // one. Premium growth comes from medicare_costs.js and depends on the YEAR alone.
     //
-    // Making the excess path-following too (cpi_t + i_t) reads the tooltip literally but implies
-    // 12 points of excess medical cost in a 12% inflation year, and swung measured IRMAA dollars
-    // from -6.5% to +29%.
-    const inflation = 0.030, cpi = 0.028;
-    const flat = 0.12;                                   // a steady 12% path, so the arithmetic is checkable by hand
-    const seq  = Array.from({ length: CLOCK_N }, () => flat);
-    const rows = clockRows(simulate({ ...CLOCK_BASE, inflation, cpi,
-                                      returnSequence: CLOCK_RET, inflationSequence: seq }));
-    // Medicare is logged as onMedicare * (standard premiums) * 12 * medicareRate, so consecutive
-    // years give the growth rate directly once both are on Medicare.
-    const med = rows.map(r => r.Medicare).filter(v => v > 0);
-    assert(med.length > 3, 'the fixture must actually reach Medicare age');
-    const cpi_t    = flat + (cpi - inflation);           // the index under this path
-    const expected = 1 + cpi_t + inflation;              // index + FIXED excess
-    const doubled  = 1 + cpi_t + flat;                   // the rejected reading
-    for (let i = 1; i < med.length; i++) {
-        assertNear(med[i] / med[i - 1], expected,
-            `year ${i}: Medicare grows at the index plus a fixed excess`, 1e-9);
+    // This replaced `cpi_t + inputs.inflation`, which tied it to the path. That is not merely a
+    // weak link: premium growth has no measurable relationship to CPI in any window, and hold
+    // harmless gives it the WRONG SIGN, because a small COLA protects most beneficiaries and the
+    // whole increase lands on the minority who are not. research/MEDICARE_ESCALATION.md measures it.
+    //
+    // The visible consequence, and the reason this is worth a test: Medicare no longer varies path
+    // to path under Monte Carlo.
+    const mild = Array.from({ length: CLOCK_N }, () => 0.01);
+    const wild = Array.from({ length: CLOCK_N }, () => 0.12);
+    const medOf = seq => clockRows(simulate({ ...CLOCK_BASE, inflation: 0.030, cpi: 0.028,
+                                              returnSequence: CLOCK_RET, inflationSequence: seq }))
+                         .filter(r => r.Medicare > 0);
+    const a = medOf(mild), b = medOf(wild);
+    assert(a.length > 3, 'the fixture must actually reach Medicare age');
+    assert(a.length === b.length, 'both arms must reach Medicare in the same years');
+    for (let i = 0; i < a.length; i++) {
+        assertNear(a[i].Medicare, b[i].Medicare,
+            `year ${a[i].year}: a 1% path and a 12% path charge the same premium`, 1e-9);
     }
-    assert(Math.abs(expected - doubled) > 0.05,
-        'the two readings must be far enough apart that this test can tell them apart');
+
+    // And it is the model, not merely something constant: each step is that year's own rate,
+    // measured from the anchor year rather than from the start of the plan.
+    const anchor = MEDICARE_COSTS.ANCHOR_YEAR;
+    for (let i = 1; i < a.length; i++) {
+        assertNear(a[i].Medicare / a[i - 1].Medicare, 1 + medicareGrowthRate(a[i].year - 1 - anchor),
+            `year ${a[i].year}: the step is medicareGrowthRate for the year before it`, 1e-9);
+    }
+    // A flat rate would pass everything above, so pin the one thing only a two-phase model does.
+    assert(a[1].Medicare / a[0].Medicare > a[a.length - 1].Medicare / a[a.length - 2].Medicare + 1e-6,
+        'growth must be DECAYING, or a constant rate would satisfy this test');
+});
+
+test('P70: the Medicare growth override reaches the engine, and moves only Medicare', () => {
+    // Without this, every other Medicare test here would pass just as well on plumbing that reads
+    // the model and ignores the override. The delta harness leans on the same three arms.
+    const scen = { ...CLOCK_BASE, inflation: 0.030, cpi: 0.028,
+                   returnSequence: CLOCK_RET, inflationSequence: CLOCK_INFL };
+    const anchor = MEDICARE_COSTS.ANCHOR_YEAR;
+    const medOf = over => clockRows(simulate({ ...scen, medicareGrowth: over })).filter(r => r.Medicare > 0);
+
+    // Zero growth: every year charges the anchor year's published dollars, exactly.
+    const zero = medOf({ g0: 0, gLong: 0 });
+    assert(zero.length > 3, 'the fixture must reach Medicare age');
+    for (const r of zero) assertNear(r.Medicare, zero[0].Medicare, `${r.year}: zero growth is flat`, 1e-9);
+
+    // Both ends equal: compound interest, which is the model this replaced. Reachable on purpose.
+    const R = 0.058;
+    const flat = medOf({ g0: R, gLong: R });
+    for (let i = 1; i < flat.length; i++) {
+        assertNear(flat[i].Medicare / flat[i - 1].Medicare, 1 + R, `${flat[i].year}: a flat override compounds`, 1e-9);
+    }
+
+    // And an override is not the default: the shipped model must differ from both arms above.
+    const model = medOf(undefined);
+    assert(Math.abs(model[model.length - 1].Medicare - flat[flat.length - 1].Medicare) > 1,
+        'the shipped model must differ from a flat 5.8%, or the override is being ignored');
+    // An absent override and one that restates the shipped parameters must be the same run, which
+    // is what "the default IS the model" means.
+    const restated = medOf({ g0: MEDICARE_COSTS.g0, gLong: MEDICARE_COSTS.gLong, decay: MEDICARE_COSTS.decay });
+    assert(JSON.stringify(model.map(r => r.Medicare)) === JSON.stringify(restated.map(r => r.Medicare)),
+        'omitting the override and restating it must give the same premiums');
+
+    // Nothing else may move. The spend goal and the price level are on the inflation path, which
+    // this override does not touch.
+    const other = over => clockRows(simulate({ ...scen, medicareGrowth: over }))
+                          .map(r => [r.spendGoal, r.inflationFactor, r['-cpiFactor']]);
+    assert(JSON.stringify(other({ g0: 0, gLong: 0 })) === JSON.stringify(other({ g0: 0.09, gLong: 0.09 })),
+        'the Medicare override must not move spending, the price level or the statutory index');
 });
 
 test('P81: the engine floor matches the one the banks are drawn under', () => {
@@ -6397,11 +6452,21 @@ test('P70: every indexed quantity tracks its declared clock', () => {
     assert(brk({ inflation: 0.01, cpi: 0.03 }) === brk({ inflation: 0.05, cpi: 0.03 }),
         'bracket limits must NOT move with felt inflation - that is the two-clock defect');
 
-    // ── both clocks, by design ──
-    // The sidebar tooltip promises Medicare/IRMAA dollars grow at "CPI + Inflation combined, not
-    // CPI alone", so this is the one quantity that must respond to each of them.
-    assert(movesWithCpi(r => r.Medicare) && movesWithInfl(r => r.Medicare),
-        'Medicare premium growth rides CPI + Inflation together');
+    // ── a THIRD clock, which is the point of medicare_costs.js ──
+    // Medicare dollars are on neither of the two clocks above. They used to be on both, at
+    // cpi + inflation, and that turned out to have no empirical support at all: premium growth has
+    // no measurable relationship to CPI in any window, and hold harmless gives it the wrong sign.
+    // A quantity that moves with a typed rate it has no relationship to is a defect of the same
+    // family as the two-clock ones above, which is why it belongs in this test rather than beside it.
+    assert(!movesWithCpi(r => r.Medicare),
+        'Medicare premium growth must NOT move with CPI');
+    assert(!movesWithInfl(r => r.Medicare),
+        'Medicare premium growth must NOT move with felt inflation either');
+    // IRMAA is the pair to it, and splits: the surcharge DOLLARS are on the Medicare clock, but the
+    // income THRESHOLDS are indexed at CPI, so which tier a plan lands in still moves with CPI.
+    // Two axes, and calcIRMAA takes them as two arguments.
+    assert(!movesWithInfl(r => r.IRMAA),
+        'IRMAA must not move with felt inflation: neither of its two axes is on it');
 
     // ── price level ──
     assert(movesWithInfl(r => r.spendGoal), 'the spending goal is on felt inflation');
@@ -10513,11 +10578,17 @@ test('IRMAA and Medicare premiums start at 65, per person on Medicare', () => {
     assert(pre65.every(row => row.Medicare === 0), 'no base Part B and D premium before 65');
     const row65 = r.log.find(row => row.age1 === 65), row67 = r.log.find(row => row.age1 === 67);
     assert(row65.IRMAA > 0 && row67.IRMAA > 0, 'a surcharge at 65 (one on Medicare) and at 67 (both)');
-    // Base premium: persons on Medicare x ($202.90 Part B + $38.99 Part D) x 12, grown by (1+cpi+inflation)/yr.
-    const g = 1 + REDUCE_BASE.cpi + REDUCE_BASE.inflation;
-    same(Math.round(row65.Medicare), Math.round(1 * (202.90 + 38.99) * 12 * Math.pow(g, 5)), 'one person on Medicare at 65');
-    same(Math.round(row67.Medicare), Math.round(2 * (202.90 + 38.99) * 12 * Math.pow(g, 7)), 'two people at 67');
-    assert(row67.IRMAA / Math.pow(g, 2) > row65.IRMAA * 1.5, 'two people on Medicare pay about twice the surcharge of one');
+    // Base premium: persons on Medicare x (Part B + Part D) x 12, grown on the Medicare clock.
+    // Both the premiums and the growth are DERIVED, never typed: a literal here would have to be
+    // re-measured on every data refresh, and would pass for the wrong reason if the model changed
+    // shape. The anchor is the year TAXData states its dollars in, not the plan's first year.
+    const base12 = (TAXData.IRMAA.standardPartB + TAXData.IRMAA.standardPartD) * 12;
+    const f = y => medicareGrowthFactor(y - MEDICARE_COSTS.ANCHOR_YEAR);
+    same(Math.round(row65.Medicare), Math.round(1 * base12 * f(row65.year)), 'one person on Medicare at 65');
+    same(Math.round(row67.Medicare), Math.round(2 * base12 * f(row67.year)), 'two people at 67');
+    // Divide out the two years of growth between them, so what is left is the per-person doubling.
+    assert(row67.IRMAA / (f(row67.year) / f(row65.year)) > row65.IRMAA * 1.5,
+        'two people on Medicare pay about twice the surcharge of one');
 });
 
 test('Brokerage gap-fill: no spurious shortfall from large unrealized gains, around a death either', () => {

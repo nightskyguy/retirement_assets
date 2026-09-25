@@ -420,8 +420,8 @@ for with money that leaves the household and it measured costing far more in don
 in surcharges. Two things it does **not** do. It does not anticipate a change of
 filing status: income sized while married but billed after a death is judged against single-filer
 thresholds roughly half as high, which is the IRMAA half of the widow penalty and the one case where
-a plan can land in a much higher tier than it targeted. And the safety margin it leaves below the threshold (an
-`?nerdknob` setting, default: project the threshold forward at half your expected inflation) only
+a plan can land in a much higher tier than it targeted. And the safety margin it leaves below the
+threshold - the tool projects that threshold forward at half your expected inflation - only
 insures one thing: **inflation
 coming in BELOW your assumption**. If CPI meets or beats what you entered, the thresholds outrun
 your plan and the margin buys nothing at all - measured as exactly zero breaches in every setting at
@@ -447,7 +447,7 @@ More inputs and knobs and conditions make the tool less simple. If you've got th
 
 ### Limitations and Restrictions
 
-0. The tool models things a year-at-a-time. This is not strictly accurate, because, for example, **when** you make withdrawals or conversions materially affects the results. Waiting until the end of the year to make your withdrawals has a different result than making a withdrawal at the beginning of the year.  The order of calculations is:  QCD withdrawals, RMD withdrawals, calculation of spending/conversion withdrawals (and removal of those funds from the needed accounts) THEN taxes, interest and dividends on the remainder are calculated. Surplus funds after minimum spending levels are eligible for deposit into a Roth.  In real life, you do Roth conversions as a separate operation, but this tool can forecast what that conversion would be. The [Retirement Tax Planner](https://tools.netcitizen.us/RetirementTaxPlanner.html) linked from the Annual Table "Year" or "totalTaxColumns" shows the trade offs about WHEN to withdraw or convert. Internally, the Optimizer moves each year's money at one of two points, January or November, and by default ("Split") it converts early and spends late: a Roth conversion, and any required distribution that must come before it, lands in January, while the spending withdrawal leaves in November, taking that year's income tax and any IRMAA surcharge with it. Withdrawn money is treated as spent the moment it leaves; nothing is credited for cash held between the withdrawal and the spending. The earlier a conversion occurs, the more tax-free growth you gain, and the later a withdrawal leaves, the longer it compounds. A diagnostic `?nerdknob` control can move everything to January (the worst case) or everything to November instead, and the Annual Details `timing` column shows which months each year used.
+0. The tool models things a year-at-a-time. This is not strictly accurate, because, for example, **when** you make withdrawals or conversions materially affects the results. Waiting until the end of the year to make your withdrawals has a different result than making a withdrawal at the beginning of the year.  The order of calculations is:  QCD withdrawals, RMD withdrawals, calculation of spending/conversion withdrawals (and removal of those funds from the needed accounts) THEN taxes, interest and dividends on the remainder are calculated. Surplus funds after minimum spending levels are eligible for deposit into a Roth.  In real life, you do Roth conversions as a separate operation, but this tool can forecast what that conversion would be. The [Retirement Tax Planner](https://tools.netcitizen.us/RetirementTaxPlanner.html) linked from the Annual Table "Year" or "totalTaxColumns" shows the trade offs about WHEN to withdraw or convert. Internally, the Optimizer moves each year's money at one of two points, January or November, and by default ("Split") it converts early and spends late: a Roth conversion, and any required distribution that must come before it, lands in January, while the spending withdrawal leaves in November, taking that year's income tax and any IRMAA surcharge with it. Withdrawn money is treated as spent the moment it leaves; nothing is credited for cash held between the withdrawal and the spending. The earlier a conversion occurs, the more tax-free growth you gain, and the later a withdrawal leaves, the longer it compounds. The Annual Details `timing` column shows which months each year used.
 0. Voluntary IRA withdrawals are done *proportionately*. Some improvement may result by reducing a large balance first.  You can model this by moving the total balance to one person.
 0. There is no "Accumulation phase" and no plan to add one.  I.e. no way to say "stash X dollars per year" in an IRA or Roth, Brokerage or Cash. The goal is to keep the inputs simple.  However, you CAN calculate your expected assets as of your retirement age, and use the *Retirement Start Age* to delay retirement into the future. This will result in properly adjusted tax brackets.
 0. There is no plan to add "Part Time income", Annuities (can model those as "pension"), windfalls, lumpy spending (well, we are thinking about that last one) ...
@@ -857,7 +857,27 @@ While the Social Security payments are adjusted annually according to the CPI (C
 
 #### IRMAA Escalation
 
-My original model assumed that the IRMAA tax brackets and amounts are adjusted by CPI, but that's not true. The *brackets* are adjusted per CPI, but the amounts are tied to Medicare. The CPI has averaged about 2.8% annually over the last 20 years, but Medicare has averaged 5.6% annual increase.  IRMAA, as mentioned is a TAX CLIFF, not a graduated bracket. That means if you make $1 more than the maximum you move up an IRMAA tier. The result is not only the need to pay the tax, say an extra 4k per year, but you may have to withdraw more from an IRA to pay the tax.  At a 20% nominal tax rate, that extra $1 costs at least $5K AND may result in pushing you up into higher marginal brackets. IRMAA penalties will cost significantly more REAL dollars in the future - if you have a chance to eat IRMAA now, or eat IRMAA later, neither is appetizing, but the future will be more painful.
+My original model assumed that the IRMAA tax brackets and amounts are both adjusted by CPI, and that is not true. **The thresholds are indexed to CPI. The surcharge is not: it is tied to Medicare, which grows faster.** The two move at different speeds, and that difference is what makes IRMAA worse the further out you look.
+
+IRMAA is also a TAX CLIFF, not a graduated bracket. One dollar over the line moves you a whole tier, and you may have to withdraw more from an IRA to pay it: at a 20% nominal tax rate that extra $1 costs at least $5,000, and can push you into a higher marginal bracket on the way.
+
+**How fast does the surcharge actually grow?** There is no single honest answer, because the figure you get depends entirely on the window you pick. Here is the standard Part B premium, which the surcharge tracks:
+
+| window | Part B premium | CPI over the same years |
+|---|---|---|
+| last 5 years, 2021 to 2026 | 6.44%/yr | 4.48%/yr |
+| last 10 years, 2016 to 2026 | 5.24%/yr | 3.21%/yr |
+| last 20 years, 2006 to 2026 | 4.24%/yr | 2.53%/yr |
+| projected 2026 to 2035 | 6.60%/yr | |
+| long run, per the Trustees | about 3.8%/yr | |
+
+This corrects two figures that used to appear here. CPI has not "averaged about 2.8% over the last 20 years" (it is 2.53%, and 3.21% over ten), and Medicare has not averaged a flat 5.6%: that number matched no window and was never sourced.
+
+**The tools model it as a rate that starts high and eases off**, rather than one fixed number: about 6.6% a year now, the rate the Medicare Trustees project through 2035, decaying toward their long-run assumption of about 3.8%. A single flat rate cannot do both ends. Fit one to the next decade and it overshoots a 30-year retirement badly; fit it to the long run and it understates the years in which you are actually deciding whether to convert.
+
+**Two things worth knowing that are easy to miss.** Premium growth has no measurable relationship to inflation, so a model of the form "CPI plus a bit" has no support in the record. And the *hold harmless* rule caps an individual's premium increase at their Social Security COLA, which means that in a low-COLA year most beneficiaries are protected and the entire increase falls on the minority who are not, driving the published standard premium up sharply. That is why 2016 saw a 16.1% rise after a year of 0.7% CPI, and why the relationship, if anything, runs backwards. Hold harmless is not modeled here, so what you actually pay may rise more smoothly than the tables suggest.
+
+The full measurement, including how the model was chosen and what it does not establish, is in [research/MEDICARE_ESCALATION.md](research/MEDICARE_ESCALATION.md). Figures come from [SSA POMS HI 01001.014](https://secure.ssa.gov/poms.nsf/lnx/0601001014) for the premium record, the [2026 Medicare Trustees Report](https://www.cms.gov/oact/tr/2026) for the projections, and the BLS CPI-U series this tool already ships for its Monte Carlo inflation.
 
 #### The Tax Torpedo
 

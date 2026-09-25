@@ -61,6 +61,17 @@ const getRateBracket = (...a) => _engine().getRateBracket(...a);
 const getIRMAATier = (...a) => _engine().getIRMAATier(...a);
 const getQCDLimit = (...a) => _engine().getQCDLimit(...a);
 
+// medicare_costs.js is a SEPARATE file with no dependency on taxengine.js, and is covered here
+// rather than in a suite of its own: a sixth suite would cost three permanent count pins for one
+// data file. Resolved the same lazy dual-mode way as the engine above.
+function _medicare() {
+	const m = IS_NODE ? require('./medicare_costs.js') : window.MedicareCosts;
+	if (!m) throw new Error('medicare_costs.js has not loaded yet');
+	return m;
+}
+const medicareGrowthRate = (...a) => _medicare().medicareGrowthRate(...a);
+const medicareGrowthFactor = (...a) => _medicare().medicareGrowthFactor(...a);
+
 let passed = 0, failed = 0;
 
 // test() REGISTERS rather than runs, the same shape as the other node suites, so the browser can
@@ -1365,6 +1376,86 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 		assertEqual(getQCDLimit(1), TAXData.QCD.AMOUNT, 'an unindexed year is the table amount');
 		assertEqual(getQCDLimit(1.03), TAXData.QCD.AMOUNT * 1.03, 'one year at 3% is one multiplication');
 		assertEqual(getQCDLimit(), TAXData.QCD.AMOUNT, 'a missing factor is 1, never NaN');
+	});
+
+	// ── medicare_costs.js ─────────────────────────────────────────────────────────────────────
+	// The two-phase escalation model. Measured case: research/MEDICARE_ESCALATION.md.
+
+	test('TEST CASE 26: MEDICARE_COSTS agrees with TAXData, which it is not allowed to read', () => {
+		// medicare_costs.js has ZERO dependencies on purpose - standalone/FutureCost.html loads it
+		// without taxengine.js - so it carries its own ANCHOR_YEAR and cannot check it. This test
+		// IS the check. Same shape as the planner's SAFE_HARBOR pin: two files loaded by different
+		// pages, duplication that only a test can hold together.
+		const M = _medicare().MEDICARE_COSTS;
+		assertEqual(M.ANCHOR_YEAR, TAXData.IRMAA.YEAR,
+			'the anchor year is the year TAXData.IRMAA dollars are stated in');
+		assertEqual(M.partB[M.ANCHOR_YEAR - M.partBStartYear], TAXData.IRMAA.standardPartB,
+			'the series and the table state the same 2026 premium');
+		assertEqual(M.partBStartYear + M.partB.length - 1 >= M.partBActualThrough, true,
+			'the series reaches at least as far as the last actual year it claims');
+	});
+
+	test('TEST CASE 26b: the growth rate starts at g0 and decays toward gLong without reaching it', () => {
+		const M = _medicare().MEDICARE_COSTS;
+		assertEqual(medicareGrowthRate(0), M.g0, 't = 0 is the first projected year, so it is g0');
+		// Strictly decreasing, and always still above the floor it is approaching. A model that
+		// crossed gLong would be extrapolating past its own assumption.
+		for (let t = 0; t < 60; t++) {
+			assertEqual(medicareGrowthRate(t) > medicareGrowthRate(t + 1), true,
+				`the rate falls every year (t = ${t})`);
+			assertEqual(medicareGrowthRate(t) > M.gLong, true,
+				`the rate never reaches gLong (t = ${t})`);
+		}
+		assertEqual(medicareGrowthRate(400), M.gLong, 'far enough out it is gLong to three decimals');
+		// A negative or missing t is g0, never a division or a NaN that would spread silently.
+		assertEqual(medicareGrowthRate(-5), M.g0, 'a negative elapsed year is g0');
+	});
+
+	test('TEST CASE 26c: the factor is exactly 1 at the anchor and equals the product of the rates', () => {
+		assertEqual(medicareGrowthFactor(0), 1,
+			'at the anchor year the published dollars pass through unchanged');
+		// The two helpers are separate entry points onto one model. If they ever disagree, one
+		// caller compounds differently from another and nothing else would catch it.
+		for (const n of [1, 5, 9, 30]) {
+			let prod = 1;
+			for (let t = 0; t < n; t++) prod *= 1 + medicareGrowthRate(t);
+			assertEqual(medicareGrowthFactor(n), prod, `factor(${n}) is the product of the rates`);
+		}
+		assertEqual(medicareGrowthFactor(-3), 1, 'a negative span is 1, never a reciprocal');
+	});
+
+	test('TEST CASE 26d: g0 re-derives from the shipped series, so the comment cannot drift', () => {
+		// The series ships precisely so this is checkable. g0 is the Trustees' own 2026 to 2035
+		// premium CAGR; if someone edits one without the other, this fails rather than the model
+		// quietly disagreeing with the data it claims to come from.
+		const M = _medicare().MEDICARE_COSTS;
+		const at = y => M.partB[y - M.partBStartYear];
+		const cagr = Math.pow(at(2035) / at(M.ANCHOR_YEAR), 1 / 9) - 1;
+		assertEqual(cagr, M.g0, 'g0 is the 2026 to 2035 CAGR of the published premium path');
+	});
+
+	test('TEST CASE 26e: the model contains the flat one, so gLong = g0 is a constant rate', () => {
+		// The cleanest possible proof that an override is live rather than ignored: set the two
+		// ends equal and the two-phase model must reproduce compound interest exactly.
+		const flat = { g0: 0.058, gLong: 0.058 };
+		assertEqual(medicareGrowthRate(17, flat), 0.058, 'both ends equal means one rate');
+		assertEqual(medicareGrowthFactor(25, flat), Math.pow(1.058, 25), '25 years of a flat 5.8%');
+		// Overrides are per key: moving one leaves the other two at the shipped values.
+		const M = _medicare().MEDICARE_COSTS;
+		assertEqual(medicareGrowthRate(0, { gLong: 0.02 }), M.g0, 'g0 survives a gLong override');
+		assertEqual(medicareGrowthFactor(40, { g0: 0, gLong: 0 }), 1, 'zero growth is flat forever');
+	});
+
+	test('TEST CASE 26f: calcIRMAA\'s medicareRate default is the identity, and grows nothing', () => {
+		// It used to default to `1 + ANNUAL_INCREASE`, so a caller that forgot the argument got a
+		// year of growth it never asked for. Every live caller passes it, which is exactly why the
+		// trap could sit there. Pinned so the convenience is never re-added.
+		const SGL_T1 = 12 * (81.20 + 14.50);
+		assertEqual(calcIRMAA(109001, 'SGL', 1), SGL_T1, 'omitted medicareRate charges 2026 dollars');
+		assertEqual(calcIRMAA(109001, 'SGL', 1), calcIRMAA(109001, 'SGL', 1, 1),
+			'omitting it and passing 1 are the same thing');
+		assertEqual(calcIRMAA(109001, 'SGL', 1, medicareGrowthFactor(0)), SGL_T1,
+			'and medicareGrowthFactor(0) is that same identity, from the other file');
 	});
 
 // ── Runner ───────────────────────────────────────────────────────────────────────────────────

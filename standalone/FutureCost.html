@@ -235,7 +235,14 @@
         <dd>Baseline CPI rate. IRMAA thresholds are indexed to CPI, but premiums often rise faster — use the Extra Growth field to capture that.</dd>
 
         <dt>Extra Growth Above Inflation</dt>
-        <dd>How much faster the payment grows beyond CPI. Medicare Part B premiums have historically grown 2–4% above general inflation. Set to 0 if you want a conservative floor estimate.</dd>
+        <dd>How much faster the payment grows beyond CPI. Set to 0 if you want a conservative floor estimate.
+        <br><br>
+        <strong>For Medicare specifically this is the wrong shape, and the line under the slider says
+        what the right one gives.</strong> Part B premium growth has no measurable relationship to
+        inflation in any window, so there is no stable "above CPI" figure to enter: the Medicare
+        Trustees project about 6.6% a year through 2035 and assume about 3.8% in the long run, and
+        the other tools here follow that published path rather than one rate. This page keeps a
+        single rate because it is a general growing-payment calculator, not a Medicare model.</dd>
 
         <dt>Portfolio Return Rate</dt>
         <dd>The annual return you expect to earn on the funds set aside for this obligation. This is how quickly the reserve can grow to keep pace with future payments. A higher return means you need to set aside less today.</dd>
@@ -277,7 +284,7 @@
       <h3>Example A — IRMAA Penalty Only (what you'd save by avoiding a tier)</h3>
       <div class="example-box">
         Your RMDs + fixed income keep you in Tier 1 IRMAA with a cost of <strong>$2,297/year for a couple</strong>
-        (the 2025 surcharge above base Medicare: $81.20 + $14.50 per person per month × 12 × 2).
+        (the 2026 surcharge above base Medicare: $81.20 + $14.50 per person per month × 12 × 2).
         Base Medicare is unavoidable — this is purely the <em>penalty</em> for exceeding the income threshold.<br><br>
         Settings: First Payment = $2,300, Years = 15, Inflation = 3%, Extra Growth = 2%, Portfolio = 7%,
         Federal = 24%, State = 0%.<br><br>
@@ -326,6 +333,8 @@
       <span class="readout" id="extra-out">2.00%</span>
     </div>
     <div class="combined-rate">Payment growth (g): <strong id="g-rate-out">5.00%</strong> &nbsp;·&nbsp; <span id="inf-g-out">3.00%</span> CPI + <span id="extra-g-out">2.00%</span> extra</div>
+
+    <div class="combined-rate" id="medicare-model-out" style="opacity:0.8;"></div>
 
     <div class="divider"></div>
 
@@ -406,6 +415,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="../displayhelpers.js"></script>
+<script src="../medicare_costs.js?v=111917"></script>
 <script>
   function calcNPV(pmt, g, r, n) {
     if (Math.abs(r - g) < 1e-9) return pmt * n / (1 + r);
@@ -444,6 +454,18 @@
     document.getElementById('g-rate-out').textContent         = pct(g);
     document.getElementById('inf-g-out').textContent          = pct(inf);
     document.getElementById('extra-g-out').textContent        = pct(extra);
+    // What the same horizon costs on the published Medicare path, beside what the sliders say.
+    // Not a control and not applied to anything here: this page prices ANY growing payment, and a
+    // reader who came for IRMAA should be able to see how far their two rates sit from the model
+    // the other tools use. Comparing the two MULTIPLIERS rather than the two rates, because that is
+    // the comparison that survives a rate which decays.
+    const medOut = document.getElementById('medicare-model-out');
+    if (medOut && typeof medicareGrowthFactor === 'function') {
+        const mine = Math.pow(1 + g, n), model = medicareGrowthFactor(n);
+        medOut.innerHTML = `Over ${n} years these settings multiply the payment <strong>${mine.toFixed(2)}x</strong>. `
+            + `Medicare's own published path gives <strong>${model.toFixed(2)}x</strong> `
+            + `(about ${pct(MEDICARE_COSTS.g0)} a year easing toward ${pct(MEDICARE_COSTS.gLong)}).`;
+    }
     const grossupFactor = combined < 1 ? 1 / (1 - combined) : 1;
     document.getElementById('grossup-out').textContent        = grossupFactor.toFixed(3) + '×';
 

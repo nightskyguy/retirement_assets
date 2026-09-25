@@ -27,6 +27,7 @@ flowchart TD
 
     subgraph engine["Engine layer - NO DOM, NO localStorage, NO location"]
         TAX["taxengine.js<br/>TAXData, RMD_TABLE<br/>calculateTaxes, calcIRMAA"]
+        MED["medicare_costs.js<br/>MEDICARE_COSTS<br/>medicareGrowthRate, medicareGrowthFactor"]
         CORE["optimizer_core.js<br/>simulate, optimizeSpend<br/>optimizeConversionAmount<br/>buildVariations, rankRowsByObjective"]
     end
 
@@ -549,6 +550,7 @@ Guardrails (GK-style) switch says; the knob shows only its cadence, path count a
 | `retirement_optimizer.html` | page | tab buttons, inline bootstrap, changelog - 5 newest inline |
 | `optimizer_styles_responsive.css` | page | the page's only stylesheet; its `?v=` token is the one most often forgotten |
 | `taxengine.js` | engine | `TAXData`, `RMD_TABLE`, `calculateTaxes`, `calcIRMAA`, `getIRMAATier`, `calculateProgressive`, `calculateTaxableSocialSecurity`, `getQCDLimit` |
+| `medicare_costs.js` | engine | `MEDICARE_COSTS`, `medicareGrowthRate`, `medicareGrowthFactor`. Loads with no dependencies at all, including no `taxengine.js`, so the helpers take ELAPSED YEARS and the caller does the anchoring. |
 | `optimizer_core.js` | engine | `simulate`, year steps `beginYear` .. `endYear`, `optimizeSpend`, `optimizeSpendDown`, `optimizeConversionAmount`, `bestTimeLimitedConversion`, `bestConversionStopYear`, `breakEvenHeirsRate`, `lowestBreakEvenHeirsRate`, `selectConversionCandidates`, `baselineScoreOf`, `rankRowsByObjective`, `buildStrategyFamilies` (the strategy enumeration both sweeps share, through `sweepOptions` and `OPTIMIZER_GRIDS`), `buildVariations`, `planRuleTwin`, `calculateWithdrawals`, `computeBracketCeiling`, `splitPreferLarger`, `snapshotResume` / `resumeInputs` (continue a plan from any year), `RAIL_PRESETS`, `portfolioReturnOf` |
 | `optimizer_ui.js` | UI | `getInputs`, `runSimulation`, `runOptimizer`, `renderOptimizerTable`, `loadOptimizerResult`, `updateTable`, `updateStats`, `updateCharts`, `openTaxPlanner`, `buildShareURL`, `loadFromURL`, `saveScenario`, `applyScenario`, `setOptObjective`, `applyConvStopYear` |
 | `displayhelpers.js` | UI | `DisplayHelpers.setDollarValue`, `parseShorthand`, formatting and tooltip helpers |

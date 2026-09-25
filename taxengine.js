@@ -1508,6 +1508,10 @@ function calculateTaxableSocialSecurity(status, provisionalIncome, totalSS) {
 //
 // Returns magiTarget unchanged when there is no benefit, which is the correct answer and skips the
 // loop on every pre-Social-Security year.
+// The two numbers the loop below stops on. The tolerance is the mechanism (half a cent of benefit);
+// the pass count is the backstop against a non-finite input, and 40 halvings cover $5.5 billion.
+const SS_BISECT_TOLERANCE  = 0.005;
+const SS_BISECT_MAX_PASSES = 40;
 function nonSSIncomeForMAGI(status, magiTarget, totalSS) {
     if (!(totalSS > 0)) return magiTarget;
     const ssBrackets = getRateBracket('SOCIALSECURITY', status);
@@ -1532,7 +1536,7 @@ function nonSSIncomeForMAGI(status, magiTarget, totalSS) {
     // The 40 is a backstop against a non-finite input, not the mechanism: 40 halvings cover a
     // benefit of $5.5 billion. Measured, dropping to 18 or 20 passes moves no engine result at all -
     // the only thing that noticed was this function's own unit test at its 0.01 tolerance.
-    for (let i = 0; i < 40 && hi - lo > 0.005; i++) {
+    for (let i = 0; i < SS_BISECT_MAX_PASSES && hi - lo > SS_BISECT_TOLERANCE; i++) {
         const mid = (lo + hi) / 2;
         if (magiOf(mid) < magiTarget) lo = mid; else hi = mid;
     }

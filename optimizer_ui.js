@@ -2133,7 +2133,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             key: 'convBE', label: 'Break Even',
             title: 'The year this strategy\'s after-tax wealth permanently overtakes the same strategy with no conversions (same sustained-crossing definition as the single-scenario Break Even stat: the lead must hold through the end of the plan). "—" means it never sustains a lasting lead, or the strategy never converts at all. Unlike Conv Tax, this prices in the tax still owed on whatever\'s left in the IRA, so it\'s the more complete answer to whether conversions paid off overall. Sort by it, or choose "Earliest Break Even" under Optimize for, to rank strategies by how fast their conversions pay back.',
             getValue: r => r._convBEYear != null ? String(r._convBEYear) : '—',
-            getSortValue: r => r._convBEYear ?? 9999
+            getSortValue: r => r._convBEYear ?? BE_NEVER
         },
         {
             // Renamed from "Tax Paid Δ". The Δ was misleading: unlike every other Δ in this table it

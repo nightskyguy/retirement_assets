@@ -90,6 +90,9 @@ const RAILS_SCALE_RANGE = [0.05, 16];
 // Market paths longer than the plan, as the research harness draws them.
 const RAILS_EXTRA_YEARS = 3;
 const RAILS_CADENCE_MAX = 10;
+// Backstop on the solve loop, not the mechanism: every rail the harness has measured settles in
+// well under this, and the loop exits when every count has an answer.
+const RAILS_MAX_SOLVE_ROUNDS = 80;
 const RAILS_PATHS_RANGE = [20, 2000];
 // The panel's defaults (user, 2026-09-16: "Running 100 paths every 3 years is sufficient").
 const RAILS_DEFAULT_PATHS = 100;
@@ -267,7 +270,7 @@ async function runRailsJob(cfg, hooks) {
             }
             return false;
         };
-        for (let round = 0; round < 80; round++) {
+        for (let round = 0; round < RAILS_MAX_SOLVE_ROUNDS; round++) {
             const lows = items.map(loB), highs = items.map(hiB);
             const open = [];
             for (const c of counts) {

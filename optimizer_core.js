@@ -97,6 +97,63 @@ const GROWTH_FALLBACK = 0.06;
 // not exist, and 0.50 is the common-law answer - the decedent's half only.
 const BASIS_STEP_UP_FALLBACK = 0.50;
 
+// ── Solver knobs: epsilons, search bounds and iteration caps ─────────────────────────────────────
+// Six different epsilon VALUES live here, and they are six on purpose. A dollar comparison and a rate
+// comparison cannot share a number, and folding them together would change results - which is why
+// each one keeps its own value and its own name rather than collapsing into one EPS.
+
+// A cent. Dollar amounts at or below it are nothing, and two dollar figures within it are the same
+// figure. Read all through calculateWithdrawals, whose arithmetic is in dollars throughout.
+const EPS_DOLLARS = 0.01;
+
+// Floor on the (1 - taxRate) divisor that grosses a net draw up. It caps the gross at 100x the net
+// rather than letting a tax rate at or above 100% produce a negative or infinite draw.
+const NET_TO_GROSS_RATE_FLOOR = 0.01;
+
+// |growth| at or below this takes the no-growth branch of the amortization, which exists because the
+// general formula divides by the rate.
+const EPS_GROWTH_ZERO = 1e-6;
+
+// |real rate| below this takes the same branch for the real-dollar amortization.
+const EPS_REAL_RATE_ZERO = 0.0001;
+
+// Float equality for two figures that arithmetic should have made identical: a fee fully paid, a
+// split vector already on the grid.
+const EPS_EXACT = 1e-9;
+
+// A conversion whose marginal tax share is below this earns no cash-funding credit; below it the
+// credit rounds to nothing and the ratio t/(1-t) is unstable.
+const EPS_TAX_SHARE = 0.0001;
+
+// Two plans count as the same selection when each of their numbers is within this of the other's.
+// A tenth of a percent: the numbers being compared are rates and weights, not dollars.
+const EPS_SELECTION = 0.001;
+
+// The heirs-rate search in breakEvenHeirsRate and lowestBreakEvenHeirsRate. `resolution` is the grid
+// the answer is reported on, so it is also the smallest difference either can distinguish.
+const BREAK_EVEN_SEARCH = Object.freeze({ minRate: 0.05, maxRate: 0.75, resolution: 0.01, coarseSteps: 4 });
+
+// Fixed-point refinements. Each of these loops solves a net draw against the tax that draw causes,
+// and converges in two passes on every household measured; the third is slack.
+const GROSS_UP_REFINE_ITERS   = 3;   // net -> gross inside calculateWithdrawals
+const REFUND_IRA_REFINE_ITERS = 3;   // cash-funded refund draw against its own tax
+
+// The third pass's Brokerage leg. 'unbounded' is a research arm, which is why its cap is an order of
+// magnitude larger: it is there to find out where the loop would stop on its own.
+const THIRD_PASS_BROKERAGE_ITER_CAP = Object.freeze({ bounded: 6, unbounded: 200 });
+
+// suggestSustainableSpend's ceiling: expand it by FACTOR up to EXPANSIONS times while the plan still
+// passes, then stop and bisect. A rich plan needs the expansions; the cap stops a runaway.
+const SUGGEST_CEILING_EXPANSIONS = 6;
+const SUGGEST_CEILING_FACTOR     = 1.6;
+
+// Guardrails shape memo: how many plans' shapes are kept before the oldest is dropped.
+const GK_SHAPE_CACHE_MAX = 64;
+
+// Sort sentinel for "this plan has no break-even year", so those rows sort last on a break-even
+// column. A year number, deliberately far past any plan's horizon.
+const BE_NEVER = 9999;
+
 // The spend floor the Optimize Spend search starts from, and the floor the page reports when no
 // spend at all passes. One function so the search and the message cannot disagree about it.
 const SPEND_FLOOR_MIN      = 500;
@@ -380,7 +437,7 @@ function calculateAmortizedWithdrawal(currentIRA, targetIRA, years, growthRate) 
     if (years <= 0) return 0;
 
     // No growth special case (avoid divide by zero)
-    if (Math.abs(growthRate) <= 1e-6) {
+    if (Math.abs(growthRate) <= EPS_GROWTH_ZERO) {
         return (currentIRA - targetIRA) / years;
     }
 
@@ -533,7 +590,7 @@ function calculateWithdrawals(balances, gapAmount, withdrawStrategy) {
 
     // Helper function to perform a withdrawal from an account
     function performWithdrawal(account, grossWithdrawal, accountIndex) {
-        if (grossWithdrawal <= 0.01) return { netWithdrawal: 0, tax: 0 };
+        if (grossWithdrawal <= EPS_DOLLARS) return { netWithdrawal: 0, tax: 0 };
 
         const taxRate = taxrates[accountIndex] ?? 0;
         let netWithdrawal, tax;
@@ -572,7 +629,7 @@ function calculateWithdrawals(balances, gapAmount, withdrawStrategy) {
 
     // Phase 1: Withdraw from weighted accounts up to their targets
     for (let i = 0; i < order.length; i++) {
-        if (netRemaining <= 0.01) break;
+        if (netRemaining <= EPS_DOLLARS) break;
 
         const account = order[i];
         const netTarget = netTargets[account];
@@ -580,7 +637,7 @@ function calculateWithdrawals(balances, gapAmount, withdrawStrategy) {
         if (netTarget <= 0) continue; // Skip zero-weight accounts
 
         const available = balances[account] ?? 0;
-        if (available <= 0.01) continue;
+        if (available <= EPS_DOLLARS) continue;
 
         // We need to solve for grossWithdrawal iteratively for brokerage
         // For simplicity, we'll use an approximation approach
@@ -593,12 +650,12 @@ function calculateWithdrawals(balances, gapAmount, withdrawStrategy) {
             let estimate = netTarget / (1 - taxRate); // Initial estimate
 
             // Refine estimate (up to 3 iterations should be enough)
-            for (let iter = 0; iter < 3; iter++) {
+            for (let iter = 0; iter < GROSS_UP_REFINE_ITERS; iter++) {
                 const testInfo = calculateBrokerageWithdrawal(estimate, balances.Brokerage, balances.BrokerageBasis);
                 const testTax = testInfo.capitalGains * taxRate;
                 const testNet = estimate - testTax;
 
-                if (Math.abs(testNet - netTarget) < 0.01) break;
+                if (Math.abs(testNet - netTarget) < EPS_DOLLARS) break;
 
                 // Adjust estimate
                 const correction = netTarget - testNet;
@@ -621,15 +678,15 @@ function calculateWithdrawals(balances, gapAmount, withdrawStrategy) {
     }
 
     // Phase 2: If gap not satisfied, take from remaining balances in order
-    if (netRemaining > 0.01) {
+    if (netRemaining > EPS_DOLLARS) {
         for (let i = 0; i < order.length; i++) {
-            if (netRemaining <= 0.01) break;
+            if (netRemaining <= EPS_DOLLARS) break;
 
             const account = order[i];
             const alreadyWithdrawn = result[account] ?? 0;
             const available = (balances[account] ?? 0) - alreadyWithdrawn;
 
-            if (available <= 0.01) continue;
+            if (available <= EPS_DOLLARS) continue;
 
             // Calculate how much gross we need to get the net we need
             let grossWithdrawal;
@@ -639,7 +696,7 @@ function calculateWithdrawals(balances, gapAmount, withdrawStrategy) {
                 const taxRate = taxrates[i];
                 let estimate = netRemaining / (1 - taxRate);
 
-                for (let iter = 0; iter < 3; iter++) {
+                for (let iter = 0; iter < GROSS_UP_REFINE_ITERS; iter++) {
                     const remainingBalance = balances.Brokerage - alreadyWithdrawn;
                     const remainingBasis = balances.BrokerageBasis - (result.BrokerageBasis ?? 0);
 
@@ -647,7 +704,7 @@ function calculateWithdrawals(balances, gapAmount, withdrawStrategy) {
                     const testTax = testInfo.capitalGains * taxRate;
                     const testNet = estimate - testTax;
 
-                    if (Math.abs(testNet - netRemaining) < 0.01) break;
+                    if (Math.abs(testNet - netRemaining) < EPS_DOLLARS) break;
 
                     const correction = netRemaining - testNet;
                     estimate += correction / (1 - taxRate * (testInfo.capitalGains / estimate));
@@ -2282,7 +2339,7 @@ function _gkShapeOf(inputs) {
     if (key != null && _gkShapeCache.has(key)) return _gkShapeCache.get(key);
     const shape = simulate(twin).log.map(r => ({ portfolio: r.portfolioBalance ?? 0, spend: r.spendGoal ?? 0, guar: r.guaranteedIncome ?? 0 }));
     if (key != null) {
-        if (_gkShapeCache.size >= 64) _gkShapeCache.delete(_gkShapeCache.keys().next().value);
+        if (_gkShapeCache.size >= GK_SHAPE_CACHE_MAX) _gkShapeCache.delete(_gkShapeCache.keys().next().value);
         _gkShapeCache.set(key, shape);
     }
     return shape;
@@ -2778,7 +2835,7 @@ function planPrimaryWithdrawals(sim, yr) {
             }
             // Spend forces gains beyond the target bracket. Find which LTCG bracket the
             // forced realization lands in and top off to that bracket's own ceiling.
-            const _spendGrossNeeded = yr.additionalSpendNeeded / Math.max(0.01, 1 - yr.capGainsPercentage * sim.capitalGainsRate);
+            const _spendGrossNeeded = yr.additionalSpendNeeded / Math.max(NET_TO_GROSS_RATE_FLOOR, 1 - yr.capGainsPercentage * sim.capitalGainsRate);
             const _landedRate = getLTCGBracketTopRate(_ltcgOrd, _spendGrossNeeded, yr.status, sim.cpiRate);
             const _ltcgRates = (TAXData.FEDERAL.CAPITAL_GAINS[yr.status]?.brackets ?? []).map(b => b.r);
             const _nextRate = _ltcgRates.find(r => r > _landedRate);
@@ -2808,7 +2865,7 @@ function planPrimaryWithdrawals(sim, yr) {
                     // Pass 1 of the fixed point: harvest sized at IRAwd=0; its realized LTCG
                     // occupies MAGI room the IRA draw must not double-book.
                     const _net1 = _sizeHarvest(_baseOrdinaryInc);
-                    const _gross1 = _net1 / Math.max(0.01, 1 - yr.capGainsPercentage * sim.capitalGainsRate);
+                    const _gross1 = _net1 / Math.max(NET_TO_GROSS_RATE_FLOOR, 1 - yr.capGainsPercentage * sim.capitalGainsRate);
                     _iraRoom = Math.max(0, yr.limit - _baseOrdinaryInc - _gross1 * yr.capGainsPercentage);
                 }
                 _coexistIRAwd = Math.max(0, Math.min(yr.curIRA, _iraRoom));
@@ -2824,7 +2881,7 @@ function planPrimaryWithdrawals(sim, yr) {
         const _brokerageNetTarget = _sizeHarvest(_baseOrdinaryInc + _coexistIRAwd);
         if (_brokerageNetTarget > 1 && yr.curBalances.Brokerage > 0) {
             // Depletion check: warn if Brokerage < 50% of what we need
-            const _grossNeeded = _brokerageNetTarget / Math.max(0.01, 1 - yr.capGainsPercentage * sim.capitalGainsRate);
+            const _grossNeeded = _brokerageNetTarget / Math.max(NET_TO_GROSS_RATE_FLOOR, 1 - yr.capGainsPercentage * sim.capitalGainsRate);
             if (yr.curBalances.Brokerage < _grossNeeded * CYCLIC_DEPLETION_FRACTION) {
                 yr.subCycleLabel = '⚠Brok';
             }
@@ -3319,7 +3376,7 @@ function resolveResidualAndForcedIRA(sim, yr) {
         // count the passes. A converging year uses one or two; a genuine spiral hits the cap.
         // Counters are attached lazily so an 'off' run's totals object keeps today's exact shape.
         if (_tpBrokArm !== 'off' && !yr.isOrderedStrategy) {
-            const _cap = _tpBrokArm === 'unbounded' ? 200 : 6;
+            const _cap = THIRD_PASS_BROKERAGE_ITER_CAP[_tpBrokArm === 'unbounded' ? 'unbounded' : 'bounded'];
             // Exit reasons are counted separately because Q2 asks a question only one of them
             // answers. A year that stops improving while Brokerage still holds a balance has hit
             // the account's own arithmetic (dust, or a draw whose tax eats the draw), NOT the
@@ -3649,7 +3706,7 @@ function cfRefundIRA(sim, yr, netTarget) {
     if (netTarget <= 1 || _cap <= 1) return;
     let G = Math.min(netTarget, _cap);
     let t2 = yr.tax, dT = 0;
-    for (let _i = 0; _i < 3; _i++) {
+    for (let _i = 0; _i < REFUND_IRA_REFINE_ITERS; _i++) {
         t2 = calculateTaxes(taxArgs(sim, yr, {
             earnedIncome: yr.pension + yr.taxableRMD + Math.max(0, yr.netWithdrawals.IRA - G) + yr.taxableInterest,
             iraIncome: yr.taxableRMD + Math.max(0, yr.netWithdrawals.IRA - G),
@@ -3929,7 +3986,7 @@ function applyAdvisorFee(sim, yr) {
     }
     // Spill whatever the source could not cover.
     for (const k of ADVISOR_FEE_SPILL) {
-        if (paid >= want - 1e-9) break;
+        if (paid >= want - EPS_EXACT) break;
         paid += _debitAdvisorFee(balance, k, want - paid);
     }
 
@@ -3980,7 +4037,7 @@ function applyConversionGrossUp(sim, yr) {
     }));
     const dT = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowCalc.totalTax);
     const t = Math.min(0.6, dT / conversion);   // 0.6 is a numeric safety guard, not a business rate
-    if (t <= 0.0001) return;
+    if (t <= EPS_TAX_SHARE) return;
 
     const idealIncrease = conversion * t / (1 - t);
     const availCash = Math.max(0, balance.Cash);
@@ -5366,7 +5423,7 @@ function solveMaxSpend(baseInputs, opts) {
 
     // Ceiling generous enough to fail; expand a few times for a rich plan, then cap.
     let hi = finalGuar + naivePMT * 2 + 1;
-    for (let g = 0; g < 6 && passes(run(hi)); g++) hi *= 1.6;
+    for (let g = 0; g < SUGGEST_CEILING_EXPANSIONS && passes(run(hi)); g++) hi *= SUGGEST_CEILING_FACTOR;
 
     // Coarse scan for the HIGHEST passing step (never break early - see SUGGEST_SCAN_STEPS), then
     // bisect between it and the next step. lo is 0.
@@ -5646,7 +5703,7 @@ const OPTIMIZER_OBJECTIVES = {
     // stopped at net wealth and left every row past that in results-array order, which is the
     // defect P100b3 exists to remove; compareByTiebreakChain carries the remaining keys and the
     // `_id` backstop, so the order is total.
-    earliestbe:{ dir: 'asc', metric: r => r._convBEYear ?? 9999,
+    earliestbe:{ dir: 'asc', metric: r => r._convBEYear ?? BE_NEVER,
                  tiebreak: ['finalRoth', 'netWealth', 'remainIRA', 'spend', 'lifeTax', 'spread'] },
 };
 
@@ -5819,7 +5876,7 @@ function sameStrategySelection(a, b) {
     // alone", so every unrecognized value has to compare equal to unset.
     const rgf = x => (x === 'fillCashThenRoth' || x === 'fillRothThenCash') ? x : '';
     if (rgf(a.rothGapFill) !== rgf(b.rothGapFill)) return false;
-    const near = (x, y) => Math.abs((x ?? 0) - (y ?? 0)) < 0.001;
+    const near = (x, y) => Math.abs((x ?? 0) - (y ?? 0)) < EPS_SELECTION;
     // Guardrails are part of the identity under every strategy: the sweep carries each draw with
     // and without the spend rule, and those are two plans. The band and the step matter only when on.
     const rule = x => (x === 'gk' || x === 'rbg') ? x : '';
@@ -5861,7 +5918,7 @@ function sameStrategySelection(a, b) {
             const na = _splitWeightsFor(a), nb = _splitWeightsFor(b);
             if (!na || !nb) return !na && !nb;
             const sa = na.weight.reduce((s, x) => s + x, 0), sb = nb.weight.reduce((s, x) => s + x, 0);
-            return na.weight.every((x, i) => Math.abs(x / sa - nb.weight[i] / sb) < 0.001);
+            return na.weight.every((x, i) => Math.abs(x / sa - nb.weight[i] / sb) < EPS_SELECTION);
         }
         default:         return false;
     }
@@ -5876,7 +5933,7 @@ function sameStrategySelection(a, b) {
 // Optimizer sweeps IRA Draw further out than Monte Carlo does). Pure.
 function offGridParamFor(base, grids = {}) {
     if (!base) return null;
-    const on = (arr, v) => (arr || []).some(x => Math.abs(x - v) < 0.001);
+    const on = (arr, v) => (arr || []).some(x => Math.abs(x - v) < EPS_SELECTION);
     switch (base.strategy) {
         case 'propwd': {
             const pct = Math.round((base.propWithdraw ?? 0) * 100);
@@ -5912,7 +5969,7 @@ function offGridParamFor(base, grids = {}) {
             if (!Array.isArray(w) || w.length !== 4) return null;
             if (!(w.reduce((a, b) => a + (b || 0), 0) > 0)) return null;
             const mine = splitVectorSortVal(w);
-            if ((grids.split || []).some(g => Math.abs(splitVectorSortVal(g) - mine) < 1e-9)) return null;
+            if ((grids.split || []).some(g => Math.abs(splitVectorSortVal(g) - mine) < EPS_EXACT)) return null;
             return { family: 'Fixed Split', paramLabel: splitVectorLabel(w), paramSortVal: mine,
                      overrides: { strategy: 'split', splitWeights: w.slice() } };
         }
@@ -5978,7 +6035,7 @@ const OPT_TIEBREAK_KEYS = Object.freeze({
     // Pre-tax IRA left behind: the survivor's and the heirs' RMD exposure. Smaller is better.
     remainIRA: { dir:  1, get: r => r.totals?.terminal?.ira ?? Infinity },
     // Integer year, and absent on most rows - a row that never breaks even sorts last, never first.
-    breakEven: { dir:  1, get: r => r._convBEYear ?? 9999 },
+    breakEven: { dir:  1, get: r => r._convBEYear ?? BE_NEVER },
     // How unequal the three after-tax buckets are. Smaller is more freedom to draw from whichever is
     // tax-advantaged in a given year, which is why `taxflex` ranks on it ascending.
     spread:    { dir:  1, get: (r, rate) => afterTaxBucketSpread(r, rate) },
@@ -6101,7 +6158,7 @@ function optimizeConversionAmount(baseInputs, strategyOverrides = {}, metric = '
     const totalIRA = (baseInputs.IRA1 || 0) + (baseInputs.IRA2 || 0);
     if (totalIRA <= 0) return { optConv: 0, optResult: null };
 
-    const STEP = 25000;
+    const STEP = OPTIMIZER_GRIDS.convStep;
     let bestScore = -Infinity, bestConv = 0, bestResult = null;
 
     const score = (res) => {
@@ -6158,7 +6215,7 @@ function _conversionHelpsAtRate(baseInputs, strategyOverrides, rate, spendableWe
         return baselineScoreOf(res, rate, spendableWeight);
     };
     const baseScore = scoreOf(0);
-    const STEP = 25000;
+    const STEP = OPTIMIZER_GRIDS.convStep;
     for (let c = STEP; c <= totalIRA; c += STEP) {
         const s = scoreOf(Math.min(c, totalIRA));
         if (s != null && s > baseScore) return true;   // early exit: one winner is enough
@@ -6181,9 +6238,9 @@ function _conversionHelpsAtRate(baseInputs, strategyOverrides, rate, spendableWe
 // Returns { rate, optConv, gain } with optConv/gain refined by the real $25k sweep at the found
 // rate, or null when no rate up to maxRate makes conversions worthwhile (itself a real finding).
 function breakEvenHeirsRate(baseInputs, strategyOverrides = {}, opts = {}) {
-    const minRate    = opts.minRate ?? 0.05;
-    const maxRate    = opts.maxRate ?? 0.75;
-    const resolution = opts.resolution ?? 0.01;
+    const minRate    = opts.minRate ?? BREAK_EVEN_SEARCH.minRate;
+    const maxRate    = opts.maxRate ?? BREAK_EVEN_SEARCH.maxRate;
+    const resolution = opts.resolution ?? BREAK_EVEN_SEARCH.resolution;
     const weight     = opts.spendableWeight ?? SPENDABLE_WEIGHT;
     const helps = (r) => _conversionHelpsAtRate(baseInputs, strategyOverrides, r, weight);
 
@@ -6233,7 +6290,7 @@ function bestTimeLimitedConversion(baseInputs, strategyOverrides = {}, opts = {}
     if (totalIRA <= 0) return null;
     const rate   = opts.futureIRARate ?? 0;
     const weight = opts.spendableWeight ?? SPENDABLE_WEIGHT;
-    const coarse = opts.coarseSteps ?? 4;
+    const coarse = opts.coarseSteps ?? BREAK_EVEN_SEARCH.coarseSteps;
 
     const probe = simulate({ ...baseInputs, ...strategyOverrides, extraConversionAmount: 0 });
     const n = probe.log.length;
@@ -6280,11 +6337,11 @@ function bestTimeLimitedConversion(baseInputs, strategyOverrides = {}, opts = {}
 
     // Refine on the real $25k grid around the winner, re-testing neighboring cutoffs since the
     // best cutoff shifts as the amount moves.
-    const span = Math.max(25000, Math.round(totalIRA / 16));
+    const span = Math.max(OPTIMIZER_GRIDS.convStep, Math.round(totalIRA * OPTIMIZER_GRIDS.convRefineFraction));
     const coarseBest = { ...best };
-    const lo = Math.max(25000, coarseBest.amount - span);
+    const lo = Math.max(OPTIMIZER_GRIDS.convStep, coarseBest.amount - span);
     const hi = Math.min(totalIRA, coarseBest.amount + span);
-    for (let a = Math.ceil(lo / 25000) * 25000; a <= hi; a += 25000) {
+    for (let a = Math.ceil(lo / OPTIMIZER_GRIDS.convStep) * OPTIMIZER_GRIDS.convStep; a <= hi; a += OPTIMIZER_GRIDS.convStep) {
         for (let cut = Math.max(1, coarseBest.cut - cutStride); cut <= Math.min(n, coarseBest.cut + cutStride); cut++) {
             consider(a, cut);
         }
@@ -6316,7 +6373,7 @@ function bestTimeLimitedConversion(baseInputs, strategyOverrides = {}, opts = {}
 // Roth rather than avoiding a terminal tax bill. "No IRA left at the end" does not mean "no
 // conversion opportunity."
 function lowestBreakEvenHeirsRate(baseInputs, candidates = [], opts = {}) {
-    const resolution = opts.resolution ?? 0.01;
+    const resolution = opts.resolution ?? BREAK_EVEN_SEARCH.resolution;
     const weight = opts.spendableWeight ?? SPENDABLE_WEIGHT;
     const usable = [...candidates].sort((a, b) => (b.terminalIRA ?? 0) - (a.terminalIRA ?? 0));
 
@@ -6412,6 +6469,10 @@ const OPTIMIZER_GRIDS = {
     // whether anyone sees it.
     split:    SPLIT_VECTORS,
     irmaaTiers:   [0, 1, 2, 3, 4],
+    // The conversion search's own grid: the step optimizeConversionAmount walks, and the fraction of
+    // the IRA the time-limited refine spans around its coarse winner.
+    convStep:            25000,
+    convRefineFraction:  1 / 16,
     acaMultiples: [200, 250, 300, 400],
 };
 
@@ -6769,7 +6830,7 @@ function calculateInflationAdjustedWithdrawal(principal, growthRate, inflationRa
     if (principal <= 0) return 0;
 
     // Special case: when real growth is zero
-    if (Math.abs(realRate) < 0.0001) {
+    if (Math.abs(realRate) < EPS_REAL_RATE_ZERO) {
         return principal / years;
     }
 
@@ -6953,7 +7014,7 @@ function planNameDefaults({ lastPlanName, lastFileName } = {}) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, _conversionHelpsAtRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, sweepOptions, describeSelection, planRuleTwin, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit, growthFactor, applyGrowth, combineGains, applyWithdrawals, calculateWithdrawals, calculateAmortizedWithdrawal, getRMDPercentage, calculateInflationAdjustedWithdrawal, optimizeSpendDown, timingShift, resolveStartAge, gkSpendStable, KNOWN_STRATEGIES, assertKnownStrategy, GK_DEFAULTS, FUNDED_TOLERANCE, minSpendFloor, BASIS_STEP_UP_FALLBACK, RAIL_PRESETS, GK_CPI_RAISE_CAP, GK_NO_CUT_FINAL_YEARS, portfolioReturnOf, snapshotResume, resumeInputs };
+    module.exports = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, _conversionHelpsAtRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, sweepOptions, describeSelection, planRuleTwin, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit, growthFactor, applyGrowth, combineGains, applyWithdrawals, calculateWithdrawals, calculateAmortizedWithdrawal, getRMDPercentage, calculateInflationAdjustedWithdrawal, optimizeSpendDown, timingShift, resolveStartAge, gkSpendStable, KNOWN_STRATEGIES, assertKnownStrategy, GK_DEFAULTS, FUNDED_TOLERANCE, minSpendFloor, BASIS_STEP_UP_FALLBACK, BE_NEVER, BREAK_EVEN_SEARCH, RAIL_PRESETS, GK_CPI_RAISE_CAP, GK_NO_CUT_FINAL_YEARS, portfolioReturnOf, snapshotResume, resumeInputs };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -6961,7 +7022,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const OPTIMIZER_GRIDS` is a global LEXICAL binding and is not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, _conversionHelpsAtRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, sweepOptions, describeSelection, planRuleTwin, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit, growthFactor, applyGrowth, combineGains, applyWithdrawals, calculateWithdrawals, calculateAmortizedWithdrawal, getRMDPercentage, calculateInflationAdjustedWithdrawal, optimizeSpendDown, timingShift, resolveStartAge, gkSpendStable, KNOWN_STRATEGIES, assertKnownStrategy, GK_DEFAULTS, FUNDED_TOLERANCE, minSpendFloor, BASIS_STEP_UP_FALLBACK, RAIL_PRESETS, GK_CPI_RAISE_CAP, GK_NO_CUT_FINAL_YEARS, portfolioReturnOf, snapshotResume, resumeInputs };
+    window.OptimizerCore = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, _conversionHelpsAtRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, sweepOptions, describeSelection, planRuleTwin, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit, growthFactor, applyGrowth, combineGains, applyWithdrawals, calculateWithdrawals, calculateAmortizedWithdrawal, getRMDPercentage, calculateInflationAdjustedWithdrawal, optimizeSpendDown, timingShift, resolveStartAge, gkSpendStable, KNOWN_STRATEGIES, assertKnownStrategy, GK_DEFAULTS, FUNDED_TOLERANCE, minSpendFloor, BASIS_STEP_UP_FALLBACK, BE_NEVER, BREAK_EVEN_SEARCH, RAIL_PRESETS, GK_CPI_RAISE_CAP, GK_NO_CUT_FINAL_YEARS, portfolioReturnOf, snapshotResume, resumeInputs };
 }
 
 

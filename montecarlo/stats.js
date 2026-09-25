@@ -4,6 +4,17 @@
 // modes their own AR(1) inflation; null remains supported and simply leaves the fan's inflation half
 // empty.
 // Returns { equity: {min,p10,p50,p90,max}, inflation: {min,p10,p50,p90,max} | null }
+// The two percentile sets this file draws, and the one piece of index arithmetic they share. They are
+// DIFFERENT sets on purpose - the input fan shows the extremes of the draw, the outcome bands do not -
+// so they are two named lists rather than one shared PERCENTILES.
+const FAN_PERCENTILES     = Object.freeze([0.10, 0.50, 0.90]);
+const OUTCOME_PERCENTILES = Object.freeze([0.05, 0.25, 0.50, 0.75, 0.95]);
+// The percentile value of an already-sorted column. floor()-1 keeps the index inside the array and
+// clamps at 0, which is what every call site did by hand five times over.
+function pctOf(sortedCol, numPaths, q) {
+    return sortedCol[Math.max(0, Math.floor(numPaths * q) - 1)];
+}
+
 function computeInputFan(equityBank, inflationBank, numPaths, years) {
     const col = new Float64Array(numPaths);
 
@@ -13,9 +24,9 @@ function computeInputFan(equityBank, inflationBank, numPaths, years) {
             for (let p = 0; p < numPaths; p++) col[p] = bank[p * years + y];
             col.sort();
             min.push(col[0]);
-            p10.push(col[Math.max(0, Math.floor(numPaths * 0.10) - 1)]);
-            p50.push(col[Math.max(0, Math.floor(numPaths * 0.50) - 1)]);
-            p90.push(col[Math.max(0, Math.floor(numPaths * 0.90) - 1)]);
+            p10.push(pctOf(col, numPaths, FAN_PERCENTILES[0]));
+            p50.push(pctOf(col, numPaths, FAN_PERCENTILES[1]));
+            p90.push(pctOf(col, numPaths, FAN_PERCENTILES[2]));
             max.push(col[numPaths - 1]);
         }
         return { min, p10, p50, p90, max };
@@ -46,11 +57,11 @@ function computePercentiles(paths, years, numPaths) {
         }
         col.sort();
         // Use Math.floor so indices stay in bounds; clamp to 0.
-        out.p5[y]  = col[Math.max(0, Math.floor(numPaths * 0.05) - 1)];
-        out.p25[y] = col[Math.max(0, Math.floor(numPaths * 0.25) - 1)];
-        out.p50[y] = col[Math.max(0, Math.floor(numPaths * 0.50) - 1)];
-        out.p75[y] = col[Math.max(0, Math.floor(numPaths * 0.75) - 1)];
-        out.p95[y] = col[Math.max(0, Math.floor(numPaths * 0.95) - 1)];
+        out.p5[y]  = pctOf(col, numPaths, OUTCOME_PERCENTILES[0]);
+        out.p25[y] = pctOf(col, numPaths, OUTCOME_PERCENTILES[1]);
+        out.p50[y] = pctOf(col, numPaths, OUTCOME_PERCENTILES[2]);
+        out.p75[y] = pctOf(col, numPaths, OUTCOME_PERCENTILES[3]);
+        out.p95[y] = pctOf(col, numPaths, OUTCOME_PERCENTILES[4]);
     }
     return out;
 }

@@ -68,7 +68,7 @@ function buildPathInputs(banks, p, years, baseInputs, mode) {
         const accts = ['IRA1', 'IRA2', 'Brokerage', 'Roth1', 'Roth2'];
         returnSequencePerAccount = {};
         for (const acct of accts) {
-            const eqPct   = (baseInputs[`comp_${acct}_ratio`] ?? 60) / 100;
+            const eqPct   = (baseInputs[`comp_${acct}_ratio`] ?? MC_DEFAULTS.equityRatioPct) / 100;
             const intlPct = (baseInputs[`comp_${acct}_intl`]  ?? 0)  / 100;
             const domEq   = eqPct * (1 - intlPct);
             const intl    = eqPct * intlPct;
@@ -215,7 +215,7 @@ function buildBanks(cfg, rng, mode) {
     if (mode === MC_MODE.BOOTSTRAP) {
         // Multi-asset block bootstrap: synchronized draws from equity, bonds, intl, inflation (1970-2025 window).
         multiAssetBank = bootstrapMultiAssetBank(rng, numPaths, years);
-        const bearFraction = (cfg.bearFraction ?? 25) / 100;
+        const bearFraction = (cfg.bearFraction ?? MC_DEFAULTS.bearFractionPct) / 100;
         if (bearFraction > 0) applyBearStartOverlay(multiAssetBank, rng, numPaths, years, bearFraction);
         scenarioBank = multiAssetBank.equity;  // used for equity min/max/median reporting
         // Single scan: collect min/max for all asset classes and inflation simultaneously.
@@ -259,7 +259,7 @@ function buildBanks(cfg, rng, mode) {
         inflationStats = { min: infMin, cagr: infCAGR, max: infMax };
     } else if (mode === MC_MODE.STRESS) {
         // Deterministic SoRR stress: N worst historical starting sequences.
-        const stressCount = cfg.stressCount ?? 20;
+        const stressCount = cfg.stressCount ?? MC_DEFAULTS.stressCount;
         // cfg.stressWindow selects WHICH start years count as worst: a number ranks on that one
         // window, 'combined' unions the worst of every window, 'all' takes the whole record. It
         // is not a splice point, and it no longer decides early vs late - see buildStressBank.
@@ -300,8 +300,8 @@ function buildBanks(cfg, rng, mode) {
         // Inflation draws come from their OWN stream, keyed by INFLATION_STREAM_XOR (prng.js, where
         // the reason is written down). With a separate stream, GBM's returns are bit-identical to
         // what this engine produced before variable inflation existed, whatever the knobs say.
-        const infRng           = mulberry32((cfg.seed ?? 42) ^ INFLATION_STREAM_XOR);
-        const inflationTarget  = cfg.inflationRate ?? 0.03;
+        const infRng           = mulberry32((cfg.seed ?? MC_DEFAULTS.seed) ^ INFLATION_STREAM_XOR);
+        const inflationTarget  = cfg.inflationRate ?? MC_DEFAULTS.inflationRate;
         const inflationPersist = cfg.inflationPersistence ?? INFLATION_AR1_PERSISTENCE;
         const inflationShockSd = cfg.inflationShockSd     ?? INFLATION_AR1_SHOCK_SD;
         const inflationCorr    = cfg.inflationReturnCorr  ?? INFLATION_RETURN_CORR;
@@ -413,7 +413,7 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
                 result = simulate({ ...baseInputs, ...pathInputs });
             } catch (e) {
                 // Treat a crashed simulation as immediate ruin
-                ruinYears[p] = baseInputs.startYear ?? 2026;
+                ruinYears[p] = baseInputs.startYear ?? new Date().getFullYear();
                 metricPerPath[p] = -Infinity;
                 ruinCount++;
                 continue;
@@ -666,14 +666,14 @@ async function runJob(cfg, hooks) {
     const t0 = performance.now();
     const { years, variations } = cfg;
     const simulationMode = cfg.simulationMode;
-    const rng = mulberry32(cfg.seed ?? 42);
+    const rng = mulberry32(cfg.seed ?? MC_DEFAULTS.seed);
 
     // Stress runs in BOTH modes. It builds its own bank from the worst historical decades
     // (buildStressBank in runPass), so it never depended on the main pass being Historical - it was
     // only ever gated that way by association. Choosing Synthetic returns for the projection is not
     // a reason to hide the question "would this plan have survived the worst of the real record".
     const willRunStress = true;
-    const stressCountEstimate = cfg.stressCount ?? 20;
+    const stressCountEstimate = cfg.stressCount ?? MC_DEFAULTS.stressCount;
     // cfg.stressOnly: refresh just the stress pass against the edited plan and leave the main sweep
     // to the caller. The main pass is ~numPaths x variations sims (measured 27s / 72,000 sims on the
     // default scenario); stress is stressCount x 1, so this is the only pass cheap enough to re-run

@@ -187,7 +187,7 @@ async function runRailsJob(cfg, hooks) {
     const tBanks = performance.now();
     const bankOf = (paths, seedShift) => {
         const banks = _railsMC.buildBanks({ ...cfg, years, numPaths: paths, baseInputs: solveBase },
-                                          mulberry32((cfg.seed ?? 42) + seedShift), mode);
+                                          mulberry32((cfg.seed ?? MC_DEFAULTS.seed) + seedShift), mode);
         const inputs = new Array(banks.numPaths);
         for (let p = 0; p < banks.numPaths; p++) inputs[p] = _railsMC.buildPathInputs(banks, p, years, solveBase, mode);
         return inputs;

@@ -151,7 +151,7 @@ function recordMCTiming(wallMs, workerMs, numPaths, numVariations) {
 // answer. Takes ~1/numPaths of a full run.
 function calibrateMCMs(cfg) {
     const { mu, sigma, seed, years, variations } = cfg;
-    const rng = mulberry32(seed ?? 42);
+    const rng = mulberry32(seed ?? MC_DEFAULTS.seed);
     const logDrift = mu - 0.5 * sigma * sigma;
 
     // Draw the way the selected mode draws. This is only a timing probe, so the difference is

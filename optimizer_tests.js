@@ -1130,6 +1130,22 @@ function runTests() {
 			'the Adjust box restates GK_DEFAULTS.adjPct as a percentage');
 	})();
 
+	// P133e. The survival legend prints the thresholds the code actually shades on.
+	//
+	// The swatch legend is static markup and survivalBand() is code, and the comment above that
+	// function has been claiming the two are "kept in step" with nothing checking it. Both numbers now
+	// come from SURVIVAL_BANDS, so this reads them back out of the rendered legend.
+	(function survivalLegendMatchesTheBands() {
+		if (typeof SURVIVAL_BANDS === 'undefined') return;   // shared suite; the Optimizer page only
+		const legend = document.getElementById('mc-survival-legend');
+		if (!legend) return;
+		const pcts = (legend.textContent.match(/\d+(?=\s*(?:–|-|%))/g) || []).map(Number);
+		assertEqual(pcts.includes(SURVIVAL_BANDS.ok * 100), true,
+			`the legend names the ok threshold ${SURVIVAL_BANDS.ok * 100}% (found ${pcts.join(', ')})`);
+		assertEqual(pcts.includes(SURVIVAL_BANDS.warn * 100), true,
+			`the legend names the warn threshold ${SURVIVAL_BANDS.warn * 100}% (found ${pcts.join(', ')})`);
+	})();
+
 	// P133d. Every mode a menu can send is a mode the code recognizes.
 	//
 	// The engine now THROWS on a key it does not dispatch, for the strategy, the spend rule and the

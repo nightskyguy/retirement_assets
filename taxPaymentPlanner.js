@@ -133,6 +133,19 @@ const TaxPaymentPlanner = (() => {
     CURRENT_YEAR: 0.90, PRIOR_YEAR: 1.00, PRIOR_YEAR_HIGH_INCOME: 1.10, HIGH_INCOME_AGI: 150000,
   });
 
+  // The April 15 reference every cost in this file is carried to, as a month index. The index runs
+  // 1..13 with January of the following year as 13, so April of the following year is 16, and
+  // `APRIL_NEXT_YEAR - m` is the number of months from an action in month m to that reference.
+  const APRIL_NEXT_YEAR = 16;
+
+  // Milliseconds in a day, for the date arithmetic below. YEAR_MS, its sibling, is declared beside
+  // the one function that uses it.
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  // A replacement landing on or after this day of December gets a warning: custodians are running
+  // year-end processing and staffing is thin. A practical caution, not a rule from any authority.
+  const DEC_YEAR_END_WARN_DAY = 24;
+
   // Gap between an RMD and a same-month Roth conversion. The RMD must be distributed
   // before the conversion; this leaves room for it to settle first.
   const ORDERING_BUFFER_DAYS = 7;
@@ -487,7 +500,7 @@ const TaxPaymentPlanner = (() => {
   }
 
   function iraOcFactor(rmdMonth) {
-    return (16 - Math.max(1, Math.min(12, rmdMonth))) / 12;
+    return (APRIL_NEXT_YEAR - Math.max(1, Math.min(12, rmdMonth))) / 12;
   }
 
   // ── Business-day arithmetic ────────────────────────────────────────────────
@@ -576,7 +589,7 @@ const TaxPaymentPlanner = (() => {
     const restore = nextBusinessDay(raw);
     // The 45-day target can absorb at most a few days of nudge, so the statutory ceiling
     // is never at risk. Assert it rather than assume it.
-    const elapsed = Math.round((restore - conv) / 86400000);
+    const elapsed = Math.round((restore - conv) / DAY_MS);
     if (elapsed > ROLLOVER_DEADLINE_DAYS) {
       throw new Error(`restore date ${elapsed} days after conversion exceeds the ${ROLLOVER_DEADLINE_DAYS}-day rollover window`);
     }
@@ -1590,7 +1603,7 @@ const TaxPaymentPlanner = (() => {
               : '',
             // The date itself is left alone; the 60-day window is what it is. This just warns
             // that the last week of December is a bad time to rely on a custodian transfer.
-            (restoreDate.year === yr && restoreDate.month === 12 && restoreDate.day >= 24)
+            (restoreDate.year === yr && restoreDate.month === 12 && restoreDate.day >= DEC_YEAR_END_WARN_DAY)
               ? `Heads up: this lands in the last week of December, when custodians are running year-end processing and staffing is thin. Move the transfer earlier in the window rather than up against this date.`
               : '',
           ].filter(Boolean),
@@ -2186,7 +2199,7 @@ const TaxPaymentPlanner = (() => {
   function buildPlanCost(plan, p, yr) {
     const r       = p.portfolioRate;
     const hysaNet = p.hysaGross * (1 - p.marginalOrdRate);
-    const carry   = m => Math.max(0, 16 - m) / 12;
+    const carry   = m => Math.max(0, APRIL_NEXT_YEAR - m) / 12;
     const frame   = a => a.date.month + (a.date.year > yr ? 12 : 0);
 
     let withholdOC = 0, estimateOC = 0, rmdDeferral = 0, rothGrowth = 0;
@@ -2316,7 +2329,7 @@ const TaxPaymentPlanner = (() => {
     if (plans.Q && totalTax > 0) {
       const q  = plans.Q.actions.filter(a => a.type === T.Q_FED || a.type === T.Q_STATE);
       const oc = q.reduce((sum, a) =>
-        sum + a.amount * r * Math.max(0, 16 - (a.date.month + (a.date.year > yr ? 12 : 0))) / 12, 0);
+        sum + a.amount * r * Math.max(0, APRIL_NEXT_YEAR - (a.date.month + (a.date.year > yr ? 12 : 0))) / 12, 0);
       const cg = extraCg(totalTax);
       brokerage = { oc, cg, total: oc + cg };
     }

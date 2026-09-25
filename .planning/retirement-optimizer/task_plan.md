@@ -97,7 +97,7 @@ run over the plan bank before and after, diffed field by field.
 | `P133b` | 1.3 in the engine and UI: `GK_DEFAULTS`, `FUNDED_TOLERANCE`, `IRA_GOAL_UNDERSHOOT`, `CYCLIC_DEPLETION_FRACTION`, `BETR_FLAG_BAND`, `GAP_FILL_DEFAULT_WEIGHTS`, `TAX_RATE_SEED`, `CEILING_RATE_PLACEHOLDERS`, `SS_FAIL_NEVER_BEFORE`, `GROWTH_FALLBACK`, `BASIS_STEP_UP_FALLBACK`, `minSpendFloor()`, and `defaultNumOf(id)` in the UI so the twelve `|| 2.8`-style fallbacks read the control instead of restating its `value=` | DONE v11.1928: 769,128 values identical, 526 node, 491 in-page, badge green. Two findings, see findings.md |
 | `P133c` | 1.4 solver knobs: `convStep` and `convRefineFraction` into `OPTIMIZER_GRIDS`, one `BREAK_EVEN_SEARCH`, and six epsilons that keep six DIFFERENT values because a dollar and a rate cannot share one: `EPS_DOLLARS`, `NET_TO_GROSS_RATE_FLOOR`, `EPS_GROWTH_ZERO`, `EPS_REAL_RATE_ZERO`, `EPS_EXACT`, `EPS_TAX_SHARE`, `EPS_SELECTION`. Plus `BE_NEVER`, `GK_SHAPE_CACHE_MAX`, `THIRD_PASS_BROKERAGE_ITER_CAP`, the two refine-iteration caps, `SUGGEST_CEILING_*`, `RAILS_MAX_SOLVE_ROUNDS` and the SS bisection pair in `taxengine.js` | DONE v11.192a: 769,128 values identical, 526/47 node, 491 in-page, badge green |
 | `P133d` | 1.5 enums: `STRATEGY` (with `KNOWN_STRATEGIES` derived from it), `SPEND_RULE` + `assertKnownSpendRule` at `simulate()`, `MC_MODE` + `assertKnownMCMode` at `runJob`, `STRESS_WINDOW`, `JOB_KIND` and `MC_SCOPE`, `ROTH_GAP_FILL`. Comparisons converted, not data literals: 34 mode comparisons across the five Monte Carlo files plus the engine's dispatch and log rows. `EMPTY_CELL` deferred to `P133f` with the rest of the UI | DONE v11.192c: 769,128 values identical, 528 node (+2 guards), 495 in-page (+4), badge green |
-| `P133e` | 1.3 and 1.6 in the Monte Carlo files and the planner: the engine-side fallbacks, `DEFAULT_SEED`, `STRESS_DEFAULTS`, `PERCENTILES`, `SURVIVAL_BANDS`, `APRIL_NEXT_YEAR`, `DAY_MS`, the due-day constants | |
+| `P133e` | 1.3 and 1.6 in the Monte Carlo files and the planner: `MC_DEFAULTS` in `prng.js`, read by the engine's eight fallbacks AND by the page's `MC_PARAMS`; `FAN_PERCENTILES` / `OUTCOME_PERCENTILES` and one `pctOf()` helper; `SURVIVAL_BANDS` with the legend pinned to it; `APRIL_NEXT_YEAR`, `DAY_MS`, `DEC_YEAR_END_WARN_DAY` in the planner. The `?? 2026` start-year fallbacks now read the clock | DONE v11.192e: 769,128 values identical, 528/62 node, 497 in-page. Two report claims corrected, see the notes below |
 | `P133f` | 1.6 UI: one `TIMING` block, the input clamps in `MC_PARAMS` shape, `minNetWorth` | |
 | `P133g` | 1.6 release tokens: one `ASSET_VERSION` appended by a small loader, so a release edits one line instead of the four sites the version-bump memory names | |
 
@@ -107,6 +107,22 @@ declared in `montecarlo/mc_tab.js`, and `worker.js` imports `taxengine.js`, `med
 `optimizer_core.js`, `prng.js`, `stats.js`, `historical_returns.js`, `mc_engine.js` and
 `rails_engine.js` - never `mc_tab.js`, which is UI. So `P133e` needs a file both sides load, and the
 specs move there with `mc_tab.js` reading them rather than owning them.
+
+**Two more of the review's 1.3 claims did not survive checking** (`P133e`, 2026-09-25):
+
+- *"the percentile list, twice"* in `montecarlo/stats.js` is TWO DIFFERENT lists: the input fan draws
+  10/50/90 with the extremes beside them, the outcome bands draw 5/25/50/75/95. One shared
+  `PERCENTILES` would have been wrong. Named separately, and the index arithmetic they did share -
+  `col[Math.max(0, Math.floor(numPaths * q) - 1)]`, written out five times - is now `pctOf()`.
+- The stress *"10 x8"* is two different numbers wearing one value. The COUNT a caller falls back to
+  when handed something that is not a positive integer is 10; the count a JOB defaults to is 20. A
+  single `STRESS_DEFAULTS.count` would have silently changed one of them, so `MC_DEFAULTS` carries
+  `stressCountFallback` and `stressCount` as separate fields.
+
+**And a defect of the same class as finding #7, found while naming:** `base.startYear ?? 2026`, in the
+Monte Carlo files, froze the fallback start year the way `Retirement_Projection.html` froze May 2026.
+The engine's own rule is `inputs.startInYear || new Date().getFullYear()`, so the fallback disagreed
+with the engine from 2027 on. It reads the clock now, which is identical today and correct later.
 
 **The enum rationale needs restating, because a frozen object does not deliver it.** The report sells
 1.5 as "a typo then throws instead of falling into the baseline `else`". A misspelled PROPERTY on a

@@ -9,7 +9,7 @@ let _mcResults           = null;
 let _legendIsolatedKey   = null;  // tracks legend click-to-isolate state (main chart)
 let _legendIsolatedKeyStress = null; // same, for the stress chart (separate — charts render side by side)
 let _mcSelected          = new Set(); // indices of variations currently on chart
-let _mcStartYear         = 2026;      // cached from getInputs() at run time
+let _mcStartYear         = new Date().getFullYear();   // cached from getInputs() at run time
 let _lastMCHash          = null;
 // The sweep-only half of that hash, captured at the same moment. The stale banner keys off this one
 // so the two Stress Test controls, which the sweep no longer depends on, cannot raise it.
@@ -46,12 +46,12 @@ const MC_PARAMS = {
     'mc-num-paths':     { dflt: 400, min: 100, max: 5000 },
     'mc-mu':            { dflt: 7,   min: 0,   max: 20, int: false },
     'mc-sigma':         { dflt: 12,  min: 1,   max: 40, int: false },
-    'mc-seed':          { dflt: 42,  min: 0,   max: Number.MAX_SAFE_INTEGER },
+    'mc-seed':          { dflt: MC_DEFAULTS.seed, min: 0, max: Number.MAX_SAFE_INTEGER },
     // Upper bound is the whole historical record; buildStressBank caps it again at the number of
     // start years the chosen window actually leaves available. On the default Combined window this
     // is per window, so 20 produces a union of roughly 40 distinct start years.
-    'mc-stress-count':  { dflt: 20,  min: 3,   max: 98 },
-    'mc-bear-fraction': { dflt: 25,  min: 0,   max: 50, int: false },
+    'mc-stress-count':  { dflt: MC_DEFAULTS.stressCount, min: 3, max: 98 },
+    'mc-bear-fraction': { dflt: MC_DEFAULTS.bearFractionPct, min: 0, max: 50, int: false },
     // Synthetic inflation. Defaults are the 1948-2025 CPI fit that prng.js ships; see the P23m
     // table in .planning/retirement-optimizer/findings.md for the fit and why that window.
     'mc-inflation-persistence':   { dflt: 0.67, min: 0,     max: 0.95, int: false },
@@ -484,7 +484,7 @@ function simCountText(numPaths, numVariations, years, planOnly = false) {
 function mcPlanYears(base) {
     if (!base) return 0;
     return Math.max(base.birthyear1 + base.die1, base.birthyear2 + base.die2)
-         - (base.startYear ?? 2026) + 1;
+         - (base.startYear ?? new Date().getFullYear()) + 1;
 }
 
 // The ranking mode the Stress window selector is on: a number, 'combined' or 'all'. The <select>
@@ -633,7 +633,7 @@ function runMonteCarlo(scope) {
     const stressWindow   = stressWindowMode();
     const bearFraction   = _mcNum('mc-bear-fraction');
 
-    _mcStartYear = base.startYear ?? 2026;
+    _mcStartYear = base.startYear ?? new Date().getFullYear();
     _mcBase = base;
     const allVariations = compareVariations(base);
     const years = mcPlanYears(base);
@@ -775,7 +775,7 @@ async function runMCExperiment() {
     const sigma  = _mcNum('mc-sigma') / 100;
     const years  = mcPlanYears(base);
     const planVar = planOnlyVariations(compareVariations(base), base)[0];
-    _mcStartYear = base.startYear ?? 2026;
+    _mcStartYear = base.startYear ?? new Date().getFullYear();
 
     const rows = [];
     let lastMsg = null;
@@ -946,7 +946,7 @@ function refreshMCStressOnly() {
     const base = getInputs();
     // The stress chart's x-axis needs these, and a nerdknob user can reach a stress result without
     // ever running the full sweep, so they cannot be left to runMonteCarlo() to set.
-    _mcStartYear = base.startYear ?? 2026;
+    _mcStartYear = base.startYear ?? new Date().getFullYear();
     const stressVariations = planOnlyVariations(compareVariations(base), base);
     const years = mcPlanYears(base);
 
@@ -1368,8 +1368,11 @@ function renderMCStressMetrics(stress) {
 // tile and the plan headline all read from here, so a reader who has learned the scale on one of
 // them has learned it on all of them. bg is for filled chips and row shading, fg for text on the
 // page background. Kept in step with the static swatch legend in retirement_optimizer.html.
+// The two thresholds the three bands are cut at. The swatch legend in retirement_optimizer.html
+// prints them, and an in-page test reads both, so the page and this cannot drift apart.
+const SURVIVAL_BANDS = Object.freeze({ ok: 0.90, warn: 0.75 });
 function survivalBand(rate) {
-    const ok = rate >= 0.90, warn = rate >= 0.75;
+    const ok = rate >= SURVIVAL_BANDS.ok, warn = rate >= SURVIVAL_BANDS.warn;
     return {
         bg: ok ? '#d4edda' : warn ? '#fff3cd' : '#f8d7da',
         fg: ok ? '#1a7f37' : warn ? '#8a6d00' : '#c0392b',

@@ -1471,11 +1471,11 @@ function buildSimYearLogRecord(p) {
         timing: (p.convLabel ?? 'none') + '/' + (p.wdLabel ?? 'Late'),
         // The spend rule - Guardrails (GK-style) or Risk-based - filled whenever one is on, under
         // any strategy. One pair of columns for both: a year is adjusted by one rule or none.
-        ruleSpend: (p.spendRule === 'gk' || p.spendRule === 'rbg') ? p.spendGoal : null,
-        ruleAdj:   (p.spendRule === 'gk' || p.spendRule === 'rbg') ? (p.gkAdjLabel || '—') : null,
+        ruleSpend: (p.spendRule === SPEND_RULE.GK || p.spendRule === SPEND_RULE.RBG) ? p.spendGoal : null,
+        ruleAdj:   (p.spendRule === SPEND_RULE.GK || p.spendRule === SPEND_RULE.RBG) ? (p.gkAdjLabel || '—') : null,
         // Where the rule has put spending against the plan's own path (the shape: the spend goal
         // with Spend Delta and every year's inflation, no rule): -0.10 is 10% under it.
-        'vsPlan%': (p.spendRule === 'gk' || p.spendRule === 'rbg') && p.shapeGoal > 0 ? p.spendGoal / p.shapeGoal - 1 : null,
+        'vsPlan%': (p.spendRule === SPEND_RULE.GK || p.spendRule === SPEND_RULE.RBG) && p.shapeGoal > 0 ? p.spendGoal / p.shapeGoal - 1 : null,
         // What the year was actually handed: this year's inflation, the compounded inflation the
         // row's nominal dollars carry, and this year's market return. Constant in a deterministic
         // run and different every year under Monte Carlo, which is the point - a replayed path is
@@ -2317,11 +2317,35 @@ function resolveSpendTarget(sim, yr) {
         : 0;
 }
 
+// The two spend rules, and the absence of one. A rule owns the SPEND; a strategy owns the DRAW.
+const SPEND_RULE = Object.freeze({
+    NONE: '',      // the plan's own goal, no rule
+    GK:   'gk',    // Guyton-Klinger: band and step, measured against the plan's own path (P132j)
+    RBG:  'rbg',   // risk-based: spending follows the chance of success, off the rails table
+});
+const KNOWN_SPEND_RULES = Object.freeze(Object.values(SPEND_RULE));
+
+// Where a Roth draw sits in the gap fill. Research-only, no UI and no URL parameter; the two
+// names are validated at the site that reads them, because anything else has to mean "leave
+// today's behavior alone" rather than silently pick the other position.
+const ROTH_GAP_FILL = Object.freeze({
+    CASH_FIRST: 'fillCashThenRoth',   // Cash, then Roth, then Brokerage
+    ROTH_FIRST: 'fillRothThenCash',   // Roth ahead of Cash
+});
+// Same reasoning as assertKnownStrategy: an unrecognized rule used to mean "no rule", so a
+// misspelled one ran the plan with its guardrails silently switched off - and a plan whose spending
+// is supposed to react to the market, running without reacting, is a different plan.
+function assertKnownSpendRule(inputs) {
+    const r = inputs ? inputs.spendRule : undefined;
+    if (r === undefined || r === null || KNOWN_SPEND_RULES.includes(r)) return;
+    throw new Error(`unknown spendRule '${r}'`);
+}
+
 // P103b5b, P126. True when the Guyton-Klinger spend adjustment - Guardrails - governs this run's
 // spend. It is only ever the rule, `spendRule: 'gk'`, under whatever strategy draws; that separation
 // is what lets any strategy, a schedule included, own the DRAW while the rule owns the SPEND.
 function _usesGKSpendRule(inputs) {
-    return inputs.spendRule === 'gk';
+    return inputs.spendRule === SPEND_RULE.GK;
 }
 // P132j. The plan's own path for the GK-style rule to measure against: the same plan with no rule,
 // on its assumed return and inflation (never a Monte Carlo path's), one row per plan year with the
@@ -2347,13 +2371,13 @@ function _gkShapeOf(inputs) {
 // P132. The risk-based rule: spending follows the chance of success, read off a table the rails
 // solver produced for this plan (`inputs.rbgRails`, railsRuleTable in montecarlo/rails_engine.js).
 function _usesRBGSpendRule(inputs) {
-    return inputs.spendRule === 'rbg';
+    return inputs.spendRule === SPEND_RULE.RBG;
 }
 // Either rule: the places that care only that SOMETHING other than the plan's own path sets the
 // year's spending - the bracket ceiling bypass, the log columns, Spend Delta's timing, the search
 // filter - read this one.
 function _usesSpendRule(inputs) {
-    return inputs.spendRule === 'gk' || inputs.spendRule === 'rbg';
+    return inputs.spendRule === SPEND_RULE.GK || inputs.spendRule === SPEND_RULE.RBG;
 }
 // The rule's row for plan year y, or null when the table has none (no table, a year before the
 // first solve, or a year the page never solved for this plan).
@@ -3181,7 +3205,7 @@ function fillSpendingGap(sim, yr) {
     // VALIDATED AGAINST THE KNOWN VALUES, not for truthiness: with `|| null` a typo such as
     // 'fillCashThenRother' fell through to the Roth-first branch and silently modeled the other
     // mode. Anything unrecognized means "leave today's behavior alone".
-    const _rothPos = (inputs.rothGapFill === 'fillCashThenRoth' || inputs.rothGapFill === 'fillRothThenCash')
+    const _rothPos = (inputs.rothGapFill === ROTH_GAP_FILL.CASH_FIRST || inputs.rothGapFill === ROTH_GAP_FILL.ROTH_FIRST)
         ? inputs.rothGapFill : null;
     const _preDraw = (acct, amt) => {
         if (amt <= 1 || !(yr.curBalances[acct] > 0)) return amt;
@@ -3191,7 +3215,7 @@ function fillSpendingGap(sim, yr) {
         return wd.shortfall ?? 0;
     };
     if (gap > 1.00 && _rothPos && !yr.isOrderedStrategy) {
-        if (_rothPos === 'fillCashThenRoth') gap = _preDraw('Cash', gap);
+        if (_rothPos === ROTH_GAP_FILL.CASH_FIRST) gap = _preDraw('Cash', gap);
         gap = _preDraw('Roth', gap);
     }
 
@@ -4643,7 +4667,21 @@ function endYear(sim, yr) {
 // through to the proportional baseline without a word, so a retired or misspelled strategy ran a
 // plan nobody chose - `strategy: 'gk'` would now draw Proportional 0% with no guardrails at all.
 // Unset stays legal: it is the baseline draw.
-const KNOWN_STRATEGIES = Object.freeze(['propwd', 'fixed', 'bracket', 'aca', 'fixedpct', 'ordered', 'split', 'schedule']);
+// One home for the eight names. The enum is for code to READ (`STRATEGY.BRACKET` says which plan a
+// branch is about); the derived array is what the dispatch and the sweep VALIDATE against, so a name
+// can only be added in one place. A misspelled PROPERTY is undefined and would compare false, which
+// is why the guard below is what actually catches a bad key rather than the freeze.
+const STRATEGY = Object.freeze({
+    PROPWD:   'propwd',    // proportional draw, the baseline
+    FIXED:    'fixed',     // a fixed dollar IRA draw
+    BRACKET:  'bracket',   // fill to a federal bracket or IRMAA tier
+    ACA:      'aca',       // fill to a multiple of the Federal Poverty Level
+    FIXEDPCT: 'fixedpct',  // a fixed percentage of the IRA
+    ORDERED:  'ordered',   // one account at a time, in a named sequence
+    SPLIT:    'split',     // a constant blend across accounts
+    SCHEDULE: 'schedule',  // a per-year table, from a solver or a replay
+});
+const KNOWN_STRATEGIES = Object.freeze(Object.values(STRATEGY));
 function assertKnownStrategy(inputs) {
     const s = inputs ? inputs.strategy : undefined;
     if (s === undefined || s === null || s === '' || KNOWN_STRATEGIES.includes(s)) return;
@@ -4714,6 +4752,7 @@ function resumeInputs(base, resume, { balanceScale = 1, spendGoal } = {}) {
 /** SIMULATION ENGINE **/
 function simulate(inputs) {
     assertKnownStrategy(inputs);
+    assertKnownSpendRule(inputs);
     if (!inputs.hasSpouse) {
         inputs = { ...inputs, birthyear2: 0, die2: 0, IRA2: 0, ss2: 0, Roth2: 0 };
     }
@@ -5874,7 +5913,7 @@ function sameStrategySelection(a, b) {
     // Same reason for the 🅡 clones: Roth drawn after Cash instead of last is a different plan,
     // not a different label. Anything the engine does not recognize means "leave today's behavior
     // alone", so every unrecognized value has to compare equal to unset.
-    const rgf = x => (x === 'fillCashThenRoth' || x === 'fillRothThenCash') ? x : '';
+    const rgf = x => (x === ROTH_GAP_FILL.CASH_FIRST || x === ROTH_GAP_FILL.ROTH_FIRST) ? x : '';
     if (rgf(a.rothGapFill) !== rgf(b.rothGapFill)) return false;
     const near = (x, y) => Math.abs((x ?? 0) - (y ?? 0)) < EPS_SELECTION;
     // Guardrails are part of the identity under every strategy: the sweep carries each draw with
@@ -6684,7 +6723,7 @@ function buildStrategyFamilies(base, opts = {}) {
                 strategyLabel: MODIFIER_PREFIX.rothgap + r.family,
                 paramLabel: r.paramLabel,
                 paramSortVal: r.paramSortVal,
-                overrides: { ...r.overrides, rothGapFill: 'fillCashThenRoth' },
+                overrides: { ...r.overrides, rothGapFill: ROTH_GAP_FILL.CASH_FIRST },
             });
         }
     }
@@ -7014,7 +7053,7 @@ function planNameDefaults({ lastPlanName, lastFileName } = {}) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, _conversionHelpsAtRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, sweepOptions, describeSelection, planRuleTwin, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit, growthFactor, applyGrowth, combineGains, applyWithdrawals, calculateWithdrawals, calculateAmortizedWithdrawal, getRMDPercentage, calculateInflationAdjustedWithdrawal, optimizeSpendDown, timingShift, resolveStartAge, gkSpendStable, KNOWN_STRATEGIES, assertKnownStrategy, GK_DEFAULTS, FUNDED_TOLERANCE, minSpendFloor, BASIS_STEP_UP_FALLBACK, BE_NEVER, BREAK_EVEN_SEARCH, RAIL_PRESETS, GK_CPI_RAISE_CAP, GK_NO_CUT_FINAL_YEARS, portfolioReturnOf, snapshotResume, resumeInputs };
+    module.exports = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, _conversionHelpsAtRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, sweepOptions, describeSelection, planRuleTwin, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit, growthFactor, applyGrowth, combineGains, applyWithdrawals, calculateWithdrawals, calculateAmortizedWithdrawal, getRMDPercentage, calculateInflationAdjustedWithdrawal, optimizeSpendDown, timingShift, resolveStartAge, gkSpendStable, KNOWN_STRATEGIES, assertKnownStrategy, GK_DEFAULTS, FUNDED_TOLERANCE, minSpendFloor, BASIS_STEP_UP_FALLBACK, BE_NEVER, BREAK_EVEN_SEARCH, STRATEGY, SPEND_RULE, KNOWN_SPEND_RULES, assertKnownSpendRule, ROTH_GAP_FILL, RAIL_PRESETS, GK_CPI_RAISE_CAP, GK_NO_CUT_FINAL_YEARS, portfolioReturnOf, snapshotResume, resumeInputs };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -7022,7 +7061,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const OPTIMIZER_GRIDS` is a global LEXICAL binding and is not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, _conversionHelpsAtRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, sweepOptions, describeSelection, planRuleTwin, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit, growthFactor, applyGrowth, combineGains, applyWithdrawals, calculateWithdrawals, calculateAmortizedWithdrawal, getRMDPercentage, calculateInflationAdjustedWithdrawal, optimizeSpendDown, timingShift, resolveStartAge, gkSpendStable, KNOWN_STRATEGIES, assertKnownStrategy, GK_DEFAULTS, FUNDED_TOLERANCE, minSpendFloor, BASIS_STEP_UP_FALLBACK, BE_NEVER, BREAK_EVEN_SEARCH, RAIL_PRESETS, GK_CPI_RAISE_CAP, GK_NO_CUT_FINAL_YEARS, portfolioReturnOf, snapshotResume, resumeInputs };
+    window.OptimizerCore = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, CPI_INDEX_FLOOR, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, _conversionHelpsAtRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, sweepOptions, describeSelection, planRuleTwin, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit, growthFactor, applyGrowth, combineGains, applyWithdrawals, calculateWithdrawals, calculateAmortizedWithdrawal, getRMDPercentage, calculateInflationAdjustedWithdrawal, optimizeSpendDown, timingShift, resolveStartAge, gkSpendStable, KNOWN_STRATEGIES, assertKnownStrategy, GK_DEFAULTS, FUNDED_TOLERANCE, minSpendFloor, BASIS_STEP_UP_FALLBACK, BE_NEVER, BREAK_EVEN_SEARCH, STRATEGY, SPEND_RULE, KNOWN_SPEND_RULES, assertKnownSpendRule, ROTH_GAP_FILL, RAIL_PRESETS, GK_CPI_RAISE_CAP, GK_NO_CUT_FINAL_YEARS, portfolioReturnOf, snapshotResume, resumeInputs };
 }
 
 

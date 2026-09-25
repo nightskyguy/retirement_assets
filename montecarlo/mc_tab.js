@@ -244,7 +244,7 @@ function _mcIsFixedInflationState() { return _mcParamIs('mc-inflation-shock-sd',
 // inflation out of the record - so Fixed Inflation and Pessimistic are disabled there rather than
 // left clickable with nothing to do. Their knobs are already grayed out in that mode.
 function updateMCPresetState() {
-    const synthetic = document.getElementById('mc-sim-mode')?.value !== 'bootstrap';
+    const synthetic = document.getElementById('mc-sim-mode')?.value !== MC_MODE.BOOTSTRAP;
     const set = (id, on, enabled) => {
         const el = document.getElementById(id);
         if (!el) return;
@@ -291,7 +291,7 @@ function _fanSourceText(msg, meta) {
 // The two synthetic modes share everything except how a normal draw becomes a return, so almost
 // every test in this file wants "is this synthetic", not "is this GBM".
 function isSyntheticMode(mode) {
-    return mode === 'gbm' || mode === 'aam';
+    return mode === MC_MODE.GBM || mode === MC_MODE.AAM;
 }
 
 // The inflation model is shared by both synthetic modes and ignored by Historical, so one reader
@@ -350,7 +350,7 @@ function updateMCGrowthWarning() {
 // samples real inflation out of the record and has no model to tune.
 function updateMCModeUI() {
     const mode = document.getElementById('mc-sim-mode')?.value;
-    const isBootstrap = mode === 'bootstrap';
+    const isBootstrap = mode === MC_MODE.BOOTSTRAP;
     ['mc-mu', 'mc-sigma', 'mc-inflation-persistence', 'mc-inflation-shock-sd',
      'mc-inflation-return-corr'].forEach(id => {
         const el = document.getElementById(id);
@@ -359,7 +359,7 @@ function updateMCModeUI() {
         el.closest('label').style.opacity = isBootstrap ? '0.4' : '';
     });
     const bearWrap = document.getElementById('mc-bear-start-wrap');
-    if (bearWrap) bearWrap.style.display = mode === 'bootstrap' ? '' : 'none';
+    if (bearWrap) bearWrap.style.display = mode === MC_MODE.BOOTSTRAP ? '' : 'none';
     // When switching to GBM, re-sync mu from Assumptions so the two stay aligned.
     if (!isBootstrap) syncMCMuFromGrowth();
     updateMCPresetState();
@@ -491,7 +491,7 @@ function mcPlanYears(base) {
 // value is a string either way, so this is the one place that decides which it is.
 function stressWindowMode() {
     const raw = document.getElementById('mc-stress-window')?.value ?? 'combined';
-    if (raw === 'combined' || raw === 'all') return raw;
+    if (raw === STRESS_WINDOW.COMBINED || raw === STRESS_WINDOW.ALL) return raw;
     // The selector offers only Combined and All now, but the engine still ranks on a single window
     // and a saved scenario or a hand-edited URL can still ask for one.
     const n = parseInt(raw, 10);
@@ -511,8 +511,8 @@ function stressModeOf(stress) {
 function stressSelectionLabel(stress) {
     const { mode, windows } = stressModeOf(stress);
     const n = stress?.startYears?.length ?? 0;
-    if (mode === 'all')      return `all ${n} historical start years, unranked`;
-    if (mode === 'combined') return `worst by each of the ${windows.join('/')} year windows, combined`;
+    if (mode === STRESS_WINDOW.ALL)      return `all ${n} historical start years, unranked`;
+    if (mode === STRESS_WINDOW.COMBINED) return `worst by each of the ${windows.join('/')} year windows, combined`;
     return `worst by ${windows[0] ?? mode} year real CAGR`;
 }
 
@@ -599,11 +599,14 @@ function withCurrentPlan(variations, base) {
 // arrives with, at about 1/60 of the cost: the plan twice, Guardrails on and off. Compare was the
 // default while it was the only thing the tab did, which meant every reader paid for a full
 // strategy ranking on arrival whether or not they wanted one, with no warning of the price.
-let _mcScope = 'plan';
+// Which plans a run covers: the sidebar's own plan, or every strategy in the compare set. Part of a
+// run's identity, so switching it has to invalidate what is on screen.
+const MC_SCOPE = Object.freeze({ PLAN: 'plan', COMPARE: 'compare' });
+let _mcScope = MC_SCOPE.PLAN;
 
 // scope: 'plan' (default, the sidebar plan with Guardrails on and off) | 'compare' (every strategy, ~60x more work).
 function runMonteCarlo(scope) {
-    _mcScope = (scope === 'compare') ? 'compare' : 'plan';
+    _mcScope = (scope === MC_SCOPE.COMPARE) ? MC_SCOPE.COMPARE : MC_SCOPE.PLAN;
     _lastMCHash = _buildMCHash();
     _lastSweepHash = _buildSweepHash();
     // What this run's own stress pass is computed from. Kept apart from _lastMCHash, which the mode
@@ -641,7 +644,7 @@ function runMonteCarlo(scope) {
 
     // In 'plan' scope the main pass runs that same plan both ways, Guardrails on and off, so the whole
     // run is 2 x numPaths simulations instead of numPaths x ~123.
-    const variations = _mcScope === 'plan'
+    const variations = _mcScope === MC_SCOPE.PLAN
         ? planScopeVariations(stressVariations, base)
         : withCurrentPlan(allVariations, base);
 
@@ -649,7 +652,7 @@ function runMonteCarlo(scope) {
     // scope that is the first variation; in compare scope withCurrentPlan() guarantees a match
     // exists, but keep the max() so a synthetic fallback row (idx -1) degrades to 0 rather than
     // handing the engine a nonsense index.
-    const captureVariationIndex = _mcScope === 'plan'
+    const captureVariationIndex = _mcScope === MC_SCOPE.PLAN
         ? 0 : Math.max(0, findCurrentStrategyIdx(variations, base));
 
     // Seed the timing model if no real run has been observed yet, so the buttons and the in-flight
@@ -667,7 +670,7 @@ function runMonteCarlo(scope) {
     // UI feedback. The count readout is set here, not in renderSurvivalTable, so the cancel bar
     // describes the run in flight rather than whatever the previous run happened to be.
     const _pcBar = document.getElementById('mc-path-count');
-    if (_pcBar) _pcBar.textContent = simCountText(numPaths, variations.length, years, _mcScope === 'plan');
+    if (_pcBar) _pcBar.textContent = simCountText(numPaths, variations.length, years, _mcScope === MC_SCOPE.PLAN);
     setMCRunning(true);
 
     runMCWorker(
@@ -1180,7 +1183,7 @@ function renderMCResults(msg) {
     document.getElementById('mc-error').style.display = 'none';
     renderMCMainMetrics(msg);
 
-    const planOnly = _mcScope === 'plan';
+    const planOnly = _mcScope === MC_SCOPE.PLAN;
 
     // Resolve the pinned row FIRST: the survival table renders it on top and the chart draws it
     // emphasized, so both have to be looking at the same index. In plan scope the first variation IS
@@ -1311,7 +1314,7 @@ function renderMCMainMetrics(msg) {
         // here sits below the growth rate typed in Assumptions; AAM's mu is the plain average, so
         // the center IS that number. Neither changes how volatility drags on compounded growth, so
         // this is a statement about one year, not about where the plan ends up.
-        const _centreLabel = (msg.simulationMode === 'aam') ? 'arithmetic' : 'geometric';
+        const _centreLabel = (msg.simulationMode === MC_MODE.AAM) ? 'arithmetic' : 'geometric';
         if (grow != null) parts.push(`Median growth <strong>${grow}%/yr</strong> <span style="color:#888;font-size:0.85em;">(${_centreLabel})</span>`);
         if (lo != null && hi != null) parts.push(
             `Equity range <strong style="color:${parseFloat(lo)<0?'#c0392b':'inherit'}">${lo}%</strong>`
@@ -1410,7 +1413,7 @@ const STRESS_TOOLTIP_ALL =
 // The base sentence for the selection currently on screen. With no run to describe there is nothing
 // but the live selector to go on, which is what stressModeOf falls back to.
 function stressTooltipBase(mode) {
-    return (mode ?? stressWindowMode()) === 'all' ? STRESS_TOOLTIP_ALL : STRESS_TOOLTIP_WORST;
+    return (mode ?? stressWindowMode()) === STRESS_WINDOW.ALL ? STRESS_TOOLTIP_ALL : STRESS_TOOLTIP_WORST;
 }
 
 // P82i. Where the tooltip is being shown, because the closing line is the one sentence that cannot
@@ -1454,7 +1457,7 @@ function renderStressHeadline(stress) {
     // All start years is not a selection of the worst, it is the whole record, so it gets its own
     // pair of sentences. Combined and the single-window modes DO rank, and keep the original wording.
     const tail = s.ruinYear ? `, typically around ${s.ruinYear}.` : '.';
-    const sentence = s.mode === 'all'
+    const sentence = s.mode === STRESS_WINDOW.ALL
         ? (s.failures === 0
             ? `Your plan survives every one of the ${s.total} start years on record.`
             : `Your plan runs out of money in ${s.failures} of the ${s.total} start years on record` + tail)
@@ -1782,7 +1785,7 @@ function renderSurvivalTable(variations, numPaths) {
     document.getElementById('mc-table-wrap').style.display = '';
     // Paths are per strategy, so the honest size of the run is the product. Both readouts say so.
     const _pathTxt = simCountText(numPaths, variations.length, _mcResults?.years ?? mcPlanYears(_mcBase),
-                                  _mcScope === 'plan');
+                                  _mcScope === MC_SCOPE.PLAN);
     const _pcBar = document.getElementById('mc-path-count');
     const _pcTbl = document.getElementById('mc-path-count-tbl');
     if (_pcBar) _pcBar.textContent = _pathTxt;
@@ -1998,7 +2001,7 @@ function _makeLegendClick() {
 // once the reader touches it, and the override lives only as long as the page.
 let _mcTracesPref = null;   // null = follow the scope, true/false = the reader has decided
 function _mcShowTraces() {
-    return _mcTracesPref === null ? (_mcScope === 'plan') : _mcTracesPref;
+    return _mcTracesPref === null ? (_mcScope === MC_SCOPE.PLAN) : _mcTracesPref;
 }
 function onMCTracesToggle(on) {
     _mcTracesPref = !!on;
@@ -2624,7 +2627,7 @@ function setMCRunning(running) {
         const base     = getInputs();
         // A plan-scope run is two variations (Guardrails on and off), so the estimate has to follow
         // the scope in flight or a 0.4s run would announce half a minute.
-        const numVar   = _mcScope === 'plan' ? 2 : withCurrentPlan(compareVariations(base), base).length;
+        const numVar   = _mcScope === MC_SCOPE.PLAN ? 2 : withCurrentPlan(compareVariations(base), base).length;
         runEst.textContent = `May take approximately ${_mcDuration(estimateMCMs(numPaths, numVar))} to complete`;
     }
 }

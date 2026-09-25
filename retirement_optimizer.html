@@ -24,7 +24,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.192a</title>
+    <title>Retirement Optimizer 11.192c</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -74,14 +74,14 @@
 	<base target="_blank">	
 	<script src="taxengine.js?v=11192a"></script>
 	<script src="medicare_costs.js?v=111917"></script>
-	<script src="optimizer_core.js?v=11192a"></script>
+	<script src="optimizer_core.js?v=11192c"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=11192a"></script>
-	<script src="optimizer_tests.js?v=111928"></script>
+	<script src="optimizer_ui.js?v=11192c"></script>
+	<script src="optimizer_tests.js?v=11192c"></script>
 </head>
 <body>
 
@@ -1672,16 +1672,16 @@
      block, the deferred test tier never registered and the self-check badge stayed neutral forever
      on that one URL. Nothing here has a load-time side effect, so loading earlier is free. -->
 <script src="montecarlo/historical_returns.js?v=11150b"></script>
-<script src="montecarlo/prng.js?v=1118ef"></script>
+<script src="montecarlo/prng.js?v=11192c"></script>
 <script src="montecarlo/stats.js?v=11161f"></script>
 <!-- The Monte Carlo model itself. The worker importScripts() the same file; on file://, where a
      worker cannot load its scripts, mc_controller.js runs it here on the main thread. -->
-<script src="montecarlo/mc_engine.js?v=1118ef"></script>
+<script src="montecarlo/mc_engine.js?v=11192c"></script>
 <!-- P128. The risk-based rails solver. Same arrangement as mc_engine.js: the worker imports it too,
      and on file:// the controller runs it here. -->
-<script src="montecarlo/rails_engine.js?v=11192a"></script>
-<script src="montecarlo/mc_controller.js?v=1118ef"></script>
-<script src="montecarlo/mc_tab.js?v=1118ef"></script>
+<script src="montecarlo/rails_engine.js?v=11192c"></script>
+<script src="montecarlo/mc_controller.js?v=11192c"></script>
+<script src="montecarlo/mc_tab.js?v=11192c"></script>
 
 <script type="text/javascript">
 function clampIntlInput(intlId, equityPct) {
@@ -1882,7 +1882,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these seven are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=11192a';
+    const V = '?v=11192c';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

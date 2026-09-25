@@ -157,7 +157,8 @@ async function runRailsJob(cfg, hooks) {
     const t0 = performance.now();
     const numPathsWanted = railsPaths(cfg.numPaths);
     const startPathsWanted = Math.max(1, Math.round(Number(cfg.startPaths)) || RAILS_START_PATHS);
-    const mode = (cfg.simulationMode === 'bootstrap' || cfg.simulationMode === 'aam') ? cfg.simulationMode : 'gbm';
+    const mode = (cfg.simulationMode === MC_MODE.BOOTSTRAP || cfg.simulationMode === MC_MODE.AAM)
+        ? cfg.simulationMode : MC_MODE.GBM;
     const presetMap = cfg.presets ?? RAIL_PRESETS;
     const presetKeys = railsPresetKeys(presetMap);
 
@@ -478,7 +479,7 @@ async function runRailsJob(cfg, hooks) {
         presetsOut[key] = { key, label: P.label, target: P.target, upper: P.upper, lower: P.lower, cutTo: railsCutTo(P) };
     }
     return {
-        type: 'results', kind: 'rails', version: 2,
+        type: 'results', kind: JOB_KIND.RAILS, version: 2,
         presets: presetsOut,
         cadence: railsCadence(cfg.cadence),
         numPaths, simulationMode: mode, ruleOn,

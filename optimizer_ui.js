@@ -5096,14 +5096,14 @@ function runRails() {
     // The plan without the rule's table (the job runs the plan without the rule anyway), plus the
     // custom set when the boxes define one.
     runMCWorker(
-        { kind: 'rails', base: { ...base, rbgRails: undefined }, cadence: s.cadence, numPaths: s.paths,
+        { kind: JOB_KIND.RAILS, base: { ...base, rbgRails: undefined }, cadence: s.cadence, numPaths: s.paths,
           presets: railsJobPresets(), skipStart: inReplay, ...railsModelCfg(base) },
         pct => { if (RailsState.runFingerprint === fingerprint) RailsState.progress = pct; },
         msg => railsComplete(msg, fingerprint, startFingerprint));
 }
 
 function cancelRails() {
-    if (typeof cancelMCWorker === 'function') cancelMCWorker('rails');
+    if (typeof cancelMCWorker === 'function') cancelMCWorker(JOB_KIND.RAILS);
     Object.assign(RailsState, { running: false, runFingerprint: null });
     railsStopTicker();
     railsRenderPanel();

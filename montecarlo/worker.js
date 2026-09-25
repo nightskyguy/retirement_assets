@@ -12,7 +12,7 @@ importScripts('../taxengine.js' + _v, '../medicare_costs.js' + _v, '../optimizer
 
 // P128. Two kinds of job share this shell: the Monte Carlo sweep, and the risk-based rails solve.
 function jobOf(cfg) {
-    return cfg && cfg.kind === 'rails' ? runRailsJob : runJob;
+    return cfg && cfg.kind === JOB_KIND.RAILS ? runRailsJob : runJob;
 }
 
 // The engine reports progress inside a variation, every 16 paths, which is far more often than a

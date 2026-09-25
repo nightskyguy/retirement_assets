@@ -59,12 +59,12 @@ function buildPathInputs(banks, p, years, baseInputs, mode) {
         // This used to test `mode === 'bootstrap'`, which exponentiated stress's already-decimal
         // returns: harmless for balances, since returnSequencePerAccount overrides every account,
         // but it fed a wrong yr.baseReturn into the log of every stress scenario.
-        returnSequence[y] = mode === 'gbm' ? Math.exp(raw) - 1 : raw;
+        returnSequence[y] = mode === MC_MODE.GBM ? Math.exp(raw) - 1 : raw;
     }
 
     // Build per-account return sequences from the multi-asset bank when there is one.
     let returnSequencePerAccount = null;
-    if ((mode === 'bootstrap' || mode === 'stress') && multiAssetBank) {
+    if ((mode === MC_MODE.BOOTSTRAP || mode === MC_MODE.STRESS) && multiAssetBank) {
         const accts = ['IRA1', 'IRA2', 'Brokerage', 'Roth1', 'Roth2'];
         returnSequencePerAccount = {};
         for (const acct of accts) {
@@ -85,7 +85,7 @@ function buildPathInputs(banks, p, years, baseInputs, mode) {
     }
 
     let inflationSequence = null;
-    if ((mode === 'bootstrap' || mode === 'stress') && multiAssetBank?.inflation) {
+    if ((mode === MC_MODE.BOOTSTRAP || mode === MC_MODE.STRESS) && multiAssetBank?.inflation) {
         inflationSequence = new Float64Array(years);
         for (let y = 0; y < years; y++) {
             inflationSequence[y] = multiAssetBank.inflation[p * years + y];
@@ -117,7 +117,7 @@ function sliceBankRowsForPath(banks, p, years, mode) {
     const { scenarioBank, multiAssetBank, synthInflationBank } = banks;
     const row = (bank) => Array.from(bank.subarray(p * years, (p + 1) * years));
     const rows = { scenario: row(scenarioBank) };
-    if ((mode === 'bootstrap' || mode === 'stress') && multiAssetBank) {
+    if ((mode === MC_MODE.BOOTSTRAP || mode === MC_MODE.STRESS) && multiAssetBank) {
         rows.equity = row(multiAssetBank.equity);
         rows.intl   = row(multiAssetBank.intl);
         rows.bonds  = row(multiAssetBank.bonds);
@@ -212,7 +212,7 @@ function buildBanks(cfg, rng, mode) {
     let assetRanges    = null;
     let inflationStats = null;
 
-    if (mode === 'bootstrap') {
+    if (mode === MC_MODE.BOOTSTRAP) {
         // Multi-asset block bootstrap: synchronized draws from equity, bonds, intl, inflation (1970-2025 window).
         multiAssetBank = bootstrapMultiAssetBank(rng, numPaths, years);
         const bearFraction = (cfg.bearFraction ?? 25) / 100;
@@ -257,7 +257,7 @@ function buildBanks(cfg, rng, mode) {
             intl:   [itMin, itCAGR, itMax],
         };
         inflationStats = { min: infMin, cagr: infCAGR, max: infMax };
-    } else if (mode === 'stress') {
+    } else if (mode === MC_MODE.STRESS) {
         // Deterministic SoRR stress: N worst historical starting sequences.
         const stressCount = cfg.stressCount ?? 20;
         // cfg.stressWindow selects WHICH start years count as worst: a number ranks on that one
@@ -293,7 +293,7 @@ function buildBanks(cfg, rng, mode) {
         // explanation of how one standard normal becomes a return under each mode; this loop only
         // decides the ORDER of the draws, which is what CRN reproducibility rests on.
         const { mu, sigma } = cfg;
-        const isAAM = (mode === 'aam');
+        const isAAM = (mode === MC_MODE.AAM);
         logDrift = mu - 0.5 * sigma * sigma;
         medianAnnualReturn = isAAM ? mu : Math.exp(logDrift) - 1;
 
@@ -498,7 +498,7 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
 
         // In stress mode, capture individual path traces for per-scenario chart rendering.
         let stressPaths = null, stressPathsReal = null;
-        if (mode === 'stress') {
+        if (mode === MC_MODE.STRESS) {
             stressPaths = [];
             stressPathsReal = [];
             for (let p = 0; p < numPaths; p++) {
@@ -552,7 +552,7 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
             // Per-scenario ruin years, stress only. The array is built for every mode but was
             // previously collapsed to medianRuinYear and discarded; the stress table needs the
             // individual years to color and sort by. At <= 20 entries the transfer is free.
-            ruinYearsPerPath: mode === 'stress' ? Array.from(ruinYears) : null,
+            ruinYearsPerPath: mode === MC_MODE.STRESS ? Array.from(ruinYears) : null,
             // P69: the replay capture rows - worst-N plus rank-percentile samples, worst-first,
             // ~10 small objects per variation. Sequences are NOT attached here; the replay UI
             // gets them separately, for the one variation being replayed, not all of them.
@@ -561,12 +561,12 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
             // its own percentile bands. ONE variation only - a Compare run has ~150 of them and
             // 150 x 10 traces is both a wasted transfer and unreadable. Stress mode already ships
             // every path as stressPaths, so it does not need these. ~10 x years x 8B, ~3KB.
-            capturedTraces: (vi === captureVi && mode !== 'stress')
+            capturedTraces: (vi === captureVi && mode !== MC_MODE.STRESS)
                 ? capturedSel.map(r => Array.from({ length: years },
                     (_, y) => paths[r.pathIndex * years + y]))
                 : null,
             // P86: the same traces on each path's own current-$ basis, same gate.
-            capturedTracesReal: (vi === captureVi && mode !== 'stress')
+            capturedTracesReal: (vi === captureVi && mode !== MC_MODE.STRESS)
                 ? capturedSel.map(r => Array.from({ length: years },
                     (_, y) => pathsReal[r.pathIndex * years + y]))
                 : null,
@@ -581,18 +581,18 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
     // Build input fan - per-year return/inflation percentile bands across all paths.
     // Bootstrap: equity bank is already decimal returns. GBM: convert log-normal shocks once.
     let equityBankForFan;
-    if (mode === 'gbm') {
+    if (mode === MC_MODE.GBM) {
         // GBM alone banks log-space shocks; convert once for the fan.
         equityBankForFan = new Float64Array(numPaths * years);
         for (let i = 0; i < scenarioBank.length; i++) {
             equityBankForFan[i] = Math.exp(scenarioBank[i]) - 1;
         }
     } else {
-        equityBankForFan = (mode === 'aam') ? scenarioBank : multiAssetBank.equity;
+        equityBankForFan = (mode === MC_MODE.AAM) ? scenarioBank : multiAssetBank.equity;
     }
     // Both synthetic modes have a real inflation distribution to show, so the Input Distribution
     // inflation chart is not blank outside Historical mode.
-    const inflationBankForFan = (['bootstrap', 'stress'].includes(mode) && multiAssetBank?.inflation)
+    const inflationBankForFan = ([MC_MODE.BOOTSTRAP, MC_MODE.STRESS].includes(mode) && multiAssetBank?.inflation)
         ? multiAssetBank.inflation
         : synthInflationBank;
     const inputFan = computeInputFan(equityBankForFan, inflationBankForFan, numPaths, years);
@@ -605,7 +605,7 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
     // path - there are at most a few dozen, the table offers replay on each, and the labels that
     // name them are already in the message.
     let capturedBankRows = null, pathBankRows = null;
-    if (mode === 'stress') {
+    if (mode === MC_MODE.STRESS) {
         pathBankRows = Array.from({ length: numPaths },
             (_, p) => sliceBankRowsForPath(banks, p, years, mode));
     } else {
@@ -621,7 +621,7 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
         // Everything above is measured over the WHOLE plan horizon on the sequence each scenario
         // actually lived through, not over the ranking window: 'combined' has five windows and
         // 'all' has none, so a window-scoped figure has nothing to be scoped to.
-        stressBank: mode === 'stress' ? multiAssetBank : null,
+        stressBank: mode === MC_MODE.STRESS ? multiAssetBank : null,
     };
 }
 
@@ -687,7 +687,9 @@ async function runJob(cfg, hooks) {
     // Pass the selected mode straight through. This used to read
     // `simulationMode === 'bootstrap' ? 'bootstrap' : 'gbm'`, which folded every non-bootstrap mode
     // into GBM, so a third mode would have silently run as the second one.
-    const mainMode = (simulationMode === 'bootstrap' || simulationMode === 'aam') ? simulationMode : 'gbm';
+    assertKnownMCMode(simulationMode);
+    const mainMode = (simulationMode === MC_MODE.BOOTSTRAP || simulationMode === MC_MODE.AAM)
+        ? simulationMode : MC_MODE.GBM;
 
     const main = stressOnly ? null : await runPass(cfg, rng, mainMode, 0, mainWeight, null, h);
     if (!stressOnly && main === null) return null;   // canceled mid-pass

@@ -67,6 +67,12 @@ const ONLY      = argOf('--plans', null);
 // plain arrays. Functions and undefined are dropped, which is what JSON does anyway.
 const LARGE_ARRAY = 240;   // above this, a numeric array is folded (see foldNumbers)
 
+// Clock reads the engine records alongside its results. They move between two runs of the SAME build,
+// so a snapshot that kept them would report a difference on every check and teach the reader to
+// ignore the output. Dropped when a snapshot is written, and skipped when comparing, so a snapshot
+// taken before this list existed is still usable.
+const TIMING_KEYS = new Set(['loopMs', 'totalTime', 'totalMs', 'thirdPassTime', 'elapsedMs', 'ms']);
+
 // A Monte Carlo run carries numPaths x years balances per variation, which is megabytes and unreadable
 // in a diff. Folded to figures that still move when any element moves: the count, the sum, the
 // extremes, an index-weighted sum (so a REORDERING shows, which a plain sum would hide) and how many
@@ -102,6 +108,7 @@ function encode(v, depth = 0) {
     }
     const out = {};
     for (const k of Object.keys(v).sort()) {
+        if (TIMING_KEYS.has(k)) continue;
         const e = encode(v[k], depth + 1);
         if (e !== undefined) out[k] = e;
     }
@@ -150,9 +157,8 @@ async function mcSection(inputs) {
             inflationRate: inputs.inflation,
         }, null);
         // Everything the job returns, field names and all, so a field added to a variation is
-        // covered without editing this harness. `totalMs` is the one omission: it is a clock read.
-        const { totalMs, ...rest } = res;
-        out[mode] = encode(rest);
+        // covered without editing this harness. The clock reads drop out in encode (TIMING_KEYS).
+        out[mode] = encode(res);
     }
     return out;
 }
@@ -189,6 +195,7 @@ function diff(a, b, path, out) {
     if (ta === 'object') {
         const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
         for (const k of [...keys].sort()) {
+            if (TIMING_KEYS.has(k)) continue;
             if (!(k in a)) { out.push({ path: `${path}.${k}`, was: '(absent)', now: b[k] }); continue; }
             if (!(k in b)) { out.push({ path: `${path}.${k}`, was: a[k], now: '(absent)' }); continue; }
             diff(a[k], b[k], `${path}.${k}`, out);

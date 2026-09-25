@@ -790,8 +790,8 @@ function getInputs() {
         })(),
         qcdHHMax: +val('qcdHHMax') || 0,
         qcdMode: valChecked('qcdAlways') ? 'always' : 'asneeded',
-        gkGuard:  +val('gkGuard')  / 100 || 0.20,
-        gkAdjPct: +val('gkAdjPct') / 100 || 0.10,
+        gkGuard:  +val('gkGuard')  / 100 || GK_DEFAULTS.guard,
+        gkAdjPct: +val('gkAdjPct') / 100 || GK_DEFAULTS.adjPct,
         // P127a. Raises never lift spending above the plan's own path. A nerdknob switch beside the
         // band and step, off by default; like them it is only read while Guardrails is on.
         gkShapeCeiling: !!valChecked('gkShapeCeiling'),
@@ -920,7 +920,7 @@ function updateProfileAgeDisplay() {
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
-    const growthRate = (+val('growth') / 100) || 0.06;
+    const growthRate = (+val('growth') / 100) || (defaultNumOf('growth') / 100);
 
     function ageInfo(birthYear, birthMonth, iraBalance) {
         if (!birthYear) return null;
@@ -1273,6 +1273,12 @@ function _scoreRows(rows, sharedFutureIRARate) {
 const CURRENT_PLAN_MARK = '📍 ';
 const BASELINE_MARK = '⚓ ';
 
+// The charts mark a year whose net income falls more than 10% short of the goal. Deliberately NOT
+// the engine's FUNDED_TOLERANCE, which is 1%: a marker on every rounding-level shortfall would mark
+// most years of a plan living close to its goal, and the marker is meant to point at the years worth
+// looking at. Changing one of the two must not change the other.
+const CHART_SHORTFALL_FRACTION = 0.90;
+
 // The ⚓ baseline is identified by object/id rather than by a label prefix: unlike the current plan,
 // its label is never rewritten, because which row IS the baseline changes with the active objective.
 function isBaselineRow(r) {
@@ -1616,7 +1622,7 @@ function _runOptimizerNow() {
                 });
             } else {
                 // Reverse search also failed - report the lowest spend level that was tried
-                OptimizerState.noSolutionFloor = Math.max(500, base.spendGoal * 0.02);
+                OptimizerState.noSolutionFloor = minSpendFloor(base.spendGoal);
             }
         }
     }
@@ -3564,7 +3570,7 @@ function updateTable(log) {
         const rowGuaranteed = row['guaranteedIncome'] ?? 0;
         const rowPortfolio  = row['portfolioBalance'] ?? (totalNetWealth ?? 0);
         const rowRequired   = Math.max(0, spendGoal - rowGuaranteed);
-        const incomeShortfall = (netIncome < spendGoal * 0.99) || (rowPortfolio < rowRequired);
+        const incomeShortfall = (netIncome < spendGoal * FUNDED_TOLERANCE) || (rowPortfolio < rowRequired);
         const deathOccurred = maritalStatus != row['status'];
 
         // IRMAA tier cell tint - blue scale (taxation theme), applied only to relevant columns
@@ -4346,7 +4352,7 @@ function computeMilestones(log) {
     // lastTotals channel as beYear above. Only the first death of a couple can be a half step-up;
     // the last death is always full, because the heirs take the account at market wherever they live.
     const stepUpFraction = (typeof lastTotals !== 'undefined' && lastTotals && lastTotals.basisStepUpFraction != null)
-        ? lastTotals.basisStepUpFraction : 0.50;
+        ? lastTotals.basisStepUpFraction : BASIS_STEP_UP_FALLBACK;
     // RMD start age from the log alone: the engine sets age = year − birthyear exactly
     // (optimizer_core.js resolveHousehold), so the birth year is recoverable from any row with a
     // numeric age, and rmdStartAge() is the rule getRMDPercentage() uses. A non-numeric age ('—')
@@ -4379,7 +4385,7 @@ function computeMilestones(log) {
         // shortfall year suppresses the GK-cut marker below - a shortfall is the more important note.)
         const sg = r.spendGoal ?? r.SpendGoal;
         const ni = r.netIncome ?? r.NetIncome;
-        const isShort = (sg > 0 && ni != null && ni < sg * 0.90);
+        const isShort = (sg > 0 && ni != null && ni < sg * CHART_SHORTFALL_FRACTION);
         // 2. A spend-rule cut or raise, by either rule (GK-style or risk-based), from what the rule
         // actually did to the goal (the hidden -ruleMove field): a risk-based raise the ceiling
         // trims back to the plan still moved spending up, and a GK-style year labeled 'no-cut'
@@ -6921,7 +6927,8 @@ function updateGuardrailsNote() {
             + (ceilingNote || ' Never above plan is recommended with this rule: the rails are solved for your planned path and are accurate near it.');
         return;
     }
-    const g = Math.round(+val('gkGuard') || 20), a = Math.round(+val('gkAdjPct') || 10);
+    const g = Math.round(+val('gkGuard') || GK_DEFAULTS.guard * 100),
+          a = Math.round(+val('gkAdjPct') || GK_DEFAULTS.adjPct * 100);
     // P127. The two published limits the rule adopted, and the ceiling when it is on. Stated here and
     // not only in the tooltip: the ceiling switch is nerdknob-only, but a share link can turn it on
     // for anyone, and a rule that is running has to be readable by whoever it is running for.
@@ -7118,6 +7125,18 @@ const OPT_SHARE_PRIVACY = {
 const SHARE_INPUT_SELECTOR = '.sidebar input, .sidebar select, #opt-search-options input,'
                            + ' #mc-nerd-panel input[type=checkbox]';
 const OPT_DEFAULTS = {};
+// The default a control SHIPPED with, as a number: the value `captureDefaults()` recorded at load,
+// falling back to the markup's own `value=` attribute when this runs before capture (a share link
+// parsed early, or a test calling a reader directly). Every `|| 2.8`-style fallback in this file used
+// to restate one of these, so the literal and the control it mirrored could drift with nothing to
+// catch it. The control's markup is the one home; this is how the code reads it.
+function defaultNumOf(id) {
+    const cap = OPT_DEFAULTS[id];
+    if (cap && cap.n !== null && cap.n !== undefined && Number.isFinite(cap.n)) return cap.n;
+    const raw = document.getElementById(id)?.getAttribute('value');
+    const n = raw === null || raw === undefined ? NaN : parseFloat(raw);
+    return Number.isFinite(n) ? n : NaN;
+}
 function captureDefaults() {
     document.querySelectorAll(SHARE_INPUT_SELECTOR).forEach(el => {
         if (!el.id || el.dataset.noShare !== undefined) return;
@@ -8402,10 +8421,10 @@ const TAX_DATA_BASE_YEAR = TAXData.FEDERAL.YEAR;
 function getDropdownStatus() {
     if (!valChecked('hasSpouse')) return 'SGL';
     const currentYear = new Date().getFullYear();
-    const die1Year = (+document.getElementById('birthyear1')?.value || 1960)
-                   + (+document.getElementById('die1')?.value || 88);
-    const die2Year = (+document.getElementById('birthyear2')?.value || 1952)
-                   + (+document.getElementById('die2')?.value || 98);
+    const die1Year = (+document.getElementById('birthyear1')?.value || defaultNumOf('birthyear1'))
+                   + (+document.getElementById('die1')?.value || defaultNumOf('die1'));
+    const die2Year = (+document.getElementById('birthyear2')?.value || defaultNumOf('birthyear2'))
+                   + (+document.getElementById('die2')?.value || defaultNumOf('die2'));
     return (die1Year > currentYear && die2Year > currentYear) ? 'MFJ' : 'SGL';
 }
 
@@ -8502,7 +8521,7 @@ function updateBracketFeedback() {
     if (!selectedOption) return;
 
     const spendGoalStr = (spendGoalEl.value || '140000').toString().replace(/[^\d.-]/g, '');
-    const spendGoal = parseFloat(spendGoalStr) || 140000;
+    const spendGoal = parseFloat(spendGoalStr) || defaultNumOf('spendGoal');
     // P92e. The limit comes off the option's `data-limit`, which generateStratRateOptions() writes
     // from the same number it formatted. This used to run a regex over the option's DISPLAY TEXT and
     // take the last dollar amount in it - which broke twice over the moment the label changed: the
@@ -8545,7 +8564,7 @@ function updateBracketFeedback() {
 // CPI compounding in generateStratRateOptions so the boundary lines up with the dropdown limits.
 function federalBracketRateAt(income) {
     if (!isFinite(income) || income <= 0) return null;
-    const cpi = (+document.getElementById('cpi')?.value || 2.8) / 100;
+    const cpi = (+document.getElementById('cpi')?.value || defaultNumOf('cpi')) / 100;
     const cpiAdj = Math.pow(1 + cpi, Math.max(0, new Date().getFullYear() - TAX_DATA_BASE_YEAR));
     const status = getDropdownStatus();
     const brks = (status === 'MFJ' ? TAXData.FEDERAL.MFJ : TAXData.FEDERAL.SGL).brackets;
@@ -8742,7 +8761,7 @@ function updateLimitBasisNote() {
     }
 
     const status = getDropdownStatus();
-    const cpi = (+document.getElementById('cpi')?.value || 2.8) / 100;
+    const cpi = (+document.getElementById('cpi')?.value || defaultNumOf('cpi')) / 100;
     const cpiAdj = Math.pow(1 + cpi, Math.max(0, new Date().getFullYear() - TAX_DATA_BASE_YEAR));
     const limit = Number(opt.dataset.limit);
     const v = opt.value;
@@ -9294,7 +9313,7 @@ function crossLadderNote(kind, limit, status, cpiAdj) {
  * - Only the applicable filing-status limit is shown (MFJ or SGL from inputs).
  */
 function generateStratRateOptions() {
-    const cpi = (+document.getElementById('cpi')?.value || 2.8) / 100;
+    const cpi = (+document.getElementById('cpi')?.value || defaultNumOf('cpi')) / 100;
     const status = getDropdownStatus();
     const isMFJ = status === 'MFJ';
 

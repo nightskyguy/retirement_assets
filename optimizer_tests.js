@@ -1104,6 +1104,32 @@ function runTests() {
 		}
 	})();
 
+	// P133b. A control's default has ONE home, the markup, and the JS reads it.
+	//
+	// Every `|| 2.8`-style fallback in optimizer_ui.js used to restate the `value=` attribute of the
+	// control it mirrored, so the two could drift with nothing to catch it. They read `defaultNumOf`
+	// now, which fails soft - a missing control gives NaN, and NaN silently becomes whatever the
+	// caller's arithmetic makes of it - so the assertion worth having is that each id the fallbacks
+	// name actually resolves to a number.
+	//
+	// The Guardrails pair is the one default that cannot live in the markup alone: `simulate()` needs
+	// it with no DOM at all, so GK_DEFAULTS holds it in optimizer_core.js and the two boxes restate
+	// it as percentages. That pin is the second half of this test.
+	(function controlDefaultsHaveOneHome() {
+		if (typeof defaultNumOf !== 'function') return;   // shared suite; optimizer_ui.js only
+		for (const id of ['cpi', 'growth', 'spendGoal', 'birthyear1', 'die1', 'birthyear2', 'die2']) {
+			if (!document.getElementById(id)) continue;
+			assertEqual(Number.isFinite(defaultNumOf(id)), true,
+				`${id} resolves to a numeric shipped default (got ${defaultNumOf(id)})`);
+		}
+		if (typeof GK_DEFAULTS === 'undefined') return;
+		const guard = document.getElementById('gkGuard'), adj = document.getElementById('gkAdjPct');
+		if (guard) assertEqual(+guard.getAttribute('value'), GK_DEFAULTS.guard * 100,
+			'the Guard box restates GK_DEFAULTS.guard as a percentage');
+		if (adj) assertEqual(+adj.getAttribute('value'), GK_DEFAULTS.adjPct * 100,
+			'the Adjust box restates GK_DEFAULTS.adjPct as a percentage');
+	})();
+
 	// P132. The rule menu beside the switch: Risk-based sends 'rbg' with its preset, shows its own
 	// controls, states the rule, turns Never above plan on, and never puts the rails table in a
 	// share link or an identity.

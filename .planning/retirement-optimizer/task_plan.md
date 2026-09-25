@@ -94,7 +94,7 @@ run over the plan bank before and after, diffed field by field.
 | slice | what | state |
 |---|---|---|
 | `P133a` | The identity harness itself: `simulate()`, both optimizers and the Monte Carlo modes over the 19 `plans/` households, dumped to JSON for a before/after diff | DONE: 771,287 values in 12.7 s |
-| `P133b` | 1.3 in the engine and UI: `GK_DEFAULTS`, `FUNDED_TOLERANCE`, `TAX_RATE_SEED`, `GAP_FILL_DEFAULT_WEIGHTS`, `CYCLIC_DEPLETION_FRACTION`, `BETR_FLAG_BAND`, `SS_FAIL_NEVER`, the minimum-spend floor, the basis step-up fallback, the two placeholder ceiling rates | |
+| `P133b` | 1.3 in the engine and UI: `GK_DEFAULTS`, `FUNDED_TOLERANCE`, `IRA_GOAL_UNDERSHOOT`, `CYCLIC_DEPLETION_FRACTION`, `BETR_FLAG_BAND`, `GAP_FILL_DEFAULT_WEIGHTS`, `TAX_RATE_SEED`, `CEILING_RATE_PLACEHOLDERS`, `SS_FAIL_NEVER_BEFORE`, `GROWTH_FALLBACK`, `BASIS_STEP_UP_FALLBACK`, `minSpendFloor()`, and `defaultNumOf(id)` in the UI so the twelve `|| 2.8`-style fallbacks read the control instead of restating its `value=` | DONE v11.1928: 769,128 values identical, 526 node, 491 in-page, badge green. Two findings, see findings.md |
 | `P133c` | 1.4 solver knobs: the conversion step and refine span into `OPTIMIZER_GRIDS`, one `BREAK_EVEN_SEARCH`, `EPS_DOLLARS` / `EPS_RATE` / `EPS_EXACT`, `BE_NEVER`, the iteration caps named per site | |
 | `P133d` | 1.5 enums: `STRATEGY`, `SPEND_RULE`, `MC_MODE`, `STRESS_WINDOW`, `MC_SCOPE`, `JOB_KIND`, `ROTH_GAP_FILL`, `EMPTY_CELL`, and an `assert*` at each boundary a key actually arrives through | |
 | `P133e` | 1.3 and 1.6 in the Monte Carlo files and the planner: the engine-side fallbacks, `DEFAULT_SEED`, `STRESS_DEFAULTS`, `PERCENTILES`, `SURVIVAL_BANDS`, `APRIL_NEXT_YEAR`, `DAY_MS`, the due-day constants | |

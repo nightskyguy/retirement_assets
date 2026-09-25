@@ -5685,3 +5685,41 @@ Round 11 (PR review): two nerdknob sections in README.md (the rule table paragra
 section 1 as "The risk-based spend rule, and its rule table"; README keeps one public paragraph on
 Guardrails milestones and the column set. Rule added to CLAUDE.md and memory. The two nerdknob
 mentions left in README predate the branch (main 399/425).
+
+## 2026-09-24 - the planning files catch up with fourteen merged PRs (v11.1917, branch `worktrees/planning-with-files-faf086`)
+
+`/plan` in a fresh worktree. `task_plan.md` and `progress.md` had last been written on 2026-09-20 at
+PR #230 (v11.18bf), and **fourteen PRs merged after that without a line in either file**: #231-#244.
+That work was tracked in `.planning/CODE_QUALITY_REVIEW.md` and in memory instead, so nothing was
+lost, but the NOW table still read "as of 2026-09-13", still listed `P132` and `P127`/`P128` as open
+work in progress, and said nothing about the code quality campaign or the Medicare model. The
+session-catchup script reported nothing: the gap is between the files and `main`, not between the
+files and a cleared session.
+
+Branch merged `origin/main` first (13 commits behind), then:
+
+- **The injection window rewritten.** The as-of line now carries v11.1917, `main` at `d6158bf`, the
+  five suite counts read off `TestTiers.EXPECTED` (526 / 47 / 62 / 15 / 46) and the campaign in one
+  sentence. The `P132` row says MERGED with the server question as the only open item; the
+  `P127 + P128` row is gone, because a NOW table lists open work and `P129` / `P130` shipped inside
+  #229 (round 4, v11.1859). Two new rows: **review D/F**, what the campaign left open, and
+  **Medicare**, section 9 of the two-phase plan.
+- **The 2026-08/09 decision trail moved below the LINE-30 marker.** Those three paragraphs were three
+  of the thirty lines the hook injects on every tool call, and they were pushing table rows out of the
+  window with no error. A "shipped and closed, do not re-open" line took their place. The head is
+  exactly 30 lines and the marker is on 31, asserted by the script that did it.
+- **A new section records #231-#244**, one row per PR with what shipped, then what it left open,
+  measured on `main` rather than remembered: step D never ran (no `GK_DEFAULTS`, no `MC_PARAMS`, no
+  `STRATEGY` / `SPEND_RULE` / `MC_MODE` enums, so a mode typo still falls into the baseline branch),
+  step F is part-done (~3,100 comment lines in `optimizer_core.js` and ~2,700 in `optimizer_ui.js`
+  against a ~1,500 target), finding #9 owes six state deductions and three bracket structures, and
+  `MEDICARE_TWO_PHASE_PLAN.md` section 9 is undecided.
+- **Two stale phase headings corrected:** `P127` and `P128` still said "not committed" for work that
+  merged in PRs #227 and #229.
+
+Two things checked rather than assumed, because memory said otherwise: the plan-bank shortfall
+household was already restored (`ira-heavy-couple-overreaching`, so `plans/` is 20 households, and
+`soft-cap-underfunded` now funds every year on its own because the IRMAA correction cut the
+surcharge), and README's unsourced 2.8% CPI and 5.6% Medicare claims were already corrected in #244.
+
+Planning files only. No page, script or suite changed, so no version bump and no changelog entry.

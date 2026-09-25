@@ -78,8 +78,47 @@ rows also say. Read the report, not this section, before touching any of it.
   override of its own? It has no nerdknob mechanism and the plan assumed no. Section 8 also leaves
   hold-harmless unmodeled and asks for it as a README limitation.
 
-The plan bank is 20 households now, not 19: correcting the IRMAA ladder made `soft-cap-underfunded`
-fund every year on its own, so `ira-heavy-couple-overreaching` was added for a genuine shortfall.
+The plan bank is **19 households**, and #244 added none: correcting the IRMAA ladder made
+`soft-cap-underfunded` fund every year on its own, so its card now points at
+`ira-heavy-couple-overreaching` for a genuine shortfall - a household the bank has held since it was
+built in `3c30911`. Measured with `plans.list()` on 2026-09-25, after the 2026-09-24 entry in
+`progress.md` said 20 and said the household had been restored. Both halves of that were wrong.
+
+## P133: one home per knob  *(2026-09-25, review step D. IN PROGRESS)*
+
+Sections 1.3-1.6 of `.planning/CODE_QUALITY_REVIEW.md`, the one step of the A-G plan that never ran.
+Read those four tables for the site list; this block holds the slicing, the decisions and what each
+slice proved. **Acceptance for every slice is the byte-identity check**, not a green suite: the same
+run over the plan bank before and after, diffed field by field.
+
+| slice | what | state |
+|---|---|---|
+| `P133a` | The identity harness itself: `simulate()`, both optimizers and the Monte Carlo modes over the 19 `plans/` households, dumped to JSON for a before/after diff | DONE: 771,287 values in 12.7 s |
+| `P133b` | 1.3 in the engine and UI: `GK_DEFAULTS`, `FUNDED_TOLERANCE`, `TAX_RATE_SEED`, `GAP_FILL_DEFAULT_WEIGHTS`, `CYCLIC_DEPLETION_FRACTION`, `BETR_FLAG_BAND`, `SS_FAIL_NEVER`, the minimum-spend floor, the basis step-up fallback, the two placeholder ceiling rates | |
+| `P133c` | 1.4 solver knobs: the conversion step and refine span into `OPTIMIZER_GRIDS`, one `BREAK_EVEN_SEARCH`, `EPS_DOLLARS` / `EPS_RATE` / `EPS_EXACT`, `BE_NEVER`, the iteration caps named per site | |
+| `P133d` | 1.5 enums: `STRATEGY`, `SPEND_RULE`, `MC_MODE`, `STRESS_WINDOW`, `MC_SCOPE`, `JOB_KIND`, `ROTH_GAP_FILL`, `EMPTY_CELL`, and an `assert*` at each boundary a key actually arrives through | |
+| `P133e` | 1.3 and 1.6 in the Monte Carlo files and the planner: the engine-side fallbacks, `DEFAULT_SEED`, `STRESS_DEFAULTS`, `PERCENTILES`, `SURVIVAL_BANDS`, `APRIL_NEXT_YEAR`, `DAY_MS`, the due-day constants | |
+| `P133f` | 1.6 UI: one `TIMING` block, the input clamps in `MC_PARAMS` shape, `minNetWorth` | |
+| `P133g` | 1.6 release tokens: one `ASSET_VERSION` appended by a small loader, so a release edits one line instead of the four sites the version-bump memory names | |
+
+**The report is wrong about where the Monte Carlo defaults can live.** Section 1.3 says the engine
+should read `MC_PARAMS[...].dflt` because "it is loaded in the worker". It is not: `MC_PARAMS` is
+declared in `montecarlo/mc_tab.js`, and `worker.js` imports `taxengine.js`, `medicare_costs.js`,
+`optimizer_core.js`, `prng.js`, `stats.js`, `historical_returns.js`, `mc_engine.js` and
+`rails_engine.js` - never `mc_tab.js`, which is UI. So `P133e` needs a file both sides load, and the
+specs move there with `mc_tab.js` reading them rather than owning them.
+
+**The enum rationale needs restating, because a frozen object does not deliver it.** The report sells
+1.5 as "a typo then throws instead of falling into the baseline `else`". A misspelled PROPERTY on a
+frozen object is `undefined`, the comparison is false, and the baseline branch runs exactly as
+before - silently. What actually throws is a check at the boundary where a key arrives from outside:
+`assertKnownStrategy` already does this for `inputs.strategy` (it is why `strategy: 'gk'` raises
+instead of drawing Proportional 0%), and `irmaaMarginModeOf` does the tolerant version for its own
+modes. A `Proxy` that throws on an unknown read would cover code typos too, and is rejected: it sits
+in comparisons inside the per-year loop, and this engine is ~1 ms a run on a fast machine and 3.5-6x
+that on the audience's laptops. So `P133d` ships frozen objects for readability, an `assert*` per
+family at the entry points, and a test that pins each enum's value set against the literals the code
+compares - which is the part that catches a drifted key.
 
 ## P132: Risk-based guardrails as a Spend rule  *(2026-09-19, user-raised. `a`-`h` BUILT, `g` and `j` included; MERGED in PR #230, v11.18bf. Open: the server question)*
 

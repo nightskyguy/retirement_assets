@@ -5718,8 +5718,14 @@ Branch merged `origin/main` first (13 commits behind), then:
   merged in PRs #227 and #229.
 
 Two things checked rather than assumed, because memory said otherwise: the plan-bank shortfall
-household was already restored (`ira-heavy-couple-overreaching`, so `plans/` is 20 households, and
-`soft-cap-underfunded` now funds every year on its own because the IRMAA correction cut the
-surcharge), and README's unsourced 2.8% CPI and 5.6% Medicare claims were already corrected in #244.
+household needed no restoring, and README's unsourced 2.8% CPI and 5.6% Medicare claims were already
+corrected in #244.
+
+**Correction, 2026-09-25:** the sentence above originally said `plans/` holds 20 households and that
+`ira-heavy-couple-overreaching` had been restored. Both wrong, and neither was measured. `plans.list()`
+returns **19**, and that household has been in the bank since `3c30911` built it. What #244 changed is
+`soft-cap-underfunded`'s card: the IRMAA correction cut the surcharge enough that it funds every year
+on its own, so the card now points at `ira-heavy-couple-overreaching` for a genuine shortfall. The
+commit message on `d795511` carries the wrong figure and cannot be edited; this is the record.
 
 Planning files only. No page, script or suite changed, so no version bump and no changelog entry.

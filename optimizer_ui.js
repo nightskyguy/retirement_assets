@@ -475,9 +475,9 @@ function deltaCellHtml(col, r, refRow) {
     if (!meta || !refRow || r === refRow) return null;
     // A dash means this row has nothing to compare - a sweep row has no break-even year, for
     // instance. It must stay a dash: turning "no value" into "+0" would read as a tie.
-    if (col.getValue(r) === '—' || col.getValue(refRow) === '—') return '—';
+    if (col.getValue(r) === EMPTY_CELL || col.getValue(refRow) === EMPTY_CELL) return EMPTY_CELL;
     const a = col.getSortValue(r), b = col.getSortValue(refRow);
-    if (!Number.isFinite(a) || !Number.isFinite(b)) return '—';
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return EMPTY_CELL;
     const d = a - b;
     let body;
     // No unit suffix on the percent columns. These are differences between two percentages, so
@@ -604,7 +604,7 @@ function getInputs() {
     // the form field still shows the user's invalid value. Fix: call
     // DisplayHelpers.setValue('spendChange', '0') after correction so UI matches simulation.
     let spendChange = +val('spendChange')
-    if (spendChange < -25 || spendChange > 25) {
+    if (spendChange < INPUT_LIMITS.SPEND_CHANGE_PCT.min || spendChange > INPUT_LIMITS.SPEND_CHANGE_PCT.max) {
         showMessage('Spend Delta: ' + spendChange + '% is unreasonable. Using 0% instead.', 'warning')
         spendChange = 0
     }
@@ -842,7 +842,8 @@ function rbgCustomProblems() {
     const out = [];
     const bad = (keys, text, fix) => out.push({ ids: keys.map(k => box[k]), text, fix });
     for (const k of Object.keys(box)) {
-        if (v[k] == null || v[k] < 1 || v[k] > 99.5) bad([k], `${name[k]} needs a number from 1 to 99.5`, 'enter one');
+        if (v[k] == null || v[k] < INPUT_LIMITS.RAILS_CHANCE_PCT.min || v[k] > INPUT_LIMITS.RAILS_CHANCE_PCT.max)
+            bad([k], `${name[k]} needs a number from ${INPUT_LIMITS.RAILS_CHANCE_PCT.min} to ${INPUT_LIMITS.RAILS_CHANCE_PCT.max}`, 'enter one');
     }
     if (out.length) return out;
     const p = x => `${x}%`;
@@ -857,7 +858,7 @@ function rbgCustomProblems() {
         `set Target ${p(v.lower + RBG_GAP)} or Cut at ${p(Math.max(1, v.target - RBG_GAP))}`);
     if (v.upper <= v.target) bad(['target', 'upper'],
         `${name.upper} ${p(v.upper)} must be above ${name.target} ${p(v.target)}`,
-        `set Raise at ${p(Math.min(99.5, v.target + 1))} or Target ${p(v.upper - 1)}`);
+        `set Raise at ${p(Math.min(INPUT_LIMITS.RAILS_CHANCE_PCT.max, v.target + 1))} or Target ${p(v.upper - 1)}`);
     return out;
 }
 // The four custom numbers as chances, or null when they do not describe a rule.
@@ -904,7 +905,7 @@ function updateStartAgeWarning() {
     const el = document.getElementById('startAge-warn');
     if (!el) return;
     const age = resolveStartAge(val('startAge'), +val('birthyear1'));
-    el.style.display = (age > 0 && age < 60) ? 'block' : 'none';
+    el.style.display = (age > 0 && age < INPUT_LIMITS.EARLY_WITHDRAWAL_NOTE_AGE) ? 'block' : 'none';
 }
 
 function updateAssetsYearLabel() {
@@ -1070,8 +1071,8 @@ function marketTooltipTitle(base, srcYear) {
 function yearAgeTaxTooltipTitle(log, items) {
     const r = log[items[0]?.dataIndex];
     if (!r) return { row: null, line: items[0]?.label ?? '' };
-    const a1 = (r.age1 == null || r.age1 === '—') ? '--' : r.age1;
-    const a2 = (r.age2 == null || r.age2 === '—') ? '--' : r.age2;
+    const a1 = (r.age1 == null || r.age1 === EMPTY_CELL) ? '--' : r.age1;
+    const a2 = (r.age2 == null || r.age2 === EMPTY_CELL) ? '--' : r.age2;
     const taxPct = r.totalIncome > 0
         ? (r.totalTax / r.totalIncome * 100).toFixed(1) + '%'
         : '--';
@@ -1278,6 +1279,49 @@ const BASELINE_MARK = '⚓ ';
 // most years of a plan living close to its goal, and the marker is meant to point at the years worth
 // looking at. Changing one of the two must not change the other.
 const CHART_SHORTFALL_FRACTION = 0.90;
+// Every interval the interface waits on, in one place. Six of them, four of which used to be bare
+// numbers at their call sites; the two that were already named keep their reasons below.
+//   OPT_COALESCE_MS         a settle delay beside the double requestAnimationFrame, so a burst of
+//                           edits runs the sweep once. The rAF pair wins on a visible tab; the timer
+//                           is what fires on a hidden one, where rAF never does.
+//   OPT_BUSY_HOLD_MS        how long the finished banner stays up. A banner that vanishes the instant
+//                           the work ends reads as a glitch rather than as an answer - on a fast
+//                           sweep it was on screen for well under a second.
+//   RAILS_AUTORUN_DEBOUNCE_MS   the rails solve is seconds of work, so an edit waits this long for
+//                           the next keystroke before starting one.
+//   RAILS_STATUS_TICK_MS    how often the rails panel repaints its elapsed time while solving.
+//   SIDEBAR_RECALC_DEBOUNCE_MS  the sidebar edit -> recalculate delay. This is the interval the
+//                           comment above scheduleRecalc refers to.
+//   STRESS_PRIME_DELAY_MS   deferral of the one stress pass run at load, past first paint.
+const TIMING = Object.freeze({
+    OPT_COALESCE_MS:            60,
+    OPT_BUSY_HOLD_MS:           5000,
+    RAILS_AUTORUN_DEBOUNCE_MS:  900,
+    RAILS_STATUS_TICK_MS:       250,
+    SIDEBAR_RECALC_DEBOUNCE_MS: 400,
+    STRESS_PRIME_DELAY_MS:      600,
+});
+
+// Input clamps and the thresholds a warning fires at. The Monte Carlo panel's own boxes keep their
+// min/max in MC_PARAMS (montecarlo/mc_tab.js), which is the same idea for the same reason.
+const INPUT_LIMITS = Object.freeze({
+    SPEND_CHANGE_PCT:   { min: -25, max: 25 },     // real spend change per year
+    RAILS_CHANCE_PCT:   { min: 1,   max: 99.5 },   // a rails chance-of-success box
+    GROWTH_WARN_HIGH:   10,   // growth above this draws an optimistic-assumption note
+    GROWTH_WARN_LOW:    3,    // and below this a conservative one (mirrored in mc_tab.js)
+    // The statutory early-withdrawal age is 59 1/2, so a note shown below 60 reaches everyone the
+    // penalty can still apply to.
+    EARLY_WITHDRAWAL_NOTE_AGE: 60,
+});
+
+// The table's own "nothing to show here" cell, produced and COMPARED in a dozen places - a column's
+// delta is '-' when either side is, and the widow/RMD readers treat it as "this person is gone".
+const EMPTY_CELL = '—';
+
+// Below this terminal net worth the stat tile reads as a plan that ran out rather than one that
+// ended small.
+const STAT_TILE_MIN_NET_WORTH = 100000;
+
 
 // The ⚓ baseline is identified by object/id rather than by a label prefix: unlike the current plan,
 // its label is never rewritten, because which row IS the baseline changes with the active objective.
@@ -1323,13 +1367,9 @@ function runOptimizer() {
         }
     };
     _optPendingFrame = requestAnimationFrame(() => { _optPendingFrame = requestAnimationFrame(start); });
-    _optPendingTimer = setTimeout(start, 60);
+    _optPendingTimer = setTimeout(start, TIMING.OPT_COALESCE_MS);
 }
 
-// How long the finished banner stays up. A banner that vanishes the instant the work ends reads as
-// a glitch rather than as an answer -- on a fast sweep it was on screen for well under a second.
-// Holding it lets the reader see that something ran, and what it cost, before it goes.
-const OPT_BUSY_HOLD_MS = 5000;
 let _optBusyHideTimer = null;
 
 // state: 'busy' while the sweep runs, 'done' once it has finished. 'done' is not the same as hidden:
@@ -1354,7 +1394,7 @@ function setOptimizerBusy(state, ms) {
     el.innerHTML = '✓ Calculating strategies… <strong>DONE</strong>'
         + (secs != null ? `<span style="font-weight:400;color:#4a5c6a;"> in ${secs}s.</span>` : '');
     el.style.display = '';
-    _optBusyHideTimer = setTimeout(() => { el.style.display = 'none'; }, OPT_BUSY_HOLD_MS);
+    _optBusyHideTimer = setTimeout(() => { el.style.display = 'none'; }, TIMING.OPT_BUSY_HOLD_MS);
 }
 
 function _runOptimizerNow() {
@@ -2049,7 +2089,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
         {
             key: 'rank', label: 'Rank',
             title: `Rank under the selected objective - "${objLabel}". 1 = best, N = worst among successful plans (failed plans show -). Change the objective with the "Optimize for" selector above.`,
-            getValue: r => (OptimizerState._rankMap && OptimizerState._rankMap[r._id]) ? OptimizerState._rankMap[r._id] : '—',
+            getValue: r => (OptimizerState._rankMap && OptimizerState._rankMap[r._id]) ? OptimizerState._rankMap[r._id] : EMPTY_CELL,
             getSortValue: r => (OptimizerState._rankMap && OptimizerState._rankMap[r._id]) ? OptimizerState._rankMap[r._id] : Infinity
         },
         {
@@ -2096,7 +2136,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             title: 'How unevenly the plan ends up split across the three tax treatments: pre-tax IRA (net of the future IRA rate), Roth, and taxable (brokerage plus cash). 0% is a perfectly even three-way split, so in any future year you can draw from whichever account is cheapest that year. 100% means it all landed in one bucket and you draw from whatever you have. Lower is better. This is the measure the "Tax Flexibility" objective ranks on, among the plans that also finish among the wealthiest.',
             getValue: r => {
                 const s = afterTaxBucketSpread(r, OptimizerState.sharedFutureIRARate ?? 0);
-                return Number.isFinite(s) ? `${(s * 100).toFixed(0)}%` : '—';
+                return Number.isFinite(s) ? `${(s * 100).toFixed(0)}%` : EMPTY_CELL;
             },
             getSortValue: r => afterTaxBucketSpread(r, OptimizerState.sharedFutureIRARate ?? 0)
         },
@@ -2126,13 +2166,13 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
         {
             key: 'rmdtax', label: 'RMD Tax%',
             title: 'Share of lifetime tax attributable to RMDs. High means forced IRA distributions are driving the tax bill - a signal that earlier conversions might help.',
-            getValue: r => r.totals.tax > 0 ? `${(r.totals.rmdTax / r.totals.tax * 100).toFixed(0)}%` : '—',
+            getValue: r => r.totals.tax > 0 ? `${(r.totals.rmdTax / r.totals.tax * 100).toFixed(0)}%` : EMPTY_CELL,
             getSortValue: r => r.totals.rmdTax / (r.totals.tax || 1)
         },
         {
             key: 'convBE', label: 'Break Even',
             title: 'The year this strategy\'s after-tax wealth permanently overtakes the same strategy with no conversions (same sustained-crossing definition as the single-scenario Break Even stat: the lead must hold through the end of the plan). "—" means it never sustains a lasting lead, or the strategy never converts at all. Unlike Conv Tax, this prices in the tax still owed on whatever\'s left in the IRA, so it\'s the more complete answer to whether conversions paid off overall. Sort by it, or choose "Earliest Break Even" under Optimize for, to rank strategies by how fast their conversions pay back.',
-            getValue: r => r._convBEYear != null ? String(r._convBEYear) : '—',
+            getValue: r => r._convBEYear != null ? String(r._convBEYear) : EMPTY_CELL,
             getSortValue: r => r._convBEYear ?? BE_NEVER
         },
         {
@@ -2144,7 +2184,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             // were comparing against. It is on the row already as _optConvAmt; this shows it.
             key: 'extraConv', label: 'Extra Conv',
             title: 'The additional yearly IRA→Roth conversion this row runs, on top of whatever the strategy already converts. This is the amount Optimize Conversions searched for, and it is what the Extra Annual Roth Conversion field is set to when you load the row. A dash means the row adds no extra conversion. The amount is also in the tooltip on the Strategy cell, so it is readable without turning this column on.',
-            getValue: r => (r._optConvAmt ? Math.round(r._optConvAmt).toLocaleString() : '—'),
+            getValue: r => (r._optConvAmt ? Math.round(r._optConvAmt).toLocaleString() : EMPTY_CELL),
             getSortValue: r => r._optConvAmt ?? -Infinity
         },
         {
@@ -2155,7 +2195,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             // black as a gain, with only a minus sign to say otherwise. No dollar prefix: every
             // other money column in this table is bare, and the heading already says what it is.
             getValue: r => {
-                if (r._convSavings == null) return '—';
+                if (r._convSavings == null) return EMPTY_CELL;
                 const v = Math.round(inC() ? (r._convSavingsCurrent ?? r._convSavings) : r._convSavings);
                 const c = v > 0 ? '#1a7f37' : v < 0 ? '#cf222e' : '#57606a';
                 return `<span style="color:${c}">${v > 0 ? '+' : ''}${v.toLocaleString()}</span>`;
@@ -3137,11 +3177,11 @@ function analyzeColumnContent(log) {
             const value = ANNUAL_RUNNING_TOTALS[key] ? ANNUAL_RUNNING_TOTALS[key].source(row) : row[key];
 
             // Check if value exists and is non-zero
-            if (value != null && value !== '' && value !== '—') {
+            if (value != null && value !== '' && value !== EMPTY_CELL) {
                 if (!isNaN(value) && parseFloat(value) !== 0) {
                     hasNonZeroValue = true;
                     break;
-                } else if (isNaN(value) && value !== '—') {
+                } else if (isNaN(value) && value !== EMPTY_CELL) {
                     // Non-numeric non-empty value
                     hasNonZeroValue = true;
                     break;
@@ -3659,7 +3699,7 @@ function updateTable(log) {
                 } else {
                     // Normalize IRMAATier base value for display
                     td.textContent = (key === 'IRMAATier' && (value === '-none-' || value === '-'))
-                        ? '—'
+                        ? EMPTY_CELL
                         : (value ?? '');
                 }
 
@@ -3793,7 +3833,7 @@ function openTaxPlanner(row, prevRow) {
 
 
 
-function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWorth = 100000) {
+function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWorth = STAT_TILE_MIN_NET_WORTH) {
     // P113. The tiles read the SAME snapshot a saved plan records, so the two cannot drift apart.
     // They used to be independent derivations of the same quantities - these values as locals here,
     // and nothing at all on the save side, because no function returned them as data.
@@ -3854,7 +3894,7 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     const changeEl = document.getElementById('stat-success');
     if (changeEl) changeEl.innerText = _lastChangedInputLabel ? '↺ ' + _lastChangedInputLabel : '';
     const convBEEl = document.getElementById('stat-conv-be');
-    if (convBEEl) convBEEl.innerText = totals.convBEYear ?? '—';
+    if (convBEEl) convBEEl.innerText = totals.convBEYear ?? EMPTY_CELL;
     // Break Even ⓘ - now a SEARCHED stop-year suggestion, not just a "why blank" explanation.
     // Evidence (findings.md, 2026-07-23) proved (a) stopping conversions partway can beat both
     // converting to the end and converting nothing, and (b) the old boundary-year text named the
@@ -3909,12 +3949,12 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     const avgSpendEl = document.getElementById('stat-avg-spend-rate');
     if (avgSpendEl) {
         avgSpendEl.innerText = (totals.avgWdRate != null)
-            ? (totals.avgWdRate * 100).toFixed(1) + '%' : '—';
+            ? (totals.avgWdRate * 100).toFixed(1) + '%' : EMPTY_CELL;
         // Tile shows the simple mean; the other two framings go in the tooltip so the single
         // headline number can't be mistaken for the whole picture. The tile div owns the title.
         const wdTile = avgSpendEl.closest('div[title]');
         if (wdTile) {
-            const pct = v => (v != null) ? (v * 100).toFixed(1) + '%' : '—';
+            const pct = v => (v != null) ? (v * 100).toFixed(1) + '%' : EMPTY_CELL;
             wdTile.title = 'Portfolio withdrawals funding spending and taxes, divided by the '
                 + 'start-of-year portfolio balance. Roth conversions and reinvested surplus are '
                 + 'excluded; Social Security and pension are not subtracted. The classic 4% rule '
@@ -4357,7 +4397,7 @@ function computeMilestones(log) {
     // (optimizer_core.js resolveHousehold), so the birth year is recoverable from any row with a
     // numeric age, and rmdStartAge() is the rule getRMDPercentage() uses. A non-numeric age ('—')
     // means not alive / no spouse.
-    const numAge = a => (a == null || a === '—') ? null : +a;
+    const numAge = a => (a == null || a === EMPTY_CELL) ? null : +a;
     const rmdAgeFor = (year, age) => rmdStartAge(year - age);
     // Fires on the first row where this person reaches their RMD age AND the prior row had them
     // below it. Requiring the crossing to happen inside the log means a plan that starts after
@@ -4375,7 +4415,7 @@ function computeMilestones(log) {
         // right-hand end of the chart where a long label is drawn right-aligned and sweeps left
         // across its neighbors. The step-up glyph replaces it at a fraction of the width.
         if (!deathDone && prevStatus && status && status !== prevStatus) {
-            const youGone = (r.age1 == null || r.age1 === '—');
+            const youGone = (r.age1 == null || r.age1 === EMPTY_CELL);
             ms.push({ x: i, label: youGone ? 'You' : 'Spouse', color: '#7b1fa2',
                       stepUp: stepUpFraction >= 1 ? 'full' : 'half' });
             deathDone = true;
@@ -4450,8 +4490,8 @@ function computeMilestones(log) {
         // Whoever is still alive on the final row is the one it belongs to; the other shows '—'.
         // Both alive means both life expectancies land on the same year, so there was no first
         // death to flip the filing status and this is the only death marker the plan gets.
-        const _you = !(_lastRow.age1 == null || _lastRow.age1 === '—');
-        const _spouse = !(_lastRow.age2 == null || _lastRow.age2 === '—');
+        const _you = !(_lastRow.age1 == null || _lastRow.age1 === EMPTY_CELL);
+        const _spouse = !(_lastRow.age2 == null || _lastRow.age2 === EMPTY_CELL);
         const _label = (_you && _spouse) ? 'Both' : (_you ? 'You' : 'Spouse');
         ms.push({ x: _lastIdx, label: _label, color: '#7b1fa2', stepUp: 'full' });
     }
@@ -4977,7 +5017,6 @@ const RailsState = {
     ticker: null,
 };
 // Long enough to swallow the sidebar's own 400ms recalc debounce and a second quick edit.
-const RAILS_AUTORUN_DEBOUNCE_MS = 900;
 
 // The panel's settings. Without the nerdknob the cadence and path count are the defaults, whatever
 // the hidden boxes still hold from a knob session.
@@ -5091,7 +5130,7 @@ function runRails() {
     Object.assign(RailsState, { running: true, runIsPath: inReplay, runFingerprint: fingerprint, startedAt: performance.now(),
                                 progress: 0, error: null });
     railsStopTicker();
-    RailsState.ticker = setInterval(railsRenderStatus, 250);
+    RailsState.ticker = setInterval(railsRenderStatus, TIMING.RAILS_STATUS_TICK_MS);
     railsRenderPanel();
     // The plan without the rule's table (the job runs the plan without the rule anyway), plus the
     // custom set when the boxes define one.
@@ -5290,7 +5329,7 @@ function railsScheduleAutoRun() {
     RailsState.debounce = setTimeout(() => {
         RailsState.debounce = null;
         if (wanted()) runRails();
-    }, RAILS_AUTORUN_DEBOUNCE_MS);
+    }, TIMING.RAILS_AUTORUN_DEBOUNCE_MS);
 }
 
 // Page load, and the nerdknob going on or off. The panel is always there; what the solve costs -
@@ -6301,7 +6340,7 @@ function setupAutoRecalc() {
             // summary bar and is visible from everywhere. mcInputsChanged is a no-op when its own
             // hash has not moved, so a change Monte Carlo does not care about costs nothing.
             if (typeof mcInputsChanged === 'function') mcInputsChanged();
-        }, 400);
+        }, TIMING.SIDEBAR_RECALC_DEBOUNCE_MS);
     }
     document.querySelectorAll('.sidebar input, .sidebar select,'
                             + ' #mc-nerd-panel input[type=checkbox]').forEach(el => {
@@ -6314,7 +6353,7 @@ function setupAutoRecalc() {
     // Prime the Stress Test tile once on load so it reads a real number before the user touches
     // anything or visits the Monte Carlo tab. Deferred past the first paint because it spawns a
     // worker; the pass itself is ~10 simulations. Everything after this is driven by scheduleRecalc.
-    setTimeout(() => { if (typeof mcInputsChanged === 'function') mcInputsChanged(); }, 600);
+    setTimeout(() => { if (typeof mcInputsChanged === 'function') mcInputsChanged(); }, TIMING.STRESS_PRIME_DELAY_MS);
 }
 
 
@@ -8447,9 +8486,9 @@ function updateGrowthDisplay() {
     let html = `Real growth: <strong>${sign}${realPct.toFixed(1)}%</strong>`
              + ` <span style="color:#888;">(${totalNominal.toFixed(1)}% nominal [${growth}% price + ${div}% div] &minus; ${inflation}% inflation)</span>`;
 
-    if (growth > 10) {
+    if (growth > INPUT_LIMITS.GROWTH_WARN_HIGH) {
         html += `<br><span style="color:#b45309;">⚠ Optimistic - S&amp;P 500 long-run nominal CAGR is ~10%; diversified portfolios typically 6–9%.</span>`;
-    } else if (growth < 3) {
+    } else if (growth < INPUT_LIMITS.GROWTH_WARN_LOW) {
         html += `<br><span style="color:#b45309;">⚠ Pessimistic - below typical equity range (6–10% nominal). Appropriate only for very conservative (mostly-bond) allocations.</span>`;
     }
 

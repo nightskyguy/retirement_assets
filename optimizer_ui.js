@@ -243,13 +243,11 @@ function applyNerdKnobVisibility() {
     // silently running a different plan than the link describes.
     const wdTimingWrap = document.getElementById('withdrawTiming-wrap');
     if (wdTimingWrap) wdTimingWrap.style.display = NERD_KNOBS ? '' : 'none';
-    // P102b1. Goal-first mode - gated while it is being lived with, and force-reverted on the way
-    // out for the same reason relative view is below: a reader who enabled it once must not be
-    // left holding a plan whose controls they can no longer see. goalFirstReset() hands the
-    // classic fields back their own values, so knob-off lands on the plan the panel built rather
-    // than on a rollback.
-    // P102b7: visible only under ?nerdknob=goal AND with the knob on, so the runtime checkbox can
-    // still hide it (and force-revert it) the way it hides every other gated surface.
+    // Goal-first mode: visible only under ?nerdknob=goal AND with the knob on, so the runtime checkbox
+    // can hide it the way it hides every other gated surface. Force-reverted on the way out, for the
+    // reason relative view is below - a reader who enabled it once must not be left holding a plan whose
+    // controls they can no longer see. goalFirstReset() hands the classic fields back their own values,
+    // so knob-off lands on the plan the panel built rather than on a rollback.
     const goalFirstWrap = document.getElementById('goalfirst-panel');
     if (goalFirstWrap) goalFirstWrap.style.display = goalFirstOn() ? '' : 'none';
     // P128. The risk-based rails panel is for everyone; the knob shows its cadence, path count and
@@ -262,13 +260,10 @@ function applyNerdKnobVisibility() {
     // and this covers the knob-ON direction plus the very first call at init.
     refreshConvEndModeOptions();
     refreshConvEndEnabled();
-    // P84. Advisor fee - gated by the user's 2026-08-28 decision. Hiding it leaves the field at
-    // whatever it holds, which is 0 by default and therefore no fee; but a plan LOADED from a URL
-    // carrying ?af= keeps its fee and still computes it, because the input is only hidden, never
-    // cleared. That is the whole reason the URL keys are not gated with the field.
-    // P84. The advisor fee is NOT gated: it is a fact about the plan, not a diagnostic, which is
-    // the rule written just above. It sat behind the knob only while it was being proven out.
-    // Ungating costs nobody a number, because the scope defaults to "none".
+    // The advisor fee is NOT gated: it is a fact about the plan, not a diagnostic, which is the rule
+    // written just above. Ungating costs nobody a number, because the scope defaults to "none". Its URL
+    // keys are not gated with any field either: hiding an input leaves its value in place, so a plan
+    // loaded from a link carrying ?af= keeps its fee and still computes it.
     updateAdvisorFeeHint();
     const irmaaMarginWrap = document.getElementById('irmaaMarginMode-wrap');
     if (irmaaMarginWrap) irmaaMarginWrap.style.display = NERD_KNOBS ? '' : 'none';
@@ -405,16 +400,14 @@ function recomputeDeltasAgainst(referenceRow) {
 // longer in the table (the user changed a parameter out from under it) is dropped rather than left
 // pointing at a stale object.
 function resolveCompareRow() {
-    // Keep the pinned row itself when it is still one of the rows on screen, instead of re-deriving
-    // it from `compareSelection`. Changing the goal is allowed to move the ⚓ BASELINE; it must not
-    // disturb the row the user chose to compare against.
-    //
-    // Re-deriving was never safe for an objective change, because `results` is not rebuilt then and
-    // the match below is not unique: a ⇌ conversion row and the plain row it was built from share a
-    // `_selection`, and only `_isCurrentPlan` separates any two candidates. So find() could return a
-    // DIFFERENT row than the one that was pinned, which reads as the pin having moved or vanished.
-    // Identity is exact and cannot mis-resolve; the selection match below still handles the case it
-    // was written for, a fresh sweep where these row objects no longer exist.
+    // Keep the pinned row itself when it is still one of the rows on screen, instead of re-deriving it
+    // from `compareSelection`. Changing the goal is allowed to move the ⚓ BASELINE; it must not disturb
+    // the row the user chose to compare against. Re-deriving cannot be safe for an objective change,
+    // because `results` is not rebuilt then and the match below is not unique: a ⇌ conversion row and
+    // the plain row it was built from share a `_selection`, and only `_isCurrentPlan` separates any two
+    // candidates, so find() can return a different row than the one pinned. Identity is exact. The
+    // selection match below still handles the case it was written for, a fresh sweep where these row
+    // objects no longer exist.
     const _cur = OptimizerState.compareRow;
     if (_cur && Array.isArray(OptimizerState.results) && OptimizerState.results.includes(_cur)) return;
     const results = OptimizerState.results;
@@ -1022,9 +1015,8 @@ function applySuggestIraGoal() {
 let _replayState = null;   // { rows, mcMode, planFields, label, pathName, nav } from mc_tab.js, or null
 let _replayExitHooked = false;
 let _preReplayIncomeView = null;   // income-chart view to restore when replay ends
-// P82d. Keeping the path while editing IS the behavior now, not a choice: a sidebar edit re-runs
-// against the SAME sequences instead of ending the replay. The checkbox that used to gate this is
-// gone, and with it the flag - every branch that read it now reads "always".
+// Keeping the path while editing IS the behavior, not a choice: a sidebar edit re-runs against the SAME
+// sequences instead of ending the replay. Every branch that once read a flag for this reads "always".
 
 // P78. What the banner says. Split out of syncReplayBanner so the rule is testable without a
 // live run: once the plan has been edited under the lock, the run's own outcome ("ruined 2035")
@@ -1547,14 +1539,12 @@ function _runOptimizerNow() {
             // that matches the user's current plan, and loadOptimizerResult() restores the fields
             // the older _-prefixed set never carried (orderedSeq, the GK guardrails).
             _selection: {
-                // P104b3. selectionOf() FIRST, then the explicit fields below. This list is
-                // hand-kept and STRATEGY_SELECTION_FIELDS is the real one, and they had already
-                // drifted: `splitWeights` was in the shared list and missing here, so a Fixed Split
-                // row recorded no mix and clicking it left whatever the sidebar had - the table
-                // showing one plan and the click running another, the PF8 class the comment above
-                // says this object exists to prevent. Spreading the shared list first means a field
-                // added there is carried automatically; the explicit entries after it keep their
-                // coercions (`!!`, `?? -1`, `?? ''`), which sameStrategySelection relies on.
+                // selectionOf() FIRST, then the explicit fields below. STRATEGY_SELECTION_FIELDS is the
+                // real list and this one is hand-kept, so spreading the shared list first means a field
+                // added there is carried automatically - without that, a field present in one and absent
+                // here records no value and clicking the row runs a different plan than the table shows.
+                // The explicit entries after it keep their coercions (`!!`, `?? -1`, `?? ''`), which
+                // sameStrategySelection relies on.
                 ...selectionOf(inputs),
                 strategy: inputs.strategy,
                 propWithdraw: inputs.propWithdraw, nYears: inputs.nYears,
@@ -2148,11 +2138,9 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             },
             getSortValue: r => afterTaxBucketSpread(r, OptimizerState.sharedFutureIRARate ?? 0)
         },
-        // The ΔEnd Wealth and ΔTax columns were removed 2026-09-07. 'Show as Differences' already
-        // turns every comparable column into a difference from the same reference row, so a pair of
-        // columns whose NAMES say delta was a second, narrower copy of that feature - and one that
-        // only ever covered two of the metrics. Pinning a row with the compare control now changes
-        // what 'Show as Differences' measures against, which is the whole of what it used to do.
+        // No delta columns: 'Show as Differences' turns every comparable column into a difference from
+        // the same reference row, and pinning a row with the compare control changes what it measures
+        // against. A pair of columns whose NAMES say delta would be a second, narrower copy of that.
         {
             key: 'rate', label: 'Tax Rate',
             title: 'Lifetime tax as a percentage of lifetime gross income (total tax ÷ total income). A blended effective rate across the whole plan.',
@@ -2627,11 +2615,8 @@ function renderOptimizerTable(results) {
         const spendVals = results.map(r => r.totals.spend);
         const allSame = spendVals.every(v => v === spendVals[0]);
         if (allSame && results.length > 1) {
-            // Names the columns that are ACTUALLY on screen. The old string named three fixed
-            // columns, one of which (Yrs Funded) is no longer a default column at all and two of
-            // which the active goal may have put away. Advice pointing at a column the reader
-            // cannot see is worse than no advice. (The two Δ columns this list used to exclude are
-            // gone; "Show as Differences" turns these same columns into differences instead.)
+            // Names the columns that are ACTUALLY on screen: the active goal puts some away, and advice
+            // pointing at a column the reader cannot see is worse than no advice.
             const _diffKeys = ['tax', 'afterTaxNW', 'mixSpread', 'finalRoth', 'finalIRA', 'rmdtax', 'convBE'];
             const _diffNames = columns.filter(c => _diffKeys.includes(c.key)).map(c => c.label).slice(0, 3);
             noteEl.textContent = 'ℹ️ All strategies show the same Total Spendable - this means every strategy fully funds your spending goal. '
@@ -3804,12 +3789,10 @@ function openTaxPlanner(row, prevRow) {
     const marginalOrd = ((row['FedRate%'] || 0) + (row['StateRate%'] || 0)) * 100;
     if (marginalOrd > 0) setF('marginalOrdRate', marginalOrd.toFixed(1));
 
-    // Brokerage position, in dollars. The planner needs the unrealized-gain SHARE to price
-    // "raise the tax money by selling brokerage", and it used to be stuck on its own hardcoded
-    // 40% because this handoff never sent anything: neither the position nor the LTCG rate was in
-    // the URL, so editing the basis here changed nothing over there. Both amounts are already on
-    // the row, and (Brokerage - Basis) / Brokerage is the same ratio the engine itself keeps as
-    // yr.capGainsPercentage.
+    // Brokerage position, in dollars, and the LTCG rate: the planner needs the unrealized-gain SHARE to
+    // price "raise the tax money by selling brokerage", and without both in the URL it falls back to a
+    // hardcoded share, so editing the basis here would change nothing over there.
+    // (Brokerage - Basis) / Brokerage is the ratio the engine keeps as yr.capGainsPercentage.
     set('bv', row.Brokerage);
     set('bb', row.Basis);
 
@@ -3903,14 +3886,13 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     if (changeEl) changeEl.innerText = _lastChangedInputLabel ? '↺ ' + _lastChangedInputLabel : '';
     const convBEEl = document.getElementById('stat-conv-be');
     if (convBEEl) convBEEl.innerText = totals.convBEYear ?? EMPTY_CELL;
-    // Break Even ⓘ - now a SEARCHED stop-year suggestion, not just a "why blank" explanation.
-    // Evidence (findings.md, 2026-07-23) proved (a) stopping conversions partway can beat both
-    // converting to the end and converting nothing, and (b) the old boundary-year text named the
-    // WRONG year (off $662k). So whenever conversions occur we run bestConversionStopYear and lead
-    // with the year that maximizes after-tax wealth + its dollar gain; the old boundary diagnosis
-    // is demoted to secondary color, shown only when Break Even is actually blank. Computed eagerly
-    // so hovering reveals it with no click. Cost: n+1 cheap runs + 1 OC re-run, well under a
-    // runSimulation(), same order as the prior diagnostic scan.
+    // Break Even ⓘ is a SEARCHED stop-year suggestion, not a "why blank" explanation: whenever
+    // conversions occur, bestConversionStopYear runs and the readout leads with the year that maximizes
+    // after-tax wealth and its dollar gain. Stopping partway can beat both converting to the end and
+    // converting nothing, and the boundary year is not that year (research: findings.md, "the suggested
+    // Stop Conversion year is a MOVING PEAK"). The boundary diagnosis stays as secondary color, shown
+    // only when Break Even is blank. Computed eagerly, so hovering over it reveals it with no click; the
+    // cost is n+1 cheap runs plus one OC re-run, well under a runSimulation().
     const diagIcon = document.getElementById('stat-conv-be-diagnose');
     const diagResultEl = document.getElementById('stat-conv-be-diagnose-result');
     if (diagIcon && diagResultEl) {
@@ -6402,15 +6384,15 @@ function onConvSubFlagChange() {
         main.checked = cxr && fcc;
         main.indeterminate = cxr !== fcc;
     }
-    // P102b3. The goal-first "Roth conversions" selector is a second convenience control over the
-    // same flags, so it is kept honest here for exactly the reasons the comment above lists: an
-    // optimizer row, a share URL, a scenario or an MC variation can all switch conversions on
-    // without firing onchange, and a panel still reading "Never convert" would be a lie.
+    // The goal-first "Roth conversions" selector is a second convenience control over the same flags, so
+    // it is kept honest here for the reasons the comment above lists: an optimizer row, a share URL, a
+    // scenario or an MC variation can all switch conversions on without firing onchange, and a panel
+    // still reading "Never convert" would be a lie.
     //
-    // ONE DIRECTION ONLY. "never" is CLEARED when conversions appear, and is never SET
-    // automatically. All flags off is also the shipped default of a plan whose Optimizer is still
-    // searching for a conversion, so inferring "never" from it would answer a question the user
-    // was never asked, and would switch Optimize Conversions off behind their back.
+    // ONE DIRECTION ONLY. "never" is CLEARED when conversions appear and is never SET automatically. All
+    // flags off is also the shipped default of a plan whose Optimizer is still searching for a
+    // conversion, so inferring "never" from it would answer a question the user was never asked and
+    // switch Optimize Conversions off behind their back.
     const gfMode = document.getElementById('gf-conv-mode');
     if (gfMode && gfMode.value === 'never'
         && (cxr || fcc || (+val('extraConversionAmount') || 0) > 0)) {
@@ -7215,17 +7197,16 @@ function buildShareURL() {
             params.set(short, el.value);
         }
     });
-    // P84. `afm` is NOT emitted, and pinning it here was over-engineering on my part. buildShareURL
-    // emits each field's own TEXT, so an explicit "$15" or "15%" already travels in `af` verbatim
-    // and reproduces exactly; a bare "15" means what the inference says, which is what the user
-    // typed and saw. A second parameter carrying the same fact could only ever disagree with it.
-    // Incoming `afm` is still ACCEPTED by loadFromURL, so links already generated keep working.
-    // P64e: these have no DOM field, so the loop above cannot see them. Re-emit them or a shared
-    // link silently drops a figure the recipient never had a way to re-enter.
-    // P100b1: the "Optimize for" goal is UI state, not an engine input, so the field loop above
-    // cannot see it - and without it a shared link silently reopens on Tax Flexibility, showing the
-    // recipient a different winner and a different anchor baseline for the same plan. Emitted only
-    // when it differs from the default, so existing links are unchanged.
+    // `afm` is NOT emitted: buildShareURL emits each field's own TEXT, so an explicit "$15" or "15%"
+    // travels in `af` verbatim and a bare "15" means what the inference says, which is what the user
+    // typed and saw. A second parameter carrying the same fact could only disagree with it. Incoming
+    // `afm` is still ACCEPTED by loadFromURL, so links already generated keep working.
+    //
+    // The three below have no DOM field, so the loop above cannot see them, and each is re-emitted
+    // because a shared link would otherwise silently drop a figure the recipient cannot re-enter. The
+    // "Optimize for" goal is UI state rather than an engine input: without it a link reopens on Tax
+    // Flexibility, showing a different winner and a different anchor baseline for the same plan. Emitted
+    // only when it differs from the default, so existing links are unchanged.
     if (OptimizerState.objective && OptimizerState.objective !== 'taxflex') {
         params.set('obj', OptimizerState.objective);
     }
@@ -7267,10 +7248,10 @@ function loadFromURL() {
         }
         params.delete('advisorFeeMode');
     }
-    // The two timing selects became one mode, so an older link carries `fwt` and maybe `cvt`. Folded
-    // explicitly rather than left to fall through: `OPT_SHORT_TO_LONG` is DERIVED from the
-    // long-to-short map, so dropping the old keys also drops the inbound mapping, and an old link
-    // would quietly load the new default while claiming to describe a plan.
+    // An older link carries `fwt` and maybe `cvt`, from when the timing was two selects rather than one
+    // mode. Folded explicitly rather than left to fall through: `OPT_SHORT_TO_LONG` is DERIVED from the
+    // long-to-short map, so dropping the old keys drops the inbound mapping too, and an old link would
+    // quietly load the new default while claiming to describe a plan.
     //
     //   fwt=early              -> Early
     //   fwt=late + cvt=early   -> Split
@@ -7280,9 +7261,8 @@ function loadFromURL() {
     // `fwt=early` with `cvt=late` is the one shape the modes cannot express - spending before a
     // conversion, which only ever surrendered Roth growth. It takes Early and says so.
     //
-    // READ UNDER BOTH NAMES. `params` was built by mapping short codes through `OPT_SHORT_TO_LONG`,
-    // which no longer carries `fwt`/`cvt`, so those keys arrive UNMAPPED and still short. A fold
-    // looking only for the long names would never fire.
+    // READ UNDER BOTH NAMES: those keys arrive UNMAPPED and still short, because `OPT_SHORT_TO_LONG` no
+    // longer carries them, so a fold looking only for the long names would never fire.
     const _fwtKey = params.has('fwt') ? 'fwt' : 'forceWithdrawTiming';
     const _cvtKey = params.has('cvt') ? 'cvt' : 'conversionTiming';
     if (params.has(_fwtKey) || params.has(_cvtKey)) {
@@ -8569,12 +8549,11 @@ function updateBracketFeedback() {
 
     const spendGoalStr = (spendGoalEl.value || '140000').toString().replace(/[^\d.-]/g, '');
     const spendGoal = parseFloat(spendGoalStr) || defaultNumOf('spendGoal');
-    // P92e. The limit comes off the option's `data-limit`, which generateStratRateOptions() writes
-    // from the same number it formatted. This used to run a regex over the option's DISPLAY TEXT and
-    // take the last dollar amount in it - which broke twice over the moment the label changed: the
-    // new compact form is "$211k", whose digits parse as 211, and the label now ends with the OTHER
-    // ladder's position, so "the last dollar amount" would have been the wrong one even in full
-    // digits. A label is a thing to read; the number it shows travels separately.
+    // The limit comes off the option's `data-limit`, which generateStratRateOptions() writes from the
+    // same number it formatted. Never from the DISPLAY TEXT: the compact form is "$211k", whose digits
+    // parse as 211, and the label ends with the other ladder's position, so "the last dollar amount in
+    // the label" is both truncated and the wrong figure. A label is a thing to read; the number it shows
+    // travels separately.
     const bracketLimit = Number(selectedOption.dataset.limit);
 
     if (!bracketLimit || isNaN(bracketLimit)) {
@@ -9269,16 +9248,15 @@ function updateACAWarning() {
             : `⚠ At retirement start in ${startYear} ${you}, already on Medicare (age ${medAge}+), so there is no premium subsidy for an income cap to protect. ACA options are unavailable. Lower Retirement Start Age to model pre-Medicare years.`;
         warnEl.style.display = 'block';
     } else if (oneMedicare && sel.value.startsWith('aca')) {
-        // P89: gated on the SELECTION. This advisory describes how the FPL cap behaves for a plan
-        // that is using one; it was previously shown for every selection, so choosing a federal
-        // bracket or an IRMAA tier produced an unprompted paragraph about a cap the plan does not
-        // have. The bothMedicare branch above is NOT gated the same way on purpose: it explains why
-        // the ACA options are grayed out, and a user who cannot select them could otherwise never
-        // find out why.
-        // Was "ACA income limits apply only to the other person", which was wrong in both
-        // directions: the FPL cap is tested against HOUSEHOLD MAGI, so the Medicare spouse's
-        // RMDs and Social Security count against it, and the cap does not lift for anyone until
-        // the younger spouse reaches Medicare age too (P35 PR 3c, yr.acaLapsed).
+        // Gated on the SELECTION: this advisory describes how the FPL cap behaves for a plan that is
+        // using one, and a federal bracket or IRMAA tier selection would otherwise get an unprompted
+        // paragraph about a cap the plan does not have. The bothMedicare branch above is deliberately NOT
+        // gated the same way: it explains why the ACA options are grayed out, and a user who cannot
+        // select them could otherwise never find out why.
+        //
+        // The cap is tested against HOUSEHOLD MAGI, so a Medicare spouse's RMDs and Social Security count
+        // against it, and it does not lift for anyone until the younger spouse reaches Medicare age too
+        // (`yr.acaLapsed`).
         const onName  = p1Medicare ? 'You'  : 'Your spouse';
         const onPoss  = p1Medicare ? 'your' : 'their';
         const offName = p1Medicare ? 'your spouse' : 'you';

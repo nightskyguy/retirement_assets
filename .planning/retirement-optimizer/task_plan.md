@@ -18,7 +18,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P28j | `jg`/`jh`/`ji`/`jk` SHIPPED, and `jo`'s Split/Early/Late menu shipped in `a5d8aa9`. `jf` MEASURED and NOT acted on - the trigger is unchanged, and its removal case was withdrawn | `P28jn` / `P28jo` Automatic |
 | **O1** | P115 | **tax-payment attribution** (user, 2026-09-09). `a` SHIPPED v11.17b1: cash interest trued up to what the cash earned; `b` CLOSED v11.17f4. Priority is mine, not the user's | `P115c` |
 | **O1** | P132 | **MERGED in PR #230, v11.18bf.** The risk-based spend rule with its presets and a box-by-box checked Custom, GK-style made plan-relative (`P132j`), the cut-side landing overshoot closed (`P132g`), the Limit menu ordered by the MAGI each entry caps. Reports: `research/RBG_RULE_VALIDATION.md`, `research/RBG_RULE_THRESHOLDS.md`. Open: the server question, which is the user's call, and the terminal-reserve success test offered as a phase | user: server? |
-| **O1** | review F/#9 | **Step D SHIPPED as `P133`, v11.1930** (see the phase for what the review had wrong). Step **F** is part-done: `optimizer_core.js` carries ~3,100 comment lines and `optimizer_ui.js` ~2,700 against the ~1,500 target; #236 fixed the defects, the block-by-block trim through Appendix A is the slow half. Finding **#9** still owes AZ, GA, NC, ND, NE and SC standard deductions and ND/NE/SC bracket structure | step F slices, or the #9 states |
+| **O1** | review F/#9 | **Step D SHIPPED as `P133`**, step **F** first pass as `P134`, both v11.193x. `P134` measured the step-F budget and it does not hold: the two files carry **502 history-marked lines**, not the ~2,900 the 1,500-line target implies, so that target means deleting working explanation. Three options in the phase, A recommended. Finding **#9** still owes AZ, GA, NC, ND, NE and SC standard deductions and ND/NE/SC bracket structure | user: `P134` A, B or C? |
 | **O1** | Medicare | The model shipped (#244) and `medicare_costs.js` is the one home. `.planning/MEDICARE_TWO_PHASE_PLAN.md` section 9 is undecided: does `Retirement_Projection.html` need an override of its own? The plan assumed no. Section 8 also leaves hold-harmless unmodeled and asks for it as a README limitation | user: section 9 |
 
 **Live carry-overs from finished phases** - the rest of what those phases did is in their stubs below:
@@ -83,6 +83,45 @@ The plan bank is **19 households**, and #244 added none: correcting the IRMAA la
 `ira-heavy-couple-overreaching` for a genuine shortfall - a household the bank has held since it was
 built in `3c30911`. Measured with `plans.list()` on 2026-09-25, after the 2026-09-24 entry in
 `progress.md` said 20 and said the household had been restored. Both halves of that were wrong.
+
+## P134: comments say what the code does (review step F)  *(2026-09-25. FIRST PASS v11.1931. The budget is the open question)*
+
+Section 3 of `.planning/CODE_QUALITY_REVIEW.md`. #236 already closed every verified DEFECT in 3.2 -
+line-number cites, retired harness names, stale identifiers, all three now zero and re-measured as
+zero. What was left is the BUDGET in 3.4: `optimizer_core.js` from 3,435 comment lines to about
+1,500, `optimizer_ui.js` from 2,752 to about 1,500.
+
+**Measured with the review's own scanner** (`.planning/code-quality-review/tools/inventory.js` then
+`commentscan.js`), before this pass and after it:
+
+| | comment lines | history-marked lines | blocks of 8+ | lines in them |
+|---|---|---|---|---|
+| `optimizer_core.js` before | 3,175 | 232 | 132 | 1,853 |
+| `optimizer_core.js` after | 3,127 | 202 | 129 | 1,800 |
+| `optimizer_ui.js` before | 2,753 | 335 | 71 | 789 |
+| `optimizer_ui.js` after | 2,731 | 300 | 69 | 768 |
+
+**The 1,500 target cannot be met by removing narration, and the arithmetic says so.** The two files
+hold **502 history-marked lines between them**, not 2,900. A full sweep of every one of those blocks
+removes perhaps 300 lines. Getting to 1,500 means deleting about 2,500 lines of comment that state
+what the code does, what it may not do, or which statute it implements - the material 3.4 says to
+keep. The budget came from a scanner count of lines sitting in a block that carries at least one
+history MARKER, which is not the same as lines that narrate history: a block whose one sentence
+says "measured on 20xx" puts its whole length in that column.
+
+**Three options, the user's call:**
+
+- **A. Finish the narration sweep and restate the budget.** About 150 blocks left carrying one or two
+  history lines each. Removes roughly 300 lines, leaves the files near 2,800 and 2,450, and the target
+  becomes "no history in a comment", which is checkable, instead of a line count.
+- **B. Chase 1,500.** Deletes explanation this repo has repeatedly had to re-derive. Not recommended.
+- **C. Stop here.** The defects are gone, the worst blocks are trimmed, and the rest is a slow
+  background job taken a block at a time as the code is edited, which `CLAUDE.md` already requires.
+
+**This pass** trimmed the five largest blocks in the engine, the twelve blocks in the UI where history
+was the dominant content, and eighteen more blocks whose opening sentences narrated a fix. Nothing
+else changed: the identity harness reports 769,128 values identical, and `git diff` shows no
+non-comment line removed at all.
 
 ## P133: one home per knob  *(2026-09-25, review step D. `a`-`g` DONE, v11.1930)*
 

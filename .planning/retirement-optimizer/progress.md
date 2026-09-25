@@ -5776,3 +5776,29 @@ in the browser as `worker.js?v=111930`.
 Suites: 528 / 47 / 62 / 15 / 46 node, 497 in-page, badge green. Four new tests (two node guards, two
 in-page pins), `TestTiers.EXPECTED` and `.githooks/README.md` updated with them. No changelog entry:
 nothing in the whole step is visible to a user, which the identity check is the proof of.
+
+## 2026-09-25 (continued) - review step F, first pass and a budget that does not hold (P134, v11.1931)
+
+User: "do step F". Re-ran the review's own scanner on the current tree first, because #236 had already
+moved the numbers: line-number cites, retired harness names and stale identifiers are all zero and
+re-measured as zero, so the defects half of section 3 is done. What is left is the BUDGET.
+
+Trimmed: the five largest blocks in `optimizer_core.js` (the two-clock advance, buildStrategyFamilies'
+JSDoc, the conversion month, the tax settlement date, the schedule entry), the twelve blocks in
+`optimizer_ui.js` where history was the dominant content, and eighteen more whose opening sentences
+narrated a fix rather than stating a rule. Core 3,175 -> 3,127 comment lines, UI 2,753 -> 2,731;
+history-marked lines 232 -> 202 and 335 -> 300. Identity harness IDENTICAL at 769,128 values, 528
+node, 497 in-page, and `git diff` shows not one non-comment line removed.
+
+**The 1,500-line budget cannot be met by removing narration.** The two files hold 502 history-marked
+lines between them; sweeping every one of those blocks removes about 300 lines. Reaching 1,500 means
+deleting roughly 2,500 lines that state what the code does, what it may not do, or which statute it
+implements - the material 3.4 says to keep. The budget came from a scanner column that counts every
+line of a block carrying at least ONE history marker, so a 40-line block with one "measured on 2026"
+sentence contributed 40. P134 in task_plan.md states three options; A (finish the narration sweep and
+restate the target as "no history in a comment", which is checkable) is the recommendation, and the
+decision is the user's.
+
+A defect of my own, caught by the scanner in the same pass: a trimmed comment cited
+`research/IRMAA_MARGIN.md`, a report that does not exist. Replaced with the claim itself. That is
+exactly the failure #236 spent a commit removing, and it took one careless edit to reintroduce.

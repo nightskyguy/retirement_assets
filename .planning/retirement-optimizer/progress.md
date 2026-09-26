@@ -5844,3 +5844,44 @@ and are correct, so nothing about them changes", in both the changelog and the p
 Nothing changed for a reader of those two states, so it is not news, and as a convention it would list
 every state on nearly every release. The rule is now a row in CLAUDE.md's leave-out table; the checking
 itself stays in the commit message and the PR, where a reviewer needs to know it happened.
+
+## 2026-09-26 - four decisions from the user, and two new plan items
+
+Asked what was next; the answer settled four things and opened one.
+
+**Medicare CLOSED, both halves.** `Retirement_Projection.html` gets no override - "close that" - so
+section 9 of `.planning/MEDICARE_TWO_PHASE_PLAN.md` is decided rather than open, and the tool takes the
+model and shows the rate. Hold harmless is closed too: the user pointed out README's "IRMAA Escalation"
+section already carries it, which checking confirms - the 42 CFR 408.20(e) citation, why the
+relationship runs backwards, that it is unmodeled, and the direction. Section 8's ask was already
+satisfied when it was written. The Medicare row is out of the NOW table.
+
+**Fixed Split stays on probation, un-gating PARKED.** Not convinced it is better or clearer, and the
+objection is structural: "Another problem with fixed split is its fixed nature. As asset balances
+change, it seems natural that the optimal draw will change." Plus the direction that matters - "the
+real win will be to implement e-ORP style analysis rather than adding another opaque withdrawal
+strategy." Recorded against `P104b3`, where the removal manifest already lives. What would reopen it is
+not another bake-off but a per-year draw that follows the balances, which is `P103c`'s search.
+
+**`P100b2` now has a specification, and it overrides the one that was there.** The old sketch said
+"replace with an explicit, documented default"; the user refused that - "A documented pinned number is
+useless because it will vary from state to state and household to household." The rule instead: a rate
+the user typed wins; otherwise the rate from a run of THEIR OWN plan, held constant across the sweep,
+re-derived when the plan changes. Five sub-items written, including the one thing I flagged rather than
+decided: year-0 marginal (what the sidebar's "(auto: N%)" prints, so the number they read is the number
+the sweep scores with) against `terminalIRARateFromLog`'s trailing same-status average, which is when an
+heir actually inherits. Measuring that gap comes before proposing a switch.
+
+**`P136` opened, O1: Extra Roth Conversion ignores the taxation entanglement.** A flat extra amount
+crosses NIIT, IRMAA and bracket thresholds thoughtlessly; for a ceiling family it goes over by
+construction, and even for a non-threshold family it is blind to the lattice. Their own year is the
+worked example - large realized gains, room for some conversion, an IRA draw on top reaching NIIT and
+IRMAA jeopardy - and `P136b` is a plan-bank household with that shape, which none of the 19 has. The
+phase records that it is the small-scope version of `P103c`: both want `magiEdgesForYear()`.
+
+**`P103c` was unclear and is worth stating plainly** (it is the phase's own next item and the plan
+buries it under a gate): instead of the user picking a named strategy, the engine searches two per-year
+income targets - ordinary income realized and LTCG realized - over a menu of about twelve MAGI edges,
+which is the e-ORP-shaped idea. Its gate `P103c1` is PROVISIONALLY FAILING: only 4.2% of best-row
+plan-years land within \$1,000 of an edge, and the first version of that measurement was wrong, so the
+next step is counting binding years per family to confirm 6 of 33 generalizes before anything is built.

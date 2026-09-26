@@ -11,15 +11,15 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
 | **O0** | P103 | **`a`-`e` DONE, 3 MC modes.** GK spend + bracket-fill draw wins 12/18 mode-cells at 95-100% survival; ordered seqs hit **0%** and are out | `P103c` / ship |
-| **O0** | P35 | **`P104b3` SHIPPED 09-03 v11.1719: Fixed Split, 4 vectors, NERDKNOB-GATED. Goldens untouched (gate off by default). MC grid deliberately empty** | `P104c` / un-gate |
-| **O1** | P100 | **O1 from O0, 2026-09-01**: SELECTION not RESULT - the ranking defect is real, the frontier is not a better plan | `P100b2` |
+| **O0** | P35 | **Fixed Split STAYS ON PROBATION** (user, 2026-09-26): not convinced it is better or clearer, and its FIXED nature is the objection - as balances change the optimal draw should change. The real win is e-ORP style analysis, not another opaque strategy. `P104c` un-gating is PARKED, not scheduled | nothing; leave gated |
+| **O1** | P100 | SELECTION not RESULT. **`P100b2` now has the user's own specification** (2026-09-26): an heirs rate the user typed wins; otherwise take the rate from a run of THEIR OWN plan and hold it constant for the sweep, re-derived when the plan changes. A documented pinned default is refused - it varies by state and household | `P100b2`, spec below |
 | **O1** | P36 | round 2 measures against the `P103a` ceiling, not rank-among-arms | `P36b` |
 | **O1** | P34 | NOT a P103 prerequisite (a-d are node harnesses); still the whole slow-machine story | `P34a` |
 | **O1** | P28j | `jg`/`jh`/`ji`/`jk` SHIPPED, and `jo`'s Split/Early/Late menu shipped in `a5d8aa9`. `jf` MEASURED and NOT acted on - the trigger is unchanged, and its removal case was withdrawn | `P28jn` / `P28jo` Automatic |
 | **O1** | P115 | **tax-payment attribution** (user, 2026-09-09). `a` SHIPPED v11.17b1: cash interest trued up to what the cash earned; `b` CLOSED v11.17f4. Priority is mine, not the user's | `P115c` |
 | **O1** | P132 | **MERGED in PR #230, v11.18bf.** The risk-based spend rule with its presets and a box-by-box checked Custom, GK-style made plan-relative (`P132j`), the cut-side landing overshoot closed (`P132g`), the Limit menu ordered by the MAGI each entry caps. Reports: `research/RBG_RULE_VALIDATION.md`, `research/RBG_RULE_THRESHOLDS.md`. Open: the server question, which is the user's call, and the terminal-reserve success test offered as a phase | user: server? |
+| **O1** | P136 | **Extra Roth Conversion ignores the taxation entanglement** (user, 2026-09-26): a fixed extra amount crosses NIIT, IRMAA and bracket thresholds thoughtlessly, and probably only makes sense for strategies that are not threshold-driven at all | `P136a` measure it |
 | **O1** | review F | **Step D shipped as `P133`, step F's first pass as `P134`, finding #9 CLOSED as `P135`** (v11.1933: ND, NE, SC and GA corrected against their own 2026 forms; AZ and NC checked and correct). Step **F** is what is left of the campaign: ~320 blocks carrying one marked line each, and the Monte Carlo files unswept (`mc_tab.js` 53 marked lines, the rest 37). The ceiling in `.githooks/check-comment-history.js` makes a regression visible meanwhile | step F slices |
-| **O1** | Medicare | The model shipped (#244) and `medicare_costs.js` is the one home. `.planning/MEDICARE_TWO_PHASE_PLAN.md` section 9 is undecided: does `Retirement_Projection.html` need an override of its own? The plan assumed no. Section 8 also leaves hold-harmless unmodeled and asks for it as a README limitation | user: section 9 |
 
 **Live carry-overs from finished phases** - the rest of what those phases did is in their stubs below:
 - `P85` RE-RUN: converting earlier still wins 353 of 499, but **the RMD claim BROKE** - 124 counterexamples, all bracket strategies at a live IRA Goal. `P72` is still pending.
@@ -83,6 +83,53 @@ The plan bank is **19 households**, and #244 added none: correcting the IRMAA la
 `ira-heavy-couple-overreaching` for a genuine shortfall - a household the bank has held since it was
 built in `3c30911`. Measured with `plans.list()` on 2026-09-25, after the 2026-09-24 entry in
 `progress.md` said 20 and said the household had been restored. Both halves of that were wrong.
+
+## P136: Extra Roth Conversion ignores the taxation entanglement  *(2026-09-26, user-raised. O1, NOT STARTED)*
+
+**The user's observation**, recorded in their own terms: *"the 'Extra Roth Conversion' logic of picking
+extra withdrawals completely ignores the taxation entanglement. I suspect the only context in which
+extra conversion really makes sense is for strategies that are not threshold driven - but even then a
+fixed extra conversion is also unlikely to be optimal as it would tend to cross NIIT/IRMAA and Tax
+bracket thresholds 'thoughtlessly'."*
+
+**Their own year is the worked example**, and it is the shape to reproduce in a household: large
+capital gains already realized, room for SOME conversion, but an IRA withdrawal on top bumps them into
+NIIT territory and creates IRMAA jeopardy. A single flat extra amount cannot see any of that.
+
+**Why the criticism is structural rather than a tuning complaint.** `extraConversionAmount` is one
+dollar figure (or a per-year array in research use) added on top of whatever the strategy already drew.
+For a ceiling family that is doubly wrong: the draw was sized to fill a ceiling, so anything extra goes
+over it by construction - which is what the ⚠ overage glyph on those rows already reports. For a
+non-ceiling family (`propwd`, `fixed`, `fixedpct`, Ordered, Guyton-Klinger) there is no ceiling to
+break, which is what makes the user's "only makes sense for strategies that are not threshold driven"
+the right first cut. But even there the amount is blind to every threshold the extra income crosses:
+the NIIT threshold, the IRMAA tier boundaries two years out, the LTCG 0/15/20 breakpoints interacting
+with the gains already realized, and the ordinary bracket tops.
+
+**Build, in the order that answers the question before changing behavior:**
+
+- [ ] **P136a** - **MEASURE what the current search buys and what it crosses.** For each family, sweep
+      `extraConversionAmount` on the plan bank and record, per winning amount: NIIT crossed or not,
+      IRMAA tier moved or not, LTCG breakpoint crossed, bracket top crossed, and the after-tax gain.
+      The question this answers: is the optimizer's chosen extra amount ever sitting just past a
+      threshold it could have stopped short of, and by how much is it paying for that?
+- [ ] **P136b** - **a household that reproduces the user's own year.** Large realized capital gains,
+      conversion room that runs out at NIIT, IRMAA jeopardy two years out. Add it to `plans/` with a
+      card whose `exercises` names this phase, because none of the 19 has this shape.
+- [ ] **P136c** - **restrict, or make it threshold-aware.** Two candidate answers, and `P136a` decides
+      between them rather than taste:
+      (i) offer the extra-conversion search only for the families where it is not self-defeating, and
+      say why it is absent for the others;
+      (ii) give the search the threshold lattice - the same `magiEdgesForYear()` artifact `P103c` needs -
+      so the candidate amounts ARE the distances to the next edge rather than a $25,000 grid.
+- [ ] **P136d** - whichever lands, the ⓘ says which thresholds the chosen amount respects and which it
+      crosses on purpose. A number a user cannot audit is the thing this phase is complaining about.
+
+**This is the small-scope version of `P103c`.** That phase's control variable is two per-year income
+targets searched over the MAGI edge menu; this one is a single amount that ought to respect the same
+menu. Whatever `magiEdgesForYear()` ends up being, both want it - and the user's e-ORP remark about
+Fixed Split points the same way: search the tax lattice, do not add another opaque strategy.
+
 
 ## P135: the six states finding #9 left open  *(2026-09-25. CLOSED, v11.1933)*
 
@@ -2535,6 +2582,14 @@ What nobody had measured is the thing that decides what to BUILD: per-year freed
             - `optimizer_core.tests.js`: the four `P104b3:` tests. `P104b1`'s engine tests stay.
             - `research/CONSTANT_SPLIT.md`, `.test_harnesses/split_fine_harness.js`,
               `.test_harnesses/split_mc_harness.js`.
+      - **PROBATION CONTINUES, un-gating PARKED (user, 2026-09-26).** Their call, in their terms:
+            *"Fixed Split is on probation. I'm not convinced it's better or will be clearer to a user
+            and the real win will be to implement e-ORP style analysis rather than adding another
+            opaque withdrawal strategy. Another problem with fixed split is its fixed nature. As asset
+            balances change, it seems natural that the optimal draw will change."*
+            So `P104c` is not scheduled: the feature stays behind `?nerdknob=split`, the removal
+            manifest above stays current, and the case that would change this is not another bake-off
+            but a per-year draw that follows the balances - which is `P103c`'s search, not a vector.
       - [x] **P104b3 SHIPPED 2026-09-03, v11.1719, NERDKNOB-GATED** (user: *"any new
             strategy/experimental feature should be guarded by nerdknob until it's been fully
             fleshed out"*). Four vectors in `SPLIT_VECTORS`; family emitted only on
@@ -3425,10 +3480,39 @@ Ordered by payoff per line of code. All three are live defects today, independen
       `OPT_LONG_TO_SHORT` nor the scenario fields, so a share link silently loses it and two people
       on "the same plan" are shown different winners. URL short-key + scenario field + round-trip
       test. **Highest payoff per line in the phase.** Same class as `P91d`.
-- [ ] **P100b2** - **make `sharedFutureIRARate` order-independent.** The `?? results[0]` fallback
-      makes every score depend on sweep ORDER when the heirs rate is unset. Replace with an explicit,
-      documented default. Pin with a test that shuffles the row array and asserts the rate is
-      unchanged.
+- [ ] **P100b2** - **the heirs rate comes from the USER'S OWN PLAN, and is then constant for the sweep.**
+      **Specified by the user 2026-09-26**, which replaces this item's original plan (an "explicit,
+      documented default"): *"A documented pinned number is useless because it will vary from state to
+      state and household to household."*
+      **The rule, in their words:** if the user specifies an heirs rate, that is used. If they do not,
+      the rate calculated from the first run of the user's plan is used as a constant in all subsequent
+      optimizer runs. If they change their plan and that rate changes, the optimizer uses the new
+      number in subsequent runs.
+      **What is wrong today.** `optimizer_ui.js` does
+      `base.futureIRATaxRate ?? (results[0]?.totals.futureIRARate ?? 0)`. `results[0]` is whatever row
+      the sweep emitted first - documented as the propwd 0% row - so every after-tax score depends on
+      sweep ORDER, and the rate comes from a row that is NOT the user's plan. `P100a2` measured the
+      fallback active at 0.12 and not the cause of that defect, but recorded it as a fragility.
+      **Build:**
+  - [ ] **P100b2a** - derive it once, from the current plan's own run. The page already has that run
+        (`runSimulation`), and `totals.futureIRARate` is the year-0 resolved `marginalFedTaxRate +
+        marginalStateTaxRate` - the SAME quantity the sidebar's "(auto: N%)" label prints, so the number
+        the user reads is the number the sweep scores with. Hoist it into `OptimizerState` at the end of
+        the plan run rather than inside `runOptimizer`, and have `runOptimizer` read it.
+  - [ ] **P100b2b** - **re-derive on a plan change, never cache across edits.** The plan run already
+        happens on every sidebar edit, so this falls out of P100b2a - but pin it: change the state, and
+        the rate the sweep uses moves with it.
+  - [ ] **P100b2c** - **order-independence test.** Shuffle the results array and assert the rate and
+        every after-tax score are unchanged. That is the regression the original sketch asked for, and
+        it survives the new design.
+  - [ ] **P100b2d** - the one honest fallback left: a plan whose own run produced NO rate (no log, or a
+        zero marginal rate in year 0). Today that lands on 0, which values every terminal IRA at par.
+        Decide it explicitly rather than by `?? 0`, and say in the ⓘ which case is in force.
+  - [ ] **P100b2e** - **FORMULA QUESTION, flagged not decided.** Year-0 marginal is what the auto label
+        shows and what this spec therefore adopts, but an heir inherits at the END of the plan, and
+        `terminalIRARateFromLog` already computes the trailing same-filing-status average (with `max`
+        and a `basis` of 'status' or 'trailing3') for exactly that reason. Worth measuring the gap on
+        the plan bank before proposing a switch, because it would move every after-tax score.
 - [ ] **P100b3** - **NOW THE PRIMARY FIX OF THE WHOLE PHASE, promoted by `P100a2`, and RESHAPED
       2026-08-31 by the user: "wouldn't a better strategy be to evaluate all rows using perhaps a
       second generic system (e.g. Net Wealth) so that there is still some meaning to the ordering?"

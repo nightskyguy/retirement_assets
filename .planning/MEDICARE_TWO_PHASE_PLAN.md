@@ -320,12 +320,12 @@ default, so both are reviewable without the argument about the model.
 | **`decay` has no independent source** | Fitted to a benchmark that is part projection and part assumption past 2035. The report already says so; the code comment must too, rather than implying it is measured. |
 | **the off-by-one at `:4475`** | One year of growth, silent. Confirm which side of the `sim.currentYear` advance the line sits on. |
 | **premiums fall in the record** | 2012 and 2023 both fell. The model never produces a decrease, so it cannot reproduce that, and no test should demand it. |
-| **hold harmless stays unmodeled** | Out of scope here, but it compresses what an individual actually pays relative to the standard premium. Worth recording as a known limitation in README rather than leaving it undocumented a second time. |
+| **hold harmless stays unmodeled** | CLOSED (user, 2026-09-25): README's "IRMAA Escalation" section already carries it - the 42 CFR 408.20(e) citation, why the relationship runs backwards, that it is not modeled here, and the direction ("what you actually pay may rise more smoothly than the tables suggest"). Nothing to add. |
 
 ---
 
-## 9. Open question I did not decide
+## 9. Decided: no override for Retirement Projection
 
-**Does `Retirement_Projection.html` need an override too?** It has no nerdknob mechanism, and adding
-one for a single field would be the first of its kind in that tool. The plan assumes **no**: it takes
-the model and shows the rate. Say so if that is wrong.
+**`Retirement_Projection.html` gets no Medicare override** (user, 2026-09-25): "Retirement_Projection
+does NOT get a medicare override. Close that." It takes the model and shows the rate, which is what
+this plan assumed. The tool has no nerdknob mechanism and will not grow one for a single field.

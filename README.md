@@ -271,8 +271,8 @@ During this otherwise low income period, strategic withdrawals and movement is p
 It also does not make sense to pay more tax than necessary. I do not see taxation as evil, but it does not feel "right" to pay up to $14,000/year in IRMAA fees for no net benefit 
 in Medicare - but that is one of the many possible pitfalls of having too much forced income.
 		
-Having a large tax deferred IRA balance (about 750K or larger at the start of drawing from your IRA) can have many consequences, the worst being taking forced income (RMDs) at higher tax rates and incurring those IRMAA penalties just described.  You do NOT have to have a large IRA balance to fall prey to RMDs causing IRMAA. For example, if you have a healthy income stream between a pension, social security, and say a profit sharing plan, dividends, interest or residuals, even a modest amount of forced income can push you over an IRMAA cliff, cause you to incur NIIT (extra tax on capital gains), or push you into a higher tax bracket.  That is, RMDs are NOT exclusively a "rich people problem."
-In this tool, we show each: IRMAA, state and Federal taxes to show the big picture: net taxes/net spendable income, year by year spend and "Final Wealth".
+Having a large tax deferred IRA balance (about 750K or larger at the start of drawing from your IRA) can have many consequences, the worst being taking forced income (RMDs) at higher tax rates and incurring those IRMAA penalties just described.  You do NOT have to have a large IRA balance to fall prey to RMDs causing IRMAA. For example, if you have a healthy income stream between a pension, social security, and say a profit sharing plan, dividends, interest or residuals, even a modest amount of forced income can push you over an IRMAA cliff, cause you to incur NIIT (extra tax on capital gains), or push you into a higher tax bracket.  That is, RMDs are NOT exclusively a "rich people problem."  [We have a tool to roughly calculate what IRA balance may cause IRMAA penalties](standalone/irmaa_and_rmds.html) and at what ages.
+In this tool, retirement optimizer, we reveal each of: IRMAA, state and Federal taxes to show the big picture: net taxes/net spendable income, year by year spend and "Final Wealth".
 
 ### Key Features:
 
@@ -409,11 +409,11 @@ is a tenth under it).
 + All other strategies e.g. the **🪣Fill Fed/IRMAA Bracket** strategy, are *soft* - and will exceed the ceiling to fund spending.
 + **The two kinds of ceiling in that dropdown are measured against different income, and the menu now says so.** A federal bracket is a limit on **taxable** income - what is left after your deduction - while an IRMAA tier and an ACA FPL multiple are limits on income **before** the deduction. Those last two are not the same measure either: an IRMAA tier counts at most 85% of a Social Security benefit, and an ACA cap counts the **whole** benefit, taxable or not. Printed as bare dollar amounts they look comparable and are not: the top of the 22% bracket is $211,400 of taxable income, which is about $244,000 of total income for a couple taking the standard deduction, and an IRMAA Tier 1 ceiling of $274,000 is total income already. Each entry in the menu therefore names where it falls on the other ladder - `22% Fed - $211k (IRMAA Tier 1)`, `IRMAA Tier 1 - $274k (24% Fed)` - and a note under the dropdown adds the part a one-line label cannot carry: **an IRMAA tier spans a bracket boundary.** Tier 1 begins inside the 22% bracket and ends inside the 24% one, so choosing to fill it is a 24% decision even though it starts below that. "Show me" draws all 4 ladders on one income axis with your chosen limit and your plan's own first-year income marked on it.
 
-+ An **IRMAA tier ceiling** aims at the threshold that will actually apply, not today's. IRMAA bills a
-given year's premium against the income you reported **two years earlier**, and compares it against
++ An **IRMAA tier ceiling** aims at the threshold that will actually apply, not today's threshold. IRMAA bills a
+given year's penalty against the income you reported **two years earlier**, and compares it against
 the thresholds published for the billing year, so a ceiling capping this year's income should target
 the threshold two years out. At 3% inflation that is about 6% higher than today's. The same forward
-projection drives QCD "As Needed", where it matters most: that mode donates exactly enough to reach
+projection drives QCD "As Needed", where it matters most: that mode donates enough to reach
 the target, so a correctly projected target means a smaller donation buys the same tier. The safety
 margin below does **not** apply there, only to the ceiling, because on the QCD side a margin is paid
 for with money that leaves the household and it measured costing far more in donations than it saved
@@ -857,11 +857,11 @@ While the Social Security payments are adjusted annually according to the CPI (C
 
 #### IRMAA Escalation
 
-My original model assumed that the IRMAA tax brackets and amounts are both adjusted by CPI, and that is not true. **The thresholds are indexed to CPI. The surcharge is not: it is tied to Medicare, which grows faster.** The two move at different speeds, and that difference is what makes IRMAA worse the further out you look.
+The original model assumed that the IRMAA tax brackets and amounts were adjusted by CPI, and that is not true. **The thresholds are indexed to CPI. The surcharge is not: it is tied to Medicare, which grows faster.** The two move at different speeds, and that difference is what makes IRMAA worse the further out you look.
 
-IRMAA is also a TAX CLIFF, not a graduated bracket. One dollar over the line moves you a whole tier, and you may have to withdraw more from an IRA to pay it: at a 20% nominal tax rate that extra $1 costs at least $5,000, and can push you into a higher marginal bracket on the way.
+IRMAA is also a *TAX CLIFF*, not a graduated bracket. One dollar over the line moves you a whole tier, and you may have to withdraw more from an IRA to pay it: at a 20% nominal tax rate that extra $1 of income can cost $5,000, and can push you into a higher marginal bracket on the way.
 
-**How fast does the surcharge actually grow?** There is no single honest answer, because the figure you get depends entirely on the window you pick. Here is the standard Part B premium, which the surcharge tracks:
+**How fast does the surcharge actually grow?** Like many things, there is no predictable pattern to how rapidly Medicare - and thus IRMAA penalties grow. Below shows the growth rate over the last 5, 10, and 20 years.  One obvious thing here is that Medicare is growing faster than CPI (inflation) in all cases.  The trustees of the Medicare plan have stated that costs over the next 10 years are expected to grow at **6.6%** per year - slightly faster than they have actually increased over the last 5 years.
 
 | window | Part B premium | CPI over the same years |
 |---|---|---|
@@ -871,11 +871,9 @@ IRMAA is also a TAX CLIFF, not a graduated bracket. One dollar over the line mov
 | projected 2026 to 2035 | 6.60%/yr | |
 | long run, per the Trustees | about 3.8%/yr | |
 
-This corrects two figures that used to appear here. CPI has not "averaged about 2.8% over the last 20 years" (it is 2.53%, and 3.21% over ten), and Medicare has not averaged a flat 5.6%: that number matched no window and was never sourced.
+In the v11.1917 update of the Retirement Optimizer we realized that a better model for the growth rate was a two-phase one that grows faster over the next 10 years, and gradually slows to around the 20 year average rate. All the tools that calculate IRMAA now use the same formula - and there is no user input for it because there is no single rate or relationship that fit the observed behavior. 
 
-**The tools model it as a rate that starts high and eases off**, rather than one fixed number: about 6.6% a year now, the rate the Medicare Trustees project through 2035, decaying toward their long-run assumption of about 3.8%. A single flat rate cannot do both ends. Fit one to the next decade and it overshoots a 30-year retirement badly; fit it to the long run and it understates the years in which you are actually deciding whether to convert.
-
-**Two things worth knowing that are easy to miss.** Premium growth has no measurable relationship to inflation, so a model of the form "CPI plus a bit" has no support in the record. And the *hold harmless* rule caps an individual's premium increase at their Social Security COLA, which means that in a low-COLA year most beneficiaries are protected and the entire increase falls on the minority who are not, driving the published standard premium up sharply. That is why 2016 saw a 16.1% rise after a year of 0.7% CPI, and why the relationship, if anything, runs backwards. Hold harmless is not modeled here, so what you actually pay may rise more smoothly than the tables suggest.
+Despite appearances, premium growth has no statistically significant relationship to inflation, so the former model of "CPI plus a bit" has little accuracy. Moreover, the *hold harmless* rule - [42 CFR §408.20(e)](https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-B/part-408/subpart-B/section-408.20) - caps an individual's premium increase at their Social Security COLA, which means that in a low-COLA year most beneficiaries Medicare cost are protected and the entire increase falls on the minority who are not, driving the published standard premium up sharply. That is why 2016 saw a 16.1% rise after a year of 0.7% CPI, and why the relationship, if anything, runs backwards. Hold harmless is not modeled here, so what you actually pay may rise more smoothly than the tables suggest. If you are not yet collecting Social Security - you are not protected. And hold harmless does not change what is charged for IRMAA. Indeed, that *hold harmless* causes INCREASEd costs to be passed on to new Medicare recipients and those paying IRMAA.
 
 The full measurement, including how the model was chosen and what it does not establish, is in [research/MEDICARE_ESCALATION.md](research/MEDICARE_ESCALATION.md). Figures come from [SSA POMS HI 01001.014](https://secure.ssa.gov/poms.nsf/lnx/0601001014) for the premium record, the [2026 Medicare Trustees Report](https://www.cms.gov/oact/tr/2026) for the projections, and the BLS CPI-U series this tool already ships for its Monte Carlo inflation.
 

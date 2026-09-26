@@ -227,6 +227,29 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
   `anUnavailableCapFallsBackToTheDefaultAndSaysSo`, which asserts the landing spot is not a federal
   bracket rather than asserting a value, so a re-sort cannot quietly restore it. ("P95")
 
+## Two invented rates are READ in the draw, and one "fallback" is unreachable (2026-09-25, P133b)
+
+Found while naming the literals of review section 1.3, both measured rather than reasoned.
+
+**`yr.nominalFedTaxRateAtLimit = 0.14` and `yr.nominalStateTaxAtLimit = 0.07` are not inert
+placeholders.** Every year starts with that pair - now `CEILING_RATE_PLACEHOLDERS` - and any strategy
+that prices a ceiling overwrites both from `computeBracketCeiling`. A strategy that prices no ceiling
+(`propwd`, `fixed`, `fixedpct`, `ordered`, `split`, the baseline) does not, and the pair is then READ:
+by the Brokerage rate the draw ordering uses in `applyWithdrawals`, and by the gap-fill tax estimate.
+So for most of the strategy families the draw is ordered partly on a 14% federal and 7% state rate
+that nobody computed and no input controls. Whether that is wrong depends on what the ordering needs
+the rate FOR, which is a question for its own phase - naming them changed nothing, and the identity
+check over 19 households is what says so. The review's section 1.3 called them "placeholder rates
+when no ceiling applies" and did not notice they are consumed.
+
+**The basis step-up `?? 0.50` cannot fire from the page.** All 38 selectable jurisdictions carry
+`BasisStepUp`, the no-tax states included (they get theirs from `NO_TAX_SHELL`), so the fallback is
+reachable only from a hand-edited plan naming a state that does not exist. The review offered "or give
+every state row the key (34 rows have it)" - the 34 is the count of literal occurrences in
+`taxengine.js`, not the count of jurisdictions without one, which is zero. Kept as
+`BASIS_STEP_UP_FALLBACK` with that stated, because deleting it turns a bogus state name into a silent
+`NaN` instead of a common-law answer.
+
 ## The suggested Stop Conversion year is a MOVING PEAK, and `totalNetWealth` is not a shared basis (2026-09-03, P106a)
 
 Full report `research/CONVERSION_STOP_YEAR.md`; harness

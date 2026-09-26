@@ -7768,7 +7768,7 @@ test('single-row bracket tables: the affected jurisdictions are pinned', () => {
     // whatever the lookup does at its edges.
     const single = Object.keys(TAXData).filter(k => k.length === 2)
         .filter(k => (getRateBracket(k, 'MFJ') || []).length === 1).sort();
-    const expected = ['AK','AZ','CO','FL','GA','IA','IL','IN','KY','MA','MI','NC','NE','NH','NV','PA','SD','TN','TX','WA','WY'];
+    const expected = ['AK','AZ','CO','FL','GA','IA','IL','IN','KY','MA','MI','NC','NH','NV','PA','SD','TN','TX','WA','WY'];
     assert(JSON.stringify(single) === JSON.stringify(expected),
         `single-row tables changed:\n         expected ${JSON.stringify(expected)}\n         actual   ${JSON.stringify(single)}`);
 });
@@ -8583,6 +8583,39 @@ test('P126: simulate refuses a strategy name it does not dispatch, and names the
         const m = threw({ strategy: s });
         assert(!m || !/strategy '/.test(m), `${s} is dispatched and must not be refused by name, got ${m}`);
     }
+});
+
+// ── P133d: the mode keys have one home, and an unrecognized one throws ───────────────────────
+test('P133d: every enum is the list its own guard validates against', () => {
+    // The point of the enums is that a name can be added in ONE place. These assert the derivation
+    // rather than the contents: a test listing the eight strategy names would be a second home for
+    // them, which is the thing being removed.
+    assert(JSON.stringify(core.KNOWN_STRATEGIES) === JSON.stringify(Object.values(core.STRATEGY)),
+        'KNOWN_STRATEGIES must BE the STRATEGY values, in order');
+    assert(JSON.stringify(core.KNOWN_SPEND_RULES) === JSON.stringify(Object.values(core.SPEND_RULE)),
+        'KNOWN_SPEND_RULES must BE the SPEND_RULE values');
+    assert(JSON.stringify(_mcPrng.KNOWN_MC_MODES) === JSON.stringify(Object.values(_mcPrng.MC_MODE)),
+        'KNOWN_MC_MODES must BE the MC_MODE values');
+    // Frozen, so a caller cannot add a ninth strategy at runtime and have it validate.
+    assert(Object.isFrozen(core.STRATEGY) && Object.isFrozen(core.SPEND_RULE)
+        && Object.isFrozen(_mcPrng.MC_MODE) && Object.isFrozen(_mcPrng.STRESS_WINDOW)
+        && Object.isFrozen(_mcPrng.JOB_KIND), 'every enum is frozen');
+});
+
+test('P133d: an unrecognized spend rule or Monte Carlo mode throws instead of running without one', () => {
+    // A rule that is not recognized used to mean "no rule", so a misspelled one ran the plan with its
+    // guardrails silently off - a different plan, reported as the one asked for.
+    const threw = over => { try { simulate({ ...SCHED_BASE, ...over }); return null; } catch (e) { return e.message; } };
+    assert(/unknown spendRule 'gkk'/.test(threw({ spendRule: 'gkk' }) || ''), 'a misspelled rule throws and names itself');
+    for (const r of core.KNOWN_SPEND_RULES) {
+        const m = threw({ spendRule: r });
+        assert(!m || !/spendRule '/.test(m), `${JSON.stringify(r)} is a real rule and must not be refused`);
+    }
+    assert(threw({ spendRule: undefined }) === null, 'no rule at all stays legal');
+    const mcThrew = m => { try { _mcPrng.assertKnownMCMode(m); return null; } catch (e) { return e.message; } };
+    assert(/unknown Monte Carlo mode 'bootstrp'/.test(mcThrew('bootstrp') || ''), 'a misspelled mode throws');
+    for (const m of _mcPrng.KNOWN_MC_MODES) assert(mcThrew(m) === null, `${m} is a real mode`);
+    assert(mcThrew(undefined) === null, 'an unset mode is the default and stays legal');
 });
 
 test('P126: a Guardrails plan on Proportional replays through the baseline gap fill, as the old gk plan did', () => {

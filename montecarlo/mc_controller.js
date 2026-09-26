@@ -8,7 +8,7 @@
 // which is what every Monte Carlo caller relies on.
 const _mcWorkers = { mc: null, rails: null };
 function _jobKind(cfg) {
-    return cfg && cfg.kind === 'rails' ? 'rails' : 'mc';
+    return cfg && cfg.kind === JOB_KIND.RAILS ? JOB_KIND.RAILS : JOB_KIND.MC;
 }
 
 // Launch a Monte Carlo run, or a rails solve.
@@ -31,7 +31,11 @@ function runMCWorker(cfg, onProgress, onComplete) {
     // Wall clock starts BEFORE the worker exists, because worker startup is the fixed term the
     // estimate needs and nothing inside the worker can see it.
     const _wallT0 = performance.now();
-    const w = new Worker('montecarlo/worker.js?v=' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : Date.now()));
+    // APP_VERSION is the release stamp optimizer_ui.js reads off the page title. A page that does not
+    // carry one (or a null stamp) falls back to the clock, which is correct but re-fetches every
+    // worker script on every load.
+    const _v = (typeof APP_VERSION !== 'undefined' && APP_VERSION) ? APP_VERSION : Date.now();
+    const w = new Worker('montecarlo/worker.js?v=' + _v);
     _mcWorkers[kind] = w;
 
     w.onmessage = function (e) {
@@ -46,7 +50,7 @@ function runMCWorker(cfg, onProgress, onComplete) {
             if (kind === 'mc' && !msg.stressOnly && !msg.error) {
                 recordMCTiming(performance.now() - _wallT0, msg.totalMs, cfg.numPaths, cfg.variations?.length ?? 1);
             }
-            if (kind === 'rails') msg.wallMs = performance.now() - _wallT0;
+            if (kind === JOB_KIND.RAILS) msg.wallMs = performance.now() - _wallT0;
             onComplete?.(msg);
         }
     };
@@ -151,7 +155,7 @@ function recordMCTiming(wallMs, workerMs, numPaths, numVariations) {
 // answer. Takes ~1/numPaths of a full run.
 function calibrateMCMs(cfg) {
     const { mu, sigma, seed, years, variations } = cfg;
-    const rng = mulberry32(seed ?? 42);
+    const rng = mulberry32(seed ?? MC_DEFAULTS.seed);
     const logDrift = mu - 0.5 * sigma * sigma;
 
     // Draw the way the selected mode draws. This is only a timing probe, so the difference is
@@ -186,8 +190,8 @@ let _railsMainThreadGen = 0;
 async function _runMCMainThread(cfg, onProgress, onComplete) {
     const kind = _jobKind(cfg);
     _mcCancelledKinds[kind] = false;
-    const gen = kind === 'rails' ? ++_railsMainThreadGen : 0;
-    const superseded = () => kind === 'rails' && gen !== _railsMainThreadGen;
+    const gen = kind === JOB_KIND.RAILS ? ++_railsMainThreadGen : 0;
+    const superseded = () => kind === JOB_KIND.RAILS && gen !== _railsMainThreadGen;
     const t0 = performance.now();
 
     // Yield on a TIME budget, not on a loop counter. This used to yield once every 5 variations,
@@ -197,7 +201,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
     // 16ms is one frame, so the progress bar keeps moving and Cancel stays clickable.
     let _lastYield = performance.now();
 
-    const job = kind === 'rails' ? runRailsJob : runJob;
+    const job = kind === JOB_KIND.RAILS ? runRailsJob : runJob;
     const msg = await job(cfg, {
         onProgress:   pct => { if (!superseded()) onProgress?.(pct); },
         shouldCancel: () => _mcCancelledKinds[kind] || superseded(),
@@ -211,7 +215,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
     // Canceled mid-pass. Report nothing, which is what leaves the previous results on screen.
     if (!msg) return;
 
-    if (kind === 'rails') {
+    if (kind === JOB_KIND.RAILS) {
         msg.wallMs = performance.now() - t0;
         onComplete?.(msg);
         return;

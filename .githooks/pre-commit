@@ -122,6 +122,23 @@ elif ! node .githooks/page-suite.js; then
 	exit 1
 fi
 
+# A staged script or stylesheet whose ?v= token did not move. The page would then be served new
+# against a cached old file, which is not a failure - it is a silently wrong answer on one reader's
+# machine. Header of .githooks/check-asset-tokens.js for the rule and for why this is a per-asset
+# check rather than one ASSET_VERSION.
+if ! node .githooks/check-asset-tokens.js; then
+	echo "            Run it directly for the list: node .githooks/check-asset-tokens.js" >&2
+	exit 1
+fi
+
+# A comment that narrates history instead of stating the rule the code follows. Counted per file
+# against a ceiling that may fall and should not rise; the header of the script says why it is a
+# ceiling on narration rather than the review's line-count target.
+if ! node .githooks/check-comment-history.js; then
+	echo "            List them: node .githooks/check-comment-history.js --list <file>" >&2
+	exit 1
+fi
+
 # Markdown that silently hides the rest of itself. A bare <select> in task_plan.md cost 4,430
 # lines of VS Code preview on 2026-08-28, and a bare <details> cost progress.md ~1,944.
 # GitHub sanitizes the tag away so the files review perfectly; only an unsanitized preview

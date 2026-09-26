@@ -17,6 +17,33 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1933"></a>
+
+## 11.1933
+
+**Four state tax tables were charging too much, and are corrected.**  
+*Georgia, Nebraska, North Dakota and South Carolina plans pay less state tax.*
+
+Each figure was checked against the state's own 2026 form or rate schedule. On a couple drawing
+$60,000, $120,000 and $250,000 a year, state tax falls by:
+
+| | $60k | $120k | $250k |
+|---|---|---|---|
+| **North Dakota** | to zero | -91% | -30% |
+| **South Carolina** | -54% | -25% | -19% |
+| **Nebraska** | -28% | -13% | -6% |
+| **Georgia** | - | - | -6% |
+
+**North Dakota** has a 0% band - the first $49,575 single, $82,800 joint - then 1.95% and 2.50%. The
+table taxed the first dollar, at rates from an older schedule. **South Carolina** rewrote its tax for
+2026: 1.99% below $30,000 and 5.21% above, and a state deduction of $15,000 single or $30,000 joint in
+place of the federal one. **Nebraska** is graduated, 2.46% / 3.51% / 4.55%, not the flat 4.55% the table
+used, and its standard deduction was a year behind. **Georgia**'s larger standard deduction, $15,000 and
+$30,000, starts this year rather than next.
+
+South Carolina reduces that new deduction at higher income and the tool does not, so a higher-income
+South Carolina plan now understates its tax; the note beside the state selector says so.
+
 <a id="11.1917"></a>
 
 ## 11.1917

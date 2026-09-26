@@ -223,14 +223,15 @@ var TAXData = {
 	// bundled entry):
 	//   AK, FL, NV, NH, SD, TN, TX, WA, WY
 	//
-	// FLAT-RATE — 13 included  (15 total across all 51 jurisdictions)
+	// FLAT-RATE — 12 included  (15 total across all 51 jurisdictions)
 	//   Included (single Infinity bracket):
 	//     AZ  2.5%    CO  4.4%    GA  4.99%  IA  3.8%  ID  5.3% (with income threshold)
 	//     IL  4.95%   IN  3.05%   KY  4.0%   MA  5.0%
-	//     MI  4.25%   NC  3.99%   NE  4.55%  PA  3.07%
+	//     MI  4.25%   NC  3.99%   PA  3.07%
+	//   Nebraska is NOT flat: its top rate is 4.55% but the schedule is graduated (2.46 / 3.51 / 4.55).
 	//   Scheduled or possible reductions (the brackets govern; these are notes on where they head):
-	//     GA — 4.99%(2026) → 4.89%(2027) → 4.79%(2028), targeting 3.99%
-	//     NE — LB754 phase-down continuing toward 3.99% target
+	//     GA — 4.99% from TY2026 (HB 463), then 0.125 points a year from 2027 toward 4.99%'s successor
+	//     NE — LB754 phase-down continuing toward a 3.99% top rate
 	//     IN — HEA 1002/1001 phase-down ongoing
 	//     KY — revenue-trigger reduction possible (not triggered for 2026)
 	//   Not yet coded (2 flat-rate states):
@@ -252,8 +253,9 @@ var TAXData = {
 	//     VT  top 8.75%   4 brackets  CPI-INDEXED SS partial  exempt <~$65k AGI
 	//     WV  top ~4.82%  5 brackets  statutory   SS partial  active phase-down
 	//
-	// FIXED (NON-INFLATION-INDEXED) BRACKETS — 5 included states:
-	//   AL, MT, ND, OH, SC  (flagged INFLATION_INDEXED: false)
+	// FIXED (NON-INFLATION-INDEXED) BRACKETS — 4 included states:
+	//   AL, MT, OH, SC  (flagged INFLATION_INDEXED: false)
+	//   North Dakota is NOT one of them: it indexes its thresholds every year.
 	//   Of the 11 missing graduated states, only RI and VT are CPI-indexed; rest are statutory.
 	//
 	// BASIS STEP-UP AT DEATH (BasisStepUp, per jurisdiction - IRC 1014):
@@ -370,13 +372,13 @@ var TAXData = {
 			ageGateTiers: [ { minAge: 62, capPerPerson: 35000 }, { minAge: 65, capPerPerson: 65000 } ]
 		},
 		MFJ: {
-			std: 24000,  // Increases to $30,000 in 2027 per HB 463
+			std: 30000,  // HB 463 (2026), applicable from TY2026; then +$750/yr from 2027 toward $36,000
 			brackets: [
 				{ l: Infinity, r: 0.0499 }  // Single flat rate
 			]
 		},
 		SGL: {
-			std: 12000,  // Increases to $15,000 in 2027 per HB 463
+			std: 15000,  // HB 463 (2026), applicable from TY2026; then +$750/yr from 2027
 			brackets: [
 				{ l: Infinity, r: 0.0499 }
 			]
@@ -724,23 +726,32 @@ var TAXData = {
 		}
 	}, // WASHINGTONDC
 
-	// NEBRASKA - LB754 phase-down: flat 4.55% in 2026 (was 5.20% in 2025, 5.84% in 2024); SS exempt per LB873
+	// NEBRASKA - graduated 2.46 / 3.51 / 4.55 in 2026; the 4.55% TOP rate is the LB754 phase-down step
+	// (5.20% top in 2025, 5.84% in 2024), heading for 3.99%. SS exempt per LB873.
 	NE: {
 		STATE: 'Nebraska',
 		BasisStepUp: 0.50,
 		YEAR: 2026,
-		NOTE: 'Brackets are approximate based on the LB754 phase-down schedule; confirm with NE DOR for your specific year. Retirement income: Nebraska also offers a retirement-income exclusion for qualifying IRA/401(k) and pension distributions, which this calculator does not apply, so tax may be overstated for retirees who qualify.',
+		NOTE: 'Retirement income: Nebraska offers a retirement-income exclusion for qualifying IRA/401(k) and pension distributions, which this calculator does not apply, so tax is overstated for retirees who qualify.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits (LB873, eff. 2024)
+		// 2026 Nebraska Tax Calculation Schedule (8-460-2026) and the Department's own rate chronology:
+		// GRADUATED, not flat - 2.46%, then 3.51%, then 4.55%. The top two rows of the published schedule
+		// are both 4.55% at different thresholds, which is one band here. Standard deductions and bracket
+		// thresholds are indexed annually (8,600 / 17,200 in 2025 to 8,850 / 17,700 in 2026).
 		MFJ: {
-			std: 17200,  // Nebraska state standard deduction (approx. 2025 value; verify against NE DOR for 2026)
+			std: 17700,
 			brackets: [
-				{ l: Infinity, r: 0.0455 }  // Flat 4.55% — final step in LB754 phase-down before 3.99% target
+				{ l: 8250, r: 0.0246 },
+				{ l: 49530, r: 0.0351 },
+				{ l: Infinity, r: 0.0455 },
 			]
 		},
 		SGL: {
-			std: 8600,
+			std: 8850,
 			brackets: [
-				{ l: Infinity, r: 0.0455 }
+				{ l: 4130, r: 0.0246 },
+				{ l: 24760, r: 0.0351 },
+				{ l: Infinity, r: 0.0455 },
 			]
 		}
 	}, // NEBRASKA
@@ -962,20 +973,24 @@ var TAXData = {
 		NOTE: 'Capital gains: this calculator taxes capital gains at the full ordinary state rate. North Dakota instead allows a deduction of up to 40% of capital gains income. Tax on a brokerage withdrawal is therefore overstated for this state, and the overstatement grows with the size of the gain realized, so a plan that harvests a large gain in one year is penalized most.',
 		BasisStepUp: 0.50,
 		YEAR: 2026,
-		INFLATION_INDEXED: false,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		// 2026 Forms ND-1 and ND-EZ Tax Rate Schedules (Form ND-1ES, SFN 28709, 12-2025): a 0% band,
+		// then 1.95%, then 2.50%. The thresholds move with inflation each year - the 0% band top went
+		// from 48,475 in 2025 to 49,575 in 2026 - so they are not flagged as statutory-fixed.
 		MFJ: {
-			std: 'FEDERAL',  // ND uses federal standard deduction (which IS inflation-adjusted)
+			std: 'FEDERAL',  // ND taxable income starts from federal taxable income
 			brackets: [
-				{ l: 74750, r: 0.011 },
-				{ l: Infinity, r: 0.0204 },
+				{ l: 82800, r: 0.00 },
+				{ l: 304850, r: 0.0195 },
+				{ l: Infinity, r: 0.025 },
 			]
 		},
 		SGL: {
 			std: 'FEDERAL',
 			brackets: [
-				{ l: 44725, r: 0.011 },
-				{ l: Infinity, r: 0.0204 },
+				{ l: 49575, r: 0.00 },
+				{ l: 250400, r: 0.0195 },
+				{ l: Infinity, r: 0.025 },
 			]
 		},
 	}, // NORTH DAKOTA
@@ -1020,28 +1035,29 @@ var TAXData = {
 		BasisStepUp: 0.50,
 		YEAR: 2026,
 		INFLATION_INDEXED: false,
-		NOTE: 'Retirement income: South Carolina allows a deduction of up to $10,000 of retirement income (401(k), IRA, or pension) for filers 65+, plus a separate age-based deduction of up to $15,000 (the two are coordinated, not additive). This calculator does not apply either deduction, so tax is overstated for retirees 65 and older. Capital gains: this calculator taxes capital gains at the full ordinary state rate. South Carolina instead allows a 44% deduction on net long-term capital gains. Tax on a brokerage withdrawal is therefore overstated for this state, and the overstatement grows with the size of the gain realized, so a plan that harvests a large gain in one year is penalized most.',
+		NOTE: 'South Carolina rewrote its individual income tax for 2026 (H. 4216): two rates, 1.99% and 5.21%, and a state deduction (the South Carolina Income Adjusted Deduction) in place of the federal standard deduction. That deduction is REDUCED at higher federal AGI, and this calculator always applies the full amount, so tax is understated for higher-income households. The $30,000 rate threshold is held flat here rather than indexed, which overstates tax in later years of a long plan. Retirement income: South Carolina allows a deduction of up to $10,000 of retirement income (401(k), IRA, or pension) for filers 65+, plus a separate age-based deduction of up to $15,000 (the two are coordinated, not additive). This calculator does not apply either deduction, so tax is overstated for retirees 65 and older. Capital gains: this calculator taxes capital gains at the full ordinary state rate. South Carolina instead allows a 44% deduction on net long-term capital gains. Tax on a brokerage withdrawal is therefore overstated for this state, and the overstatement grows with the size of the gain realized, so a plan that harvests a large gain in one year is penalized most.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		// H. 4216, from TY2026: two brackets, 1.99% below 30,000 of South Carolina taxable income and
+		// 5.21% above it. The published form states the upper band as "5.21% minus $966", which is the
+		// same schedule written as a single rate on the whole amount: 0.0521x - 966 equals
+		// 597 + 0.0521(x - 30,000), and 597 is 1.99% of the first 30,000.
+		//
+		// `std` is the South Carolina Income Adjusted Deduction (SCIAD), not the federal figure: the state
+		// decoupled from IRC 63(b)-(g) and now starts from federal AGI, which is the base this engine
+		// already builds. The SCIAD is reduced at higher federal AGI by a formula published in SCDOR
+		// Information Letter #26-20; that reduction is not modeled - see NOTE.
 		MFJ: {
-			std: 'FEDERAL',  // SC uses federal standard deduction (which IS inflation-adjusted)
+			std: 30000,
 			brackets: [
-				{ l: 3200, r: 0.00 },
-				{ l: 6410, r: 0.03 },
-				{ l: 9620, r: 0.04 },
-				{ l: 12820, r: 0.05 },
-				{ l: 16040, r: 0.06 },
-				{ l: Infinity, r: 0.061 },
+				{ l: 30000, r: 0.0199 },
+				{ l: Infinity, r: 0.0521 },
 			]
 		},
 		SGL: {
-			std: 'FEDERAL',
+			std: 15000,
 			brackets: [
-				{ l: 3200, r: 0.00 },
-				{ l: 6410, r: 0.03 },
-				{ l: 9620, r: 0.04 },
-				{ l: 12820, r: 0.05 },
-				{ l: 16040, r: 0.06 },
-				{ l: Infinity, r: 0.061 },
+				{ l: 30000, r: 0.0199 },
+				{ l: Infinity, r: 0.0521 },
 			]
 		},
 	}, // SOUTH CAROLINA
@@ -1508,6 +1524,10 @@ function calculateTaxableSocialSecurity(status, provisionalIncome, totalSS) {
 //
 // Returns magiTarget unchanged when there is no benefit, which is the correct answer and skips the
 // loop on every pre-Social-Security year.
+// The two numbers the loop below stops on. The tolerance is the mechanism (half a cent of benefit);
+// the pass count is the backstop against a non-finite input, and 40 halvings cover $5.5 billion.
+const SS_BISECT_TOLERANCE  = 0.005;
+const SS_BISECT_MAX_PASSES = 40;
 function nonSSIncomeForMAGI(status, magiTarget, totalSS) {
     if (!(totalSS > 0)) return magiTarget;
     const ssBrackets = getRateBracket('SOCIALSECURITY', status);
@@ -1532,7 +1552,7 @@ function nonSSIncomeForMAGI(status, magiTarget, totalSS) {
     // The 40 is a backstop against a non-finite input, not the mechanism: 40 halvings cover a
     // benefit of $5.5 billion. Measured, dropping to 18 or 20 passes moves no engine result at all -
     // the only thing that noticed was this function's own unit test at its 0.01 tolerance.
-    for (let i = 0; i < 40 && hi - lo > 0.005; i++) {
+    for (let i = 0; i < SS_BISECT_MAX_PASSES && hi - lo > SS_BISECT_TOLERANCE; i++) {
         const mid = (lo + hi) / 2;
         if (magiOf(mid) < magiTarget) lo = mid; else hi = mid;
     }

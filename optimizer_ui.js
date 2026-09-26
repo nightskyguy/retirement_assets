@@ -10,6 +10,14 @@
 // Version constant - increment this when data structure changes
 const SCENARIO_VERSION = 4;
 
+// The release stamp, read off the page <title> so it is written in exactly one place. The Monte Carlo
+// worker's URL carries it (montecarlo/mc_controller.js), and worker.js passes its own query string
+// down to every script it importScripts, which is what stops a refreshed worker from running a cached
+// copy of an engine that has changed. mc_controller read APP_VERSION before this existed and found
+// nothing, so it fell back to Date.now() and re-fetched all eight worker scripts on every page load.
+// A title without a version - any page but this one - keeps that fallback.
+const APP_VERSION = (document.title.match(/(\d+)\.(\w+)\s*$/) || []).slice(1, 3).join('') || null;
+
 // New storage key for current version scenarios
 const STORAGE_KEY = 'SLCRetireOptimizeScenario';
 
@@ -17,12 +25,11 @@ const STORAGE_KEY = 'SLCRetireOptimizeScenario';
 const OLD_STORAGE_KEY = 'retirementScenarios';
 
 // Feature flags
-// NERD_KNOBS: shows advanced controls (Monte Carlo params, GK guardrails, the 💵 cash-funded
-// sweep dimension, etc.). The optimizer objective selector graduated out of this in PF13 and the
-// ACA Cliff options in v11.1464 - do not add either back to this list.
-// Enabled via ?nerdknob URL param, OR flipped at runtime by the hidden Documentation-page checkbox
-// (see setNerdKnob / applyNerdKnobVisibility). Therefore a `let`, not a `const` - it can change
-// after load. The runtime flip is NOT persisted to the URL.
+// NERD_KNOBS: shows advanced controls (Monte Carlo params, GK guardrails, the 💵 cash-funded sweep
+// dimension, etc.). The optimizer objective selector and the ACA Cliff options are NOT gated and must not
+// be added back to this list. Enabled via ?nerdknob, or flipped at runtime by the hidden
+// Documentation-page checkbox (see setNerdKnob / applyNerdKnobVisibility) - hence a `let`. The runtime
+// flip is not persisted to the URL.
 let NERD_KNOBS = new URLSearchParams(location.search).has('nerdknob');
 // P102b7. Goal-first mode is gated one notch deeper than the nerdknob: it shows only when the knob
 // is set to the literal value 'goal' (?nerdknob=goal). Some users know the plain ?nerdknob and
@@ -33,53 +40,21 @@ let NERD_KNOBS = new URLSearchParams(location.search).has('nerdknob');
 const GOAL_FIRST = new URLSearchParams(location.search).get('nerdknob') === 'goal';
 
 // ============================================================================
-// SPLIT_FEATURE  --  the Fixed Split withdrawal family (P104b3), ON PROBATION
+// SPLIT_FEATURE  --  the Fixed Split withdrawal family, ON PROBATION
 // ============================================================================
-// Gated one notch deeper than the nerdknob, the same way GOAL_FIRST is: it shows only at the
-// literal ?nerdknob=split. The plain ?nerdknob does NOT reveal it.
+// Gated one notch deeper than the nerdknob, the same way GOAL_FIRST is: it shows only at the literal
+// ?nerdknob=split, and the plain ?nerdknob does not reveal it.
 //
-// ON PROBATION. On a real scenario Fixed Split reached the top ten under only two of the nine
-// goals, it has no mechanism to grow a Roth balance other than declining to spend it, and Ordered
-// CIBR beat every Fixed Split variation on that path. It stays available for further testing,
-// clearly flagged, and comes out if it keeps failing to earn its rows.
+// ON PROBATION. On a real scenario Fixed Split reached the top ten under only two of the nine goals, it
+// has no mechanism to grow a Roth balance other than declining to spend it, and Ordered CIBR beat every
+// Fixed Split variation on that path. Against that: a single-path comparison is what the Optimizer was
+// built to distrust - Ordered CIBR won that bake-off and then reached 0% survival under bootstrap
+// resampling, while the four Fixed Split vectors were selected on median AND survival across three return
+// models (research/CONSTANT_SPLIT.md). It stays available, clearly flagged, until one of those settles it.
 //
-// The counter-argument, recorded so a later reader weighs both: a single-path comparison is exactly
-// what the Optimizer was built to distrust. Ordered CIBR won that bake-off too and then reached 0%
-// survival under bootstrap resampling, while the four Fixed Split vectors were selected on median
-// AND
-// survival across three return models. See research/CONSTANT_SPLIT.md.
-//
-// ── REMOVAL MANIFEST ────────────────────────────────────────────────────────────────────────
-// Everything the feature owns, so it can be taken out in one pass. Every site is tagged `P104b3`
-// or `P104b1` in a comment; `grep -n "split\|Split" optimizer_core.js optimizer_ui.js` finds them.
-//
-//   optimizer_core.js  ENGINE (P104b1, keep if the sweep family goes but the input stays):
-//     _splitWeightsFor()                    the vector validator + order/weight shape
-//     planPrimaryWithdrawals                the `strategy === 'split'` branch
-//     fillSpendingGap                       the gap-fill mirror of the same weights
-//     totals.splitWeightsInvalid            malformed-vector flag
-//     STRATEGY_SELECTION_FIELDS             'splitWeights'
-//     sameStrategySelection                 the element-wise 'split' compare
-//     ROTH_GAP_EXCLUDED                     'split'
-//   optimizer_core.js  SWEEP (P104b3, the part on probation):
-//     SPLIT_VECTORS / SPLIT_ACCOUNT_LABELS / splitVectorLabel / splitVectorSortVal
-//     OPTIMIZER_GRIDS.split
-//     sweepOptions                          the splitFeature flag -> splitFamily
-//     describeSelection                     case 'split'
-//     buildStrategyFamilies                 the `splitFamily` opt + the family loop + the
-//                                           addOffGrid guard
-//     offGridParamFor                       case 'split'
-//     the three exports
-//   optimizer_ui.js:
-//     SPLIT_FEATURE (this block) and the flag it passes to sweepOptions,
-//     getInputs splitWeights, toggleStrategyUI's #ui-split line, applyNerdKnobVisibility's menu
-//     entry, the loadOptimizerResult adopt branch, the four OPT_LONG_TO_SHORT keys, the
-//     applyScenario array case, and generateSplitPresetOptions / onSplitPresetChange /
-//     syncSplitPresetFromFields / onSplitFieldInput / updateSplitMixNote / SPLIT_FIELD_IDS
-//   retirement_optimizer.html:
-//     the #strategy-opt-split option, the #ui-split panel, the DOMContentLoaded menu build
-//   optimizer_core.tests.js: the four `P104b3:` tests (and P104b1's engine tests, which stay)
-//   research/CONSTANT_SPLIT.md + .test_harnesses/split_fine_harness.js, split_mc_harness.js
+// Every site the feature owns is tagged `P104b3` (the sweep family, the part on probation) or `P104b1`
+// (the engine input, which stays if only the family goes); the removal manifest is in task_plan.md under
+// P104b3, so it cannot rot here while the code moves.
 const SPLIT_FEATURE = new URLSearchParams(location.search).get('nerdknob') === 'split';
 
 // MONTE_DEMO: the ?montecarlo teaching demo. Lands the reader on the Monte Carlo tab in Synthetic
@@ -207,10 +182,10 @@ function applyNerdKnobVisibility() {
     // should not have to have. Hiding it leaves the model in force, not "no growth".
     const medGrowthWrap = document.getElementById('medicareGrowth-wrap');
     if (medGrowthWrap) medGrowthWrap.style.display = NERD_KNOBS ? '' : 'none';
-    // P104b3. The Fixed Split menu entry. `hidden` alone is not enough - a hidden <option> is still
-    // keyboard-selectable in some browsers - so it is disabled too. If the knob goes off while it
-    // is the live selection the strategy is NOT rewritten: silently switching someone's plan to a
-    // different one is worse than showing a strategy they can no longer pick from the menu.
+    // The Fixed Split menu entry. `hidden` alone is not enough - a hidden <option> is still
+    // keyboard-selectable in some browsers - so it is disabled too. If the knob goes off while it is the
+    // live selection the strategy is NOT rewritten: silently switching someone's plan to a different one
+    // is worse than showing a strategy they can no longer pick from the menu.
     const splitOpt = document.getElementById('strategy-opt-split');
     if (splitOpt) { splitOpt.hidden = !SPLIT_FEATURE; splitOpt.disabled = !SPLIT_FEATURE; }
     // Maximize Conversions sub-flags (Convert Excess to Roth / Use Cash) - always visible: they are
@@ -235,13 +210,11 @@ function applyNerdKnobVisibility() {
     // silently running a different plan than the link describes.
     const wdTimingWrap = document.getElementById('withdrawTiming-wrap');
     if (wdTimingWrap) wdTimingWrap.style.display = NERD_KNOBS ? '' : 'none';
-    // P102b1. Goal-first mode - gated while it is being lived with, and force-reverted on the way
-    // out for the same reason relative view is below: a reader who enabled it once must not be
-    // left holding a plan whose controls they can no longer see. goalFirstReset() hands the
-    // classic fields back their own values, so knob-off lands on the plan the panel built rather
-    // than on a rollback.
-    // P102b7: visible only under ?nerdknob=goal AND with the knob on, so the runtime checkbox can
-    // still hide it (and force-revert it) the way it hides every other gated surface.
+    // Goal-first mode: visible only under ?nerdknob=goal AND with the knob on, so the runtime checkbox
+    // can hide it the way it hides every other gated surface. Force-reverted on the way out, for the
+    // reason relative view is below - a reader who enabled it once must not be left holding a plan whose
+    // controls they can no longer see. goalFirstReset() hands the classic fields back their own values,
+    // so knob-off lands on the plan the panel built rather than on a rollback.
     const goalFirstWrap = document.getElementById('goalfirst-panel');
     if (goalFirstWrap) goalFirstWrap.style.display = goalFirstOn() ? '' : 'none';
     // P128. The risk-based rails panel is for everyone; the knob shows its cadence, path count and
@@ -254,13 +227,10 @@ function applyNerdKnobVisibility() {
     // and this covers the knob-ON direction plus the very first call at init.
     refreshConvEndModeOptions();
     refreshConvEndEnabled();
-    // P84. Advisor fee - gated by the user's 2026-08-28 decision. Hiding it leaves the field at
-    // whatever it holds, which is 0 by default and therefore no fee; but a plan LOADED from a URL
-    // carrying ?af= keeps its fee and still computes it, because the input is only hidden, never
-    // cleared. That is the whole reason the URL keys are not gated with the field.
-    // P84. The advisor fee is NOT gated: it is a fact about the plan, not a diagnostic, which is
-    // the rule written just above. It sat behind the knob only while it was being proven out.
-    // Ungating costs nobody a number, because the scope defaults to "none".
+    // The advisor fee is NOT gated: it is a fact about the plan, not a diagnostic, which is the rule
+    // written just above. Ungating costs nobody a number, because the scope defaults to "none". Its URL
+    // keys are not gated with any field either: hiding an input leaves its value in place, so a plan
+    // loaded from a link carrying ?af= keeps its fee and still computes it.
     updateAdvisorFeeHint();
     const irmaaMarginWrap = document.getElementById('irmaaMarginMode-wrap');
     if (irmaaMarginWrap) irmaaMarginWrap.style.display = NERD_KNOBS ? '' : 'none';
@@ -268,12 +238,10 @@ function applyNerdKnobVisibility() {
     const cashFundLegend = document.getElementById('opt-legend-cashfund');
     if (cashFundLegend) cashFundLegend.style.display = NERD_KNOBS ? '' : 'none';
     // Show as Differences is not gated. It is ON by default for everyone (user, 2026-09-14), and a
-    // default-on mode needs a switch everyone can see, or a reader would be left with a table of
-    // differences and no visible way back to the actual numbers.
-    // The ACA Cliff documentation paragraph used to be hidden here. It is now always visible, like
-    // every other strategy's paragraph, so there is nothing to toggle - the inline display:none was
-    // dropped from the markup rather than being switched off from JS, which keeps it visible even
-    // if this function never runs.
+    // default-on mode needs a switch everyone can see, or a reader is left with a table of differences and
+    // no visible way back to the actual numbers. The ACA Cliff documentation paragraph is always visible,
+    // like every other strategy's, so there is nothing to toggle - it carries no inline display:none,
+    // which keeps it visible even if this function never runs.
     // Monte Carlo nerd panels (initMCTab reads _mcNerdMode() → NERD_KNOBS)
     if (typeof initMCTab === 'function') initMCTab();
     // Strategy panel (GK params gated) + bracket dropdown (ACA options gated, item 12)
@@ -319,13 +287,11 @@ function buildGoalFirstObjectiveOptions() {
 
 function setOptObjective(key) {
     OptimizerState.objective = OPT_OBJECTIVE_LABELS[key] ? key : 'taxflex';
-    // P100b1. The <select> is the CALLER when a user changes the goal by hand, but not when the
-    // goal arrives from `?obj=` or from a loaded scenario - and a control showing one goal while
-    // the table is ranked by another is worse than not restoring it at all. Written back
-    // unconditionally, which is a no-op in the by-hand case.
-    // P102b6: TWO selects now raise this - the Optimizer tab's and goal-first's mirror - and
-    // neither is written by the caller. Both are set unconditionally, which is a no-op on whichever
-    // one the user just used, so the same goal cannot read differently in two places.
+    // The <select> is the CALLER when a user changes the goal by hand, but not when the goal arrives from
+    // `?obj=` or from a loaded scenario - and a control showing one goal while the table is ranked by
+    // another is worse than not restoring it at all. TWO selects raise this, the Optimizer tab's and
+    // goal-first's mirror, and both are written unconditionally: a no-op on whichever one the user just
+    // used, and the only way the same goal cannot read differently in two places.
     for (const _id of ['opt-objective', 'gf-objective']) {
         const _sel = document.getElementById(_id);
         if (_sel && _sel.value !== OptimizerState.objective) _sel.value = OptimizerState.objective;
@@ -397,16 +363,14 @@ function recomputeDeltasAgainst(referenceRow) {
 // longer in the table (the user changed a parameter out from under it) is dropped rather than left
 // pointing at a stale object.
 function resolveCompareRow() {
-    // Keep the pinned row itself when it is still one of the rows on screen, instead of re-deriving
-    // it from `compareSelection`. Changing the goal is allowed to move the ⚓ BASELINE; it must not
-    // disturb the row the user chose to compare against.
-    //
-    // Re-deriving was never safe for an objective change, because `results` is not rebuilt then and
-    // the match below is not unique: a ⇌ conversion row and the plain row it was built from share a
-    // `_selection`, and only `_isCurrentPlan` separates any two candidates. So find() could return a
-    // DIFFERENT row than the one that was pinned, which reads as the pin having moved or vanished.
-    // Identity is exact and cannot mis-resolve; the selection match below still handles the case it
-    // was written for, a fresh sweep where these row objects no longer exist.
+    // Keep the pinned row itself when it is still one of the rows on screen, instead of re-deriving it
+    // from `compareSelection`. Changing the goal is allowed to move the ⚓ BASELINE; it must not disturb
+    // the row the user chose to compare against. Re-deriving cannot be safe for an objective change,
+    // because `results` is not rebuilt then and the match below is not unique: a ⇌ conversion row and
+    // the plain row it was built from share a `_selection`, and only `_isCurrentPlan` separates any two
+    // candidates, so find() can return a different row than the one pinned. Identity is exact. The
+    // selection match below still handles the case it was written for, a fresh sweep where these row
+    // objects no longer exist.
     const _cur = OptimizerState.compareRow;
     if (_cur && Array.isArray(OptimizerState.results) && OptimizerState.results.includes(_cur)) return;
     const results = OptimizerState.results;
@@ -427,11 +391,10 @@ function toggleCompareRow(id) {
     const results = OptimizerState.results;
     const row = results?.find(r => r._id === id);
     if (!row) return;
-    // Clicking the row that is ALREADY the reference stops comparing - and that includes the ⚓
-    // baseline even when nothing is pinned, because the baseline IS the default reference. Pinning
-    // it explicitly used to produce a state that claimed to measure "from this row instead of from
-    // the ⚓ baseline" while being the baseline, so the banner contradicted itself and the only way
-    // out was the ✕ button. Selecting the baseline now means the same thing as stopping.
+    // Clicking the row that is ALREADY the reference stops comparing, and that includes the ⚓ baseline
+    // even when nothing is pinned, because the baseline IS the default reference. Pinning it explicitly
+    // would otherwise claim to measure "from this row instead of from the ⚓ baseline" while being the
+    // baseline, which contradicts itself and leaves the ✕ button as the only way out.
     if (deltaReferenceRow() === row || row === OptimizerState.baseline) {
         OptimizerState.compareSelection = null;
         OptimizerState.compareIsCurrentPlan = false;
@@ -475,9 +438,9 @@ function deltaCellHtml(col, r, refRow) {
     if (!meta || !refRow || r === refRow) return null;
     // A dash means this row has nothing to compare - a sweep row has no break-even year, for
     // instance. It must stay a dash: turning "no value" into "+0" would read as a tie.
-    if (col.getValue(r) === '—' || col.getValue(refRow) === '—') return '—';
+    if (col.getValue(r) === EMPTY_CELL || col.getValue(refRow) === EMPTY_CELL) return EMPTY_CELL;
     const a = col.getSortValue(r), b = col.getSortValue(refRow);
-    if (!Number.isFinite(a) || !Number.isFinite(b)) return '—';
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return EMPTY_CELL;
     const d = a - b;
     let body;
     // No unit suffix on the percent columns. These are differences between two percentages, so
@@ -604,7 +567,7 @@ function getInputs() {
     // the form field still shows the user's invalid value. Fix: call
     // DisplayHelpers.setValue('spendChange', '0') after correction so UI matches simulation.
     let spendChange = +val('spendChange')
-    if (spendChange < -25 || spendChange > 25) {
+    if (spendChange < INPUT_LIMITS.SPEND_CHANGE_PCT.min || spendChange > INPUT_LIMITS.SPEND_CHANGE_PCT.max) {
         showMessage('Spend Delta: ' + spendChange + '% is unreasonable. Using 0% instead.', 'warning')
         spendChange = 0
     }
@@ -686,9 +649,9 @@ function getInputs() {
         pensionAnnual: +val('pensionAnnual'),
         pensionStartAge: +val('pensionStartAge') || 0,
         survivorPct: +val('survivorPct'),
-        // P70i. A selector now, not a checkbox: 'none' | '1' | '2' | '3' | 'full'. The engine's
-        // pensionColaCap() still accepts the old booleans, so a saved plan carrying true or false
-        // keeps its meaning without a migration step.
+        // A selector, not a checkbox: 'none' | '1' | '2' | '3' | 'full'. The engine's pensionColaCap()
+        // also accepts booleans, so a saved plan carrying true or false keeps its meaning with no
+        // migration step.
         pensionCola: val('pensionCola') || 'none',
         spendGoal: +val('spendGoal'),
         spendChange: (spendChange / 100.0),
@@ -736,8 +699,8 @@ function getInputs() {
         // Age OR calendar year (1000+), resolved as it is read so every consumer of these inputs sees an
         // age. startInYear below needs nothing extra: planFirstYear resolves its own argument.
         startAge: resolveStartAge(val('startAge'), +val('birthyear1')) || (new Date().getFullYear() - +val('birthyear1')),
-        // P89: one definition of the plan's first year, shared with the ACA age gate. This block
-        // used to carry its own copy of the clamp and the gate carried an unclamped copy.
+        // One definition of the plan's first year, shared with the ACA age gate: a second copy of the
+        // clamp here is how the two came to disagree.
         startInYear: planFirstYear(+val('birthyear1'), +val('startAge')),
         dividendReinvest: !!valChecked('dividendReinvest'),
         cyclicEnabled: !!valChecked('cyclicEnabled'),
@@ -790,8 +753,8 @@ function getInputs() {
         })(),
         qcdHHMax: +val('qcdHHMax') || 0,
         qcdMode: valChecked('qcdAlways') ? 'always' : 'asneeded',
-        gkGuard:  +val('gkGuard')  / 100 || 0.20,
-        gkAdjPct: +val('gkAdjPct') / 100 || 0.10,
+        gkGuard:  +val('gkGuard')  / 100 || GK_DEFAULTS.guard,
+        gkAdjPct: +val('gkAdjPct') / 100 || GK_DEFAULTS.adjPct,
         // P127a. Raises never lift spending above the plan's own path. A nerdknob switch beside the
         // band and step, off by default; like them it is only read while Guardrails is on.
         gkShapeCeiling: !!valChecked('gkShapeCeiling'),
@@ -842,7 +805,8 @@ function rbgCustomProblems() {
     const out = [];
     const bad = (keys, text, fix) => out.push({ ids: keys.map(k => box[k]), text, fix });
     for (const k of Object.keys(box)) {
-        if (v[k] == null || v[k] < 1 || v[k] > 99.5) bad([k], `${name[k]} needs a number from 1 to 99.5`, 'enter one');
+        if (v[k] == null || v[k] < INPUT_LIMITS.RAILS_CHANCE_PCT.min || v[k] > INPUT_LIMITS.RAILS_CHANCE_PCT.max)
+            bad([k], `${name[k]} needs a number from ${INPUT_LIMITS.RAILS_CHANCE_PCT.min} to ${INPUT_LIMITS.RAILS_CHANCE_PCT.max}`, 'enter one');
     }
     if (out.length) return out;
     const p = x => `${x}%`;
@@ -857,7 +821,7 @@ function rbgCustomProblems() {
         `set Target ${p(v.lower + RBG_GAP)} or Cut at ${p(Math.max(1, v.target - RBG_GAP))}`);
     if (v.upper <= v.target) bad(['target', 'upper'],
         `${name.upper} ${p(v.upper)} must be above ${name.target} ${p(v.target)}`,
-        `set Raise at ${p(Math.min(99.5, v.target + 1))} or Target ${p(v.upper - 1)}`);
+        `set Raise at ${p(Math.min(INPUT_LIMITS.RAILS_CHANCE_PCT.max, v.target + 1))} or Target ${p(v.upper - 1)}`);
     return out;
 }
 // The four custom numbers as chances, or null when they do not describe a rule.
@@ -904,7 +868,7 @@ function updateStartAgeWarning() {
     const el = document.getElementById('startAge-warn');
     if (!el) return;
     const age = resolveStartAge(val('startAge'), +val('birthyear1'));
-    el.style.display = (age > 0 && age < 60) ? 'block' : 'none';
+    el.style.display = (age > 0 && age < INPUT_LIMITS.EARLY_WITHDRAWAL_NOTE_AGE) ? 'block' : 'none';
 }
 
 function updateAssetsYearLabel() {
@@ -920,7 +884,7 @@ function updateProfileAgeDisplay() {
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
-    const growthRate = (+val('growth') / 100) || 0.06;
+    const growthRate = (+val('growth') / 100) || (defaultNumOf('growth') / 100);
 
     function ageInfo(birthYear, birthMonth, iraBalance) {
         if (!birthYear) return null;
@@ -1003,25 +967,23 @@ function applySuggestIraGoal() {
     runSimulation();
 }
 
-// ── P69: Monte Carlo path replay ────────────────────────────────────────────
+// ── Monte Carlo path replay ─────────────────────────────────────────────────
 // One injection point, not a second pipeline: when a replay is active, runSimulation() overlays the
-// captured path's return and inflation sequences onto the inputs it just read from the sidebar. The
-// INPUTS are never mutated - the plan under test stays whatever the sidebar says - and the
-// sequences are rebuilt from the shipped bank rows through the engine's own pathInputsFromBankRows,
-// never regenerated from the seed. Exit paths: the banner's button, editing any sidebar input
-// (delegated listener below), or leaving the Charts / Annual Details tabs.
+// captured path's return and inflation sequences onto the inputs it just read from the sidebar. The INPUTS
+// are never mutated - the plan under test stays whatever the sidebar says - and the sequences are rebuilt
+// from the shipped bank rows through the engine's own pathInputsFromBankRows, never regenerated from the
+// seed. Exit paths: the banner's button, editing any sidebar input (delegated listener below), or leaving
+// the Charts / Annual Details tabs.
 let _replayState = null;   // { rows, mcMode, planFields, label, pathName, nav } from mc_tab.js, or null
 let _replayExitHooked = false;
 let _preReplayIncomeView = null;   // income-chart view to restore when replay ends
-// P82d. Keeping the path while editing IS the behavior now, not a choice: a sidebar edit re-runs
-// against the SAME sequences instead of ending the replay. The checkbox that used to gate this is
-// gone, and with it the flag - every branch that read it now reads "always".
+// Keeping the path while editing IS the behavior, not a choice: a sidebar edit re-runs against the SAME
+// sequences instead of ending the replay. Every branch that once read a flag for this reads "always".
 
-// P78. What the banner says. Split out of syncReplayBanner so the rule is testable without a
-// live run: once the plan has been edited under the lock, the run's own outcome ("ruined 2035")
-// describes a plan that is no longer on screen, so the banner names the PATH and says the plan is
-// modified. A state with no pathName (an older cached mc_tab.js) keeps its full label rather than
-// losing the text entirely.
+// What the banner says. Split out of syncReplayBanner so the rule is testable without a live run: once
+// the plan has been edited under the lock, the run's own outcome ("ruined 2035") describes a plan that is
+// no longer on screen, so the banner names the PATH and says the plan is modified. A state with no
+// pathName keeps its full label rather than losing the text entirely.
 function replayBannerText(state) {
     if (!state) return '';
     return (state.modified && state.pathName)
@@ -1041,15 +1003,13 @@ function replayCarryOnStep(prev, next) {
     return next;
 }
 
-// P80. Which historical year the replayed path's year `i` was sampled from, or null. Two ways to
-// get nothing, both of them normal: no replay on screen, or a synthetic path (GBM and AAM are
-// drawn, not sampled, so there is no year to name). The banks index returns and inflation with ONE
-// shared index, so this single year is honest for both.
+// Which historical year the replayed path's year `i` was sampled from, or null. Two ways to get nothing,
+// both normal: no replay on screen, or a synthetic path (GBM and AAM are drawn, not sampled, so there is
+// no year to name). The banks index returns and inflation with ONE shared index, so a single year is
+// honest for both.
 //
-// P90: no longer gated on the nerdknob. Naming the year a bootstrap block came from is a FACT about
-// the path being shown, not a diagnostic - the same rule that ungated the advisor fee and the
-// forward IRMAA projection. A reader looking at a replayed 1974 return is better served knowing it
-// is 1974 than being shown the number alone.
+// Not gated: naming the year a bootstrap block came from is a FACT about the path being shown, not a
+// diagnostic - the rule that also ungates the advisor fee and the forward IRMAA projection.
 function replaySourceYear(i) {
     const y = _replayState?.rows?.srcYears?.[i];
     return Number.isFinite(y) && y > 0 ? y : null;
@@ -1070,8 +1030,8 @@ function marketTooltipTitle(base, srcYear) {
 function yearAgeTaxTooltipTitle(log, items) {
     const r = log[items[0]?.dataIndex];
     if (!r) return { row: null, line: items[0]?.label ?? '' };
-    const a1 = (r.age1 == null || r.age1 === '—') ? '--' : r.age1;
-    const a2 = (r.age2 == null || r.age2 === '—') ? '--' : r.age2;
+    const a1 = (r.age1 == null || r.age1 === EMPTY_CELL) ? '--' : r.age1;
+    const a2 = (r.age2 == null || r.age2 === EMPTY_CELL) ? '--' : r.age2;
     const taxPct = r.totalIncome > 0
         ? (r.totalTax / r.totalIncome * 100).toFixed(1) + '%'
         : '--';
@@ -1094,11 +1054,10 @@ function replayPath(state) {
         incomeChartView = 'market';
         syncIncomeViewControls();
     }
-    // P82d. On ENTRY, hand the run's own plan fields to the sidebar once: swept rows force
-    // conversions on, carry their own strategy and sometimes their own spend, and none of that was
-    // visible while the controls said something else. On a STEP, prev has already been handed off,
-    // so replayCarryOnStep drops the fresh state's fields instead - re-imposing them would revert
-    // every edit the reader has made, which is the PF8 / P74 class.
+    // On ENTRY, hand the run's own plan fields to the sidebar once: swept rows force conversions on, carry
+    // their own strategy and sometimes their own spend, and none of that is visible while the controls say
+    // something else. On a STEP, prev has already been handed off, so replayCarryOnStep drops the fresh
+    // state's fields instead - re-imposing them would revert every edit the reader has made.
     const entering = !_replayState;
     replayCarryOnStep(_replayState, state);
     if (entering && state.planFields && typeof applyMCVariationToSidebar === 'function') {
@@ -1230,10 +1189,9 @@ function updateCurrentDollarsView() {
         : (typeof _mcStress !== 'undefined' ? _mcStress : null);
     if (typeof _mcResults !== 'undefined' && _mcResults) {
         if (typeof renderMCChart === 'function') renderMCChart(_mcResults);
-        // P86: the survival table and the plan headline carry dollar figures too (final balance,
-        // taxes, spendable) and were never re-rendered here, so they sat on a fixed basis while
-        // the chart above them switched. Both scopes render the table (My Plan Only shows its two
-        // rows, Guardrails on and off), so both re-render it.
+        // The survival table and the plan headline carry dollar figures too (final balance, taxes,
+        // spendable), so they re-render with the chart or they sit on a basis the chart no longer uses.
+        // Both scopes render the table - My Plan Only shows its two rows, Guardrails on and off.
         if (typeof renderSurvivalTable === 'function' && _mcResults.variations) {
             renderSurvivalTable(_mcResults.variations, _mcResults.numPaths);
         }
@@ -1272,6 +1230,53 @@ function _scoreRows(rows, sharedFutureIRARate) {
 // pinned row cannot drift apart.
 const CURRENT_PLAN_MARK = '📍 ';
 const BASELINE_MARK = '⚓ ';
+
+// The charts mark a year whose net income falls more than 10% short of the goal. Deliberately NOT
+// the engine's FUNDED_TOLERANCE, which is 1%: a marker on every rounding-level shortfall would mark
+// most years of a plan living close to its goal, and the marker is meant to point at the years worth
+// looking at. Changing one of the two must not change the other.
+const CHART_SHORTFALL_FRACTION = 0.90;
+// Every interval the interface waits on, in one place.
+//   OPT_COALESCE_MS         a settle delay beside the double requestAnimationFrame, so a burst of edits
+//                           runs the sweep once. The rAF pair wins on a visible tab; the timer is what
+//                           fires on a hidden one, where rAF never does.
+//   OPT_BUSY_HOLD_MS        how long the finished banner stays up. A banner that vanishes the instant the
+//                           work ends reads as a glitch rather than as an answer.
+//   RAILS_AUTORUN_DEBOUNCE_MS   the rails solve is seconds of work, so an edit waits this long for the
+//                           next keystroke before starting one.
+//   RAILS_STATUS_TICK_MS    how often the rails panel repaints its elapsed time while solving.
+//   SIDEBAR_RECALC_DEBOUNCE_MS  the sidebar edit -> recalculate delay, which is the interval the comment
+//                           above scheduleRecalc refers to.
+//   STRESS_PRIME_DELAY_MS   deferral of the one stress pass run at load, past first paint.
+const TIMING = Object.freeze({
+    OPT_COALESCE_MS:            60,
+    OPT_BUSY_HOLD_MS:           5000,
+    RAILS_AUTORUN_DEBOUNCE_MS:  900,
+    RAILS_STATUS_TICK_MS:       250,
+    SIDEBAR_RECALC_DEBOUNCE_MS: 400,
+    STRESS_PRIME_DELAY_MS:      600,
+});
+
+// Input clamps and the thresholds a warning fires at. The Monte Carlo panel's own boxes keep their
+// min/max in MC_PARAMS (montecarlo/mc_tab.js), which is the same idea for the same reason.
+const INPUT_LIMITS = Object.freeze({
+    SPEND_CHANGE_PCT:   { min: -25, max: 25 },     // real spend change per year
+    RAILS_CHANCE_PCT:   { min: 1,   max: 99.5 },   // a rails chance-of-success box
+    GROWTH_WARN_HIGH:   10,   // growth above this draws an optimistic-assumption note
+    GROWTH_WARN_LOW:    3,    // and below this a conservative one (mirrored in mc_tab.js)
+    // The statutory early-withdrawal age is 59 1/2, so a note shown below 60 reaches everyone the
+    // penalty can still apply to.
+    EARLY_WITHDRAWAL_NOTE_AGE: 60,
+});
+
+// The table's own "nothing to show here" cell, produced and COMPARED in a dozen places - a column's
+// delta is '-' when either side is, and the widow/RMD readers treat it as "this person is gone".
+const EMPTY_CELL = '—';
+
+// Below this terminal net worth the stat tile reads as a plan that ran out rather than one that
+// ended small.
+const STAT_TILE_MIN_NET_WORTH = 100000;
+
 
 // The ⚓ baseline is identified by object/id rather than by a label prefix: unlike the current plan,
 // its label is never rewritten, because which row IS the baseline changes with the active objective.
@@ -1317,13 +1322,9 @@ function runOptimizer() {
         }
     };
     _optPendingFrame = requestAnimationFrame(() => { _optPendingFrame = requestAnimationFrame(start); });
-    _optPendingTimer = setTimeout(start, 60);
+    _optPendingTimer = setTimeout(start, TIMING.OPT_COALESCE_MS);
 }
 
-// How long the finished banner stays up. A banner that vanishes the instant the work ends reads as
-// a glitch rather than as an answer -- on a fast sweep it was on screen for well under a second.
-// Holding it lets the reader see that something ran, and what it cost, before it goes.
-const OPT_BUSY_HOLD_MS = 5000;
 let _optBusyHideTimer = null;
 
 // state: 'busy' while the sweep runs, 'done' once it has finished. 'done' is not the same as hidden:
@@ -1348,7 +1349,7 @@ function setOptimizerBusy(state, ms) {
     el.innerHTML = '✓ Calculating strategies… <strong>DONE</strong>'
         + (secs != null ? `<span style="font-weight:400;color:#4a5c6a;"> in ${secs}s.</span>` : '');
     el.style.display = '';
-    _optBusyHideTimer = setTimeout(() => { el.style.display = 'none'; }, OPT_BUSY_HOLD_MS);
+    _optBusyHideTimer = setTimeout(() => { el.style.display = 'none'; }, TIMING.OPT_BUSY_HOLD_MS);
 }
 
 function _runOptimizerNow() {
@@ -1493,14 +1494,12 @@ function _runOptimizerNow() {
             // that matches the user's current plan, and loadOptimizerResult() restores the fields
             // the older _-prefixed set never carried (orderedSeq, the GK guardrails).
             _selection: {
-                // P104b3. selectionOf() FIRST, then the explicit fields below. This list is
-                // hand-kept and STRATEGY_SELECTION_FIELDS is the real one, and they had already
-                // drifted: `splitWeights` was in the shared list and missing here, so a Fixed Split
-                // row recorded no mix and clicking it left whatever the sidebar had - the table
-                // showing one plan and the click running another, the PF8 class the comment above
-                // says this object exists to prevent. Spreading the shared list first means a field
-                // added there is carried automatically; the explicit entries after it keep their
-                // coercions (`!!`, `?? -1`, `?? ''`), which sameStrategySelection relies on.
+                // selectionOf() FIRST, then the explicit fields below. STRATEGY_SELECTION_FIELDS is the
+                // real list and this one is hand-kept, so spreading the shared list first means a field
+                // added there is carried automatically - without that, a field present in one and absent
+                // here records no value and clicking the row runs a different plan than the table shows.
+                // The explicit entries after it keep their coercions (`!!`, `?? -1`, `?? ''`), which
+                // sameStrategySelection relies on.
                 ...selectionOf(inputs),
                 strategy: inputs.strategy,
                 propWithdraw: inputs.propWithdraw, nYears: inputs.nYears,
@@ -1616,7 +1615,7 @@ function _runOptimizerNow() {
                 });
             } else {
                 // Reverse search also failed - report the lowest spend level that was tried
-                OptimizerState.noSolutionFloor = Math.max(500, base.spendGoal * 0.02);
+                OptimizerState.noSolutionFloor = minSpendFloor(base.spendGoal);
             }
         }
     }
@@ -1781,16 +1780,14 @@ function _runOptimizerNow() {
                                         ...(convEndYear != null ? { convEndYear, convEndMode: 'extra' } : {}),
                                         computeOC: true });
             const lastEntry = beResult.log[beResult.log.length - 1];
-            // P88f. A conversion is stacked ON TOP of a draw already sized to fill the row's
-            // ceiling, so on a Fill Bracket / Min Limit / IRMAA Tier row it goes over. Measured
-            // across 180 ceiling cells: the search picks a non-zero conversion in 61 of them and
-            // ALL 61 breach. The rows are still worth offering - median gain $53,990 and up to
-            // $1,546,930, so dropping the family would throw real money away - but a row that
-            // quietly abandons the ceiling in its own name should say so.
+            // A conversion is stacked ON TOP of a draw already sized to fill the row's ceiling, so on a
+            // Fill Bracket / Min Limit / IRMAA Tier row it goes over - measured across 180 ceiling cells,
+            // the search picks a non-zero conversion in 61 and all 61 breach. The rows are worth offering,
+            // but a row that abandons the ceiling in its own name has to say so.
             //
-            // `-overageFromConv` is the conversion's share specifically (P88c), not spending that
-            // could not be funded inside the ceiling. Marking the second as if it were the first
-            // would put this glyph on rows where the user chose nothing.
+            // `-overageFromConv` is the conversion's share specifically, not spending that could not be
+            // funded inside the ceiling; marking the second as if it were the first would put this glyph
+            // on rows where the user chose nothing.
             const _convBreach = beResult.log.filter(r => (r['-overageFromConv'] ?? 0) > 1);
             const _convBreachWorst = _convBreach.length
                 ? Math.max(..._convBreach.map(r => r['-overageFromConv'])) : 0;
@@ -2043,7 +2040,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
         {
             key: 'rank', label: 'Rank',
             title: `Rank under the selected objective - "${objLabel}". 1 = best, N = worst among successful plans (failed plans show -). Change the objective with the "Optimize for" selector above.`,
-            getValue: r => (OptimizerState._rankMap && OptimizerState._rankMap[r._id]) ? OptimizerState._rankMap[r._id] : '—',
+            getValue: r => (OptimizerState._rankMap && OptimizerState._rankMap[r._id]) ? OptimizerState._rankMap[r._id] : EMPTY_CELL,
             getSortValue: r => (OptimizerState._rankMap && OptimizerState._rankMap[r._id]) ? OptimizerState._rankMap[r._id] : Infinity
         },
         {
@@ -2090,15 +2087,13 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             title: 'How unevenly the plan ends up split across the three tax treatments: pre-tax IRA (net of the future IRA rate), Roth, and taxable (brokerage plus cash). 0% is a perfectly even three-way split, so in any future year you can draw from whichever account is cheapest that year. 100% means it all landed in one bucket and you draw from whatever you have. Lower is better. This is the measure the "Tax Flexibility" objective ranks on, among the plans that also finish among the wealthiest.',
             getValue: r => {
                 const s = afterTaxBucketSpread(r, OptimizerState.sharedFutureIRARate ?? 0);
-                return Number.isFinite(s) ? `${(s * 100).toFixed(0)}%` : '—';
+                return Number.isFinite(s) ? `${(s * 100).toFixed(0)}%` : EMPTY_CELL;
             },
             getSortValue: r => afterTaxBucketSpread(r, OptimizerState.sharedFutureIRARate ?? 0)
         },
-        // The ΔEnd Wealth and ΔTax columns were removed 2026-09-07. 'Show as Differences' already
-        // turns every comparable column into a difference from the same reference row, so a pair of
-        // columns whose NAMES say delta was a second, narrower copy of that feature - and one that
-        // only ever covered two of the metrics. Pinning a row with the compare control now changes
-        // what 'Show as Differences' measures against, which is the whole of what it used to do.
+        // No delta columns: 'Show as Differences' turns every comparable column into a difference from
+        // the same reference row, and pinning a row with the compare control changes what it measures
+        // against. A pair of columns whose NAMES say delta would be a second, narrower copy of that.
         {
             key: 'rate', label: 'Tax Rate',
             title: 'Lifetime tax as a percentage of lifetime gross income (total tax ÷ total income). A blended effective rate across the whole plan.',
@@ -2120,14 +2115,14 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
         {
             key: 'rmdtax', label: 'RMD Tax%',
             title: 'Share of lifetime tax attributable to RMDs. High means forced IRA distributions are driving the tax bill - a signal that earlier conversions might help.',
-            getValue: r => r.totals.tax > 0 ? `${(r.totals.rmdTax / r.totals.tax * 100).toFixed(0)}%` : '—',
+            getValue: r => r.totals.tax > 0 ? `${(r.totals.rmdTax / r.totals.tax * 100).toFixed(0)}%` : EMPTY_CELL,
             getSortValue: r => r.totals.rmdTax / (r.totals.tax || 1)
         },
         {
             key: 'convBE', label: 'Break Even',
             title: 'The year this strategy\'s after-tax wealth permanently overtakes the same strategy with no conversions (same sustained-crossing definition as the single-scenario Break Even stat: the lead must hold through the end of the plan). "—" means it never sustains a lasting lead, or the strategy never converts at all. Unlike Conv Tax, this prices in the tax still owed on whatever\'s left in the IRA, so it\'s the more complete answer to whether conversions paid off overall. Sort by it, or choose "Earliest Break Even" under Optimize for, to rank strategies by how fast their conversions pay back.',
-            getValue: r => r._convBEYear != null ? String(r._convBEYear) : '—',
-            getSortValue: r => r._convBEYear ?? 9999
+            getValue: r => r._convBEYear != null ? String(r._convBEYear) : EMPTY_CELL,
+            getSortValue: r => r._convBEYear ?? BE_NEVER
         },
         {
             // Renamed from "Tax Paid Δ". The Δ was misleading: unlike every other Δ in this table it
@@ -2138,7 +2133,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             // were comparing against. It is on the row already as _optConvAmt; this shows it.
             key: 'extraConv', label: 'Extra Conv',
             title: 'The additional yearly IRA→Roth conversion this row runs, on top of whatever the strategy already converts. This is the amount Optimize Conversions searched for, and it is what the Extra Annual Roth Conversion field is set to when you load the row. A dash means the row adds no extra conversion. The amount is also in the tooltip on the Strategy cell, so it is readable without turning this column on.',
-            getValue: r => (r._optConvAmt ? Math.round(r._optConvAmt).toLocaleString() : '—'),
+            getValue: r => (r._optConvAmt ? Math.round(r._optConvAmt).toLocaleString() : EMPTY_CELL),
             getSortValue: r => r._optConvAmt ?? -Infinity
         },
         {
@@ -2149,7 +2144,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             // black as a gain, with only a minus sign to say otherwise. No dollar prefix: every
             // other money column in this table is bare, and the heading already says what it is.
             getValue: r => {
-                if (r._convSavings == null) return '—';
+                if (r._convSavings == null) return EMPTY_CELL;
                 const v = Math.round(inC() ? (r._convSavingsCurrent ?? r._convSavings) : r._convSavings);
                 const c = v > 0 ? '#1a7f37' : v < 0 ? '#cf222e' : '#57606a';
                 return `<span style="color:${c}">${v > 0 ? '+' : ''}${v.toLocaleString()}</span>`;
@@ -2270,14 +2265,12 @@ function renderOptimizerTable(results) {
         colWinners.spend      = w3._id;
         colWinners.rmdtax     = w5._id;
         colWinners.afterTaxNW = w6._id;
-        // Earliest Break Even - the year conversions permanently overtake the same strategy without
-        // them. Only rows that HAVE a break-even can win: a plan that never converts has none, and
-        // the 9999 sort sentinel must not be allowed to look like the earliest year.
+        // Earliest Break Even - the year conversions permanently overtake the same strategy without them.
+        // Only rows that HAVE a break-even can win: a plan that never converts has none, and the BE_NEVER
+        // sort sentinel must never be allowed to look like the earliest year.
         //
-        // Ordered THROUGH rankRows, so the badge and Rank 1 cannot disagree. The hand-written copy
-        // of the tie rule that used to sit here broke ties on net wealth, and when the objective's
-        // ties moved to the Roth balance first it would have gone on awarding the badge to the
-        // other row - two rules for one question, drifting apart silently. One rule, in core.
+        // Ordered THROUGH rankRows, so the badge and Rank 1 cannot disagree. A local copy of the tie rule
+        // is two rules for one question, and they drift the moment the objective's own tie order changes.
         const beRows = feasibleSuccesses.filter(r => r._convBEYear != null);
         if (beRows.length > 0) colWinners.convBE = rankRows(beRows, 'earliestbe')[0]._id;
     }
@@ -2573,11 +2566,8 @@ function renderOptimizerTable(results) {
         const spendVals = results.map(r => r.totals.spend);
         const allSame = spendVals.every(v => v === spendVals[0]);
         if (allSame && results.length > 1) {
-            // Names the columns that are ACTUALLY on screen. The old string named three fixed
-            // columns, one of which (Yrs Funded) is no longer a default column at all and two of
-            // which the active goal may have put away. Advice pointing at a column the reader
-            // cannot see is worse than no advice. (The two Δ columns this list used to exclude are
-            // gone; "Show as Differences" turns these same columns into differences instead.)
+            // Names the columns that are ACTUALLY on screen: the active goal puts some away, and advice
+            // pointing at a column the reader cannot see is worse than no advice.
             const _diffKeys = ['tax', 'afterTaxNW', 'mixSpread', 'finalRoth', 'finalIRA', 'rmdtax', 'convBE'];
             const _diffNames = columns.filter(c => _diffKeys.includes(c.key)).map(c => c.label).slice(0, 3);
             noteEl.textContent = 'ℹ️ All strategies show the same Total Spendable - this means every strategy fully funds your spending goal. '
@@ -2738,10 +2728,9 @@ function loadOptimizerResult(id) {
         document.getElementById('iraWithdrawPct').value = Math.round(result._iraWithdrawPct * 100);
     }
 
-    // Ordered / Guyton-Klinger were never restored: the row recorded no sequence and no guardrails,
-    // so loading "Ordered RIBC" set strategy=ordered and left whatever sequence the sidebar already
-    // had - the table showed one plan and clicking it ran another (the PF8 bug class). _selection
-    // carries the effective values; guard on it so rows from an older cached run still load.
+    // Guard on `_selection`, which carries the effective values: a row that records only its strategy
+    // name sets strategy=ordered and leaves whatever sequence the sidebar already had, so the table shows
+    // one plan and clicking it runs another. Rows from an older cached run still load.
     if (result._selection) {
         // Same PF8 class, one dimension later: a 🅡 row that loaded without its Roth position ran
         // the un-cloned plan. Set unconditionally, including back to off for the rows that are not
@@ -2949,9 +2938,9 @@ const columnCategories = {
     'ruleSpend':   ['Summary', 'Income', 'Guardrails'],
     'ruleAdj':     ['Summary', 'Income', 'Guardrails'],
     'vsPlan%':     ['Summary', 'Income', 'Guardrails'],
-    // P128: risk-based rails. Only in a log a rails solve was merged into, so the columns exist only
-    // after a solve; analyzeColumnContent hides them while they are empty anyway. In Guardrails
-    // (user, 2026-09-19: "all the guardrail related information") as well as Spending.
+    // Risk-based rails: only in a log a rails solve was merged into, so the columns exist only after a
+    // solve, and analyzeColumnContent hides them while they are empty. In Guardrails as well as Spending
+    // (user, 2026-09-19: "all the guardrail related information").
     'railLower':   ['Spending', 'Guardrails'],
     'railUpper':   ['Spending', 'Guardrails'],
     'railPoS%':    ['Spending', 'Guardrails'],
@@ -3000,14 +2989,13 @@ const columnGroupDefs = {
     'railSpend': 'Rails', 'railSpendDn': 'Rails', 'railSpendUp': 'Rails', 'railBasis': 'Rails',
 };
 
-// P86: the running-total columns are COMPUTED HERE, not stored in the engine log. A stored nominal
-// sum-to-date divided by one row's inflation factor is the wrong Current-$ number (it can even
-// fall year over year); the right one is the running sum of each year's deflated flow. This is a
-// NAMED list on purpose - never infer accumulators by monotonicity: per-year flows like spendGoal
-// and netIncome legitimately DECLINE under Current-$ and must keep doing so.
-// `after` = the log key each computed column is spliced after; these are the columns' historical
-// positions, and rebuildGroupRow colSpans runs of consecutive same-group columns, so moving one
-// into the middle of another run shears the Annual Details banner (the P84 lesson).
+// The running-total columns are COMPUTED HERE, not stored in the engine log: a stored nominal sum-to-date
+// divided by one row's inflation factor is the wrong Current-$ number and can even fall year over year,
+// where the right one is the running sum of each year's deflated flow. A NAMED list on purpose - never
+// infer accumulators by monotonicity, because per-year flows like spendGoal and netIncome legitimately
+// DECLINE under Current-$ and must keep doing so.
+// `after` = the log key each computed column is spliced after. rebuildGroupRow colSpans runs of
+// consecutive same-group columns, so moving one into the middle of another run shears the banner.
 const ANNUAL_RUNNING_TOTALS = {
     'SumTaxes':       { after: 'StateCap',         source: r => r.totalTax ?? 0 },
     'SumAdvisorFees': { after: 'AdvisorFee',       source: r => r.AdvisorFee ?? 0 },
@@ -3131,11 +3119,11 @@ function analyzeColumnContent(log) {
             const value = ANNUAL_RUNNING_TOTALS[key] ? ANNUAL_RUNNING_TOTALS[key].source(row) : row[key];
 
             // Check if value exists and is non-zero
-            if (value != null && value !== '' && value !== '—') {
+            if (value != null && value !== '' && value !== EMPTY_CELL) {
                 if (!isNaN(value) && parseFloat(value) !== 0) {
                     hasNonZeroValue = true;
                     break;
-                } else if (isNaN(value) && value !== '—') {
+                } else if (isNaN(value) && value !== EMPTY_CELL) {
                     // Non-numeric non-empty value
                     hasNonZeroValue = true;
                     break;
@@ -3564,7 +3552,7 @@ function updateTable(log) {
         const rowGuaranteed = row['guaranteedIncome'] ?? 0;
         const rowPortfolio  = row['portfolioBalance'] ?? (totalNetWealth ?? 0);
         const rowRequired   = Math.max(0, spendGoal - rowGuaranteed);
-        const incomeShortfall = (netIncome < spendGoal * 0.99) || (rowPortfolio < rowRequired);
+        const incomeShortfall = (netIncome < spendGoal * FUNDED_TOLERANCE) || (rowPortfolio < rowRequired);
         const deathOccurred = maritalStatus != row['status'];
 
         // IRMAA tier cell tint - blue scale (taxation theme), applied only to relevant columns
@@ -3653,7 +3641,7 @@ function updateTable(log) {
                 } else {
                     // Normalize IRMAATier base value for display
                     td.textContent = (key === 'IRMAATier' && (value === '-none-' || value === '-'))
-                        ? '—'
+                        ? EMPTY_CELL
                         : (value ?? '');
                 }
 
@@ -3750,12 +3738,10 @@ function openTaxPlanner(row, prevRow) {
     const marginalOrd = ((row['FedRate%'] || 0) + (row['StateRate%'] || 0)) * 100;
     if (marginalOrd > 0) setF('marginalOrdRate', marginalOrd.toFixed(1));
 
-    // Brokerage position, in dollars. The planner needs the unrealized-gain SHARE to price
-    // "raise the tax money by selling brokerage", and it used to be stuck on its own hardcoded
-    // 40% because this handoff never sent anything: neither the position nor the LTCG rate was in
-    // the URL, so editing the basis here changed nothing over there. Both amounts are already on
-    // the row, and (Brokerage - Basis) / Brokerage is the same ratio the engine itself keeps as
-    // yr.capGainsPercentage.
+    // Brokerage position, in dollars, and the LTCG rate: the planner needs the unrealized-gain SHARE to
+    // price "raise the tax money by selling brokerage", and without both in the URL it falls back to a
+    // hardcoded share, so editing the basis here would change nothing over there.
+    // (Brokerage - Basis) / Brokerage is the ratio the engine keeps as yr.capGainsPercentage.
     set('bv', row.Brokerage);
     set('bb', row.Basis);
 
@@ -3787,10 +3773,9 @@ function openTaxPlanner(row, prevRow) {
 
 
 
-function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWorth = 100000) {
-    // P113. The tiles read the SAME snapshot a saved plan records, so the two cannot drift apart.
-    // They used to be independent derivations of the same quantities - these values as locals here,
-    // and nothing at all on the save side, because no function returned them as data.
+function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWorth = STAT_TILE_MIN_NET_WORTH) {
+    // The tiles read the SAME snapshot a saved plan records, so the two cannot drift apart - two
+    // independent derivations of one quantity is what that drift is made of.
     const _snap = OptimizerCore.summarizeRun(totals, finalNW, finalNWCurrentDollars).tiles;
 
     const inCD = document.getElementById('show-current-dollars')?.checked;
@@ -3848,15 +3833,14 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     const changeEl = document.getElementById('stat-success');
     if (changeEl) changeEl.innerText = _lastChangedInputLabel ? '↺ ' + _lastChangedInputLabel : '';
     const convBEEl = document.getElementById('stat-conv-be');
-    if (convBEEl) convBEEl.innerText = totals.convBEYear ?? '—';
-    // Break Even ⓘ - now a SEARCHED stop-year suggestion, not just a "why blank" explanation.
-    // Evidence (findings.md, 2026-07-23) proved (a) stopping conversions partway can beat both
-    // converting to the end and converting nothing, and (b) the old boundary-year text named the
-    // WRONG year (off $662k). So whenever conversions occur we run bestConversionStopYear and lead
-    // with the year that maximizes after-tax wealth + its dollar gain; the old boundary diagnosis
-    // is demoted to secondary color, shown only when Break Even is actually blank. Computed eagerly
-    // so hovering reveals it with no click. Cost: n+1 cheap runs + 1 OC re-run, well under a
-    // runSimulation(), same order as the prior diagnostic scan.
+    if (convBEEl) convBEEl.innerText = totals.convBEYear ?? EMPTY_CELL;
+    // Break Even ⓘ is a SEARCHED stop-year suggestion, not a "why blank" explanation: whenever
+    // conversions occur, bestConversionStopYear runs and the readout leads with the year that maximizes
+    // after-tax wealth and its dollar gain. Stopping partway can beat both converting to the end and
+    // converting nothing, and the boundary year is not that year (research: findings.md, "the suggested
+    // Stop Conversion year is a MOVING PEAK"). The boundary diagnosis stays as secondary color, shown
+    // only when Break Even is blank. Computed eagerly, so hovering over it reveals it with no click; the
+    // cost is n+1 cheap runs plus one OC re-run, well under a runSimulation().
     const diagIcon = document.getElementById('stat-conv-be-diagnose');
     const diagResultEl = document.getElementById('stat-conv-be-diagnose-result');
     if (diagIcon && diagResultEl) {
@@ -3895,20 +3879,20 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
         diagResultEl.innerHTML = '';
         diagResultEl.style.display = 'none';
     }
-    // P102b2. Immediately after _beStopSuggestion is refreshed, and never before it: the
-    // 'when they stop paying' stop-year position adopts that exact object rather than searching
-    // again, which is what makes it and the Break Even icon agree by construction.
+    // Immediately after _beStopSuggestion is refreshed, and never before it: the 'when they stop paying'
+    // stop-year position adopts that exact object rather than searching again, which is what makes it and
+    // the Break Even icon agree by construction.
     syncAutoStopYear();
 
     const avgSpendEl = document.getElementById('stat-avg-spend-rate');
     if (avgSpendEl) {
         avgSpendEl.innerText = (totals.avgWdRate != null)
-            ? (totals.avgWdRate * 100).toFixed(1) + '%' : '—';
+            ? (totals.avgWdRate * 100).toFixed(1) + '%' : EMPTY_CELL;
         // Tile shows the simple mean; the other two framings go in the tooltip so the single
         // headline number can't be mistaken for the whole picture. The tile div owns the title.
         const wdTile = avgSpendEl.closest('div[title]');
         if (wdTile) {
-            const pct = v => (v != null) ? (v * 100).toFixed(1) + '%' : '—';
+            const pct = v => (v != null) ? (v * 100).toFixed(1) + '%' : EMPTY_CELL;
             wdTile.title = 'Portfolio withdrawals funding spending and taxes, divided by the '
                 + 'start-of-year portfolio balance. Roth conversions and reinvested surplus are '
                 + 'excluded; Social Security and pension are not subtracted. The classic 4% rule '
@@ -3979,16 +3963,15 @@ function formatBreakEvenDiagnosis(diag, deflAtYear = () => 1) {
     return msg;
 }
 
-// Turns a bestConversionStopYear() result into the ⓘ headline + a one-click suggestion object.
-// Leads with the searched year and its dollar gain (findings.md §7: never show a bare year -- the
-// gain is what tells low-tax-state users a nearby year is worthless). `boundaryNote` is the old
-// which-conversion-erased-the-lead sentence, appended as secondary color only when Break Even is
-// blank. Returns { msg, suggestion } where suggestion is { year, mode } for the one-click apply,
-// or null when there is nothing actionable to click (converting through the end is already best,
-// or converting nothing is best -- the latter has no natural "stop after YEAR" the field expresses).
-// `deflTerm` (P86) converts the terminal-wealth gains to the displayed basis; the `> 1` decision
-// thresholds below deliberately stay on the NOMINAL values so the toggle never changes which
-// suggestion is made, only the dollars that describe it.
+// Turns a bestConversionStopYear() result into the ⓘ headline and a one-click suggestion object. Leads
+// with the searched year and its dollar gain, never a bare year: the gain is what tells a low-tax-state
+// reader that a nearby year is worthless. `boundaryNote` is the which-conversion-erased-the-lead sentence,
+// appended as secondary color only when Break Even is blank. Returns { msg, suggestion }, where suggestion
+// is { year, mode } for the one-click apply, or null when there is nothing actionable to click (converting
+// through the end is already best, or converting nothing is - and the latter has no "stop after YEAR" the
+// field can express). `deflTerm` converts the terminal-wealth gains to the displayed basis; the decision
+// thresholds below stay on the NOMINAL values, so the toggle changes only the dollars, never which
+// suggestion is made.
 function formatStopYearMessage(sugg, boundaryNote, mode, deflTerm = 1) {
     if (!sugg) return { msg: boundaryNote || '', suggestion: null };
     const _m = (n) => '$' + Math.round(n * deflTerm).toLocaleString();
@@ -4122,9 +4105,8 @@ const milestonePlugin = {
         // All other charts (MC input fans, etc.) get none.
         const canvasId = chart.canvas?.id || '';
         let milestones = _chartMilestones;
-        // Deaths are matched on the stepUp flag, not on the label. They used to read "Your Passing"
-        // and be caught by the regex; the labels are now "You"/"Spouse"/"Both", which no word test
-        // can distinguish from a future marker without one. The flag is set on death markers only.
+        // Deaths are matched on the stepUp flag, not on the label: the labels are "You"/"Spouse"/"Both",
+        // which no word test can tell from a future marker. The flag is set on death markers only.
         if (canvasId === 'mc-chart') milestones = milestones.filter(m => m.stepUp || /RMDs begin|SS begins/.test(m.label));
         else if (canvasId !== 'chartAssets' && canvasId !== 'chartIncomeSources') return;
         if (!milestones.length) return;
@@ -4346,12 +4328,12 @@ function computeMilestones(log) {
     // lastTotals channel as beYear above. Only the first death of a couple can be a half step-up;
     // the last death is always full, because the heirs take the account at market wherever they live.
     const stepUpFraction = (typeof lastTotals !== 'undefined' && lastTotals && lastTotals.basisStepUpFraction != null)
-        ? lastTotals.basisStepUpFraction : 0.50;
+        ? lastTotals.basisStepUpFraction : BASIS_STEP_UP_FALLBACK;
     // RMD start age from the log alone: the engine sets age = year − birthyear exactly
     // (optimizer_core.js resolveHousehold), so the birth year is recoverable from any row with a
     // numeric age, and rmdStartAge() is the rule getRMDPercentage() uses. A non-numeric age ('—')
     // means not alive / no spouse.
-    const numAge = a => (a == null || a === '—') ? null : +a;
+    const numAge = a => (a == null || a === EMPTY_CELL) ? null : +a;
     const rmdAgeFor = (year, age) => rmdStartAge(year - age);
     // Fires on the first row where this person reaches their RMD age AND the prior row had them
     // below it. Requiring the crossing to happen inside the log means a plan that starts after
@@ -4369,7 +4351,7 @@ function computeMilestones(log) {
         // right-hand end of the chart where a long label is drawn right-aligned and sweeps left
         // across its neighbors. The step-up glyph replaces it at a fraction of the width.
         if (!deathDone && prevStatus && status && status !== prevStatus) {
-            const youGone = (r.age1 == null || r.age1 === '—');
+            const youGone = (r.age1 == null || r.age1 === EMPTY_CELL);
             ms.push({ x: i, label: youGone ? 'You' : 'Spouse', color: '#7b1fa2',
                       stepUp: stepUpFraction >= 1 ? 'full' : 'half' });
             deathDone = true;
@@ -4379,7 +4361,7 @@ function computeMilestones(log) {
         // shortfall year suppresses the GK-cut marker below - a shortfall is the more important note.)
         const sg = r.spendGoal ?? r.SpendGoal;
         const ni = r.netIncome ?? r.NetIncome;
-        const isShort = (sg > 0 && ni != null && ni < sg * 0.90);
+        const isShort = (sg > 0 && ni != null && ni < sg * CHART_SHORTFALL_FRACTION);
         // 2. A spend-rule cut or raise, by either rule (GK-style or risk-based), from what the rule
         // actually did to the goal (the hidden -ruleMove field): a risk-based raise the ceiling
         // trims back to the plan still moved spending up, and a GK-style year labeled 'no-cut'
@@ -4444,8 +4426,8 @@ function computeMilestones(log) {
         // Whoever is still alive on the final row is the one it belongs to; the other shows '—'.
         // Both alive means both life expectancies land on the same year, so there was no first
         // death to flip the filing status and this is the only death marker the plan gets.
-        const _you = !(_lastRow.age1 == null || _lastRow.age1 === '—');
-        const _spouse = !(_lastRow.age2 == null || _lastRow.age2 === '—');
+        const _you = !(_lastRow.age1 == null || _lastRow.age1 === EMPTY_CELL);
+        const _spouse = !(_lastRow.age2 == null || _lastRow.age2 === EMPTY_CELL);
         const _label = (_you && _spouse) ? 'Both' : (_you ? 'You' : 'Spouse');
         ms.push({ x: _lastIdx, label: _label, color: '#7b1fa2', stepUp: 'full' });
     }
@@ -4971,7 +4953,6 @@ const RailsState = {
     ticker: null,
 };
 // Long enough to swallow the sidebar's own 400ms recalc debounce and a second quick edit.
-const RAILS_AUTORUN_DEBOUNCE_MS = 900;
 
 // The panel's settings. Without the nerdknob the cadence and path count are the defaults, whatever
 // the hidden boxes still hold from a knob session.
@@ -5085,19 +5066,19 @@ function runRails() {
     Object.assign(RailsState, { running: true, runIsPath: inReplay, runFingerprint: fingerprint, startedAt: performance.now(),
                                 progress: 0, error: null });
     railsStopTicker();
-    RailsState.ticker = setInterval(railsRenderStatus, 250);
+    RailsState.ticker = setInterval(railsRenderStatus, TIMING.RAILS_STATUS_TICK_MS);
     railsRenderPanel();
     // The plan without the rule's table (the job runs the plan without the rule anyway), plus the
     // custom set when the boxes define one.
     runMCWorker(
-        { kind: 'rails', base: { ...base, rbgRails: undefined }, cadence: s.cadence, numPaths: s.paths,
+        { kind: JOB_KIND.RAILS, base: { ...base, rbgRails: undefined }, cadence: s.cadence, numPaths: s.paths,
           presets: railsJobPresets(), skipStart: inReplay, ...railsModelCfg(base) },
         pct => { if (RailsState.runFingerprint === fingerprint) RailsState.progress = pct; },
         msg => railsComplete(msg, fingerprint, startFingerprint));
 }
 
 function cancelRails() {
-    if (typeof cancelMCWorker === 'function') cancelMCWorker('rails');
+    if (typeof cancelMCWorker === 'function') cancelMCWorker(JOB_KIND.RAILS);
     Object.assign(RailsState, { running: false, runFingerprint: null });
     railsStopTicker();
     railsRenderPanel();
@@ -5284,7 +5265,7 @@ function railsScheduleAutoRun() {
     RailsState.debounce = setTimeout(() => {
         RailsState.debounce = null;
         if (wanted()) runRails();
-    }, RAILS_AUTORUN_DEBOUNCE_MS);
+    }, TIMING.RAILS_AUTORUN_DEBOUNCE_MS);
 }
 
 // Page load, and the nerdknob going on or off. The panel is always there; what the solve costs -
@@ -5649,10 +5630,10 @@ function railsRenderTiming() {
 const RAIL_BAND_COLORS = { above: 'rgba(46,125,50,0.10)', below: 'rgba(229,57,53,0.10)' };
 // The colors each rail line is drawn in, shared with the hints that name them.
 const RAIL_COLORS = { upper: '#2e7d32', lower: '#c62828', target: '#6a1b9a' };
-// No spending rail is drawn above this multiple of the year's own planned spending (user,
-// 2026-09-18: "At more than 2x spend, it should not plot any points"). Near a plan's end the answer
-// climbs toward spending whatever is left - up to 10x the plan on many plans - which only a known
-// date of death allows, and it squashed every other line on the chart. Annual Details keeps it.
+// No spending rail is drawn above this multiple of the year's own planned spending (user, 2026-09-18: "At
+// more than 2x spend, it should not plot any points"). Near a plan's end the answer climbs toward spending
+// whatever is left, which only a known date of death allows, and it squashes every other line on the
+// chart. Annual Details keeps the unclipped figure.
 const RAILS_SPEND_PLOT_MAX = 2;
 
 function railsChartDatasets(log, adj, pt, kind) {
@@ -5701,8 +5682,8 @@ function railsSeries(log, adj, pt, kind, fieldsAt, tag) {
         };
     };
     // Two bands on both views (user, 2026-09-16): green above the raise line, light red below the cut
-    // line. Between the two - on track - stays clear: a gray band there was too narrow to notice
-    // (user, same day). The previous solve gets no bands, so only one set is ever on screen.
+    // line. Between them - on track - stays clear, a gray band there being too narrow to notice. The
+    // previous solve gets no bands, so only one set is ever on screen.
     const bands = (upper, lower) => {
         if (faded) return [upper, lower];
         const shade = (ds, fill, color) => Object.assign(ds, { fill, backgroundColor: color, _keepFillOnHover: true });
@@ -6295,7 +6276,7 @@ function setupAutoRecalc() {
             // summary bar and is visible from everywhere. mcInputsChanged is a no-op when its own
             // hash has not moved, so a change Monte Carlo does not care about costs nothing.
             if (typeof mcInputsChanged === 'function') mcInputsChanged();
-        }, 400);
+        }, TIMING.SIDEBAR_RECALC_DEBOUNCE_MS);
     }
     document.querySelectorAll('.sidebar input, .sidebar select,'
                             + ' #mc-nerd-panel input[type=checkbox]').forEach(el => {
@@ -6308,7 +6289,7 @@ function setupAutoRecalc() {
     // Prime the Stress Test tile once on load so it reads a real number before the user touches
     // anything or visits the Monte Carlo tab. Deferred past the first paint because it spawns a
     // worker; the pass itself is ~10 simulations. Everything after this is driven by scheduleRecalc.
-    setTimeout(() => { if (typeof mcInputsChanged === 'function') mcInputsChanged(); }, 600);
+    setTimeout(() => { if (typeof mcInputsChanged === 'function') mcInputsChanged(); }, TIMING.STRESS_PRIME_DELAY_MS);
 }
 
 
@@ -6349,15 +6330,15 @@ function onConvSubFlagChange() {
         main.checked = cxr && fcc;
         main.indeterminate = cxr !== fcc;
     }
-    // P102b3. The goal-first "Roth conversions" selector is a second convenience control over the
-    // same flags, so it is kept honest here for exactly the reasons the comment above lists: an
-    // optimizer row, a share URL, a scenario or an MC variation can all switch conversions on
-    // without firing onchange, and a panel still reading "Never convert" would be a lie.
+    // The goal-first "Roth conversions" selector is a second convenience control over the same flags, so
+    // it is kept honest here for the reasons the comment above lists: an optimizer row, a share URL, a
+    // scenario or an MC variation can all switch conversions on without firing onchange, and a panel
+    // still reading "Never convert" would be a lie.
     //
-    // ONE DIRECTION ONLY. "never" is CLEARED when conversions appear, and is never SET
-    // automatically. All flags off is also the shipped default of a plan whose Optimizer is still
-    // searching for a conversion, so inferring "never" from it would answer a question the user
-    // was never asked, and would switch Optimize Conversions off behind their back.
+    // ONE DIRECTION ONLY. "never" is CLEARED when conversions appear and is never SET automatically. All
+    // flags off is also the shipped default of a plan whose Optimizer is still searching for a
+    // conversion, so inferring "never" from it would answer a question the user was never asked and
+    // switch Optimize Conversions off behind their back.
     const gfMode = document.getElementById('gf-conv-mode');
     if (gfMode && gfMode.value === 'never'
         && (cxr || fcc || (+val('extraConversionAmount') || 0) > 0)) {
@@ -6921,7 +6902,8 @@ function updateGuardrailsNote() {
             + (ceilingNote || ' Never above plan is recommended with this rule: the rails are solved for your planned path and are accurate near it.');
         return;
     }
-    const g = Math.round(+val('gkGuard') || 20), a = Math.round(+val('gkAdjPct') || 10);
+    const g = Math.round(+val('gkGuard') || GK_DEFAULTS.guard * 100),
+          a = Math.round(+val('gkAdjPct') || GK_DEFAULTS.adjPct * 100);
     // P127. The two published limits the rule adopted, and the ceiling when it is on. Stated here and
     // not only in the tooltip: the ceiling switch is nerdknob-only, but a share link can turn it on
     // for anyone, and a rule that is running has to be readable by whoever it is running for.
@@ -7118,6 +7100,18 @@ const OPT_SHARE_PRIVACY = {
 const SHARE_INPUT_SELECTOR = '.sidebar input, .sidebar select, #opt-search-options input,'
                            + ' #mc-nerd-panel input[type=checkbox]';
 const OPT_DEFAULTS = {};
+// The default a control SHIPPED with, as a number: the value `captureDefaults()` recorded at load,
+// falling back to the markup's own `value=` attribute when this runs before capture (a share link
+// parsed early, or a test calling a reader directly). Every `|| 2.8`-style fallback in this file used
+// to restate one of these, so the literal and the control it mirrored could drift with nothing to
+// catch it. The control's markup is the one home; this is how the code reads it.
+function defaultNumOf(id) {
+    const cap = OPT_DEFAULTS[id];
+    if (cap && cap.n !== null && cap.n !== undefined && Number.isFinite(cap.n)) return cap.n;
+    const raw = document.getElementById(id)?.getAttribute('value');
+    const n = raw === null || raw === undefined ? NaN : parseFloat(raw);
+    return Number.isFinite(n) ? n : NaN;
+}
 function captureDefaults() {
     document.querySelectorAll(SHARE_INPUT_SELECTOR).forEach(el => {
         if (!el.id || el.dataset.noShare !== undefined) return;
@@ -7149,17 +7143,16 @@ function buildShareURL() {
             params.set(short, el.value);
         }
     });
-    // P84. `afm` is NOT emitted, and pinning it here was over-engineering on my part. buildShareURL
-    // emits each field's own TEXT, so an explicit "$15" or "15%" already travels in `af` verbatim
-    // and reproduces exactly; a bare "15" means what the inference says, which is what the user
-    // typed and saw. A second parameter carrying the same fact could only ever disagree with it.
-    // Incoming `afm` is still ACCEPTED by loadFromURL, so links already generated keep working.
-    // P64e: these have no DOM field, so the loop above cannot see them. Re-emit them or a shared
-    // link silently drops a figure the recipient never had a way to re-enter.
-    // P100b1: the "Optimize for" goal is UI state, not an engine input, so the field loop above
-    // cannot see it - and without it a shared link silently reopens on Tax Flexibility, showing the
-    // recipient a different winner and a different anchor baseline for the same plan. Emitted only
-    // when it differs from the default, so existing links are unchanged.
+    // `afm` is NOT emitted: buildShareURL emits each field's own TEXT, so an explicit "$15" or "15%"
+    // travels in `af` verbatim and a bare "15" means what the inference says, which is what the user
+    // typed and saw. A second parameter carrying the same fact could only disagree with it. Incoming
+    // `afm` is still ACCEPTED by loadFromURL, so links already generated keep working.
+    //
+    // The three below have no DOM field, so the loop above cannot see them, and each is re-emitted
+    // because a shared link would otherwise silently drop a figure the recipient cannot re-enter. The
+    // "Optimize for" goal is UI state rather than an engine input: without it a link reopens on Tax
+    // Flexibility, showing a different winner and a different anchor baseline for the same plan. Emitted
+    // only when it differs from the default, so existing links are unchanged.
     if (OptimizerState.objective && OptimizerState.objective !== 'taxflex') {
         params.set('obj', OptimizerState.objective);
     }
@@ -7201,10 +7194,10 @@ function loadFromURL() {
         }
         params.delete('advisorFeeMode');
     }
-    // The two timing selects became one mode, so an older link carries `fwt` and maybe `cvt`. Folded
-    // explicitly rather than left to fall through: `OPT_SHORT_TO_LONG` is DERIVED from the
-    // long-to-short map, so dropping the old keys also drops the inbound mapping, and an old link
-    // would quietly load the new default while claiming to describe a plan.
+    // An older link carries `fwt` and maybe `cvt`, from when the timing was two selects rather than one
+    // mode. Folded explicitly rather than left to fall through: `OPT_SHORT_TO_LONG` is DERIVED from the
+    // long-to-short map, so dropping the old keys drops the inbound mapping too, and an old link would
+    // quietly load the new default while claiming to describe a plan.
     //
     //   fwt=early              -> Early
     //   fwt=late + cvt=early   -> Split
@@ -7214,9 +7207,8 @@ function loadFromURL() {
     // `fwt=early` with `cvt=late` is the one shape the modes cannot express - spending before a
     // conversion, which only ever surrendered Roth growth. It takes Early and says so.
     //
-    // READ UNDER BOTH NAMES. `params` was built by mapping short codes through `OPT_SHORT_TO_LONG`,
-    // which no longer carries `fwt`/`cvt`, so those keys arrive UNMAPPED and still short. A fold
-    // looking only for the long names would never fire.
+    // READ UNDER BOTH NAMES: those keys arrive UNMAPPED and still short, because `OPT_SHORT_TO_LONG` no
+    // longer carries them, so a fold looking only for the long names would never fire.
     const _fwtKey = params.has('fwt') ? 'fwt' : 'forceWithdrawTiming';
     const _cvtKey = params.has('cvt') ? 'cvt' : 'conversionTiming';
     if (params.has(_fwtKey) || params.has(_cvtKey)) {
@@ -8402,10 +8394,10 @@ const TAX_DATA_BASE_YEAR = TAXData.FEDERAL.YEAR;
 function getDropdownStatus() {
     if (!valChecked('hasSpouse')) return 'SGL';
     const currentYear = new Date().getFullYear();
-    const die1Year = (+document.getElementById('birthyear1')?.value || 1960)
-                   + (+document.getElementById('die1')?.value || 88);
-    const die2Year = (+document.getElementById('birthyear2')?.value || 1952)
-                   + (+document.getElementById('die2')?.value || 98);
+    const die1Year = (+document.getElementById('birthyear1')?.value || defaultNumOf('birthyear1'))
+                   + (+document.getElementById('die1')?.value || defaultNumOf('die1'));
+    const die2Year = (+document.getElementById('birthyear2')?.value || defaultNumOf('birthyear2'))
+                   + (+document.getElementById('die2')?.value || defaultNumOf('die2'));
     return (die1Year > currentYear && die2Year > currentYear) ? 'MFJ' : 'SGL';
 }
 
@@ -8428,9 +8420,9 @@ function updateGrowthDisplay() {
     let html = `Real growth: <strong>${sign}${realPct.toFixed(1)}%</strong>`
              + ` <span style="color:#888;">(${totalNominal.toFixed(1)}% nominal [${growth}% price + ${div}% div] &minus; ${inflation}% inflation)</span>`;
 
-    if (growth > 10) {
+    if (growth > INPUT_LIMITS.GROWTH_WARN_HIGH) {
         html += `<br><span style="color:#b45309;">⚠ Optimistic - S&amp;P 500 long-run nominal CAGR is ~10%; diversified portfolios typically 6–9%.</span>`;
-    } else if (growth < 3) {
+    } else if (growth < INPUT_LIMITS.GROWTH_WARN_LOW) {
         html += `<br><span style="color:#b45309;">⚠ Pessimistic - below typical equity range (6–10% nominal). Appropriate only for very conservative (mostly-bond) allocations.</span>`;
     }
 
@@ -8502,13 +8494,12 @@ function updateBracketFeedback() {
     if (!selectedOption) return;
 
     const spendGoalStr = (spendGoalEl.value || '140000').toString().replace(/[^\d.-]/g, '');
-    const spendGoal = parseFloat(spendGoalStr) || 140000;
-    // P92e. The limit comes off the option's `data-limit`, which generateStratRateOptions() writes
-    // from the same number it formatted. This used to run a regex over the option's DISPLAY TEXT and
-    // take the last dollar amount in it - which broke twice over the moment the label changed: the
-    // new compact form is "$211k", whose digits parse as 211, and the label now ends with the OTHER
-    // ladder's position, so "the last dollar amount" would have been the wrong one even in full
-    // digits. A label is a thing to read; the number it shows travels separately.
+    const spendGoal = parseFloat(spendGoalStr) || defaultNumOf('spendGoal');
+    // The limit comes off the option's `data-limit`, which generateStratRateOptions() writes from the
+    // same number it formatted. Never from the DISPLAY TEXT: the compact form is "$211k", whose digits
+    // parse as 211, and the label ends with the other ladder's position, so "the last dollar amount in
+    // the label" is both truncated and the wrong figure. A label is a thing to read; the number it shows
+    // travels separately.
     const bracketLimit = Number(selectedOption.dataset.limit);
 
     if (!bracketLimit || isNaN(bracketLimit)) {
@@ -8545,7 +8536,7 @@ function updateBracketFeedback() {
 // CPI compounding in generateStratRateOptions so the boundary lines up with the dropdown limits.
 function federalBracketRateAt(income) {
     if (!isFinite(income) || income <= 0) return null;
-    const cpi = (+document.getElementById('cpi')?.value || 2.8) / 100;
+    const cpi = (+document.getElementById('cpi')?.value || defaultNumOf('cpi')) / 100;
     const cpiAdj = Math.pow(1 + cpi, Math.max(0, new Date().getFullYear() - TAX_DATA_BASE_YEAR));
     const status = getDropdownStatus();
     const brks = (status === 'MFJ' ? TAXData.FEDERAL.MFJ : TAXData.FEDERAL.SGL).brackets;
@@ -8742,7 +8733,7 @@ function updateLimitBasisNote() {
     }
 
     const status = getDropdownStatus();
-    const cpi = (+document.getElementById('cpi')?.value || 2.8) / 100;
+    const cpi = (+document.getElementById('cpi')?.value || defaultNumOf('cpi')) / 100;
     const cpiAdj = Math.pow(1 + cpi, Math.max(0, new Date().getFullYear() - TAX_DATA_BASE_YEAR));
     const limit = Number(opt.dataset.limit);
     const v = opt.value;
@@ -9203,16 +9194,15 @@ function updateACAWarning() {
             : `⚠ At retirement start in ${startYear} ${you}, already on Medicare (age ${medAge}+), so there is no premium subsidy for an income cap to protect. ACA options are unavailable. Lower Retirement Start Age to model pre-Medicare years.`;
         warnEl.style.display = 'block';
     } else if (oneMedicare && sel.value.startsWith('aca')) {
-        // P89: gated on the SELECTION. This advisory describes how the FPL cap behaves for a plan
-        // that is using one; it was previously shown for every selection, so choosing a federal
-        // bracket or an IRMAA tier produced an unprompted paragraph about a cap the plan does not
-        // have. The bothMedicare branch above is NOT gated the same way on purpose: it explains why
-        // the ACA options are grayed out, and a user who cannot select them could otherwise never
-        // find out why.
-        // Was "ACA income limits apply only to the other person", which was wrong in both
-        // directions: the FPL cap is tested against HOUSEHOLD MAGI, so the Medicare spouse's
-        // RMDs and Social Security count against it, and the cap does not lift for anyone until
-        // the younger spouse reaches Medicare age too (P35 PR 3c, yr.acaLapsed).
+        // Gated on the SELECTION: this advisory describes how the FPL cap behaves for a plan that is
+        // using one, and a federal bracket or IRMAA tier selection would otherwise get an unprompted
+        // paragraph about a cap the plan does not have. The bothMedicare branch above is deliberately NOT
+        // gated the same way: it explains why the ACA options are grayed out, and a user who cannot
+        // select them could otherwise never find out why.
+        //
+        // The cap is tested against HOUSEHOLD MAGI, so a Medicare spouse's RMDs and Social Security count
+        // against it, and it does not lift for anyone until the younger spouse reaches Medicare age too
+        // (`yr.acaLapsed`).
         const onName  = p1Medicare ? 'You'  : 'Your spouse';
         const onPoss  = p1Medicare ? 'your' : 'their';
         const offName = p1Medicare ? 'your spouse' : 'you';
@@ -9294,7 +9284,7 @@ function crossLadderNote(kind, limit, status, cpiAdj) {
  * - Only the applicable filing-status limit is shown (MFJ or SGL from inputs).
  */
 function generateStratRateOptions() {
-    const cpi = (+document.getElementById('cpi')?.value || 2.8) / 100;
+    const cpi = (+document.getElementById('cpi')?.value || defaultNumOf('cpi')) / 100;
     const status = getDropdownStatus();
     const isMFJ = status === 'MFJ';
 

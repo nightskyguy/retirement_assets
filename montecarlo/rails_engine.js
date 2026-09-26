@@ -90,6 +90,9 @@ const RAILS_SCALE_RANGE = [0.05, 16];
 // Market paths longer than the plan, as the research harness draws them.
 const RAILS_EXTRA_YEARS = 3;
 const RAILS_CADENCE_MAX = 10;
+// Backstop on the solve loop, not the mechanism: every rail the harness has measured settles in
+// well under this, and the loop exits when every count has an answer.
+const RAILS_MAX_SOLVE_ROUNDS = 80;
 const RAILS_PATHS_RANGE = [20, 2000];
 // The panel's defaults (user, 2026-09-16: "Running 100 paths every 3 years is sufficient").
 const RAILS_DEFAULT_PATHS = 100;
@@ -154,7 +157,8 @@ async function runRailsJob(cfg, hooks) {
     const t0 = performance.now();
     const numPathsWanted = railsPaths(cfg.numPaths);
     const startPathsWanted = Math.max(1, Math.round(Number(cfg.startPaths)) || RAILS_START_PATHS);
-    const mode = (cfg.simulationMode === 'bootstrap' || cfg.simulationMode === 'aam') ? cfg.simulationMode : 'gbm';
+    const mode = (cfg.simulationMode === MC_MODE.BOOTSTRAP || cfg.simulationMode === MC_MODE.AAM)
+        ? cfg.simulationMode : MC_MODE.GBM;
     const presetMap = cfg.presets ?? RAIL_PRESETS;
     const presetKeys = railsPresetKeys(presetMap);
 
@@ -183,7 +187,7 @@ async function runRailsJob(cfg, hooks) {
     const tBanks = performance.now();
     const bankOf = (paths, seedShift) => {
         const banks = _railsMC.buildBanks({ ...cfg, years, numPaths: paths, baseInputs: solveBase },
-                                          mulberry32((cfg.seed ?? 42) + seedShift), mode);
+                                          mulberry32((cfg.seed ?? MC_DEFAULTS.seed) + seedShift), mode);
         const inputs = new Array(banks.numPaths);
         for (let p = 0; p < banks.numPaths; p++) inputs[p] = _railsMC.buildPathInputs(banks, p, years, solveBase, mode);
         return inputs;
@@ -267,7 +271,7 @@ async function runRailsJob(cfg, hooks) {
             }
             return false;
         };
-        for (let round = 0; round < 80; round++) {
+        for (let round = 0; round < RAILS_MAX_SOLVE_ROUNDS; round++) {
             const lows = items.map(loB), highs = items.map(hiB);
             const open = [];
             for (const c of counts) {
@@ -475,7 +479,7 @@ async function runRailsJob(cfg, hooks) {
         presetsOut[key] = { key, label: P.label, target: P.target, upper: P.upper, lower: P.lower, cutTo: railsCutTo(P) };
     }
     return {
-        type: 'results', kind: 'rails', version: 2,
+        type: 'results', kind: JOB_KIND.RAILS, version: 2,
         presets: presetsOut,
         cadence: railsCadence(cfg.cadence),
         numPaths, simulationMode: mode, ruleOn,

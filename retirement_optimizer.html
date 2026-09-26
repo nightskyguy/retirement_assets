@@ -24,7 +24,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1917</title>
+    <title>Retirement Optimizer 11.1933</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -72,16 +72,16 @@
     .share-panel .share-status { font-family:monospace; font-size:10px; color:#1a7a1a; margin-top:.35rem; min-height:14px; }
 	</style>
 	<base target="_blank">	
-	<script src="taxengine.js?v=111917"></script>
+	<script src="taxengine.js?v=111933"></script>
 	<script src="medicare_costs.js?v=111917"></script>
-	<script src="optimizer_core.js?v=111917"></script>
+	<script src="optimizer_core.js?v=111932"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=111917"></script>
-	<script src="optimizer_tests.js?v=1118ef"></script>
+	<script src="optimizer_ui.js?v=111932"></script>
+	<script src="optimizer_tests.js?v=111933"></script>
 </head>
 <body>
 
@@ -1011,7 +1011,7 @@
 				<div style="font-size:0.85em;color:#555;margin-bottom:4px;">
 					Check rows to add/remove from chart. Click a column heading to sort; the 📍 row is your own plan and stays on top whatever the sort. Every row runs with your Guardrails setting except one: your own plan with the switch the other way around. <span id="mc-path-count-tbl"></span>
 				</div>
-				<div style="font-size:0.8em;margin-bottom:6px;">
+				<div id="mc-survival-legend" style="font-size:0.8em;margin-bottom:6px;">
 					Row shading:
 					<span style="background:#d4edda;padding:1px 8px;border-radius:3px;margin-right:4px;">≥ 90% survival</span>
 					<span style="background:#fff3cd;padding:1px 8px;border-radius:3px;margin-right:4px;">75 – 89%</span>
@@ -1146,6 +1146,13 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="behavior"><b>11.1933</b>
+					<strong>Four state tax tables were charging too much, and are corrected.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>North Dakota, Nebraska, South Carolina and Georgia were each charging too much state tax and now match what the state publishes for 2026: North Dakota has a 0% band the table did not carry, South Carolina rewrote its tax for 2026, Nebraska is graduated rather than flat 4.55%, and Georgia's larger standard deduction starts this year. On a couple drawing $120,000 a year, state tax falls 91% in North Dakota, 25% in South Carolina and 13% in Nebraska.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.1933" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="behavior"><b>11.1917</b>
 					<strong>Medicare and IRMAA costs now grow on a published path instead of your inflation rate.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1672,16 +1679,16 @@
      block, the deferred test tier never registered and the self-check badge stayed neutral forever
      on that one URL. Nothing here has a load-time side effect, so loading earlier is free. -->
 <script src="montecarlo/historical_returns.js?v=11150b"></script>
-<script src="montecarlo/prng.js?v=1118ef"></script>
-<script src="montecarlo/stats.js?v=11161f"></script>
+<script src="montecarlo/prng.js?v=11192e"></script>
+<script src="montecarlo/stats.js?v=11192e"></script>
 <!-- The Monte Carlo model itself. The worker importScripts() the same file; on file://, where a
      worker cannot load its scripts, mc_controller.js runs it here on the main thread. -->
-<script src="montecarlo/mc_engine.js?v=1118ef"></script>
+<script src="montecarlo/mc_engine.js?v=11192e"></script>
 <!-- P128. The risk-based rails solver. Same arrangement as mc_engine.js: the worker imports it too,
      and on file:// the controller runs it here. -->
-<script src="montecarlo/rails_engine.js?v=1118ef"></script>
-<script src="montecarlo/mc_controller.js?v=1118ef"></script>
-<script src="montecarlo/mc_tab.js?v=1118ef"></script>
+<script src="montecarlo/rails_engine.js?v=11192e"></script>
+<script src="montecarlo/mc_controller.js?v=111930"></script>
+<script src="montecarlo/mc_tab.js?v=11192e"></script>
 
 <script type="text/javascript">
 function clampIntlInput(intlId, equityPct) {
@@ -1882,7 +1889,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these seven are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111917';
+    const V = '?v=111933';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

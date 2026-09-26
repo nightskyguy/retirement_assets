@@ -319,17 +319,23 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
   "error": "Invalid entity (TEST) or status (NONEXISTENT)"},
 		'calculateProgressive(TEST,NONEXISTENT,...) ok')
 
-	// INFLATION_INDEXED: false - MT/ND/AL/OH/SC brackets must NOT inflate regardless of passed inflation value.
+	// INFLATION_INDEXED: false - MT/AL/OH/SC brackets must NOT inflate regardless of passed inflation
+	// value. North Dakota is deliberately NOT in this list: its thresholds move every year, so it is
+	// checked on the indexed side below.
 	const mtBase     = calculateProgressive('MT', 'MFJ', 50000, 1.0);
 	const mtInflated = calculateProgressive('MT', 'MFJ', 50000, 1.1);
 	assertEqual(mtBase.total, mtInflated.total,
 		'MT (INFLATION_INDEXED:false) - bracket inflation ignored, tax same at inflation=1.1 vs 1.0')
 	assertEqual(mtBase.marginal, mtInflated.marginal,
 		'MT marginal rate unchanged with inflation=1.1')
+	const scBase     = calculateProgressive('SC', 'SGL', 60000, 1.0);
+	const scInflated = calculateProgressive('SC', 'SGL', 60000, 1.1);
+	assertEqual(scBase.total, scInflated.total,
+		'SC (INFLATION_INDEXED:false) - bracket inflation ignored')
 	const ndBase     = calculateProgressive('ND', 'SGL', 60000, 1.0);
 	const ndInflated = calculateProgressive('ND', 'SGL', 60000, 1.1);
-	assertEqual(ndBase.total, ndInflated.total,
-		'ND (INFLATION_INDEXED:false) - bracket inflation ignored')
+	assertEqual(ndBase.total > ndInflated.total, true,
+		'ND (indexed) - inflation=1.1 widens the 0% band, lowering tax')
 	// CA IS indexed - inflation=1.1 widens brackets → less tax at same income
 	const caBase     = calculateProgressive('CA', 'MFJ', 200000, 1.0);
 	const caInflated = calculateProgressive('CA', 'MFJ', 200000, 1.1);
@@ -1456,6 +1462,45 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 			'omitting it and passing 1 are the same thing');
 		assertEqual(calcIRMAA(109001, 'SGL', 1, medicareGrowthFactor(0)), SGL_T1,
 			'and medicareGrowthFactor(0) is that same identity, from the other file');
+	});
+
+	// ── TEST CASE 27: the four states corrected against their own 2026 forms ─────────────────────
+	// Each figure below is PRINTED ON THE FORM, which is what makes this worth pinning: it is not an
+	// engine output, it is the state's own arithmetic at a threshold the state chose. A table edited
+	// from a summary rather than from the form fails here.
+	test('TEST CASE 27: ND, NE, SC and GA reproduce the figures printed on their 2026 forms', () => {
+		// North Dakota, 2026 Forms ND-1 and ND-EZ Tax Rate Schedules (Form ND-1ES, SFN 28709, 12-2025).
+		// The base amounts at the top of each band are on the form; a 0% first band is the whole point.
+		assertEqual(calculateProgressive('ND', 'SGL', 49575).total, 0,
+			'ND single: the 0% band runs to 49,575');
+		assertEqual(Math.round(calculateProgressive('ND', 'SGL', 250400).total * 100) / 100, 3916.09,
+			'ND single: the form prints 3,916.09 at the top of the 1.95% band');
+		assertEqual(Math.round(calculateProgressive('ND', 'MFJ', 304850).total * 100) / 100, 4329.98,
+			'ND joint: the form prints 4,329.98 at the top of the 1.95% band');
+
+		// Nebraska, 2026 Nebraska Tax Calculation Schedule (8-460-2026). Graduated, not flat.
+		assertEqual(Math.round(calculateProgressive('NE', 'SGL', 39900).total * 100) / 100, 1514.58,
+			'NE single: the schedule prints 1,514.58 at 39,900');
+		assertEqual(Math.round(calculateProgressive('NE', 'MFJ', 79800).total * 100) / 100, 3029.16,
+			'NE joint: the schedule prints 3,029.16 at 79,800');
+		assertEqual(calculateProgressive('NE', 'MFJ', 8250).marginal, 0.0246,
+			'NE joint: the first 8,250 is taxed at 2.46%, not at the 4.55% top rate');
+
+		// South Carolina, H. 4216 from TY2026: the form states the upper band as "5.21% minus $966",
+		// which must equal this schedule at every income above the threshold.
+		for (const x of [30000, 50000, 120000, 400000]) {
+			assertEqual(Math.round(calculateProgressive('SC', 'MFJ', x).total * 100) / 100,
+				Math.round((x < 30000 ? 0.0199 * x : 0.0521 * x - 966) * 100) / 100,
+				`SC joint at ${x}: matches the published 1.99% / 5.21%-minus-966 form`);
+		}
+
+		// The standard deductions these four states apply, from the 2026 figures each publishes.
+		assertEqual([TAXData.GA.MFJ.std, TAXData.GA.SGL.std], [30000, 15000], 'GA std, HB 463 from TY2026');
+		assertEqual([TAXData.NE.MFJ.std, TAXData.NE.SGL.std], [17700, 8850], 'NE std, 2026 rate chronology');
+		assertEqual([TAXData.SC.MFJ.std, TAXData.SC.SGL.std], [30000, 15000], 'SC SCIAD replaces the federal figure');
+		assertEqual([TAXData.NC.MFJ.std, TAXData.NC.SGL.std], [25500, 12750], 'NC std, unchanged and not indexed');
+		assertEqual([TAXData.AZ.MFJ.std, TAXData.AZ.SGL.std], ['FEDERAL', 'FEDERAL'],
+			'AZ tracks the federal standard deduction rather than restating it');
 	});
 
 // ── Runner ───────────────────────────────────────────────────────────────────────────────────

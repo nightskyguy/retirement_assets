@@ -89,14 +89,60 @@ const INFLATION_STREAM_XOR = 0x5F356495;
 // Split in two because the hot loop needs both halves and neither is derivable from the other for
 // free: it banks drawSyntheticBank() and separately needs the return for the min/max scan.
 // `logDrift` is passed in rather than recomputed per year - it is loop-invariant.
+// The four modes a bank can be drawn in, and the two non-numeric stress windows. One home for
+// names that cross five files - prng.js, mc_engine.js, rails_engine.js, mc_controller.js, mc_tab.js -
+// and the page's two <select> lists carry the same strings as option values.
+//
+// 'stress' is not a user choice: it is the mode the stress PASS runs in, set by the engine, and it
+// banks its returns the way bootstrap does. A windowMode may also be a NUMBER (one window's length),
+// so STRESS_WINDOW covers only the two names, never the whole domain.
+const MC_MODE = Object.freeze({
+    GBM:       'gbm',         // lognormal synthetic
+    AAM:       'aam',         // arithmetic-average synthetic
+    BOOTSTRAP: 'bootstrap',   // replayed historical blocks
+    STRESS:    'stress',      // the engine's own worst-decades pass
+});
+const STRESS_WINDOW = Object.freeze({ COMBINED: 'combined', ALL: 'all' });
+// The two kinds of job the worker shell runs, one worker each, so the rails panel re-solving on a
+// plan edit never terminates a Monte Carlo sweep in flight (P128). Here rather than in mc_engine.js
+// because rails_engine.js needs it too, and in node nothing hoists mc_engine's exports to globals.
+const JOB_KIND = Object.freeze({ MC: 'mc', RAILS: 'rails' });
+
+// Defaults a Monte Carlo job falls back to when a caller leaves one out - a node harness, a saved
+// scenario written before the control existed, a rails solve that only cares about returns. The page
+// mirrors the same values in MC_PARAMS (montecarlo/mc_tab.js), which READS them from here, so the
+// number a box shows and the number a headless run uses cannot disagree.
+//
+// Units are the units each field travels in, which are not all the same: bearFractionPct and
+// equityRatioPct are percentages because that is what the inputs carry, inflationRate is a fraction
+// because that is what the engine consumes. Naming says which.
+const MC_DEFAULTS = Object.freeze({
+    seed:            42,
+    stressCount:     20,
+    stressWindow:    10,     // one window's length, in years, when a mode is not a named one
+    // The job asks for stressCount sequences. This is the DIFFERENT number these functions fall back
+    // to when handed a count that is not a positive integer at all, and the two have never been equal.
+    stressCountFallback: 10,
+    bearFractionPct: 25,
+    inflationRate:   0.03,
+    equityRatioPct:  60,     // a component account's equity share
+});
+const KNOWN_MC_MODES = Object.freeze(Object.values(MC_MODE));
+// Same guard as the engine's assertKnownStrategy, for the same reason: an unrecognized mode used to
+// fold into GBM, so a misspelled one reported a synthetic run under a historical label.
+function assertKnownMCMode(mode) {
+    if (mode === undefined || mode === null || mode === '' || KNOWN_MC_MODES.includes(mode)) return;
+    throw new Error(`unknown Monte Carlo mode '${mode}'`);
+}
+
 function drawSyntheticBank(mode, mu, sigma, logDrift, z) {
-    return (mode === 'aam') ? Math.max(RETURN_FLOOR, mu + sigma * z)
+    return (mode === MC_MODE.AAM) ? Math.max(RETURN_FLOOR, mu + sigma * z)
                             : logDrift + sigma * z;
 }
 
 // Bank value -> annual return. Identity under 'aam', which banks the return already.
 function syntheticReturnFromBank(mode, banked) {
-    return (mode === 'aam') ? banked : Math.exp(banked) - 1;
+    return (mode === MC_MODE.AAM) ? banked : Math.exp(banked) - 1;
 }
 
 // Both halves at once, for callers that want the return and never the bank value.
@@ -239,7 +285,7 @@ function scoreStartYears(sLen) {
 // on. 'all' sorts by start year instead, since nothing is being ranked.
 function selectStressStarts(count, years, mode) {
     const n    = HISTORICAL_RETURNS.equity.length;
-    const want = (Number.isFinite(count) && count >= 1) ? Math.floor(count) : 10;
+    const want = (Number.isFinite(count) && count >= 1) ? Math.floor(count) : MC_DEFAULTS.stressCountFallback;
     const wins = stressWindowsFor(years);
 
     // index -> {i, year, nominatedBy, worstScore}. Built the same way for every mode so the caller
@@ -255,7 +301,7 @@ function selectStressStarts(count, years, mode) {
         }
     };
 
-    if (mode === 'all') {
+    if (mode === STRESS_WINDOW.ALL) {
         for (let i = 0; i < n; i++) {
             picked.set(i, { i, year: HISTORICAL_RETURNS.equityStartYear + i,
                             nominatedBy: [], worstScore: Infinity });
@@ -272,13 +318,14 @@ function selectStressStarts(count, years, mode) {
         return [...picked.values()].sort((a, b) => a.year - b.year);
     }
 
-    if (mode === 'combined') {
+    if (mode === STRESS_WINDOW.COMBINED) {
         for (const w of wins) for (const s of scoreStartYears(w).slice(0, want)) nominate(s, w);
         // Worst first by deepest nomination; ties broken by start year so the order is total.
         return [...picked.values()].sort((a, b) => a.worstScore - b.worstScore || a.year - b.year);
     }
 
-    const sLen = Math.max(1, Math.min(Number(mode) || 10, n, years || Number(mode) || 10));
+    const sLen = Math.max(1, Math.min(Number(mode) || MC_DEFAULTS.stressWindow, n,
+                                      years || Number(mode) || MC_DEFAULTS.stressWindow));
     for (const s of scoreStartYears(sLen).slice(0, want)) nominate(s, sLen);
     return [...picked.values()];   // already worst-first: scoreStartYears sorts, slice preserves
 }
@@ -318,15 +365,16 @@ function _worstRollingReal(prefixEq, prefixInf, years, w) {
 // Returns the four return banks plus, per scenario: startYears, realYears (how many plan years come
 // from the actual record before the wrap), nominatedBy, full-horizon CAGRs, and worstRealCAGRs
 // keyed by rolling window length.
-function buildStressBank(count = 10, years, windowMode = 10) {
+function buildStressBank(count = MC_DEFAULTS.stressCountFallback, years, windowMode = MC_DEFAULTS.stressWindow) {
     const eq      = HISTORICAL_RETURNS.equity;
     const bd      = HISTORICAL_RETURNS.bonds;
     const infSrc  = HISTORICAL_RETURNS.inflation;
     const n       = eq.length;   // 98 (1928-2025)
 
-    const isMulti = (windowMode === 'combined' || windowMode === 'all');
+    const isMulti = (windowMode === STRESS_WINDOW.COMBINED || windowMode === STRESS_WINDOW.ALL);
     const sLen    = isMulti ? null
-                            : Math.max(1, Math.min(Number(windowMode) || 10, n, years || Number(windowMode) || 10));
+                            : Math.max(1, Math.min(Number(windowMode) || MC_DEFAULTS.stressWindow, n,
+                                                   years || Number(windowMode) || MC_DEFAULTS.stressWindow));
     const starts  = selectStressStarts(count, years, windowMode);
     // The candidate pool is only (n - window + 1) start years: 94 at a 5-year window, 69 at 30.
     // Asking for more sequences than that used to slice short and then walk off the end of the
@@ -415,7 +463,7 @@ function buildStressBank(count = 10, years, windowMode = 10) {
              // What was asked for vs what the record could supply, so the UI can say "capped at 84
              // of the 200 you asked for" instead of silently returning a shorter list. In the modes
              // that do not rank, everything available was taken, so the two agree by construction.
-             requestedCount: (Number.isFinite(count) && count >= 1) ? Math.floor(count) : 10,
+             requestedCount: (Number.isFinite(count) && count >= 1) ? Math.floor(count) : MC_DEFAULTS.stressCountFallback,
              candidatePool: isMulti ? nSeq : (n - sLen + 1) };
 }
 
@@ -564,7 +612,8 @@ if (typeof module !== 'undefined' && module.exports) {
     // HISTORICAL_RETURNS is a bare global under importScripts. In node it is a module-scoped const,
     // so it has to be pulled onto globalThis before buildStressBank() can read it.
     if (typeof globalThis.HISTORICAL_RETURNS === 'undefined') require('./historical_returns.js');
-    module.exports = { mulberry32, boxMuller, bootstrapScenarioBank, buildStressBank,
+    module.exports = { MC_MODE, STRESS_WINDOW, JOB_KIND, MC_DEFAULTS, KNOWN_MC_MODES, assertKnownMCMode,
+                      mulberry32, boxMuller, bootstrapScenarioBank, buildStressBank,
                        stressOutcomeBand, applyBearStartOverlay, bootstrapMultiAssetBank,
                        scoreStartYears, selectStressStarts, stressWindowsFor, buildBearPool,
                        STRESS_WINDOWS, STRESS_ROLLING_WINDOWS,
@@ -577,7 +626,8 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof window !== 'undefined') {
     // Keep this list identical to the module.exports above: optimizer_core.tests.js runs against
     // whichever one its host provides, so a name missing here fails only in the browser tier.
-    window.MCPrng = { mulberry32, boxMuller, bootstrapScenarioBank, buildStressBank,
+    window.MCPrng = { MC_MODE, STRESS_WINDOW, JOB_KIND, MC_DEFAULTS, KNOWN_MC_MODES, assertKnownMCMode,
+                      mulberry32, boxMuller, bootstrapScenarioBank, buildStressBank,
                       stressOutcomeBand, applyBearStartOverlay, bootstrapMultiAssetBank,
                       scoreStartYears, selectStressStarts, stressWindowsFor, buildBearPool,
                       STRESS_WINDOWS, STRESS_ROLLING_WINDOWS,

@@ -5685,3 +5685,203 @@ Round 11 (PR review): two nerdknob sections in README.md (the rule table paragra
 section 1 as "The risk-based spend rule, and its rule table"; README keeps one public paragraph on
 Guardrails milestones and the column set. Rule added to CLAUDE.md and memory. The two nerdknob
 mentions left in README predate the branch (main 399/425).
+
+## 2026-09-24 - the planning files catch up with fourteen merged PRs (v11.1917, branch `worktrees/planning-with-files-faf086`)
+
+`/plan` in a fresh worktree. `task_plan.md` and `progress.md` had last been written on 2026-09-20 at
+PR #230 (v11.18bf), and **fourteen PRs merged after that without a line in either file**: #231-#244.
+That work was tracked in `.planning/CODE_QUALITY_REVIEW.md` and in memory instead, so nothing was
+lost, but the NOW table still read "as of 2026-09-13", still listed `P132` and `P127`/`P128` as open
+work in progress, and said nothing about the code quality campaign or the Medicare model. The
+session-catchup script reported nothing: the gap is between the files and `main`, not between the
+files and a cleared session.
+
+Branch merged `origin/main` first (13 commits behind), then:
+
+- **The injection window rewritten.** The as-of line now carries v11.1917, `main` at `d6158bf`, the
+  five suite counts read off `TestTiers.EXPECTED` (526 / 47 / 62 / 15 / 46) and the campaign in one
+  sentence. The `P132` row says MERGED with the server question as the only open item; the
+  `P127 + P128` row is gone, because a NOW table lists open work and `P129` / `P130` shipped inside
+  #229 (round 4, v11.1859). Two new rows: **review D/F**, what the campaign left open, and
+  **Medicare**, section 9 of the two-phase plan.
+- **The 2026-08/09 decision trail moved below the LINE-30 marker.** Those three paragraphs were three
+  of the thirty lines the hook injects on every tool call, and they were pushing table rows out of the
+  window with no error. A "shipped and closed, do not re-open" line took their place. The head is
+  exactly 30 lines and the marker is on 31, asserted by the script that did it.
+- **A new section records #231-#244**, one row per PR with what shipped, then what it left open,
+  measured on `main` rather than remembered: step D never ran (no `GK_DEFAULTS`, no `MC_PARAMS`, no
+  `STRATEGY` / `SPEND_RULE` / `MC_MODE` enums, so a mode typo still falls into the baseline branch),
+  step F is part-done (~3,100 comment lines in `optimizer_core.js` and ~2,700 in `optimizer_ui.js`
+  against a ~1,500 target), finding #9 owes six state deductions and three bracket structures, and
+  `MEDICARE_TWO_PHASE_PLAN.md` section 9 is undecided.
+- **Two stale phase headings corrected:** `P127` and `P128` still said "not committed" for work that
+  merged in PRs #227 and #229.
+
+Two things checked rather than assumed, because memory said otherwise: the plan-bank shortfall
+household needed no restoring, and README's unsourced 2.8% CPI and 5.6% Medicare claims were already
+corrected in #244.
+
+**Correction, 2026-09-25:** the sentence above originally said `plans/` holds 20 households and that
+`ira-heavy-couple-overreaching` had been restored. Both wrong, and neither was measured. `plans.list()`
+returns **19**, and that household has been in the bank since `3c30911` built it. What #244 changed is
+`soft-cap-underfunded`'s card: the IRMAA correction cut the surcharge enough that it funds every year
+on its own, so the card now points at `ira-heavy-couple-overreaching` for a genuine shortfall. The
+commit message on `d795511` carries the wrong figure and cannot be edited; this is the record.
+
+Planning files only. No page, script or suite changed, so no version bump and no changelog entry.
+
+## 2026-09-25 - review step D, one home per knob (P133, v11.1930, branch `worktrees/planning-with-files-faf086`)
+
+User: "do step D". Sections 1.3-1.6 of `.planning/CODE_QUALITY_REVIEW.md`, the one step of the A-G
+plan that never ran. Seven commits, each proved by the same check.
+
+**`P133a`, the check itself, first.** `.test_harnesses/identity_harness.js` walks 769,128 values over
+all 19 `plans/` households - `simulate()` field by field, both optimizers, `breakEvenHeirsRate`,
+`suggestSustainableSpend`, eight sweep variations summarized, and `runJob` in gbm, bootstrap and aam
+with the stress pass - and `--check` names the first values that moved, by path. Every slice below
+reports IDENTICAL against the snapshot taken before any of them. Clock reads are dropped, and path
+arrays are folded to count, sum, INDEX-WEIGHTED sum and extremes so a reordering still shows.
+
+**What shipped, by slice:** `b` the engine's rule defaults, tolerances and seeds plus `defaultNumOf`
+in the UI (twelve fallbacks that restated a markup default now read it); `c` six epsilons that stay
+six, `BREAK_EVEN_SEARCH`, the conversion grid, the iteration caps; `d` the enums with a guard at every
+boundary a key arrives through; `e` `MC_DEFAULTS` read from both sides of the worker boundary, the two
+percentile sets, `SURVIVAL_BANDS`; `f` one `TIMING` block, `INPUT_LIMITS`, `EMPTY_CELL`; `g` the cache
+tokens.
+
+**Five of the review's own recommendations did not survive checking**, which is the pattern every
+earlier step in this campaign hit too:
+
+1. A frozen enum object does NOT make a typo throw - a misspelled property is `undefined` and the
+   comparison is false. The guards at the boundaries are what throw, and a `Proxy` was rejected on
+   cost: it would sit in comparisons inside the per-year loop.
+2. `MC_PARAMS` is NOT loaded in the worker. It is declared in `montecarlo/mc_tab.js`, which
+   `worker.js` never imports. The shared defaults went to `prng.js`, the first file every host loads.
+3. "The percentile list, twice" is two DIFFERENT lists, 10/50/90 and 5/25/50/75/95. One shared
+   `PERCENTILES` would have been wrong.
+4. The stress "10 x8" is two numbers sharing a value: the fallback count is 10, the job default is 20.
+5. One `ASSET_VERSION` would invalidate every asset on every release. The chore it was aiming at is
+   FORGETTING a token, so `.githooks/check-asset-tokens.js` blocks that instead - and it caught two of
+   my own missed bumps the first time it ran.
+
+**Two defects found while naming, both recorded in `findings.md`:** the 0.14 / 0.07 ceiling rates are
+not inert placeholders - the strategy families that price no ceiling leave them in place and the draw
+ordering READS them, so part of the draw is ordered on rates nobody computed; and `base.startYear ??
+2026` froze the fallback start year the way `Retirement_Projection.html` froze May 2026, disagreeing
+with the engine's own `inputs.startInYear || new Date().getFullYear()` from 2027 on. Now the clock.
+Also: `APP_VERSION` was referenced by `mc_controller.js` and defined nowhere, so every page load
+re-fetched all eight worker scripts. It is read off the `<title>` now, and the worker URL was verified
+in the browser as `worker.js?v=111930`.
+
+Suites: 528 / 47 / 62 / 15 / 46 node, 497 in-page, badge green. Four new tests (two node guards, two
+in-page pins), `TestTiers.EXPECTED` and `.githooks/README.md` updated with them. No changelog entry:
+nothing in the whole step is visible to a user, which the identity check is the proof of.
+
+## 2026-09-25 (continued) - review step F, first pass and a budget that does not hold (P134, v11.1931)
+
+User: "do step F". Re-ran the review's own scanner on the current tree first, because #236 had already
+moved the numbers: line-number cites, retired harness names and stale identifiers are all zero and
+re-measured as zero, so the defects half of section 3 is done. What is left is the BUDGET.
+
+Trimmed: the five largest blocks in `optimizer_core.js` (the two-clock advance, buildStrategyFamilies'
+JSDoc, the conversion month, the tax settlement date, the schedule entry), the twelve blocks in
+`optimizer_ui.js` where history was the dominant content, and eighteen more whose opening sentences
+narrated a fix rather than stating a rule. Core 3,175 -> 3,127 comment lines, UI 2,753 -> 2,731;
+history-marked lines 232 -> 202 and 335 -> 300. Identity harness IDENTICAL at 769,128 values, 528
+node, 497 in-page, and `git diff` shows not one non-comment line removed.
+
+**The 1,500-line budget cannot be met by removing narration.** The two files hold 502 history-marked
+lines between them; sweeping every one of those blocks removes about 300 lines. Reaching 1,500 means
+deleting roughly 2,500 lines that state what the code does, what it may not do, or which statute it
+implements - the material 3.4 says to keep. The budget came from a scanner column that counts every
+line of a block carrying at least ONE history marker, so a 40-line block with one "measured on 2026"
+sentence contributed 40. P134 in task_plan.md states three options; A (finish the narration sweep and
+restate the target as "no history in a comment", which is checkable) is the recommendation, and the
+decision is the user's.
+
+A defect of my own, caught by the scanner in the same pass: a trimmed comment cited
+`research/IRMAA_MARGIN.md`, a report that does not exist. Replaced with the claim itself. That is
+exactly the failure #236 spent a commit removing, and it took one careless edit to reintroduce.
+
+## 2026-09-25 (continued) - finding #9's six states, each against its own form (P135, v11.1933)
+
+User: "do finding #9". The remainder the #239 commit listed and deliberately did not touch: AZ, GA,
+NC, ND, NE, SC standard deductions and ND / NE / SC bracket structure.
+
+**Four were wrong, two were already right.** ND carried 1.1% / 2.04% with no zero band - a pre-2023
+schedule - against the published 0% / 1.95% / 2.50%. NE was modeled flat at 4.55% where the state is
+graduated (2.46 / 3.51 / 4.55), and its standard deduction was a year behind. SC rewrote its whole
+tax for 2026 under H. 4216: two rates, and a state deduction (SCIAD) replacing the federal standard
+deduction, from federal AGI - which is the base this engine already builds, so it modeled cleanly. GA's
+standard deduction rise was recorded in the table as landing in 2027; HB 463 as passed says
+"applicable to all taxable years beginning on or after January 1, 2026". AZ (`std: 'FEDERAL'`) and NC
+(25,500 / 12,750, not indexed) needed no change, and AZ's form of the answer is better than a literal
+because it updates itself.
+
+**Sources, all primary:** Form ND-1ES SFN 28709 (12-2025) for ND's schedule, read out of the PDF with
+pypdf after WebFetch returned only the compressed stream; the 2026 Nebraska Tax Calculation Schedule
+(8-460-2026) and the Department's own rate chronology for NE; SCDOR's H. 4216 page and IIT page for SC;
+and HB 463 as passed for GA's amounts and its effective date. Georgia's DOR page and our own comment
+disagreed about the year, which is why the bill text was the thing that settled it.
+
+**Every corrected table now reproduces a figure printed on the form** - ND 3,916.09 and 4,329.98, NE
+1,514.58 and 3,029.16, SC's "5.21% minus $966" at four incomes - as `TEST CASE 27`. Two existing tests
+had to move with the data: the indexing test used ND as its non-indexed example (ND indexes, so SC took
+that role and ND moved to the indexed side), and the single-row-table pin listed NE as flat.
+
+**Direction, measured on a couple drawing 60k / 120k / 250k:** every correction CUTS tax. ND to zero,
+-91%, -30%; SC -54%, -25%, -19%; NE -28%, -13%, -6%; GA -0, -0, -6%. The identity harness reports
+IDENTICAL, because the plan bank is TX, CA and NY only - which is the proof that nothing outside these
+six states moved. Suites 528 / 48 / 62 / 15 / 46, page suite 497, badge green, and the four corrected
+states verified again in the live page.
+
+Changelog: its own entry, since #239's shipped months ago and this fixes states a user has already
+been given wrong numbers for. It leads with the direction and the per-income table, and states the one
+thing now understated: SC reduces the SCIAD at higher AGI and the tool does not.
+
+**Correction (user, 2026-09-25):** the 11.1933 entry ended with "Arizona and North Carolina were checked
+and are correct, so nothing about them changes", in both the changelog and the page. Cut from both.
+Nothing changed for a reader of those two states, so it is not news, and as a convention it would list
+every state on nearly every release. The rule is now a row in CLAUDE.md's leave-out table; the checking
+itself stays in the commit message and the PR, where a reviewer needs to know it happened.
+
+## 2026-09-26 - four decisions from the user, and two new plan items
+
+Asked what was next; the answer settled four things and opened one.
+
+**Medicare CLOSED, both halves.** `Retirement_Projection.html` gets no override - "close that" - so
+section 9 of `.planning/MEDICARE_TWO_PHASE_PLAN.md` is decided rather than open, and the tool takes the
+model and shows the rate. Hold harmless is closed too: the user pointed out README's "IRMAA Escalation"
+section already carries it, which checking confirms - the 42 CFR 408.20(e) citation, why the
+relationship runs backwards, that it is unmodeled, and the direction. Section 8's ask was already
+satisfied when it was written. The Medicare row is out of the NOW table.
+
+**Fixed Split stays on probation, un-gating PARKED.** Not convinced it is better or clearer, and the
+objection is structural: "Another problem with fixed split is its fixed nature. As asset balances
+change, it seems natural that the optimal draw will change." Plus the direction that matters - "the
+real win will be to implement e-ORP style analysis rather than adding another opaque withdrawal
+strategy." Recorded against `P104b3`, where the removal manifest already lives. What would reopen it is
+not another bake-off but a per-year draw that follows the balances, which is `P103c`'s search.
+
+**`P100b2` now has a specification, and it overrides the one that was there.** The old sketch said
+"replace with an explicit, documented default"; the user refused that - "A documented pinned number is
+useless because it will vary from state to state and household to household." The rule instead: a rate
+the user typed wins; otherwise the rate from a run of THEIR OWN plan, held constant across the sweep,
+re-derived when the plan changes. Five sub-items written, including the one thing I flagged rather than
+decided: year-0 marginal (what the sidebar's "(auto: N%)" prints, so the number they read is the number
+the sweep scores with) against `terminalIRARateFromLog`'s trailing same-status average, which is when an
+heir actually inherits. Measuring that gap comes before proposing a switch.
+
+**`P136` opened, O1: Extra Roth Conversion ignores the taxation entanglement.** A flat extra amount
+crosses NIIT, IRMAA and bracket thresholds thoughtlessly; for a ceiling family it goes over by
+construction, and even for a non-threshold family it is blind to the lattice. Their own year is the
+worked example - large realized gains, room for some conversion, an IRA draw on top reaching NIIT and
+IRMAA jeopardy - and `P136b` is a plan-bank household with that shape, which none of the 19 has. The
+phase records that it is the small-scope version of `P103c`: both want `magiEdgesForYear()`.
+
+**`P103c` was unclear and is worth stating plainly** (it is the phase's own next item and the plan
+buries it under a gate): instead of the user picking a named strategy, the engine searches two per-year
+income targets - ordinary income realized and LTCG realized - over a menu of about twelve MAGI edges,
+which is the e-ORP-shaped idea. Its gate `P103c1` is PROVISIONALLY FAILING: only 4.2% of best-row
+plan-years land within \$1,000 of an edge, and the first version of that measurement was wrong, so the
+next step is counting binding years per family to confirm 6 of 33 generalizes before anything is built.

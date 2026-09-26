@@ -1104,6 +1104,77 @@ function runTests() {
 		}
 	})();
 
+	// P133b. A control's default has ONE home, the markup, and the JS reads it.
+	//
+	// Every `|| 2.8`-style fallback in optimizer_ui.js used to restate the `value=` attribute of the
+	// control it mirrored, so the two could drift with nothing to catch it. They read `defaultNumOf`
+	// now, which fails soft - a missing control gives NaN, and NaN silently becomes whatever the
+	// caller's arithmetic makes of it - so the assertion worth having is that each id the fallbacks
+	// name actually resolves to a number.
+	//
+	// The Guardrails pair is the one default that cannot live in the markup alone: `simulate()` needs
+	// it with no DOM at all, so GK_DEFAULTS holds it in optimizer_core.js and the two boxes restate
+	// it as percentages. That pin is the second half of this test.
+	(function controlDefaultsHaveOneHome() {
+		if (typeof defaultNumOf !== 'function') return;   // shared suite; optimizer_ui.js only
+		for (const id of ['cpi', 'growth', 'spendGoal', 'birthyear1', 'die1', 'birthyear2', 'die2']) {
+			if (!document.getElementById(id)) continue;
+			assertEqual(Number.isFinite(defaultNumOf(id)), true,
+				`${id} resolves to a numeric shipped default (got ${defaultNumOf(id)})`);
+		}
+		if (typeof GK_DEFAULTS === 'undefined') return;
+		const guard = document.getElementById('gkGuard'), adj = document.getElementById('gkAdjPct');
+		if (guard) assertEqual(+guard.getAttribute('value'), GK_DEFAULTS.guard * 100,
+			'the Guard box restates GK_DEFAULTS.guard as a percentage');
+		if (adj) assertEqual(+adj.getAttribute('value'), GK_DEFAULTS.adjPct * 100,
+			'the Adjust box restates GK_DEFAULTS.adjPct as a percentage');
+	})();
+
+	// P133e. The survival legend prints the thresholds the code actually shades on.
+	//
+	// The swatch legend is static markup and survivalBand() is code, and the comment above that
+	// function has been claiming the two are "kept in step" with nothing checking it. Both numbers now
+	// come from SURVIVAL_BANDS, so this reads them back out of the rendered legend.
+	(function survivalLegendMatchesTheBands() {
+		if (typeof SURVIVAL_BANDS === 'undefined') return;   // shared suite; the Optimizer page only
+		const legend = document.getElementById('mc-survival-legend');
+		if (!legend) return;
+		const pcts = (legend.textContent.match(/\d+(?=\s*(?:–|-|%))/g) || []).map(Number);
+		assertEqual(pcts.includes(SURVIVAL_BANDS.ok * 100), true,
+			`the legend names the ok threshold ${SURVIVAL_BANDS.ok * 100}% (found ${pcts.join(', ')})`);
+		assertEqual(pcts.includes(SURVIVAL_BANDS.warn * 100), true,
+			`the legend names the warn threshold ${SURVIVAL_BANDS.warn * 100}% (found ${pcts.join(', ')})`);
+	})();
+
+	// P133d. Every mode a menu can send is a mode the code recognizes.
+	//
+	// The engine now THROWS on a key it does not dispatch, for the strategy, the spend rule and the
+	// Monte Carlo mode alike. That turns a markup typo from a silently different plan into a page that
+	// does not run, so the option values and the enums have to agree - and this is the only place both
+	// are visible at once. The reverse direction is deliberately not asserted: the enums are wider than
+	// the menus (`schedule` and `aca` have no option of their own, `stress` is a pass the engine runs).
+	(function everyMenuModeIsDispatched() {
+		const check = (id, values, name) => {
+			const sel = document.getElementById(id);
+			if (!sel || !values) return;
+			const offered = [...sel.options].map(o => o.value).filter(v => v !== '');
+			const unknown = offered.filter(v => !values.includes(v));
+			assertEqual(unknown.length, 0, `every #${id} option is a known ${name} (stray: ${unknown.join(', ')})`);
+		};
+		if (typeof KNOWN_STRATEGIES !== 'undefined') check('strategy', KNOWN_STRATEGIES, 'strategy');
+		if (typeof KNOWN_SPEND_RULES !== 'undefined') check('spendRuleKind', KNOWN_SPEND_RULES, 'spend rule');
+		if (typeof KNOWN_MC_MODES !== 'undefined') check('mc-sim-mode', KNOWN_MC_MODES, 'Monte Carlo mode');
+		if (typeof STRESS_WINDOW !== 'undefined') {
+			// The stress window may also be a NUMBER of years, so only the non-numeric options are named.
+			const sel = document.getElementById('mc-stress-window');
+			if (sel) {
+				const named = [...sel.options].map(o => o.value).filter(v => v !== '' && !/^\d+$/.test(v));
+				const stray = named.filter(v => !Object.values(STRESS_WINDOW).includes(v));
+				assertEqual(stray.length, 0, `every named #mc-stress-window option is in STRESS_WINDOW (stray: ${stray.join(', ')})`);
+			}
+		}
+	})();
+
 	// P132. The rule menu beside the switch: Risk-based sends 'rbg' with its preset, shows its own
 	// controls, states the rule, turns Never above plan on, and never puts the rails table in a
 	// share link or an identity.
@@ -2417,7 +2488,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all five suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 526, taxengine: 47, taxPaymentPlanner: 62, doclinks: 15, feedback: 46, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 528, taxengine: 48, taxPaymentPlanner: 62, doclinks: 15, feedback: 46, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

@@ -44,8 +44,6 @@ $30,000, starts this year rather than next.
 South Carolina reduces that new deduction at higher income and the tool does not, so a higher-income
 South Carolina plan now understates its tax; the note beside the state selector says so.
 
-**Arizona and North Carolina were checked and need no change.**
-
 <a id="11.1917"></a>
 
 ## 11.1917

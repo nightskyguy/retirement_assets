@@ -5838,3 +5838,9 @@ states verified again in the live page.
 Changelog: its own entry, since #239's shipped months ago and this fixes states a user has already
 been given wrong numbers for. It leads with the direction and the per-income table, and states the one
 thing now understated: SC reduces the SCIAD at higher AGI and the tool does not.
+
+**Correction (user, 2026-09-25):** the 11.1933 entry ended with "Arizona and North Carolina were checked
+and are correct, so nothing about them changes", in both the changelog and the page. Cut from both.
+Nothing changed for a reader of those two states, so it is not news, and as a convention it would list
+every state on nearly every release. The rule is now a row in CLAUDE.md's leave-out table; the checking
+itself stays in the commit message and the PR, where a reviewer needs to know it happened.

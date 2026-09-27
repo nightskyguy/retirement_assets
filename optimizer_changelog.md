@@ -17,6 +17,20 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.195c"></a>
+
+## 11.195c
+
+**The Feedback dialog's spam check no longer runs itself in the background.**  
+*Nothing about sending feedback changes; a dialog left open just stops generating its own checks.*
+
+The dialog's spam check used to refresh itself every couple of minutes for as long as the dialog sat
+open, whether or not anyone was there. It now checks once when the dialog opens, and checks again
+only if you come back after a long pause and press Send. No plan's numbers are affected; this is the
+Feedback dialog only.
+
+---
+
 <a id="11.1933"></a>
 
 ## 11.1933

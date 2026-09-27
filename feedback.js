@@ -498,6 +498,7 @@
     d.addEventListener('pointerdown', e => { pressedOutside = e.target === d; });
     d.addEventListener('click', e => { if (pressedOutside && e.target === d) close(); });
     d.addEventListener('close', () => {
+      stopTurnstile();
       const back = ui.opener;
       ui.opener = null;
       if (back && typeof back.focus === 'function' && document.contains(back)) back.focus();
@@ -534,6 +535,10 @@
 
   function close() {
     if (ui.dialog && ui.dialog.open) ui.dialog.close();
+    // Not left to the dialog's own 'close' event: some embedded browsers never dispatch it (the
+    // same gap the Escape override above works around), and every dismissal already runs through
+    // this function.
+    stopTurnstile();
   }
 
   function setStatus(text, kind) {
@@ -754,6 +759,12 @@
         sitekey: ui.route.siteKey,
         action: 'feedback',
         appearance: 'interaction-only',
+        // Manual, not the default 'auto': an unsolved widget on 'auto' re-issues a fresh
+        // challenge every couple of minutes on its own, so a dialog left open racks up
+        // "unsolved" counts on the Cloudflare dashboard that were never a visitor. Nothing here
+        // re-solves on a timer; send() is what re-arms a stale widget, and only when asked to.
+        'refresh-expired': 'manual',
+        'refresh-timeout': 'manual',
         callback: token => { ui.token = token; },
         'expired-callback': () => { ui.token = ''; },
         'timeout-callback': () => { ui.token = ''; },
@@ -770,11 +781,24 @@
     });
   }
 
+  // Consumes the current token so the next Send gets a fresh one. The widget itself stays alive.
   function resetTurnstile() {
     ui.token = '';
     if (ui.widget !== null && window.turnstile) {
       try { window.turnstile.reset(ui.widget); } catch (e) { /* widget gone; next open renders again */ }
     }
+  }
+
+  // Drops the widget rather than leaving it idle behind a closed dialog. Paired with manual
+  // refresh above, this is what stops a forgotten-open tab from generating challenges forever:
+  // nothing is left running once the dialog closes. open() calls startTurnstile() again next time.
+  function stopTurnstile() {
+    if (ui.widget !== null && window.turnstile) {
+      try { window.turnstile.remove(ui.widget); } catch (e) { /* already gone */ }
+    }
+    ui.widget = null;
+    ui.token = '';
+    ui.turnstile = 'idle';
   }
 
   // ── Sending ──────────────────────────────────────────────────────────────────────────────────
@@ -802,8 +826,16 @@
       return;
     }
     if (!ui.token) {
-      setStatus('The spam check is still running. Try again in a moment.', 'error');
-      startTurnstile();
+      // A widget that already rendered ('ready') but holds no token went stale (expired,
+      // timed out, or a transient error) rather than never having started; manual refresh above
+      // means only this explicit reset re-arms it, never a background timer.
+      if (ui.turnstile === 'ready') {
+        setStatus('The spam check needs a moment. Press Send again in a few seconds.', 'error');
+        resetTurnstile();
+      } else {
+        setStatus('The spam check is still running. Try again in a moment.', 'error');
+        startTurnstile();
+      }
       return;
     }
 

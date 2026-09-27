@@ -24,7 +24,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.195c</title>
+    <title>Retirement Optimizer 11.1933</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -1146,13 +1146,6 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="display"><b>11.195c</b>
-					<strong>The Feedback dialog's spam check no longer runs itself in the background.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>Leaving the &#9993; Feedback dialog open used to make its spam check quietly re-check itself every couple of minutes on its own. It now checks once when the dialog opens and stays put until you send, so sending itself works exactly as before.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.195c" target="_blank" rel="noopener">Details</a>
-				</li>
 				<li data-flag="behavior"><b>11.1933</b>
 					<strong>Four state tax tables were charging too much, and are corrected.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1210,6 +1203,17 @@
 					<li>On a phone the page no longer scrolls sideways.</li>
 					</ul>
 					<a href="optimizer_changelog.md#11.186c" target="_blank" rel="noopener">Details</a>
+				</li>
+				<li data-flag="display"><b>11.1859</b>
+					<strong>Risk-based guardrails for every plan, and GK-style Guardrails stop cutting in a plan's last 8 years.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>Risk-based guardrails, below the Charts tab's charts, draw the savings at which your spending would be raised or cut. The same run finds the After-Tax Spend for a chosen chance of success: <i>Use it</i> sets it, <i>Restore</i> puts yours back.</li>
+					<li>Monte Carlo opens on Synthetic – Lognormal (GBM), which gives most plans a lower chance of success than Historical.</li>
+					<li>A plan with Guardrails on can give different numbers: the inflation raise is at most 6% and is skipped only after a year your savings as a whole lost money. Optimize Spend suggests for a plan whose spending falls on purpose, and Optimize Conversions never suggests a conversion worse than none.</li>
+					<li>The income charts no longer count money a year saves as income.</li>
+					<li>The Stress Test and Monte Carlo's out-of-date notice keep up with your edits, including one you undo.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.1859" target="_blank" rel="noopener">Details</a>
 				</li>
 				</ul>
 				<script>

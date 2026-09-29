@@ -32,7 +32,7 @@ where the rule would otherwise raise, and changes nothing where it would not
 of this section it travels in a share link (`gsc`) and a saved plan, and a link carrying it stays in
 force for a reader without the knob; the sentence under the Guardrails switch says so when it is on.
 
-It can also be flipped **at runtime** by a hidden checkbox on the Documentation tab
+It can also be flipped **at runtime** by a hidden checkbox on the INFO tab
 (`setNerdKnob` / `applyNerdKnobVisibility`). That flip is deliberately **not** written back to the
 URL, so a link you share does not carry your knob state.
 
@@ -187,7 +187,7 @@ knob, who cannot see the controls - the same behavior as every other gated field
 ### The two deeper variants
 
 Both are gated one notch below the plain knob: they respond only to the **literal value**, and
-plain `?nerdknob` does *not* reveal them. Both are also read once at load, so the Documentation
+plain `?nerdknob` does *not* reveal them. Both are also read once at load, so the INFO tab
 checkbox cannot turn them on. Unchecking it does hide goal-first again (it also requires the knob to
 be on); the Fixed Split menu entry ignores it.
 
@@ -235,7 +235,7 @@ Example: `?ptx=12000&ptxm=custom&ptxr=2`
 
 | parameter | effect |
 |---|---|
-| `?tab=…` | opens on a named tab instead of Charts. Friendly names, because links are read by people: `annual`/`details`/`table`, `charts`, `optimizer`/`opt`, `montecarlo`/`mc`, `importexport`/`fileio`/`import`/`export`, `documentation`/`docs`/`help`. A typo leaves the default alone rather than silently moving you. |
+| `?tab=…` | opens on a named tab instead of Charts. Friendly names, because links are read by people: `annual`/`details`/`table`, `charts`, `optimizer`/`opt`, `montecarlo`/`mc`, `save`/`load`/`saveload`/`import`/`export`/`importexport`/`fileio`, `info`/`doc`/`docs`/`documentation`/`help`. A typo leaves the default alone rather than silently moving you. |
 | `?obj=…` | preselects the Optimizer's ranking objective. |
 | `?montecarlo` | the teaching demo. Lands on the Monte Carlo tab in Synthetic mode with Seed / Paths / Input Distributions exposed and auto-runs the Experiment. **Deliberately narrow** — unlike `?nerdknob` it does *not* unlock the other advanced surfaces, only the MC panels and a lower paths floor. |
 | `?runtests` | runs the in-page suites that write to the live page (skipped by default). |

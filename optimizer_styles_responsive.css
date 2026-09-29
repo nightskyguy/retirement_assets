@@ -56,9 +56,108 @@ body {
     border-right: 2px solid #999;
 }
 
-/* CRITICAL: This hides columns marked as hidden */
-table th.hidden-column,
-table td.hidden-column {
+/* ── Grid tables: Annual Details, the Optimizer's two tables, the Monte Carlo survival table ──
+   Each is a CSS grid of divs rather than a <table>. A row is a .gt-row wrapper with
+   display:contents, so its cells sit directly in the grid's column tracks; a cell is any div whose
+   parent is the grid or a row. The column count is set in JS and must equal the number of cells a
+   row shows, or every row wraps into the next.
+
+   Cells draw their right and bottom borders and the scroll box draws the top and left, so no edge
+   is drawn twice. Anything pinned with position:sticky pins to the scroll box, which is why the
+   box has a height limit: without one it never scrolls, and nothing ever pins. */
+.gt-scroll {
+    overflow: auto;
+    max-height: 75vh;
+    width: fit-content;
+    max-width: 100%;
+    border-top: 1px solid #dee2e6;
+    border-left: 1px solid #dee2e6;
+    -webkit-overflow-scrolling: touch;
+}
+.gt {
+    display: grid;
+    width: fit-content;
+}
+.gt-row {
+    display: contents;
+}
+/* The second horizontal scrollbar above a data-top-scroll box; sized and synced by
+   attachTopScrollbar() in optimizer_ui.js. The explicit height is what makes room for the
+   scrollbar: without it the strip collapses to its 1px spacer and the browser draws no scrollbar. */
+.gt-hscroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    height: 16px;
+    max-width: 100%;
+}
+.gt-hscroll > div {
+    height: 1px;
+}
+.gt > div:not(.gt-row),
+.gt .gt-row > div:not(.gt-row) {
+    border-right: 1px solid #dee2e6;
+    border-bottom: 1px solid #dee2e6;
+}
+
+/* Annual Details. Both header rows pin to the top of the box: the group banner at 0 and the column
+   names under it at the banner's fixed height, --ad-grp-h, so neither needs measuring. The year
+   column pins to the left. Every body cell is opaque, because the rest of the row scrolls
+   underneath the pinned ones. */
+#main-table {
+    --ad-grp-h: 1.25rem;
+    font-size: 0.75rem;
+    text-align: right;
+}
+#main-table .ad-grp {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    height: var(--ad-grp-h);
+    box-sizing: border-box;
+    padding: 0 4px;
+    line-height: calc(var(--ad-grp-h) - 1px);
+    font-size: 0.78em;
+    font-weight: bold;
+    text-align: center;
+    white-space: nowrap;
+    border-bottom-color: #bbb;
+}
+#main-table .ad-th {
+    position: sticky;
+    top: var(--ad-grp-h);
+    z-index: 4;
+    background: #f8f9fa;
+    padding: 6px 8px;
+    font-weight: bold;
+    text-align: center;
+    white-space: nowrap;
+    border-bottom: 2px solid #dee2e6;
+}
+#main-table .ad-th[title] {
+    cursor: help;
+    text-decoration: underline dotted;
+    color: green;
+}
+#main-table .ad-td {
+    padding: 4px 8px;
+    white-space: nowrap;
+    background: #fff;
+}
+#main-table .ad-pin {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+}
+#main-table .ad-th.ad-pin {
+    z-index: 6;
+}
+/* Underfunded year. The legend's swatch is #ffb6c180, which over white is this color; opaque here
+   so the pinned year cell hides the cells scrolling beneath it. */
+#main-table .ad-short > .ad-td {
+    background: #ffdae0;
+}
+
+#main-table .hidden-column {
     display: none;
 }
 
@@ -74,19 +173,17 @@ table td.hidden-column {
    Yellow rather than the red of .highlight-input, because a column someone asked to see is not an
    error. !important beats the per-cell inline background the renderer paints (IRMAA tier tints,
    the orange BracketOverage cells), which would otherwise win over a class. */
-table th.col-reveal,
-table td.col-reveal {
+#main-table .col-reveal {
     background-color: #fff3b0 !important;
 }
 
-/* Optional: Style empty columns differently when visible */
-table th.empty-column {
+/* An all-zero column, shown because Show Zero is on. After .ad-short, which it overrides. */
+#main-table .ad-th.empty-column {
     background-color: #f0f0f0;
     font-style: italic;
     color: #666;
 }
-
-table td.empty-column {
+#main-table .ad-row > .empty-column {
     background-color: #fafafa;
 }
 
@@ -407,34 +504,7 @@ button.opt-btn {
     -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
 }
 
-/* Annual Details: the table's real horizontal scroller (#2). */
-.tbl-scroll {
-    overflow-x: auto;
-    overflow-y: visible;
-    max-width: 100%;
-    -webkit-overflow-scrolling: touch;
-}
-
-/* Annual Details: mirror scrollbar pinned above the table. Its inner spacer width is set in JS
-   to the table's scrollWidth so this thin strip shows a horizontal scrollbar that drives the
-   table. Sticky so it stays reachable while scrolling a tall table. JS hides it when the table
-   is not wider than its viewport. */
-.tbl-top-scroll {
-    overflow-x: auto;
-    overflow-y: hidden;
-    max-width: 100%;
-    height: 16px;          /* room for the horizontal scrollbar; without an explicit height the
-                              strip collapses and the browser suppresses the scrollbar */
-    position: sticky;
-    top: 0;
-    z-index: 6;
-    background: #fff;
-}
-.tbl-top-scroll-inner {
-    height: 1px;
-}
-
-table { 
+table {
     width: 100%; 
     border-collapse: collapse; 
     font-size: 0.75rem; 
@@ -464,11 +534,7 @@ td {
     border-bottom: 1px solid #eee; 
 }
 
-tr.single-year { 
-    background-color: #fff9e6; 
-}
-
-.neg { 
+.neg {
     color: #e74c3c; 
     font-weight: bold; 
 }
@@ -703,11 +769,6 @@ th[title] {
     z-index: 1000;
 }
 
-table th.empty-column {
-    background-color: #f0f0f0;
-    font-style: italic;
-}
-
 /* ── Summary stat bar: one scrolling row on desktop, 3-column grid on phones ── */
 #summary-stats {
     display: flex;
@@ -751,20 +812,6 @@ table th.empty-column {
     }
 }
 
-/* ── Annual Details: keep the Year column visible while scrolling horizontally ── */
-#main-table th:first-child,
-#main-table td:first-child {
-    position: sticky;
-    left: 0;
-    z-index: 3;
-    background: #fff;
-}
-#main-table thead th:first-child {
-    z-index: 7;   /* above the sticky header row (th z-index:5) and the year cells */
-}
-#main-table tr.single-year td:first-child {
-    background: #fff9e6;
-}
 
 /* ── Tap-tooltip popover (touch devices; see setupSmallScreenUX) ── */
 #touch-tooltip {
@@ -847,10 +894,13 @@ table th.empty-column {
         gap: 10px;
     }
     
+    /* A 100px floor rather than the 120px every other button gets above, so the switch and the six
+       tabs fit on one line in a window about 1340px wide. */
     .tab-btn {
         flex: 0 1 auto;
+        min-width: 100px;
     }
-    
+
     .header-drawers {
         flex-direction: row;
         flex-wrap: wrap;
@@ -954,10 +1004,11 @@ table th.empty-column {
         overflow-y: auto;
     }
 
-    /* Main content accounts for fixed sidebar */
-    .main { 
-        margin-left: 345px;
-        width: calc(100% - 350px);
+    /* Main content accounts for the fixed 320px sidebar: 10px of margin plus .main's own 20px
+       padding make the gutter between the inputs and the tabs 30px. */
+    .main {
+        margin-left: 330px;
+        width: calc(100% - 335px);
     }
     
     .sidebar input[type="number"],

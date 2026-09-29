@@ -72,8 +72,10 @@ const TAB_ALIASES = Object.freeze({
     charts: 'tab-chart', chart: 'tab-chart',
     optimizer: 'tab-opt', opt: 'tab-opt',
     montecarlo: 'tab-mc', mc: 'tab-mc',
+    // The tabs read Save/Load and INFO; the older names keep links that were already shared working.
+    save: 'tab-fileio', load: 'tab-fileio', saveload: 'tab-fileio',
     importexport: 'tab-fileio', fileio: 'tab-fileio', import: 'tab-fileio', export: 'tab-fileio',
-    documentation: 'tab-docs', docs: 'tab-docs', help: 'tab-docs',
+    info: 'tab-docs', documentation: 'tab-docs', docs: 'tab-docs', doc: 'tab-docs', help: 'tab-docs',
 });
 
 // Returns a tab id from ?tab=, or null when the parameter is absent or names nothing. Null means
@@ -2176,6 +2178,26 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
     return cols.filter(c => keep.has(c.key));
 }
 
+// Pin the ⚓ baseline, 📍 current and ⚖ compare rows under the header, each directly under
+// whichever of them rendered above it. Row heights depend on the rendered font and zoom, so they
+// are measured, and only while the tab is showing: in a hidden card everything measures 0, which
+// would stack all of them on top of the header. showTab() calls this again on the way in. The row
+// wrappers are display:contents and have no box, so a CELL is measured, never the wrapper.
+function stackOptimizerPinnedRows() {
+    // Fractional heights: offsetHeight rounds, which leaves a sliver between pinned rows that the
+    // scrolling body shows through.
+    const height = el => el?.getBoundingClientRect().height ?? 0;
+    const hdrH = height(document.getElementById('opt-table')?.children[0]);
+    if (!hdrH) return;
+    let top = hdrH;
+    for (const id of ['opt-baseline-row', 'opt-current-row', 'opt-compare-row']) {
+        const cells = document.querySelectorAll(`#${id} > div`);
+        if (!cells.length) continue;
+        cells.forEach(d => { d.style.top = top + 'px'; });
+        top += height(cells[0]);
+    }
+}
+
 function renderOptimizerTable(results) {
     // Re-renders triggered by the ⚖ compare toggle pass no argument - they are redrawing whatever
     // is already in state, not a fresh sweep.
@@ -2346,7 +2368,7 @@ function renderOptimizerTable(results) {
             const dv = OptimizerState.relativeView ? deltaCellHtml(col, r, deltaReferenceRow()) : null;
             return `<div${cls} style="padding:4px 8px;${cellActionCss(col)}${bgCss}${extra}"${cellActionAttrs(col, r, rowTitle)}>${dv ?? col.getValue(r)}</div>`;
         }).join('');
-        return `<div style="display:contents;">${cells}</div>`;
+        return `<div class="gt-row">${cells}</div>`;
     }).join('');
 
     // Pinned baseline reference row - best no-conversion / no-cyclic plan. Light-blue tint,
@@ -2355,7 +2377,7 @@ function renderOptimizerTable(results) {
     if (baselineRow) {
         const _bCell = 'padding:4px 8px;background-color:#dbeafe;font-weight:bold;position:sticky;top:30px;z-index:1;';
         const bTitle = 'BASELINE - the strongest plan with no Roth conversions and no cyclic brokerage maneuvering. Every other row\'s numbers are measured against this when Show as Differences is on, unless you pin another row with ⚖. Click to load it.';
-        baselineRowHtml = '<div style="display:contents;" id="opt-baseline-row">' + columns.map(col => {
+        baselineRowHtml = '<div class="gt-row" id="opt-baseline-row">' + columns.map(col => {
             let v;
             if (col.key === 'strategy')      v = BASELINE_MARK + baselineRow._strategyLabel;
             // Zero only when the baseline IS the reference. With a compare row pinned the baseline
@@ -2389,7 +2411,7 @@ function renderOptimizerTable(results) {
             + 'conversions forced on, so none of them is this plan. Click to reload it.'
             + (curFailed ? ' This plan runs out of money before the end.' : '')
             + (curInfeas ? ' This plan\'s bracket/ACA target cannot actually be held.' : '');
-        currentRowHtml = '<div style="display:contents;" id="opt-current-row">' + columns.map(col => {
+        currentRowHtml = '<div class="gt-row" id="opt-current-row">' + columns.map(col => {
             // Marker first, matching '⚓ …' on the row above. _strategyLabel already carries the 📍
             // prefix (it is what marks the row everywhere else), so it is moved to the front rather
             // than printed twice as '📍 … 📍 …'. The words "BASELINE"/"CURRENT" are not printed: the
@@ -2418,7 +2440,7 @@ function renderOptimizerTable(results) {
         const _mCell = 'padding:4px 8px;background-color:#dbeafe;font-weight:bold;position:sticky;z-index:1;';
         const mTitle = 'COMPARING AGAINST THIS ROW - with Show as Differences on, every column is '
             + 'measured from it instead of from the ⚓ baseline. Click it again to stop comparing.';
-        compareRowHtml = '<div style="display:contents;" id="opt-compare-row">' + columns.map(col => {
+        compareRowHtml = '<div class="gt-row" id="opt-compare-row">' + columns.map(col => {
             const v = (OptimizerState.relativeView ? deltaCellHtml(col, cmpRow, deltaReferenceRow()) : null)
                    ?? col.getValue(cmpRow);
             return `<div style="${_mCell}${cellActionCss(col)}"${cellActionAttrs(col, cmpRow, mTitle)}>${v}</div>`;
@@ -2426,26 +2448,7 @@ function renderOptimizerTable(results) {
     }
 
     optTableEl.innerHTML = headerHtml + baselineRowHtml + currentRowHtml + compareRowHtml + rowsHtml;
-    // Stack the second sticky row directly under the first: the 60px default assumes header +
-    // baseline row heights, which depend on the rendered font/zoom, so measure once it is in the DOM.
-    if (currentRowHtml) {
-        // The row wrappers are display:contents (no box of their own), so measure a CELL, not the
-        // wrapper - a wrapper reports offsetHeight 0 and the sticky rows would overlap.
-        const _hdrH  = optTableEl.children[0]?.offsetHeight ?? 30;
-        const _baseH = document.querySelector('#opt-baseline-row > div')?.offsetHeight ?? 0;
-        const _top = _hdrH + _baseH;
-        document.querySelectorAll('#opt-current-row > div').forEach(d => { d.style.top = _top + 'px'; });
-    }
-    // Third sticky row, stacked the same measured way. Its own offset has to include whichever of
-    // the two rows above it actually rendered, so it is measured rather than assumed: a plan with no
-    // baseline or no current row would otherwise leave a gap or overlap.
-    if (compareRowHtml) {
-        const _hdrH  = optTableEl.children[0]?.offsetHeight ?? 30;
-        const _baseH = document.querySelector('#opt-baseline-row > div')?.offsetHeight ?? 0;
-        const _curH  = document.querySelector('#opt-current-row > div')?.offsetHeight ?? 0;
-        const _top = _hdrH + _baseH + _curH;
-        document.querySelectorAll('#opt-compare-row > div').forEach(d => { d.style.top = _top + 'px'; });
-    }
+    stackOptimizerPinnedRows();
 
     // Column-count escape hatch. Written here rather than in the markup for the same reason the two
     // legend toggles are: the count is only knowable after the columns are built.
@@ -2544,7 +2547,7 @@ function renderOptimizerTable(results) {
                     if (col.key === 'strategy' && isBaselineRow(r)) cellVal = BASELINE_MARK + cellVal;
                     return `<div style="padding:4px 8px;background-color:${bg};font-weight:bold;cursor:pointer;" onclick="loadOptimizerResult(${r._id})" title="${w.label} - click to load">${cellVal}</div>`;
                 }).join('');
-                return `<div style="display:contents;">${labelCell}${dataCells}</div>`;
+                return `<div class="gt-row">${labelCell}${dataCells}</div>`;
             }).join('');
             const _bLabelTip = 'Each row is the strategy that wins one metric (the highlighted cell shows which). Click a row to load that strategy.';
             const bestHeader = `<div style="${_bHdrStyle}" title="${_bLabelTip}">Best</div>`
@@ -2553,7 +2556,8 @@ function renderOptimizerTable(results) {
                     return `<div style="${_bHdrStyle}"${tip}>${col.label}</div>`;
                 }).join('');
             const _bColsCss = ['max-content', ...dataCols.map(() => 'max-content')].join(' ');
-            bestEl.innerHTML = `<div style="display:grid;grid-template-columns:${_bColsCss};width:fit-content;margin-bottom:16px;border:1px solid #dee2e6;">${bestHeader}${bestRows}</div>`;
+            bestEl.innerHTML = `<div class="gt-scroll" style="margin-bottom:16px;">`
+                + `<div class="gt" style="grid-template-columns:${_bColsCss};">${bestHeader}${bestRows}</div></div>`;
             bestEl.style.display = 'block';
         } else {
             bestEl.style.display = 'none';
@@ -3140,53 +3144,37 @@ function analyzeColumnContent(log) {
 // Global variable to store column content analysis
 let columnContentStatus = {};
 
+// The Annual Details grid's parts. The grid's children are rows, in order: the group banner
+// (.ad-group), the column names (.ad-head), then one .ad-row per year. A row's children are its
+// cells, and a column-name cell carries its column's name in data-key. Every reader of the grid
+// goes through here, so that shape is written down once.
+function annualGridParts() {
+    const grid = document.getElementById('main-table');
+    const rows = grid ? [...grid.children] : [];
+    return {
+        grid,
+        groupRow: rows.find(r => r.classList.contains('ad-group')) ?? null,
+        headCells: [...(rows.find(r => r.classList.contains('ad-head'))?.children ?? [])],
+        bodyRows: rows.filter(r => r.classList.contains('ad-row')),
+    };
+}
+
 // Update column visibility without rebuilding the entire table
 function updateColumnVisibility() {
-    const table = document.getElementById('main-table');
-    if (!table) return;
-
-    // Use the last thead row (column names), not the first (group header)
-    const allHeaderRows = table.querySelectorAll('thead tr');
-    const headerRow = allHeaderRows[allHeaderRows.length - 1];
-    const bodyRows = table.querySelectorAll('tbody tr');
-
-    if (!headerRow) return;
+    const { headCells, bodyRows } = annualGridParts();
+    if (!headCells.length) return;
 
     const showEmpty = document.getElementById('show-empty-columns')?.checked ?? false;
 
-    // Get column keys from header
-    const headers = Array.from(headerRow.querySelectorAll('th'));
-
-    headers.forEach((th, index) => {
-        const columnKey = th.textContent;
-        const visibleByCategory = isColumnVisible(columnKey);
-        const isEmpty = th.classList.contains('empty-column');
-
-        // Column is visible if it passes category filter AND (has content OR show-empty is checked)
-        const visible = visibleByCategory && (showEmpty || !isEmpty);
-
-        // Update header
-        if (visible) {
-            th.classList.remove('hidden-column');
-        } else {
-            th.classList.add('hidden-column');
-        }
-
-        // Update all body cells in this column
-        bodyRows.forEach(row => {
-            const cell = row.cells[index];
-            if (cell) {
-                if (visible) {
-                    cell.classList.remove('hidden-column');
-                } else {
-                    cell.classList.add('hidden-column');
-                }
-            }
-        });
+    headCells.forEach((th, index) => {
+        // Visible if it passes the category filter AND (has content OR Show Zero is checked).
+        const visible = isColumnVisible(th.dataset.key)
+            && (showEmpty || !th.classList.contains('empty-column'));
+        th.classList.toggle('hidden-column', !visible);
+        bodyRows.forEach(row => row.children[index]?.classList.toggle('hidden-column', !visible));
     });
 
-    rebuildGroupRow(table);
-    syncTopScroll();
+    rebuildGroupRow();
 }
 
 // Phase P21: isolate the "Spending" category (unchecks all other cat-* boxes)
@@ -3225,21 +3213,18 @@ function showAnnualColumns(...keys) {
 
     // The Documentation tab can be read before anything has been simulated, so the table may not
     // exist yet. Build it the way #btn-tbl does rather than sending the reader to an empty tab.
-    let table = document.getElementById('main-table');
-    let head = table?.tHead?.rows[table.tHead.rows.length - 1];
-    if (!head || !head.cells.length) {
+    let cells = annualGridParts().headCells;
+    if (!cells.length) {
         if (typeof runSimulation === 'function') runSimulation();
-        table = document.getElementById('main-table');
-        head = table?.tHead?.rows[table.tHead.rows.length - 1];
+        cells = annualGridParts().headCells;
     }
-    if (!head || !head.cells.length) return false;
+    if (!cells.length) return false;
 
-    // Match on the rendered header text, which is `displayKey` - a trailing '!' is stripped at
+    // Match on the header's data-key, which is the displayed name - a trailing '!' is stripped at
     // render time - never on the raw log key.
-    const cells = [...head.cells];
     const found = [];
     keys.forEach(key => {
-        const idx = cells.findIndex(th => th.textContent.trim() === key);
+        const idx = cells.findIndex(th => th.dataset.key === key);
         if (idx >= 0) found.push({ key, idx, th: cells[idx] });
     });
     if (!found.length) return false;   // nothing to show: leave the page exactly as it was
@@ -3262,8 +3247,8 @@ function showAnnualColumns(...keys) {
         showEmpty.checked = true;
     }
 
-    // BEFORE the two steps below: inside a hidden card every rect reads 0, so syncTopScroll() would
-    // hide the mirror scrollbar and the scroll math would land on 0.
+    // BEFORE the two steps below: inside a hidden card every rect reads 0, and the scroll math
+    // would land on 0.
     showTab('tab-tbl');
     updateColumnVisibility();
 
@@ -3294,10 +3279,10 @@ function showAnnualColumns(...keys) {
     // indistinguishable from the nineteen the reader did not ask for.
     if (_colRevealTimer) { clearTimeout(_colRevealTimer); _colRevealTimer = null; }
     document.querySelectorAll('.col-reveal').forEach(el => el.classList.remove('col-reveal'));
-    const bodyRows = table.querySelectorAll('tbody tr');
+    const bodyRows = annualGridParts().bodyRows;
     found.forEach(({ idx, th }) => {
         th.classList.add('col-reveal');
-        bodyRows.forEach(row => row.cells[idx]?.classList.add('col-reveal'));
+        bodyRows.forEach(row => row.children[idx]?.classList.add('col-reveal'));
     });
     _colRevealTimer = setTimeout(() => {
         document.querySelectorAll('.col-reveal').forEach(el => el.classList.remove('col-reveal'));
@@ -3336,66 +3321,86 @@ function tabLink(tabId, text) {
     return `<span onclick="goToTab('${tabId}')" style="${_LINK_STYLE}">${text}</span>`;
 }
 
-// Rebuild the group header row based on currently visible columns
-function rebuildGroupRow(table) {
-    const thead = table.tHead;
-    if (!thead || thead.rows.length < 2) return;
-    const groupRow = thead.rows[0];
-    const headerRow = thead.rows[1];
-    groupRow.innerHTML = '';
+const ANNUAL_GROUP_COLORS = {
+    'Who':          '#e8eaf6',
+    'Income':       '#e8f5e9',
+    'Withdrawals':  '#fff3e0',
+    'Taxes':        '#e3f2fd',
+    'Balances':     '#e0f2f1',
+    'Rails':        '#f3e5f5',
+};
 
-    const groupColors = {
-        'Who':          '#e8eaf6',
-        'Income':       '#e8f5e9',
-        'Withdrawals':  '#fff3e0',
-        'Taxes':        '#e3f2fd',
-        'Balances':     '#e0f2f1',
-        'Rails':        '#f3e5f5',
-    };
+// Rebuild the group banner from the columns now showing, and size the grid to them. The grid gets
+// one track per SHOWN column: a hidden cell leaves the grid's flow entirely, so a track count that
+// included it would wrap every row into the next. Each banner cell spans the run of consecutive
+// shown columns in its group, so the spans add up to the same count.
+function rebuildGroupRow() {
+    const { grid, groupRow, headCells } = annualGridParts();
+    if (!grid || !groupRow) return;
+    const shown = headCells.filter(th => !th.classList.contains('hidden-column'));
+    grid.style.gridTemplateColumns = shown.length ? `repeat(${shown.length}, max-content)` : 'none';
+    groupRow.textContent = '';
 
-    let currentGroup = null;
-    let currentSpan = 0;
-    let currentCell = null;
-
-    Array.from(headerRow.cells).forEach(th => {
-        if (th.classList.contains('hidden-column')) return;
-        const key = th.textContent.trim();
-        const group = columnGroupDefs[key] ?? '';
-
-        if (group !== currentGroup) {
-            if (currentCell !== null) currentCell.colSpan = currentSpan;
-            currentGroup = group;
-            currentSpan = 1;
-            currentCell = document.createElement('th');
-            currentCell.textContent = group;
-            const bg = groupColors[group] ?? '#f5f5f5';
-            currentCell.style.cssText =
-                `background:${bg};text-align:center;font-size:0.78em;font-weight:bold;` +
-                `border-bottom:1px solid #bbb;padding:2px 4px;`;
-            groupRow.appendChild(currentCell);
-        } else {
-            currentSpan++;
+    let currentGroup = null, currentSpan = 0, currentCell = null;
+    shown.forEach(th => {
+        const group = columnGroupDefs[th.dataset.key] ?? '';
+        if (currentCell && group === currentGroup) {
+            currentCell.style.gridColumn = `span ${++currentSpan}`;
+            return;
         }
+        currentGroup = group;
+        currentSpan = 1;
+        currentCell = document.createElement('div');
+        currentCell.className = 'ad-grp';
+        currentCell.setAttribute('role', 'columnheader');
+        currentCell.textContent = group;
+        currentCell.style.background = ANNUAL_GROUP_COLORS[group] ?? '#f5f5f5';
+        groupRow.appendChild(currentCell);
     });
-    if (currentCell !== null) currentCell.colSpan = currentSpan;
+}
+
+// Annual Details columns that count years. They print exactly as the log holds them in both Future $
+// and Current $: they are not money, and an age divided by an inflation factor above 1 falls a little
+// further every year, so the column counts DOWN (issue #247).
+const ANNUAL_YEAR_COUNT_KEYS = new Set(['age1', 'age2']);
+
+// The text of one Annual Details cell. `deflator` divides MONEY and nothing else: the row's inflation
+// factor in Current $, and 1 in Future $ or for a running total. Percentages, `loopMs`, years and
+// ages print the same in either view.
+function annualCellText(key, value, deflator = 1) {
+    // `value !== ''` is load-bearing: isNaN('') is FALSE, because Number('') is 0, so an empty cell
+    // would take the numeric branch and print "0". `acaBreach` is the one log key that holds '', and
+    // its blank years must read blank beside the years that read "Yes": an empty cell is not a zero.
+    if (value == null || value === '' || isNaN(value)) {
+        return (key === 'IRMAATier' && (value === '-none-' || value === '-')) ? EMPTY_CELL : String(value ?? '');
+    }
+    const lk = key.toLowerCase();
+    if (lk.includes('%')) return (value * 100).toFixed(2);
+    // loopMs is the engine's time for one simulated year, ~0.2ms, which whole-number rounding would
+    // print as 0 forever.
+    if (key === 'loopMs') return value.toFixed(2);
+    if (lk.includes('yr') || lk.includes('year') || ANNUAL_YEAR_COUNT_KEYS.has(key)) return String(value);
+    return Math.round(value / deflator).toLocaleString();
+}
+
+function annualRow(cls) {
+    const row = document.createElement('div');
+    row.className = 'gt-row ' + cls;
+    row.setAttribute('role', 'row');
+    return row;
 }
 
 function updateTable(log) {
-    const oldTable = document.getElementById('main-table');
+    const grid = document.getElementById('main-table');
+    if (!grid) return null;
 
     if (!log || log.length === 0) {
-        if (oldTable) {
-            oldTable.remove();
-        }
+        grid.textContent = '';
         return null;
     }
 
     // Analyze which columns have content
     columnContentStatus = analyzeColumnContent(log);
-
-    const table = document.createElement('table');
-    table.border = '1';
-    table.id = 'main-table';
 
     const keys = annualDetailsKeys(log);
     // P86: computed running-total columns, already in the basis the toggle selects - their cells
@@ -3403,10 +3408,11 @@ function updateTable(log) {
     const _inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
     const _runningTotals = computeRunningTotals(log, _inCurrentDollars);
 
-    // Create header - row 0 is the group banner, row 1 is the column names
-    const thead = table.createTHead();
-    thead.insertRow(); // group row placeholder - populated by rebuildGroupRow below
-    const headerRow = thead.insertRow();
+    // Built off-document and swapped in whole. Row 0 is the group banner, filled by
+    // rebuildGroupRow() once the grid is in place; row 1 is the column names.
+    const frag = document.createDocumentFragment();
+    frag.appendChild(annualRow('ad-group'));
+    const headerRow = frag.appendChild(annualRow('ad-head'));
 
     // Medicare age is stated in three tooltips below; read it from the tax data so the copy
     // cannot drift from the gate that actually charges the surcharge.
@@ -3500,8 +3506,11 @@ function updateTable(log) {
 
     keys.forEach(key => {
         if (isTableColumnKey(key)) {
-            const th = document.createElement('th');
+            const th = document.createElement('div');
             const displayKey = key.endsWith('!') ? key.slice(0, -1) : key;
+            th.className = key === 'year' ? 'ad-th ad-pin' : 'ad-th';
+            th.setAttribute('role', 'columnheader');
+            th.dataset.key = displayKey;
             th.textContent = displayKey;
 
             if (tooltips[key]) {
@@ -3526,8 +3535,6 @@ function updateTable(log) {
         }
     });
 
-    // Create body
-    const tbody = table.createTBody();
     let maritalStatus = 'MFJ';
     // P69g: under replay, the FIRST year the portfolio cannot cover its required draw is the ruin
     // year the Monte Carlo run scored - the same rule the engine's path loop applies. Later years
@@ -3538,7 +3545,7 @@ function updateTable(log) {
               Math.max(0, (r.spendGoal ?? 0) - (r.guaranteedIncome ?? 0))))?.year ?? null)
         : null;
     log.forEach((row, i) => {
-        const tr = tbody.insertRow();
+        const tr = frag.appendChild(annualRow('ad-row'));
         const _isRuinRow = _ruinYear != null && row.year === _ruinYear;
 
         // Check conditions for highlighting
@@ -3563,18 +3570,18 @@ function updateTable(log) {
         const tierEntry = IRMAATierColors[row['IRMAATier']];
         const _IRMAACols = ['year', 'IRMAATier', 'totalIncome', 'IRMAA', 'totalTax'];
 
-        // Pink takes priority over tier color
-        if (incomeShortfall) {
-            tr.style.backgroundColor = '#ffb6c180';  // Light pink
-            tr.style.color = '';  // reset to default dark text
-        }
+        // Pink takes priority over tier color. The row's class paints every cell of it; the cell
+        // colors below are inline, so they still win where they apply.
+        if (incomeShortfall) tr.classList.add('ad-short');
 
         // Apply cell-level yellow highlighting for death occurred
         const deathHighlightCols = ['year', 'age1', 'age2', 'status', 'SSincome'];
 
         keys.forEach(key => {
             if (isTableColumnKey(key)) {
-                const td = tr.insertCell();
+                const td = document.createElement('div');
+                td.className = key === 'year' ? 'ad-td ad-pin' : 'ad-td';
+                td.setAttribute('role', 'cell');
                 const isRunningTotal = !!ANNUAL_RUNNING_TOTALS[key];
                 const value = isRunningTotal ? _runningTotals[key][i] : row[key];
 
@@ -3605,45 +3612,10 @@ function updateTable(log) {
                     }
                 }
 
-                // Columns whose useful magnitude is below 1, so the whole-number rounding every
-                // other column gets would print 0 forever. loopMs is the engine's time for one
-                // simulated year: ~0.2ms on a normal plan, which read as "0" the moment the column
-                // was fixed enough to render at all.
-                const isFractional = (key === 'loopMs');
-                // Check if key indicates percentage
-                const isPercent = key.toLowerCase().includes('%');
-                const isYear = key.toLowerCase().includes('yr') || key.toLowerCase().includes('year');
-
-                // `value !== ''` is load-bearing: isNaN('') is FALSE, because Number('') is 0, so an
-                // empty cell took the numeric branch and printed "0". P99 found it on `acaBreach`,
-                // whose blank years read as a real zero beside the years that read "Yes". It is the
-                // only key in any log that holds '', so this is that column and nothing else -
-                // measured, not assumed - but the rule is general: an empty cell is not a zero.
-                if (value != null && value !== '' && !isNaN(value)) {
-                    if (isPercent) {
-                        // Format as percentage (convert from decimal)
-                        td.textContent = (value * 100).toFixed(2);
-                    } else if (isFractional) {
-                        td.textContent = value.toFixed(2);
-                    } else {
-                        // Format as whole number
-                        if (isYear) {
-                            td.textContent = value;
-                        } else {
-                            // Running totals are already in the selected basis (a running sum of
-                            // deflated years); dividing that sum by this row's factor would be
-                            // the exact mistake P86 removed.
-                            const displayValue = (_inCurrentDollars && !isRunningTotal)
-                                ? value / (row.inflationFactor || 1) : value;
-                            td.textContent = Math.round(displayValue).toLocaleString();
-                        }
-                    }
-                } else {
-                    // Normalize IRMAATier base value for display
-                    td.textContent = (key === 'IRMAATier' && (value === '-none-' || value === '-'))
-                        ? EMPTY_CELL
-                        : (value ?? '');
-                }
+                // Running totals are already in the selected basis (a running sum of deflated
+                // years); dividing that sum by this row's factor again would be wrong.
+                const deflator = (_inCurrentDollars && !isRunningTotal) ? (row.inflationFactor || 1) : 1;
+                td.textContent = annualCellText(key, value, deflator);
 
                 // Apply visibility based on category filter AND empty column filter
                 const displayKey = key.endsWith('!') ? key.slice(0, -1) : key;
@@ -3665,46 +3637,96 @@ function updateTable(log) {
         });
     });
 
-    rebuildGroupRow(table);
+    grid.replaceChildren(frag);
+    rebuildGroupRow();
+    return grid;
+}
 
-    if (oldTable) {
-        oldTable.replaceWith(table);
+// A second horizontal scrollbar, ABOVE a wide grid. A .gt-scroll box is up to 75% of the window
+// tall, so its own horizontal scrollbar sits at the bottom of that, often below the fold. A box
+// marked data-top-scroll gets a thin strip just above it that scrolls it sideways as well. The strip
+// is exactly as wide as the box's viewport and its spacer as wide as the box's content, so the two
+// scroll the same distance. A ResizeObserver on the box and on its grid keeps that true through
+// re-renders, column changes, window resizes and the tab being shown, with no call needed from any
+// of them. The strip hides whenever the table fits.
+function syncTopScrollbar(box) {
+    const strip = box.previousElementSibling;
+    if (!strip?.classList.contains('gt-hscroll')) return;
+    const overflow = box.scrollWidth > box.clientWidth + 1;
+    strip.style.display = overflow ? '' : 'none';
+    if (!overflow) return;
+    strip.style.width = box.clientWidth + 'px';
+    strip.style.marginLeft = box.clientLeft + 'px';
+    strip.firstElementChild.style.width = box.scrollWidth + 'px';
+    strip.scrollLeft = box.scrollLeft;
+}
+function attachTopScrollbar(box) {
+    if (box.previousElementSibling?.classList.contains('gt-hscroll')) return;
+    const strip = document.createElement('div');
+    strip.className = 'gt-hscroll';
+    strip.appendChild(document.createElement('div'));
+    box.before(strip);
+    // Each side follows the other. The 1px tolerance stops a fractional scrollLeft, rounded
+    // differently by the two elements, from bouncing between them.
+    strip.addEventListener('scroll', () => {
+        if (Math.abs(box.scrollLeft - strip.scrollLeft) > 1) box.scrollLeft = strip.scrollLeft;
+    });
+    box.addEventListener('scroll', () => {
+        if (Math.abs(strip.scrollLeft - box.scrollLeft) > 1) strip.scrollLeft = box.scrollLeft;
+    });
+    const ro = new ResizeObserver(() => syncTopScrollbar(box));
+    ro.observe(box);
+    if (box.firstElementChild) ro.observe(box.firstElementChild);
+    syncTopScrollbar(box);
+}
+function setupTopScrollbars() {
+    if (typeof ResizeObserver !== 'function') return;
+    document.querySelectorAll('.gt-scroll[data-top-scroll]').forEach(attachTopScrollbar);
+}
+
+// A div grid copies as one cell per line, because every cell is a block, where a <table> selection
+// pastes into a spreadsheet as rows and columns. So a copy that covers more than one cell of a .gt
+// grid is rebuilt as tab-separated lines: the selected cells that are showing, one line per row,
+// and a banner cell that spans several columns padded with tabs so the columns under it line up.
+// A row is a cell's parent, which is either a .gt-row or, for a header written straight into the
+// grid, the grid itself. Returns null when the selection holds fewer than two cells, which leaves
+// the browser's own copy alone.
+function gridSelectionText(grid, sel) {
+    const ranges = Array.from({ length: sel.rangeCount }, (_, i) => sel.getRangeAt(i));
+    // Strict overlap with the cell's contents. Selection.containsNode(el, true) also counts a
+    // cell whose edge merely touches the selection's end, which copies one cell too many.
+    const selected = el => {
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        return ranges.some(s => s.compareBoundaryPoints(Range.END_TO_START, r) < 0
+                             && s.compareBoundaryPoints(Range.START_TO_END, r) > 0);
+    };
+    const isCell = el => !el.classList.contains('gt-row')
+        && (el.parentElement === grid || el.parentElement.classList.contains('gt-row'));
+    const cells = [...grid.querySelectorAll('div')].filter(el =>
+        isCell(el) && el.getClientRects().length > 0 && selected(el));
+    if (cells.length < 2) return null;
+    const lines = [];
+    let parent = null, line = null;
+    for (const cell of cells) {
+        if (cell.parentElement !== parent) { parent = cell.parentElement; line = []; lines.push(line); }
+        // `grid-column: span n` lands on the START longhand; the end stays auto.
+        const cs = getComputedStyle(cell);
+        const span = Number(/span\s+(\d+)/.exec(`${cs.gridColumnStart} ${cs.gridColumnEnd}`)?.[1] ?? 1);
+        line.push(cell.textContent.trim(), ...Array(span - 1).fill(''));
     }
-
-    syncTopScroll();
-    return table;
+    return lines.map(l => l.join('\t')).join('\n');
 }
-
-// #2 - keep the mirror scrollbar above the Annual Details table sized and toggled correctly.
-// Sets the spacer width to the table's scrollWidth and hides the strip when nothing overflows.
-function syncTopScroll() {
-    const table  = document.getElementById('main-table');
-    const top    = document.getElementById('tbl-top-scroll');
-    const inner  = document.getElementById('tbl-top-scroll-inner');
-    const bottom = document.getElementById('tbl-scroll');
-    if (!table || !top || !inner || !bottom) return;
-    const w = table.scrollWidth;
-    inner.style.width = w + 'px';
-    top.style.display = w > bottom.clientWidth + 1 ? '' : 'none';
-}
-
-// Wire bidirectional scroll sync between the mirror strip and the table scroller. Called once.
-let _topScrollWired = false;
-function setupTopScrollSync() {
-    if (_topScrollWired) return;
-    const top    = document.getElementById('tbl-top-scroll');
-    const bottom = document.getElementById('tbl-scroll');
-    if (!top || !bottom) return;
-    let syncing = false;
-    top.addEventListener('scroll', () => {
-        if (syncing) return; syncing = true; bottom.scrollLeft = top.scrollLeft; syncing = false;
-    });
-    bottom.addEventListener('scroll', () => {
-        if (syncing) return; syncing = true; top.scrollLeft = bottom.scrollLeft; syncing = false;
-    });
-    window.addEventListener('resize', syncTopScroll);
-    _topScrollWired = true;
-}
+document.addEventListener('copy', e => {
+    const sel = document.getSelection();
+    if (!sel || sel.isCollapsed || !sel.anchorNode || !e.clipboardData) return;
+    const anchor = sel.anchorNode.nodeType === Node.ELEMENT_NODE ? sel.anchorNode : sel.anchorNode.parentElement;
+    const grid = anchor?.closest('.gt');
+    const text = grid ? gridSelectionText(grid, sel) : null;
+    if (text == null) return;
+    e.clipboardData.setData('text/plain', text);
+    e.preventDefault();
+});
 
 
 function openTaxPlanner(row, prevRow) {
@@ -6161,8 +6183,7 @@ function showTab(id) {
     const activeBtn = document.querySelector(`.tab-btn[onclick*="${id}"]`);
     if (activeBtn) activeBtn.classList.add('active');
 
-    // Annual Details table width can only be measured while its tab is visible (#2).
-    if (id === 'tab-tbl') syncTopScroll();
+    if (id === 'tab-opt') stackOptimizerPinnedRows();
 }
 
 
@@ -8023,7 +8044,7 @@ function commitScenario(entry, name) {
 // ── The load report ─────────────────────────────────────────────────────────────────────────
 // What a load changed used to go to the status bar, which hides itself after a few seconds, so a
 // comparison of several figures was gone before it could be read. It now lives in a panel at the top
-// of the Import/Export tab and stays there until the next load or save. Built with textContent
+// of the Save/Load tab and stays there until the next load or save. Built with textContent
 // throughout: the plan name is the user's own text and must never be parsed as markup.
 function setLoadReport(type, headline, lines = []) {
     const box = document.getElementById('scenarioLoadReport');
@@ -8109,7 +8130,7 @@ function reportSummaryDrift(entry, name) {
         headline = `Loaded "${name}". It predates release stamping, so this difference cannot be attributed:`;
     }
     setLoadReport(type, headline, lines);
-    showMessage(`Scenario "${name}" loaded. ${diffs.length} figure(s) changed - see the Import/Export tab.`, type);
+    showMessage(`Scenario "${name}" loaded. ${diffs.length} figure(s) changed - see the Save/Load tab.`, type);
 }
 
 function loadScenarioByName(name) {

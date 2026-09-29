@@ -24,7 +24,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1933</title>
+    <title>Retirement Optimizer 11.198b</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -54,7 +54,7 @@
 	     entry's HTML into the LATEST CHANGE banner during parse, and this has to sweep
 	     the document after that copy exists. See doclinks.js. -->
 	<script src="doclinks.js?v=1118ef" defer></script>
-	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=1118ef">
+	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=11198a">
 	<style>
     .toggle { display: flex !important; }
     /* The two page-level buttons, stacked at the top left. Matching widths so the stack lines up;
@@ -80,8 +80,8 @@
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=111932"></script>
-	<script src="optimizer_tests.js?v=111933"></script>
+	<script src="optimizer_ui.js?v=11198b"></script>
+	<script src="optimizer_tests.js?v=11198d"></script>
 </head>
 <body>
 
@@ -710,7 +710,7 @@
     <div class="main">
         <div class="top-bar">
             <div style="display:flex; flex-direction:column; align-items:flex-start; gap:6px; margin-bottom:6px;">
-                <div title="Generate a URL with all current settings for bookmarking or sharing" style="position:relative">
+                <div title="Generate a compressed URL that restores all your current settings, for bookmarking or sharing. It records only what differs from the defaults, so it stays short." style="position:relative">
                     <button id="share-btn" onclick="toggleSharePanel()" style="font-size:0.8em;padding:4px 8px;">&#8258; Share</button>
                     <div class="share-panel" id="share-panel">
                         <label>Copy this URL to restore your settings in any browser:</label>
@@ -731,7 +731,7 @@
                 <div id="stat-advisorfee-tile" style="display:none;" title="Total advisor or fund fees paid across the whole plan. Charged each year on the previous December 31 balances. Fee money taken from an IRA is not a taxable distribution, so it never appears in your income or your tax."><small>Advisor Fees</small><br><strong id="stat-advisorfee">$0</strong><div id="stat-advisorfee-sub" style="font-size:0.75em;min-height:1em;color:#888;"></div></div>
                 <div title="Total after-tax spendable income produced across all years."><small>Spendable</small><br><strong id="stat-spend">$0</strong><div id="stat-spend-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Total portfolio value (after-tax) remaining at the end of the final simulation year."><small>End Wealth</small><br><strong id="stat-nw">$0</strong><div id="stat-nw-delta" style="font-size:0.75em;min-height:1em;"></div></div>
-                <div title="First year the plan's after-tax portfolio value permanently overtakes what it would have been with no Roth conversions, and stays ahead for the rest of the plan, or &quot;--&quot; if that never happens (including a brief lead that doesn't hold). Computed by re-running the entire plan without the conversions. Only shown when conversions actually occur. See Documentation for details."><small>Break Even</small><br><strong id="stat-conv-be" style="font-size:0.9em;"> - </strong><span id="stat-conv-be-diagnose" onclick="toggleBreakEvenDiagnosis()" style="display:none;cursor:pointer;font-size:0.85em;margin-left:3px;color:#2980b9;">ⓘ</span>
+                <div title="First year the plan's after-tax portfolio value permanently overtakes what it would have been with no Roth conversions, and stays ahead for the rest of the plan, or &quot;--&quot; if that never happens (including a brief lead that doesn't hold). Computed by re-running the entire plan without the conversions. Only shown when conversions actually occur. See the INFO tab for details."><small>Break Even</small><br><strong id="stat-conv-be" style="font-size:0.9em;"> - </strong><span id="stat-conv-be-diagnose" onclick="toggleBreakEvenDiagnosis()" style="display:none;cursor:pointer;font-size:0.85em;margin-left:3px;color:#2980b9;">ⓘ</span>
                     <div id="stat-conv-be-diagnose-result" style="display:none;font-size:0.75em;max-width:230px;color:#555;text-align:left;margin-top:2px;"></div>
                 </div>
                 <div title="Portfolio withdrawals funding spending and taxes, divided by the start-of-year portfolio balance. The classic 4% rule targets ~4%. See wdRate% column in Annual Details."><small>Withdrawal Rate</small><br><strong id="stat-avg-spend-rate" style="font-size:0.9em;"> - </strong></div>
@@ -740,7 +740,7 @@
                      the rest of Monte Carlo this number is always current and belongs on a bar that
                      is visible from every tab. Tooltip is rebuilt with the value. -->
                 <div title="Of the harshest return periods in the historical record, how many your current plan runs out of money in."><small>Stress Test</small><br><strong id="stat-stress" style="font-size:0.9em;"> - </strong></div>
-                <div title="The current version of this software. See 'Change Log' on the Documentation tab for details."><small>Version</small><br><strong id="stat-version" style="font-size:0.9em;"></strong></div>
+                <div title="The current version of this software. See 'Change Log' on the INFO tab for details."><small>Version</small><br><strong id="stat-version" style="font-size:0.9em;"></strong></div>
 				<!-- Ephemeral notes trail the stats: "↺ what changed" and the Load/Save result. -->
 				<div id="stat-success" style="font-size:0.8em;color:#555;align-self:center;"></div>
 				<div id="popUpMessage" class="scenario-message"></div>
@@ -750,16 +750,16 @@
         <div class="tabs">
             <label class="toggle" style="font-size:0.8em;align-self:center;margin-right:6px;" title="Future $: nominal amounts as they'll actually appear (no adjustment). Current $: restated in today's purchasing power - useful for comparing real spending across years.">
                 <input type="checkbox" id="show-current-dollars" checked onchange="updateCurrentDollarsView()">
-                <span class="toggle-label">Future $</span>
+                <span class="toggle-label">Future</span>
                 <span class="toggle-switch"></span>
-                <span style="color:#666;font-size:0.9em;">Current $</span>
+                <span style="color:#666;font-size:0.9em;">Current</span>
             </label>
             <button id="btn-tbl" class="tab-btn" onclick="{runSimulation(); showTab('tab-tbl')}" title="Year-by-year detail: balances, income, taxes, RMDs, and Roth conversions for every year of the plan.">Annual Details ⊞</button>
             <button id="btn-cht" class="tab-btn active" onclick="{runSimulation(); showTab('tab-chart')}" title="Visualize the plan: account balances over time plus income / expense breakdowns (switch views with the buttons above each chart).">Charts 📊</button>
             <button id="btn-opt" class="tab-btn" onclick="{runOptimizer(); showTab('tab-opt')}" title="Sweeps every withdrawal & conversion strategy and ranks them by net wealth, total spendable, and lifetime tax.">Optimizer 🎯</button>
 		    <button id="btn-mc" class="tab-btn" onclick="{showTab('tab-mc'); mcTabActivated();}" title="Runs the plan against hundreds of random or historical return sequences and reports survival / success rates.">Monte Carlo 🎲</button>
-		    <button id="btn-fileio" class="tab-btn" onclick="{showTab('tab-fileio')}" title="Save, load, or delete named scenarios, and share a plan via a compressed URL.">Import/Export 📂</button>
-		    <button id="btn-docs" class="tab-btn" onclick="{showTab('tab-docs')}" title="How-to guide, strategy explanations, modeling assumptions, and the changelog.">Documentation <strong id="testsFailed">🟢</strong></button>
+		    <button id="btn-fileio" class="tab-btn" onclick="{showTab('tab-fileio')}" title="Save, load, or delete named scenarios in this browser, and export or import them as files. For a link to share, use the Share button.">Save/Load 📂</button>
+		    <button id="btn-docs" class="tab-btn" onclick="{showTab('tab-docs')}" title="How-to guide, strategy explanations, modeling assumptions, and the changelog.">INFO <strong id="testsFailed">🟢</strong></button>
 
         </div>
 
@@ -981,12 +981,11 @@
 						<div style="font-size:0.8em;color:#555;margin-bottom:4px;">
 							One row per sequence, matching the chart line color. This table replaces the chart legend, so it is the only key to which line is which. Click a row to isolate its line, which also turns on the hover-over readout for that line; click again to restore all. Click a column heading to sort.
 						</div>
-						<div style="max-height:260px;overflow-y:auto;overflow-x:auto;scrollbar-gutter:stable;border:1px solid #dee2e6;border-radius:4px;width:fit-content;max-width:100%;">
+						<div class="gt-scroll" style="max-height:260px;scrollbar-gutter:stable;">
 							<!-- 11 columns: color swatch + the 10 in getStressColumns(). -->
-							<div style="display:grid;grid-template-columns:repeat(11,max-content);font-size:0.85em;width:fit-content;">
-								<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;border-right:2px solid #dee2e6;border-bottom:1px solid #dee2e6;"></div>
-								<div id="mc-stress-table-header" style="display:contents;"></div>
-								<div id="mc-stress-table-body" style="display:contents;"></div>
+							<div class="gt" style="grid-template-columns:repeat(11,max-content);font-size:0.85em;">
+								<div id="mc-stress-table-header" class="gt-row"></div>
+								<div id="mc-stress-table-body" class="gt-row"></div>
 							</div>
 						</div>
 					</div>
@@ -1017,11 +1016,10 @@
 					<span style="background:#fff3cd;padding:1px 8px;border-radius:3px;margin-right:4px;">75 – 89%</span>
 					<span style="background:#f8d7da;padding:1px 8px;border-radius:3px;">below 75%</span>
 				</div>
-				<div style="max-height:280px;overflow-y:auto;overflow-x:auto;scrollbar-gutter:stable;border:1px solid #dee2e6;border-radius:4px;width:fit-content;max-width:100%;">
-					<div style="display:grid;grid-template-columns:max-content max-content max-content max-content max-content max-content max-content max-content;font-size:0.85em;width:fit-content;">
-						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;border-right:2px solid #dee2e6;border-bottom:1px solid #dee2e6;"></div>
-						<div id="mc-table-header" style="display:contents;"></div>
-						<div id="mc-table-body" style="display:contents;"></div>
+				<div class="gt-scroll" style="max-height:280px;scrollbar-gutter:stable;">
+					<div class="gt" style="grid-template-columns:max-content max-content max-content max-content max-content max-content max-content max-content;font-size:0.85em;">
+						<div id="mc-table-header" class="gt-row"></div>
+						<div id="mc-table-body" class="gt-row"></div>
 					</div>
 				</div>
 			</div>
@@ -1146,6 +1144,17 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="display"><b>11.198b</b>
+					<strong>Ages in Annual Details count up in Current $, Feedback sends again, and the tables keep their headings in view.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>With the Future / Current switch on Current, the age columns no longer shrink with inflation and read the same as in Future (<a href="https://github.com/nightskyguy/retirement_assets/issues/247" target="_blank" rel="noopener">issue #247</a>). No plan's numbers change.</li>
+					<li>Feedback spam prevention was stopping messages from being sent, and has been fixed.</li>
+					<li>Annual Details and the Optimizer table scroll inside their own box, with a horizontal scrollbar above the table as well as below, keeping their headings (and in Annual Details the year column) in view. They and the Monte Carlo tables have cell borders.</li>
+					<li>A block copied from any of them pastes into a spreadsheet as rows and columns.</li>
+					<li>The Import/Export tab is now called Save/Load and the Documentation tab is not called INFO.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.198b" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="behavior"><b>11.1933</b>
 					<strong>Four state tax tables were charging too much, and are corrected.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1189,31 +1198,6 @@
 					<li>Run and Use it are green buttons, and changing the preset or the market paths no longer scrolls the page away from the controls.</li>
 					</ul>
 					<a href="optimizer_changelog.md#11.1881" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="display"><b>11.186c</b>
-					<strong>Send feedback from the page.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>The &#9993; Feedback button, under Share, sends a note to the author. No plan's numbers change.
-						<ul style="margin:4px 0 0 0;padding-left:18px;">
-						<li>Your settings and any page errors go with it unless you uncheck them: strategy, tax limit, filing status, state, growth and inflation, never balances, income, spending, ages or birth dates. Your full plan link and a screenshot of the whole page go only if you tick them, and <i>Show exactly what will be sent</i> lists everything first.</li>
-						<li>An email address is optional and is used only to reply to you; without one there is no way to answer. The <a href="README.md#sending-feedback" target="_blank" rel="noopener">README&rsquo;s <i>Sending Feedback</i></a> section says where a message goes.</li>
-						<li>Prefer GitHub? The same box links to a feedback form for a public GitHub issue.</li>
-						</ul>
-					</li>
-					<li>On a phone the page no longer scrolls sideways.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.186c" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="display"><b>11.1859</b>
-					<strong>Risk-based guardrails for every plan, and GK-style Guardrails stop cutting in a plan's last 8 years.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>Risk-based guardrails, below the Charts tab's charts, draw the savings at which your spending would be raised or cut. The same run finds the After-Tax Spend for a chosen chance of success: <i>Use it</i> sets it, <i>Restore</i> puts yours back.</li>
-					<li>Monte Carlo opens on Synthetic – Lognormal (GBM), which gives most plans a lower chance of success than Historical.</li>
-					<li>A plan with Guardrails on can give different numbers: the inflation raise is at most 6% and is skipped only after a year your savings as a whole lost money. Optimize Spend suggests for a plan whose spending falls on purpose, and Optimize Conversions never suggests a conversion worse than none.</li>
-					<li>The income charts no longer count money a year saves as income.</li>
-					<li>The Stress Test and Monte Carlo's out-of-date notice keep up with your edits, including one you undo.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.1859" target="_blank" rel="noopener">Details</a>
 				</li>
 				</ul>
 				<script>
@@ -1344,7 +1328,7 @@
 					<strong>Today's dollars or future dollars.</strong> Dollar amounts in Annual Details, Charts, the Optimizer and Monte Carlo are shown in <em>today's dollars</em> (Current $) by default, which is the clearest way to judge whether your plan preserves your standard of living over time. Use the <strong>Future $ / Current $</strong> toggle in the tab bar (left of Annual Details / Charts / Optimizer / Monte Carlo) to see amounts as they will actually appear in each year instead.
 					<br><br>
 					<i>Cash Interest</i> is for HYSA and money-market holdings. <i>Inflation</i> drives spending-goal escalation; <i>CPI/COLA</i> drives bracket indexing and SS cost-of-living adjustments (they often differ). Medicare and IRMAA dollar amounts follow a published Medicare path instead of either rate, starting near 6.6% a year and easing toward 3.8%; <i>CPI/COLA</i> still indexes the IRMAA income thresholds. <i>Fed Tax Creep %/yr</i> stress-tests future federal tax increases. It raises the federal ordinary-income bracket rates by that percentage a year from <i>Creep Starts</i> onward (leave the start blank for the first plan year), so a 22% bracket becomes about 26.8% after 20 years at 1%. Bracket thresholds keep tracking CPI, and state tax, capital gains, the 3.8% investment-income surtax and IRMAA are not changed. <i>Medicare premiums</i> sets whether the Part B and Part D base premiums are assumed to be inside your After-Tax Spend, the default, or charged on top of it; the IRMAA surcharge is charged either way. The <i>Enrolled at 65</i> switches let you switch off anyone who will not enroll, for example because a spouse&rsquo;s employer plan or the VA covers them, and that person then owes no premium and no surcharge. <i>Marginal Heirs Tax Rate</i> is the combined federal and state rate of whoever inherits your traditional IRA; it drives the Roth conversion break-even and the after-tax legacy figures. Enter 0 if the IRA goes to charity, or leave it blank to use the plan&rsquo;s own computed marginal rate.</li>
-				<li><strong>After Changes...</strong> Changes to any input - balances, rates, ages, strategy switches, or any other value - trigger an immediate recalculation. On the <i>Annual Details</i> table, rows are highlighted yellow when filing status changes to Single; pink/red means the portfolio cannot cover the required draw (a real shortfall - for the strict <i>ACA Cliff</i> strategy this means the plan is untenable at that spend, and for <i>Ordered</i> a small residual can remain because the strategy will not step outside your chosen sequence). The <span onclick="showAnnualColumns('ForcedIRA')" style="cursor:pointer;color:#2980b9;text-decoration:underline;text-decoration-style:dotted;"><code>ForcedIRA</code></span> column shows where spending was funded by drawing extra IRA after Cash, Brokerage and Roth ran out; for the soft <i>Fill Bracket / IRMAA</i> strategies that draw goes above the ceiling and <span onclick="showAnnualColumns('BracketOverage')" style="cursor:pointer;color:#2980b9;text-decoration:underline;text-decoration-style:dotted;"><code>BracketOverage</code></span> shows by how much. The <i>Balances</i> chart has a <i>Both / Mine / Spouse</i> toggle. The <span onclick="goToTab('tab-opt')" style="cursor:pointer;color:#2980b9;text-decoration:underline;text-decoration-style:dotted;"><i>Optimizer</i></span> sweeps all strategy variations and highlights the best result per column. The <span onclick="goToTab('tab-mc')" style="cursor:pointer;color:#2980b9;text-decoration:underline;text-decoration-style:dotted;"><i>Monte Carlo</i></span> tab runs all variations against stochastic return sequences and reports survival rates. Both tabs skip a full rebuild if inputs are unchanged. Use <i>Import/Export</i> to save, load, or delete named scenarios.</li>
+				<li><strong>After Changes...</strong> Changes to any input - balances, rates, ages, strategy switches, or any other value - trigger an immediate recalculation. On the <i>Annual Details</i> table, rows are highlighted yellow when filing status changes to Single; pink/red means the portfolio cannot cover the required draw (a real shortfall - for the strict <i>ACA Cliff</i> strategy this means the plan is untenable at that spend, and for <i>Ordered</i> a small residual can remain because the strategy will not step outside your chosen sequence). The <span onclick="showAnnualColumns('ForcedIRA')" style="cursor:pointer;color:#2980b9;text-decoration:underline;text-decoration-style:dotted;"><code>ForcedIRA</code></span> column shows where spending was funded by drawing extra IRA after Cash, Brokerage and Roth ran out; for the soft <i>Fill Bracket / IRMAA</i> strategies that draw goes above the ceiling and <span onclick="showAnnualColumns('BracketOverage')" style="cursor:pointer;color:#2980b9;text-decoration:underline;text-decoration-style:dotted;"><code>BracketOverage</code></span> shows by how much. The <i>Balances</i> chart has a <i>Both / Mine / Spouse</i> toggle. The <span onclick="goToTab('tab-opt')" style="cursor:pointer;color:#2980b9;text-decoration:underline;text-decoration-style:dotted;"><i>Optimizer</i></span> sweeps all strategy variations and highlights the best result per column. The <span onclick="goToTab('tab-mc')" style="cursor:pointer;color:#2980b9;text-decoration:underline;text-decoration-style:dotted;"><i>Monte Carlo</i></span> tab runs all variations against stochastic return sequences and reports survival rates. Both tabs skip a full rebuild if inputs are unchanged. Use <i>Save/Load</i> to save, load, or delete named scenarios.</li>
 			</ul></div>
 
 			<p>For limitations and features not currently modeled, see the <a href="README.md#limitations-and-restrictions" target="_blank" rel="noopener">README.md</a>.</p>
@@ -1435,17 +1419,11 @@
 					<span><span style="display:inline-block;width:14px;height:14px;background:#ff8c0099;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>BracketOverage / Net Income - MAGI exceeded the bracket/IRMAA ceiling this year</span>
 				</div>
 			</div>
-			<!-- Mirror of the table's horizontal scrollbar, pinned above the table so the user
-			     need not scroll to the very bottom of a tall table to scroll right (#2). -->
-			<div id="tbl-top-scroll" class="tbl-top-scroll"><div id="tbl-top-scroll-inner"></div></div>
-			<div id="tbl-scroll" class="tbl-scroll">
-				<table id="main-table">
-					<thead>
-						<tr id="groupRow"></tr>
-						<tr id="headerRow"></tr>
-					</thead>
-					<tbody id="tableBody"></tbody>
-				</table>
+			<!-- A div grid, built by updateTable() in optimizer_ui.js. The box scrolls both ways, so
+			     the header rows and year column stay pinned; data-top-scroll adds a second horizontal
+			     scrollbar above it. -->
+			<div id="tbl-scroll" class="gt-scroll" data-top-scroll>
+				<div id="main-table" class="gt" role="table"></div>
 			</div>
 		</div>
 
@@ -1664,8 +1642,8 @@
                  ⚖ control is easy to miss; the banner because a pinned row silently changes what
                  every Δ number means. -->
             <div id="opt-compare-banner" style="display:none;padding:6px 12px;background:#e8f4fd;border:1px solid #a8d0f0;border-radius:4px;color:#1a4d70;margin-bottom:8px;font-size:0.9em;"></div>
-            <div style="overflow-x:auto;width:fit-content;max-width:100%;">
-                <div id="opt-table" style="display:grid;width:fit-content;"></div>
+            <div id="opt-table-scroll" class="gt-scroll" data-top-scroll>
+                <div id="opt-table" class="gt"></div>
             </div>
             <div id="opt-note" style="margin-top:8px;font-size:0.8em;color:#666;display:none;"></div>
         </div>
@@ -1688,7 +1666,7 @@
      and on file:// the controller runs it here. -->
 <script src="montecarlo/rails_engine.js?v=11192e"></script>
 <script src="montecarlo/mc_controller.js?v=111930"></script>
-<script src="montecarlo/mc_tab.js?v=11192e"></script>
+<script src="montecarlo/mc_tab.js?v=111989"></script>
 
 <script type="text/javascript">
 function clampIntlInput(intlId, equityPct) {
@@ -1813,7 +1791,7 @@ window.addEventListener('DOMContentLoaded', function () {
     onConvSubFlagChange?.();   // Sync "Maximize Conversions" to whatever the default scenario + URL resolved the two sub-flags to
     toggleStrategyUI();
     setupAutoRecalc();
-    setupTopScrollSync();   // #2 - mirror horizontal scrollbar above the Annual Details table
+    setupTopScrollbars();   // a second horizontal scrollbar above Annual Details and the Optimizer table
     setupSmallScreenUX();   // tap tooltips on touch devices, folded sidebar + jump button on phones
     restoreFoldState();     // re-fold the legend the way this reader last left it
     // P100b1. setOptObjective rather than renderObjectiveBlurb alone: OptimizerState.objective may
@@ -1858,7 +1836,7 @@ window.addEventListener('DOMContentLoaded', function () {
 // page had painted. They now run from the idle callback at the bottom of this block, after boot.
 runSimulation?.();
 
-// ?tab=optimizer / annual / charts / montecarlo / importexport / documentation opens the page on
+// ?tab=optimizer / annual / charts / montecarlo / save / info opens the page on
 // that tab. Runs AFTER runSimulation so every tab has its content built before one is shown, and
 // is skipped under ?montecarlo, which has already chosen a tab and deliberately does not call
 // mcTabActivated (it would race the Experiment).
@@ -1889,7 +1867,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these seven are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111933';
+    const V = '?v=11198b';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

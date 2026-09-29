@@ -1686,7 +1686,11 @@ function renderSurvivalTable(variations, numPaths) {
     if (thead) {
         const hCellStyle = 'position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;border-bottom:1px solid #dee2e6;cursor:pointer;user-select:none;';
         const greenCols = new Set(['final', 'tax', 'spend']);
-        thead.innerHTML = columns.map(c => {
+        // The empty cell over the checkbox column belongs to this row, so a copied block of the
+        // table lines its headings up with the columns under them.
+        const corner = '<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;'
+                     + 'border-right:2px solid #dee2e6;border-bottom:1px solid #dee2e6;"></div>';
+        thead.innerHTML = corner + columns.map(c => {
             const active = mcSortState.colKey === c.key;
             const arrow = active ? (mcSortState.direction === 'asc' ? ' ▲' : ' ▼') : '';
             const tip = c.title ? ` title="${c.title.replace(/"/g, '&quot;')}"` : '';
@@ -1727,7 +1731,7 @@ function renderSurvivalTable(variations, numPaths) {
         const color   = survivalBand(v.survivalRate).bg;
 
         const row = document.createElement('div');
-        row.style.display = 'contents';
+        row.className = 'gt-row';
         row.dataset.varIdx = v._origIdx;
 
         const taxVal   = _mcTaxVal(v);
@@ -2535,7 +2539,11 @@ function renderStressTable(stress, rows) {
     if (thead) {
         const hCellStyle = 'position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;'
                          + 'white-space:nowrap;font-weight:600;border-bottom:1px solid #dee2e6;cursor:pointer;user-select:none;';
-        thead.innerHTML = columns.map(c => {
+        // The empty cell over the swatch column belongs to this row, so a copied block of the
+        // table lines its headings up with the columns under them.
+        const corner = '<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;'
+                     + 'border-right:2px solid #dee2e6;border-bottom:1px solid #dee2e6;"></div>';
+        thead.innerHTML = corner + columns.map(c => {
             const active = stressSortState.colKey === c.key;
             const arrow  = active ? (stressSortState.direction === 'asc' ? ' ▲' : ' ▼') : '';
             const tip    = c.title ? ` title="${c.title.replace(/"/g, '&quot;')}"` : '';
@@ -2547,7 +2555,7 @@ function renderStressTable(stress, rows) {
     rows.forEach(r => {
         const oc = STRESS_OUTCOME_COLORS[r.band] ?? STRESS_OUTCOME_COLORS['survive'];
         const row = document.createElement('div');
-        row.style.display = 'contents';
+        row.className = 'gt-row';
 
         // Color chip in the leading cell, drawn in this line's exact color, so a line on the chart
         // and its row here are paired without counting legend entries.

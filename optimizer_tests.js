@@ -885,12 +885,12 @@ function runTests() {
 		try {
 			// Two rows, one of each, so the column is not all-empty and therefore not hidden.
 			updateTable([{ year: 2026, acaBreach: 'Yes' }, { year: 2027, acaBreach: '' }]);
-			const hs = [...document.querySelectorAll('#main-table thead tr:last-child th')];
+			const hs = [...document.querySelectorAll('#main-table > .ad-head > div')];
 			const i = hs.findIndex(h => h.textContent.trim() === 'acaBreach');
 			if (i < 0) return;
-			const rows = [...document.querySelectorAll('#main-table tbody tr')];
-			assertEqual(rows[0].cells[i].textContent, 'Yes', 'a breach year says so');
-			assertEqual(rows[1].cells[i].textContent, '',
+			const rows = [...document.querySelectorAll('#main-table > .ad-row')];
+			assertEqual(rows[0].children[i].textContent, 'Yes', 'a breach year says so');
+			assertEqual(rows[1].children[i].textContent, '',
 				'and a year that did not breach is BLANK, not the "0" an empty string used to print');
 		} finally {
 			if (window.lastSimulationLog) updateTable(window.lastSimulationLog);
@@ -920,7 +920,7 @@ function runTests() {
 			assertEqual(summ.checked, true,
 				'while leaving every category the reader already had, which is the whole contract');
 			assertEqual(card.classList.contains('hidden'), false, 'and opens Annual Details');
-			const th = [...document.querySelectorAll('#main-table thead tr:last-child th')]
+			const th = [...document.querySelectorAll('#main-table > .ad-head > div')]
 				.find(h => h.textContent.trim() === 'BracketOverage');
 			assertEqual(!!th && !th.classList.contains('hidden-column'), true,
 				'and the column itself is on screen, not merely permitted');
@@ -1253,6 +1253,46 @@ function runTests() {
 		});
 	})();
 
+	// ===== ?tab= reaches a renamed tab by its new name and by every older one =====
+	// Links already shared say ?tab=importexport or ?tab=documentation; those tabs now read
+	// Save/Load and INFO. Each name must still land on the same tab, and that tab must exist.
+	(function renamedTabAliases() {
+		if (typeof TAB_ALIASES === 'undefined') return;
+		const tabs = {
+			'Save/Load': ['tab-fileio', ['save', 'load', 'saveload', 'import', 'export', 'importexport']],
+			'INFO':      ['tab-docs',   ['info', 'doc', 'docs', 'documentation', 'help']],
+		};
+		for (const [label, [id, names]] of Object.entries(tabs)) {
+			for (const name of names) {
+				assertEqual(TAB_ALIASES[name], id, `?tab=${name} opens the ${label} tab`);
+			}
+			assertEqual(!!document.getElementById(id), true, `and the ${label} tab is on the page`);
+		}
+	})();
+
+	// ===== CRITICAL: an age in Annual Details never counts DOWN (issue #247) =====
+	// Ages are counts of years, not money. Divided by each row's inflation factor, as Current $ does to
+	// a dollar column, they fall a little further every year and the column counts down. This runs on
+	// the cell formatter itself, with no table to render, so it runs on EVERY page load and turns the
+	// badge red. The rendered-table version further down runs in the pre-commit hook.
+	(function annualAgesCountUpInBothViews() {
+		if (typeof annualCellText !== 'function') return;
+		// A plan's shape: one year older per row, prices up 3% a year.
+		const rows = Array.from({ length: 30 }, (_, i) => ({ age1: 65 + i, age2: 62 + i, f: Math.pow(1.03, i) }));
+		for (const key of ['age1', 'age2']) {
+			for (const [view, useFactor] of [['Future $', false], ['Current $', true]]) {
+				const shown = rows.map(r => Number(annualCellText(key, r[key], useFactor ? r.f : 1)));
+				const bad = shown.findIndex((a, i) => i > 0 && a !== shown[i - 1] + 1);
+				assertEqual(bad, -1, `${key} counts UP one a year in ${view}`
+					+ (bad > 0 ? ` - row ${bad} reads ${shown[bad - 1]} then ${shown[bad]}` : ''));
+			}
+		}
+		// The other half: money still deflates. A change that stopped deflating everything would pass
+		// the ages and break every dollar column in Current $.
+		const dollars = Number(annualCellText('spendGoal', 103000, 1.03).replace(/\D/g, ''));
+		assertEqual(dollars, 100000, 'a dollar column still reads in current dollars');
+	})();
+
 	// ===== Annual Details: one cell per column, in every row =====
 	// The header row and the body rows are built from the same key list but used to apply DIFFERENT
 	// filters to it - the body skipped `inflationFactor` and the header did not. From that column
@@ -1280,19 +1320,139 @@ function runTests() {
 			assertEqual(String(e.message || e), '', 'Annual Details renders from a live log');
 			return;
 		}
-		const table = document.getElementById('main-table');
-		if (!table) return;
-		const headRows = table.querySelectorAll('thead tr');
-		const headerRow = headRows[headRows.length - 1];
-		if (!headerRow) return;
-		const nCols = headerRow.querySelectorAll('th').length;
-		const bodyRows = [...table.querySelectorAll('tbody tr')];
+		const grid = document.getElementById('main-table');
+		if (!grid) return;
+		const heads = [...grid.querySelectorAll(':scope > .ad-head > div')];
+		const nCols = heads.length;
+		const bodyRows = [...grid.querySelectorAll(':scope > .ad-row')];
 		if (!nCols || !bodyRows.length) return;
 		const bad = bodyRows
-			.map((r, i) => (r.cells.length === nCols ? null : `row ${i} has ${r.cells.length}`))
+			.map((r, i) => (r.children.length === nCols ? null : `row ${i} has ${r.children.length}`))
 			.filter(Boolean);
 		assertEqual(bad.slice(0, 3).join(', '), '',
 			`every Annual Details row has one cell per header (${nCols} headers)`);
+
+		// The grid is a CSS grid, not a <table>: nothing lines a cell up with its heading except
+		// the count. A hidden cell leaves the grid's flow, so every row must hide exactly the
+		// columns the header hides, the grid must have one track per shown column, and the group
+		// banner's spans must add up to the same number - any one of them off by one wraps each
+		// row into the next.
+		const hidden = el => el.classList.contains('hidden-column');
+		const shown = heads.filter(h => !hidden(h)).length;
+		const skewed = bodyRows.findIndex(r => heads.some((h, c) => hidden(h) !== hidden(r.children[c])));
+		assertEqual(skewed, -1, `every row hides the columns its header hides (first skewed row: ${skewed})`);
+		const tracks = Number(/repeat\((\d+)/.exec(grid.style.gridTemplateColumns)?.[1] ?? 0);
+		assertEqual(tracks, shown, `the grid has one track per shown column (${shown} shown)`);
+		const spans = [...grid.querySelectorAll(':scope > .ad-group > div')]
+			.reduce((n, g) => n + Number(/span (\d+)/.exec(g.style.gridColumn)?.[1] ?? 1), 0);
+		assertEqual(spans, shown, 'the group banner spans exactly the shown columns');
+	})();
+
+	// ===== Annual Details: a copied block pastes into a spreadsheet as rows and columns =====
+	// Every cell of a div grid is a block, so the browser's own copy puts each on its own line.
+	// gridSelectionText() rebuilds the selection as one tab-separated line per row, of the cells
+	// that are showing.
+	// ⚠ UNSAFE - MUTATES: #main-table, the page's text selection (cleared) and the Annual Details
+	// card's visibility (restored), since a cell in a hidden card has no box to be selected.
+	(function annualDetailsCopiesAsRows() {
+		if (!unsafeTest('annualDetailsCopiesAsRows')) return;
+		if (typeof gridSelectionText !== 'function' || typeof updateTable !== 'function') return;
+		const card = document.getElementById('tab-tbl');
+		if (!card) return;
+		const wasHidden = card.classList.contains('hidden');
+		const sel = document.getSelection();
+		try {
+			card.classList.remove('hidden');
+			updateTable(simulate(getInputs()).log);
+			const grid = document.getElementById('main-table');
+			const banner = grid.querySelector(':scope > .ad-group');
+			const heads = [...grid.querySelectorAll(':scope > .ad-head > div')];
+			const rows = [...grid.querySelectorAll(':scope > .ad-row')].slice(0, 2);
+			const shownOf = cells => [...cells].filter(c => !c.classList.contains('hidden-column'));
+			const showing = cells => shownOf(cells).map(c => c.textContent.trim()).join('\t');
+			const range = document.createRange();
+			range.setStartBefore(banner.firstElementChild);
+			range.setEndAfter(rows[1].lastElementChild);
+			sel.removeAllRanges();
+			sel.addRange(range);
+			const lines = (gridSelectionText(grid, sel) ?? '').split('\n');
+			assertEqual(lines.length, 4, 'the banner, the header and two years copy as four lines');
+			assertEqual(lines[0].split('\t').length, shownOf(heads).length,
+				'the banner line is padded to one field per shown column, so the groups sit over their columns');
+			assertEqual(lines.slice(1).join('\n'),
+				[showing(heads), showing(rows[0].children), showing(rows[1].children)].join('\n'),
+				'and each other line is the shown cells of its row, tab-separated');
+
+			// A selection that ends exactly on the boundary after a cell stops at that cell.
+			const firstThree = shownOf(rows[0].children).slice(0, 3);
+			const upTo = document.createRange();
+			upTo.setStartBefore(firstThree[0]);
+			upTo.setEndAfter(firstThree[2]);
+			sel.removeAllRanges();
+			sel.addRange(upTo);
+			assertEqual(gridSelectionText(grid, sel), firstThree.map(c => c.textContent.trim()).join('\t'),
+				'a selection ending on a cell boundary copies no cell beyond it');
+
+			const one = document.createRange();
+			one.selectNodeContents(rows[0].children[0]);
+			sel.removeAllRanges();
+			sel.addRange(one);
+			assertEqual(gridSelectionText(grid, sel), null,
+				'a selection inside one cell is left to the browser');
+		} finally {
+			sel.removeAllRanges();
+			if (wasHidden) card.classList.add('hidden');
+		}
+	})();
+
+	// ===== A wide Annual Details or Optimizer table has a horizontal scrollbar ABOVE it too =====
+	// The box's own scrollbar is at the bottom of a box up to 75% of the window tall, below the fold
+	// on a laptop. The strip above must scroll exactly as far as the box, and each must follow the
+	// other. A ResizeObserver sizes the strip on the next frame, so this calls the sizing directly.
+	// Under ?runtests the suite runs before the page's boot, which is where setupTopScrollbars() is
+	// called, so it is called here too; it attaches each strip once, however often it runs.
+	// ⚠ UNSAFE - MUTATES: #main-table, the Show All switch and the Annual Details card's visibility
+	// (all restored).
+	(function wideTablesScrollFromTheTop() {
+		if (!unsafeTest('wideTablesScrollFromTheTop')) return;
+		if (typeof setupTopScrollbars !== 'function' || typeof updateTable !== 'function') return;
+		setupTopScrollbars();
+		setupTopScrollbars();
+		for (const id of ['tbl-scroll', 'opt-table-scroll']) {
+			const box = document.getElementById(id);
+			assertEqual(!!box?.previousElementSibling?.classList.contains('gt-hscroll'), true,
+				`#${id} has a scrollbar strip directly above it`);
+			assertEqual(!!box?.previousElementSibling?.previousElementSibling?.classList.contains('gt-hscroll'), false,
+				`and only one, however often the strips are set up`);
+		}
+		const card = document.getElementById('tab-tbl'), all = document.getElementById('show-all');
+		if (!card || !all) return;
+		const wasHidden = card.classList.contains('hidden'), wasAll = all.checked;
+		const box = document.getElementById('tbl-scroll'), strip = box.previousElementSibling;
+		try {
+			card.classList.remove('hidden');
+			all.checked = true;
+			updateTable(simulate(getInputs()).log);
+			syncTopScrollbar(box);
+			if (box.scrollWidth <= box.clientWidth + 1) return;   // a window wide enough to fit every column
+			assertEqual(strip.style.display, '', 'the strip shows while the table is wider than its box');
+			assertEqual(strip.scrollWidth - strip.clientWidth, box.scrollWidth - box.clientWidth,
+				'and scrolls exactly as far as the box does');
+			strip.scrollLeft = 120;
+			strip.dispatchEvent(new Event('scroll'));
+			assertEqual(Math.abs(box.scrollLeft - 120) <= 1, true,
+				`scrolling the strip scrolls the table (strip ${strip.scrollLeft}, table ${box.scrollLeft})`);
+			box.scrollLeft = 40;
+			box.dispatchEvent(new Event('scroll'));
+			assertEqual(Math.abs(strip.scrollLeft - 40) <= 1, true,
+				`and scrolling the table moves the strip (strip ${strip.scrollLeft}, table ${box.scrollLeft})`);
+		} finally {
+			box.scrollLeft = 0;
+			all.checked = wasAll;
+			updateColumnVisibility();
+			syncTopScrollbar(box);
+			if (wasHidden) card.classList.add('hidden');
+		}
 	})();
 
 	// ===== P86: running-total columns accumulate in the toggle's basis; per-year columns do not =====
@@ -1316,13 +1476,11 @@ function runTests() {
 			if (!log || log.length < 3) return;
 			cdBox.checked = true;
 			updateTable(log);
-			const table = document.getElementById('main-table');
-			const headRows = table.querySelectorAll('thead tr');
-			const headers = [...headRows[headRows.length - 1].querySelectorAll('th')].map(th => th.textContent);
+			const headers = [...document.querySelectorAll('#main-table > .ad-head > div')].map(th => th.textContent);
 			assertEqual(headers.includes('Spendable'), false,
 				'the stored Spendable column is gone (renamed SumSpendable, computed on demand)');
-			const cellNum = (row, col) => parseFloat(row.cells[col].textContent.replace(/,/g, ''));
-			const bodyRows = [...table.querySelectorAll('tbody tr')];
+			const cellNum = (row, col) => parseFloat(row.children[col].textContent.replace(/,/g, ''));
+			const bodyRows = [...document.querySelectorAll('#main-table > .ad-row')];
 			for (const name of ['SumTaxes', 'SumAdvisorFees', 'SumSpendable']) {
 				const col = headers.indexOf(name);
 				assertEqual(col >= 0, true, `${name} column renders`);
@@ -1341,6 +1499,46 @@ function runTests() {
 				const want = Math.round((log[lastIdx].spendGoal || 0) / (log[lastIdx].inflationFactor || 1));
 				assertEqual(Math.abs(shown - want) <= 1, true,
 					`spendGoal cell is the per-row deflated flow (got ${shown}, want ~${want})`);
+			}
+		} finally {
+			cdBox.checked = wasChecked;
+			try { updateTable(simulate(getInputs()).log); } catch (e) { /* page re-renders on next run */ }
+		}
+	})();
+
+	// ===== CRITICAL: the rendered age columns count UP in both views (issue #247) =====
+	// The every-load check above covers the formatter. This one reads the table a reader actually
+	// sees, in Future $ and in Current $, so a later path around that formatter is caught too. Each
+	// age must be one more than the row above it, and once a spouse's column goes blank at death it
+	// stays blank. Inflation is forced to 3% because at 0% a deflated age would not move.
+	// ⚠ UNSAFE - MUTATES: #main-table (re-rendered twice) and #show-current-dollars (restored).
+	(function renderedAgesCountUp() {
+		if (!unsafeTest('renderedAgesCountUp')) return;
+		if (typeof getInputs !== 'function' || typeof updateTable !== 'function') return;
+		const cdBox = document.getElementById('show-current-dollars');
+		if (!cdBox) return;
+		const wasChecked = cdBox.checked;
+		try {
+			const log = simulate({ ...getInputs(), inflation: 0.03 }).log;
+			for (const [view, checked] of [['Future $', false], ['Current $', true]]) {
+				cdBox.checked = checked;
+				updateTable(log);
+				const heads = [...document.querySelectorAll('#main-table > .ad-head > div')].map(h => h.dataset.key);
+				const rows = [...document.querySelectorAll('#main-table > .ad-row')];
+				for (const name of ['age1', 'age2']) {
+					const col = heads.indexOf(name);
+					assertEqual(col >= 0, true, `${view}: ${name} column renders`);
+					const texts = rows.map(r => r.children[col].textContent.trim());
+					let problem = '';
+					texts.forEach((t, i) => {
+						if (problem || i === 0) return;
+						const prev = texts[i - 1];
+						const a = Number(t), p = Number(prev);
+						if (prev === EMPTY_CELL && t !== EMPTY_CELL) problem = `row ${i} comes back after death as ${t}`;
+						else if (t !== EMPTY_CELL && a !== p + 1) problem = `row ${i} reads ${prev} then ${t}`;
+					});
+					assertEqual(problem, '', `${view}: ${name} counts UP one a year`);
+				}
 			}
 		} finally {
 			cdBox.checked = wasChecked;
@@ -2454,16 +2652,17 @@ function runTests() {
         // while claiming to mean "the tests passed", which is the exact gap P39 exists to close.
         // TestTiers.finish() below resolves it once the node suites report.
         statusElement.textContent = '⏳';
-		statusElement.title = `In-page: all ${passed} passed. Node suites still running...`;
+		statusElement.title = `All ${passed} quick checks passed. The rest of the full set is still running...`;
     } else {
-        // Without ?runtests the node suites do not run here at all - the pre-commit hook ran them
-        // on every commit - so the badge says what it measured and where the rest was measured,
-        // rather than a green that reads as "the tests passed".
+        // Without ?runtests the node suites do not run here at all, so the badge says what it
+        // measured and how to run the rest, rather than a green that reads as "the tests passed".
+        // The tooltip is for a reader of the page: it names only what they can do from the address
+        // bar, never the repository's own tooling.
         const ex = (window.TestTiers && window.TestTiers.EXPECTED) || {};
         const nodeTotal = Object.keys(ex).filter(k => k !== 'slowInCore').reduce((n, k) => n + ex[k], 0);
         statusElement.textContent = '🟢';
-		statusElement.title = `In-page: all ${passed} passed.`
-			+ (nodeTotal ? ` The ${nodeTotal} node tests run on every commit (pre-commit hook); add ?runtests to run them here as well.` : '')
+		statusElement.title = `All ${passed} quick checks passed.`
+			+ (nodeTotal ? ` Add ?runtests to the page address to run the full set as well: these and ${nodeTotal} more.` : '')
 			+ (skippedUnsafe ? `\n${skippedUnsafe} suite${skippedUnsafe !== 1 ? 's' : ''} that write to the live page were skipped - add ?runtests to include them.` : '');
     }
     return failed === 0;
@@ -2488,7 +2687,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all five suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 528, taxengine: 48, taxPaymentPlanner: 62, doclinks: 15, feedback: 46, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 529, taxengine: 48, taxPaymentPlanner: 62, doclinks: 15, feedback: 46, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];
@@ -2546,12 +2745,12 @@ window.TestTiers = {
                                       + crit.names.join('\n') : '');
         } else {
             el.textContent = '🟢';
-            el.title = `All ${passed} tests passed (${t1.passed} in-page + ${passed - t1.passed} node)`
+            el.title = `All ${passed} tests passed: the ${t1.passed} quick checks and ${passed - t1.passed} more`
                      + (skipped ? `.\n${skipped} slow test${skipped !== 1 ? 's' : ''} skipped - add ?runtests=all to include them.` : '.')
                      // Say so when the mutating suites sat out. Otherwise the in-page count drops by
                      // a hundred with no explanation, which reads as tests having gone missing.
                      + (t1.skippedUnsafe ? `\n${t1.skippedUnsafe} suite${t1.skippedUnsafe !== 1 ? 's' : ''} that write to the live page were skipped - add ?runtests to include them.` : '')
-                     + (crit.passed ? `\n★ ${crit.passed} critical regression guards passed. Each one pins a defect that shipped once and was fixed - the dividend/interest double-count, the gap-fill phantom draw, the state retirement-income exemptions, the no-tax states - so that it cannot come back unnoticed.` : '');
+                     + (crit.passed ? `\n★ ${crit.passed} critical regression guards passed. Each one pins a defect that shipped once and was fixed - the dividend/interest double-count, the gap-fill phantom draw, the state retirement-income exemptions, the no-tax states, ages counting down in Annual Details - so that it cannot come back unnoticed.` : '');
         }
     },
 
@@ -2563,8 +2762,8 @@ window.TestTiers = {
         const t1 = window.TIER1_RESULT || { passed: 0, failed: 0 };
         if (t1.failed > 0) return;                       // already red, leave it
         el.textContent = '🟢⚠';
-        el.title = `In-page: all ${t1.passed} passed. The node suites did NOT run: ${why}\n`
-                 + 'Serve the page over http to run them. The pre-commit hook covers them either way.';
+        el.title = `All ${t1.passed} quick checks passed. The full set did NOT run: ${why}\n`
+                 + 'Open the page from a web address (http:// or https://), not as a file, to run it.';
     }
 };
 

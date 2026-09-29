@@ -8,12 +8,37 @@ version stamp if you like, but never add a second entry for the next commit. Lea
 used to work and anything about the internals; the commit messages carry that. See the rule in
 [CLAUDE.md](CLAUDE.md).
 
-The Documentation tab inside [retirement_optimizer.html](retirement_optimizer.html) carries a short
+The INFO tab inside [retirement_optimizer.html](retirement_optimizer.html) carries a short
 summary of the most recent releases and links here for the detail. Entries marked **behavior
 change** alter the numbers an existing plan produces, so a saved scenario or a shared link can give a
 different answer than it did before that release.
 
 For what the tool does and how to use it, see [README.md](README.md).
+
+---
+
+<a id="11.198b"></a>
+
+## 11.198b
+
+**Ages in Annual Details count up in Current $, Feedback sends again, and the tables keep their headings in view.**  
+*Display only: no plan's numbers change.*
+
+- **Ages ([issue #247](https://github.com/nightskyguy/retirement_assets/issues/247)).** With the
+  Future / Current switch on Current, which is how the page opens, the age columns in Annual Details
+  were restated for inflation as though they were dollar amounts, so each year's age read lower than
+  the year before. They now read the same in both views.
+- **Feedback sends again.** The Feedback dialog's spam prevention was stopping messages from being
+  sent, and has been fixed. If a message of yours did not go through, please try again.
+- **Headings stay put.** Annual Details and the Optimizer table each scroll inside their own box,
+  with a horizontal scrollbar above the table as well as below it. Annual Details keeps its two
+  heading rows and the year column in view as you scroll; the Optimizer keeps its heading and the
+  pinned baseline, your plan and compared rows.
+- **Cell borders** on Annual Details, both Optimizer tables and both Monte Carlo tables.
+- **Copy and paste.** A block copied from any of these tables pastes into a spreadsheet as rows and
+  columns, including only the columns on screen.
+- **Import/Export is now Save/Load.** Same tab, shorter name. A link that opens it can say
+  `?tab=save` or `?tab=load`; links already shared with `?tab=importexport` still work.
 
 ---
 

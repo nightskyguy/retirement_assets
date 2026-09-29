@@ -3408,6 +3408,27 @@ test('the plan runs to the SECOND death, and nYears does not extend it', () => {
         'no year may be logged with nobody alive in it');
 });
 
+test.critical('#247: each spouse\'s age in the log counts UP one a year, and stops only at death', () => {
+    // Issue #247 was a display fault, not this, but an age column that counts down is the symptom
+    // either way, and the page's own checks can only see what the engine hands them. An age is the
+    // calendar year minus the birth year, so it is one more on every row until that spouse's death,
+    // then '—' for good. Inflation is on so nothing about prices can leak into it.
+    const r = simulate({ ...SURVIVOR_BASE, inflation: 0.03, cpi: 0.025, die1: 75, die2: 88 });
+    for (const [key, birthyear] of [['age1', SURVIVOR_BASE.birthyear1], ['age2', SURVIVOR_BASE.birthyear2]]) {
+        let prev = null, gone = false;
+        for (const row of r.log) {
+            const age = row[key];
+            if (age === '—') { gone = true; continue; }
+            assert(!gone, `${key} comes back after death, as ${age} in ${row.year}`);
+            assert(age === row.year - birthyear, `${key} in ${row.year} is ${age}, expected ${row.year - birthyear}`);
+            assert(prev === null || age === prev + 1, `${key} must rise one a year: ${prev} then ${age} in ${row.year}`);
+            prev = age;
+        }
+        assert(prev !== null, `${key} never appears in the log`);
+    }
+    assert(r.log.some(row => row.age1 === '—'), 'the fixture must cover a death, or the "stops at death" half tests nothing');
+});
+
 // ── P38 PR 3: the primary draw is sized net of the tax on guaranteed income ───
 // PR 2 widened the forced-IRA backstop so the shortfall stopped stranding. That treated the
 // symptom: the backstop was making up, year after year, for a first-pass draw that was too small

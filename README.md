@@ -271,7 +271,7 @@ During this otherwise low income period, strategic withdrawals and movement is p
 It also does not make sense to pay more tax than necessary. I do not see taxation as evil, but it does not feel "right" to pay up to $14,000/year in IRMAA fees for no net benefit 
 in Medicare - but that is one of the many possible pitfalls of having too much forced income.
 		
-Having a large tax deferred IRA balance (about 750K or larger at the start of drawing from your IRA) can have many consequences, the worst being taking forced income (RMDs) at higher tax rates and incurring those IRMAA penalties just described.  You do NOT have to have a large IRA balance to fall prey to RMDs causing IRMAA. For example, if you have a healthy income stream between a pension, social security, and say a profit sharing plan, dividends, interest or residuals, even a modest amount of forced income can push you over an IRMAA cliff, cause you to incur NIIT (extra tax on capital gains), or push you into a higher tax bracket.  That is, RMDs are NOT exclusively a "rich people problem."  [We have a tool to roughly calculate what IRA balance may cause IRMAA penalties](standalone/irmaa_and_rmds.html) and at what ages.
+Having a large tax deferred IRA balance (about 750K or larger at the start of drawing from your IRA) can have many consequences, the worst being forced income (RMDs) at higher tax rates and incurring those IRMAA penalties just described. You do NOT have to have a large IRA balance to fall prey to RMDs causing IRMAA. For example, if you have a healthy income stream between a pension, social security, and say a profit sharing plan, dividends, interest or residuals, even a modest amount of forced income can push you over an IRMAA cliff, cause you to incur NIIT (extra tax on capital gains), or push you into a higher tax bracket.  That is, RMDs are NOT exclusively a "rich people problem."  [We have a tool to roughly calculate what IRA balance may cause IRMAA penalties](standalone/irmaa_and_rmds.html) and at what ages.
 In this tool, retirement optimizer, we reveal each of: IRMAA, state and Federal taxes to show the big picture: net taxes/net spendable income, year by year spend and "Final Wealth".
 
 ### Key Features:
@@ -433,7 +433,8 @@ as a late fund distribution or K-1, because the simulation never has any. It war
 + There is no Foreign Tax Credit modeling (relevant if your brokerage holds international funds).
 + There is no Alternative Minimum Tax (AMT) calculation.
 + There is no asset-class-specific tax treatment for alternative assets - gold/collectibles, cryptocurrency, or REIT-specific dividend/basis rules. All holdings within an account are taxed per that account's rules only.
-+ There is no Estate Tax or Gift Tax modeling. This tool only models income tax.
++ There is no Estate Tax or Gift Tax modeling. This tool only models income tax. The *worst* states for estate taxes (per person) are Oregon (10 to 16% of any amount greater than $1M), Rhode Island (1 to 16% > 1.8M), Massachusetts (1 to 16% > 2M), Minnesota (13 to 16% > 3M - not inflation adjusted!), District of Columbia (11 to 16% > 4.99M), Vermont (16% > 5M), Maryland (1 to 16% > 5M), Hawaii (10 to 20% > 5.5M), New York (3 to 16% > 7.3M the ENTIRE estate is taxed above this amount, no exemption). My favorite quote: "Senator, taxing a man from the day he is born until the day he dies seems long enough." [Kiplinger has a good summary of estate taxes](https://www.kiplinger.com/retirement/inheritance/601551/states-with-scary-death-taxes).  Connecticut stands out as the only state with a **gift** tax (12% flat).
++ There is no modeling of Inheritance taxes (5 states: Kentucky, Maryland, Nebraska, New Jersey and Pennsylvania) have inheritance tax. All states exempt the spouse, 3 exempt children, one (Maryland) exempts siblings. The others charge between 4 and 18% tax. Note that the heirs pay the tax, not the estate.
 + There is no NUA (Net Unrealized Appreciation) handling for employer stock held inside a 401k.
 + There is no 72(t) SEPP (Substantially Equal Periodic Payments) modeling for pre-59½ withdrawal planning.
 + There is no modeling of Education Credits or 529 plan interactions.
@@ -659,7 +660,7 @@ The support is good, too.
 
 Unlike most of the others, this tool integrates AI well. You can ask the AI questions about your plan and/or about the tool. Ask "where do I enter QCDs" and it provides a link to exactly the place where the input/values are used AND tells you if/when and how you are eligible.  That is phenomenally better than a "best selling major competitor" which not only does not have this level of integration, but the competitor AI often gives WRONG answers.
 
-I am skeptical of "Spending Guardrails" analysis. The idea is sound (it's based on Risk Based Guardrails found in Income Labs and described by it's authors [](), but the guidance on the plan I trialed tells me I can permanently spend 43% more if my assets more than double. That's not unreasonable, but there appears to be no *in between*. 
+I am skeptical of "Spending Guardrails" analysis. The idea is sound (it's based on Risk Based Guardrails found in Income Laboratory and described by it's authors [Tharp and Fitzpatrick](https://www.kitces.com/blog/guyton-klinger-guardrails-retirement-income-rules-risk-based/)), but the guidance on the plan I trialed tells me I can permanently spend 43% more if my assets more than double. That's not unreasonable, but there appears to be no *in between*. 
 A better question, in my opinion, would be to work this in reverse. If I want to spend 5%, 10%, 20% or 30% more a year, what assets do I need? (Ignoring the fact that what kind of asset also matters).
 E.g. if my assets rise by 30%, could I spend 8% more annually? The AI was confused and unclear about the Spending Guardrails (which is NOT Guyton Klinger). The analysis is based on the Monte Carlo outcomes - which as I noted is a reasonable way to model.  Perhaps this guardrail statement is intended at pre-retirees more than me. One last problem with this approach: typical retirement spending is a "smile" - decreasing every year until the end when significant medical costs may arise. A "43%" spending increase in some unknown future year is more depressing than helpful. 
 
@@ -712,9 +713,9 @@ Background for the **Guardrails** switch (GK-style, see *Limitations and Restric
 [`research/RISK_BASED_GUARDRAILS.md`](research/RISK_BASED_GUARDRAILS.md). Grouped by who is making
 the claim, because on this subject that matters.
 
-**The published rule.** Neither is free to read; both are *Journal of Financial Planning*.
+Neither is free to read; both are *Journal of Financial Planning*.
 
-+ Jonathan Guyton, "Decision Rules and Portfolio Management for Retirees: Is the 'Safe' Initial Withdrawal Rate Too Safe?", *JFP*, October 2004 - the original four decision rules.
++ Jonathan Guyton, "Decision Rules and Portfolio Management for Retirees: Is the 'Safe' Initial Withdrawal Rate Too Safe?", [*JFP*, October 2004](https://www.financialplanningassociation.org/article/decision-rules-and-portfolio-management-retirees-safe-initial-withdrawal-rate-too-safe) - the original four decision rules.
 + Jonathan Guyton and William Klinger, "Decision Rules and Maximum Initial Withdrawal Rates", *JFP*, March 2006 - the version everyone cites: the 20% band, the 10% adjustment, the inflation freeze after a down year, the 6% cap on the inflation raise, and the suspension of the capital-preservation cut in a plan's last 15 years.
 
 **The risk-based alternative.** Written by Derek Tharp and Justin Fitzpatrick, who are
@@ -726,12 +727,12 @@ implements this.
 + [Using Probability-Of-Success-Driven Guardrails To Manage Safe Retirement Spending](https://www.kitces.com/blog/probability-of-success-driven-guardrails-advantages-monte-carlo-simulations-analysis-communication/) (Kitces.com) - the mechanics, and where the "express the rails as portfolio balances" idea comes from.
 + [Why Guyton-Klinger Guardrails Are Too Risky For Retirees](https://www.kitces.com/blog/guyton-klinger-guardrails-retirement-income-rules-risk-based/) (Kitces.com) - the case against the withdrawal-rate trigger.
 + [Communicating Retirement Income Guardrails To Alleviate Monte Carlo Stress](https://www.kitces.com/blog/retirement-income-guardrails-monte-carlo-client-communication/) (Kitces.com) - the framing argument: households misread a probability of success, and dollar rails are easier to act on.
-+ [Risk-Based Guardrails vs Guyton-Klinger](https://incomelaboratory.com/risk-based-vs-guyton-klinger-guardrails/) (Income Lab) - the vendor's own head-to-head, including the 2007-retiree backtest in which the classic rule calls a 28% income cut by the 2009 trough against 3% for the risk-based one.
-+ [How are a Plan's Guardrails and Spending Capacity Calculated?](https://help.incomelaboratory.com/methodology/how-are-a-plans-guardrails-and-spending-capacity-calculated) (Income Lab) - the closest thing to a specification, including that the risk is recalculated monthly.
++ [Risk-Based Guardrails vs Guyton-Klinger](https://incomelaboratory.com/risk-based-vs-guyton-klinger-guardrails/) (Income Lab) - the vendor's own head-to-head, including the 2007-retiree backtest in which the classic rule calls a 28% income cut by the 2009 trough against 3% for the risk-based one. Our assessment: the numbers look "fishy". In Retirement Optimizer we do not implement the full "Guyton Klinger" rules, and the details of the retiree household are not fully specified - however the difference is much more modest in our analysis.
++ [How are a Plan's Guardrails and Spending Capacity Calculated?](https://help.incomelaboratory.com/methodology/how-are-a-plans-guardrails-and-spending-capacity-calculated) (Income Lab) - the closest thing to a specification, including that the risk is recalculated monthly - why monthly is unclear.
++ [The Dangers of Monte Carlo Simulations](https://www.advisorperspectives.com/articles/2023/01/10/the-dangers-of-monte-carlo-simulations) - points out several things that we harp on throughout this work.
 
 **Independent work.** All of it is about the *classic* rule; I could find no independent, peer-reviewed
-head-to-head of risk-based guardrails against Guyton-Klinger. That gap is the honest answer to "has
-this been tested by anyone who does not sell it".
+head-to-head of risk-based guardrails against Guyton-Klinger. 
 
 + Wade Pfau, *JFP* (2015) - assesses Guyton-Klinger by Monte Carlo and finds deep cuts in the median path. Cited second-hand here: both of the pages above lean on it.
 + [The Ultimate Guide to Safe Withdrawal Rates, Part 11: Six Criteria to Grade Withdrawal Rules](https://earlyretirementnow.com/2017/03/15/the-ultimate-guide-to-safe-withdrawal-rates-part-11-criteria/) (Karsten Jeske, Early Retirement Now, 2017) - the most useful thing on this list for judging any of these rules, because it is a framework rather than a verdict.
@@ -915,31 +916,29 @@ Those *Moldy Brackets* have added to another problem: there is a ["Tax Torpedo"]
 
 #### No "Long Term Capital Gains" in most states
 
-33 of 50 states tax capital gains the same as regular income. Unfortunately many tools and many discussions neglect this aspect, which is another reason I wrote this tool. 9 states have no taxation or do not tax capital gains (as of 2026), and 9 states have preferential treatment of capital gains. [[Source]](https://www.theentrustgroup.com/blog/state-capital-gains-tax)
+33 of 50 states tax capital gains the same as regular income. Unfortunately many tools and many discussions neglect this aspect, which is another reason I wrote this tool. 9 states have no taxation or do not tax capital gains (as of 2026), and 9 states have preferential treatment of capital gains. [[Source]](https://www.theentrustgroup.com/blog/state-capital-gains-tax). One state has no income tax but DOES have long term Capital Gains tax: Washington - 7% on gains above 278k, and 9.9% above 1.3M - but not on short term gains! Washington also has a 10 to 35% estate tax on estates over 3M.
 
-If you live in, or plan to move to, a different state and you want to use this tool, you can. **38 states plus the District of Columbia are modeled.** The thirteen that are not are **Arkansas, Delaware, Hawaii, Kansas, Louisiana, Missouri, New Jersey, New Mexico, Oklahoma, Rhode Island, Utah, Vermont and West Virginia**.
+If you live in or plan to move to a different state and you want to use this tool, you can. 38 states plus the District of Columbia are modeled. The thirteen that are not are Arkansas, Delaware, Hawaii, Kansas, Louisiana, Missouri, New Jersey, New Mexico, Oklahoma, Rhode Island, Utah, Vermont and West Virginia.
 
-This used to say the missing ones were the states that tax Social Security. **That is not the reason, and it was never the whole reason.** The engine has always had a per-state Social Security setting, and four of the eight states that do tax benefits in 2026 are already modeled: Connecticut, Minnesota, Montana and Colorado. Of the thirteen missing states only four tax Social Security at all (New Mexico, Rhode Island, Utah and Vermont); Kansas, Missouri and West Virginia all finished phasing their tax out, West Virginia as recently as January 2026, and the other six never taxed benefits.
-
-The real reasons vary by state and are a mix of preferential capital-gains treatment, retirement-income exclusions with their own phase-outs, and, for **Louisiana and New Mexico**, community property, which changes the cost-basis step-up at the first death as well as the tax. A state-by-state list of what each one actually needs has not been written yet. Until it is, treat a missing state as unfinished rather than as impossible.
+Some states remain unincluded because they have a mix of preferential capital-gains treatment, retirement-income exclusions with their own phase-outs, or other odd, one-off state-specific variations. 
 
 #### Roth Conversion Gotchas
 
-0. You withdraw/convert now at a (significantly) higher tax rate than you will face in your future. Converting into the 24% bracket might save you even if you expect to be in the 22% bracket, but converting into the 32% bracket will *likely* not help - at least this is the conventional wisdom, and I believe it is, like much conventional wisdom, is incomplete and does not apply universally.  Indeed, exploring the veracity of the conventional wisdom is one of the reasons I created the retirement optimizer. Let's say I have a healthy dose of skepticism.
+0. You withdraw/convert now at a (significantly) higher tax rate than you will face in your future. Converting into the 24% bracket might save you even if you expect to be in the 22% bracket, but converting into the 32% bracket will *likely* not help - at least this is the conventional wisdom, and I believe it is, like much conventional wisdom, incomplete and does not apply universally.  Indeed, exploring the veracity of the conventional wisdom is one of the reasons I created the retirement optimizer. Let's say I have a healthy dose of skepticism.
 0. You convert before you're 59.5 and do not have funds to pay the taxes AND/or that conversion pushes you into a significantly higher taxation situation.
-0. You have modest IRA balances and expect that to be the case once you start drawing them in retirement. Modest here means something less than 1 million with 12 or fewer years before you plan to start drawing down assets. If you have 1M now, 10 years of 10% gains like those from 2016 to 2025 could TRIPLE that 1M to 3M.  3M will force you to take about 115k from your IRA at age 75. If married the RMD plus 70k in social security and other income MAY land you in the Federal 24% bracket - if inflation is low. At 83 just the RMD will put you in the 24% Federal Bracket.  If single, your first RMD may land you in the 24% Federal Bracket above the IRMAA tier 1.
+0. You have modest IRA balances and expect that to be the case once you start drawing them in retirement. Modest here generally means something less than 1 million with 12 or fewer years before you plan to start drawing down assets. If you have 1M now, 10 years of 10% gains like those from 2016 to 2025 could TRIPLE that 1M to 3M.  3M will force you to take about 115k from your IRA at age 75. If married the RMD plus 70k in social security and other income MAY land you in the Federal 24% bracket - if inflation is low. At 83 just the RMD will put you in the 24% Federal Bracket.  If single, your first RMD may land you in the 24% Federal Bracket above the IRMAA tier 1.
 0. Your remainder estate is going to charity (not people).  Charities pay zero tax regardless of the income source. If you can stomach the RMD forced income, it may not be necessary to bother with conversions.
 0. You plan to take advantage of QCDs (Qualified Chraritable Deductions) after 70.5 years of age. QCDs satisfy RMD requirements, and do not count against your MAGI so can be used to avoid IRMAA penalties.
 0. You already have a healthy mix of assets (e.g. 60% IRA/401K, 30% Roth, 10% or higher Cash/CDs/Bonds in taxable).
-0. You have to pay conversion taxes solely from the IRA withdrawals. This is not the bad thing the pundits claim it is.
-0. You plan to make relatively large annual withdrawals.  For example, assume you're 59 now and your IRA balance is 1M. It grows at a steady 8% annually. In 3 years you start taking 70K (adjusted for inflation, so actually 77k), at age 75 your RMD will be less than your planned annual withdrawal and remain so to age 99. This is "living on the edge", because any other income may push you into higher taxes and/or IRMAA penalties, but it may well be a scenario where conversions does not gain anything (financially). 
+0. You have to pay conversion taxes solely from the IRA withdrawals. This is not the bad thing the pundits claim it is. In fact, an IRA withdrawal and a Roth conversion have the same tax consequence - so if one is advisable, so is the other.
+0. You plan to make relatively large annual withdrawals. For example, assume you're 59 now and your IRA balance is 1M. It grows at a steady 8% annually. In 3 years you start taking 70K (adjusted for inflation, so actually 77k), at age 75 your RMD will be less than your planned annual withdrawal and remain so to age 99. This is "living on the edge", because any other income may push you into higher taxes and/or IRMAA penalties, but it is a scenario where conversions does not gain anything (financially). 
 
 
 Here are some of the harms of having or accruing a large IRA/401K:
 
-1. Growth in or size of the IRA/401K balance reaches a point where you end up in a higher tax bracket after RMDs start. This in ITSELF is not the problem. Yes, moving from the 12% to 22% Federal bracket sounds painful, but if it's only the last $1000 being taxed at the higher rate very little is being added.
+1. Growth in or size of the IRA/401K balance reaches a point where you end up in a higher tax bracket after RMDs start. This in ITSELF is not the problem. Yes, moving from the 12% to 22% Federal bracket sounds painful, but if it's only the last $1000 being taxed at the higher rate very little ($100) is being added to the tax burden.
 2. RMDs cause you to have little to no room for managing your desired spend (i.e. avoiding IRMAA and/or NIIT) - if you don't plan to invoke QCDs. But remember, higher brackets are "bumps" not cliffs.
-3. If the bulk of your assets remain in an IRA/401K, any large extra expenditure may cause a corresponding hit to your taxation (think remodeling, buying a new car, repairing a roof, or buying a vacation home).
+3. If the bulk of your assets remain in an IRA/401K, any large extra expenditure may cause a corresponding hit to your taxation (think remodeling, buying a new car, repairing a roof, or embarking on a lavish vacation).
 4. Tax rates could go up significantly in the future (I argue they will go up!).
 5. Social security bottoms out in 2033 (as it is on track to do), and you have to withdraw more to cover the loss of Social Security funds to maintain your style of living ... increasing your taxation.
 6. Your spouse passes away. Now you're in a single tax bracket paying 30% more taxes for the same income (unless you remarry).
@@ -998,7 +997,7 @@ Your **Cash Reserve** is a protective buffer, but it can be drawn down if spendi
 2. If Cash runs out, liquidate from **Brokerage** (triggers capital gains tax)
 3. If Brokerage is exhausted, withdraw from **Roth** accounts (tax-free, but reduces future growth)
 4. If Roth is exhausted, take forced **IRA withdrawals** (ordinary income tax). **ACA Cliff** will not cross its income cap while that cap is in force, but other strategies will dip into the IRA to meet spend.
-5. Only if all else fails, the tool dips into your hidden **Cash Reserve buffer** as a true last resort
+5. Only if all else fails, the tool dips into your **Cash Reserve buffer** as a last resort
 
 When the reserve is breached, it's flagged internally so you can see in logs that this happened.
 
@@ -1247,7 +1246,7 @@ D. Document any missing taxation related issues in priority order in "MissingFea
 
 E. Identify any architectural issues/problems and document them in "ARCHITECTUREIssues.md" including missing test cases, useless/orphaned test cases and organizational issues (duplication of code rather than reuse). Also note any hard coded conditions or constants that are likely to change when there are changes in the tax laws of the federal or state(s) supported.
 
-F. Identify any usability issues that may apply to the current implementation in a large browser window, and or using a smaller real-estate device (like a tablet or smart phone). Summarize usability findings in "UsabilityFlaws.md"
+F. Identify any usability issues that may apply to the current implementation in a large browser window, and or using a smaller screen-size device (like a tablet or smart phone). Summarize usability findings in "UsabilityFlaws.md"
 
 Provide a two paragraph standalone summary of the top 5 most important issues/flaws/problems from among the findings. Save this summary in "IssueSummary.md"
 

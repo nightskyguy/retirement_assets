@@ -154,6 +154,10 @@ ordinary,totalIncome,agi,magi,fedTax,stateTax,irmaa,totalTax,effRate,fedMarginal
 92000,116000,112400,112400,14620.68,4554.29,0,19174.97,0.165301,0.2332,0.093
 ```
 
+The same line is on the page without a link: under the details panel at the bottom of the chart, the
+**Result for a spreadsheet** row shows it for the pinned income, with **Copy**, **Copy with names** and
+**Copy all fields** buttons.
+
 **Which income it calculates at.** The pinned `pi` if the link has one, otherwise the ordinary income
 entered under Income details (`wg` + `it` + `nd` + `sg` + `ri` + `ot`). In the example that is
 60000 + 2000 + 30000 = 92000. Use `pi` to calculate at a different ordinary income than the one

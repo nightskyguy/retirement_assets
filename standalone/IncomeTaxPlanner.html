@@ -149,6 +149,9 @@
   .ret-banner[hidden] { display:none; }
   .ret-title { display:flex; justify-content:space-between; align-items:center; gap:.6rem; font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--teal); margin-bottom:.35rem; }
   .ret-banner pre { font-family:var(--mono); font-size:12px; color:var(--text); white-space:pre-wrap; word-break:break-all; user-select:all; }
+  .info-result { margin-top:.6rem; padding-top:.45rem; border-top:1px solid var(--border); }
+  .info-result-head { display:flex; justify-content:space-between; align-items:center; gap:.6rem; flex-wrap:wrap; margin-bottom:.3rem; }
+  .info-result code { display:block; font-family:var(--mono); font-size:10px; color:var(--muted); word-break:break-all; user-select:all; }
   .info-note { font-family:var(--mono); font-size:9px; color:var(--muted); margin-top:3px; line-height:1.5; }
   .info-total .ir-val { color:var(--red); font-weight:500; }
   .info-total .ir-pct { color:var(--red); }
@@ -1334,6 +1337,7 @@ function updateInfoPanel(d) {
   const cgEffRate = d.cgGain > 0
     ? ` (${((d.fedCGTax + d.niit) / d.cgGain * 100).toFixed(1)}% on gain, incl NIIT)` : '';
 
+  const res = buildResult({ names: RESULT_DEFAULT, header: false, P: d.ordInc });
   document.getElementById('info-panel').innerHTML = `
     <div class="info-header">
       <span><span class="ih-lbl">Total income: </span><span class="ih-val">${$v(d.ordInc + cfg.ssIncome + d.cgGain)}</span></span>
@@ -1375,6 +1379,13 @@ function updateInfoPanel(d) {
         <div class="info-row future"><span class="ir-lbl vis">${cfg.year + IRMAA_AHEAD} IRMAA${infoIcon(IRMAA_FUTURE_TIP, true)}</span><span><span class="ir-val">${$v(d.IRMAAFuture)}</span><span class="ir-pct">${pp(d.IRMAAFuture,totalInc)}</span></span></div>
         <div class="info-row info-net"><span class="ir-lbl">Net Income</span><span><span class="ir-val">${$v(totalInc - d.totalTax)}</span><span class="ir-pct">${pp(totalInc - d.totalTax,totalInc)}</span></span></div>
       </div>
+    </div>
+    <div class="info-result">
+      <div class="info-result-head"><span class="info-col-title" style="border:0;margin:0;padding:0">Result for a spreadsheet${infoIcon('The numbers behind this panel as one comma-separated line, at the ordinary income shown. Paste it into a cell and split it into columns. The field names are listed in the URL guide.', true)}</span>
+        <span><button type="button" class="zoom-btn" onclick="copyResult('values', this, ${d.ordInc})">Copy</button>
+        <button type="button" class="zoom-btn" onclick="copyResult('names', this, ${d.ordInc})">Copy with names</button>
+        <button type="button" class="zoom-btn" onclick="copyResult('all', this, ${d.ordInc})">Copy all fields</button></span></div>
+      <code>${res.csv}</code>
     </div>`;
 }
 
@@ -1764,14 +1775,14 @@ function resultFor(P) {
 
 // { fields, values, csv } for the current inputs. A name the page does not know comes back as a
 // single "ERROR: ..." token rather than as a column of zeros, so a typo cannot pass as a result.
-function buildResult() {
-  const spec = RETURN_SPEC ?? { names: RESULT_DEFAULT, header: false };
+function buildResult(over = null) {
+  const spec = over ?? RETURN_SPEC ?? { names: RESULT_DEFAULT, header: false };
   const bad = spec.names.filter(n => !(n in RESULT_FIELDS));
   if (bad.length) {
     const msg = 'ERROR: unknown field ' + bad.join(' ');
     return { fields: [], values: [], csv: msg };
   }
-  const P = pinnedIncome ?? cfg.entOrdinary;
+  const P = over?.P ?? pinnedIncome ?? cfg.entOrdinary;
   const c = resultFor(P);
   const values = spec.names.map(n => {
     const v = RESULT_FIELDS[n](c);
@@ -1789,6 +1800,14 @@ function renderReturn() {
   document.getElementById('ret-for').textContent = r.fields.length
     ? `at ordinary income ${fmtMoney(pinnedIncome ?? cfg.entOrdinary)}` : '';
   document.getElementById('ret-banner').hidden = false;
+}
+
+// The Copy buttons under the info panel: the default fields as a line of numbers, the same with the
+// names above it, or every field with names. `P` is the ordinary income the panel is showing.
+function copyResult(kind, btn, P) {
+  const r = buildResult({ names: kind === 'all' ? Object.keys(RESULT_FIELDS) : RESULT_DEFAULT, header: kind !== 'values', P });
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(r.csv).catch(() => {});
+  if (btn) { const was = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = was; }, 1200); }
 }
 
 function copyReturn() {

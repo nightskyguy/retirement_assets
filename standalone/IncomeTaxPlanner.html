@@ -318,14 +318,14 @@
     </div>
 
     <div class="ctrl">
-      <div class="ctrl-hdr"><label>Medicare cost growth<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Not a setting. Medicare premiums and IRMAA surcharges follow a published path shared with the other tools here: it starts near 6.6% a year, the rate the Medicare Trustees project through 2035, and eases toward 3.8%, their long-run assumption. Premium growth has no measurable relationship to inflation, so there is nothing to tie it to.</span></span></label><span class="val" id="med-val"></span></div>
+      <div class="ctrl-hdr"><label>Medicare cost growth<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Medicare premiums and IRMAA surcharges follow a published path shared with the other tools here: it starts near 6.6% a year, the rate the Medicare Trustees project through 2035, and eases toward 3.8%, their long-run assumption.</span></span></label><span class="val" id="med-val"></span></div>
     </div>
 
     <div class="ctrl">
-      <div class="ctrl-hdr"><label id="pm-label">MAGI two years earlier (optional)</label><span class="val" id="pm-val"></span></div>
+      <div class="ctrl-hdr"><label id="pm-label">MAGI from two years earlier (optional)</label><span class="val" id="pm-val"></span></div>
       <input type="text" id="num-prevmagi" value="" autocomplete="off" placeholder="blank = leave out"
              oninput="run()" onchange="fmtPrevMagi()">
-      <div class="note">Medicare charges this year's IRMAA from the MAGI of two years back. Enter it and this year's taxes include that charge. Leave it blank and they include none.</div>
+      <div class="note">Medicare charges this year's IRMAA from the MAGI of two years back. Enter the prior MAGI and this year's taxes include that charge. If left blank, this years IRMAA is not calculated.</div>
     </div>
 
     <hr class="divider">
@@ -1393,7 +1393,7 @@ function updateInfoPanel(d) {
       </div>
     </div>
     <div class="info-result">
-      <div class="info-result-head"><span class="info-col-title" style="border:0;margin:0;padding:0">Result for a spreadsheet${infoIcon('The numbers behind this panel as comma-separated lines, with their field names, at the ordinary income shown. Paste into a cell and split into columns. Copy all fields adds every other result and the inputs they came from. The fields are listed in the <a href="https://tools.netcitizen.us/UsageGuide.html" target="_blank" rel="noopener">URL guide</a>.', true)}</span>
+      <div class="info-result-head"><span class="info-col-title" style="border:0;margin:0;padding:0">Result for a spreadsheet${infoIcon('The result of the calculation can be copied for pasting into a spreadsheet or notes. "Copy" copies all field names and the calculated numbers. "Copy all fields" includes both the inputs and the calculated results. The fields are listed in the <a href="https://tools.netcitizen.us/UsageGuide.html" target="_blank" rel="noopener">URL guide</a>.', true)}</span>
         <span><button type="button" class="zoom-btn" onclick="copyResult('names', this, ${d.ordInc})">Copy</button>
         <button type="button" class="zoom-btn" onclick="copyResult('all', this, ${d.ordInc})">Copy all fields</button></span></div>
       <code>${res.csv}</code>

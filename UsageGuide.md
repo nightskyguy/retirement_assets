@@ -77,7 +77,7 @@ with a teal dotted line, and it is the income a `return` link calculates at when
 
 | Name | Meaning |
 |---|---|
-| `return` | Show the result as a line of comma-separated numbers. See [Getting a result](#getting-a-result-with-return). |
+| `return` (or `result`) | Show the result as a line of comma-separated numbers, and copy it to the clipboard. See [Getting a result](#getting-a-result-with-return). |
 | `header` | With `return`, set to `1` to put the field names on a first line |
 
 ### Old parameters
@@ -142,21 +142,23 @@ Tips:
 
 ## Getting a result with `return`
 
-Add `return` and the page calculates at one ordinary income and shows the answer in a box at the top
-of the page, with a **Copy** button:
+Add `return` (or `result`, which means the same) and the page calculates at one ordinary income and
+shows the answer in a box at the top of the page, with a **Copy** button. It also copies the answer to
+the clipboard by itself, as if you had pressed Copy. Many browsers refuse a copy that no click asked
+for, and the box then says "Not copied: press Copy", so do not rely on the clipboard being filled.
 
 ```
 ?st=SGL&s=CA&a1=65&yr=2026&wg=60000&it=2000&ri=30000&ss=24000&return&header=1
 ```
 
 ```
-ordinary,totalIncome,agi,magi,fedTax,stateTax,irmaa,totalTax,effRate,fedMarginal,stateMarginal
-92000,116000,112400,112400,14620.68,4554.29,0,19174.97,0.165301,0.2332,0.093
+ordinary,totalIncome,agi,magi,fedTax,stateTax,irmaa,irmaaFuture,totalTax,effRate,fedMarginal,stateMarginal
+92000,116000,112400,112400,14620.68,4554.29,0,0,19174.97,0.165301,0.2332,0.093
 ```
 
-The same line is on the page without a link: under the details panel at the bottom of the chart, the
-**Result for a spreadsheet** row shows it for the pinned income. **Copy** puts the default fields on the
-clipboard with their names on a first line. **Copy all fields** adds every other result and the inputs
+The same result is on the page without a link: under the details panel at the bottom of the chart, the
+**Result for a spreadsheet** row has two buttons that copy it for the pinned income. **Copy** puts the
+default fields on the clipboard with their names on a first line. **Copy all fields** adds every other result and the inputs
 the result was calculated from. Both carry names because the set of fields may change over time, and a
 bare line of numbers would not say which is which.
 

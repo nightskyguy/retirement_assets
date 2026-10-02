@@ -136,6 +136,8 @@
   .info-ic.tip-r .tip { left:auto; right:-8px; }
   .info-ic:hover .tip, .info-ic.open .tip, .info-ic:focus .tip { display:block; }
   details.modal-section > summary { font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--muted); text-transform:uppercase; cursor:pointer; margin-bottom:.5rem; }
+  .modal-kv dd ul { padding-left:1.1rem; }
+  .modal-kv dd li { margin-bottom:.2rem; }
   details.modal-section > summary:hover { color:var(--teal); }
   details.details { border:1px solid var(--border); border-radius:6px; padding:.45rem .6rem; background:var(--surf2); }
   details.details > summary { cursor:pointer; font-family:var(--mono); font-size:11px; color:var(--muted); display:flex; align-items:baseline; gap:.5rem; list-style:none; }
@@ -150,6 +152,7 @@
   .det-row label { font-family:var(--mono); font-size:10px; color:var(--muted); line-height:1.3; }
   .det-row input { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:4px; color:var(--text); font-family:var(--mono); font-size:11px; padding:3px 6px; text-align:right; }
   .det-row input:focus { border-color:var(--teal); outline:none; }
+  .det-check[hidden] { display:none; }
   .det-check { display:flex; align-items:center; gap:.4rem; margin:3px 0; font-family:var(--mono); font-size:10px; color:var(--muted); cursor:pointer; }
   .det-sum { display:flex; justify-content:space-between; align-items:center; margin-top:.4rem; padding-top:.35rem; border-top:1px solid var(--border); font-family:var(--mono); font-size:10px; color:var(--muted); }
   .det-sum b { color:var(--text); font-weight:500; margin-left:.3rem; }
@@ -159,7 +162,6 @@
   .ret-banner pre { font-family:var(--mono); font-size:12px; color:var(--text); white-space:pre-wrap; word-break:break-all; user-select:all; }
   .info-result { margin-top:.6rem; padding-top:.45rem; border-top:1px solid var(--border); }
   .info-result-head { display:flex; justify-content:space-between; align-items:center; gap:.6rem; flex-wrap:wrap; margin-bottom:.3rem; }
-  .info-result code { display:block; font-family:var(--mono); font-size:10px; color:var(--muted); word-break:break-all; user-select:all; }
   .info-note { font-family:var(--mono); font-size:9px; color:var(--muted); margin-top:3px; line-height:1.5; }
   .info-total .ir-val { color:var(--red); font-weight:500; }
   .info-total .ir-pct { color:var(--red); }
@@ -227,7 +229,7 @@
 </header>
 
 <div class="ret-banner" id="ret-banner" hidden>
-  <div class="ret-title"><span>Result <span id="ret-for"></span></span>
+  <div class="ret-title"><span>Result <span id="ret-for"></span> <span id="ret-status" style="color:var(--muted)"></span></span>
     <span><button type="button" class="hdr-btn" onclick="copyReturn()">Copy</button>
     <button type="button" class="hdr-btn" onclick="document.getElementById('ret-banner').hidden=true">Hide</button></span></div>
   <pre id="ret-csv"></pre>
@@ -278,7 +280,7 @@
       <div class="det-row"><label for="num-ndiv">Non-qualified dividends</label><input type="text" id="num-ndiv" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
       <div class="det-row"><label for="num-stcg">Short-term capital gains<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">A short-term loss (negative) is netted against your long-term gain. A net capital loss offsets ordinary income by $3,000 a year at most; the rest carries forward and is ignored here.</span></span></label><input type="text" id="num-stcg" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
       <div class="det-row"><label for="num-retinc">IRA, 401k or pension withdrawals</label><input type="text" id="num-retinc" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
-      <label class="det-check"><input type="checkbox" id="chk-retinc-swept" onchange="run()">Extra income I sweep is also IRA/401k<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Used only by states that exempt retirement income (for example IL and PA), which are few. When checked, ordinary income above what you entered here is treated as IRA/401k distributions or conversions.</span></span></label>
+      <label class="det-check" id="det-swept-row"><input type="checkbox" id="chk-retinc-swept" onchange="run()">Extra income I sweep is also IRA/401k<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Used only by states that exempt retirement income (for example IL and PA), which are few. When checked, ordinary income above what you entered here is treated as IRA/401k distributions or conversions.</span></span></label>
       <div class="det-row"><label for="num-other">Other ordinary income<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Anything else taxed at regular rates. A loss can be entered as a negative number.</span></span></label><input type="text" id="num-other" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
       <div class="det-sum"><span>Ordinary income entered <b id="det-ord">$0</b></span><button type="button" class="zoom-btn" id="btn-pin-entered" onclick="pinAtEntered()" title="Pin the chart at the ordinary income you entered above">Pin here</button></div>
       <div class="det-head">Taxed at capital-gains rates</div>
@@ -520,6 +522,9 @@ function deriveIncome() {
 // The Income details heading and note: the ordinary total, and anything the page did to an entry.
 function updDetails() {
   const $ = id => document.getElementById(id);
+  // "Extra income I sweep is also IRA/401k" only does anything in a state that exempts retirement
+  // income, so it is shown only for those.
+  $('det-swept-row').hidden = !TAXData[cfg.state]?.RETIREMENT_EXCLUSION;
   $('det-ord').textContent = fmtMoney(cfg.entOrdinary);
   $('det-sum').textContent = cfg.entOrdinary !== 0 ? `ordinary ${fmtK(cfg.entOrdinary)}` : '';
   const notes = [];
@@ -1327,10 +1332,9 @@ function irmaaPanelRows(magi) {
   const y  = cfg.year + IRMAA_AHEAD;
   const ir = irmaaAt(magi);
   const row = (l, v) => `<div class="info-row future"><span class="ir-lbl">${l}</span><span class="ir-val">${v}</span></div>`;
-  const rows = [row(`${y} IRMAA tier`, ir.tier ? `Tier ${ir.tier} of ${irmaaTiers().length} &middot; ${$v(ir.annual)}/yr` : 'none')];
+  const rows = [row(`${y} IRMAA ${ir.tier ? 'Tier ' + ir.tier : 'none'}`, ir.tier ? `${$v(ir.annual)}/yr` : '')];
   if (ir.next) {
     rows.push(row(ir.tier ? `Tier ${ir.next.n} starts at MAGI` : 'IRMAA starts at MAGI', $v(Math.ceil(ir.next.at))));
-    rows.push(row('MAGI room before it', $v(Math.max(0, Math.floor(ir.next.at - magi - 1)))));
     rows.push(row('Crossing it adds', `+${$v(ir.next.cliff)}/yr`));
   } else {
     rows.push(row('Top tier', 'no higher tier'));
@@ -1349,7 +1353,6 @@ function updateInfoPanel(d) {
   const cgEffRate = d.cgGain > 0
     ? ` (${((d.fedCGTax + d.niit) / d.cgGain * 100).toFixed(1)}% on gain, incl NIIT)` : '';
 
-  const res = buildResult({ names: RESULT_DEFAULT, header: false, P: d.ordInc });
   document.getElementById('info-panel').innerHTML = `
     <div class="info-header">
       <span><span class="ih-lbl">Total income: </span><span class="ih-val">${$v(d.ordInc + cfg.ssIncome + d.cgGain)}</span></span>
@@ -1394,9 +1397,8 @@ function updateInfoPanel(d) {
     </div>
     <div class="info-result">
       <div class="info-result-head"><span class="info-col-title" style="border:0;margin:0;padding:0">Result for a spreadsheet${infoIcon('The result of the calculation can be copied for pasting into a spreadsheet or notes. "Copy" copies all field names and the calculated numbers. "Copy all fields" includes both the inputs and the calculated results. The fields are listed in the <a href="https://tools.netcitizen.us/UsageGuide.html" target="_blank" rel="noopener">URL guide</a>.', true)}</span>
-        <span><button type="button" class="zoom-btn" onclick="copyResult('names', this, ${d.ordInc})">Copy</button>
-        <button type="button" class="zoom-btn" onclick="copyResult('all', this, ${d.ordInc})">Copy all fields</button></span></div>
-      <code>${res.csv}</code>
+        <span><button type="button" class="zoom-btn" onclick="copyResult('names', this, ${d.ordInc})" title="Copies the main results at this ordinary income, with their field names on the first line, ready to paste into a spreadsheet or notes.">Copy</button>
+        <button type="button" class="zoom-btn" onclick="copyResult('all', this, ${d.ordInc})" title="Copies every result field AND the inputs they were calculated from, with names on the first line, ready to paste into a spreadsheet or notes.">Copy all fields</button></span></div>
     </div>`;
 }
 
@@ -1733,7 +1735,7 @@ function populateStateDropdown() {
 // spreadsheet can build the link from its own cells and the person can paste the result back. The
 // field names and their meaning are documented in UsageGuide.md; keep the two together.
 const RESULT_DEFAULT = ['ordinary', 'totalIncome', 'agi', 'magi', 'fedTax', 'stateTax', 'irmaa',
-                        'totalTax', 'effRate', 'fedMarginal', 'stateMarginal'];
+                        'irmaaFuture', 'totalTax', 'effRate', 'fedMarginal', 'stateMarginal'];
 const RESULT_RATES   = new Set(['effRate', 'allInRate', 'fedMarginal', 'stateMarginal', 'cgRate']);
 const RESULT_FIELDS = {
   ordinary:        c => c.P,
@@ -1787,8 +1789,9 @@ const ALL_NAMES  = [...Object.keys(RESULT_FIELDS), ...Object.keys(INPUT_FIELDS)]
 // set, `all` is every field, and anything else is a comma list of field names.
 const RETURN_SPEC = (() => {
   const p = new URLSearchParams(window.location.search);
-  if (!p.has('return')) return null;
-  const raw = p.get('return').trim();
+  const key = p.has('return') ? 'return' : p.has('result') ? 'result' : null;   // `result` is accepted as a synonym
+  if (!key) return null;
+  const raw = p.get(key).trim();
   const names = (raw === '' || raw === '1' || raw === 'true') ? RESULT_DEFAULT
               : raw === 'all' ? ALL_NAMES
               : raw.split(',').map(x => x.trim()).filter(Boolean);
@@ -1840,15 +1843,34 @@ function renderReturn() {
 // income the panel is showing.
 function copyResult(kind, btn, P) {
   const r = buildResult({ names: kind === 'all' ? ALL_NAMES : RESULT_DEFAULT, header: true, P });
-  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(r.csv).catch(() => {});
-  if (btn) { const was = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = was; }, 1200); }
+  copyText(r.csv).then(ok => {
+    if (!btn) return;
+    const was = btn.textContent;
+    btn.textContent = ok ? 'Copied' : 'Not copied';
+    setTimeout(() => { btn.textContent = was; }, 1200);
+  });
 }
 
-function copyReturn() {
-  const text = document.getElementById('ret-csv').textContent;
-  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).catch(() => {});
-  const sel = window.getSelection(), range = document.createRange();   // also select it, for a manual copy
-  range.selectNodeContents(document.getElementById('ret-csv'));
+// Puts text on the clipboard and says whether it worked. A browser may refuse a copy that no click
+// asked for (most do, on load), so the caller reports the outcome rather than assuming it.
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* fall through */ }
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  ta.remove();
+  return ok;
+}
+
+// Copy in the result box: exactly the text shown there, and it stays selected for a manual copy.
+async function copyReturn() {
+  const el = document.getElementById('ret-csv');
+  const ok = await copyText(el.textContent);
+  document.getElementById('ret-status').textContent = ok ? 'Copied to the clipboard' : 'Not copied: press Copy';
+  const sel = window.getSelection(), range = document.createRange();
+  range.selectNodeContents(el);
   sel.removeAllRanges(); sel.addRange(range);
 }
 
@@ -1864,6 +1886,7 @@ if (RETURN_SPEC && pinnedIncome === null) pinnedIncome = cfg.entOrdinary;   // s
 updateZoomUI();
 run();           // run() paints the info panel for a URL-restored pin
 initInfoPanel();
+if (RETURN_SPEC && !LINK_ERRORS.length) copyReturn();   // a return link copies its result, as if Copy had been pressed
 
 // Attach numeric formatting to dollar inputs (after init so URL-loaded values are formatted)
 ['num-ss', 'num-cg-sale'].forEach(id => {
@@ -2105,7 +2128,14 @@ function loadFromURL() {
       <summary>Change Log</summary>
       <dl class="modal-kv">
         <dt>v2.9</dt>
-        <dd>IRMAA tier lines carry the MAGI thresholds that will apply 2 years from now. This year's taxes include the IRMAA you owe now when you enter your MAGI from two years earlier, shown as its own purple bar, and the projected IRMAA two years out is shown separately, in purple, below Total Tax. Pin an income to see its IRMAA tier, the surcharge, the MAGI room before the next tier, and what crossing it adds. The summary states the ordinary income where IRMAA starts. The View is set in total income and can start below the income you entered (double-click its label to jump to $0 through $50k above your total, and again for sliders that reach negative values), ordinary income can be negative (a business loss, for example), and a dotted line marks where ordinary income is zero. Total Effective is income taxes only, and a separate purple line adds this year's IRMAA where that is meaningful. New Income details lets you spell out ordinary income, qualified dividends and property taxes, and all of it is in the Share link. Adding <code>return</code> to a link shows one result as comma-separated numbers, for spreadsheets; the URL guide lists every parameter.</dd>
+        <dd><ul>
+          <li>IRMAA tier lines carry the MAGI thresholds that will apply 2 years from now.</li>
+          <li>Enter your MAGI from two years earlier and this year's taxes include that IRMAA, as its own purple bar. The IRMAA this income causes two years out is shown below Total Tax.</li>
+          <li>The View is set in total income and can start below your entered income. Ordinary income can be negative, and a dotted line marks where it is $0. Double-click the View or Ordinary label to let the sliders reach negative values.</li>
+          <li>Total Effective is income taxes only. A purple line adds this year's IRMAA where that is meaningful.</li>
+          <li>Income details: ordinary income by type, qualified dividends, and property and local taxes. All of it is in the Share link.</li>
+          <li>The Result for a spreadsheet row copies the results. Adding <code>return</code> to a link shows the same result and copies it. The <a href="https://tools.netcitizen.us/UsageGuide.html" target="_blank" rel="noopener">URL guide</a> lists every parameter.</li>
+        </ul></dd>
         <dt>v2.8</dt>
         <dd>Medicare growth is modeled based on trustee guidance and is not adjustable.</dd>
         <dt>v2.5</dt>

@@ -84,7 +84,9 @@ in a browser and returns text to a formula.
 - **Abuse and limits:** the calculation is cheap. Cloudflare's free tier allows a large number of Worker
   requests a day. A per-address rate limit is optional but worth a line of configuration.
 
-### C. Google Sheets custom function (no link, no web call)
+### C. Google Sheets custom function (no link, no web call) - REJECTED
+
+Decision 2026-10-02: Excel and Google Sheets will not be supported. Kept here for the record.
 
 An Apps Script function, for example `=TAXCALC("SGL","TX",2026,60000,24000)`, that contains the tax
 engine and calculates inside the sheet.
@@ -98,7 +100,9 @@ engine and calculates inside the sheet.
   call a web address with `UrlFetchApp`, so a Sheets function could instead call option B. (Both facts
   are from memory of the Apps Script documentation and should be checked before building.)
 
-### D. Excel add-in with JavaScript custom functions
+### D. Excel add-in with JavaScript custom functions - REJECTED
+
+Decision 2026-10-02: as for C. Kept here for the record.
 
 Office Add-ins can define custom worksheet functions in JavaScript, which would run the engine inside
 Excel on Windows, Mac and the web, with no server.
@@ -106,6 +110,34 @@ Excel on Windows, Mac and the web, with no server.
 - **Work:** a manifest, hosting for the add-in files, and each user installing it. The heaviest option.
 - **Caveat:** the same copy-of-the-tables maintenance problem as option C.
 - **Verdict:** worth considering only if Excel is the main tool and option B is rejected.
+
+### H. A local node tool (no hosting, nothing leaves the machine)
+
+Decision 2026-10-02: still on the table, and it fits how the author already works (a local Flask server
+for market symbols; LibreOffice Calc for spreadsheets). Two shapes of one small program, built on the
+shared calculation file:
+
+- **Command line:** `node taxcalc.js "st=SGL&s=CA&wg=60000&ss=24000"` prints the comma-separated result,
+  taking the same parameter names as the link, so a link and a command are interchangeable. Useful from
+  a shell script, a cron job or a macro.
+- **Local server:** `node taxcalc.js --serve 8765` listens on `127.0.0.1` only and answers
+  `http://localhost:8765/?st=SGL&s=CA&wg=60000&return=fedTax,stateTax` with `text/plain`. A spreadsheet
+  that can fetch an address can then calculate with it.
+- **LibreOffice Calc** has a `WEBSERVICE()` function (with `ENCODEURL()` and `FILTERXML()` beside it),
+  so a cell can hold `=WEBSERVICE("http://localhost:8765/?...&return=totalTax")`. Asking for one field
+  at a time returns a bare number, which needs no splitting: wrap it in `VALUE()`. (From memory of the
+  LibreOffice documentation: confirm it fetches a `localhost` address in the installed version, and
+  whether a multi-field line is easier to split with a newer release's text functions or with
+  **Data, Text to Columns**.)
+- **Privacy:** the figures go only to a process on the same machine. No Cloudflare, no logs unless the
+  tool is written to keep them, which it would not be. It would also suit anyone else who runs scripts,
+  since the node tool needs no installation beyond node itself.
+- **Work:** the shared calculation file is the real task (the planner's logic moves out of the page).
+  After that the tool is about 60 lines with no dependencies, using only node's built-in `http`.
+  Tests join the existing suites, including one that the page and the tool return the same line for a
+  set of cases.
+- **Limits:** it runs only where node is installed and the server is started. It is not something to
+  hand to someone who just wants a link.
 
 ### E. Smaller alternatives
 
@@ -124,9 +156,10 @@ Excel on Windows, Mac and the web, with no server.
 |---|---|---|---|---|---|---|
 | A. Text-only view | No | no | no | no | small | no |
 | B. Cloudflare Worker | Yes | Windows `WEBSERVICE` | `IMPORTDATA` | yes (yours) | medium | yes, to your Worker |
-| C. Apps Script function | Yes | no | yes | no | medium | stays in the Google account |
-| D. Excel add-in | Yes | yes | no | hosting only | high | no |
-| E. Office Scripts, formulas, CLI | partly | partly | no | no | varies | no |
+| C. Apps Script function (rejected) | Yes | no | yes | no | medium | stays in the Google account |
+| D. Excel add-in (rejected) | Yes | yes | no | hosting only | high | no |
+| E. Office Scripts, formulas | partly | partly | no | no | varies | no |
+| H. Local node tool | Yes, from LibreOffice `WEBSERVICE` or a script | not supported | not supported | no (a local process) | small after the shared file | no, stays on the machine |
 
 ## Privacy
 
@@ -213,21 +246,23 @@ Is there a clean way to do this with open source code? In a browser, yes. In a s
 
 ## Recommendation
 
-1. Do the **shared calculation file** first. It is the prerequisite for B, C, D and a command-line tool,
-   and it also removes the risk of the page and any Worker disagreeing.
-2. Build **B**, the Worker, if formula-driven results are wanted, after checking that the `tools` DNS
-   record is proxied.
-3. Do **A** whenever convenient. It is independent of the rest.
-4. Treat **C** and **D** as follow-ons for whichever spreadsheet people actually use.
-5. Consider **F**, fragment parameters, before B: it is small, and it removes the figures from the host's
-   logs for every user who opens a link, not only for spreadsheet users.
+C and D are rejected, so the spreadsheet question is now about LibreOffice and scripts, and the local node
+tool (H) answers it without sending anything anywhere.
+
+1. Do the **shared calculation file** first. The page, a node tool and any Worker all need it, and it
+   removes the risk of them disagreeing.
+2. Build **H**, the local node tool, on top of it.
+3. Do **F**, fragment parameters, for the pages people open in a browser. It is small, and it removes the
+   figures from the host's logs and from link previews.
+4. Do **A**, the text-only view, whenever convenient. It is independent of the rest.
+5. Leave **B**, the Cloudflare Worker, unbuilt unless someone needs formulas with no local program. It is
+   the only option that sends figures to a server.
 
 ## Decisions needed
 
-- Is a formula-driven result worth sending figures to a Worker you run?
-- Is the `tools` hostname proxied by Cloudflare, or should formulas use a separate `calc` hostname?
-- Which spreadsheet matters most: Excel (and which version, since `WEBSERVICE` is Windows only) or
-  Google Sheets?
+- Build the shared calculation file and the local node tool (H)? Should the server mode ship, or only the
+  command line?
 - Should the output format carry a version, so the field list can grow without breaking old sheets?
 - Should the tools read parameters from the `#` fragment as well as the `?` query, and should Share
   write the `#` form by default?
+- Is a hosted Worker (B) wanted at all now that Excel and Sheets are out of scope?

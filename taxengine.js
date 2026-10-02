@@ -1881,6 +1881,23 @@ function getIRMAATier(magi, status, cpiRate) {
 	return idx === -1 ? (brks[0].tier ?? '-') : (brks[idx].tier ?? '-');
 }
 
+// The five surcharge tiers of TAXData.IRMAA[status], in order, as a list a caller can draw or
+// describe. `-none-` (tier zero, no fee) and the trailing `l: Infinity` terminator are left out:
+// neither is a band someone lands in and pays for. Anything that lists tiers goes through here
+// rather than filtering the raw rows, so a rename of a row field breaks a test and not a chart.
+//
+// `l` is the first dollar of the tier at the table's own dollars, so a caller indexing for a later
+// year multiplies it by the CPI factor, as every lookup in this file does. `annualCost` is the
+// household surcharge in the table's dollars, before any Medicare growth factor.
+function getIRMAATiers(status) {
+	const brks = getRateBracket('IRMAA', status);
+	if (!brks) return [];
+	return brks
+		.filter(b => b.monthlyCost > 0 && Number.isFinite(b.l))
+		.map((b, i) => ({ n: i + 1, tier: b.tier, l: b.l, monthlyCost: b.monthlyCost,
+		                  annualCost: b.monthlyCost * 12 }));
+}
+
 // Returns the CPI-adjusted per-person annual QCD limit.
 //
 // P70d. `cpiFactor` is the CUMULATIVE index factor (sim.cpiRate), the same thing every bracket
@@ -1931,7 +1948,7 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         TAXData, RMD_TABLE, RMD_START_AGE, rmdStartAge, rmdDivisor, getRateBracket,
         findLimitByRate, findUpperLimitByAmount, calculateProgressive,
-        calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATierTargetMAGI,
+        calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATiers, getIRMAATierTargetMAGI,
         getQCDLimit, isQCDEligible,
         calculateTaxableSocialSecurity, nonSSIncomeForMAGI
     };
@@ -1945,7 +1962,7 @@ if (typeof module !== 'undefined' && module.exports) {
     window.TaxEngine = {
         TAXData, RMD_TABLE, RMD_START_AGE, rmdStartAge, rmdDivisor, getRateBracket,
         findLimitByRate, findUpperLimitByAmount, calculateProgressive,
-        calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATierTargetMAGI,
+        calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATiers, getIRMAATierTargetMAGI,
         getQCDLimit, isQCDEligible,
         calculateTaxableSocialSecurity, nonSSIncomeForMAGI
     };

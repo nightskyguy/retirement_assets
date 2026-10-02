@@ -53,6 +53,7 @@ const findLimitByRate = (...a) => _engine().findLimitByRate(...a);
 const findUpperLimitByAmount = (...a) => _engine().findUpperLimitByAmount(...a);
 const calculateProgressive = (...a) => _engine().calculateProgressive(...a);
 const calcIRMAA = (...a) => _engine().calcIRMAA(...a);
+const getIRMAATiers = (...a) => _engine().getIRMAATiers(...a);
 const isQCDEligible = (...a) => _engine().isQCDEligible(...a);
 const rmdStartAge = (...a) => _engine().rmdStartAge(...a);
 const rmdDivisor = (...a) => _engine().rmdDivisor(...a);
@@ -1374,6 +1375,25 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 			// Callers that aim at a ceiling must cope with Infinity rather than assume a number.
 			assertEqual(brks[surcharge.length + 1].l, Infinity,
 				`${status}: the ceiling of the top tier is Infinity, which is the thing to handle`);
+		}
+	});
+
+	test('TEST CASE 25d: getIRMAATiers lists the five paying tiers and nothing else', () => {
+		// The Income Tax Planner draws one reference line per entry. Each tier must carry a floor
+		// and an annual dollar figure; a row that lost either would draw nothing, or draw at NaN.
+		for (const status of ['MFJ', 'SGL']) {
+			const brks = getRateBracket('IRMAA', status);
+			const tiers = getIRMAATiers(status);
+			assertEqual(tiers.length, 5, `${status}: five paying tiers, with no-surcharge and the terminator left out`);
+			tiers.forEach((t, i) => {
+				assertEqual(t.n, i + 1, `${status}: tiers are numbered 1 to 5`);
+				assertEqual(t.tier, `Tier ${i + 1}`, `${status}: tier ${i + 1} carries the table's own label`);
+				assertEqual(t.l, brks[i + 1].l, `${status}: tier ${i + 1} starts at the table's floor`);
+				assertEqual(t.annualCost, brks[i + 1].monthlyCost * 12, `${status}: tier ${i + 1} annual cost is twelve months`);
+				assertEqual(Number.isFinite(t.l) && t.annualCost > 0, true, `${status}: tier ${i + 1} has a floor and a charge`);
+			});
+			assertEqual(tiers[0].l, brks[0].l + 1, `${status}: tier 1 starts a dollar above the no-surcharge ceiling`);
+			assertEqual(tiers.map(t => t.l).every((l, i, a) => i === 0 || l > a[i - 1]), true, `${status}: floors ascend`);
 		}
 	});
 

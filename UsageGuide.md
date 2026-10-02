@@ -26,7 +26,7 @@ Rates and percentages are plain numbers too (`2.5` means 2.5%).
 | Name | Meaning | Values and default |
 |---|---|---|
 | `st` | Filing status | `MFJ` (married filing jointly, the default) or `SGL` (single) |
-| `s` | State | Two-letter code, default `CA`. See [state codes](#state-codes). |
+| `s` | State | Two-letter code in any case, default `CA`. See [state codes](#state-codes). A code the page does not have is reported as an error and never replaced by a default state. |
 | `a1`, `a2` | Ages of the two taxpayers | Whole years, default 65 and 65. `a2` is ignored for `SGL`. An age of 65 or more brings the larger standard deduction and the OBBBA senior deduction. |
 | `yr` | Tax year to show | 2026 to 2035, default 2026. Brackets and thresholds are inflated from 2026. |
 | `in` | Annual bracket inflation, in percent | 0.5 to 6 in steps of 0.5, default 2.5 |
@@ -155,8 +155,10 @@ ordinary,totalIncome,agi,magi,fedTax,stateTax,irmaa,totalTax,effRate,fedMarginal
 ```
 
 The same line is on the page without a link: under the details panel at the bottom of the chart, the
-**Result for a spreadsheet** row shows it for the pinned income, with **Copy**, **Copy with names** and
-**Copy all fields** buttons.
+**Result for a spreadsheet** row shows it for the pinned income. **Copy** puts the default fields on the
+clipboard with their names on a first line. **Copy all fields** adds every other result and the inputs
+the result was calculated from. Both carry names because the set of fields may change over time, and a
+bare line of numbers would not say which is which.
 
 **Which income it calculates at.** The pinned `pi` if the link has one, otherwise the ordinary income
 entered under Income details (`wg` + `it` + `nd` + `sg` + `ri` + `ot`). In the example that is
@@ -164,7 +166,8 @@ entered under Income details (`wg` + `it` + `nd` + `sg` + `ri` + `ot`). In the e
 entered.
 
 **Which fields.** `return` by itself (or `return=1`) gives the default set shown above. `return=all`
-gives every field. A comma list picks exactly the ones you want, in the order you give:
+gives every result field and then every input it was calculated from. A comma list picks exactly the
+ones you want, in the order you give, and can mix results with inputs:
 
 ```
 ?st=SGL&s=CA&wg=60000&return=fedTax,stateTax,totalTax
@@ -205,6 +208,11 @@ Dollar amounts are for the whole year, in the dollars of `yr`, rounded to cents.
 | `irmaaFuture` | The IRMAA this income will cause two years from `yr` |
 | `irmaaFutureTier` | Its tier, 0 to 5 |
 
+**Input fields.** `return=all`, and any comma list, can also name the inputs, spelled as in the link:
+`st`, `s`, `a1`, `a2`, `yr`, `in`, `ss`, `cs`, `cb`, `pm`, `wg`, `it`, `nd`, `sg`, `ri`, `ot`, `qd`, `pt`
+and `rw`. `st` and `s` come back as text (`SGL`, `TX`). `a2` is blank for a single filer and `pm` is
+blank when it was not entered. A result can then say what it was a result of.
+
 ### What a spreadsheet can do with it
 
 You open the link, copy the line, paste it into a cell, and split it into columns (**Data, Text to
@@ -223,6 +231,12 @@ For scripts that drive a real browser, the page exposes `window.taxResult()`, wh
 
 ## Before you share a link
 
-The calculation runs in your browser. But a link carries your figures in plain text, so they are in
-your browser history and in anything you paste the link into, including the spreadsheet and any
-email or chat. If you do not want amounts in an address at all, type them into the page instead.
+The calculation runs in your browser. A link carries your figures in plain text, so they are in your
+browser history and in anything you paste the link into, including the spreadsheet and any email or
+chat.
+
+The page tells Google Analytics only its own address and the state, not the rest of the query, and it
+sends other sites only the site's address as the referrer. The Cloudflare page counter reads the full
+address and cannot be given a shorter one, so the page does not load it when the address carries
+anything besides the state. If you do not want amounts in an address at all, type them into the page
+instead.

@@ -6,8 +6,15 @@
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-  gtag('config', 'G-DJ1KD88H79');
+  // The page address WITHOUT its figures. A link carries the whole scenario in its query, and Google
+  // Analytics records the full address with every page view unless told otherwise. Only the state is
+  // kept, which is not a figure and is what is worth counting.
+  var _st = (new URLSearchParams(location.search).get('s') || '').toUpperCase();
+  gtag('config', 'G-DJ1KD88H79', { page_location: location.origin + location.pathname + (/^[A-Z]{2}$/.test(_st) ? '?s=' + _st : '') });
 </script>
+<!-- Requests and links from this page carry only the site's origin as the referrer, never the page
+     address, which holds the scenario in its query. -->
+<meta name="referrer" content="strict-origin">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Income Tax Planner · 2026+ · v2.9</title>
@@ -124,7 +131,8 @@
   .info-row.future, .info-row.future .ir-lbl, .info-row.future .ir-val, .info-row.future .ir-pct { color:var(--future); }
   .info-ic { display:inline-flex; align-items:center; justify-content:center; width:13px; height:13px; margin-left:5px; border:1px solid var(--muted); border-radius:50%; font:italic 600 9px var(--mono); color:var(--muted); cursor:pointer; position:relative; vertical-align:middle; user-select:none; }
   .info-ic:hover, .info-ic.open, .info-ic:focus { color:var(--teal); border-color:var(--teal); outline:none; }
-  .info-ic .tip { display:none; position:absolute; top:17px; left:-8px; z-index:850; width:min(260px,70vw); padding:.55rem .7rem; background:var(--surf2); border:1px solid var(--border); border-radius:6px; box-shadow:0 6px 20px rgba(0,0,0,.5); font:400 10px/1.55 var(--mono); font-style:normal; color:var(--text); text-align:left; white-space:normal; cursor:default; }
+  .info-ic .tip a { color:var(--teal); }
+  .info-ic .tip { text-transform:none; letter-spacing:normal; display:none; position:absolute; top:17px; left:-8px; z-index:850; width:min(260px,70vw); padding:.55rem .7rem; background:var(--surf2); border:1px solid var(--border); border-radius:6px; box-shadow:0 6px 20px rgba(0,0,0,.5); font:400 10px/1.55 var(--mono); font-style:normal; color:var(--text); text-align:left; white-space:normal; cursor:default; }
   .info-ic.tip-r .tip { left:auto; right:-8px; }
   .info-ic:hover .tip, .info-ic.open .tip, .info-ic:focus .tip { display:block; }
   details.modal-section > summary { font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--muted); text-transform:uppercase; cursor:pointer; margin-bottom:.5rem; }
@@ -470,6 +478,9 @@ const IRMAA_AHEAD = -TAXData.IRMAA.LOOKBACK;
 // field added here is a field everywhere. Keys avoid the ones the page already uses (st s a1 a2 ss
 // cs cb yr in pm pi vl vh az rw); `ri` and `pt` are the original retirement-income and property-tax
 // keys and keep their meaning.
+// Problems found in the page address while loading it. They are shown, and a result line says ERROR.
+const LINK_ERRORS = [];
+
 const DETAIL_FIELDS = [
   { id:'num-wages',  key:'wg', cfg:'wages',            neg:true  },
   { id:'num-int',    key:'it', cfg:'interest',         neg:false },
@@ -1299,6 +1310,7 @@ document.addEventListener('click', e => {
   const ic = e.target.closest('.info-ic');
   document.querySelectorAll('.info-ic.open').forEach(o => { if (o !== ic) o.classList.remove('open'); });
   if (!ic) return;
+  if (e.target.closest('a')) return;   // a link inside the text follows its address
   e.preventDefault();               // an icon inside a <label> must not toggle that label's checkbox
   if (!e.target.closest('.tip')) ic.classList.toggle('open');   // a click inside the text leaves it open
 });
@@ -1381,9 +1393,8 @@ function updateInfoPanel(d) {
       </div>
     </div>
     <div class="info-result">
-      <div class="info-result-head"><span class="info-col-title" style="border:0;margin:0;padding:0">Result for a spreadsheet${infoIcon('The numbers behind this panel as one comma-separated line, at the ordinary income shown. Paste it into a cell and split it into columns. The field names are listed in the URL guide.', true)}</span>
-        <span><button type="button" class="zoom-btn" onclick="copyResult('values', this, ${d.ordInc})">Copy</button>
-        <button type="button" class="zoom-btn" onclick="copyResult('names', this, ${d.ordInc})">Copy with names</button>
+      <div class="info-result-head"><span class="info-col-title" style="border:0;margin:0;padding:0">Result for a spreadsheet${infoIcon('The numbers behind this panel as comma-separated lines, with their field names, at the ordinary income shown. Paste into a cell and split into columns. Copy all fields adds every other result and the inputs they came from. The fields are listed in the <a href="https://tools.netcitizen.us/UsageGuide.html" target="_blank" rel="noopener">URL guide</a>.', true)}</span>
+        <span><button type="button" class="zoom-btn" onclick="copyResult('names', this, ${d.ordInc})">Copy</button>
         <button type="button" class="zoom-btn" onclick="copyResult('all', this, ${d.ordInc})">Copy all fields</button></span></div>
       <code>${res.csv}</code>
     </div>`;
@@ -1753,6 +1764,25 @@ const RESULT_FIELDS = {
   irmaaFutureTier: c => c.fut.tier,
 };
 
+// The inputs the result was calculated from, named as in the link (st, s, ss, wg, ...), so a result
+// line can say what it was a result OF. `a2` is blank for a single filer and `pm` when not entered.
+const INPUT_FIELDS = {
+  st: () => cfg.status,
+  s:  () => cfg.state,
+  a1: () => cfg.ages[0],
+  a2: () => cfg.status === 'MFJ' ? cfg.ages[1] : '',
+  yr: () => cfg.year,
+  'in': () => cfg.inflation,
+  ss: () => cfg.ssIncome,
+  cs: () => cfg.cgSale,
+  cb: () => cfg.cgBasisPct,
+  pm: () => cfg.prevMagi ?? '',
+  ...Object.fromEntries(DETAIL_FIELDS.map(f => [f.key, () => cfg[f.cfg]])),
+  rw: () => cfg.retirementSwept ? 1 : 0,
+};
+const ALL_FIELDS = { ...RESULT_FIELDS, ...INPUT_FIELDS };
+const ALL_NAMES  = [...Object.keys(RESULT_FIELDS), ...Object.keys(INPUT_FIELDS)];   // results, then inputs
+
 // What the link asked for, read once: null without `return`. `return` alone (or 1) is the default
 // set, `all` is every field, and anything else is a comma list of field names.
 const RETURN_SPEC = (() => {
@@ -1760,7 +1790,7 @@ const RETURN_SPEC = (() => {
   if (!p.has('return')) return null;
   const raw = p.get('return').trim();
   const names = (raw === '' || raw === '1' || raw === 'true') ? RESULT_DEFAULT
-              : raw === 'all' ? Object.keys(RESULT_FIELDS)
+              : raw === 'all' ? ALL_NAMES
               : raw.split(',').map(x => x.trim()).filter(Boolean);
   return { names, header: p.get('header') === '1' };
 })();
@@ -1776,8 +1806,9 @@ function resultFor(P) {
 // { fields, values, csv } for the current inputs. A name the page does not know comes back as a
 // single "ERROR: ..." token rather than as a column of zeros, so a typo cannot pass as a result.
 function buildResult(over = null) {
+  if (LINK_ERRORS.length) return { fields: [], values: [], csv: 'ERROR: ' + LINK_ERRORS.join('; ') };
   const spec = over ?? RETURN_SPEC ?? { names: RESULT_DEFAULT, header: false };
-  const bad = spec.names.filter(n => !(n in RESULT_FIELDS));
+  const bad = spec.names.filter(n => !(n in ALL_FIELDS));
   if (bad.length) {
     const msg = 'ERROR: unknown field ' + bad.join(' ');
     return { fields: [], values: [], csv: msg };
@@ -1785,7 +1816,8 @@ function buildResult(over = null) {
   const P = over?.P ?? pinnedIncome ?? cfg.entOrdinary;
   const c = resultFor(P);
   const values = spec.names.map(n => {
-    const v = RESULT_FIELDS[n](c);
+    const v = ALL_FIELDS[n](c);
+    if (typeof v === 'string') return v;     // filing status, state, or a blank
     return RESULT_RATES.has(n) ? Math.round(v * 1e6) / 1e6 : Math.round(v * 100) / 100;
   });
   const csv = (spec.header ? spec.names.join(',') + '\n' : '') + values.join(',');
@@ -1794,7 +1826,7 @@ function buildResult(over = null) {
 window.taxResult = buildResult;   // for scripts: window.taxResult().csv
 
 function renderReturn() {
-  if (!RETURN_SPEC) return;
+  if (!RETURN_SPEC && !LINK_ERRORS.length) return;
   const r = buildResult();
   document.getElementById('ret-csv').textContent = r.csv;
   document.getElementById('ret-for').textContent = r.fields.length
@@ -1802,10 +1834,12 @@ function renderReturn() {
   document.getElementById('ret-banner').hidden = false;
 }
 
-// The Copy buttons under the info panel: the default fields as a line of numbers, the same with the
-// names above it, or every field with names. `P` is the ordinary income the panel is showing.
+// The Copy buttons under the info panel. Both put the field names on a first line, because the
+// fields may change and a bare line of numbers would not say which is which: Copy is the default
+// set, Copy all fields is every result AND every input it was calculated from. `P` is the ordinary
+// income the panel is showing.
 function copyResult(kind, btn, P) {
-  const r = buildResult({ names: kind === 'all' ? Object.keys(RESULT_FIELDS) : RESULT_DEFAULT, header: kind !== 'values', P });
+  const r = buildResult({ names: kind === 'all' ? ALL_NAMES : RESULT_DEFAULT, header: true, P });
   if (navigator.clipboard?.writeText) navigator.clipboard.writeText(r.csv).catch(() => {});
   if (btn) { const was = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = was; }, 1200); }
 }
@@ -1990,7 +2024,13 @@ function loadFromURL() {
     document.getElementById('age-label').textContent = mfj ? 'Taxpayer Ages' : 'Taxpayer Age';
     applySsMax();   // slider travel depends on filing status
   }
-  if (p.has('s'))  document.getElementById('sel-state').value = p.get('s');
+  if (p.has('s')) {
+    // Any case is accepted, but a code the page does not have is an ERROR, never a quiet fallback to
+    // California: a wrong state is a wrong tax.
+    const code = p.get('s').trim().toUpperCase(), sel = document.getElementById('sel-state');
+    if ([...sel.options].some(o => o.value === code)) sel.value = code;
+    else LINK_ERRORS.push('unknown state ' + p.get('s'));
+  }
   if (p.has('a1')) document.getElementById('age1').value = +p.get('a1');
   if (p.has('a2')) document.getElementById('age2').value = +p.get('a2');
 
@@ -2162,6 +2202,19 @@ function loadFromURL() {
 </div>
 
 <script src="../other_tools.js"></script>
-<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->
+<!-- Cloudflare Web Analytics reads the full page address and cannot be given a stripped one, so it is
+     loaded only when the address carries nothing but, at most, the state. -->
+<script>
+  (function () {
+    var carries = false, ks = new URLSearchParams(location.search).keys();
+    for (var k = ks.next(); !k.done; k = ks.next()) if (k.value !== 's') carries = true;
+    if (carries) return;
+    var el = document.createElement('script');
+    el.defer = true;
+    el.src = 'https://static.cloudflareinsights.com/beacon.min.js';
+    el.setAttribute('data-cf-beacon', '{"token": "b36ad716dfc143508c15df16ada9f252"}');
+    document.body.appendChild(el);
+  })();
+</script>
 </body>
 </html>

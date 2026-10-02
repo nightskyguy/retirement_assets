@@ -129,6 +129,21 @@ shared calculation file:
   LibreOffice documentation: confirm it fetches a `localhost` address in the installed version, and
   whether a multi-field line is easier to split with a newer release's text functions or with
   **Data, Text to Columns**.)
+- **What `WEBSERVICE()` does to the server.** The author measured that each call sends three requests:
+  OPTIONS, HEAD and GET. The client cannot be told to send fewer, so the server's job is to make the
+  extra two nearly free: answer OPTIONS and HEAD with headers only, without running the calculation (a
+  framework that routes HEAD to the GET handler, as Flask does, runs it twice more), and keep the
+  connection alive. Cheap probes plus an optional few-second cache keyed on the full address make a
+  call cost one calculation. The node tool's own calculation takes well under a millisecond, so for it
+  this is about tidiness, not speed.
+- **One call, many results.** The efficient pattern, which the author already uses for 29 symbols on 5
+  dates, is to fetch everything in one `WEBSERVICE()` and split it in the sheet with
+  `TEXTSPLIT(K6, ",")` (and a row delimiter for several lines), which the author's LibreOffice has. The
+  tool should therefore take a batch in one request: shared settings once, and one input varied over a
+  list, for example `?st=SGL&s=CA&ss=24000&vary=wg:40000,60000,80000,100000&return=fedTax,stateTax,totalTax`,
+  answering one line per value, newline-separated, numbers only. Numbers only matters because the sheet
+  wraps the pieces in `VALUE()`: text fields such as `st` and `s` would come out as errors. In a locale
+  whose decimal mark is a comma, `NUMBERVALUE(text, ".")` is safer than `VALUE()`.
 - **Privacy:** the figures go only to a process on the same machine. No Cloudflare, no logs unless the
   tool is written to keep them, which it would not be. It would also suit anyone else who runs scripts,
   since the node tool needs no installation beyond node itself.
@@ -261,7 +276,7 @@ tool (H) answers it without sending anything anywhere.
 ## Decisions needed
 
 - Build the shared calculation file and the local node tool (H)? Should the server mode ship, or only the
-  command line?
+  command line? If the server ships: the batch form (`vary=`) as well as one scenario per call?
 - Should the output format carry a version, so the field list can grow without breaking old sheets?
 - Should the tools read parameters from the `#` fragment as well as the `?` query, and should Share
   write the `#` form by default?

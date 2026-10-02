@@ -54,6 +54,7 @@ const findUpperLimitByAmount = (...a) => _engine().findUpperLimitByAmount(...a);
 const calculateProgressive = (...a) => _engine().calculateProgressive(...a);
 const calcIRMAA = (...a) => _engine().calcIRMAA(...a);
 const getIRMAATiers = (...a) => _engine().getIRMAATiers(...a);
+const netCapitalLosses = (...a) => _engine().netCapitalLosses(...a);
 const isQCDEligible = (...a) => _engine().isQCDEligible(...a);
 const rmdStartAge = (...a) => _engine().rmdStartAge(...a);
 const rmdDivisor = (...a) => _engine().rmdDivisor(...a);
@@ -1395,6 +1396,31 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 			assertEqual(tiers[0].l, brks[0].l + 1, `${status}: tier 1 starts a dollar above the no-surcharge ceiling`);
 			assertEqual(tiers.map(t => t.l).every((l, i, a) => i === 0 || l > a[i - 1]), true, `${status}: floors ascend`);
 		}
+	});
+
+	test('TEST CASE 25e: netCapitalLosses nets the two baskets and keeps the gain\'s character', () => {
+		const n = netCapitalLosses;
+		const limit = TAXData.FEDERAL.CAPITAL_LOSS_LIMIT;
+		assertEqual(limit, 3000, 'the annual net-loss offset is $3,000');
+		// Gains only: nothing to net, each stays where it was.
+		assertEqual(n(5000, 20000), { ordinary: 5000, longTerm: 20000, carryforward: 0 }, 'two gains pass through');
+		// A short-term loss is absorbed by a long-term gain, and what is left is still long-term.
+		assertEqual(n(-4000, 20000), { ordinary: 0, longTerm: 16000, carryforward: 0 }, 'a short-term loss reduces a long-term gain');
+		// A long-term loss is absorbed by a short-term gain, and what is left is ordinary income.
+		assertEqual(n(9000, -4000), { ordinary: 5000, longTerm: 0, carryforward: 0 }, 'a long-term loss reduces a short-term gain');
+		// A loss larger than the gain that absorbs it is a net loss, capped at the limit.
+		assertEqual(n(-10000, 2000), { ordinary: -3000, longTerm: 0, carryforward: 5000 }, 'net loss of 8,000: 3,000 offsets, 5,000 carries');
+		assertEqual(n(-1000, 0), { ordinary: -1000, longTerm: 0, carryforward: 0 }, 'a small net loss offsets in full');
+		assertEqual(n(-2000, -8000), { ordinary: -3000, longTerm: 0, carryforward: 7000 }, 'two losses are one net loss');
+	});
+
+	test('TEST CASE 25f: a capped net loss feeds the tax engine as ordinary income', () => {
+		// The page hands calculateTaxes the netted pieces. A $10,000 net loss against nothing else
+		// must lower AGI by the $3,000 the return allows, not by $10,000.
+		const net = netCapitalLosses(-10000, 0);
+		const r = calculateTaxes({ filingStatus: 'SGL', ages: [60], earnedIncome: 50000 + net.ordinary,
+			capGains: net.longTerm, state: 'TX', inflation: 1, taxYear: 2026 });
+		assertEqual(r.AGI, 47000, 'AGI falls by 3,000, the capped offset');
 	});
 
 	test('TEST CASE 25b: getQCDLimit is the table amount times the cumulative CPI factor', () => {

@@ -29,6 +29,10 @@ var TAXData = {
 			MFJ: 250000,
 			SGL: 200000,
 		},
+		// IRC 1211(b): a NET capital loss offsets ordinary income only up to this amount a year; the
+		// rest carries forward. Not indexed. $1,500 for married filing separately, which this tool
+		// does not model. See netCapitalLosses.
+		CAPITAL_LOSS_LIMIT: 3000,
 
 		CAPITAL_GAINS: {
 			YEAR: 2026,
@@ -1898,6 +1902,28 @@ function getIRMAATiers(status) {
 		                  annualCost: b.monthlyCost * 12 }));
 }
 
+// Nets a short-term and a long-term capital result the way the return does, and says what each
+// part becomes. A loss in either basket offsets a gain in the other; what survives keeps the
+// character of the gain it came from (short-term gain is ordinary income, long-term stays
+// preferential). If the two together are a NET LOSS, at most `limit` of it offsets ordinary income
+// this year and the rest is a carryforward, which this function reports and nothing else uses.
+//
+// Returns { ordinary, longTerm, carryforward }. `ordinary` is the amount that joins ordinary income
+// (negative for a capped net loss), `longTerm` the preferential gain left, `carryforward` the loss
+// that does not offset anything this year (>= 0).
+function netCapitalLosses(shortTerm, longTerm, limit = TAXData.FEDERAL.CAPITAL_LOSS_LIMIT) {
+	if (shortTerm >= 0 && longTerm >= 0) return { ordinary: shortTerm, longTerm, carryforward: 0 };
+	const net = shortTerm + longTerm;
+	if (net >= 0) {
+		// One basket is a loss and the gain in the other absorbs it.
+		return shortTerm >= 0
+			? { ordinary: net, longTerm: 0, carryforward: 0 }
+			: { ordinary: 0, longTerm: net, carryforward: 0 };
+	}
+	const used = Math.min(-net, limit);
+	return { ordinary: -used, longTerm: 0, carryforward: -net - used };
+}
+
 // Returns the CPI-adjusted per-person annual QCD limit.
 //
 // P70d. `cpiFactor` is the CUMULATIVE index factor (sim.cpiRate), the same thing every bracket
@@ -1948,7 +1974,7 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         TAXData, RMD_TABLE, RMD_START_AGE, rmdStartAge, rmdDivisor, getRateBracket,
         findLimitByRate, findUpperLimitByAmount, calculateProgressive,
-        calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATiers, getIRMAATierTargetMAGI,
+        calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATiers, netCapitalLosses, getIRMAATierTargetMAGI,
         getQCDLimit, isQCDEligible,
         calculateTaxableSocialSecurity, nonSSIncomeForMAGI
     };
@@ -1962,7 +1988,7 @@ if (typeof module !== 'undefined' && module.exports) {
     window.TaxEngine = {
         TAXData, RMD_TABLE, RMD_START_AGE, rmdStartAge, rmdDivisor, getRateBracket,
         findLimitByRate, findUpperLimitByAmount, calculateProgressive,
-        calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATiers, getIRMAATierTargetMAGI,
+        calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATiers, netCapitalLosses, getIRMAATierTargetMAGI,
         getQCDLimit, isQCDEligible,
         calculateTaxableSocialSecurity, nonSSIncomeForMAGI
     };

@@ -129,6 +129,18 @@
   .info-ic:hover .tip, .info-ic.open .tip, .info-ic:focus .tip { display:block; }
   details.modal-section > summary { font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--muted); text-transform:uppercase; cursor:pointer; margin-bottom:.5rem; }
   details.modal-section > summary:hover { color:var(--teal); }
+  details.details { border:1px solid var(--border); border-radius:6px; padding:.45rem .6rem; background:var(--surf2); }
+  details.details > summary { cursor:pointer; font-family:var(--mono); font-size:11px; color:var(--muted); display:flex; justify-content:space-between; gap:.5rem; }
+  details.details[open] > summary { color:var(--text); margin-bottom:.4rem; }
+  details.details > summary .val { font-size:10px; color:var(--teal); }
+  .det-head { font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin:.55rem 0 .25rem; }
+  .det-row { display:grid; grid-template-columns:1fr 7.2rem; gap:.4rem; align-items:center; margin-bottom:3px; }
+  .det-row label { font-family:var(--mono); font-size:10px; color:var(--muted); line-height:1.3; }
+  .det-row input { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:4px; color:var(--text); font-family:var(--mono); font-size:11px; padding:3px 6px; text-align:right; }
+  .det-row input:focus { border-color:var(--teal); outline:none; }
+  .det-check { display:flex; align-items:center; gap:.4rem; margin:3px 0; font-family:var(--mono); font-size:10px; color:var(--muted); cursor:pointer; }
+  .det-sum { display:flex; justify-content:space-between; align-items:center; margin-top:.4rem; padding-top:.35rem; border-top:1px solid var(--border); font-family:var(--mono); font-size:10px; color:var(--muted); }
+  .det-sum b { color:var(--text); font-weight:500; margin-left:.3rem; }
   .info-note { font-family:var(--mono); font-size:9px; color:var(--muted); margin-top:3px; line-height:1.5; }
   .info-total .ir-val { color:var(--red); font-weight:500; }
   .info-total .ir-pct { color:var(--red); }
@@ -170,9 +182,9 @@
 <!-- Shared tax modules — NOTE: these require file:// or http:// (CORS blocks in data: URLs) -->
 <script src="../displayhelpers.js"></script>
 <script src="../sharepanel.js?v=1118e3"></script>
-<script src="../taxengine.js?v=1119c3"></script>
+<script src="../taxengine.js?v=1119c7"></script>
 <script src="../medicare_costs.js?v=111917"></script>
-<script src="../taxengine.tests.js?v=1119c3"></script>
+<script src="../taxengine.tests.js?v=1119c7"></script>
 </head>
 <body>
 <header>
@@ -224,7 +236,7 @@
     </div>
 
     <div class="ctrl">
-      <div class="ctrl-hdr"><label>Social Security Income</label><span class="val" id="ss-val">$0</span></div>
+      <div class="ctrl-hdr"><label>Total Social Security (all recipients)<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Enter the combined benefit of everyone on the return. How much of it is taxable depends on all of your income together, never on each person alone.</span></span></label><span class="val" id="ss-val">$0</span></div>
       <input type="range" id="sl-ss" min="0" max="130000" step="1000" value="0"
              oninput="sliderToNum('sl-ss','num-ss','ss-val'); run()">
       <div class="range-ends"><span>$0</span><span id="ss-range-max">$130k</span></div>
@@ -232,21 +244,23 @@
              style="margin-top:5px" oninput="numToSlider('num-ss','sl-ss','ss-val'); run()">
     </div>
 
-    <div class="ctrl">
-      <div class="ctrl-hdr"><label>Retirement Income (IRA/401k/pension)</label><span class="val" id="retinc-val">$0</span></div>
-      <input type="text" id="num-retinc" value="0" autocomplete="off"
-             placeholder="Portion of ordinary income from retirement plans" oninput="updRetInc(); run()">
-      <label style="display:flex;align-items:center;gap:.4rem;margin-top:6px;font-size:.85em;cursor:pointer">
-        <input type="checkbox" id="chk-retinc-swept" onchange="run()">
-        Swept income is all retirement distributions<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Used only by states that exempt retirement income (for example IL and PA), which are few. When checked, the entire ordinary-income axis is treated as retirement distributions.</span></span>
-      </label>
-    </div>
-
-    <div class="ctrl">
-      <div class="ctrl-hdr"><label>Property / Local Taxes (SALT input)</label><span class="val" id="prop-val">$0</span></div>
-      <input type="text" id="num-prop" value="0" autocomplete="off"
-             placeholder="Annual property + local tax" oninput="updProp(); run()">
-    </div>
+    <details class="ctrl details" id="details-income">
+      <summary>Income details<span class="val" id="det-sum"></span></summary>
+      <div class="det-head">Ordinary income</div>
+      <div class="det-row"><label for="num-wages">Wages, 1099 or business income<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">A loss can be entered as a negative number. It offsets your other income, and taxable income cannot go below zero.</span></span></label><input type="text" id="num-wages" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <div class="det-row"><label for="num-int">Interest</label><input type="text" id="num-int" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <div class="det-row"><label for="num-ndiv">Non-qualified dividends</label><input type="text" id="num-ndiv" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <div class="det-row"><label for="num-stcg">Short-term capital gains<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">A short-term loss (negative) is netted against your long-term gain. A net capital loss offsets ordinary income by $3,000 a year at most; the rest carries forward and is ignored here.</span></span></label><input type="text" id="num-stcg" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <div class="det-row"><label for="num-retinc">IRA, 401k or pension withdrawals</label><input type="text" id="num-retinc" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <label class="det-check"><input type="checkbox" id="chk-retinc-swept" onchange="run()">Extra income I sweep is also IRA/401k<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Used only by states that exempt retirement income (for example IL and PA), which are few. When checked, ordinary income above what you entered here is treated as IRA/401k distributions or conversions.</span></span></label>
+      <div class="det-row"><label for="num-other">Other ordinary income<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Anything else taxed at regular rates. A loss can be entered as a negative number.</span></span></label><input type="text" id="num-other" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <div class="det-sum"><span>Ordinary income entered <b id="det-ord">$0</b></span><button type="button" class="zoom-btn" id="btn-pin-entered" onclick="pinAtEntered()" title="Pin the chart at the ordinary income you entered above">Pin here</button></div>
+      <div class="det-head">Taxed at capital-gains rates</div>
+      <div class="det-row"><label for="num-qdiv">Qualified dividends<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Taxed with your capital gains and added to the gain from the sale below.</span></span></label><input type="text" id="num-qdiv" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <div class="det-head">Deductions</div>
+      <div class="det-row"><label for="num-prop">Property and local taxes (SALT)<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Real estate and local taxes. State income tax is computed by this tool and added automatically, so do not enter it here.</span></span></label><input type="text" id="num-prop" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <div class="note" id="det-note"></div>
+    </details>
 
     <hr class="divider">
     <div class="panel-title" style="margin-bottom:.6rem">Capital Gains (fixed, not scaled)</div>
@@ -395,7 +409,13 @@ const cfg = {
   status:'MFJ', state:'CA', ages:[65,65],
   ssIncome:0, propTax:0,
   retirementIncome:0, retirementSwept:false,
+  wages:0, interest:0, ndiv:0, stcg:0, other:0, qdiv:0,
   cgSale:0, cgBasisPct:60,
+  // Derived from the entries above by deriveIncome(), never read from a control:
+  ltNet:0,          // long-term gain left after netting a short-term loss against it
+  stOrd:0,          // short-term result that joins ordinary income (a capped net loss is negative)
+  carry:0,          // net capital loss that does not offset anything this year
+  entOrdinary:0,    // everything entered under Ordinary income, added up
   year:2026, inflation:2.5,
   prevMagi:null,   // MAGI from year - 2, or null when not entered; only the IRMAA-in-force line reads it
   // OBBBA is current law, so it is always on and never user-switchable. The provisions still
@@ -425,15 +445,70 @@ function indexFactors(ahead = 0) {
 // is priced IRMAA_AHEAD years ahead, against thresholds and surcharges indexed that far forward.
 const IRMAA_AHEAD = -TAXData.IRMAA.LOOKBACK;
 
+// ─── INCOME DETAILS ──────────────────────────────────────────────────────────
+// One row per Income details entry: its control, its share-link key, its cfg name, and whether a
+// negative amount means something (a business loss, a short-term capital loss). The same table
+// drives reading the controls, writing and reading the share URL, and the "entered" total, so a
+// field added here is a field everywhere. Keys avoid the ones the page already uses (st s a1 a2 ss
+// cs cb yr in pm pi vl vh az rw); `ri` and `pt` are the original retirement-income and property-tax
+// keys and keep their meaning.
+const DETAIL_FIELDS = [
+  { id:'num-wages',  key:'wg', cfg:'wages',            neg:true  },
+  { id:'num-int',    key:'it', cfg:'interest',         neg:false },
+  { id:'num-ndiv',   key:'nd', cfg:'ndiv',             neg:false },
+  { id:'num-stcg',   key:'sg', cfg:'stcg',             neg:true  },
+  { id:'num-retinc', key:'ri', cfg:'retirementIncome', neg:false },
+  { id:'num-other',  key:'ot', cfg:'other',            neg:true  },
+  { id:'num-qdiv',   key:'qd', cfg:'qdiv',             neg:false },
+  { id:'num-prop',   key:'pt', cfg:'propTax',          neg:false },
+];
+const detailAmount = (f, text) => {
+  const v = DisplayHelpers.parseShorthand(text);
+  return Number.isFinite(v) ? (f.neg ? v : Math.max(0, v)) : 0;
+};
+
+// Reformat once the entry is committed, not per keystroke, which would fight the typing. Zero and
+// blank both show as blank.
+function fmtDetail(el) {
+  const f = DETAIL_FIELDS.find(x => x.id === el.id);
+  const v = detailAmount(f, el.value);
+  el.value = v === 0 ? '' : fmtMoney(v);
+  run();
+}
+
+// Fills cfg's derived income figures from the entries. The short-term and long-term results are
+// netted the way the return does it (netCapitalLosses in taxengine.js); the long-term part is the
+// sale's gain, and everything that joins ordinary income is added up as `entOrdinary`.
+function deriveIncome() {
+  const lt  = cfg.cgSale > 0 ? cfg.cgSale * (1 - cfg.cgBasisPct / 100) : 0;
+  const net = netCapitalLosses(cfg.stcg, lt);
+  cfg.ltNet = net.longTerm;
+  cfg.stOrd = net.ordinary;
+  cfg.carry = net.carryforward;
+  cfg.entOrdinary = cfg.wages + cfg.interest + cfg.ndiv + cfg.retirementIncome + cfg.other + net.ordinary;
+}
+
+// The Income details heading and note: the ordinary total, and anything the page did to an entry.
+function updDetails() {
+  const $ = id => document.getElementById(id);
+  $('det-ord').textContent = fmtMoney(cfg.entOrdinary);
+  $('det-sum').textContent = cfg.entOrdinary !== 0 ? `ordinary ${fmtK(cfg.entOrdinary)}` : '';
+  const notes = [];
+  const pref = cfg.ltNet + cfg.qdiv;
+  if (pref > 0 && (cfg.qdiv > 0 || cfg.stcg < 0)) notes.push(`Taxed at capital-gains rates: ${fmtMoney(pref)} (gain ${fmtMoney(cfg.ltNet)}, qualified dividends ${fmtMoney(cfg.qdiv)}).`);
+  if (cfg.carry > 0) notes.push(`<span class="hi-amber">Net capital loss: only ${fmtMoney(TAXData.FEDERAL.CAPITAL_LOSS_LIMIT)} offsets income this year; ${fmtMoney(cfg.carry)} carries forward and is ignored.</span>`);
+  $('det-note').innerHTML = notes.join('<br>');
+}
+
 // ─── CALC ADAPTER ────────────────────────────────────────────────────────────
 // Thin wrapper that maps cfg → calculateTaxes() params and reshapes the result
 // to match the shape expected by sweep(), renderChart(), and renderSummary().
 function calcAt(ordInc) {
   const {status, state, ages, ssIncome, propTax, obbaOn, saltHigh,
-         year, cgSale, cgBasisPct} = cfg;
+         year} = cfg;
 
   const {inf} = indexFactors();
-  const cgGain    = cgSale > 0 ? cgSale * (1 - cgBasisPct / 100) : 0;
+  const cgGain    = cfg.ltNet;
 
   // Suppress saltHigh after OBBBA SALT provisions sunset (2030+)
   const effectiveSaltHigh = saltHigh && year <= obbaSalt.sunsetYear;
@@ -441,7 +516,10 @@ function calcAt(ordInc) {
   const effectiveObbaOn = obbaOn && year <= obbaSen.sunsetYear;
 
   // Retirement-income portion of the swept ordinary income (for state exclusion states like IL/PA).
-  const retInc = Math.max(0, cfg.retirementSwept ? ordInc : Math.min(cfg.retirementIncome, ordInc));
+  // Retirement part of the ordinary income, for the states that exempt it: what was entered, plus
+  // (when asked) everything swept above what was entered. Never more than the ordinary income there is.
+  const extraRet = cfg.retirementSwept ? Math.max(0, ordInc - cfg.entOrdinary) : 0;
+  const retInc = Math.max(0, Math.min(ordInc, cfg.retirementIncome + extraRet));
 
   const r = calculateTaxes({
     filingStatus:    status,
@@ -450,6 +528,7 @@ function calcAt(ordInc) {
     iraIncome:       retInc,
     totalSS:         ssIncome,
     capGains:        cgGain,
+    qualifiedDiv:    cfg.qdiv,
     inflation:       inf,
     state:           state,
     obbaOn:          effectiveObbaOn,
@@ -485,7 +564,7 @@ function calcAt(ordInc) {
     stMarg:    r.stateMarginalRate,
     niit:      r.niitTax,
     cgRate:    r.capitalGainsRate + (r.MAGI > TAXData.FEDERAL.NIIT[status] ? TAXData.FEDERAL.NIIT.rate : 0),
-    cgGain
+    cgGain:    cgGain + cfg.qdiv        // everything taxed at capital-gains rates
   };
 }
 
@@ -505,9 +584,10 @@ let negRanges = false, dblPhase = null;
 let autoZoomOn   = true;
 let pinnedIncome = null;  // ORDINARY income of the pinned column (null = none); may be negative
 
-// Income held fixed while ordinary income is swept: all Social Security plus the taxable gain.
+// Income held fixed while ordinary income is swept: all Social Security, the long-term gain left
+// after netting, and qualified dividends.
 function fixedIncome() {
-  return cfg.ssIncome + (cfg.cgSale > 0 ? cfg.cgSale * (1 - cfg.cgBasisPct / 100) : 0);
+  return cfg.ssIncome + cfg.ltNet + cfg.qdiv;
 }
 const round2 = v => Math.round(v * 100) / 100;
 // "Full" is every total income from $0 up to FULL_MAX of ordinary income above the fixed amounts, so
@@ -781,7 +861,7 @@ const vLinePlugin = {
         ctx.font = '9px DM Mono, monospace';
         ctx.textAlign = 'left';
         const row = ln.tierIdx === undefined ? 1 : 2 + (ln.tierIdx % 2);
-        ctx.fillText(ln.label, xPx+3, ln.bottomLabel ? yScale.bottom - 5 : yScale.top + ROW * row);
+        ctx.fillText(ln.label, xPx+3, ln.bottomLabel ? yScale.bottom - 5 - 11 * (ln.bottomRow ?? 0) : yScale.top + ROW * row);
       }
       ctx.restore();
     }
@@ -896,11 +976,23 @@ const OTHER_COLOR = '#cbd5e1';
 function otherIncomeLine(data) {
   const F = fixedIncome();
   if (!(F > 0) || !data.length) return [];
-  const label = 'Ord $0 \u00B7 other income ' + fmtK(F);
-  const pos = (0 - zoomMin) / zoomStep;
-  if (pos < 0)                return [{ index: 0, edge: 'left',  color: OTHER_COLOR, label }];
-  if (pos > data.length - 1)  return [{ index: data.length - 1, edge: 'right', color: OTHER_COLOR, label }];
-  return [{ index: pos, color: OTHER_COLOR, dash: [2, 3], label, bottomLabel: true }];
+  return [markerAt(0, 'Ord $0 \u00B7 other income ' + fmtK(F), OTHER_COLOR, 0, data)];
+}
+
+// A vertical marker at an ORDINARY income, or an edge arrow when that is outside the view. `row`
+// stacks the bottom labels of markers that land close together.
+function markerAt(ord, label, color, row, data) {
+  const pos = (ord - zoomMin) / zoomStep;
+  if (pos < 0)               return { index: 0, edge: 'left',  color, label };
+  if (pos > data.length - 1) return { index: data.length - 1, edge: 'right', color, label };
+  return { index: pos, color, dash: [2, 3], label, bottomLabel: true, bottomRow: row };
+}
+
+// The ordinary income typed under Income details, which is where the chart sits "as entered".
+const ENTERED_COLOR = '#5eead4';
+function enteredOrdinaryLine(data) {
+  if (!cfg.entOrdinary || !data.length) return [];
+  return [markerAt(cfg.entOrdinary, 'Entered ord ' + fmtK(cfg.entOrdinary), ENTERED_COLOR, 1, data)];
 }
 
 function tierLines(data) {
@@ -976,7 +1068,7 @@ function renderChart(data) {
   const maxTax  = Math.max(...data.map(d => d.totalTax));
   const yDMax   = Math.ceil(maxTax * 1.15 / 50_000) * 50_000 || 500_000;
 
-  const vlines = [...niitLine(data), ...tierLines(data), ...otherIncomeLine(data)];
+  const vlines = [...niitLine(data), ...tierLines(data), ...otherIncomeLine(data), ...enteredOrdinaryLine(data)];
 
   updateChartTitle();
 
@@ -1229,7 +1321,7 @@ function updateInfoPanel(d) {
 
   document.getElementById('info-panel').innerHTML = `
     <div class="info-header">
-      <span><span class="ih-lbl">Total income: </span><span class="ih-val">${$v(totalInc)}</span></span>
+      <span><span class="ih-lbl">Total income: </span><span class="ih-val">${$v(d.ordInc + cfg.ssIncome + d.cgGain)}</span></span>
       <span><span class="ih-lbl">Ordinary: </span><span class="ih-val">${$v(d.ordInc)}</span></span>
       <span><span class="ih-lbl">SS: </span><span class="ih-val">${$v(cfg.ssIncome)}</span><span class="ih-lbl"> (${$v(d.ssTax)} taxable)</span></span>
       <span><span class="ih-lbl">CG gain: </span><span class="ih-val">${$v(d.cgGain)}</span></span>
@@ -1352,6 +1444,11 @@ function onPinNumCommit() {
   if (!raw) { clearPin(); return; }
   const v = DisplayHelpers.parseShorthand(raw);
   if (!Number.isFinite(v)) { syncPinControls(); return; }
+  commitPin(v);
+}
+
+// Pins an ORDINARY income, re-centering the View when it falls outside it.
+function commitPin(v) {
   pinnedIncome = Math.min(Math.max(v, VIEW_FLOOR - fixedIncome()), viewTop() - fixedIncome());
   if (pinnedIncome < zoomMin || pinnedIncome > zoomMax) {
     zoomToIncome(pinnedIncome);
@@ -1363,6 +1460,9 @@ function onPinNumCommit() {
     if (chartMain) chartMain.update('none');
   }
 }
+
+// The Pin here button under Income details.
+function pinAtEntered() { commitPin(cfg.entOrdinary); }
 
 function clearPin() {
   pinnedIncome = null;
@@ -1377,7 +1477,7 @@ function renderSummary(data) {
   const fm    = TAXData.FEDERAL[cfg.status];
   const nSen  = (cfg.ages[0]>=fm.age?1:0)+(cfg.status==='MFJ'&&cfg.ages[1]>=fm.age?1:0);
   const stdF  = (fm.std + fm.stdbump*nSen)*inf;
-  const cgGain= cfg.cgSale*(1-cfg.cgBasisPct/100);
+  const cgGain= cfg.ltNet + cfg.qdiv;   // everything taxed at capital-gains rates
 
   let peakMarg=0, peakInc=0;
   data.forEach(d => { if (d.fedMarg>peakMarg){ peakMarg=d.fedMarg; peakInc=d.ordInc; }});
@@ -1401,7 +1501,11 @@ function renderSummary(data) {
       ? `<div><strong>Senior ded.:</strong> OBBBA <span class="hi-teal">applies</span>, up to $${(obbaSen.perSenior*nSen).toLocaleString()}, phases out above $${obbaSen.phaseoutAGI[cfg.status].toLocaleString()} AGI, last year ${obbaSen.sunsetYear}</div>`
       : `<div><strong>Senior ded.:</strong> OBBBA <span class="hi-amber">expired</span> after ${obbaSen.sunsetYear}, none in ${cfg.year}</div>`);
   if (cfg.cgSale > 0)
-    rows.push(`<div><strong>Capital gains:</strong> $${cgGain.toLocaleString()} taxable gain on $${cfg.cgSale.toLocaleString()} sale (${(100-cfg.cgBasisPct).toFixed(0)}% gain rate)</div>`);
+    rows.push(`<div><strong>Capital gains:</strong> $${Math.round(cfg.ltNet).toLocaleString()} taxable gain on $${cfg.cgSale.toLocaleString()} sale (${(100-cfg.cgBasisPct).toFixed(0)}% gain rate)</div>`);
+  if (cfg.qdiv > 0)
+    rows.push(`<div><strong>Qualified dividends:</strong> $${Math.round(cfg.qdiv).toLocaleString()}, taxed with the gains (${fmtMoney(cgGain)} in all)</div>`);
+  if (cfg.carry > 0)
+    rows.push(`<div class="hi-amber"><strong>Net capital loss:</strong> ${fmtMoney(cfg.carry)} carries forward; only ${fmtMoney(TAXData.FEDERAL.CAPITAL_LOSS_LIMIT)} offsets income this year</div>`);
   if (sample)
     rows.push(`<div><strong>Deduction @ $200k:</strong> ${sample.useItz?'SALT itemized':'Standard ded.'}</div>`);
   if (cfg.ssIncome > 0) {
@@ -1467,8 +1571,6 @@ function numToSlider(nid, sid, vid) {
   sl.value = Math.min(v, +sl.max);
   document.getElementById(vid).textContent = DisplayHelpers.formatDollar(v);
 }
-function updProp()   { document.getElementById('prop-val').textContent = DisplayHelpers.formatDollar(DisplayHelpers.parseShorthand(document.getElementById('num-prop').value) || 0); }
-function updRetInc() { document.getElementById('retinc-val').textContent = DisplayHelpers.formatDollar(DisplayHelpers.parseShorthand(document.getElementById('num-retinc').value) || 0); }
 function updYear()   { document.getElementById('year-display').textContent = document.getElementById('sl-year').value; }
 function updInf()    { document.getElementById('inf-val').textContent  = document.getElementById('sl-inf').value+'%'; }
 // Reformat once the field is committed (not per keystroke, which would fight the typing). Blank stays
@@ -1529,15 +1631,15 @@ function readCfg() {
   cfg.ages[0]     = +document.getElementById('age1').value  || 40;
   cfg.ages[1]     = +document.getElementById('age2').value  || 40;
   cfg.ssIncome    = DisplayHelpers.parseShorthand(document.getElementById('num-ss').value)     || 0;
-  cfg.retirementIncome = DisplayHelpers.parseShorthand(document.getElementById('num-retinc').value) || 0;
+  for (const f of DETAIL_FIELDS) cfg[f.cfg] = detailAmount(f, document.getElementById(f.id).value);
   cfg.retirementSwept  = document.getElementById('chk-retinc-swept').checked;
-  cfg.propTax     = DisplayHelpers.parseShorthand(document.getElementById('num-prop').value)   || 0;
   cfg.cgSale      = DisplayHelpers.parseShorthand(document.getElementById('num-cg-sale').value)|| 0;
   cfg.cgBasisPct  = +document.getElementById('sl-cg-basis').value;
   cfg.year        = +document.getElementById('sl-year').value;
   cfg.inflation   = +document.getElementById('sl-inf').value;
   const pm = DisplayHelpers.parseShorthand(document.getElementById('num-prevmagi').value);
   cfg.prevMagi    = Number.isFinite(pm) && pm >= 0 ? pm : null;
+  deriveIncome();
 }
 
 // ─── MAIN ────────────────────────────────────────────────────────────────────
@@ -1546,6 +1648,7 @@ function run() {
   applyView();
   updMed();     // depends on cfg.year, which only readCfg() sets, so it belongs here and not on a control
   updPrevMagi();
+  updDetails();
   const data = sweep();
   renderChart(data);
   renderIrmaaLegend();
@@ -1588,7 +1691,7 @@ function populateStateDropdown() {
 
 // Init
 populateStateDropdown();
-updYear(); updInf(); updMed(); updProp(); updCgBasis();
+updYear(); updInf(); updMed(); updCgBasis();
 document.getElementById('ss-val').textContent = '$0';
 document.getElementById('cg-sale-val').textContent = '$0';
 loadFromURL();   // apply URL params before first render
@@ -1599,7 +1702,7 @@ run();           // run() paints the info panel for a URL-restored pin
 initInfoPanel();
 
 // Attach numeric formatting to dollar inputs (after init so URL-loaded values are formatted)
-['num-ss', 'num-retinc', 'num-prop', 'num-cg-sale'].forEach(id => {
+['num-ss', 'num-cg-sale'].forEach(id => {
   const el = document.getElementById(id);
   if (el) DisplayHelpers.attachNumericDollarInput(el, { min: 0 });
 });
@@ -1636,7 +1739,6 @@ function buildShareParams() {
     a1: cfg.ages[0],
     a2: cfg.ages[1],
     ss: cfg.ssIncome,
-    pt: cfg.propTax,
     cs: cfg.cgSale,
     cb: cfg.cgBasisPct,
     yr: cfg.year,
@@ -1646,7 +1748,7 @@ function buildShareParams() {
     // and expire by year. Legacy links carrying any of them still load, ignoring the parameter.
   };
   if (cfg.prevMagi !== null) p.pm = cfg.prevMagi;
-  if (cfg.retirementIncome) p.ri = cfg.retirementIncome;
+  for (const f of DETAIL_FIELDS) if (cfg[f.cfg]) p[f.key] = cfg[f.cfg];   // Income details, when entered
   if (cfg.retirementSwept)  p.rw = 1;
   if (pinnedIncome !== null) p.pi = pinnedIncome;
   if (!isFullZoom()) { p.vl = viewLo; p.vh = viewHi; }   // total income; legacy zl/zh were ordinary
@@ -1703,9 +1805,15 @@ function buildTaxPlannerParams() {
   const ft  = Math.round(row.fedTax + row.fedCGTax + row.niit);
   const stt = Math.round(row.stTaxOrd + row.stTaxCG);
 
-  // The pinned x value IS ordinary income, with Social Security held separately.
-  const iraEst = Math.max(0, Math.round(pinnedIncome));
-  const gain   = Math.max(0, Math.round(cfg.cgSale * (1 - cfg.cgBasisPct / 100)));
+  // The pinned x value IS ordinary income, with Social Security held separately. The planner has
+  // slots for pension, interest, qualified dividends and capital gains, and the rest of the ordinary
+  // income goes in as an IRA distribution, which is what a swept amount is. Wages, business and
+  // other income have no slot of their own, so they ride in the pension slot (all three are taxed
+  // as ordinary income there).
+  const pen    = Math.max(0, Math.round(cfg.wages + cfg.other + cfg.stOrd));
+  const intr   = Math.max(0, Math.round(cfg.interest + cfg.ndiv));
+  const iraEst = Math.max(0, Math.round(pinnedIncome) - pen - intr);
+  const gain   = Math.max(0, Math.round(cfg.ltNet));
 
   const sp = new URLSearchParams({
     yr:  cfg.year,
@@ -1721,7 +1829,7 @@ function buildTaxPlannerParams() {
     i1v: iraEst,
     // Explicit zeros for everything this page has no view of. Without them the planner's own
     // defaults supply an RMD and a conversion nobody asked for.
-    i1r: 0, i1c: 0, i2r: 0, i2v: 0, i2c: 0, pen: 0, int: 0, qdiv: 0,
+    i1r: 0, i1c: 0, i2r: 0, i2v: 0, i2c: 0, pen: pen, int: intr, qdiv: Math.round(cfg.qdiv),
   });
   return sp;
 }
@@ -1763,19 +1871,19 @@ function loadFromURL() {
     document.getElementById('ss-val').textContent = '$'+v.toLocaleString();
   }
 
-  if (p.has('ri')) {
-    const v = +p.get('ri');
-    document.getElementById('num-retinc').value = v;
-    document.getElementById('retinc-val').textContent = '$'+v.toLocaleString();
+  // Income details: every field in the table, and the section opens when a link carries any of them.
+  for (const f of DETAIL_FIELDS) {
+    if (!p.has(f.key) || !Number.isFinite(+p.get(f.key))) continue;
+    const v = detailAmount(f, p.get(f.key));
+    document.getElementById(f.id).value = v === 0 ? '' : fmtMoney(v);
+    if (v !== 0) document.getElementById('details-income').open = true;
   }
-  if (p.has('rw')) document.getElementById('chk-retinc-swept').checked = p.get('rw') === '1';
+  if (p.has('rw')) {
+    document.getElementById('chk-retinc-swept').checked = p.get('rw') === '1';
+    if (p.get('rw') === '1') document.getElementById('details-income').open = true;
+  }
   if (p.has('pm') && Number.isFinite(+p.get('pm')) && +p.get('pm') >= 0)
     document.getElementById('num-prevmagi').value = DisplayHelpers.formatDollar(+p.get('pm'));
-  if (p.has('pt')) {
-    const v = +p.get('pt');
-    document.getElementById('num-prop').value = v;
-    document.getElementById('prop-val').textContent = '$'+v.toLocaleString();
-  }
   if (p.has('cs')) {
     const v = +p.get('cs');
     document.getElementById('num-cg-sale').value = v;
@@ -1827,7 +1935,7 @@ function loadFromURL() {
       <summary>Change Log</summary>
       <dl class="modal-kv">
         <dt>v2.9</dt>
-        <dd>IRMAA tier lines carry the MAGI thresholds that will apply 2 years from now. This year's taxes include the IRMAA you owe now when you enter your MAGI from two years earlier, shown as its own purple bar, and the projected IRMAA two years out is shown separately, in purple, below Total Tax. Pin an income to see its IRMAA tier, the surcharge, the MAGI room before the next tier, and what crossing it adds. The summary states the ordinary income where IRMAA starts. The View is set in total income and can start below the income you entered (double-click its label to jump to $0 through $50k above your total, and again for sliders that reach negative values), ordinary income can be negative (a business loss, for example), and a dotted line marks where ordinary income is zero. Total Effective is income taxes only, and a separate purple line adds this year's IRMAA where that is meaningful.</dd>
+        <dd>IRMAA tier lines carry the MAGI thresholds that will apply 2 years from now. This year's taxes include the IRMAA you owe now when you enter your MAGI from two years earlier, shown as its own purple bar, and the projected IRMAA two years out is shown separately, in purple, below Total Tax. Pin an income to see its IRMAA tier, the surcharge, the MAGI room before the next tier, and what crossing it adds. The summary states the ordinary income where IRMAA starts. The View is set in total income and can start below the income you entered (double-click its label to jump to $0 through $50k above your total, and again for sliders that reach negative values), ordinary income can be negative (a business loss, for example), and a dotted line marks where ordinary income is zero. Total Effective is income taxes only, and a separate purple line adds this year's IRMAA where that is meaningful. New Income details lets you spell out ordinary income, qualified dividends and property taxes, and all of it is in the Share link.</dd>
         <dt>v2.8</dt>
         <dd>Medicare growth is modeled based on trustee guidance and is not adjustable.</dd>
         <dt>v2.5</dt>
@@ -1861,6 +1969,17 @@ function loadFromURL() {
       <h3>How the income sweep works</h3>
       <p>The chart sweeps <strong>ordinary income</strong> across the visible range, and the <strong>View</strong> is set in <strong>total income</strong>, the figure on the top axis (default $30k–$620k; the slider runs from -$300k up past $1.1M). Ordinary income covers wages, IRA/401k withdrawals, pensions, and RMDs — anything taxed at regular rates — and it can be <strong>negative</strong>: a business or rental loss offsets your other income, and taxable income cannot go below zero. A dotted line marks where ordinary income is $0, which is where total income equals your Social Security plus gains. Left of it you are seeing a net loss, or what a lower total would look like. <strong>Social Security</strong> and <strong>capital gains</strong> are entered as fixed amounts that apply at every point across the sweep, letting you see how they interact with the income ramp. The top x-axis shows the <strong>total income</strong> (ordinary + SS + CG gain) at each corresponding point.</p>
       <p style="margin-top:.5rem">The step size between data points and the x-axis label spacing both adapt automatically to the visible range — zoom into a narrower window and you get finer granularity with denser labels.</p>
+    </div>
+
+    <div class="modal-section">
+      <h3>Income details</h3>
+      <ul>
+        <li>Open <strong>Income details</strong> in the left panel to spell out your ordinary income: wages or business income (negative for a loss), interest, non-qualified dividends, short-term capital gains (negative for a loss), IRA, 401k or pension withdrawals, and other income (negative for a loss). They add up to the <em>ordinary income entered</em>. The chart marks that amount with a teal dotted line, and <strong>Pin here</strong> pins it. The chart's ordinary-income axis is still the total, so these entries do not stack on top of it.</li>
+        <li><strong>Qualified dividends</strong> are taxed with your capital gains and added to the gain from the sale. A short-term loss is netted against that gain first, and a net capital loss offsets only $3,000 of income a year; the rest carries forward and is ignored.</li>
+        <li><strong>Property and local taxes</strong> are real estate and local taxes only. State income tax is computed for you and added to them for the SALT deduction.</li>
+        <li><strong>Social Security</strong> is one combined amount for everyone on the return, because how much of it is taxed depends on all of your income together.</li>
+        <li>Every entry is carried in the Share link, and a link that includes any of them opens the section.</li>
+      </ul>
     </div>
 
     <div class="modal-section">

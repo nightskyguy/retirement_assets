@@ -130,7 +130,11 @@
   details.modal-section > summary { font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--muted); text-transform:uppercase; cursor:pointer; margin-bottom:.5rem; }
   details.modal-section > summary:hover { color:var(--teal); }
   details.details { border:1px solid var(--border); border-radius:6px; padding:.45rem .6rem; background:var(--surf2); }
-  details.details > summary { cursor:pointer; font-family:var(--mono); font-size:11px; color:var(--muted); display:flex; justify-content:space-between; gap:.5rem; }
+  details.details > summary { cursor:pointer; font-family:var(--mono); font-size:11px; color:var(--muted); display:flex; align-items:baseline; gap:.5rem; list-style:none; }
+  details.details > summary::-webkit-details-marker { display:none; }
+  details.details > summary::before { content:'▸'; color:var(--teal); font-size:12px; width:.9em; flex:none; }
+  details.details[open] > summary::before { content:'▾'; }
+  details.details > summary .val { margin-left:auto; }
   details.details[open] > summary { color:var(--text); margin-bottom:.4rem; }
   details.details > summary .val { font-size:10px; color:var(--teal); }
   .det-head { font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin:.55rem 0 .25rem; }
@@ -141,6 +145,10 @@
   .det-check { display:flex; align-items:center; gap:.4rem; margin:3px 0; font-family:var(--mono); font-size:10px; color:var(--muted); cursor:pointer; }
   .det-sum { display:flex; justify-content:space-between; align-items:center; margin-top:.4rem; padding-top:.35rem; border-top:1px solid var(--border); font-family:var(--mono); font-size:10px; color:var(--muted); }
   .det-sum b { color:var(--text); font-weight:500; margin-left:.3rem; }
+  .ret-banner { margin:.8rem 1.5rem 0; padding:.6rem .9rem; background:var(--surf2); border:1px solid var(--teal); border-radius:8px; }
+  .ret-banner[hidden] { display:none; }
+  .ret-title { display:flex; justify-content:space-between; align-items:center; gap:.6rem; font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--teal); margin-bottom:.35rem; }
+  .ret-banner pre { font-family:var(--mono); font-size:12px; color:var(--text); white-space:pre-wrap; word-break:break-all; user-select:all; }
   .info-note { font-family:var(--mono); font-size:9px; color:var(--muted); margin-top:3px; line-height:1.5; }
   .info-total .ir-val { color:var(--red); font-weight:500; }
   .info-total .ir-pct { color:var(--red); }
@@ -206,6 +214,13 @@
     </div>
   </div>
 </header>
+
+<div class="ret-banner" id="ret-banner" hidden>
+  <div class="ret-title"><span>Result <span id="ret-for"></span></span>
+    <span><button type="button" class="hdr-btn" onclick="copyReturn()">Copy</button>
+    <button type="button" class="hdr-btn" onclick="document.getElementById('ret-banner').hidden=true">Hide</button></span></div>
+  <pre id="ret-csv"></pre>
+</div>
 
 <div class="shell">
   <!-- ── LEFT PANEL ── -->
@@ -1657,6 +1672,7 @@ function run() {
   renderSummary(data);
   renderAssumptions();
   updCgBasis();
+  renderReturn();
 }
 
 function buildStateNotes() {
@@ -1689,6 +1705,100 @@ function populateStateDropdown() {
   sel.value = 'CA';
 }
 
+// ─── RESULT FOR A SPREADSHEET (&return) ──────────────────────────────────────
+// A link with `return` computes at ONE ordinary income (`pi`, or the ordinary income entered under
+// Income details when there is no `pi`) and shows the answer as a comma-separated line, so a
+// spreadsheet can build the link from its own cells and the person can paste the result back. The
+// field names and their meaning are documented in UsageGuide.md; keep the two together.
+const RESULT_DEFAULT = ['ordinary', 'totalIncome', 'agi', 'magi', 'fedTax', 'stateTax', 'irmaa',
+                        'totalTax', 'effRate', 'fedMarginal', 'stateMarginal'];
+const RESULT_RATES   = new Set(['effRate', 'allInRate', 'fedMarginal', 'stateMarginal', 'cgRate']);
+const RESULT_FIELDS = {
+  ordinary:        c => c.P,
+  totalIncome:     c => c.total,
+  agi:             c => c.d.fedAGI,
+  magi:            c => c.d.magi,
+  taxableSS:       c => c.d.ssTax,
+  deduction:       c => c.d.fedDed,
+  seniorDeduction: c => c.d.senDed,
+  stateDeduction:  c => c.d.stDed,
+  itemized:        c => c.d.useItz ? 1 : 0,
+  fedOrdinaryTax:  c => c.d.fedTax,
+  fedCgTax:        c => c.d.fedCGTax,
+  niit:            c => c.d.niit,
+  fedTax:          c => c.d.fedTax + c.d.fedCGTax + c.d.niit,
+  stateTax:        c => c.d.stTaxOrd + c.d.stTaxCG,
+  incomeTax:       c => RESULT_FIELDS.fedTax(c) + RESULT_FIELDS.stateTax(c),
+  irmaa:           c => c.d.IRMAA,
+  irmaaTier:       c => c.now ? c.now.tier : 0,
+  totalTax:        c => c.d.totalTax,
+  netIncome:       c => c.total - c.d.totalTax,
+  effRate:         c => c.d.totEff,
+  allInRate:       c => c.d.allIn,
+  fedMarginal:     c => c.d.fedMarg,
+  stateMarginal:   c => c.d.stMarg,
+  cgRate:          c => c.d.cgRate,
+  irmaaFuture:     c => c.d.IRMAAFuture,
+  irmaaFutureTier: c => c.fut.tier,
+};
+
+// What the link asked for, read once: null without `return`. `return` alone (or 1) is the default
+// set, `all` is every field, and anything else is a comma list of field names.
+const RETURN_SPEC = (() => {
+  const p = new URLSearchParams(window.location.search);
+  if (!p.has('return')) return null;
+  const raw = p.get('return').trim();
+  const names = (raw === '' || raw === '1' || raw === 'true') ? RESULT_DEFAULT
+              : raw === 'all' ? Object.keys(RESULT_FIELDS)
+              : raw.split(',').map(x => x.trim()).filter(Boolean);
+  return { names, header: p.get('header') === '1' };
+})();
+
+// The result at one ordinary income. The marginal rates are measured over a $1,000 step.
+function resultFor(P) {
+  const h = 1000;
+  const d = deriveRow(calcAt(P), calcAt(P - h).fedTax, h);
+  return { d, P, total: P + cfg.ssIncome + d.cgGain,
+           now: cfg.prevMagi === null ? null : irmaaAt(cfg.prevMagi, 0), fut: irmaaAt(d.magi) };
+}
+
+// { fields, values, csv } for the current inputs. A name the page does not know comes back as a
+// single "ERROR: ..." token rather than as a column of zeros, so a typo cannot pass as a result.
+function buildResult() {
+  const spec = RETURN_SPEC ?? { names: RESULT_DEFAULT, header: false };
+  const bad = spec.names.filter(n => !(n in RESULT_FIELDS));
+  if (bad.length) {
+    const msg = 'ERROR: unknown field ' + bad.join(' ');
+    return { fields: [], values: [], csv: msg };
+  }
+  const P = pinnedIncome ?? cfg.entOrdinary;
+  const c = resultFor(P);
+  const values = spec.names.map(n => {
+    const v = RESULT_FIELDS[n](c);
+    return RESULT_RATES.has(n) ? Math.round(v * 1e6) / 1e6 : Math.round(v * 100) / 100;
+  });
+  const csv = (spec.header ? spec.names.join(',') + '\n' : '') + values.join(',');
+  return { fields: spec.names, values, csv };
+}
+window.taxResult = buildResult;   // for scripts: window.taxResult().csv
+
+function renderReturn() {
+  if (!RETURN_SPEC) return;
+  const r = buildResult();
+  document.getElementById('ret-csv').textContent = r.csv;
+  document.getElementById('ret-for').textContent = r.fields.length
+    ? `at ordinary income ${fmtMoney(pinnedIncome ?? cfg.entOrdinary)}` : '';
+  document.getElementById('ret-banner').hidden = false;
+}
+
+function copyReturn() {
+  const text = document.getElementById('ret-csv').textContent;
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).catch(() => {});
+  const sel = window.getSelection(), range = document.createRange();   // also select it, for a manual copy
+  range.selectNodeContents(document.getElementById('ret-csv'));
+  sel.removeAllRanges(); sel.addRange(range);
+}
+
 // Init
 populateStateDropdown();
 updYear(); updInf(); updMed(); updCgBasis();
@@ -1697,6 +1807,7 @@ document.getElementById('cg-sale-val').textContent = '$0';
 loadFromURL();   // apply URL params before first render
 applySsMax();
 readCfg();       // the View slider's range depends on the fixed income
+if (RETURN_SPEC && pinnedIncome === null) pinnedIncome = cfg.entOrdinary;   // so the chart shows what the result is for
 updateZoomUI();
 run();           // run() paints the info panel for a URL-restored pin
 initInfoPanel();
@@ -1873,14 +1984,14 @@ function loadFromURL() {
 
   // Income details: every field in the table, and the section opens when a link carries any of them.
   for (const f of DETAIL_FIELDS) {
-    if (!p.has(f.key) || !Number.isFinite(+p.get(f.key))) continue;
+    if (!p.has(f.key) || p.get(f.key).trim() === '' || !Number.isFinite(+p.get(f.key))) continue;
     const v = detailAmount(f, p.get(f.key));
     document.getElementById(f.id).value = v === 0 ? '' : fmtMoney(v);
-    if (v !== 0) document.getElementById('details-income').open = true;
+    document.getElementById('details-income').open = true;   // named in the link, so show it, even as 0
   }
   if (p.has('rw')) {
     document.getElementById('chk-retinc-swept').checked = p.get('rw') === '1';
-    if (p.get('rw') === '1') document.getElementById('details-income').open = true;
+    document.getElementById('details-income').open = true;
   }
   if (p.has('pm') && Number.isFinite(+p.get('pm')) && +p.get('pm') >= 0)
     document.getElementById('num-prevmagi').value = DisplayHelpers.formatDollar(+p.get('pm'));
@@ -1935,7 +2046,7 @@ function loadFromURL() {
       <summary>Change Log</summary>
       <dl class="modal-kv">
         <dt>v2.9</dt>
-        <dd>IRMAA tier lines carry the MAGI thresholds that will apply 2 years from now. This year's taxes include the IRMAA you owe now when you enter your MAGI from two years earlier, shown as its own purple bar, and the projected IRMAA two years out is shown separately, in purple, below Total Tax. Pin an income to see its IRMAA tier, the surcharge, the MAGI room before the next tier, and what crossing it adds. The summary states the ordinary income where IRMAA starts. The View is set in total income and can start below the income you entered (double-click its label to jump to $0 through $50k above your total, and again for sliders that reach negative values), ordinary income can be negative (a business loss, for example), and a dotted line marks where ordinary income is zero. Total Effective is income taxes only, and a separate purple line adds this year's IRMAA where that is meaningful. New Income details lets you spell out ordinary income, qualified dividends and property taxes, and all of it is in the Share link.</dd>
+        <dd>IRMAA tier lines carry the MAGI thresholds that will apply 2 years from now. This year's taxes include the IRMAA you owe now when you enter your MAGI from two years earlier, shown as its own purple bar, and the projected IRMAA two years out is shown separately, in purple, below Total Tax. Pin an income to see its IRMAA tier, the surcharge, the MAGI room before the next tier, and what crossing it adds. The summary states the ordinary income where IRMAA starts. The View is set in total income and can start below the income you entered (double-click its label to jump to $0 through $50k above your total, and again for sliders that reach negative values), ordinary income can be negative (a business loss, for example), and a dotted line marks where ordinary income is zero. Total Effective is income taxes only, and a separate purple line adds this year's IRMAA where that is meaningful. New Income details lets you spell out ordinary income, qualified dividends and property taxes, and all of it is in the Share link. Adding <code>return</code> to a link shows one result as comma-separated numbers, for spreadsheets; the URL guide lists every parameter.</dd>
         <dt>v2.8</dt>
         <dd>Medicare growth is modeled based on trustee guidance and is not adjustable.</dd>
         <dt>v2.5</dt>
@@ -2009,7 +2120,7 @@ function loadFromURL() {
 
     <div class="modal-section">
       <h3>Share button</h3>
-      <p>The <strong>Share</strong> button encodes all current settings into the URL and copies it to your clipboard. Paste it into any browser — or save it as a bookmark — to restore the exact same configuration. Works from a local file (<code>file://</code>) as well as a web server.</p>
+      <p>The <strong>Share</strong> button encodes all current settings into the URL and copies it to your clipboard. Paste it into any browser — or save it as a bookmark — to restore the exact same configuration. Works from a local file (<code>file://</code>) as well as a web server. A link can also be written by hand or built from a spreadsheet, and can ask for a result as a line of comma-separated numbers; the <a href="https://tools.netcitizen.us/UsageGuide.html" target="_blank" rel="noopener">URL guide</a> lists every parameter.</p>
     </div>
 
     <div class="modal-section">

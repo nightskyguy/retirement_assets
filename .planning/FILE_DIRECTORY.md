@@ -88,6 +88,7 @@ same stub pattern, just within `standalone/` rather than at root.)
 | File | What it is |
 |---|---|
 | `README.md` | The site's landing page (`/`, not `README.html`) — what the tools are, who they are for, the tax-torpedo explainer, FAQ, and the modelling caveats. |
+| `UsageGuide.md` | The URL parameters of `standalone/IncomeTaxPlanner.html` (every setting, the Income details fields, `pm`, `pi`, the view range), how to build a link from spreadsheet cells, and the `return` result line with its field list. The field names in its table are `RESULT_FIELDS` in the page; change one, change the other. |
 | `ARCHITECTURE.md` | Diagrams and file reference for `retirement_optimizer.html` and everything it loads: dependency graph, runtime data flow, `simulate()` pipeline, optimizer sweep, Monte Carlo, plus the rule for where a test file belongs. |
 | `optimizer_changelog.md` | Full release history. The 5 newest entries are duplicated inline in `retirement_optimizer.html`; adding one there means dropping the sixth-oldest `<li>`, whose detail is already here. |
 

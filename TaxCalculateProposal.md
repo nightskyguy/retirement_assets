@@ -144,6 +144,47 @@ shared calculation file:
   answering one line per value, newline-separated, numbers only. Numbers only matters because the sheet
   wraps the pieces in `VALUE()`: text fields such as `st` and `s` would come out as errors. In a locale
   whose decimal mark is a comma, `NUMBERVALUE(text, ".")` is safer than `VALUE()`.
+- **Answering the probes cheaply, with a Flask example.** Flask adds HEAD and OPTIONS to every GET route
+  and runs the same view for HEAD, so each `WEBSERVICE()` call to a Flask server does its work three
+  times. For `local_stock` that can mean three upstream quote fetches per cell. A hook that answers
+  the probes before any view runs removes that:
+
+  ```python
+  from flask import request, Response
+
+  @app.before_request
+  def cheap_probes():
+      # Calc's WEBSERVICE() sends OPTIONS and HEAD before GET. Answer them without doing the work.
+      if request.method == "OPTIONS":
+          return Response(status=204, headers={"Allow": "GET, HEAD, OPTIONS"})
+      if request.method == "HEAD":
+          return Response(status=200, headers={"Content-Type": "text/plain; charset=utf-8"})
+  ```
+
+  A HEAD reply with no `Content-Length` is legal, but LibreOffice might read something from it that
+  is not visible from outside, so try it on one cell first and compare the result with the old one.
+  The same pair of answers is what `prototypes/libreoffice_probe.js` gives, and its `--full-head`
+  option turns the shortcut off so the two can be compared by request count.
+- **Prototype: Sheet, Link to External Data.** `WEBSERVICE()` is one way for Calc to read an address.
+  The other is **Sheet > Link to External Data...**, which imports a table from an address into a range
+  and can refresh it every few seconds. It may need fewer requests per refresh, and it brings a whole
+  block at once, which suits a batch of scenarios or symbols. Whether it does is a question for an
+  experiment, not for reasoning, so `prototypes/libreoffice_probe.js` exists: a dependency-free node
+  server that answers with real tax figures (`/tax.csv` and `/tax.html`, one scenario or a `vary=` batch)
+  and prints every request, with `/stats` counting them by method. The script's header lists what to try
+  and what to count:
+  1. the requests per `WEBSERVICE()` call, as a baseline (expected: OPTIONS, HEAD, GET);
+  2. the requests per refresh of a linked range, for an `.html` table and for a plain `.csv` address;
+  3. whether Calc accepts the plain CSV or insists on an HTML table;
+  4. whether the refresh interval holds, and whether the linked range survives closing and reopening.
+  If it works well it is also a better shape for `local_stock`: one linked block of all symbols,
+  refreshed by Calc on a timer, instead of one `WEBSERVICE()` cell per value.
+- **Calc's distrust of external content.** Calc asks for approval the first time a document that
+  fetches from an address is opened, and the author finds this the biggest friction, even for
+  `localhost`. Things to try, from memory of the options and to be confirmed in the installed version:
+  **Tools > Options > LibreOffice Calc > General > Update links when opening** (always, on request,
+  never), and whether a linked range behaves differently from `WEBSERVICE()` cells in this respect.
+  The probe's step 4 is there to find that out.
 - **Privacy:** the figures go only to a process on the same machine. No Cloudflare, no logs unless the
   tool is written to keep them, which it would not be. It would also suit anyone else who runs scripts,
   since the node tool needs no installation beyond node itself.

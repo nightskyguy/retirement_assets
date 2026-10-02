@@ -120,7 +120,7 @@ Where a link, and so your figures, can end up:
 - **Browser history and bookmarks**, on every device that syncs them.
 - **Anywhere you paste or send the link**: email, chat, a forum or Reddit post, a spreadsheet, a document, a screenshot of the address bar. Everyone who can see the link can read the numbers in it, and a post that also says who you are or where you live can tie them to you. The author typically uses such links for illustration and avoids sharing any link containing real personal information.
 - **The servers that deliver the page.** Asking for a page sends its parameters along, so the web host and any network in front of it can record them in their access logs, whatever the page itself does.
-- **Analytics.** The Retirement Optimizer discloses only the tool's own address to Google Analytics. The Income Tax Planner discloses its address and the state (if entered), but no other parameters. The Income Tax Planner also skips the Cloudflare page counter when a link carries parameters. The other standalone tools have not yet been hardened so assume they leak any parameters you enter.
+- **Analytics.** The Retirement Optimizer and the Income Tax Planner disclose the tool name and state (if entered) to Google Analytics - but no other parameters. The Income Tax Planner also skips the Cloudflare page counter when a link carries parameters. The other standalone tools have not yet been hardened so assume they leak any parameters you enter.
 
 Sharing safely:
 

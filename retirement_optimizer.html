@@ -6,9 +6,11 @@
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-  // P131. The page address WITHOUT its query. A shared plan link carries the whole plan in the
-  // query, and Google Analytics records the full address with every page view unless told otherwise.
-  gtag('config', 'G-DJ1KD88H79', { page_location: location.origin + location.pathname });
+  // The page address WITHOUT its query. A shared plan link carries the whole plan in the query, and
+  // Google Analytics records the full address with every page view unless told otherwise. Only the
+  // state (`s`) is kept: it is not a figure, and it is what is worth counting.
+  var _st = (new URLSearchParams(location.search).get('s') || '').toUpperCase();
+  gtag('config', 'G-DJ1KD88H79', { page_location: location.origin + location.pathname + (/^[A-Z]{2}$/.test(_st) ? '?s=' + _st : '') });
 </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">

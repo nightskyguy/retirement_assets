@@ -28,7 +28,7 @@ Rates and percentages are plain numbers too (`2.5` means 2.5%).
 | `st` | Filing status | `MFJ` (married filing jointly, the default) or `SGL` (single) |
 | `s` | State | Two-letter code in any case, default `CA`. See [state codes](#state-codes). A code the page does not have is reported as an error and never replaced by a default state. |
 | `a1`, `a2` | Ages of the two taxpayers | Whole years, default 65 and 65. `a2` is ignored for `SGL`. An age of 65 or more brings the larger standard deduction and the OBBBA senior deduction. |
-| `yr` | Tax year to show | 2026 to 2035, default 2026. Brackets and thresholds are inflated from 2026. |
+| `yr` | Tax year to show | The year of the tax tables (2026 at present) through that year plus 9 (2035). The first year is the default. Brackets and thresholds are inflated from the first year. |
 | `in` | Annual bracket inflation, in percent | 0.5 to 6 in steps of 0.5, default 2.5 |
 
 ### Income that stays fixed while the chart sweeps ordinary income
@@ -233,7 +233,7 @@ For scripts that drive a real browser, the page exposes `window.taxResult()`, wh
 
 ## Before you share a link
 
-The README explains the risk in full: [Putting Numbers in a Link: Privacy](https://tools.netcitizen.us/#putting-numbers-in-a-link-privacy). In short, a link with parameters is personal financial information.
+The README explains the risk in full: [Privacy Considerations](https://tools.netcitizen.us/#privacy-considerations). In short, a link with parameters is personal financial information.
 
 The calculation runs in your browser. A link carries your figures in plain text, so they are in your
 browser history and in anything you paste the link into, including the spreadsheet and any email or

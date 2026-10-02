@@ -210,7 +210,7 @@
 <body>
 <header>
   <h1>Income Tax Planner<span class="ver">v2.9</span></h1>
-  <p>Federal + State · Capital Gains · IRMAA · SS torpedo · 2026–2035 with inflation</p>
+  <p>Federal + State · Capital Gains · IRMAA · SS torpedo · <span id="hdr-years">2026–2035</span> with inflation</p>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center;position:relative">
     <strong id="testsFailed" title="Unit tests status">🟢</strong>
     <button class="hdr-btn share" onclick="toggleSharePanel()">&#8258; Share</button>
@@ -1876,6 +1876,13 @@ async function copyReturn() {
 
 // Init
 populateStateDropdown();
+// The Tax Year slider spans the year the tax tables are stated in and the nine after it, so no year
+// is written into the page: when the tables move forward, so does the slider and its default.
+(function () {
+  const y = document.getElementById('sl-year');
+  y.min = BASE_YEAR; y.max = BASE_YEAR + 9; y.value = BASE_YEAR;
+  document.getElementById('hdr-years').textContent = `${BASE_YEAR}\u2013${BASE_YEAR + 9}`;
+})();
 updYear(); updInf(); updMed(); updCgBasis();
 document.getElementById('ss-val').textContent = '$0';
 document.getElementById('cg-sale-val').textContent = '$0';

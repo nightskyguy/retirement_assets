@@ -119,18 +119,18 @@ Where a link, and so your figures, can end up:
 
 - **Browser history and bookmarks**, on every device that syncs them.
 - **Anywhere you paste or send the link**: email, chat, a forum or Reddit post, a spreadsheet, a document, a screenshot of the address bar. Everyone who can see the link can read the numbers in it, and a post that also says who you are or where you live can tie them to you. The author typically uses such links for illustration and avoids sharing any link containing real personal information.
-- **The servers that deliver the page.** Asking for a page sends its parameters along, so the web host and any network in front of it can record them in their access logs, whatever the page itself does. 
-- **Analytics.** The Retirement Optimizer and the Income Tax Planner disclose the tool name and state (if entered) to Google Analytics - but no other parameters. The Income Tax Planner also skips the Cloudflare page counter when a link carries parameters. The other standalone tools have not yet been hardened so assume they leak any parameters you enter.
+- **The servers that deliver the page.** Asking for a page sends its parameters along, so the web host and any network in front of it can record them in their access logs, whatever the page itself does.
+- **Analytics.** The Retirement Optimizer discloses only the tool's own address to Google Analytics. The Income Tax Planner discloses its address and the state (if entered), but no other parameters. The Income Tax Planner also skips the Cloudflare page counter when a link carries parameters. The other standalone tools have not yet been hardened so assume they leak any parameters you enter.
 
 Sharing safely:
 
 - If someone being able to see your balances or annual income is not worrisome to you, you don't need to do anything special.
-- Before posting a link in public, take the parameters off, or replace the figures with made-up ones. If you must share details - e.g. with your Financial Advisor -  consider using encrypted email. You can enter parameters after loading the page (or from a saved file for Retirement Optimizer), then use the Share button and send the result to your financial advisor. Your shared target will have the actual parameters - but at least one step removed from being linked to you.
+- Before posting a link in public, take the parameters off, or replace the figures with made-up ones. If you must share details - e.g. with your financial advisor - consider using encrypted email. You can enter parameters after loading the page (or from a saved file for Retirement Optimizer), then use the Share button and send the result to your financial advisor. Your shared target will have the actual parameters - but at least one step removed from being linked to you.
 - Avoid bookmarking a link that holds your real figures unless you are sure your bookmarks are secure (most bookmarks in most browsers are NOT secure).
 - The Retirement Optimizer can save your information in your browser using "Save" or write a file to your disk using "Export" which avoids using links/URLs altogether.
 - The other bit of information that goes along with your page load is your IP address. You can avoid your actual IP address being captured by using a VPN.
 
-There is no clean way to hide parameters and preserve functionality. Encrypting parameters, for example creates its own problem about managing/providing keys. And spreadsheets cannot encrypt. 
+There is no clean way to hide parameters and preserve functionality. Encrypting parameters, for example, creates its own problem of managing and providing keys, and spreadsheets cannot encrypt.
 
 ---
 
@@ -138,7 +138,7 @@ There is no clean way to hide parameters and preserve functionality. Encrypting 
 
 Here are less ambitious, standalone tools. Each should have a "How to Use" set of instructions, many have a way to generate a URL (called share) to capture your settings so you can either run again without reentering, or share with friends (or Redditors) for advice.
 
-These tools are all being actively developed and improved. Each tool runs standalone in your browser - though most load additional local resources (e.g. they share the same **taxengine.js**). An internet connection is needed to load fonts and the tool for graphing charts. Basic, anonymous page-load analytics are collected (Google Analytics and Cloudflare Web Analytics) solely to understand how often the tools are used and from what general region - the tools themselves do not collect, store, or transmit personally identifiable information, apart from anything you choose to send with the Retirement Optimizer's **Feedback** button (see [Sending Feedback](#sending-feedback)). What a link can carry is a separate matter: see [Putting Numbers in a Link: Privacy](#putting-numbers-in-a-link-privacy). General region information helps prioritize which state tax rules to add in future releases. You are welcome to see for yourself by inspecting the [source code](https://github.com/nightskyguy/retirement_assets).
+These tools are all being actively developed and improved. Each tool runs standalone in your browser - though most load additional local resources (e.g. they share the same **taxengine.js**). An internet connection is needed to load fonts and the tool for graphing charts. Basic, anonymous page-load analytics are collected (Google Analytics and Cloudflare Web Analytics) solely to understand how often the tools are used and from what general region - the tools themselves do not collect, store, or transmit personally identifiable information, apart from anything you choose to send with the Retirement Optimizer's **Feedback** button (see [Sending Feedback](#sending-feedback)). What a link can carry is a separate matter: see [Privacy Considerations](#privacy-considerations). General region information helps prioritize which state tax rules to add in future releases. You are welcome to see for yourself by inspecting the [source code](https://github.com/nightskyguy/retirement_assets).
 
 ### Historical Real Returns
 **[Historical Real Returns](standalone/RealReturns.html) - Inflation-Adjusted Cumulative Growth of $10,000 (1928–2025)**

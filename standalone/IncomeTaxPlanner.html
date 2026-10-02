@@ -1335,7 +1335,7 @@ function irmaaPanelRows(magi) {
   const rows = [row(`${y} IRMAA ${ir.tier ? 'Tier ' + ir.tier : 'none'}`, ir.tier ? `${$v(ir.annual)}/yr` : '')];
   if (ir.next) {
     rows.push(row(ir.tier ? `Tier ${ir.next.n} starts at MAGI` : 'IRMAA starts at MAGI', $v(Math.ceil(ir.next.at))));
-    rows.push(row('Crossing it adds', `+${$v(ir.next.cliff)}/yr`));
+    rows.push(row('Crossing it adds', `+${$v(ir.next.cliff)}/yr, to ${$v(ir.annual + ir.next.cliff)}/yr`));
   } else {
     rows.push(row('Top tier', 'no higher tier'));
   }

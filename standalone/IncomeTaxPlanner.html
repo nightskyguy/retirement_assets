@@ -150,7 +150,8 @@
   .zoom-btn.zoomed { border-color:rgba(245,166,35,.5); color:var(--amber); }
   /* ── dual range zoom slider ── */
   .zoom-slider-row { display:flex; align-items:center; gap:.55rem; padding:.3rem .4rem; }
-  .zoom-slider-lbl { font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); white-space:nowrap; }
+  .zoom-slider-lbl { font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); white-space:nowrap; cursor:pointer; user-select:none; }
+  .zoom-slider-lbl.neg::after { content:' ±'; color:var(--teal); }
   .zoom-slider-readout { font-family:var(--mono); font-size:11px; color:var(--teal); white-space:nowrap; min-width:9rem; text-align:right; }
   .range-wrap { position:relative; flex:1; height:18px; }
   .range-wrap input[type=range] { position:absolute; left:0; right:0; top:50%; transform:translateY(-50%); width:100%; height:3px; background:transparent; pointer-events:none; }
@@ -312,7 +313,7 @@
       <canvas id="chart-main" height="240"></canvas>
       <div class="irm-legend" id="irm-legend"></div>
       <div class="zoom-slider-row">
-        <span class="zoom-slider-lbl">View</span>
+        <span class="zoom-slider-lbl" id="lbl-view" ondblclick="onViewLabelDbl()" title="Double-click: set the View from $0 to $50k above your current total income. Again: let both sliders reach negative values. Again: back to $0.">View</span>
         <div class="range-wrap" id="zoom-range-wrap">
           <div class="range-track-fill" id="zoom-track-fill"></div>
           <input type="range" id="sl-zoom-lo" min="0" max="1100000" step="10000" value="30000"
@@ -323,11 +324,11 @@
         <span class="zoom-slider-readout" id="zoom-readout">$30k – $620k</span>
       </div>
       <div class="zoom-slider-row">
-        <span class="zoom-slider-lbl">Ordinary</span>
+        <span class="zoom-slider-lbl" id="lbl-ord" ondblclick="onOrdLabelDbl()" title="Double-click: let both sliders reach negative values, and again to go back to starting at $0.">Ordinary</span>
         <input type="range" id="sl-pin" min="30000" max="620000" step="10000" value="30000"
                class="unpinned" oninput="onPinSlider()" title="Move the pinned ordinary income">
         <input type="text" id="num-pin" class="pin-num" value="" placeholder="none"
-               autocomplete="off" onchange="onPinNumCommit()"
+               autocomplete="off" onchange="onPinNumCommit()" onfocus="this.select()"
                title="Type an exact ordinary income to pin">
         <button class="zoom-btn" id="btn-pin-clear" onclick="clearPin()" disabled
                 title="Unpin">&#10005;</button>
@@ -358,6 +359,7 @@
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const FULL_MAX  = 1_100_000;
 const FULL_STEP =    10_000;
+const VIEW_FLOOR = -300_000;   // the lowest TOTAL income the View can be set to
 const BASE_YEAR = TAXData.FEDERAL.YEAR;   // the year the tax tables are stated in
 
 // OBBBA display helpers — read from TAXData so display stays in sync with calculations
@@ -439,7 +441,7 @@ function calcAt(ordInc) {
   const effectiveObbaOn = obbaOn && year <= obbaSen.sunsetYear;
 
   // Retirement-income portion of the swept ordinary income (for state exclusion states like IL/PA).
-  const retInc = cfg.retirementSwept ? ordInc : Math.min(cfg.retirementIncome, ordInc);
+  const retInc = Math.max(0, cfg.retirementSwept ? ordInc : Math.min(cfg.retirementIncome, ordInc));
 
   const r = calculateTaxes({
     filingStatus:    status,
@@ -487,20 +489,52 @@ function calcAt(ordInc) {
   };
 }
 
-// ─── ZOOM STATE ──────────────────────────────────────────────────────────────
-let zoomMin      = 30_000;
-let zoomMax      = 620_000;
-let zoomStep     = FULL_STEP;
+// ─── VIEW STATE ──────────────────────────────────────────────────────────────
+// The View is a range of TOTAL income, the figure on the chart's top axis, and it is what the user
+// sets. The sweep itself runs over ORDINARY income (calcAt takes that), and fixedIncome() is the
+// difference: total = ordinary + fixed. So the View is free to reach below the income already
+// entered, where ordinary income is negative (which is what a business loss is), and does not have
+// to start at it. applyView() turns the View into the sweep's ordinary range on every redraw.
+let viewLo = 30_000, viewHi = 620_000;                          // total income: the user's setting
+let zoomMin = 30_000, zoomMax = 620_000, zoomStep = FULL_STEP;  // ordinary income: derived by applyView()
+// Both sliders start at 0 so a negative stretch they rarely need does not eat their travel. They reach
+// below 0 when a negative ordinary income is pinned, when the View was set below 0, or while
+// negRanges is on (double-click either label). That changes the sliders' RANGES only, never the View
+// or the pinned income. dblPhase tracks the View label's double-click cycle: null, 'set', 'neg'.
+let negRanges = false, dblPhase = null;
 let autoZoomOn   = true;
-let pinnedIncome = null;  // actual $ income value of pinned column (null = none)
+let pinnedIncome = null;  // ORDINARY income of the pinned column (null = none); may be negative
+
+// Income held fixed while ordinary income is swept: all Social Security plus the taxable gain.
+function fixedIncome() {
+  return cfg.ssIncome + (cfg.cgSale > 0 ? cfg.cgSale * (1 - cfg.cgBasisPct / 100) : 0);
+}
+const round2 = v => Math.round(v * 100) / 100;
+// "Full" is every total income from $0 up to FULL_MAX of ordinary income above the fixed amounts, so
+// the whole range is reachable whatever has been entered.
+const fullHi  = () => Math.ceil((FULL_MAX + fixedIncome()) / FULL_STEP) * FULL_STEP;
+const viewTop = () => Math.max(fullHi(), viewHi);   // the View slider's upper end
+const viewBottom = () => negRanges ? VIEW_FLOOR : Math.min(0, viewLo);   // and its lower end
 
 function getN()       { return Math.round((zoomMax - zoomMin) / zoomStep) + 1; }
-function isFullZoom() { return zoomMin === 0 && zoomMax === FULL_MAX && zoomStep === FULL_STEP; }
+function isFullZoom() { return viewLo === 0 && viewHi === fullHi(); }
 
 function pickStep(range) {
   const raw = range / 110;
   const nice = [200, 500, 1_000, 2_000, 5_000, 10_000, 25_000, 50_000];
   return nice.find(s => s >= raw) ?? 50_000;
+}
+
+// Sample the View on a grid of whole TOTAL-income steps, so the top axis lands on round numbers and
+// the slider thumbs sit exactly where they were dragged. Ordinary income is whatever is left.
+function applyView() {
+  const F    = fixedIncome();
+  const step = pickStep(viewHi - viewLo);
+  const t0   = Math.ceil(viewLo / step) * step;
+  const t1   = Math.max(Math.floor(viewHi / step) * step, t0 + step);
+  zoomStep = step;
+  zoomMin  = round2(t0 - F);
+  zoomMax  = round2(t1 - F);
 }
 
 // Label interval for x-axis ticks — more marks when zoomed in
@@ -511,6 +545,20 @@ function pickLabelStep() {
   if (range <=  600_000) return  50_000;
   return 100_000;
 }
+
+// Total income at column i if that column sits on a label multiple, else null. Both axes label the
+// same columns: the top one prints the total, the bottom one the ordinary income at that column.
+function tickTotal(i) {
+  const t  = zoomMin + i * zoomStep + fixedIncome();
+  const ls = pickLabelStep();
+  return Math.abs(t - Math.round(t / ls) * ls) < 0.01 ? t : null;
+}
+
+// Money in thousands, sign first: -$50k. (formatDollar would print $-50k.)
+const fmtK = v => Math.abs(v) < 500 ? '$0'
+  : Math.abs(v) >= 1e6 ? `${v < 0 ? '-' : ''}$${(Math.abs(v) / 1e6).toFixed(2).replace(/\.?0+$/, '')}M`
+  : `${v < 0 ? '-' : ''}$${Math.round(Math.abs(v) / 1000).toLocaleString()}k`;
+const fmtMoney = v => `${v < 0 ? '-' : ''}$${Math.round(Math.abs(v)).toLocaleString()}`;
 
 // Fractional x position of the pin. The pin carries an exact dollar value (the numeric field can
 // set anything), so it does not have to land on a sampled column.
@@ -527,26 +575,19 @@ function getPinnedIdx() {
 }
 
 function buildLabels() {
-  const n = getN();
-  return Array.from({length: n}, (_, i) => {
-    const v = zoomMin + i * zoomStep;
-    if (v === 0) return '$0';
-    if (v % 100_000 === 0) return `$${v / 1000}k`;
-    return '';
-  });
+  return Array.from({length: getN()}, () => '');   // the axes label their own ticks
 }
 
+// Centers the View on an ORDINARY income (the pinned column).
 function zoomToIncome(income) {
-  const half = Math.max(income * 0.30, 25_000);
-  zoomMin  = Math.max(0, Math.round((income - half) / 1000) * 1000);
-  zoomMax  = Math.round((income + half) / 1000) * 1000;
-  zoomStep = pickStep(zoomMax - zoomMin);
+  const total = income + fixedIncome();
+  const half  = Math.max(Math.abs(total) * 0.30, 25_000);
+  viewLo = Math.max(VIEW_FLOOR, Math.round((total - half) / 1000) * 1000);
+  viewHi = Math.round((total + half) / 1000) * 1000;
 }
 
 function resetZoom() {
-  // Pin keeps its exact dollar value; it is drawn at a fractional x, so no snapping needed.
-  if (pinnedIncome !== null) pinnedIncome = Math.max(0, Math.min(FULL_MAX, pinnedIncome));
-  zoomMin = 0; zoomMax = FULL_MAX; zoomStep = FULL_STEP;
+  viewLo = 0; viewHi = fullHi();
   updateZoomUI();
   run();
 }
@@ -569,35 +610,62 @@ function syncRangeSlider() {
   const fill = document.getElementById('zoom-track-fill');
   const readout = document.getElementById('zoom-readout');
   if (!lo || !hi) return;
-  lo.value = zoomMin;
-  hi.value = zoomMax;
-  lo.style.zIndex = zoomMin > FULL_MAX / 2 ? '2' : '1';
-  hi.style.zIndex = zoomMin > FULL_MAX / 2 ? '1' : '2';
-  const loF = zoomMin / FULL_MAX * 100;
-  const hiF = zoomMax / FULL_MAX * 100;
+  const top = viewTop();
+  const bot = viewBottom();
+  for (const el of [lo, hi]) { el.min = bot; el.max = top; }
+  lo.value = viewLo;
+  hi.value = viewHi;
+  const span = top - bot;
+  const mid  = bot + span / 2;
+  lo.style.zIndex = viewLo > mid ? '2' : '1';
+  hi.style.zIndex = viewLo > mid ? '1' : '2';
+  const loF = (viewLo - bot) / span * 100;
+  const hiF = (viewHi - bot) / span * 100;
   fill.style.background =
     `linear-gradient(to right,var(--border) 0%,var(--border) ${loF}%,` +
     `var(--teal) ${loF}%,var(--teal) ${hiF}%,var(--border) ${hiF}%,var(--border) 100%)`;
-  const fmt = v => v === 0 ? '$0' : `$${(v/1000).toLocaleString(undefined,{maximumFractionDigits:0})}k`;
-  readout.textContent = `${fmt(zoomMin)} – ${fmt(zoomMax)}`;
+  readout.textContent = `${fmtK(viewLo)} – ${fmtK(viewHi)}`;
+  for (const id of ['lbl-view', 'lbl-ord']) document.getElementById(id)?.classList.toggle('neg', negRanges);
 }
 
 const ZOOM_MIN_GAP = 50_000;
 
 function onZoomLoInput() {
   let lo = +document.getElementById('sl-zoom-lo').value;
-  lo = Math.round(Math.min(lo, zoomMax - ZOOM_MIN_GAP) / FULL_STEP) * FULL_STEP;
-  zoomMin = Math.max(lo, 0);
-  zoomStep = pickStep(zoomMax - zoomMin);
+  viewLo = Math.max(VIEW_FLOOR, Math.round(Math.min(lo, viewHi - ZOOM_MIN_GAP) / FULL_STEP) * FULL_STEP);
+  dblPhase = null;
   updateZoomUI(); run();
 }
 
 function onZoomHiInput() {
   let hi = +document.getElementById('sl-zoom-hi').value;
-  hi = Math.round(Math.max(hi, zoomMin + ZOOM_MIN_GAP) / FULL_STEP) * FULL_STEP;
-  zoomMax = Math.min(hi, FULL_MAX);
-  zoomStep = pickStep(zoomMax - zoomMin);
+  viewHi = Math.round(Math.max(hi, viewLo + ZOOM_MIN_GAP) / FULL_STEP) * FULL_STEP;
+  dblPhase = null;
   updateZoomUI(); run();
+}
+
+// Double-click on the View label. First: View = $0 to $50k above the current total income (the pinned
+// column's, or the fixed income when nothing is pinned). Second: both sliders may reach negative
+// values, with the View and the pin left exactly as they are. Third: back to the first.
+function onViewLabelDbl() {
+  if (dblPhase === 'set') {
+    negRanges = true;
+    dblPhase = 'neg';
+  } else {
+    const total = fixedIncome() + (pinnedIncome ?? 0);
+    negRanges = false;
+    dblPhase = 'set';
+    viewLo = 0;
+    viewHi = Math.max(Math.round((total + 50_000) / FULL_STEP) * FULL_STEP, viewLo + ZOOM_MIN_GAP);
+  }
+  updateZoomUI(); run();
+}
+
+// Double-click on the Ordinary label only flips whether the sliders may reach below 0.
+function onOrdLabelDbl() {
+  negRanges = !negRanges;
+  dblPhase = negRanges ? 'neg' : null;
+  updateZoomUI();
 }
 
 // Stored sweep results for info panel access
@@ -608,15 +676,18 @@ let sweepData = [];
 function deriveRow(p, prevFedTax, h) {
   const denom    = Math.max(p.ordInc + cfg.ssIncome + p.cgGain, 1);
   const totalTax = p.fedTax + p.fedCGTax + p.niit + p.IRMAA + p.stTaxOrd + p.stTaxCG;
-  // The rate lines leave out this year's IRMAA. It is a flat charge set by income two years ago, so
-  // it does not move with the income being swept; divided by a small swept income it is a rate in
-  // the hundreds of thousands of percent and flattens every other line. It stays in Total Tax.
+  const fedMarg = prevFedTax === null ? 0 : (p.fedTax - prevFedTax) / h;
+  // The solid effective rates are INCOME taxes. This year's IRMAA is a flat charge set by income two
+  // years ago, so over a small swept income it is an enormous "rate" and says nothing about what
+  // more income costs. `allIn` carries it, and is shown (allInShown) only where it stays within the
+  // sum of the two marginal rates; elsewhere it is null and the chart leaves a gap.
+  const allIn = totalTax / denom;
   return {
-    ...p, totalTax,
+    ...p, totalTax, fedMarg, allIn,
     fedEff:  (p.fedTax + p.fedCGTax + p.niit) / denom,
     stEff:   (p.stTaxOrd + p.stTaxCG) / denom,
     totEff:  (totalTax - p.IRMAA) / denom,
-    fedMarg: prevFedTax === null ? 0 : (p.fedTax - prevFedTax) / h
+    allInShown: p.IRMAA > 0 && allIn <= Math.max(0, fedMarg) + Math.max(0, p.stMarg) ? allIn : null
   };
 }
 
@@ -624,8 +695,7 @@ function deriveRow(p, prevFedTax, h) {
 // difference width as the chart so the panel's Fed Marginal matches the purple line.
 function exactRow(income) {
   const p = calcAt(income);
-  const prev = income - zoomStep >= 0 ? calcAt(income - zoomStep).fedTax : null;
-  return deriveRow(p, prev, zoomStep);
+  return deriveRow(p, calcAt(income - zoomStep).fedTax, zoomStep);
 }
 
 function pinnedRow() {
@@ -646,10 +716,7 @@ const XSCALE = {
   ticks:{ color:'#7b83a0', font:{family:'DM Mono, monospace',size:9},
           maxRotation:0, autoSkip:false,
           callback(_, i) {
-            const v = zoomMin + i * zoomStep;
-            const ls = pickLabelStep();
-            if (v === 0 || v % ls === 0) return v === 0 ? '$0' : `$${v / 1000}k`;
-            return null;
+            return tickTotal(i) === null ? null : fmtK(zoomMin + i * zoomStep);
           }},
   grid:{ color:'#2a3048' }
 };
@@ -714,7 +781,7 @@ const vLinePlugin = {
         ctx.font = '9px DM Mono, monospace';
         ctx.textAlign = 'left';
         const row = ln.tierIdx === undefined ? 1 : 2 + (ln.tierIdx % 2);
-        ctx.fillText(ln.label, xPx+3, yScale.top + ROW * row);
+        ctx.fillText(ln.label, xPx+3, ln.bottomLabel ? yScale.bottom - 5 : yScale.top + ROW * row);
       }
       ctx.restore();
     }
@@ -799,25 +866,43 @@ function irmaaAt(magi, ahead = IRMAA_AHEAD) {
 
 // Ordinary income at which MAGI first reaches `magiAt`, found by bisection on calcAt rather than read
 // off the chart, so it is the same answer at every zoom and when the crossing is outside the view.
-// MAGI never falls as ordinary income rises, which is what makes bisection valid. null when even
-// the search ceiling does not reach it; 0 when Social Security and gains alone already do.
+// MAGI never falls as ordinary income rises, which is what makes bisection valid. The answer is
+// negative when the income already entered (Social Security, gains) is past the threshold on its own.
+// null when even the search ceiling does not reach it.
 function ordinaryAtMagi(magiAt) {
-  const CEIL = 5_000_000;
-  if (calcAt(0).magi >= magiAt) return 0;
+  const LO = -(fixedIncome() + 1_000_000), CEIL = 5_000_000;   // MAGI is far below any threshold at LO
   if (calcAt(CEIL).magi < magiAt) return null;
-  let lo = 0, hi = CEIL;
-  for (let i = 0; i < 28; i++) {          // 28 halvings of 5M is a couple of cents
+  let lo = LO, hi = CEIL;
+  for (let i = 0; i < 30; i++) {          // 30 halvings of ~6M is under a cent
     const mid = (lo + hi) / 2;
     if (calcAt(mid).magi >= magiAt) hi = mid; else lo = mid;
   }
   return hi;
 }
 
-const kLabel = v => `$${Math.round(v / 1000)}k`;
+// A rate as text. Anything over 999% is a flat charge over almost no income and reads as a bug if
+// printed in full.
+const fmtPct = v => v > 9.99 ? '>999%' : (v * 100).toFixed(1) + '%';
+
+const kLabel = fmtK;
 
 // One entry per tier, always. A tier outside the view comes back as an edge marker (`edge`) rather
 // than being dropped: left when MAGI is already past it at the left edge of the view, right when
 // MAGI never reaches it. Dropping it was how a tier above the zoom window went missing silently.
+// A dotted line where ORDINARY income is zero, which is where total income equals the income held
+// fixed (Social Security plus the gain). Left of it the View is showing a net loss or a lower
+// total than what was entered. Off screen it becomes an edge marker like the IRMAA tiers.
+const OTHER_COLOR = '#cbd5e1';
+function otherIncomeLine(data) {
+  const F = fixedIncome();
+  if (!(F > 0) || !data.length) return [];
+  const label = 'Ord $0 \u00B7 other income ' + fmtK(F);
+  const pos = (0 - zoomMin) / zoomStep;
+  if (pos < 0)                return [{ index: 0, edge: 'left',  color: OTHER_COLOR, label }];
+  if (pos > data.length - 1)  return [{ index: data.length - 1, edge: 'right', color: OTHER_COLOR, label }];
+  return [{ index: pos, color: OTHER_COLOR, dash: [2, 3], label, bottomLabel: true }];
+}
+
 function tierLines(data) {
   if (!data.length) return [];
   return irmaaTiers().map((t, i) => {
@@ -874,7 +959,8 @@ function renderChart(data) {
   const fedMrg = data.map(d => pct(Math.max(0, d.fedMarg)));
   const stMrg  = data.map(d => pct(Math.max(0, d.stMarg)));
   const cgRt   = data.map(d => pct(Math.max(0, d.cgRate)));
-  const yRMax  = Math.ceil(Math.max(...fedMrg, ...stMrg, ...totEff, 40) / 5) * 5 + 5;
+  const allInD = data.map(d => d.allInShown === null ? null : pct(d.allInShown));
+  const yRMax  = Math.ceil(Math.max(...fedMrg, ...stMrg, ...totEff, ...allInD.filter(v => v !== null), 40) / 5) * 5 + 5;
 
   // Dollar datasets
   const fedOrd = data.map(d => Math.round(d.fedTax));
@@ -890,7 +976,7 @@ function renderChart(data) {
   const maxTax  = Math.max(...data.map(d => d.totalTax));
   const yDMax   = Math.ceil(maxTax * 1.15 / 50_000) * 50_000 || 500_000;
 
-  const vlines = [...niitLine(data), ...tierLines(data)];
+  const vlines = [...niitLine(data), ...tierLines(data), ...otherIncomeLine(data)];
 
   updateChartTitle();
 
@@ -910,6 +996,7 @@ function renderChart(data) {
     ds[10].data = stOrd;
     ds[11].data = stCG;
     ds[12].data = magiD;
+    ds[13].data = allInD;
     chartMain.options.scales.yR.max = yRMax;
     chartMain.options.scales.yD.max = yDMax;
     chartMain.options.scales.y2.max = y2Max;
@@ -955,8 +1042,8 @@ function renderChart(data) {
         { _dollarDs:true, type:'bar', label:'Federal NIIT (3.8%)',
           data:niitD, backgroundColor:'rgba(129,140,248,0.80)', borderWidth:0,
           stack:'tx', yAxisID:'yD', hidden:inD },
-        { _dollarDs:true, type:'bar', label:'IRMAA',
-          data:IRMAAD, backgroundColor:'rgba(245,166,35,0.85)', borderWidth:0,
+        { _dollarDs:true, type:'bar', label:'IRMAA (this year)',
+          data:IRMAAD, backgroundColor:'rgba(168,85,247,0.90)', borderWidth:0,
           stack:'tx', yAxisID:'yD', hidden:inD },
         { _dollarDs:true, type:'bar', label:'State Ordinary Tax',
           data:stOrd, backgroundColor:'rgba(251,146,60,0.75)', borderWidth:0,
@@ -969,7 +1056,12 @@ function renderChart(data) {
           data:magiD, borderColor:'rgba(25,201,157,0.8)', backgroundColor:'transparent',
           borderWidth:1.5, pointRadius:0, tension:0, yAxisID:'y2',
           hidden:inD, order:-1 },
-        // ─ FAKE IRMAA (legend only) ─
+        // ─ ALL-IN RATE: income taxes plus this year's IRMAA, drawn only where it is meaningful ─
+        { _rateDs:true, _allIn:true, type:'line', label:"Total incl. IRMAA (this year)",
+          data:allInD, borderColor:'#a855f7', backgroundColor:'transparent',
+          borderWidth:2, pointRadius:0, tension:0, borderDash:[2,2], spanGaps:false,
+          yAxisID:'yR', hidden:inR },
+        // ─ IRMAA TIER CARRIERS (hidden state only; the legend is the row under the chart) ─
         ...fakeIRMAA()
       ]
     },
@@ -990,14 +1082,14 @@ function renderChart(data) {
               if (!d) return [];
               const totalInc = d.ordInc + cfg.ssIncome + d.cgGain;
               const pin = getPinnedIdx() === idx ? '  ★ pinned' : '';
-              return [`$${(d.ordInc/1000).toFixed(0)}k ordinary  ·  $${Math.round(totalInc/1000)}k total${pin}`];
+              return [`${fmtK(d.ordInc)} ordinary  ·  ${fmtK(d.ordInc + cfg.ssIncome + d.cgGain)} total${pin}`];
             },
             beforeBody(items) {
               if (!items.length) return [];
               const d = sweepData[items[0].dataIndex];
               if (!d) return [];
               return [
-                ` Eff ${(d.totEff*100).toFixed(1)}%   Fed ${(d.fedEff*100).toFixed(1)}%   St ${(d.stEff*100).toFixed(1)}%`,
+                ` Eff ${fmtPct(d.totEff)}${d.allInShown === null ? '' : ' (' + fmtPct(d.allInShown) + ' with IRMAA)'}   Fed ${fmtPct(d.fedEff)}   St ${fmtPct(d.stEff)}`,
                 ` Fed Ord Marg ${(d.fedMarg*100).toFixed(1)}%   CG Rate ${(d.cgRate*100).toFixed(1)}%   St Marg ${(d.stMarg*100).toFixed(1)}%   Tax $${Math.round(d.totalTax).toLocaleString()}`
               ];
             },
@@ -1029,6 +1121,7 @@ function renderChart(data) {
             filter(item, chartData) {
               const ds = chartData.datasets[item.datasetIndex];
               if (!ds) return false;
+              if (ds._allIn)    return viewMode === 'rates' && cfg.prevMagi !== null;
               if (ds._rateDs)   return viewMode === 'rates';
               if (ds._dollarDs || ds._magiDs) return viewMode === 'dollars';
               return !ds._isFake;   // the IRMAA tiers have their own legend row, under the chart
@@ -1046,11 +1139,8 @@ function renderChart(data) {
             color:'#4a5470', font:{family:'DM Mono, monospace', size:9},
             maxRotation:0, autoSkip:false,
             callback(val, i) {
-              const ord = zoomMin + i * zoomStep;
-              const ls = pickLabelStep();
-              if (ord !== 0 && ord % ls !== 0) return null;
-              const total = ord + cfg.ssIncome + cfg.cgSale * (1 - cfg.cgBasisPct / 100);
-              return `$${Math.round(total / 1000)}k`;
+              const t = tickTotal(i);
+              return t === null ? null : fmtK(t);
             }
           },
           title: { display:true, text:'Total Income (Ord + SS + CG)',
@@ -1111,7 +1201,7 @@ const IRMAA_FUTURE_TIP = 'Medicare charges IRMAA from your MAGI of two years ear
 // The Medicare (IRMAA) block of the info panel: the tier this MAGI will fall in two years out, what
 // it costs then, and how far the next tier is, all in that year's indexed dollars.
 function irmaaPanelRows(magi) {
-  const $v = v => '$' + Math.round(v).toLocaleString();
+  const $v = fmtMoney;
   const y  = cfg.year + IRMAA_AHEAD;
   const ir = irmaaAt(magi);
   const row = (l, v) => `<div class="info-row future"><span class="ir-lbl">${l}</span><span class="ir-val">${v}</span></div>`;
@@ -1129,7 +1219,7 @@ function irmaaPanelRows(magi) {
 // Takes a derived row (from sweepData or exactRow), not an index — the pin can sit between columns.
 function updateInfoPanel(d) {
   if (!d) return;
-  const $v = v => '$' + Math.round(v).toLocaleString();
+  const $v = fmtMoney;
   const pp = (v, denom) => denom > 1 ? (v / denom * 100).toFixed(1) + '%' : '—';
   const totalInc = Math.max(d.ordInc + cfg.ssIncome + d.cgGain, 1);
   // Effective rate on the CG gain itself (not % of total income), NIIT included
@@ -1148,8 +1238,11 @@ function updateInfoPanel(d) {
     <div class="info-grid">
       <div>
         <div class="info-col-title">Tax Rates</div>
-        <div class="info-row"><span class="ir-lbl">Total Effective${d.IRMAA > 0 ? ' <span style="font-size:9px">(excl. IRMAA)</span>' : ''}</span><span class="ir-val">${(d.totEff*100).toFixed(1)}%</span></div>
-        <div class="info-row"><span class="ir-lbl">Federal Effective</span><span class="ir-val">${(d.fedEff*100).toFixed(1)}%</span></div>
+        <div class="info-row"><span class="ir-lbl">Total Effective</span><span class="ir-val">${fmtPct(d.totEff)}</span></div>
+        ${d.IRMAA > 0 ? `<div class="info-row"><span class="ir-lbl vis" style="color:#a855f7">Total incl. IRMAA${d.allInShown === null
+          ? infoIcon('Not shown here. This year\'s IRMAA is a flat charge of ' + $v(d.IRMAA) + ', and over an income this small it is a larger share than the two marginal rates add up to, so the rate would mislead.')
+          : ''}</span><span class="ir-val" style="color:#a855f7">${d.allInShown === null ? '&mdash;' : fmtPct(d.allInShown)}</span></div>` : ''}
+        <div class="info-row"><span class="ir-lbl">Federal Effective</span><span class="ir-val">${fmtPct(d.fedEff)}</span></div>
         <div class="info-row"><span class="ir-lbl">State Effective</span><span class="ir-val">${(d.stEff*100).toFixed(1)}%</span></div>
         <div class="info-row"><span class="ir-lbl">Fed Marginal (Ordinary)</span><span class="ir-val">${(d.fedMarg*100).toFixed(1)}%</span></div>
         <div class="info-row"><span class="ir-lbl">Fed CG Rate (incl NIIT)</span><span class="ir-val">${(d.cgRate*100).toFixed(1)}%</span></div>
@@ -1228,20 +1321,18 @@ function syncPinControls() {
   const sl  = document.getElementById('sl-pin');
   const num = document.getElementById('num-pin');
   if (!sl || !num) return;
-  sl.min  = zoomMin;
+  // The slider spans the visible window, but starts at the first sampled column at or above $0
+  // unless it is allowed below: negRanges, a negative pin, or a window that is itself all below 0.
+  const has = pinnedIncome !== null;
+  let lo = zoomMin;
+  if (zoomMin < 0 && !negRanges && !(has && pinnedIncome < 0))
+    lo = Math.min(zoomMin + Math.ceil(-zoomMin / zoomStep) * zoomStep, zoomMax - zoomStep);
+  sl.min  = lo;
   sl.max  = zoomMax;
   sl.step = zoomStep;
-  const has = pinnedIncome !== null;
-  sl.value = has ? Math.min(Math.max(pinnedIncome, zoomMin), zoomMax) : zoomMin;
+  sl.value = has ? Math.min(Math.max(pinnedIncome, lo), zoomMax) : lo;
   sl.classList.toggle('unpinned', !has);
-  if (has) {
-    DisplayHelpers.setDollarValue('num-pin', pinnedIncome);
-  } else {
-    // delete, not '' — attachNumericDollarInput's blur handler formats dataset.numVal back into
-    // the field, and parseFloat('') would render "$NaN".
-    num.value = '';
-    delete num.dataset.numVal;
-  }
+  num.value = has ? fmtMoney(pinnedIncome) : '';
   document.getElementById('btn-pin-clear').disabled = !has;
 }
 
@@ -1249,7 +1340,7 @@ function syncPinControls() {
 function onPinSlider() {
   pinnedIncome = +document.getElementById('sl-pin').value;
   document.getElementById('sl-pin').classList.remove('unpinned');
-  DisplayHelpers.setDollarValue('num-pin', pinnedIncome);
+  document.getElementById('num-pin').value = fmtMoney(pinnedIncome);
   document.getElementById('btn-pin-clear').disabled = false;
   updateInfoPanel(pinnedRow());
   if (chartMain) chartMain.update('none');
@@ -1261,7 +1352,7 @@ function onPinNumCommit() {
   if (!raw) { clearPin(); return; }
   const v = DisplayHelpers.parseShorthand(raw);
   if (!Number.isFinite(v)) { syncPinControls(); return; }
-  pinnedIncome = Math.min(Math.max(v, 0), FULL_MAX);
+  pinnedIncome = Math.min(Math.max(v, VIEW_FLOOR - fixedIncome()), viewTop() - fixedIncome());
   if (pinnedIncome < zoomMin || pinnedIncome > zoomMax) {
     zoomToIncome(pinnedIncome);
     updateZoomUI();
@@ -1317,9 +1408,9 @@ function renderSummary(data) {
     const cls = peakMarg>.40?'hi-red':'hi-amber';
     // Provisional income counts the benefit at the first tier's rate (half), as calculateTaxes does.
     const ssShare   = TAXData.SOCIALSECURITY[cfg.status].brackets[1].r;
-    const torpEntry = Math.max(0, SS_T[cfg.status].t1 - ssShare*cfg.ssIncome - cgGain);
+    const torpEntry = SS_T[cfg.status].t1 - ssShare*cfg.ssIncome - cgGain;   // negative: already inside it at $0 ordinary
     rows.push(`<div class="${cls}"><strong>SS torpedo peak:</strong> ~${(peakMarg*100).toFixed(1)}% fed marginal @ $${peakInc.toLocaleString()} ordinary income</div>`);
-    rows.push(`<div><strong>SS torpedo starts:</strong> ~$${Math.round(torpEntry).toLocaleString()} ordinary income</div>`);
+    rows.push(`<div><strong>SS torpedo starts:</strong> ~${fmtMoney(torpEntry)} ordinary income${torpEntry < 0 ? ' (your other income is already past it)' : ''}</div>`);
   }
   // Medicare (IRMAA). Always shown: it is a MAGI test, so it applies with or without Social Security.
   const t1 = irmaaTiers()[0];
@@ -1330,9 +1421,9 @@ function renderSummary(data) {
     const lbl = `<strong>${y} IRMAA starts:</strong>`;
     rows.push(`<div class="hi-future">` + (ordAt === null
       ? `${lbl} not within $5,000,000 of ordinary income (${first})`
-      : ordAt === 0
-        ? `${lbl} already reached with no ordinary income, from Social Security and gains alone (${first})`
-        : `${lbl} ~$${Math.round(ordAt).toLocaleString()} ordinary income (${first})`) +
+      : ordAt <= 0
+        ? `${lbl} already past it with $0 ordinary income: your other income alone is ${fmtMoney(calcAt(0).magi - t1.at)} over (${first})`
+        : `${lbl} ~${fmtMoney(ordAt)} ordinary income (${first})`) +
       infoIcon(IRMAA_FUTURE_TIP) + `</div>`);
   }
   if (cfg.prevMagi !== null) {
@@ -1452,6 +1543,7 @@ function readCfg() {
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 function run() {
   readCfg();
+  applyView();
   updMed();     // depends on cfg.year, which only readCfg() sets, so it belongs here and not on a control
   updPrevMagi();
   const data = sweep();
@@ -1501,15 +1593,15 @@ document.getElementById('ss-val').textContent = '$0';
 document.getElementById('cg-sale-val').textContent = '$0';
 loadFromURL();   // apply URL params before first render
 applySsMax();
+readCfg();       // the View slider's range depends on the fixed income
 updateZoomUI();
 run();           // run() paints the info panel for a URL-restored pin
 initInfoPanel();
 
 // Attach numeric formatting to dollar inputs (after init so URL-loaded values are formatted)
-['num-ss', 'num-retinc', 'num-prop', 'num-cg-sale', 'num-pin'].forEach(id => {
+['num-ss', 'num-retinc', 'num-prop', 'num-cg-sale'].forEach(id => {
   const el = document.getElementById(id);
-  if (el) DisplayHelpers.attachNumericDollarInput(el,
-    id === 'num-pin' ? { min: 0, max: FULL_MAX } : { min: 0 });
+  if (el) DisplayHelpers.attachNumericDollarInput(el, { min: 0 });
 });
 // Register chart canvas for tap-outside-to-dismiss on mobile
 DisplayHelpers.registerChartDismissal(document.getElementById('chart-main'));
@@ -1557,7 +1649,7 @@ function buildShareParams() {
   if (cfg.retirementIncome) p.ri = cfg.retirementIncome;
   if (cfg.retirementSwept)  p.rw = 1;
   if (pinnedIncome !== null) p.pi = pinnedIncome;
-  if (!isFullZoom()) { p.zl = zoomMin; p.zh = zoomMax; p.zs = zoomStep; }
+  if (!isFullZoom()) { p.vl = viewLo; p.vh = viewHi; }   // total income; legacy zl/zh were ordinary
   if (!autoZoomOn) p.az = 0;
   return new URLSearchParams(p).toString();
 }
@@ -1701,14 +1793,17 @@ function loadFromURL() {
   }
   // 'ob' and 'sh' from pre-v2.5 links are intentionally ignored: OBBBA is current law and is
   // always applied, sunsetting by tax year rather than by switch.
-  if (p.has('pi')) {
-    const income = +p.get('pi');
-    if (income >= 0) pinnedIncome = income;
-  }
-  if (p.has('zl') && p.has('zh')) {
-    zoomMin  = +p.get('zl');
-    zoomMax  = +p.get('zh');
-    zoomStep = p.has('zs') ? +p.get('zs') : pickStep(zoomMax - zoomMin);
+  if (p.has('pi') && Number.isFinite(+p.get('pi'))) pinnedIncome = +p.get('pi');   // ordinary; may be negative
+  // The View is total income (vl, vh). Links from before that carried it as ordinary income (zl, zh,
+  // zs), so those are shifted by the fixed income the same link supplies.
+  if (p.has('vl') && p.has('vh')) {
+    viewLo = +p.get('vl');
+    viewHi = +p.get('vh');
+  } else if (p.has('zl') && p.has('zh')) {
+    const cs = p.has('cs') ? +p.get('cs') : 0, cb = p.has('cb') ? +p.get('cb') : 60;
+    const F = (p.has('ss') ? +p.get('ss') : 0) + (cs > 0 ? cs * (1 - cb / 100) : 0);
+    viewLo = +p.get('zl') + F;
+    viewHi = +p.get('zh') + F;
   }
   if (p.has('az')) autoZoomOn = p.get('az') !== '0';
   updCgBasis();
@@ -1732,7 +1827,7 @@ function loadFromURL() {
       <summary>Change Log</summary>
       <dl class="modal-kv">
         <dt>v2.9</dt>
-        <dd>IRMAA tier lines carry the MAGI thresholds that will apply 2 years from now. This year's taxes include the IRMAA you owe now when you enter your MAGI from two years earlier, and the projected IRMAA two years out is shown separately, in purple, below Total Tax. Pin an income to see its IRMAA tier, the surcharge, the MAGI room before the next tier, and what crossing it adds. The summary states the ordinary income where IRMAA starts.</dd>
+        <dd>IRMAA tier lines carry the MAGI thresholds that will apply 2 years from now. This year's taxes include the IRMAA you owe now when you enter your MAGI from two years earlier, shown as its own purple bar, and the projected IRMAA two years out is shown separately, in purple, below Total Tax. Pin an income to see its IRMAA tier, the surcharge, the MAGI room before the next tier, and what crossing it adds. The summary states the ordinary income where IRMAA starts. The View is set in total income and can start below the income you entered (double-click its label to jump to $0 through $50k above your total, and again for sliders that reach negative values), ordinary income can be negative (a business loss, for example), and a dotted line marks where ordinary income is zero. Total Effective is income taxes only, and a separate purple line adds this year's IRMAA where that is meaningful.</dd>
         <dt>v2.8</dt>
         <dd>Medicare growth is modeled based on trustee guidance and is not adjustable.</dd>
         <dt>v2.5</dt>
@@ -1750,7 +1845,7 @@ function loadFromURL() {
         <dt>B · Sweet spots &amp; danger zones</dt>
         <dd>Where are the SS torpedo, IRMAA tier crossings, and NIIT threshold? The vertical reference lines and marginal rate curves (purple and yellow dashed) make them immediately visible.</dd>
         <dt>C · True all-in effective rate</dt>
-        <dd>Federal + state + NIIT, not just the marginal bracket. This year's IRMAA is a flat charge set by your income two years ago, so it is in Total Tax dollars (enter that MAGI to include it) but kept out of the rate lines. The white line on the Tax Rates view is the number that actually matters for planning.</dd>
+        <dd>Federal + state + NIIT + the IRMAA you owe this year (enter your MAGI from two years earlier to include it), not just the marginal bracket. The white line on the Tax Rates view is the number that actually matters for planning.</dd>
         <dt>D · What the tax is at a given income</dt>
         <dd>Hover over your expected income on the chart. The info panel below shows every component — rates and dollars — simultaneously at that income level. Pin a column and <strong>Open in Tax Planner</strong> hands that income and the tax computed here to the Tax Payment Planner, which decides when to draw and when to pay it. This page computes the tax; that one schedules it.</dd>
         <dt>E · Filing status changes</dt>
@@ -1764,7 +1859,7 @@ function loadFromURL() {
 
     <div class="modal-section">
       <h3>How the income sweep works</h3>
-      <p>The x-axis sweeps <strong>ordinary income</strong> across the visible range (default $30k–$620k; the View slider can extend it up to $1.1M). Ordinary income covers wages, IRA/401k withdrawals, pensions, and RMDs — anything taxed at regular rates. <strong>Social Security</strong> and <strong>capital gains</strong> are entered as fixed amounts that apply at every point across the sweep, letting you see how they interact with the income ramp. The top x-axis shows the <strong>total income</strong> (ordinary + SS + CG gain) at each corresponding point.</p>
+      <p>The chart sweeps <strong>ordinary income</strong> across the visible range, and the <strong>View</strong> is set in <strong>total income</strong>, the figure on the top axis (default $30k–$620k; the slider runs from -$300k up past $1.1M). Ordinary income covers wages, IRA/401k withdrawals, pensions, and RMDs — anything taxed at regular rates — and it can be <strong>negative</strong>: a business or rental loss offsets your other income, and taxable income cannot go below zero. A dotted line marks where ordinary income is $0, which is where total income equals your Social Security plus gains. Left of it you are seeing a net loss, or what a lower total would look like. <strong>Social Security</strong> and <strong>capital gains</strong> are entered as fixed amounts that apply at every point across the sweep, letting you see how they interact with the income ramp. The top x-axis shows the <strong>total income</strong> (ordinary + SS + CG gain) at each corresponding point.</p>
       <p style="margin-top:.5rem">The step size between data points and the x-axis label spacing both adapt automatically to the visible range — zoom into a narrower window and you get finer granularity with denser labels.</p>
     </div>
 
@@ -1775,9 +1870,9 @@ function loadFromURL() {
         <li><strong>Legend items</strong> — click any entry in the legend to toggle that line or bar series on/off. Useful for hiding distracting lines (e.g. IRMAA tiers you don't need).</li>
         <li><strong>Click a column</strong> — pins that income level so the info panel stays visible. With AutoZoom on, clicking also centers and zooms the chart around that income level, adjusting the label step size automatically.</li>
         <li><strong>AutoZoom button</strong> — when active (teal), clicking a column auto-zooms to a window around that income. Toggle it off to pin without zooming.</li>
-        <li><strong>Full button</strong> — resets the view back to the full $0–$1.1M range.</li>
-        <li><strong>View slider</strong> (below the chart) — drag either handle to set the lower or upper bound of the visible income range directly. The chart redraws and label spacing adapts immediately. The slider and AutoZoom/Full buttons all stay in sync.</li>
-        <li><strong>Ordinary slider and entry box</strong> (below the View slider) — move the pinned income without clicking the chart. The slider scrubs across the visible range in chart steps and never re-zooms, so you can sweep the pin while watching the info panel. The entry box takes an exact dollar amount for fine tuning, and its readout is computed at that exact income even when it falls between two chart columns. Type an amount outside the current view and the chart re-centers on it. The &#10005; button unpins.</li>
+        <li><strong>Full button</strong> — resets the view to every total income from $0 up, whatever you have entered.</li>
+        <li><strong>View slider</strong> (below the chart) — drag either handle to set the lower or upper bound of the visible <em>total</em> income directly, starting as low as -$300k. Both sliders normally start at $0; double-click the <strong>View</strong> label to set the View from $0 to $50k above your current total income, again to let both sliders reach negative values (the View and the pin do not change), and again to go back. Double-clicking <strong>Ordinary</strong> only switches the negative range on and off. A negative pin or View also opens the negative range by itself. The chart redraws and label spacing adapts immediately. The slider and AutoZoom/Full buttons all stay in sync.</li>
+        <li><strong>Ordinary slider and entry box</strong> (below the View slider) — move the pinned ordinary income, which can be negative, without clicking the chart. The slider scrubs across the visible range in chart steps and never re-zooms, so you can sweep the pin while watching the info panel. The entry box takes an exact dollar amount for fine tuning, and its readout is computed at that exact income even when it falls between two chart columns. Type an amount outside the current view and the chart re-centers on it. The &#10005; button unpins.</li>
       </ul>
     </div>
 
@@ -1785,7 +1880,7 @@ function loadFromURL() {
       <h3>The chart</h3>
       <ul>
         <li><strong>Tax Rates view</strong> — federal effective (blue), state effective (orange), total effective (white), federal marginal on ordinary income + CG (purple dashed), and state marginal (yellow dashed).</li>
-        <li><strong>Tax Dollars view</strong> — stacked bars for Federal Ordinary, Federal CG, Federal NIIT, IRMAA (the charge in force this year), State Ordinary, and State CG. The teal line (right axis) is your MAGI, the figure that decides your IRMAA two years out.</li>
+        <li><strong>Tax Dollars view</strong> — stacked bars for Federal Ordinary, Federal CG, Federal NIIT, IRMAA (the charge in force this year, in purple), State Ordinary, and State CG. The teal line (right axis) is your MAGI, the figure that decides your IRMAA two years out.</li>
         <li><strong>NIIT line</strong> (indigo dashed) — sits where MAGI crosses the NIIT threshold, which is left of the $250k ordinary-income mark whenever you have taxable Social Security or capital gains. It is always shown, whether or not you have a gain this year, because it is the MAGI level to stay under: once you are past it, any gain you do realize is surtaxed from the first dollar.</li>
         <li><strong>Info panel</strong> — hovering over the chart shows all rates and dollar amounts for that income level simultaneously, regardless of which view is active.</li>
         <li><strong>IRMAA tier lines</strong> — one dashed line per surcharge tier, drawn where MAGI reaches that tier and labeled with the threshold (for example T1 $241k). The thresholds are the ones that will apply two years from the selected year, inflated to that year. A tier outside the visible range is an arrow marker at the nearest edge. Click an entry in the IRMAA legend row under the chart to hide or show its line. The info panel gives the tier at a pinned income, its surcharge, the MAGI room before the next tier and what crossing it adds, all in purple because they are a future cost.</li>
@@ -1810,10 +1905,10 @@ function loadFromURL() {
       </ul>
     </div>
 
-    <div class="modal-section" id="modal-state-notes-section">
-      <h3>State-specific notes</h3>
+    <details class="modal-section" id="modal-state-notes-section">
+      <summary>State-specific notes</summary>
       <ul id="state-notes-list"></ul>
-    </div>
+    </details>
   </div>
 </div>
 

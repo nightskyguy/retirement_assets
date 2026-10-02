@@ -17,7 +17,7 @@ The first exists. The second is the subject of this document.
 
 ## What exists today
 
-- Every planner setting can be set from the page address. [UsageGuide.md](UsageGuide.md) lists them.
+- Every planner setting can be set from the page address. [UsageGuide](https://tools.netcitizen.us/UsageGuide.html) lists them.
 - A link with `return` shows one result as a comma-separated line, at the ordinary income pinned by
   `pi` or entered under Income details. `return=all` adds every result field and the inputs.
 - The **Result for a spreadsheet** row under the charts copies the same line, with field names.
@@ -143,6 +143,74 @@ changes that: the figures travel in the address to a Worker.
 
 Anyone who does not want figures in an address at all can keep using the page and type them in.
 
+## Protecting the figures in a link
+
+Whenever figures are parameters of a link, they can leak. This applies to the page as it is today, with
+no Worker at all. Where they can go, and what would stop each:
+
+| Where the figures can end up | Stopped by moving them into the `#` fragment? | Stopped by encrypting them? |
+|---|---|---|
+| The web host and the network in front of it (access logs) | Yes. The fragment is never sent in the request. | Yes, they would see only ciphertext |
+| Analytics scripts that read the page address | Only if the script is told to drop it, which the planner now does | Yes, ciphertext only |
+| The `Referer` header sent to other sites | Yes, and a `strict-origin` referrer policy (set on the planner) covers the query too | Yes |
+| Browser history, bookmarks and sync | No | Only if the key is not in the link |
+| Wherever the link is pasted (email, chat, forum, a sheet) | No | Only if the key is not in the link |
+| A Worker's logs, if a Worker is built | No, a fragment never reaches the Worker either | Yes, if only the Worker can decrypt |
+
+Cloudflare's dashboard not showing parameters is encouraging, but it does not show what the page counter
+transmitted, and it says nothing about the request logs of the host. The planner now avoids the
+question: it does not load that counter when the address carries figures.
+
+### Option F: figures in the `#` fragment instead of the `?` query
+
+A page can read its settings from `location.hash` exactly as it reads `location.search`. Everything
+after the `#` stays in the browser: it is not part of the request, so it cannot appear in the host's or
+Cloudflare's logs, in the `Referer` header, or in any analytics that does not read it.
+
+- **Work:** small. Read both places, and have Share and the guide offer the `#` form. The spreadsheet
+  link changes from `...html?st=SGL&...` to `...html#st=SGL&...` and `HYPERLINK` does not care.
+- **Limits:** it does nothing for browser history or for wherever the link is pasted. It cannot be used
+  with a Worker, because a Worker never receives the fragment, so it is an alternative to option B for
+  the link-opening case, not a way to protect B.
+- **Verdict:** the cheapest real reduction in exposure, and worth doing before any Worker.
+
+### Option G: encrypting the parameters
+
+Is there a clean way to do this with open source code? In a browser, yes. In a spreadsheet, no.
+
+- **In the browser.** The Web Crypto API is built into every current browser, needs no library, and does
+  AES-GCM and RSA-OAEP. Small open source libraries (libsodium.js, TweetNaCl, jsrsasign) cover the
+  rest. A page could decrypt `?e=<ciphertext>` after asking for a passphrase, or an `#e=` fragment
+  with the key kept somewhere else.
+- **In the spreadsheet.** Neither Excel nor Google Sheets has an encryption function. Google Apps Script
+  has hashing and HMAC but no AES, so it would need a pasted-in library. Excel would need VBA calling
+  Windows crypto routines or an add-in. So the sheet cannot build an encrypted link without extra
+  code that every user must install, which defeats the purpose of a link a formula builds.
+- **What it would and would not protect.**
+  - If the key travels in the same link, the link is as readable as before to anyone holding it. If it
+    travels separately, the person opening the link needs it, which is friction nobody will accept for a
+    calculator. A key kept in a fragment protects only against the server channels, which the fragment
+    alone already protects against.
+  - Against the server and log channels, encryption helps only if the server never holds the key.
+    A Worker that decrypts must hold the private key, which protects the figures from the host's logs
+    and analytics but not from the Worker's owner.
+  - TLS already encrypts the figures on the wire. The real exposures are logs, history, referrers and
+    pasted text, and encryption does not reach the last two unless the key is kept apart.
+- **Verdict:** possible in a browser, not clean in a spreadsheet, and it solves less than the fragment.
+  Not recommended. If a formula must send figures to a Worker, a POST body is better than any
+  encryption scheme: it is not part of the address, so it is not in history, referrers or the usual
+  access logs. Apps Script's `UrlFetchApp` can POST. `WEBSERVICE` and `IMPORTDATA` can only GET.
+
+### What would reduce the exposure, in order
+
+1. Keep figures out of what servers and analytics see: fragment parameters (F), the analytics changes
+   already made, and a `strict-origin` referrer policy on every tool that reads parameters.
+2. Do the calculation on the user's side, with no transmission at all: options C and D.
+3. Only if a formula must reach a Worker: a POST from a script (C with `UrlFetchApp`) in preference to
+   a GET from `WEBSERVICE` or `IMPORTDATA`.
+4. Say plainly, in the README and the guide, that a link with parameters is personal financial
+   information. The README now does, and the guide should point to it.
+
 ## Recommendation
 
 1. Do the **shared calculation file** first. It is the prerequisite for B, C, D and a command-line tool,
@@ -151,6 +219,8 @@ Anyone who does not want figures in an address at all can keep using the page an
    record is proxied.
 3. Do **A** whenever convenient. It is independent of the rest.
 4. Treat **C** and **D** as follow-ons for whichever spreadsheet people actually use.
+5. Consider **F**, fragment parameters, before B: it is small, and it removes the figures from the host's
+   logs for every user who opens a link, not only for spreadsheet users.
 
 ## Decisions needed
 
@@ -159,3 +229,5 @@ Anyone who does not want figures in an address at all can keep using the page an
 - Which spreadsheet matters most: Excel (and which version, since `WEBSERVICE` is Windows only) or
   Google Sheets?
 - Should the output format carry a version, so the field list can grow without breaking old sheets?
+- Should the tools read parameters from the `#` fragment as well as the `?` query, and should Share
+  write the `#` form by default?

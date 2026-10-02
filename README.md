@@ -25,6 +25,7 @@ A California resident built these with [Google gemini](https://gemini.google.com
 
 - [Who Are These Tools For? What Can They Do?](#who-are-these-tools-for--what-can-they-do)
 - [Standalone Calculator Tools](#standalone-calculator-tools)
+  - [Putting Numbers in a Link: Privacy](#putting-numbers-in-a-link-privacy)
   - [Historical Real Returns](#historical-real-returns)
   - [Future Cost](#future-cost)
   - [IRMAA and RMDs](#irmaa-and-rmds)
@@ -114,7 +115,26 @@ Or you can directly run the tools from _tools.netcitizen.us_
 
 Here are less ambitious, standalone tools. Each should have a "How to Use" set of instructions, many have a way to generate a URL (called share) to capture your settings so you can either run again without reentering, or share with friends (or Redditors) for advice.
 
-These tools are all being actively developed and improved. Each tool runs standalone in your browser - though most load additional local resources (e.g. they share the same **taxengine.js**). An internet connection is needed to load fonts and the tool for graphing charts. Basic, anonymous page-load analytics are collected (Google Analytics and Cloudflare Web Analytics) solely to understand how often the tools are used and from what general region - no personally identifiable information is collected, stored, or transmitted, apart from anything you choose to send with the Retirement Optimizer's **Feedback** button (see [Sending Feedback](#sending-feedback)). General region information helps prioritize which state tax rules to add in future releases. You are welcome to see for yourself by inspecting the [source code](https://github.com/nightskyguy/retirement_assets).
+These tools are all being actively developed and improved. Each tool runs standalone in your browser - though most load additional local resources (e.g. they share the same **taxengine.js**). An internet connection is needed to load fonts and the tool for graphing charts. Basic, anonymous page-load analytics are collected (Google Analytics and Cloudflare Web Analytics) solely to understand how often the tools are used and from what general region - the tools themselves do not collect, store, or transmit personally identifiable information, apart from anything you choose to send with the Retirement Optimizer's **Feedback** button (see [Sending Feedback](#sending-feedback)). What a link can carry is a separate matter: see [Putting Numbers in a Link: Privacy](#putting-numbers-in-a-link-privacy). General region information helps prioritize which state tax rules to add in future releases. You are welcome to see for yourself by inspecting the [source code](https://github.com/nightskyguy/retirement_assets).
+
+### Putting Numbers in a Link: Privacy
+
+Several tools can read their settings from the page address, the part after the `?`. That is what the **Share** button writes, and it is what a spreadsheet can build (see the [URL guide](https://tools.netcitizen.us/UsageGuide.html)). Those parameters are your financial figures: incomes, balances, Social Security, gains, ages and state. **Anything in a link can leak, and a link that works for whoever opens it has to contain what it needs to work.** Treat a link with parameters as sensitive personal financial information.
+
+Where a link, and so your figures, can end up:
+
+- **Browser history and bookmarks**, on every device that syncs them.
+- **Anywhere you paste or send the link**: email, chat, a forum or Reddit post, a spreadsheet, a document, a screenshot of the address bar. Everyone who can see the link can read the numbers in it, and a post that also says who you are or where you live can tie them to you.
+- **The servers that deliver the page.** Asking for a page sends its parameters along, so the web host and any network in front of it can record them in their access logs, whatever the page itself does. The tools do not ask for names, account numbers or Social Security numbers, but a set of dollar figures, ages and a state is still personal financial information.
+- **Analytics.** The Retirement Optimizer tells Google Analytics only the page's own address, and the Income Tax Planner tells it only the address and the state. The Income Tax Planner also skips the Cloudflare page counter when a link carries parameters. The other standalone tools have not been checked for this, so assume they do not.
+
+Sharing safely:
+
+- Before posting a link in public, take the parameters off, or replace the figures with made-up ones, or describe the scenario in words.
+- Prefer a private window when you open links you were sent, and do not bookmark a link that holds real figures.
+- If you only need your own copy, use the tool's save or export instead of a link.
+
+There is no clean way to hide the parameters and keep the link working everywhere: encrypting them would only move the problem to however the key reaches the person opening the link, and spreadsheets cannot encrypt anyway. The options that were considered, including keeping the figures out of what is sent to servers, are in [the tax calculate proposal](https://tools.netcitizen.us/TaxCalculateProposal.html#protecting-the-figures-in-a-link).
 
 ### Historical Real Returns
 **[Historical Real Returns](standalone/RealReturns.html) - Inflation-Adjusted Cumulative Growth of $10,000 (1928–2025)**
@@ -136,7 +156,7 @@ Visualize how inflation and taxation combine to erode nominal investment returns
 
 ### Income Tax Planner
 **[IncomeTaxPlanner.html](standalone/IncomeTaxPlanner.html) - Federal + State Tax Sweep with IRMAA & Capital Gains**
-Sweeps ordinary income from $0 to $1.1M in $10k steps and plots your true all-in effective tax rate - federal, state, and IRMAA combined - with a marginal rate curve that makes the Social Security torpedo, IRMAA tier crossings, and NIIT threshold immediately visible. Configure filing status, state (38 choices: 29 taxing jurisdictions including DC, plus the 9 states with no income tax - the list is generated from the shared tax engine, so it grows whenever a state is added there), taxpayer ages, fixed Social Security income, capital gains proceeds and basis, a target year 2026–2035 with configurable CPI, and OBBBA provisions (senior deduction, elevated SALT cap). Two linked charts update instantly on any control change, and hovering over either chart activates the corresponding tooltip on the other at the same income level. Every setting can also be written into the page address, so a spreadsheet can build a clickable link, and a link can ask for one result as a line of comma-separated numbers; see the [URL guide](UsageGuide.md).
+Sweeps ordinary income from $0 to $1.1M in $10k steps and plots your true all-in effective tax rate - federal, state, and IRMAA combined - with a marginal rate curve that makes the Social Security torpedo, IRMAA tier crossings, and NIIT threshold immediately visible. Configure filing status, state (38 choices: 29 taxing jurisdictions including DC, plus the 9 states with no income tax - the list is generated from the shared tax engine, so it grows whenever a state is added there), taxpayer ages, fixed Social Security income, capital gains proceeds and basis, a target year 2026–2035 with configurable CPI, and OBBBA provisions (senior deduction, elevated SALT cap). Two linked charts update instantly on any control change, and hovering over either chart activates the corresponding tooltip on the other at the same income level. Every setting can also be written into the page address, so a spreadsheet can build a clickable link, and a link can ask for one result as a line of comma-separated numbers; see the [URL guide](https://tools.netcitizen.us/UsageGuide.html).
 
 Uses 2026 IRS Rev. Proc. 2025-32 federal brackets inflated forward by your chosen CPI rate; IRMAA premiums grow at that rate plus a configurable Medicare-specific increment. Designed to answer four questions: *How sensitive is my tax burden to a $10k income change? Where are my sweet spots and danger zones (SS torpedo, IRMAA cliffs, NIIT)? What is my real all-in effective rate? What withholding should I target?* The Share button encodes all settings into a compact URL that works from a local file or a web server - save it as a bookmark or paste it into a discussion to let someone else replicate your exact scenario.
 

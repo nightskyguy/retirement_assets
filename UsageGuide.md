@@ -231,6 +231,8 @@ For scripts that drive a real browser, the page exposes `window.taxResult()`, wh
 
 ## Before you share a link
 
+The README explains the risk in full: [Putting Numbers in a Link: Privacy](https://tools.netcitizen.us/#putting-numbers-in-a-link-privacy). In short, a link with parameters is personal financial information.
+
 The calculation runs in your browser. A link carries your figures in plain text, so they are in your
 browser history and in anything you paste the link into, including the spreadsheet and any email or
 chat.

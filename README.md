@@ -24,8 +24,8 @@ A California resident built these with [Google gemini](https://gemini.google.com
 ## Table of Contents
 
 - [Who Are These Tools For? What Can They Do?](#who-are-these-tools-for--what-can-they-do)
+- [Privacy Considerations](#privacy-considerations)
 - [Standalone Calculator Tools](#standalone-calculator-tools)
-  - [Putting Numbers in a Link: Privacy](#putting-numbers-in-a-link-privacy)
   - [Historical Real Returns](#historical-real-returns)
   - [Future Cost](#future-cost)
   - [IRMAA and RMDs](#irmaa-and-rmds)
@@ -111,30 +111,34 @@ Or you can directly run the tools from _tools.netcitizen.us_
 
 ---
 
+## Privacy Considerations
+
+Several tools can read their settings from the page address, the part after the `?`. That is what the **Share** button writes, and it is what a spreadsheet can build (see the [URL guide](https://tools.netcitizen.us/UsageGuide.html)). Those parameters are your financial figures: incomes, balances, Social Security income, capital gains, ages and state. **Anything in a link can leak, and a link that works for whoever opens it has to contain what it needs to work.** Treat a link with parameters as sensitive personal financial information. The tools do not ask for names, account numbers or Social Security numbers, but a set of dollar figures, ages and a state is still personal financial information - especially if you use them in a context where other information about you may be known.
+
+Where a link, and so your figures, can end up:
+
+- **Browser history and bookmarks**, on every device that syncs them.
+- **Anywhere you paste or send the link**: email, chat, a forum or Reddit post, a spreadsheet, a document, a screenshot of the address bar. Everyone who can see the link can read the numbers in it, and a post that also says who you are or where you live can tie them to you. The author typically uses such links for illustration and avoids sharing any link containing real personal information.
+- **The servers that deliver the page.** Asking for a page sends its parameters along, so the web host and any network in front of it can record them in their access logs, whatever the page itself does. 
+- **Analytics.** The Retirement Optimizer and the Income Tax Planner disclose the tool name and state (if entered) to Google Analytics - but no other parameters. The Income Tax Planner also skips the Cloudflare page counter when a link carries parameters. The other standalone tools have not yet been hardened so assume they leak any parameters you enter.
+
+Sharing safely:
+
+- If someone being able to see your balances or annual income is not worrisome to you, you don't need to do anything special.
+- Before posting a link in public, take the parameters off, or replace the figures with made-up ones. If you must share details - e.g. with your Financial Advisor -  consider using encrypted email. You can enter parameters after loading the page (or from a saved file for Retirement Optimizer), then use the Share button and send the result to your financial advisor. Your shared target will have the actual parameters - but at least one step removed from being linked to you.
+- Avoid bookmarking a link that holds your real figures unless you are sure your bookmarks are secure (most bookmarks in most browsers are NOT secure).
+- The Retirement Optimizer can save your information in your browser using "Save" or write a file to your disk using "Export" which avoids using links/URLs altogether.
+- The other bit of information that goes along with your page load is your IP address. You can avoid your actual IP address being captured by using a VPN.
+
+There is no clean way to hide parameters and preserve functionality. Encrypting parameters, for example creates its own problem about managing/providing keys. And spreadsheets cannot encrypt. 
+
+---
+
 ## Standalone Calculator Tools
 
 Here are less ambitious, standalone tools. Each should have a "How to Use" set of instructions, many have a way to generate a URL (called share) to capture your settings so you can either run again without reentering, or share with friends (or Redditors) for advice.
 
 These tools are all being actively developed and improved. Each tool runs standalone in your browser - though most load additional local resources (e.g. they share the same **taxengine.js**). An internet connection is needed to load fonts and the tool for graphing charts. Basic, anonymous page-load analytics are collected (Google Analytics and Cloudflare Web Analytics) solely to understand how often the tools are used and from what general region - the tools themselves do not collect, store, or transmit personally identifiable information, apart from anything you choose to send with the Retirement Optimizer's **Feedback** button (see [Sending Feedback](#sending-feedback)). What a link can carry is a separate matter: see [Putting Numbers in a Link: Privacy](#putting-numbers-in-a-link-privacy). General region information helps prioritize which state tax rules to add in future releases. You are welcome to see for yourself by inspecting the [source code](https://github.com/nightskyguy/retirement_assets).
-
-### Putting Numbers in a Link: Privacy
-
-Several tools can read their settings from the page address, the part after the `?`. That is what the **Share** button writes, and it is what a spreadsheet can build (see the [URL guide](https://tools.netcitizen.us/UsageGuide.html)). Those parameters are your financial figures: incomes, balances, Social Security, gains, ages and state. **Anything in a link can leak, and a link that works for whoever opens it has to contain what it needs to work.** Treat a link with parameters as sensitive personal financial information.
-
-Where a link, and so your figures, can end up:
-
-- **Browser history and bookmarks**, on every device that syncs them.
-- **Anywhere you paste or send the link**: email, chat, a forum or Reddit post, a spreadsheet, a document, a screenshot of the address bar. Everyone who can see the link can read the numbers in it, and a post that also says who you are or where you live can tie them to you.
-- **The servers that deliver the page.** Asking for a page sends its parameters along, so the web host and any network in front of it can record them in their access logs, whatever the page itself does. The tools do not ask for names, account numbers or Social Security numbers, but a set of dollar figures, ages and a state is still personal financial information.
-- **Analytics.** The Retirement Optimizer tells Google Analytics only the page's own address, and the Income Tax Planner tells it only the address and the state. The Income Tax Planner also skips the Cloudflare page counter when a link carries parameters. The other standalone tools have not been checked for this, so assume they do not.
-
-Sharing safely:
-
-- Before posting a link in public, take the parameters off, or replace the figures with made-up ones, or describe the scenario in words.
-- Prefer a private window when you open links you were sent, and do not bookmark a link that holds real figures.
-- If you only need your own copy, use the tool's save or export instead of a link.
-
-There is no clean way to hide the parameters and keep the link working everywhere: encrypting them would only move the problem to however the key reaches the person opening the link, and spreadsheets cannot encrypt anyway. The options that were considered, including keeping the figures out of what is sent to servers, are in [the tax calculate proposal](https://tools.netcitizen.us/TaxCalculateProposal.html#protecting-the-figures-in-a-link).
 
 ### Historical Real Returns
 **[Historical Real Returns](standalone/RealReturns.html) - Inflation-Adjusted Cumulative Growth of $10,000 (1928–2025)**

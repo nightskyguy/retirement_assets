@@ -124,6 +124,7 @@
   .info-divider { border-top:1px solid var(--border); margin:.3rem 0; }
   .irm-legend { display:flex; flex-wrap:wrap; align-items:center; gap:.2rem .9rem; margin:.35rem 0 .1rem; font-family:var(--mono); font-size:10px; }
   .irm-lbl { color:var(--future); }
+  .irm-note { flex-basis:100%; color:var(--muted); }
   .irm-item { display:inline-flex; align-items:center; gap:6px; background:none; border:none; padding:0; font:inherit; color:var(--muted); cursor:pointer; }
   .irm-item:hover { color:var(--text); }
   .irm-item.off { opacity:.4; text-decoration:line-through; }
@@ -233,7 +234,8 @@
 
 <div class="ret-banner" id="ret-banner" hidden>
   <div class="ret-title"><span>Result <span id="ret-for"></span> <span id="ret-status" style="color:var(--muted)"></span></span>
-    <span><button type="button" class="hdr-btn" onclick="copyReturn()">Copy</button>
+    <span><button type="button" class="hdr-btn" onclick="copyReturn(false)" title="Copies the values as the link asked for them: with the names above them only if the link has header=1.">Copy</button>
+    <button type="button" class="hdr-btn" onclick="copyReturn(true)" title="Copies the field names and the values.">Copy with Names</button>
     <button type="button" class="hdr-btn" onclick="document.getElementById('ret-banner').hidden=true">Hide</button></span></div>
   <pre id="ret-csv"></pre>
 </div>
@@ -279,7 +281,7 @@
       <summary>Income details<span class="val" id="det-sum"></span></summary>
       <div class="det-head">Ordinary income</div>
       <div class="det-row"><label for="num-wages">Wages, 1099 or business income<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">A loss can be entered as a negative number. It offsets your other income, and taxable income cannot go below zero.</span></span></label><input type="text" id="num-wages" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
-      <div class="det-row"><label for="num-int">Interest</label><input type="text" id="num-int" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <div class="det-row"><label for="num-int">Interest<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Taxable interest: bank, bond and US Treasury. It does not include municipal bond interest, which has its own row under Tax-exempt interest below. Treasury interest goes here too, and its state-exempt part is shown again on the "of which US Treasury" line.</span></span></label><input type="text" id="num-int" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
       <div class="det-row sub"><label for="num-usint">of which US Treasury<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">The part of Interest that is from US government obligations (Treasuries, savings bonds). Federal tax applies, state tax does not. For a fund, enter only its US-government part from the year-end statement. It cannot exceed Interest.</span></span></label><input type="text" id="num-usint" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
       <div class="det-warn" id="warn-usint" hidden></div>
       <div class="det-row"><label for="num-ndiv">Non-qualified dividends</label><input type="text" id="num-ndiv" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
@@ -364,7 +366,7 @@
       <canvas id="chart-main" height="240"></canvas>
       <div class="irm-legend" id="irm-legend"></div>
       <div class="zoom-slider-row">
-        <span class="zoom-slider-lbl" id="lbl-view" ondblclick="onViewLabelDbl()" title="Double-click: set the View from $0 to $50k above your current total income. Again: let both sliders reach negative values. Again: back to $0.">View</span>
+        <span class="zoom-slider-lbl" id="lbl-view" ondblclick="onViewLabelDbl()" title="Double-click: set the View from $0 to $50k above your current Fed income. Again: let both sliders reach negative values. Again: back to $0.">View</span>
         <div class="range-wrap" id="zoom-range-wrap">
           <div class="range-track-fill" id="zoom-track-fill"></div>
           <input type="range" id="sl-zoom-lo" min="0" max="1100000" step="10000" value="30000"
@@ -550,8 +552,8 @@ function updDetails() {
   if (pref > 0 && (cfg.qdiv > 0 || cfg.stcg < 0)) notes.push(`Taxed at capital-gains rates: ${fmtMoney(pref)} (gain ${fmtMoney(cfg.ltNet)}, qualified dividends ${fmtMoney(cfg.qdiv)}).`);
   // A part cannot exceed what it is a part of; the warning sits under the row that was too large.
   const warn = (id, on, text) => { const el = $(id); el.hidden = !on; el.textContent = on ? text : ''; };
-  warn('warn-usint', cfg.usInt > cfg.interest, `Limited to the Interest entered (${fmtMoney(cfg.interest)}).`);
-  warn('warn-stmuni', cfg.stMuni > cfg.muni, `Limited to the municipal bond interest entered (${fmtMoney(cfg.muni)}).`);
+  warn('warn-usint', cfg.usInt > cfg.interest, `Must be less than or equal to the Interest entered (${fmtMoney(cfg.interest)}).`);
+  warn('warn-stmuni', cfg.stMuni > cfg.muni, `Must be less than or equal to the municipal bond interest entered (${fmtMoney(cfg.muni)}).`);
   if (cfg.carry > 0) notes.push(`<span class="hi-amber">Net capital loss: only ${fmtMoney(TAXData.FEDERAL.CAPITAL_LOSS_LIMIT)} offsets income this year; ${fmtMoney(cfg.carry)} carries forward and is ignored.</span>`);
   $('det-note').innerHTML = notes.join('<br>');
 }
@@ -633,7 +635,7 @@ function calcAt(ordInc) {
 // difference: total = ordinary + fixed. So the View is free to reach below the income already
 // entered, where ordinary income is negative (which is what a business loss is), and does not have
 // to start at it. applyView() turns the View into the sweep's ordinary range on every redraw.
-let viewLo = 30_000, viewHi = 620_000;                          // total income: the user's setting
+let viewLo = 30_000, viewHi = 620_000;                          // Fed income: the user's setting
 let zoomMin = 30_000, zoomMax = 620_000, zoomStep = FULL_STEP;  // ordinary income: derived by applyView()
 // Both sliders start at 0 so a negative stretch they rarely need does not eat their travel. They reach
 // below 0 when a negative ordinary income is pinned, when the View was set below 0, or while
@@ -1087,7 +1089,13 @@ function renderIrmaaLegend() {
       `<svg width="22" height="6" aria-hidden="true"><line x1="0" y1="3" x2="22" y2="3" stroke="${TIER_CFG[i].color}" stroke-width="1.5" stroke-dasharray="4 2"/></svg>` +
       `Tier ${t.n} &middot; ${kLabel(t.at)}</button>`;
   });
-  el.innerHTML = `<span class="irm-lbl">${cfg.year + IRMAA_AHEAD} IRMAA:</span>` + items.join('');
+  // Tiers the left edge of the View is already past (tax-exempt interest, Social Security or gains put
+  // MAGI there before any ordinary income) have no place on the chart: say so.
+  const m0 = sweepData[0]?.magi;
+  const passed = m0 === undefined ? 0 : irmaaTiers().filter(t => t.at <= m0).length;
+  const note = passed
+    ? `<span class="irm-note">${passed === 1 ? 'Tier 1 starts' : 'Tiers 1 to ' + passed + ' start'} below this View: MAGI is already ${fmtK(m0)} at its left edge. To see ${passed === 1 ? 'it' : 'them'}, double-click the View label twice, then drag its left handle below $0.</span>` : '';
+  el.innerHTML = `<span class="irm-lbl">${cfg.year + IRMAA_AHEAD} IRMAA:</span>` + items.join('') + note;
 }
 
 function toggleIrmaaTier(i) {
@@ -1231,9 +1239,9 @@ function renderChart(data) {
               const idx = items[0].dataIndex;
               const d = sweepData[idx];
               if (!d) return [];
-              const totalInc = d.ordInc + cfg.ssIncome + d.cgGain;
               const pin = getPinnedIdx() === idx ? '  ★ pinned' : '';
-              return [`${fmtK(d.ordInc)} ordinary  ·  ${fmtK(d.ordInc + cfg.ssIncome + d.cgGain)} total${pin}`];
+              const fed = d.ordInc + cfg.ssIncome + d.cgGain;
+              return [`${fmtK(d.ordInc)} ordinary  ·  ${fmtK(fed)} fed  ·  ${fmtK(fed + cfg.muni)} gross${pin}`];
             },
             beforeBody(items) {
               if (!items.length) return [];
@@ -1294,7 +1302,7 @@ function renderChart(data) {
               return t === null ? null : fmtK(t);
             }
           },
-          title: { display:true, text:'Total Income (Ord + SS + CG)',
+          title: { display:true, text:'Fed Income (Ord + SS + CG)',
                    color:'#4a5470', font:{family:'DM Mono, monospace', size:9} },
           grid: { drawOnChartArea:false, drawTicks:true, color:'#2a3048' }
         },
@@ -1372,7 +1380,8 @@ function updateInfoPanel(d) {
   if (!d) return;
   const $v = fmtMoney;
   const pp = (v, denom) => denom > 1 ? (v / denom * 100).toFixed(1) + '%' : '—';
-  const totalInc = Math.max(d.ordInc + cfg.ssIncome + d.cgGain, 1);
+  const totalInc = Math.max(d.ordInc + cfg.ssIncome + d.cgGain, 1);   // the divisor for every rate and percentage
+  const fedInc = d.ordInc + cfg.ssIncome + d.cgGain, grossInc = fedInc + cfg.muni;
   // Effective rate on the CG gain itself (not % of total income), NIIT included
   const nowTier = cfg.prevMagi === null ? null : irmaaAt(cfg.prevMagi, 0);
   const cgEffRate = d.cgGain > 0
@@ -1380,7 +1389,8 @@ function updateInfoPanel(d) {
 
   document.getElementById('info-panel').innerHTML = `
     <div class="info-header">
-      <span><span class="ih-lbl">Total income: </span><span class="ih-val">${$v(d.ordInc + cfg.ssIncome + d.cgGain)}</span></span>
+      <span title="Ordinary income + Social Security + capital gains + qualified dividends. Tax rates are measured against this."><span class="ih-lbl">Fed income: </span><span class="ih-val">${$v(fedInc)}</span></span>
+      <span title="Fed income plus tax-exempt (municipal bond) interest: everything that came in."><span class="ih-lbl">Gross income: </span><span class="ih-val">${$v(grossInc)}</span></span>
       <span><span class="ih-lbl">Ordinary: </span><span class="ih-val">${$v(d.ordInc)}</span></span>
       <span><span class="ih-lbl">SS: </span><span class="ih-val">${$v(cfg.ssIncome)}</span><span class="ih-lbl"> (${$v(d.ssTax)} taxable)</span></span>
       <span><span class="ih-lbl">CG gain: </span><span class="ih-val">${$v(d.cgGain)}</span></span>
@@ -1405,7 +1415,7 @@ function updateInfoPanel(d) {
         ${irmaaPanelRows(d.magi)}
       </div>
       <div>
-        <div class="info-col-title">Tax Dollars&ensp;<span style="font-size:9px;color:var(--muted)">(% of total income)</span></div>
+        <div class="info-col-title">Tax Dollars&ensp;<span style="font-size:9px;color:var(--muted)">(% of Fed income)</span></div>
         <div class="info-row"><span class="ir-lbl">Federal Ordinary</span><span><span class="ir-val">${$v(d.fedTax)}</span><span class="ir-pct">${pp(d.fedTax,totalInc)}</span></span></div>
         <div class="info-row"><span class="ir-lbl">Federal CG Tax</span><span><span class="ir-val">${$v(d.fedCGTax)}</span><span class="ir-pct">${pp(d.fedCGTax,totalInc)}<span style="color:var(--teal);margin-left:.3rem">${cgEffRate}</span></span></span></div>
         <div class="info-row"><span class="ir-lbl">Federal NIIT (3.8%)</span><span><span class="ir-val">${$v(d.niit)}</span><span class="ir-pct">${pp(d.niit,totalInc)}</span></span></div>
@@ -1417,7 +1427,7 @@ function updateInfoPanel(d) {
         <div class="info-divider"></div>
         <div class="info-row info-total"><span class="ir-lbl">Total Tax</span><span><span class="ir-val">${$v(d.totalTax)}</span><span class="ir-pct">${pp(d.totalTax,totalInc)}</span></span></div>
         <div class="info-row future"><span class="ir-lbl vis">${cfg.year + IRMAA_AHEAD} IRMAA${infoIcon(IRMAA_FUTURE_TIP, true)}</span><span><span class="ir-val">${$v(d.IRMAAFuture)}</span><span class="ir-pct">${pp(d.IRMAAFuture,totalInc)}</span></span></div>
-        <div class="info-row info-net"><span class="ir-lbl">Net Income</span><span><span class="ir-val">${$v(totalInc - d.totalTax)}</span><span class="ir-pct">${pp(totalInc - d.totalTax,totalInc)}</span></span></div>
+        <div class="info-row info-net"><span class="ir-lbl">Net Income</span><span><span class="ir-val">${$v(grossInc - d.totalTax)}</span><span class="ir-pct">${pp(grossInc - d.totalTax, grossInc)}</span></span></div>
       </div>
     </div>
     <div class="info-result">
@@ -1608,7 +1618,7 @@ function renderSummary(data) {
 function renderAssumptions() {
   const sn = document.getElementById('sel-state').selectedOptions[0].text;
   document.getElementById('assum-text').innerHTML = `
-    <div><strong>Top x-axis:</strong> Total income = ordinary income + Social Security + CG gain at each sweep point (fixed SS and CG amounts).</div>
+    <div><strong>Top x-axis:</strong> Fed income = ordinary income + Social Security + CG gain at each sweep point (fixed SS and CG amounts).</div>
     <div><strong>${sn} brackets:</strong> Most recent data, treated as 2026 base. States treat CG as ordinary income.</div>
     <details>
       <summary>More detail &amp; sources</summary>
@@ -1759,12 +1769,13 @@ function populateStateDropdown() {
 // Income details when there is no `pi`) and shows the answer as a comma-separated line, so a
 // spreadsheet can build the link from its own cells and the person can paste the result back. The
 // field names and their meaning are documented in UsageGuide.md; keep the two together.
-const RESULT_DEFAULT = ['ordinary', 'totalIncome', 'agi', 'magi', 'fedTax', 'stateTax', 'irmaa',
+const RESULT_DEFAULT = ['ordinary', 'fedIncome', 'grossIncome', 'agi', 'magi', 'fedTax', 'stateTax', 'irmaa',
                         'irmaaFuture', 'totalTax', 'effRate', 'fedMarginal', 'stateMarginal'];
 const RESULT_RATES   = new Set(['effRate', 'allInRate', 'fedMarginal', 'stateMarginal', 'cgRate']);
 const RESULT_FIELDS = {
   ordinary:        c => c.P,
-  totalIncome:     c => c.total,
+  fedIncome:       c => c.total,
+  grossIncome:     c => c.total + cfg.muni,
   agi:             c => c.d.fedAGI,
   magi:            c => c.d.magi,
   taxableSS:       c => c.d.ssTax,
@@ -1781,7 +1792,7 @@ const RESULT_FIELDS = {
   irmaa:           c => c.d.IRMAA,
   irmaaTier:       c => c.now ? c.now.tier : 0,
   totalTax:        c => c.d.totalTax,
-  netIncome:       c => c.total - c.d.totalTax,
+  netIncome:       c => c.total + cfg.muni - c.d.totalTax,
   effRate:         c => c.d.totEff,
   allInRate:       c => c.d.allIn,
   fedMarginal:     c => c.d.fedMarg,
@@ -1857,17 +1868,16 @@ window.taxResult = buildResult;   // for scripts: window.taxResult().csv
 
 function renderReturn() {
   if (!RETURN_SPEC && !LINK_ERRORS.length) return;
-  const r = buildResult();
+  // The box always shows the names above the values, so a field added later cannot hide in an
+  // unlabeled list. What Copy puts on the clipboard follows the link; Copy with Names always has them.
+  const spec = RETURN_SPEC ?? { names: RESULT_DEFAULT, header: false };
+  const r = buildResult({ names: spec.names, header: true });
   document.getElementById('ret-csv').textContent = r.csv;
   document.getElementById('ret-for').textContent = r.fields.length
     ? `at ordinary income ${fmtMoney(pinnedIncome ?? cfg.entOrdinary)}` : '';
   document.getElementById('ret-banner').hidden = false;
 }
 
-// The Copy buttons under the info panel. Both put the field names on a first line, because the
-// fields may change and a bare line of numbers would not say which is which: Copy is the default
-// set, Copy all fields is every result AND every input it was calculated from. `P` is the ordinary
-// income the panel is showing.
 function copyResult(kind, btn, P) {
   const r = buildResult({ names: kind === 'all' ? ALL_NAMES : RESULT_DEFAULT, header: true, P });
   copyText(r.csv).then(ok => {
@@ -1892,10 +1902,12 @@ async function copyText(text) {
 }
 
 // Copy in the result box: exactly the text shown there, and it stays selected for a manual copy.
-async function copyReturn() {
-  const el = document.getElementById('ret-csv');
-  const ok = await copyText(el.textContent);
+async function copyReturn(withNames) {
+  const spec = RETURN_SPEC ?? { names: RESULT_DEFAULT, header: false };
+  const text = buildResult({ names: spec.names, header: withNames === undefined ? spec.header : withNames }).csv;
+  const ok = await copyText(text);
   document.getElementById('ret-status').textContent = ok ? 'Copied to the clipboard' : 'Not copied: press Copy';
+  const el = document.getElementById('ret-csv');
   const sel = window.getSelection(), range = document.createRange();
   range.selectNodeContents(el);
   sel.removeAllRanges(); sel.addRange(range);
@@ -1920,7 +1932,7 @@ if (RETURN_SPEC && pinnedIncome === null) pinnedIncome = cfg.entOrdinary;   // s
 updateZoomUI();
 run();           // run() paints the info panel for a URL-restored pin
 initInfoPanel();
-if (RETURN_SPEC && !LINK_ERRORS.length) copyReturn();   // a return link copies its result, as if Copy had been pressed
+if (RETURN_SPEC && !LINK_ERRORS.length) copyReturn();   // header follows the link   // a return link copies its result, as if Copy had been pressed
 
 // Attach numeric formatting to dollar inputs (after init so URL-loaded values are formatted)
 ['num-ss', 'num-cg-sale'].forEach(id => {
@@ -1972,7 +1984,7 @@ function buildShareParams() {
   for (const f of DETAIL_FIELDS) if (cfg[f.cfg]) p[f.key] = cfg[f.cfg];   // Income details, when entered
   if (cfg.retirementSwept)  p.rw = 1;
   if (pinnedIncome !== null) p.pi = pinnedIncome;
-  if (!isFullZoom()) { p.vl = viewLo; p.vh = viewHi; }   // total income; legacy zl/zh were ordinary
+  if (!isFullZoom()) { p.vl = viewLo; p.vh = viewHi; }   // Fed income; legacy zl/zh were ordinary
   if (!autoZoomOn) p.az = 0;
   return new URLSearchParams(p).toString();
 }
@@ -2165,7 +2177,7 @@ function loadFromURL() {
         <dd><ul>
           <li>IRMAA tier lines carry the MAGI thresholds that will apply 2 years from now.</li>
           <li>Enter your MAGI from two years earlier and this year's taxes include that IRMAA, as its own purple bar. The IRMAA this income causes two years out is shown below Total Tax.</li>
-          <li>The View is set in total income and can start below your entered income. Ordinary income can be negative, and a dotted line marks where it is $0. Double-click the View or Ordinary label to let the sliders reach negative values.</li>
+          <li>The View is set in Fed income and can start below your entered income. Ordinary income can be negative, and a dotted line marks where it is $0. Double-click the View or Ordinary label to let the sliders reach negative values.</li>
           <li>Total Effective is income taxes only. A purple line adds this year's IRMAA where that is meaningful.</li>
           <li>Income details: ordinary income by type, qualified dividends, tax-exempt interest (municipal, Treasury, and municipal interest a state taxes), and property and local taxes. All of it is in the Share link.</li>
           <li>The Result for a spreadsheet row copies the results. Adding <code>return</code> to a link shows the same result and copies it. The <a href="https://tools.netcitizen.us/UsageGuide.html" target="_blank" rel="noopener">URL guide</a> lists every parameter.</li>
@@ -2201,7 +2213,7 @@ function loadFromURL() {
 
     <div class="modal-section">
       <h3>How the income sweep works</h3>
-      <p>The chart sweeps <strong>ordinary income</strong> across the visible range, and the <strong>View</strong> is set in <strong>total income</strong>, the figure on the top axis (default $30k–$620k; the slider runs from -$300k up past $1.1M). Ordinary income covers wages, IRA/401k withdrawals, pensions, and RMDs — anything taxed at regular rates — and it can be <strong>negative</strong>: a business or rental loss offsets your other income, and taxable income cannot go below zero. A dotted line marks where ordinary income is $0, which is where total income equals your Social Security plus gains. Left of it you are seeing a net loss, or what a lower total would look like. <strong>Social Security</strong> and <strong>capital gains</strong> are entered as fixed amounts that apply at every point across the sweep, letting you see how they interact with the income ramp. The top x-axis shows the <strong>total income</strong> (ordinary + SS + CG gain) at each corresponding point.</p>
+      <p>The chart sweeps <strong>ordinary income</strong> across the visible range, and the <strong>View</strong> is set in <strong>Fed income</strong>, the figure on the top axis (default $30k–$620k; the slider runs from -$300k up past $1.1M). Ordinary income covers wages, IRA/401k withdrawals, pensions, and RMDs — anything taxed at regular rates — and it can be <strong>negative</strong>: a business or rental loss offsets your other income, and taxable income cannot go below zero. A dotted line marks where ordinary income is $0, which is where Fed income equals your Social Security plus gains. Left of it you are seeing a net loss, or what a lower total would look like. <strong>Social Security</strong> and <strong>capital gains</strong> are entered as fixed amounts that apply at every point across the sweep, letting you see how they interact with the income ramp. The top x-axis shows the <strong>Fed income</strong> (ordinary + SS + CG gain) at each corresponding point.</p>
       <p style="margin-top:.5rem">The step size between data points and the x-axis label spacing both adapt automatically to the visible range — zoom into a narrower window and you get finer granularity with denser labels.</p>
     </div>
 
@@ -2224,8 +2236,8 @@ function loadFromURL() {
         <li><strong>Legend items</strong> — click any entry in the legend to toggle that line or bar series on/off. Useful for hiding distracting lines (e.g. IRMAA tiers you don't need).</li>
         <li><strong>Click a column</strong> — pins that income level so the info panel stays visible. With AutoZoom on, clicking also centers and zooms the chart around that income level, adjusting the label step size automatically.</li>
         <li><strong>AutoZoom button</strong> — when active (teal), clicking a column auto-zooms to a window around that income. Toggle it off to pin without zooming.</li>
-        <li><strong>Full button</strong> — resets the view to every total income from $0 up, whatever you have entered.</li>
-        <li><strong>View slider</strong> (below the chart) — drag either handle to set the lower or upper bound of the visible <em>total</em> income directly, starting as low as -$300k. Both sliders normally start at $0; double-click the <strong>View</strong> label to set the View from $0 to $50k above your current total income, again to let both sliders reach negative values (the View and the pin do not change), and again to go back. Double-clicking <strong>Ordinary</strong> only switches the negative range on and off. A negative pin or View also opens the negative range by itself. The chart redraws and label spacing adapts immediately. The slider and AutoZoom/Full buttons all stay in sync.</li>
+        <li><strong>Full button</strong> — resets the view to every Fed income from $0 up, whatever you have entered.</li>
+        <li><strong>View slider</strong> (below the chart) — drag either handle to set the lower or upper bound of the visible <em>total</em> income directly, starting as low as -$300k. Both sliders normally start at $0; double-click the <strong>View</strong> label to set the View from $0 to $50k above your current Fed income, again to let both sliders reach negative values (the View and the pin do not change), and again to go back. Double-clicking <strong>Ordinary</strong> only switches the negative range on and off. A negative pin or View also opens the negative range by itself. The chart redraws and label spacing adapts immediately. The slider and AutoZoom/Full buttons all stay in sync.</li>
         <li><strong>Ordinary slider and entry box</strong> (below the View slider) — move the pinned ordinary income, which can be negative, without clicking the chart. The slider scrubs across the visible range in chart steps and never re-zooms, so you can sweep the pin while watching the info panel. The entry box takes an exact dollar amount for fine tuning, and its readout is computed at that exact income even when it falls between two chart columns. Type an amount outside the current view and the chart re-centers on it. The &#10005; button unpins.</li>
       </ul>
     </div>
@@ -2238,7 +2250,7 @@ function loadFromURL() {
         <li><strong>NIIT line</strong> (indigo dashed) — sits where MAGI crosses the NIIT threshold, which is left of the $250k ordinary-income mark whenever you have taxable Social Security or capital gains. It is always shown, whether or not you have a gain this year, because it is the MAGI level to stay under: once you are past it, any gain you do realize is surtaxed from the first dollar.</li>
         <li><strong>Info panel</strong> — hovering over the chart shows all rates and dollar amounts for that income level simultaneously, regardless of which view is active.</li>
         <li><strong>IRMAA tier lines</strong> — one dashed line per surcharge tier, drawn where MAGI reaches that tier and labeled with the threshold (for example T1 $241k). The thresholds are the ones that will apply two years from the selected year, inflated to that year. A tier outside the visible range is an arrow marker at the nearest edge. Click an entry in the IRMAA legend row under the chart to hide or show its line. The info panel gives the tier at a pinned income, its surcharge, the MAGI room before the next tier and what crossing it adds, all in purple because they are a future cost.</li>
-        <li><strong>Top axis</strong> — shows total income (ordinary + SS + CG) at each major ordinary income mark. When SS and CG are zero it matches the bottom axis.</li>
+        <li><strong>Top axis</strong> — shows Fed income (ordinary + SS + CG) at each major ordinary income mark. When SS and CG are zero it matches the bottom axis.</li>
       </ul>
     </div>
 

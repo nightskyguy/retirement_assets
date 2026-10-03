@@ -116,7 +116,7 @@ looking at 2028 with their MAGI from 2026 entered:
 ?st=MFJ&s=CA&yr=2028&cs=200000&cb=0&ri=30000&pt=9000&pm=150000
 ```
 
-A business loss, with the view starting at a total income of $0:
+A business loss, with the view starting at a Fed income of $0:
 
 ```
 ?st=SGL&s=CA&wg=-40000&ss=24000&cs=60000&cb=0&vl=0&vh=300000
@@ -146,7 +146,9 @@ Tips:
 ## Getting a result with `return`
 
 Add `return` (or `result`, which means the same) and the page calculates at one ordinary income and
-shows the answer in a box at the top of the page, with a **Copy** button. It also copies the answer to
+shows the answer in a box at the top of the page, with the field names above the values so that an
+added field cannot hide in an unlabeled list. **Copy** puts the values on the clipboard as the link asked for
+them (with the names above them only if the link has `header=1`), and **Copy with Names** always includes the names. It also copies the answer to
 the clipboard by itself, as if you had pressed Copy. Many browsers refuse a copy that no click asked
 for, and the box then says "Not copied: press Copy", so do not rely on the clipboard being filled.
 
@@ -155,8 +157,8 @@ for, and the box then says "Not copied: press Copy", so do not rely on the clipb
 ```
 
 ```
-ordinary,totalIncome,agi,magi,fedTax,stateTax,irmaa,irmaaFuture,totalTax,effRate,fedMarginal,stateMarginal
-92000,116000,112400,112400,14620.68,4554.29,0,0,19174.97,0.165301,0.2332,0.093
+ordinary,fedIncome,grossIncome,agi,magi,fedTax,stateTax,irmaa,irmaaFuture,totalTax,effRate,fedMarginal,stateMarginal
+92000,116000,116000,112400,112400,14620.68,4554.29,0,0,19174.97,0.165301,0.2332,0.093
 ```
 
 The same result is on the page without a link: under the details panel at the bottom of the chart, the
@@ -187,7 +189,8 @@ Dollar amounts are for the whole year, in the dollars of `yr`, rounded to cents.
 | Field | Meaning |
 |---|---|
 | `ordinary` | The ordinary income calculated at |
-| `totalIncome` | Ordinary income plus all Social Security plus capital gains and qualified dividends |
+| `fedIncome` | Ordinary income plus all Social Security plus capital gains and qualified dividends. The page calls it Fed income. |
+| `grossIncome` | `fedIncome` plus tax-exempt (municipal bond) interest: everything that came in |
 | `agi` | Adjusted gross income |
 | `magi` | Modified AGI, which sets IRMAA |
 | `taxableSS` | The part of Social Security that is taxable |
@@ -204,9 +207,9 @@ Dollar amounts are for the whole year, in the dollars of `yr`, rounded to cents.
 | `irmaa` | The IRMAA you owe this year, from `pm` (0 when `pm` is not given) |
 | `irmaaTier` | Its tier, 0 to 5 |
 | `totalTax` | Federal, state and this year's IRMAA |
-| `netIncome` | Total income minus `totalTax` |
-| `effRate` | Income taxes divided by total income. It leaves IRMAA out. |
-| `allInRate` | `totalTax` divided by total income, IRMAA included |
+| `netIncome` | `grossIncome` minus `totalTax` |
+| `effRate` | Income taxes divided by `fedIncome`. It leaves IRMAA out. |
+| `allInRate` | `totalTax` divided by `fedIncome`, IRMAA included |
 | `fedMarginal` | Federal marginal rate on ordinary income, measured over a $1,000 step |
 | `stateMarginal` | State marginal rate |
 | `cgRate` | Federal capital-gains rate, including NIIT when it applies |

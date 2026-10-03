@@ -81,7 +81,6 @@ with a teal dotted line, and it is the income a `return` link calculates at when
 | Name | Meaning |
 |---|---|
 | `return` (or `result`) | Show the result as a line of comma-separated numbers, and copy it to the clipboard. See [Getting a result](#getting-a-result-with-return). |
-| `header` | With `return`, set to `1` to put the field names on a first line |
 
 ### Old parameters
 
@@ -147,13 +146,13 @@ Tips:
 
 Add `return` (or `result`, which means the same) and the page calculates at one ordinary income and
 shows the answer in a box at the top of the page, with the field names above the values so that an
-added field cannot hide in an unlabeled list. **Copy** puts the values on the clipboard as the link asked for
-them (with the names above them only if the link has `header=1`), and **Copy with Names** always includes the names. It also copies the answer to
+added field cannot hide in an unlabeled list. **Copy** puts the values on the clipboard in the order shown,
+and **Copy with Names** puts the names above them. It also copies the answer to
 the clipboard by itself, as if you had pressed Copy. Many browsers refuse a copy that no click asked
 for, and the box then says "Not copied: press Copy", so do not rely on the clipboard being filled.
 
 ```
-?st=SGL&s=CA&a1=65&yr=2026&wg=60000&it=2000&ri=30000&ss=24000&return&header=1
+?st=SGL&s=CA&a1=65&yr=2026&wg=60000&it=2000&ri=30000&ss=24000&return
 ```
 
 ```
@@ -181,7 +180,11 @@ ones you want, in the order you give, and can mix results with inputs:
 ```
 
 A name the page does not know produces `ERROR: unknown field` and the name, so a typo cannot pass for
-a result. `header=1` puts the field names on a first line.
+a result.
+
+**In a spreadsheet, list the fields you want** (`return=fedTax,stateTax,totalTax`) and do not rely on the
+default set. The default set may gain fields, and a spreadsheet that reads the values by position would
+then shift by a column. A list you wrote stays as you wrote it.
 
 Dollar amounts are for the whole year, in the dollars of `yr`, rounded to cents. Rates are fractions
 (`0.2332` is 23.32%), rounded to six places.

@@ -234,7 +234,7 @@
 
 <div class="ret-banner" id="ret-banner" hidden>
   <div class="ret-title"><span>Result <span id="ret-for"></span> <span id="ret-status" style="color:var(--muted)"></span></span>
-    <span><button type="button" class="hdr-btn" onclick="copyReturn(false)" title="Copies the values as the link asked for them: with the names above them only if the link has header=1.">Copy</button>
+    <span><button type="button" class="hdr-btn" onclick="copyReturn(false)" title="Copies the values only, in the order shown, ready to paste into spreadsheet cells.">Copy</button>
     <button type="button" class="hdr-btn" onclick="copyReturn(true)" title="Copies the field names and the values.">Copy with Names</button>
     <button type="button" class="hdr-btn" onclick="document.getElementById('ret-banner').hidden=true">Hide</button></span></div>
   <pre id="ret-csv"></pre>
@@ -1833,7 +1833,7 @@ const RETURN_SPEC = (() => {
   const names = (raw === '' || raw === '1' || raw === 'true') ? RESULT_DEFAULT
               : raw === 'all' ? ALL_NAMES
               : raw.split(',').map(x => x.trim()).filter(Boolean);
-  return { names, header: p.get('header') === '1' };
+  return { names };
 })();
 
 // The result at one ordinary income. The marginal rates are measured over a $1,000 step.
@@ -1869,8 +1869,8 @@ window.taxResult = buildResult;   // for scripts: window.taxResult().csv
 function renderReturn() {
   if (!RETURN_SPEC && !LINK_ERRORS.length) return;
   // The box always shows the names above the values, so a field added later cannot hide in an
-  // unlabeled list. What Copy puts on the clipboard follows the link; Copy with Names always has them.
-  const spec = RETURN_SPEC ?? { names: RESULT_DEFAULT, header: false };
+  // unlabeled list. Copy puts the values on the clipboard; Copy with Names puts the names above them.
+  const spec = RETURN_SPEC ?? { names: RESULT_DEFAULT };
   const r = buildResult({ names: spec.names, header: true });
   document.getElementById('ret-csv').textContent = r.csv;
   document.getElementById('ret-for').textContent = r.fields.length
@@ -1903,8 +1903,8 @@ async function copyText(text) {
 
 // Copy in the result box: exactly the text shown there, and it stays selected for a manual copy.
 async function copyReturn(withNames) {
-  const spec = RETURN_SPEC ?? { names: RESULT_DEFAULT, header: false };
-  const text = buildResult({ names: spec.names, header: withNames === undefined ? spec.header : withNames }).csv;
+  const spec = RETURN_SPEC ?? { names: RESULT_DEFAULT };
+  const text = buildResult({ names: spec.names, header: withNames === true }).csv;
   const ok = await copyText(text);
   document.getElementById('ret-status').textContent = ok ? 'Copied to the clipboard' : 'Not copied: press Copy';
   const el = document.getElementById('ret-csv');
@@ -1932,7 +1932,7 @@ if (RETURN_SPEC && pinnedIncome === null) pinnedIncome = cfg.entOrdinary;   // s
 updateZoomUI();
 run();           // run() paints the info panel for a URL-restored pin
 initInfoPanel();
-if (RETURN_SPEC && !LINK_ERRORS.length) copyReturn();   // header follows the link   // a return link copies its result, as if Copy had been pressed
+if (RETURN_SPEC && !LINK_ERRORS.length) copyReturn(false);   // a return link copies its values, as if Copy had been pressed
 
 // Attach numeric formatting to dollar inputs (after init so URL-loaded values are formatted)
 ['num-ss', 'num-cg-sale'].forEach(id => {

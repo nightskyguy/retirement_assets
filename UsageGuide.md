@@ -54,7 +54,7 @@ opens that section, even when the value is 0. The section is otherwise folded.
 | `ri` | IRA, 401k or pension withdrawals | No |
 | `rw` | Set to `1` to treat income swept above what you entered as IRA or 401k money | Only matters in states that exempt retirement income |
 | `ot` | Other ordinary income | Yes |
-| `mu` | Municipal bond interest (tax-exempt interest) | No. Not in income tax, but counted in MAGI (IRMAA), in how much Social Security is taxable and in the SALT phase-out. |
+| `mu` | Municipal bond interest (tax-exempt interest), entered separately from `it` | No. Not in income tax, but counted in MAGI (IRMAA), in how much Social Security is taxable and in the SALT phase-out. |
 | `ui` | US Treasury interest, a part of `it` that is exempt from state tax | No. Limited to `it`. |
 | `sm` | Municipal interest your state taxes, a part of `mu` | No. Limited to `mu`. Added to state income only. |
 | `pt` | Property and local taxes, for the SALT deduction | No. Enter real estate and local taxes only: state income tax is computed for you. |

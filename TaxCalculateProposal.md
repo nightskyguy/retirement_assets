@@ -129,12 +129,13 @@ shared calculation file:
   LibreOffice documentation: confirm it fetches a `localhost` address in the installed version, and
   whether a multi-field line is easier to split with a newer release's text functions or with
   **Data, Text to Columns**.)
-- **What `WEBSERVICE()` does to the server.** The author measured that each call sends three requests:
-  OPTIONS, HEAD and GET. The client cannot be told to send fewer, so the server's job is to make the
-  extra two nearly free: answer OPTIONS and HEAD with headers only, without running the calculation (a
-  framework that routes HEAD to the GET handler, as Flask does, runs it twice more), and keep the
-  connection alive. Cheap probes plus an optional few-second cache keyed on the full address make a
-  call cost one calculation. The node tool's own calculation takes well under a millisecond, so for it
+- **What `WEBSERVICE()` does to the server.** Measured with the probe on LibreOffice 26.2.4.2: one
+  `WEBSERVICE()` call sends **OPTIONS and then GET**, about a millisecond apart, and **no HEAD**. The
+  author's earlier observation against `local_stock` was OPTIONS, HEAD and GET; this run does not
+  reproduce the HEAD, and the reopen counts below suggest it comes from a linked range instead. The
+  client cannot be told to send fewer requests, so the server's job is to make the extra ones nearly
+  free: answer OPTIONS (and HEAD, when one arrives) with headers only, without running the work, and
+  keep the connection alive. The node tool's own calculation takes well under a millisecond, so for it
   this is about tidiness, not speed.
 - **One call, many results.** The efficient pattern, which the author already uses for 29 symbols on 5
   dates, is to fetch everything in one `WEBSERVICE()` and split it in the sheet with
@@ -144,10 +145,13 @@ shared calculation file:
   answering one line per value, newline-separated, numbers only. Numbers only matters because the sheet
   wraps the pieces in `VALUE()`: text fields such as `st` and `s` would come out as errors. In a locale
   whose decimal mark is a comma, `NUMBERVALUE(text, ".")` is safer than `VALUE()`.
-- **Answering the probes cheaply, with a Flask example.** Flask adds HEAD and OPTIONS to every GET route
-  and runs the same view for HEAD, so each `WEBSERVICE()` call to a Flask server does its work three
-  times. For `local_stock` that can mean three upstream quote fetches per cell. A hook that answers
-  the probes before any view runs removes that:
+- **Answering the probes cheaply, with a Flask example.** Flask adds HEAD and OPTIONS to every GET
+  route. It answers OPTIONS itself, without running the view, so the OPTIONS in a `WEBSERVICE()` call
+  already costs `local_stock` nothing. It runs the same view for HEAD, so a HEAD request does the full
+  work and throws the body away. Since the measurement above shows no HEAD from `WEBSERVICE()`, the hook
+  below should change nothing for those cells. It matters only if a HEAD does arrive, which the reopen
+  counts suggest a linked range sends. For `local_stock` that would mean an extra upstream quote fetch
+  per linked block. A hook that answers the probes before any view runs removes it:
 
   ```python
   from flask import request, Response
@@ -201,6 +205,9 @@ shared calculation file:
     of `/stats`. That is a reading of totals and not yet a measurement: the console lists the requests
     in order, and `/mark?label=...` now separates the steps, so a controlled run (reset, reopen,
     answer the prompt, read the console) will say which feature sent which request.
+  - **Request log, one `WEBSERVICE()` call:** OPTIONS then GET, from `LibreOffice 26.2.4.2`, about
+    1 ms apart, nothing else. That confirms the first half of the reading above. The linked-range half
+    (HEAD plus GET) still needs its own controlled run.
   - Not yet decided: whether a linked range or `WEBSERVICE()` is cheaper per refresh, and whether
     the prompt can be avoided (**Tools > Options > LibreOffice Calc > General > Update links when
     opening**, and trusted file locations, are the settings to try; both are from memory, and the first

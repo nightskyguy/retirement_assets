@@ -188,12 +188,23 @@ shared calculation file:
 - **Prototype results (author's LibreOffice, 2026-10-02).**
   - `WEBSERVICE()` against the probe worked for a single scenario and for a `vary=` batch split with
     `TEXTSPLIT`, with and without `--full-head`, and with both `127.0.0.1` and `localhost` addresses.
-  - **No trust prompt appeared** for any of them, including a new `localhost` address typed into a cell.
-    The prompts the author sees for other external sources do not apply to a local address.
   - **Sheet > Link to External Data** also worked, with a single scenario and with a batch, and it
     accepted the plain `.csv` address (an HTML table is not required).
-  - Not yet recorded: the request counts per `WEBSERVICE()` call and per linked-range refresh, which is
-    what `/stats` and the console show. The comparison between the two methods rests on those.
+  - **Trust prompts:** none while entering formulas or setting up a link, including a new `localhost`
+    address typed into a cell. **Reopening the document does prompt**, once for the document, asking
+    the author to verify before the data is fetched. So the prompt belongs to opening a document that
+    has external data, not to the address or to each formula.
+  - **Request counts, one reopen:** a sheet with 4 `WEBSERVICE()` cells and 2 external links, counted
+    after answering the prompt, showed GET 8, OPTIONS 4, HEAD 2. The count included requests to
+    `/stats` itself, which the probe no longer counts. The numbers fit `WEBSERVICE()` as OPTIONS plus
+    GET (4 each), and a linked range as HEAD plus GET (2 each), with the two remaining GETs being views
+    of `/stats`. That is a reading of totals and not yet a measurement: the console lists the requests
+    in order, and `/mark?label=...` now separates the steps, so a controlled run (reset, reopen,
+    answer the prompt, read the console) will say which feature sent which request.
+  - Not yet decided: whether a linked range or `WEBSERVICE()` is cheaper per refresh, and whether
+    the prompt can be avoided (**Tools > Options > LibreOffice Calc > General > Update links when
+    opening**, and trusted file locations, are the settings to try; both are from memory, and the first
+    applies to every document, so "always" is a wider permission than this one tool needs).
 - **Privacy:** the figures go only to a process on the same machine. No Cloudflare, no logs unless the
   tool is written to keep them, which it would not be. It would also suit anyone else who runs scripts,
   since the node tool needs no installation beyond node itself.

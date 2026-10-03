@@ -25,7 +25,9 @@
  *      Try the .csv address too: it shows whether Calc will take a plain CSV from an address.
  *   4. Whether Calc asks you to trust the link each time, and in which of the cases above.
  *
- * Open /stats to see the counts by method, and /stats?reset=1 to zero them between experiments.
+ * Open /stats to see the counts by method, and /stats?reset=1 to zero them between experiments. Neither
+ * /stats nor /mark counts itself. /mark?label=reopened prints a separator line in the console, to tell
+ * one step of an experiment from the next in the log.
  */
 const http = require('http');
 const path = require('path');
@@ -65,8 +67,9 @@ function rows(q) {
 }
 
 const counts = {};
+// /stats and /mark are for the person running the experiment, so they are logged but not counted.
 const note = (req) => {
-  counts[req.method] = (counts[req.method] || 0) + 1;
+  if (!/^\/(stats|mark)(\?|$)/.test(req.url)) counts[req.method] = (counts[req.method] || 0) + 1;
   const ua = String(req.headers['user-agent'] || '').slice(0, 40);
   console.log(new Date().toISOString().slice(11, 23), req.method.padEnd(7), req.url, '|', ua,
               '| conn:', req.headers.connection || '-');
@@ -87,6 +90,11 @@ const server = http.createServer((req, res) => {
   }
 
   try {
+    if (url.pathname === '/mark') {
+      console.log('-------- ' + (url.searchParams.get('label') || 'mark') + ' --------');
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('ok' + String.fromCharCode(10));
+    }
     if (url.pathname === '/stats') {
       if (url.searchParams.get('reset')) for (const k of Object.keys(counts)) delete counts[k];
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });

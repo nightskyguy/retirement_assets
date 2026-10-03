@@ -1577,6 +1577,12 @@ function nonSSIncomeForMAGI(status, magiTarget, totalSS) {
  * @param {number} params.qualifiedDiv - Qualified Dividends (preferentially taxed).
  * @param {number} params.capGains - Net Long Term Capital Gains.
  * @param {number} params.taxExemptInterest - Muni bond interest (affects SS/IRMAA/CA).
+ * @param {number} params.stateExemptInterest - Interest on US obligations (Treasuries, savings bonds).
+ *                 Part of the income passed in, taxed federally and exempt from state income tax, so it
+ *                 is subtracted from state income only.
+ * @param {number} params.stateTaxableExempt - Federally tax-exempt interest that the state taxes anyway
+ *                 (usually out-of-state municipal bonds). Added to state income only; it is already
+ *                 in `taxExemptInterest`, which this does not change.
  * @param {number} params.hsaContrib - HSA contributions (deductible Fed, taxable CA).
  * @param {number} params.inflation - CPI multiplier for tax brackets (e.g., 1.025).
  * @param {string} params.state - State abbreviation (e.g., 'CA', 'no' for no-tax states).
@@ -1606,6 +1612,8 @@ function calculateTaxes(params = {}) {
         qualifiedDiv = 0,
         capGains = 0,
         taxExemptInterest = 0,
+        stateExemptInterest = 0,
+        stateTaxableExempt = 0,
         hsaContrib = 0,
         inflation = 1.0,
         state = 'CA',
@@ -1688,7 +1696,10 @@ function calculateTaxes(params = {}) {
 
     // A state row with HSA_DEDUCTIBLE: false taxes HSA contributions; every other state deducts them.
     const stateHSADeduction = stateData.HSA_DEDUCTIBLE === false ? 0 : hsaContrib;
-    const stateAGI = earnedIncome - stateHSADeduction + stateTaxableSS + ordDivInterest + qualifiedDiv + capGains - stateRetExcl;
+    // Two state-only adjustments, both zero unless the caller supplies them: US-obligation interest
+    // is in the income above and comes back out, and tax-exempt interest the state taxes goes in.
+    const stateAGI = earnedIncome - stateHSADeduction + stateTaxableSS + ordDivInterest + qualifiedDiv + capGains
+                   - stateRetExcl - stateExemptInterest + stateTaxableExempt;
 
     const rawStateStd = stateData[status].std;
     const stateStdDeduction = rawStateStd === 'FEDERAL'

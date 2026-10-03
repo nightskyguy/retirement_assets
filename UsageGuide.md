@@ -54,6 +54,9 @@ opens that section, even when the value is 0. The section is otherwise folded.
 | `ri` | IRA, 401k or pension withdrawals | No |
 | `rw` | Set to `1` to treat income swept above what you entered as IRA or 401k money | Only matters in states that exempt retirement income |
 | `ot` | Other ordinary income | Yes |
+| `mu` | Municipal bond interest (tax-exempt interest) | No. Not in income tax, but counted in MAGI (IRMAA), in how much Social Security is taxable and in the SALT phase-out. |
+| `ui` | US Treasury interest, a part of `it` that is exempt from state tax | No. Limited to `it`. |
+| `sm` | Municipal interest your state taxes, a part of `mu` | No. Limited to `mu`. Added to state income only. |
 | `pt` | Property and local taxes, for the SALT deduction | No. Enter real estate and local taxes only: state income tax is computed for you. |
 
 `wg`, `it`, `nd`, `sg`, `ri` and `ot` add up to the **ordinary income entered**. The chart marks it
@@ -211,8 +214,8 @@ Dollar amounts are for the whole year, in the dollars of `yr`, rounded to cents.
 | `irmaaFutureTier` | Its tier, 0 to 5 |
 
 **Input fields.** `return=all`, and any comma list, can also name the inputs, spelled as in the link:
-`st`, `s`, `a1`, `a2`, `yr`, `in`, `ss`, `cs`, `cb`, `pm`, `wg`, `it`, `nd`, `sg`, `ri`, `ot`, `qd`, `pt`
-and `rw`. `st` and `s` come back as text (`SGL`, `TX`). `a2` is blank for a single filer and `pm` is
+`st`, `s`, `a1`, `a2`, `yr`, `in`, `ss`, `cs`, `cb`, `pm`, `wg`, `it`, `nd`, `sg`, `ri`, `ot`, `qd`, `mu`,
+`ui`, `sm`, `pt` and `rw`. `st` and `s` come back as text (`SGL`, `TX`). `a2` is blank for a single filer and `pm` is
 blank when it was not entered. A result can then say what it was a result of.
 
 ### What a spreadsheet can do with it

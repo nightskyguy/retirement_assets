@@ -1423,6 +1423,45 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 		assertEqual(r.AGI, 47000, 'AGI falls by 3,000, the capped offset');
 	});
 
+	// The three kinds of interest that are not simply "income": municipal interest (federal MAGI only),
+	// US-obligation interest (state-exempt), and tax-exempt interest a state taxes anyway.
+	const interestBase = { filingStatus: 'SGL', ages: [65], earnedIncome: 80000, state: 'CA',
+		inflation: 1, obbaOn: true, saltHigh: true, taxYear: 2026 };
+
+	test('TEST CASE 25g: stateExemptInterest comes out of state income only', () => {
+		const a = calculateTaxes(interestBase);
+		const b = calculateTaxes({ ...interestBase, stateExemptInterest: 5000 });
+		const c = calculateTaxes({ ...interestBase, earnedIncome: 75000 });
+		assertEqual(b.federalTax, a.federalTax, 'federal tax does not move: the interest is still federal income');
+		assertEqual(b.MAGI, a.MAGI, 'MAGI does not move either');
+		assertEqual(b.stateTax, c.stateTax, 'state tax is that of 5,000 less income');
+		assertEqual(b.stateTax < a.stateTax, true, 'and lower than without it');
+	});
+
+	test('TEST CASE 25h: stateTaxableExempt goes into state income only', () => {
+		const a = calculateTaxes(interestBase);
+		const muni = calculateTaxes({ ...interestBase, taxExemptInterest: 5000 });
+		const taxed = calculateTaxes({ ...interestBase, taxExemptInterest: 5000, stateTaxableExempt: 5000 });
+		const more = calculateTaxes({ ...interestBase, earnedIncome: 85000 });
+		assertEqual(muni.stateTax, a.stateTax, 'municipal interest alone leaves state tax where it was');
+		assertEqual(taxed.stateTax, more.stateTax, 'a state that taxes it charges what 5,000 more income would');
+		assertEqual(taxed.federalTax, muni.federalTax, 'federal tax is unchanged by the state treatment');
+		assertEqual(taxed.MAGI, muni.MAGI, 'and so is MAGI');
+	});
+
+	test('TEST CASE 25i: taxExemptInterest raises MAGI and Social Security taxability, not federal tax directly', () => {
+		const ss = { ...interestBase, earnedIncome: 20000, totalSS: 24000 };
+		const g = calculateTaxes(ss);
+		const h = calculateTaxes({ ...ss, taxExemptInterest: 5000 });
+		assertEqual(h.AGI - g.AGI, h.taxableSS - g.taxableSS, 'AGI moves only through the Social Security that becomes taxable');
+		assertEqual(h.MAGI - h.AGI, 5000, 'MAGI is AGI plus the municipal interest');
+		assertEqual(h.taxableSS > g.taxableSS, true, 'more of the benefit is taxable');
+		const plain = calculateTaxes(interestBase);
+		const withMuni = calculateTaxes({ ...interestBase, taxExemptInterest: 5000 });
+		assertEqual(withMuni.federalTax, plain.federalTax, 'with no Social Security, federal tax does not move');
+		assertEqual(withMuni.MAGI - plain.MAGI, 5000, 'but MAGI, which sets IRMAA, rises by the amount');
+	});
+
 	test('TEST CASE 25b: getQCDLimit is the table amount times the cumulative CPI factor', () => {
 		// cpiFactor is the CUMULATIVE index, not a rate - the trap the function\'s own comment names.
 		assertEqual(getQCDLimit(1), TAXData.QCD.AMOUNT, 'an unindexed year is the table amount');

@@ -203,9 +203,9 @@
 <!-- Shared tax modules — NOTE: these require file:// or http:// (CORS blocks in data: URLs) -->
 <script src="../displayhelpers.js"></script>
 <script src="../sharepanel.js?v=1118e3"></script>
-<script src="../taxengine.js?v=1119c7"></script>
+<script src="../taxengine.js?v=1119e7"></script>
 <script src="../medicare_costs.js?v=111917"></script>
-<script src="../taxengine.tests.js?v=1119c7"></script>
+<script src="../taxengine.tests.js?v=1119e7"></script>
 </head>
 <body>
 <header>
@@ -285,6 +285,10 @@
       <div class="det-sum"><span>Ordinary income entered <b id="det-ord">$0</b></span><button type="button" class="zoom-btn" id="btn-pin-entered" onclick="pinAtEntered()" title="Pin the chart at the ordinary income you entered above">Pin here</button></div>
       <div class="det-head">Taxed at capital-gains rates</div>
       <div class="det-row"><label for="num-qdiv">Qualified dividends<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Taxed with your capital gains and added to the gain from the sale below.</span></span></label><input type="text" id="num-qdiv" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <div class="det-head">Tax-exempt interest</div>
+      <div class="det-row"><label for="num-muni">Municipal bond interest<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Not in your income tax, but it counts toward IRMAA, how much of your Social Security is taxed, and the SALT cap phase-out.</span></span></label><input type="text" id="num-muni" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <div class="det-row"><label for="num-usint">US Treasury interest<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">The part of the Interest above that is from US government obligations (Treasuries, savings bonds). Federal tax applies, state tax does not. For a fund, enter only its US-government part from the year-end statement.</span></span></label><input type="text" id="num-usint" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <div class="det-row"><label for="num-stmuni">Municipal interest your state taxes<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">The part of the municipal interest above that your state taxes anyway, usually from out-of-state bonds. Your state decides; the tool uses your number.</span></span></label><input type="text" id="num-stmuni" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
       <div class="det-head">Deductions</div>
       <div class="det-row"><label for="num-prop">Property and local taxes (SALT)<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Real estate and local taxes. State income tax is computed by this tool and added automatically, so do not enter it here.</span></span></label><input type="text" id="num-prop" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
       <div class="note" id="det-note"></div>
@@ -438,11 +442,14 @@ const cfg = {
   ssIncome:0, propTax:0,
   retirementIncome:0, retirementSwept:false,
   wages:0, interest:0, ndiv:0, stcg:0, other:0, qdiv:0,
+  muni:0, usInt:0, stMuni:0,   // tax-exempt interest, its state-exempt Treasury part, and the part a state taxes
   cgSale:0, cgBasisPct:60,
   // Derived from the entries above by deriveIncome(), never read from a control:
   ltNet:0,          // long-term gain left after netting a short-term loss against it
   stOrd:0,          // short-term result that joins ordinary income (a capped net loss is negative)
   carry:0,          // net capital loss that does not offset anything this year
+  usIntEff:0,       // Treasury interest, limited to the Interest entered
+  stMuniEff:0,      // municipal interest a state taxes, limited to the municipal interest entered
   entOrdinary:0,    // everything entered under Ordinary income, added up
   year:2026, inflation:2.5,
   prevMagi:null,   // MAGI from year - 2, or null when not entered; only the IRMAA-in-force line reads it
@@ -491,6 +498,9 @@ const DETAIL_FIELDS = [
   { id:'num-retinc', key:'ri', cfg:'retirementIncome', neg:false },
   { id:'num-other',  key:'ot', cfg:'other',            neg:true  },
   { id:'num-qdiv',   key:'qd', cfg:'qdiv',             neg:false },
+  { id:'num-muni',   key:'mu', cfg:'muni',             neg:false },
+  { id:'num-usint',  key:'ui', cfg:'usInt',            neg:false },
+  { id:'num-stmuni', key:'sm', cfg:'stMuni',           neg:false },
   { id:'num-prop',   key:'pt', cfg:'propTax',          neg:false },
 ];
 const detailAmount = (f, text) => {
@@ -516,6 +526,9 @@ function deriveIncome() {
   cfg.ltNet = net.longTerm;
   cfg.stOrd = net.ordinary;
   cfg.carry = net.carryforward;
+  // Each is a part of another entry, so it cannot be larger than that entry.
+  cfg.usIntEff  = Math.min(cfg.usInt, cfg.interest);
+  cfg.stMuniEff = Math.min(cfg.stMuni, cfg.muni);
   cfg.entOrdinary = cfg.wages + cfg.interest + cfg.ndiv + cfg.retirementIncome + cfg.other + net.ordinary;
 }
 
@@ -530,6 +543,8 @@ function updDetails() {
   const notes = [];
   const pref = cfg.ltNet + cfg.qdiv;
   if (pref > 0 && (cfg.qdiv > 0 || cfg.stcg < 0)) notes.push(`Taxed at capital-gains rates: ${fmtMoney(pref)} (gain ${fmtMoney(cfg.ltNet)}, qualified dividends ${fmtMoney(cfg.qdiv)}).`);
+  if (cfg.usInt > cfg.interest) notes.push(`<span class="hi-amber">Treasury interest is limited to the Interest entered (${fmtMoney(cfg.interest)}).</span>`);
+  if (cfg.stMuni > cfg.muni) notes.push(`<span class="hi-amber">Municipal interest your state taxes is limited to the municipal interest entered (${fmtMoney(cfg.muni)}).</span>`);
   if (cfg.carry > 0) notes.push(`<span class="hi-amber">Net capital loss: only ${fmtMoney(TAXData.FEDERAL.CAPITAL_LOSS_LIMIT)} offsets income this year; ${fmtMoney(cfg.carry)} carries forward and is ignored.</span>`);
   $('det-note').innerHTML = notes.join('<br>');
 }
@@ -563,6 +578,9 @@ function calcAt(ordInc) {
     totalSS:         ssIncome,
     capGains:        cgGain,
     qualifiedDiv:    cfg.qdiv,
+    taxExemptInterest:   cfg.muni,          // federal MAGI only: IRMAA, Social Security taxability, SALT cap
+    stateExemptInterest: cfg.usIntEff,      // Treasury interest, out of state income
+    stateTaxableExempt:  cfg.stMuniEff,     // municipal interest the state taxes, into state income
     inflation:       inf,
     state:           state,
     obbaOn:          effectiveObbaOn,
@@ -1551,7 +1569,7 @@ function renderSummary(data) {
     const cls = peakMarg>.40?'hi-red':'hi-amber';
     // Provisional income counts the benefit at the first tier's rate (half), as calculateTaxes does.
     const ssShare   = TAXData.SOCIALSECURITY[cfg.status].brackets[1].r;
-    const torpEntry = SS_T[cfg.status].t1 - ssShare*cfg.ssIncome - cgGain;   // negative: already inside it at $0 ordinary
+    const torpEntry = SS_T[cfg.status].t1 - ssShare*cfg.ssIncome - cgGain - cfg.muni;   // negative: already inside it at $0 ordinary
     rows.push(`<div class="${cls}"><strong>SS torpedo peak:</strong> ~${(peakMarg*100).toFixed(1)}% fed marginal @ $${peakInc.toLocaleString()} ordinary income</div>`);
     rows.push(`<div><strong>SS torpedo starts:</strong> ~${fmtMoney(torpEntry)} ordinary income${torpEntry < 0 ? ' (your other income is already past it)' : ''}</div>`);
   }
@@ -1780,6 +1798,8 @@ const INPUT_FIELDS = {
   cb: () => cfg.cgBasisPct,
   pm: () => cfg.prevMagi ?? '',
   ...Object.fromEntries(DETAIL_FIELDS.map(f => [f.key, () => cfg[f.cfg]])),
+  ui: () => cfg.usIntEff,    // the amounts USED, which are limited to the entries they are part of
+  sm: () => cfg.stMuniEff,
   rw: () => cfg.retirementSwept ? 1 : 0,
 };
 const ALL_FIELDS = { ...RESULT_FIELDS, ...INPUT_FIELDS };
@@ -2140,7 +2160,7 @@ function loadFromURL() {
           <li>Enter your MAGI from two years earlier and this year's taxes include that IRMAA, as its own purple bar. The IRMAA this income causes two years out is shown below Total Tax.</li>
           <li>The View is set in total income and can start below your entered income. Ordinary income can be negative, and a dotted line marks where it is $0. Double-click the View or Ordinary label to let the sliders reach negative values.</li>
           <li>Total Effective is income taxes only. A purple line adds this year's IRMAA where that is meaningful.</li>
-          <li>Income details: ordinary income by type, qualified dividends, and property and local taxes. All of it is in the Share link.</li>
+          <li>Income details: ordinary income by type, qualified dividends, tax-exempt interest (municipal, Treasury, and municipal interest a state taxes), and property and local taxes. All of it is in the Share link.</li>
           <li>The Result for a spreadsheet row copies the results. Adding <code>return</code> to a link shows the same result and copies it. The <a href="https://tools.netcitizen.us/UsageGuide.html" target="_blank" rel="noopener">URL guide</a> lists every parameter.</li>
         </ul></dd>
         <dt>v2.8</dt>
@@ -2183,6 +2203,7 @@ function loadFromURL() {
       <ul>
         <li>Open <strong>Income details</strong> in the left panel to spell out your ordinary income: wages or business income (negative for a loss), interest, non-qualified dividends, short-term capital gains (negative for a loss), IRA, 401k or pension withdrawals, and other income (negative for a loss). They add up to the <em>ordinary income entered</em>. The chart marks that amount with a teal dotted line, and <strong>Pin here</strong> pins it. The chart's ordinary-income axis is still the total, so these entries do not stack on top of it.</li>
         <li><strong>Qualified dividends</strong> are taxed with your capital gains and added to the gain from the sale. A short-term loss is netted against that gain first, and a net capital loss offsets only $3,000 of income a year; the rest carries forward and is ignored.</li>
+        <li><strong>Tax-exempt interest.</strong> Municipal bond interest is not in your income tax, but it counts toward MAGI, so it moves the IRMAA tiers, and toward how much Social Security is taxed. <strong>US Treasury interest</strong> is part of Interest: taxed federally, exempt from state tax. <strong>Municipal interest your state taxes</strong> (usually out-of-state bonds) is added to state income only. The last two are parts of other entries and cannot exceed them; for a fund, enter only the part its year-end statement attributes to US obligations or to your state.</li>
         <li><strong>Property and local taxes</strong> are real estate and local taxes only. State income tax is computed for you and added to them for the SALT deduction.</li>
         <li><strong>Social Security</strong> is one combined amount for everyone on the return, because how much of it is taxed depends on all of your income together.</li>
         <li>Every entry is carried in the Share link, and a link that includes any of them opens the section.</li>

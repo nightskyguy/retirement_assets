@@ -188,7 +188,7 @@ shared calculation file:
   `localhost`. Things to try, from memory of the options and to be confirmed in the installed version:
   **Tools > Options > LibreOffice Calc > General > Update links when opening** (always, on request,
   never), and whether a linked range behaves differently from `WEBSERVICE()` cells in this respect.
-  The probe's step 4 is there to find that out.
+  The probe's step 4 was there to find that out; the answer is in the results below.
 - **Prototype results (author's LibreOffice, 2026-10-02).**
   - `WEBSERVICE()` against the probe worked for a single scenario and for a `vary=` batch split with
     `TEXTSPLIT`, with and without `--full-head`, and with both `127.0.0.1` and `localhost` addresses.
@@ -226,10 +226,14 @@ shared calculation file:
     difference is a millisecond on a local machine, so it matters only where each request does real work,
     as with a server that fetches quotes upstream. For that, batching and the short cache are worth more
     than either method's request count.
-  - Not yet decided: whether the prompt can be avoided (**Tools > Options > LibreOffice Calc >
-    General > Update links when opening**, and trusted file locations, are the settings to try; both are
-    from memory, and the first applies to every document, so "always" is a wider permission than this
-    one tool needs).
+  - **The reopen prompt can be turned off.** With **Tools > Options > LibreOffice Calc > General >
+    Update links when opening** set to **Always (from trusted locations)**, the author's documents,
+    including the original multi-cell spreadsheet, now load their `WEBSERVICE()` cells and linked
+    ranges without asking. The same setting did not work in an earlier LibreOffice version, so this
+    is specific to the installed one (26.2.4.2). Not recorded: which trusted location made it work (the
+    document's folder, the address, or something already trusted), so a reader on another machine may
+    need to try the document's folder first. "Always" without "(from trusted locations)" applies to
+    every document, which is a wider permission than this one tool needs.
 - **Privacy:** the figures go only to a process on the same machine. No Cloudflare, no logs unless the
   tool is written to keep them, which it would not be. It would also suit anyone else who runs scripts,
   since the node tool needs no installation beyond node itself.

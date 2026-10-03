@@ -185,6 +185,15 @@ shared calculation file:
   **Tools > Options > LibreOffice Calc > General > Update links when opening** (always, on request,
   never), and whether a linked range behaves differently from `WEBSERVICE()` cells in this respect.
   The probe's step 4 is there to find that out.
+- **Prototype results (author's LibreOffice, 2026-10-02).**
+  - `WEBSERVICE()` against the probe worked for a single scenario and for a `vary=` batch split with
+    `TEXTSPLIT`, with and without `--full-head`, and with both `127.0.0.1` and `localhost` addresses.
+  - **No trust prompt appeared** for any of them, including a new `localhost` address typed into a cell.
+    The prompts the author sees for other external sources do not apply to a local address.
+  - **Sheet > Link to External Data** also worked, with a single scenario and with a batch, and it
+    accepted the plain `.csv` address (an HTML table is not required).
+  - Not yet recorded: the request counts per `WEBSERVICE()` call and per linked-range refresh, which is
+    what `/stats` and the console show. The comparison between the two methods rests on those.
 - **Privacy:** the figures go only to a process on the same machine. No Cloudflare, no logs unless the
   tool is written to keep them, which it would not be. It would also suit anyone else who runs scripts,
   since the node tool needs no installation beyond node itself.

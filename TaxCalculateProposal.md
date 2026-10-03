@@ -148,10 +148,10 @@ shared calculation file:
 - **Answering the probes cheaply, with a Flask example.** Flask adds HEAD and OPTIONS to every GET
   route. It answers OPTIONS itself, without running the view, so the OPTIONS in a `WEBSERVICE()` call
   already costs `local_stock` nothing. It runs the same view for HEAD, so a HEAD request does the full
-  work and throws the body away. Since the measurement above shows no HEAD from `WEBSERVICE()`, the hook
-  below should change nothing for those cells. It matters only if a HEAD does arrive, which the reopen
-  counts suggest a linked range sends. For `local_stock` that would mean an extra upstream quote fetch
-  per linked block. A hook that answers the probes before any view runs removes it:
+  work and throws the body away. The reopen log below shows one HEAD among nine requests, so HEAD is
+  rare and the hook below buys little. What the log does show repeating is the same address fetched
+  twice within a few milliseconds, which a short cache saves (see the results). The hook, for the
+  occasional HEAD:
 
   ```python
   from flask import request, Response
@@ -177,7 +177,7 @@ shared calculation file:
   server that answers with real tax figures (`/tax.csv` and `/tax.html`, one scenario or a `vary=` batch)
   and prints every request, with `/stats` counting them by method. The script's header lists what to try
   and what to count:
-  1. the requests per `WEBSERVICE()` call, as a baseline (expected: OPTIONS, HEAD, GET);
+  1. the requests per `WEBSERVICE()` call, as a baseline (found: OPTIONS, GET);
   2. the requests per refresh of a linked range, for an `.html` table and for a plain `.csv` address;
   3. whether Calc accepts the plain CSV or insists on an HTML table;
   4. whether the refresh interval holds, and whether the linked range survives closing and reopening.
@@ -198,20 +198,38 @@ shared calculation file:
     address typed into a cell. **Reopening the document does prompt**, once for the document, asking
     the author to verify before the data is fetched. So the prompt belongs to opening a document that
     has external data, not to the address or to each formula.
-  - **Request counts, one reopen:** a sheet with 4 `WEBSERVICE()` cells and 2 external links, counted
-    after answering the prompt, showed GET 8, OPTIONS 4, HEAD 2. The count included requests to
-    `/stats` itself, which the probe no longer counts. The numbers fit `WEBSERVICE()` as OPTIONS plus
-    GET (4 each), and a linked range as HEAD plus GET (2 each), with the two remaining GETs being views
-    of `/stats`. That is a reading of totals and not yet a measurement: the console lists the requests
-    in order, and `/mark?label=...` now separates the steps, so a controlled run (reset, reopen,
-    answer the prompt, read the console) will say which feature sent which request.
   - **Request log, one `WEBSERVICE()` call:** OPTIONS then GET, from `LibreOffice 26.2.4.2`, about
-    1 ms apart, nothing else. That confirms the first half of the reading above. The linked-range half
-    (HEAD plus GET) still needs its own controlled run.
-  - Not yet decided: whether a linked range or `WEBSERVICE()` is cheaper per refresh, and whether
-    the prompt can be avoided (**Tools > Options > LibreOffice Calc > General > Update links when
-    opening**, and trusted file locations, are the settings to try; both are from memory, and the first
-    applies to every document, so "always" is a wider permission than this one tool needs).
+    1 ms apart, nothing else.
+  - **Request log, reopening a sheet** with 4 `WEBSERVICE()` cells and 2 linked ranges, after the
+    prompt was answered (the probe was running with `--full-head`). Nine requests in 21 ms, on three
+    distinct addresses (`A` is the batch `wg:40001,60001,80001`, `B` the single `wg=60001`, `C` the batch
+    `wg:40000,60000,80000`):
+
+    | address | requests, in order |
+    |---|---|
+    | A | OPTIONS, GET, and a later GET |
+    | B | OPTIONS, HEAD, GET |
+    | C | OPTIONS, GET, GET |
+
+    Which cell sent which request is not recorded, so what follows is a reading:
+    - `WEBSERVICE()` sends OPTIONS then GET, as in the single-call log: one pair per distinct address.
+      Four cells made only three pairs, so two cells with the same address share one fetch.
+    - A **linked range sends a GET and nothing else** (no OPTIONS, no HEAD): the two extra GETs, on A
+      and C, fit the two links.
+    - The one HEAD, on B, is unexplained. It is not a regular part of either feature in this run.
+    - **Identical addresses were fetched twice within milliseconds** (C at .150 and .151, A at .144 and
+      .164). A cache on the full address that holds for a few seconds would serve the second at no cost,
+      and is the one server-side saving this log supports.
+  - **Nothing was fetched until the prompt was answered:** the first request came 31 seconds after the
+    reopen marker, and the marker for the answer came after the last request.
+  - **Which is cheaper:** a linked range, at one request per fetch against two for `WEBSERVICE()`. The
+    difference is a millisecond on a local machine, so it matters only where each request does real work,
+    as with a server that fetches quotes upstream. For that, batching and the short cache are worth more
+    than either method's request count.
+  - Not yet decided: whether the prompt can be avoided (**Tools > Options > LibreOffice Calc >
+    General > Update links when opening**, and trusted file locations, are the settings to try; both are
+    from memory, and the first applies to every document, so "always" is a wider permission than this
+    one tool needs).
 - **Privacy:** the figures go only to a process on the same machine. No Cloudflare, no logs unless the
   tool is written to keep them, which it would not be. It would also suit anyone else who runs scripts,
   since the node tool needs no installation beyond node itself.

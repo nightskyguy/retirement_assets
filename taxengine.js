@@ -29,6 +29,10 @@ var TAXData = {
 			MFJ: 250000,
 			SGL: 200000,
 		},
+		// IRC 1211(b): a NET capital loss offsets ordinary income only up to this amount a year; the
+		// rest carries forward. Not indexed. $1,500 for married filing separately, which this tool
+		// does not model. See netCapitalLosses.
+		CAPITAL_LOSS_LIMIT: 3000,
 
 		CAPITAL_GAINS: {
 			YEAR: 2026,
@@ -1573,6 +1577,12 @@ function nonSSIncomeForMAGI(status, magiTarget, totalSS) {
  * @param {number} params.qualifiedDiv - Qualified Dividends (preferentially taxed).
  * @param {number} params.capGains - Net Long Term Capital Gains.
  * @param {number} params.taxExemptInterest - Muni bond interest (affects SS/IRMAA/CA).
+ * @param {number} params.stateExemptInterest - Interest on US obligations (Treasuries, savings bonds).
+ *                 Part of the income passed in, taxed federally and exempt from state income tax, so it
+ *                 is subtracted from state income only.
+ * @param {number} params.stateTaxableExempt - Federally tax-exempt interest that the state taxes anyway
+ *                 (usually out-of-state municipal bonds). Added to state income only; it is already
+ *                 in `taxExemptInterest`, which this does not change.
  * @param {number} params.hsaContrib - HSA contributions (deductible Fed, taxable CA).
  * @param {number} params.inflation - CPI multiplier for tax brackets (e.g., 1.025).
  * @param {string} params.state - State abbreviation (e.g., 'CA', 'no' for no-tax states).
@@ -1602,6 +1612,8 @@ function calculateTaxes(params = {}) {
         qualifiedDiv = 0,
         capGains = 0,
         taxExemptInterest = 0,
+        stateExemptInterest = 0,
+        stateTaxableExempt = 0,
         hsaContrib = 0,
         inflation = 1.0,
         state = 'CA',
@@ -1684,7 +1696,10 @@ function calculateTaxes(params = {}) {
 
     // A state row with HSA_DEDUCTIBLE: false taxes HSA contributions; every other state deducts them.
     const stateHSADeduction = stateData.HSA_DEDUCTIBLE === false ? 0 : hsaContrib;
-    const stateAGI = earnedIncome - stateHSADeduction + stateTaxableSS + ordDivInterest + qualifiedDiv + capGains - stateRetExcl;
+    // Two state-only adjustments, both zero unless the caller supplies them: US-obligation interest
+    // is in the income above and comes back out, and tax-exempt interest the state taxes goes in.
+    const stateAGI = earnedIncome - stateHSADeduction + stateTaxableSS + ordDivInterest + qualifiedDiv + capGains
+                   - stateRetExcl - stateExemptInterest + stateTaxableExempt;
 
     const rawStateStd = stateData[status].std;
     const stateStdDeduction = rawStateStd === 'FEDERAL'
@@ -1881,6 +1896,45 @@ function getIRMAATier(magi, status, cpiRate) {
 	return idx === -1 ? (brks[0].tier ?? '-') : (brks[idx].tier ?? '-');
 }
 
+// The five surcharge tiers of TAXData.IRMAA[status], in order, as a list a caller can draw or
+// describe. `-none-` (tier zero, no fee) and the trailing `l: Infinity` terminator are left out:
+// neither is a band someone lands in and pays for. Anything that lists tiers goes through here
+// rather than filtering the raw rows, so a rename of a row field breaks a test and not a chart.
+//
+// `l` is the first dollar of the tier at the table's own dollars, so a caller indexing for a later
+// year multiplies it by the CPI factor, as every lookup in this file does. `annualCost` is the
+// household surcharge in the table's dollars, before any Medicare growth factor.
+function getIRMAATiers(status) {
+	const brks = getRateBracket('IRMAA', status);
+	if (!brks) return [];
+	return brks
+		.filter(b => b.monthlyCost > 0 && Number.isFinite(b.l))
+		.map((b, i) => ({ n: i + 1, tier: b.tier, l: b.l, monthlyCost: b.monthlyCost,
+		                  annualCost: b.monthlyCost * 12 }));
+}
+
+// Nets a short-term and a long-term capital result the way the return does, and says what each
+// part becomes. A loss in either basket offsets a gain in the other; what survives keeps the
+// character of the gain it came from (short-term gain is ordinary income, long-term stays
+// preferential). If the two together are a NET LOSS, at most `limit` of it offsets ordinary income
+// this year and the rest is a carryforward, which this function reports and nothing else uses.
+//
+// Returns { ordinary, longTerm, carryforward }. `ordinary` is the amount that joins ordinary income
+// (negative for a capped net loss), `longTerm` the preferential gain left, `carryforward` the loss
+// that does not offset anything this year (>= 0).
+function netCapitalLosses(shortTerm, longTerm, limit = TAXData.FEDERAL.CAPITAL_LOSS_LIMIT) {
+	if (shortTerm >= 0 && longTerm >= 0) return { ordinary: shortTerm, longTerm, carryforward: 0 };
+	const net = shortTerm + longTerm;
+	if (net >= 0) {
+		// One basket is a loss and the gain in the other absorbs it.
+		return shortTerm >= 0
+			? { ordinary: net, longTerm: 0, carryforward: 0 }
+			: { ordinary: 0, longTerm: net, carryforward: 0 };
+	}
+	const used = Math.min(-net, limit);
+	return { ordinary: -used, longTerm: 0, carryforward: -net - used };
+}
+
 // Returns the CPI-adjusted per-person annual QCD limit.
 //
 // P70d. `cpiFactor` is the CUMULATIVE index factor (sim.cpiRate), the same thing every bracket
@@ -1931,7 +1985,7 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         TAXData, RMD_TABLE, RMD_START_AGE, rmdStartAge, rmdDivisor, getRateBracket,
         findLimitByRate, findUpperLimitByAmount, calculateProgressive,
-        calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATierTargetMAGI,
+        calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATiers, netCapitalLosses, getIRMAATierTargetMAGI,
         getQCDLimit, isQCDEligible,
         calculateTaxableSocialSecurity, nonSSIncomeForMAGI
     };
@@ -1945,7 +1999,7 @@ if (typeof module !== 'undefined' && module.exports) {
     window.TaxEngine = {
         TAXData, RMD_TABLE, RMD_START_AGE, rmdStartAge, rmdDivisor, getRateBracket,
         findLimitByRate, findUpperLimitByAmount, calculateProgressive,
-        calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATierTargetMAGI,
+        calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATiers, netCapitalLosses, getIRMAATierTargetMAGI,
         getQCDLimit, isQCDEligible,
         calculateTaxableSocialSecurity, nonSSIncomeForMAGI
     };

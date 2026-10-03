@@ -53,6 +53,8 @@ const findLimitByRate = (...a) => _engine().findLimitByRate(...a);
 const findUpperLimitByAmount = (...a) => _engine().findUpperLimitByAmount(...a);
 const calculateProgressive = (...a) => _engine().calculateProgressive(...a);
 const calcIRMAA = (...a) => _engine().calcIRMAA(...a);
+const getIRMAATiers = (...a) => _engine().getIRMAATiers(...a);
+const netCapitalLosses = (...a) => _engine().netCapitalLosses(...a);
 const isQCDEligible = (...a) => _engine().isQCDEligible(...a);
 const rmdStartAge = (...a) => _engine().rmdStartAge(...a);
 const rmdDivisor = (...a) => _engine().rmdDivisor(...a);
@@ -1375,6 +1377,89 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 			assertEqual(brks[surcharge.length + 1].l, Infinity,
 				`${status}: the ceiling of the top tier is Infinity, which is the thing to handle`);
 		}
+	});
+
+	test('TEST CASE 25d: getIRMAATiers lists the five paying tiers and nothing else', () => {
+		// The Income Tax Planner draws one reference line per entry. Each tier must carry a floor
+		// and an annual dollar figure; a row that lost either would draw nothing, or draw at NaN.
+		for (const status of ['MFJ', 'SGL']) {
+			const brks = getRateBracket('IRMAA', status);
+			const tiers = getIRMAATiers(status);
+			assertEqual(tiers.length, 5, `${status}: five paying tiers, with no-surcharge and the terminator left out`);
+			tiers.forEach((t, i) => {
+				assertEqual(t.n, i + 1, `${status}: tiers are numbered 1 to 5`);
+				assertEqual(t.tier, `Tier ${i + 1}`, `${status}: tier ${i + 1} carries the table's own label`);
+				assertEqual(t.l, brks[i + 1].l, `${status}: tier ${i + 1} starts at the table's floor`);
+				assertEqual(t.annualCost, brks[i + 1].monthlyCost * 12, `${status}: tier ${i + 1} annual cost is twelve months`);
+				assertEqual(Number.isFinite(t.l) && t.annualCost > 0, true, `${status}: tier ${i + 1} has a floor and a charge`);
+			});
+			assertEqual(tiers[0].l, brks[0].l + 1, `${status}: tier 1 starts a dollar above the no-surcharge ceiling`);
+			assertEqual(tiers.map(t => t.l).every((l, i, a) => i === 0 || l > a[i - 1]), true, `${status}: floors ascend`);
+		}
+	});
+
+	test('TEST CASE 25e: netCapitalLosses nets the two baskets and keeps the gain\'s character', () => {
+		const n = netCapitalLosses;
+		const limit = TAXData.FEDERAL.CAPITAL_LOSS_LIMIT;
+		assertEqual(limit, 3000, 'the annual net-loss offset is $3,000');
+		// Gains only: nothing to net, each stays where it was.
+		assertEqual(n(5000, 20000), { ordinary: 5000, longTerm: 20000, carryforward: 0 }, 'two gains pass through');
+		// A short-term loss is absorbed by a long-term gain, and what is left is still long-term.
+		assertEqual(n(-4000, 20000), { ordinary: 0, longTerm: 16000, carryforward: 0 }, 'a short-term loss reduces a long-term gain');
+		// A long-term loss is absorbed by a short-term gain, and what is left is ordinary income.
+		assertEqual(n(9000, -4000), { ordinary: 5000, longTerm: 0, carryforward: 0 }, 'a long-term loss reduces a short-term gain');
+		// A loss larger than the gain that absorbs it is a net loss, capped at the limit.
+		assertEqual(n(-10000, 2000), { ordinary: -3000, longTerm: 0, carryforward: 5000 }, 'net loss of 8,000: 3,000 offsets, 5,000 carries');
+		assertEqual(n(-1000, 0), { ordinary: -1000, longTerm: 0, carryforward: 0 }, 'a small net loss offsets in full');
+		assertEqual(n(-2000, -8000), { ordinary: -3000, longTerm: 0, carryforward: 7000 }, 'two losses are one net loss');
+	});
+
+	test('TEST CASE 25f: a capped net loss feeds the tax engine as ordinary income', () => {
+		// The page hands calculateTaxes the netted pieces. A $10,000 net loss against nothing else
+		// must lower AGI by the $3,000 the return allows, not by $10,000.
+		const net = netCapitalLosses(-10000, 0);
+		const r = calculateTaxes({ filingStatus: 'SGL', ages: [60], earnedIncome: 50000 + net.ordinary,
+			capGains: net.longTerm, state: 'TX', inflation: 1, taxYear: 2026 });
+		assertEqual(r.AGI, 47000, 'AGI falls by 3,000, the capped offset');
+	});
+
+	// The three kinds of interest that are not simply "income": municipal interest (federal MAGI only),
+	// US-obligation interest (state-exempt), and tax-exempt interest a state taxes anyway.
+	const interestBase = { filingStatus: 'SGL', ages: [65], earnedIncome: 80000, state: 'CA',
+		inflation: 1, obbaOn: true, saltHigh: true, taxYear: 2026 };
+
+	test('TEST CASE 25g: stateExemptInterest comes out of state income only', () => {
+		const a = calculateTaxes(interestBase);
+		const b = calculateTaxes({ ...interestBase, stateExemptInterest: 5000 });
+		const c = calculateTaxes({ ...interestBase, earnedIncome: 75000 });
+		assertEqual(b.federalTax, a.federalTax, 'federal tax does not move: the interest is still federal income');
+		assertEqual(b.MAGI, a.MAGI, 'MAGI does not move either');
+		assertEqual(b.stateTax, c.stateTax, 'state tax is that of 5,000 less income');
+		assertEqual(b.stateTax < a.stateTax, true, 'and lower than without it');
+	});
+
+	test('TEST CASE 25h: stateTaxableExempt goes into state income only', () => {
+		const a = calculateTaxes(interestBase);
+		const muni = calculateTaxes({ ...interestBase, taxExemptInterest: 5000 });
+		const taxed = calculateTaxes({ ...interestBase, taxExemptInterest: 5000, stateTaxableExempt: 5000 });
+		const more = calculateTaxes({ ...interestBase, earnedIncome: 85000 });
+		assertEqual(muni.stateTax, a.stateTax, 'municipal interest alone leaves state tax where it was');
+		assertEqual(taxed.stateTax, more.stateTax, 'a state that taxes it charges what 5,000 more income would');
+		assertEqual(taxed.federalTax, muni.federalTax, 'federal tax is unchanged by the state treatment');
+		assertEqual(taxed.MAGI, muni.MAGI, 'and so is MAGI');
+	});
+
+	test('TEST CASE 25i: taxExemptInterest raises MAGI and Social Security taxability, not federal tax directly', () => {
+		const ss = { ...interestBase, earnedIncome: 20000, totalSS: 24000 };
+		const g = calculateTaxes(ss);
+		const h = calculateTaxes({ ...ss, taxExemptInterest: 5000 });
+		assertEqual(h.AGI - g.AGI, h.taxableSS - g.taxableSS, 'AGI moves only through the Social Security that becomes taxable');
+		assertEqual(h.MAGI - h.AGI, 5000, 'MAGI is AGI plus the municipal interest');
+		assertEqual(h.taxableSS > g.taxableSS, true, 'more of the benefit is taxable');
+		const plain = calculateTaxes(interestBase);
+		const withMuni = calculateTaxes({ ...interestBase, taxExemptInterest: 5000 });
+		assertEqual(withMuni.federalTax, plain.federalTax, 'with no Social Security, federal tax does not move');
+		assertEqual(withMuni.MAGI - plain.MAGI, 5000, 'but MAGI, which sets IRMAA, rises by the amount');
 	});
 
 	test('TEST CASE 25b: getQCDLimit is the table amount times the cumulative CPI factor', () => {

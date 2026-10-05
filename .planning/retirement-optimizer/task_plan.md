@@ -18,6 +18,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P28j | `jg`/`jh`/`ji`/`jk` SHIPPED, and `jo`'s Split/Early/Late menu shipped in `a5d8aa9`. `jf` MEASURED and NOT acted on - the trigger is unchanged, and its removal case was withdrawn | `P28jn` / `P28jo` Automatic |
 | **O1** | P115 | **tax-payment attribution** (user, 2026-09-09). `a` SHIPPED v11.17b1: cash interest trued up to what the cash earned; `b` CLOSED v11.17f4. Priority is mine, not the user's | `P115c` |
 | **O1** | P132 | **MERGED in PR #230, v11.18bf.** The risk-based spend rule with its presets and a box-by-box checked Custom, GK-style made plan-relative (`P132j`), the cut-side landing overshoot closed (`P132g`), the Limit menu ordered by the MAGI each entry caps. Reports: `research/RBG_RULE_VALIDATION.md`, `research/RBG_RULE_THRESHOLDS.md`. Open: the server question, which is the user's call, and the terminal-reserve success test offered as a phase | user: server? |
+| **O1** | P137 | **A selectable "success" condition** (user, 2026-10-04): Monte Carlo, the rails and the Optimizer table each define success differently, and the default is "one year of need left", not "$1". Nerdknob-gated "Success means" control. PLAN ONLY, nothing implemented | `P137a` core |
 | **O1** | P136 | **Extra Roth Conversion ignores the taxation entanglement** (user, 2026-09-26): a fixed extra amount crosses NIIT, IRMAA and bracket thresholds thoughtlessly, and probably only makes sense for strategies that are not threshold-driven at all | `P136a` measure it |
 | **O1** | review F | **Step D shipped as `P133`, step F's first pass as `P134`, finding #9 CLOSED as `P135`** (v11.1933: ND, NE, SC and GA corrected against their own 2026 forms; AZ and NC checked and correct). Step **F** is what is left of the campaign: ~320 blocks carrying one marked line each, and the Monte Carlo files unswept (`mc_tab.js` 53 marked lines, the rest 37). The ceiling in `.githooks/check-comment-history.js` makes a regression visible meanwhile | step F slices |
 
@@ -83,6 +84,85 @@ The plan bank is **19 households**, and #244 added none: correcting the IRMAA la
 `ira-heavy-couple-overreaching` for a genuine shortfall - a household the bank has held since it was
 built in `3c30911`. Measured with `plans.list()` on 2026-09-25, after the 2026-09-24 entry in
 `progress.md` said 20 and said the household had been restored. Both halves of that were wrong.
+
+## P137: a selectable "success" condition for Monte Carlo and the Optimizer  *(2026-10-04, user-raised. O1, PLANNED, NOT STARTED)*
+
+**The user's request:** change the success/fail metric. In some places success means three more years
+of expenses past the end of the plan; in Monte Carlo it is "a dollar or more left". Offer a
+nerdknob-gated "end metric" the user picks: more than $0, a share of the initial real net worth,
+N years of expenses left (3, possibly 7 or 10, so no one needs an unnaturally long lifespan for
+safety). Investigate, scope, and say what to add or drop. **Scope chosen (user, 2026-10-04):** the
+Monte Carlo tab, the risk-based rails (they follow the selected condition, with a note), and the
+deterministic Optimizer table. This is also the "terminal-reserve success test" `P132` offered.
+
+**What the code does today** (verified, not remembered):
+
+| Where | Success means | Code |
+|---|---|---|
+| Monte Carlo survival rate, stress test, ruin year | no year ends with portfolio < that year's required draw (spend - guaranteed income). At the last year that is "holds one more year of portfolio-funded need", **not "$1 left"** | `yearIsRuined`, `montecarlo/mc_engine.js` |
+| Risk-based rails and rule | the same test, shared on purpose | `survives()`, `montecarlo/rails_engine.js` |
+| Optimizer green/red dot, ranking, sweeps | `totals.success`: that balance test plus net income >= 99% of target every year | yearly loop of `simulate()` |
+| Optimize Spend (✦ rows) | last-year balance >= last-year required draw; the page copy says "2 full years", the code tests one | `optimizeSpend` |
+| Suggested spend, "sustainable" | last year holds **5** years of portfolio-funded need (`SUGGEST_BUFFER_YEARS`); the tooltip falls back to 3 | `suggestSustainableSpend` |
+| Suggested spend menu | Middle = 50% of REAL starting pre-tax portfolio; Aggressive = 5 years of FULL spend | `suggestSpendMenu` |
+
+The "3 more years" the user remembers is the older buffer constant.
+
+**The conditions**, all applied to the plan's last modeled year, all keeping the per-year solvency test:
+
+| # | Condition | Value | Basis |
+|---|---|---|---|
+| 1 | Funds every year (default, today's behavior) | none | pre-tax portfolio vs required draw; output identical |
+| 2 | N years of need left at the end | 3, 5, 7, 10 or a number | after-tax net worth >= N x last year's portfolio-funded need, last-year dollars; need 0 always passes |
+| 3 | Share of starting net worth left, today's dollars | 25, 50, 100% or a number | after-tax terminal net worth deflated by the last inflation factor >= pct x starting after-tax net worth |
+| 4 | Dollar legacy target, today's dollars (added) | a number | same deflation as #3 |
+
+Judgment calls, open to the user: **after-tax basis for #2-#4** (an IRA at face overstates what a
+survivor can spend; the default stays pre-tax only so it does not move); **dropped** a literal "> $0"
+option (the default is already stricter) and a "1 year" preset (duplicates the default); **need, not
+full spend, for #2**; **terminal only** (an N-years reserve at every year is a different, stricter
+rule). **Deferred addition:** a delivered-spending floor ("never below 80% of the plan's real
+spend"). With Guardrails or the risk-based rule on, solvency is satisfied by cutting, and My Plan Only
+runs the plan with Guardrails ON and OFF, so the "on" chance of success is flattered. It is a path-wise
+second axis, so the condition object is `{ kind, value }` and can grow a `floor` later.
+
+**Design: one function, carried on the inputs.** `endCondition` rides on the `simulate()` inputs
+(null = default), so the Monte Carlo worker, the rails and the Optimizer all receive it through the path
+they already use. New pure `endConditionMet(lastRow, cond)` and `startNetWealthOf(inputs)` in
+`optimizer_core.js`; `simulate()` sets `totals.endMet` / `totals.endShort` after the loop and ANDs
+`endMet` into `totals.success`, so every consumer of `totals.success` (ranking, row eligibility,
+Optimize Spend, conversion and stop-year searches, `solveMaxSpend`) follows. A path that never runs out
+but ends short has no ruin year, so Monte Carlo tracks three outcomes - ruined (year), ends short,
+meets - with `survivalRate` = meets / paths (name kept) and a new `endShortCount`. The rails'
+`survives()` becomes no ruin year AND `endMet !== false`. All four conditions are monotone in wealth and
+spending, which the rails' bracketing needs.
+
+**Build:**
+
+- [ ] **P137a core** - the two pure functions, `simulate()` totals, `optimizeSpend`. Prove default
+      byte-identity with the `P133a` identity harness over the 19 `plans/` households. Settle whether
+      the resume record carries the reference net worth (`snapshotResume`), else pass it on
+      `endCondition.refReal` from the page.
+- [ ] **P137b engines** - `mc_engine.js` three-outcome path result and `endShortCount`;
+      `rails_engine.js` `survives()`.
+- [ ] **P137c page** - nerd-gated "Success means" select and number field in the Monte Carlo
+      Simulation Parameters panel; `getInputs()` merges `endCondition` only while `NERD_KNOBS` is on
+      (leak guard, the `cey`/`cem` pattern); the sweep hash; Monte Carlo sentences and tooltips naming
+      the condition; a stress "Ends short" band; the rails note; red-row tooltip and legend text.
+- [ ] **P137d suggestions** - `suggestSustainableSpend` follows the selected condition (default keeps
+      `SUGGEST_BUFFER_YEARS`); the menu's Middle and Aggressive become condition objects; drop the
+      tooltip's `: 3` fallback; make the Optimize Spend copy say what the code tests.
+- [ ] **P137e docs and pins** - `ExperimentalFeatures.md` (README and the changelog stay silent: gated);
+      `TestTiers.EXPECTED` and `.githooks/README.md` from MEASURED totals of all five suites; version
+      stamp in all four sites.
+- [ ] **P137f (deferred, ask first)** - the delivered-spending floor.
+
+**Verify:** five suites green and counts reconciled; default byte-identity before/after; invariant
+tests, not golden numbers - survival is monotone non-increasing in N, the share and the dollar target
+on one seed and bank, need 0 always passes, a path that ends short has no ruin year, rails at a preset
+agree with the tab at the matching spend; the page suite and the self-check badge; a `?nerdknob`
+browser pass with each condition, the control measured VISIBLE, and the knob turned off to see the
+default return.
 
 ## P136: Extra Roth Conversion ignores the taxation entanglement  *(2026-09-26, user-raised. O1, NOT STARTED)*
 

@@ -1165,7 +1165,7 @@ function explainItems(data) {
     }
   };
   bands((a, b) => b.ssTax > a.ssTax + eps, 'SS tax torpedo', EXPLAIN_COLORS.ss);
-  bands((a, b) => b.senDed < a.senDed - eps, 'Senior deduction phase-out', EXPLAIN_COLORS.senior, 'b3', '#047857');
+  bands((a, b) => b.senDed < a.senDed - eps, 'Senior deduction phase-out', EXPLAIN_COLORS.senior, '1f', '#14532d');
   bands((a, b) => a.useItz && b.useItz && itemized(b) < itemized(a) - eps, 'SALT cap phase-out', EXPLAIN_COLORS.salt);
   const step = (i, label, color) => items.push({ kind:'step', at:i - 0.5, label, color });
   for (let i = 1; i < n; i++) {

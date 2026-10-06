@@ -198,6 +198,16 @@ be on); the Fixed Split menu entry ignores it.
 
 Both still count as the plain knob for everything else, because `has('nerdknob')` is true for them.
 
+### Income Tax Planner: Copy table and Save image
+
+`?nerdknob` on `standalone/IncomeTaxPlanner.html` shows two more buttons beside **Export** and **Explain**:
+
+- **Copy table** puts the same content as Export (the link that recreates the chart, the summary, every setting and the table of points) on the clipboard, tab-separated, for pasting into a spreadsheet.
+- **Save image** downloads the chart canvas as a PNG, on the panel's background color, with the Explain labels if they are on. The IRMAA legend row under the chart is page markup and is not in the picture. Meant for capturing a chart for documentation.
+
+Neither enters the share link or changes any figure.
+
+
 ---
 
 ## 2. URL-only inputs — real inputs with no form field

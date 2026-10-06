@@ -57,10 +57,11 @@ opens that section, even when the value is 0. The section is otherwise folded.
 | `mu` | Municipal bond interest (tax-exempt interest), entered separately from `it` | No. Not in income tax, but counted in MAGI (IRMAA), in how much Social Security is taxable and in the SALT phase-out. |
 | `ui` | US Treasury interest, a part of `it` that is exempt from state tax | No. Limited to `it`. |
 | `sm` | Municipal interest your state taxes, a part of `mu` | No. Limited to `mu`. Added to state income only. |
+| `un` | Untaxed income, such as a Roth withdrawal or cash | No. Counts in Gross income and Net income only. |
 | `pt` | Property and local taxes, for the SALT deduction | No. Enter real estate and local taxes only: state income tax is computed for you. |
 
 `wg`, `it`, `nd`, `sg`, `ri` and `ot` add up to the **ordinary income entered**. The chart marks it
-with a teal dotted line, and it is the income a `return` link calculates at when there is no `pi`.
+with a teal line, the Ordinary slider shows it, and it is the income a `return` link calculates at.
 
 ### Medicare
 
@@ -72,9 +73,9 @@ with a teal dotted line, and it is the income a `return` link calculates at when
 
 | Name | Meaning | Values and default |
 |---|---|---|
-| `pi` | Ordinary income to pin, which fills the details panel and is the income a `return` link calculates at | Any number, negative allowed (a net loss). Default: not pinned. |
+| `pi` | Ordinary income to show on the chart, which fills the details panel and is the income a `return` link calculates at. The page sets Other ordinary income (`ot`) so the entries add up to it. | Any number, negative allowed (a net loss). Default: the ordinary income entered. |
 | `vl`, `vh` | The visible range, as **total** income (the top axis) | Low and high, in dollars, from -300000 up. Default 30000 to 620000. Omit both for the default view. |
-| `az` | Set to `0` to turn AutoZoom off | AutoZoom is on by default |
+| `ex` | Set to `1` to switch on Explain, which labels what moves the tax rate | Off by default |
 
 ### Asking for a result
 
@@ -85,7 +86,7 @@ with a teal dotted line, and it is the income a `return` link calculates at when
 ### Old parameters
 
 Links made by earlier versions still work. `zl`, `zh` and `zs` (the old ordinary-income view range) are
-converted to `vl` and `vh`. `me`, `ob` and `sh` no longer do anything and are ignored.
+converted to `vl` and `vh`. `me`, `ob`, `sh` and `az` (AutoZoom, which no longer exists) do nothing and are ignored.
 
 ## State codes
 
@@ -161,15 +162,15 @@ ordinary,fedIncome,grossIncome,agi,magi,fedTax,stateTax,irmaa,irmaaFuture,totalT
 ```
 
 The same result is on the page without a link: under the details panel at the bottom of the chart, the
-**Result for a spreadsheet** row has two buttons that copy it for the pinned income. **Copy** puts the
+**Result for a spreadsheet** row has two buttons that copy it for the ordinary income on the chart. **Copy** puts the
 default fields on the clipboard with their names on a first line. **Copy all fields** adds every other result and the inputs
 the result was calculated from. Both carry names because the set of fields may change over time, and a
 bare line of numbers would not say which is which.
 
-**Which income it calculates at.** The pinned `pi` if the link has one, otherwise the ordinary income
-entered under Income details (`wg` + `it` + `nd` + `sg` + `ri` + `ot`). In the example that is
-60000 + 2000 + 30000 = 92000. Use `pi` to calculate at a different ordinary income than the one
-entered.
+**Which income it calculates at.** The ordinary income entered under Income details (`wg` + `it` +
+`nd` + `sg` + `ri` + `ot`). In the example that is 60000 + 2000 + 30000 = 92000. Add `pi` to calculate
+at a different ordinary income: the page changes Other ordinary income (`ot`) by whatever it takes
+for the entries to add up to `pi`, so the inputs listed by `return=all` show that `ot`.
 
 **Which fields.** `return` by itself (or `return=1`) gives the default set shown above. `return=all`
 gives every result field and then every input it was calculated from. A comma list picks exactly the

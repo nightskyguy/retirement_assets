@@ -17,6 +17,17 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1a3f"></a>
+
+## 11.1a3f
+
+**Annual Details shows in browsers with an ad blocker on.**  
+*Display only: no plan's numbers change.*
+
+- **Blank Annual Details.** In a browser whose built-in ad blocker hides page elements by name, such as Brave with Shields up, the tab opened with its column boxes and nothing under them. The table's parts now have names those blockers leave alone.
+
+---
+
 <a id="11.198b"></a>
 
 ## 11.198b

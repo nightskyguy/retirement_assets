@@ -885,10 +885,10 @@ function runTests() {
 		try {
 			// Two rows, one of each, so the column is not all-empty and therefore not hidden.
 			updateTable([{ year: 2026, acaBreach: 'Yes' }, { year: 2027, acaBreach: '' }]);
-			const hs = [...document.querySelectorAll('#main-table > .ad-head > div')];
+			const hs = [...document.querySelectorAll('#main-table > .ann-head > div')];
 			const i = hs.findIndex(h => h.textContent.trim() === 'acaBreach');
 			if (i < 0) return;
-			const rows = [...document.querySelectorAll('#main-table > .ad-row')];
+			const rows = [...document.querySelectorAll('#main-table > .ann-row')];
 			assertEqual(rows[0].children[i].textContent, 'Yes', 'a breach year says so');
 			assertEqual(rows[1].children[i].textContent, '',
 				'and a year that did not breach is BLANK, not the "0" an empty string used to print');
@@ -920,7 +920,7 @@ function runTests() {
 			assertEqual(summ.checked, true,
 				'while leaving every category the reader already had, which is the whole contract');
 			assertEqual(card.classList.contains('hidden'), false, 'and opens Annual Details');
-			const th = [...document.querySelectorAll('#main-table > .ad-head > div')]
+			const th = [...document.querySelectorAll('#main-table > .ann-head > div')]
 				.find(h => h.textContent.trim() === 'BracketOverage');
 			assertEqual(!!th && !th.classList.contains('hidden-column'), true,
 				'and the column itself is on screen, not merely permitted');
@@ -935,6 +935,27 @@ function runTests() {
 			tax.checked = wasTax; summ.checked = wasSumm;
 			updateColumnVisibility();
 			if (wasHidden) card.classList.add('hidden');
+		}
+	})();
+
+	// ===== No Annual Details class name looks like an advertisement =====
+	// Content blockers hide elements by class name, and a class that begins "ad-" is on their generic
+	// lists. Brave hid every row of the grid (display:none, with no rule in the page) while the cells
+	// inside stayed, so the tab opened with all its columns zero wide.
+	(function annualGridClassNamesAvoidBlockerLists() {
+		if (typeof updateTable !== 'function' || typeof simulate !== 'function') return;
+		const grid = document.getElementById('main-table');
+		if (!grid) return;
+		const wasLog = window.lastSimulationLog;
+		try {
+			updateTable(simulate(getInputs()).log);
+			const bad = new Set();
+			grid.querySelectorAll('[class]').forEach(el => el.classList.forEach(c => {
+				if (/^ads?(-|_|$)|(-|_)ads?$|^(banner|sponsor)/i.test(c)) bad.add(c);
+			}));
+			assertEqual([...bad].join(' '), '', 'no class in the Annual Details grid matches an ad-blocker rule');
+		} finally {
+			if (wasLog) updateTable(wasLog);
 		}
 	})();
 
@@ -1322,9 +1343,9 @@ function runTests() {
 		}
 		const grid = document.getElementById('main-table');
 		if (!grid) return;
-		const heads = [...grid.querySelectorAll(':scope > .ad-head > div')];
+		const heads = [...grid.querySelectorAll(':scope > .ann-head > div')];
 		const nCols = heads.length;
-		const bodyRows = [...grid.querySelectorAll(':scope > .ad-row')];
+		const bodyRows = [...grid.querySelectorAll(':scope > .ann-row')];
 		if (!nCols || !bodyRows.length) return;
 		const bad = bodyRows
 			.map((r, i) => (r.children.length === nCols ? null : `row ${i} has ${r.children.length}`))
@@ -1343,7 +1364,7 @@ function runTests() {
 		assertEqual(skewed, -1, `every row hides the columns its header hides (first skewed row: ${skewed})`);
 		const tracks = Number(/repeat\((\d+)/.exec(grid.style.gridTemplateColumns)?.[1] ?? 0);
 		assertEqual(tracks, shown, `the grid has one track per shown column (${shown} shown)`);
-		const spans = [...grid.querySelectorAll(':scope > .ad-group > div')]
+		const spans = [...grid.querySelectorAll(':scope > .ann-group > div')]
 			.reduce((n, g) => n + Number(/span (\d+)/.exec(g.style.gridColumn)?.[1] ?? 1), 0);
 		assertEqual(spans, shown, 'the group banner spans exactly the shown columns');
 	})();
@@ -1365,9 +1386,9 @@ function runTests() {
 			card.classList.remove('hidden');
 			updateTable(simulate(getInputs()).log);
 			const grid = document.getElementById('main-table');
-			const banner = grid.querySelector(':scope > .ad-group');
-			const heads = [...grid.querySelectorAll(':scope > .ad-head > div')];
-			const rows = [...grid.querySelectorAll(':scope > .ad-row')].slice(0, 2);
+			const banner = grid.querySelector(':scope > .ann-group');
+			const heads = [...grid.querySelectorAll(':scope > .ann-head > div')];
+			const rows = [...grid.querySelectorAll(':scope > .ann-row')].slice(0, 2);
 			const shownOf = cells => [...cells].filter(c => !c.classList.contains('hidden-column'));
 			const showing = cells => shownOf(cells).map(c => c.textContent.trim()).join('\t');
 			const range = document.createRange();
@@ -1476,11 +1497,11 @@ function runTests() {
 			if (!log || log.length < 3) return;
 			cdBox.checked = true;
 			updateTable(log);
-			const headers = [...document.querySelectorAll('#main-table > .ad-head > div')].map(th => th.textContent);
+			const headers = [...document.querySelectorAll('#main-table > .ann-head > div')].map(th => th.textContent);
 			assertEqual(headers.includes('Spendable'), false,
 				'the stored Spendable column is gone (renamed SumSpendable, computed on demand)');
 			const cellNum = (row, col) => parseFloat(row.children[col].textContent.replace(/,/g, ''));
-			const bodyRows = [...document.querySelectorAll('#main-table > .ad-row')];
+			const bodyRows = [...document.querySelectorAll('#main-table > .ann-row')];
 			for (const name of ['SumTaxes', 'SumAdvisorFees', 'SumSpendable']) {
 				const col = headers.indexOf(name);
 				assertEqual(col >= 0, true, `${name} column renders`);
@@ -1523,8 +1544,8 @@ function runTests() {
 			for (const [view, checked] of [['Future $', false], ['Current $', true]]) {
 				cdBox.checked = checked;
 				updateTable(log);
-				const heads = [...document.querySelectorAll('#main-table > .ad-head > div')].map(h => h.dataset.key);
-				const rows = [...document.querySelectorAll('#main-table > .ad-row')];
+				const heads = [...document.querySelectorAll('#main-table > .ann-head > div')].map(h => h.dataset.key);
+				const rows = [...document.querySelectorAll('#main-table > .ann-row')];
 				for (const name of ['age1', 'age2']) {
 					const col = heads.indexOf(name);
 					assertEqual(col >= 0, true, `${view}: ${name} column renders`);

@@ -3145,7 +3145,7 @@ function analyzeColumnContent(log) {
 let columnContentStatus = {};
 
 // The Annual Details grid's parts. The grid's children are rows, in order: the group banner
-// (.ad-group), the column names (.ad-head), then one .ad-row per year. A row's children are its
+// (.ann-group), the column names (.ann-head), then one .ann-row per year. A row's children are its
 // cells, and a column-name cell carries its column's name in data-key. Every reader of the grid
 // goes through here, so that shape is written down once.
 function annualGridParts() {
@@ -3153,9 +3153,9 @@ function annualGridParts() {
     const rows = grid ? [...grid.children] : [];
     return {
         grid,
-        groupRow: rows.find(r => r.classList.contains('ad-group')) ?? null,
-        headCells: [...(rows.find(r => r.classList.contains('ad-head'))?.children ?? [])],
-        bodyRows: rows.filter(r => r.classList.contains('ad-row')),
+        groupRow: rows.find(r => r.classList.contains('ann-group')) ?? null,
+        headCells: [...(rows.find(r => r.classList.contains('ann-head'))?.children ?? [])],
+        bodyRows: rows.filter(r => r.classList.contains('ann-row')),
     };
 }
 
@@ -3351,7 +3351,7 @@ function rebuildGroupRow() {
         currentGroup = group;
         currentSpan = 1;
         currentCell = document.createElement('div');
-        currentCell.className = 'ad-grp';
+        currentCell.className = 'ann-grp';
         currentCell.setAttribute('role', 'columnheader');
         currentCell.textContent = group;
         currentCell.style.background = ANNUAL_GROUP_COLORS[group] ?? '#f5f5f5';
@@ -3411,8 +3411,8 @@ function updateTable(log) {
     // Built off-document and swapped in whole. Row 0 is the group banner, filled by
     // rebuildGroupRow() once the grid is in place; row 1 is the column names.
     const frag = document.createDocumentFragment();
-    frag.appendChild(annualRow('ad-group'));
-    const headerRow = frag.appendChild(annualRow('ad-head'));
+    frag.appendChild(annualRow('ann-group'));
+    const headerRow = frag.appendChild(annualRow('ann-head'));
 
     // Medicare age is stated in three tooltips below; read it from the tax data so the copy
     // cannot drift from the gate that actually charges the surcharge.
@@ -3508,7 +3508,7 @@ function updateTable(log) {
         if (isTableColumnKey(key)) {
             const th = document.createElement('div');
             const displayKey = key.endsWith('!') ? key.slice(0, -1) : key;
-            th.className = key === 'year' ? 'ad-th ad-pin' : 'ad-th';
+            th.className = key === 'year' ? 'ann-th ann-pin' : 'ann-th';
             th.setAttribute('role', 'columnheader');
             th.dataset.key = displayKey;
             th.textContent = displayKey;
@@ -3545,7 +3545,7 @@ function updateTable(log) {
               Math.max(0, (r.spendGoal ?? 0) - (r.guaranteedIncome ?? 0))))?.year ?? null)
         : null;
     log.forEach((row, i) => {
-        const tr = frag.appendChild(annualRow('ad-row'));
+        const tr = frag.appendChild(annualRow('ann-row'));
         const _isRuinRow = _ruinYear != null && row.year === _ruinYear;
 
         // Check conditions for highlighting
@@ -3572,7 +3572,7 @@ function updateTable(log) {
 
         // Pink takes priority over tier color. The row's class paints every cell of it; the cell
         // colors below are inline, so they still win where they apply.
-        if (incomeShortfall) tr.classList.add('ad-short');
+        if (incomeShortfall) tr.classList.add('ann-short');
 
         // Apply cell-level yellow highlighting for death occurred
         const deathHighlightCols = ['year', 'age1', 'age2', 'status', 'SSincome'];
@@ -3580,7 +3580,7 @@ function updateTable(log) {
         keys.forEach(key => {
             if (isTableColumnKey(key)) {
                 const td = document.createElement('div');
-                td.className = key === 'year' ? 'ad-td ad-pin' : 'ad-td';
+                td.className = key === 'year' ? 'ann-td ann-pin' : 'ann-td';
                 td.setAttribute('role', 'cell');
                 const isRunningTotal = !!ANNUAL_RUNNING_TOTALS[key];
                 const value = isRunningTotal ? _runningTotals[key][i] : row[key];

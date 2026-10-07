@@ -31,7 +31,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.198b</title>
+    <title>Retirement Optimizer 11.1a3f</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -61,7 +61,7 @@
 	     entry's HTML into the LATEST CHANGE banner during parse, and this has to sweep
 	     the document after that copy exists. See doclinks.js. -->
 	<script src="doclinks.js?v=1118ef" defer></script>
-	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=11198a">
+	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=111a3f">
 	<style>
     .toggle { display: flex !important; }
     /* The two page-level buttons, stacked at the top left. Matching widths so the stack lines up;
@@ -87,8 +87,8 @@
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=11198b"></script>
-	<script src="optimizer_tests.js?v=111a30"></script>
+	<script src="optimizer_ui.js?v=111a3f"></script>
+	<script src="optimizer_tests.js?v=111a3f"></script>
 </head>
 <body>
 
@@ -1151,6 +1151,13 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="display"><b>11.1a3f</b>
+					<strong>Annual Details shows in browsers with an ad blocker on.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>In a browser whose built-in ad blocker hides page elements by name, such as Brave with Shields up, the tab opened with its column boxes and nothing under them. The table's parts now have names those blockers leave alone.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.1a3f" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="display"><b>11.198b</b>
 					<strong>Ages in Annual Details count up in Current $, Feedback sends again, and the tables keep their headings in view.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1195,16 +1202,6 @@
 					<li><i>Solve rails on this path</i> re-solves the chance of success along a replayed Monte Carlo path. Every Guardrails cut and raise is a milestone on the charts, and Annual Details has a <i>Guardrails</i> column set (<i>ruleSpend</i>, <i>ruleAdj</i>, <i>vsPlan%</i>). The Limit menu is in order of the income each entry caps, and its figures are that income. No other plan numbers change.</li>
 					</ul>
 					<a href="optimizer_changelog.md#11.18bf" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="display"><b>11.1881</b>
-					<strong>Risk-based rails run to the end of the plan, and say how to read them.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>The rails reach the plan's last years, and a rail under 5% of TotalNetWealth is drawn at $0 instead of stopping. The target spend starts in the first year, at the After-Tax Spend the rails panel suggests; spending above twice the plan's is not drawn. No plan's numbers change.</li>
-					<li>A line above each chart explains its rails, including that the spending rails are after tax, like Spend Goal, and the panel links to the <a href="README.md#how-to-read-risk-based-rails" target="_blank" rel="noopener">README&rsquo;s <i>How to Read Risk-Based Rails</i></a>.</li>
-					<li>The Balances tooltip is shorter: the chance of success (CoS) once, beside TotalNetWealth, and the rails rounded to $1,000.</li>
-					<li>Run and Use it are green buttons, and changing the preset or the market paths no longer scrolls the page away from the controls.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.1881" target="_blank" rel="noopener">Details</a>
 				</li>
 				</ul>
 				<script>

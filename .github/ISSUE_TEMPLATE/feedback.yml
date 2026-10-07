@@ -12,7 +12,7 @@ body:
 
         **Issues here are public: anyone can read them.** Leave out your own balances, income, spending, ages and birth dates, a share link made from your own plan, and any screenshot that shows them. If a problem needs numbers to show, change them to made-up numbers that still show it, and share a link made from those.
 
-        To send something privately instead, use the **✉ Feedback** button at the top of the [Retirement Optimizer](https://tools.netcitizen.us/retirement_optimizer.html). Only the author reads those.
+        To send something privately instead, use the **✉ Feedback** button at the top of the [Retirement Optimizer](https://tools.netcitizen.us/retirement_optimizer.html), the [Income Tax Planner](https://tools.netcitizen.us/standalone/IncomeTaxPlanner.html) or the [Retirement Tax Payment Planner](https://tools.netcitizen.us/RetirementTaxPlanner.html). Only the author reads those.
 
   - type: dropdown
     id: tool
@@ -66,13 +66,13 @@ body:
     id: link
     attributes:
       label: A share link that shows it (optional)
-      description: Made with made-up numbers, never your own. The Share button at the top of the Retirement Optimizer makes one.
+      description: Made with made-up numbers, never your own. The Share button at the top of the Retirement Optimizer, the Income Tax Planner or the Retirement Tax Payment Planner makes one.
 
   - type: input
     id: version
     attributes:
       label: Version
-      description: The Retirement Optimizer shows it in the Version box at the top of the page.
+      description: The number after the tool's name at the top of the page, or in the Version box of the Retirement Optimizer.
       placeholder: "11.1867"
 
   - type: input

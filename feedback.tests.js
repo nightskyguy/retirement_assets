@@ -303,10 +303,11 @@ function _source(file) {
   return require('fs').readFileSync(require('path').join(__dirname, file), 'utf8');
 }
 
-// Evaluates one `const NAME = { ... };` object literal from optimizer_ui.js without loading the file.
+// Evaluates one `const NAME = { ... };` object literal from a source file without loading it. The
+// literal ends at the first line that is only a closing brace and a semicolon, indented or not.
 function _literal(src, name) {
-  const m = src.match(new RegExp('const ' + name + ' = (\\{[\\s\\S]*?\\n\\});'));
-  if (!m) throw new Error('test setup: const ' + name + ' not found in optimizer_ui.js');
+  const m = src.match(new RegExp('const ' + name + ' = (\\{[\\s\\S]*?\\n\\s*\\});'));
+  if (!m) throw new Error('test setup: const ' + name + ' not found');
   return require('vm').runInNewContext('(' + m[1] + ')');
 }
 
@@ -361,6 +362,125 @@ test('retirement_optimizer.html loads feedback.js early and wires the Feedback b
     'the page must hand feedback.js its safe-key list');
   assert(/FeedbackWidget\.init\(\{[\s\S]*?pinnedSettings:[^\n]*\bs:\s*document\.getElementById\('STATEname'\)/.test(src),
     'the page must pin the state, which the share link leaves out at its default');
+});
+
+// The two tax planners. Each page keeps its own SHARE_PRIVACY next to the code that builds its link.
+
+// Every key a page's share link can carry, read from the source of the function that builds it.
+const PLANNER_PAGES = {
+  'standalone/IncomeTaxPlanner.html': {
+    keys(src) {
+      const fn = (src.match(/function buildShareParams\(\) \{[\s\S]*?\r?\n\}\r?\n/) || [''])[0];
+      const literal = (fn.match(/const p = \{[\s\S]*?\r?\n  \};/) || [''])[0];
+      const inLiteral = [...literal.matchAll(/^\s+'?([a-z0-9]+)'?:/gm)].map(m => m[1]);
+      const assigned = [...fn.matchAll(/\bp\.([a-z0-9]+) = /g)].map(m => m[1]);
+      const details = (src.match(/const DETAIL_FIELDS = \[[\s\S]*?\r?\n\];/) || [''])[0];
+      const detailKeys = [...details.matchAll(/key:'([a-z0-9]+)'/g)].map(m => m[1]);
+      return [...new Set(inLiteral.concat(assigned, detailKeys))];
+    },
+    withheld: {
+      ages: ['a1', 'a2'],
+      amounts: ['ss', 'cs', 'cb', 'pm', 'wg', 'it', 'sg', 'ri', 'ot', 'un'],
+    },
+    tool: 'Income Tax Planner',
+  },
+  'RetirementTaxPlanner.html': {
+    keys(src) {
+      const fn = (src.match(/function buildShareURL\(\) \{[\s\S]*?\r?\n  \}\r?\n/) || [''])[0];
+      return [...new Set([...fn.matchAll(/\b(?:sp\.set|set)\('([a-z0-9]+)'/g)].map(m => m[1]))];
+    },
+    withheld: {
+      tax: ['ft', 'stt', 'pft', 'pst'],
+      ira: ['i1r', 'i1v', 'i1c', 'i2r', 'i2v', 'i2c', 'i1rw', 'i2rw'],
+      income: ['ss', 'pen', 'int', 'qdiv', 'cg', 'bv', 'bb'],
+    },
+    tool: 'Retirement Tax Payment Planner',
+  },
+};
+
+test('every share-link key on the two tax planners is classified as safe or personal, exactly once', () => {
+  if (!IS_NODE) return;
+  for (const [file, page] of Object.entries(PLANNER_PAGES)) {
+    const src = _source(file);
+    const privacy = _literal(src, 'SHARE_PRIVACY');
+    const keys = page.keys(src);
+    assert(keys.length >= 8, file + ': test setup: the share-link keys were not found (' + keys.length + ')');
+    const safe = new Set(privacy.safe), personal = new Set(privacy.personal);
+    const both = keys.filter(k => safe.has(k) && personal.has(k));
+    const neither = keys.filter(k => !safe.has(k) && !personal.has(k));
+    const stale = [...safe, ...personal].filter(k => !keys.includes(k));
+    assert(!both.length, file + ': in both lists: ' + both.join(', '));
+    assert(!neither.length, file + ': not classified - add each to SHARE_PRIVACY: ' + neither.join(', '));
+    assert(!stale.length, file + ': classified, but no longer a share-link key: ' + stale.join(', '));
+  }
+});
+
+test('amounts, ages and tax paid are withheld from a settings-only report on the two tax planners', () => {
+  if (!IS_NODE) return;
+  for (const [file, page] of Object.entries(PLANNER_PAGES)) {
+    const personal = new Set(_literal(_source(file), 'SHARE_PRIVACY').personal);
+    const wrong = [];
+    for (const [kind, keys] of Object.entries(page.withheld)) {
+      for (const k of keys) if (!personal.has(k)) wrong.push(kind + ' ' + k);
+    }
+    assert(!wrong.length, file + ': must be withheld: ' + wrong.join(', '));
+  }
+});
+
+test('the two tax planners load feedback.js early and wire the Feedback button', () => {
+  if (!IS_NODE) return;
+  for (const [file, page] of Object.entries(PLANNER_PAGES)) {
+    const src = _source(file);
+    const head = src.slice(0, src.indexOf('</head>'));
+    const tag = head.match(/<script src="(?:\.\.\/)?feedback\.js(\?v=[^"]*)?"[^>]*><\/script>/);
+    assert(tag, file + ': feedback.js must load in <head>, so its error listeners exist before the page scripts run');
+    assert(!/\b(defer|async)\b/.test(tag[0]), file + ': feedback.js must not be deferred: ' + tag[0]);
+    assert(/onclick="FeedbackWidget\.open\(\)"/.test(src), file + ': no button opens the dialog');
+    assert(/FeedbackWidget\.init\(\{[\s\S]*?safeKeys:\s*SHARE_PRIVACY\.safe/.test(src),
+      file + ': the page must hand feedback.js its safe-key list');
+    assert(src.includes("tool: '" + page.tool + "'"), file + ': the report must name the tool ' + page.tool);
+    // A const read by init() before its own line runs is a ReferenceError that kills the whole script.
+    const init = src.indexOf('FeedbackWidget.init(');
+    for (const name of ['SHARE_PRIVACY', 'buildShareURL', 'SHORT_TO_LONG']) {
+      if (!new RegExp('FeedbackWidget\\.init\\(\\{[\\s\\S]*?\\b' + name + '\\b').test(src)) continue;
+      const decl = src.search(new RegExp('(const|function) ' + name + '\\b'));
+      assert(decl !== -1 && decl < init, file + ': ' + name + ' must be declared before FeedbackWidget.init');
+    }
+  }
+});
+
+// What the three pages that carry plan data tell Google Analytics about their own address.
+test('Google Analytics gets only the address, the state and a short usage flag on every plan page', () => {
+  if (!IS_NODE) return;
+  const vm = require('vm');
+  const sent = (file, search) => {
+    const src = _source(file);
+    const head = src.slice(0, src.indexOf('</head>'));
+    const script = [...head.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).find(s => /gtag\('config'/.test(s));
+    assert(script, file + ': no inline gtag config script in <head>');
+    const box = { URLSearchParams, Date, location: { search, origin: 'https://t.example', pathname: '/page.html' } };
+    box.window = box;
+    vm.runInNewContext(script, box);
+    const cfg = Array.from(box.dataLayer).map(a => Array.from(a)).find(a => a[0] === 'config');
+    assert(cfg, file + ': gtag config was never called');
+    return cfg[2].page_location;
+  };
+  const base = 'https://t.example/page.html';
+  const cases = [
+    ['', base],
+    ['?ft=50000&ss=30000&i1r=25000', base],
+    ['?s=az&ft=50000', base + '?s=AZ'],
+    ['?s=Arizona&ft=1', base],
+    ['?ft=50000&nerdknob', base + '?nerdknob'],
+    ['?nerdknob=goal&ss=9000&s=NC', base + '?s=NC&nerdknob=goal'],
+    ['?nerdknob=split', base + '?nerdknob=split'],
+    ['?nerdknob=1234567', base + '?nerdknob'],
+    ['?nerdknob=a%26ss%3D9000', base + '?nerdknob'],
+    ['?nerdknob=abcdefghijklm', base + '?nerdknob'],
+  ];
+  for (const file of ['retirement_optimizer.html', 'standalone/IncomeTaxPlanner.html', 'RetirementTaxPlanner.html']) {
+    for (const [search, want] of cases) eq(sent(file, search), want, file + ' ' + (search || '(no query)'));
+  }
 });
 
 test('the GitHub issue form has the fields the link fills, and a required privacy check', () => {

@@ -19,11 +19,12 @@ Runs the five `node`-only suites and blocks the commit if any of them fails:
 | `taxengine.tests.js` | 54 | 0.1 s |
 | `taxPaymentPlanner.tests.js` | 62 | 0.5 s |
 | `doclinks.tests.js` | 15 | 0.1 s |
-| `feedback.tests.js` | 46 | 0.1 s |
+| `feedback.tests.js` | 50 | 0.1 s |
 
 `taxengine.tests.js` is the tax engine's own suite; `doclinks.tests.js` also carries the page-markup
 check (an unclosed inline tag in the changelog). `feedback.tests.js` covers the Send feedback dialog
-(`feedback.js`), which share-link keys it may send, the GitHub issue form it links to
+(`feedback.js`), which share-link keys each tool may send, the address the plan pages report to
+Google Analytics, the GitHub issue form it links to
 (`.github/ISSUE_TEMPLATE/feedback.yml`), and the Cloudflare Worker that receives it
 (`.feedback-worker/src/logic.cjs`).
 

@@ -120,7 +120,7 @@ Where a link, and so your figures, can end up:
 - **Browser history and bookmarks**, on every device that syncs them.
 - **Anywhere you paste or send the link**: email, chat, a forum or Reddit post, a spreadsheet, a document, a screenshot of the address bar. Everyone who can see the link can read the numbers in it, and a post that also says who you are or where you live can tie them to you. The author typically uses such links for illustration and avoids sharing any link containing real personal information.
 - **The servers that deliver the page.** Asking for a page sends its parameters along, so the web host and any network in front of it can record them in their access logs, whatever the page itself does.
-- **Analytics.** The Retirement Optimizer and the Income Tax Planner disclose the tool name and state (if entered) to Google Analytics - but no other parameters. The Income Tax Planner also skips the Cloudflare page counter when a link carries parameters. The other standalone tools have not yet been hardened so assume they leak any parameters you enter.
+- **Analytics.** The Retirement Optimizer, the Income Tax Planner and the Retirement Tax Payment Planner disclose the tool name and state (if entered) to Google Analytics - but no other parameters. The Income Tax Planner also skips the Cloudflare page counter when a link carries parameters. The other standalone tools have not yet been hardened so assume they leak any parameters you enter.
 
 Sharing safely:
 
@@ -213,7 +213,8 @@ My primary motivations for this tool are:
 ### Sending Feedback
 
 The **✉ Feedback** button, at the top of the Retirement Optimizer under **Share** and again on its
-INFO tab, sends a note to the author: a problem, a question or an idea.
+INFO tab, and beside **Share** on the Income Tax Planner and the Retirement Tax Payment Planner, sends
+a note to the author: a problem, a question or an idea.
 
 You decide what goes with your message. Each part has its own box, and **Show exactly what will be
 sent** prints the whole report before anything leaves your browser.

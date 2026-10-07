@@ -1,14 +1,36 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-DJ1KD88H79"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  // The page address WITHOUT its figures. A link carries the whole payment plan in its query, and
+  // Google Analytics records the full address with every page view unless told otherwise. Only the
+  // state and a short usage flag are kept: neither is a figure, and both are worth counting.
+  var _q = new URLSearchParams(location.search);
+  var _st = (_q.get('s') || '').toUpperCase();
+  var _flag = _q.has('nerdknob') ? (/^[a-z]{1,12}$/.test(_q.get('nerdknob')) ? '=' + _q.get('nerdknob') : '') : null;
+  var _keep = [];
+  if (/^[A-Z]{2}$/.test(_st)) _keep.push('s=' + _st);
+  if (_flag !== null) _keep.push('nerdknob' + _flag);
+  gtag('config', 'G-DJ1KD88H79', { page_location: location.origin + location.pathname + (_keep.length ? '?' + _keep.join('&') : '') });
+</script>
+  <!-- Requests and links from this page carry only the site's origin as the referrer, never the page
+       address, which holds the payment plan in its query. -->
+  <meta name="referrer" content="strict-origin">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- The Send feedback dialog. NOT deferred: it records page errors from here on, so it has to
+       load before the scripts below. It builds nothing until FeedbackWidget.open(). -->
+  <script src="feedback.js?v=11195c"></script>
   <!-- Version: major.minor where minor = lowercase hex((day-of-year * 24) + hour-of-day) at
        build time, the same convention retirement_optimizer.html uses.
        Example: Jul 29 08:00 -> day 210 -> (210*24)+8 = 5048 = 0x13b8 -> "1.13b8"
        Bump major manually for significant feature batches. Hardcode it here: the heading
        reads it back out of this tag at runtime rather than duplicating the number. -->
-  <title>Retirement Tax Payment Planner 1.15a2</title>
+  <title>Retirement Tax Payment Planner 1.1a30</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
@@ -197,7 +219,7 @@
       background: #fff;
     }
     .tabs-spacer { flex: 1; }
-    .tabs #btn-print, .tabs #btn-copy-link {
+    .tabs #btn-print, .tabs #btn-copy-link, .tabs #btn-feedback {
       padding: 5px 10px;
       font-size: 0.82em;
       font-weight: 600;
@@ -212,6 +234,8 @@
     .tabs #btn-copy-link { background: #00796B; color: #fff; }
     .tabs #btn-copy-link:hover { background: #004D40; }
     .tabs #btn-copy-link.copied { background: #2E7D32; }
+    .tabs #btn-feedback { background: #1F4E79; color: #fff; }
+    .tabs #btn-feedback:hover { background: #163A5C; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
     pre {
@@ -520,6 +544,7 @@
       <div class="tabs-spacer"></div>
       <button id="btn-print"     onclick="window.print()">🖨️ Print / PDF</button>
       <button id="btn-copy-link" onclick="toggleSharePanel()">&#8258; Share</button>
+      <button id="btn-feedback" type="button" onclick="FeedbackWidget.open()" title="Send a problem report, a question or an idea to the author. You choose what goes with it.">&#9993; Feedback</button>
       <div class="share-panel" id="share-panel">
         <label>Copy this URL to restore your settings in any browser:</label>
         <div class="share-row">
@@ -1030,14 +1055,9 @@
   //     &ira1Rmd=25000&ira1Voluntary=30000&ira1RothConversion=20000
   //     &portfolioRate=7&hysaGross=3.8&marginalOrdRate=30
 
-  function loadFromUrl() {
-    const raw = new URLSearchParams(window.location.search);
-    // runtests is a page switch, not an input. Left in, a bare ?runtests would look like
-    // pre-filled parameters and auto-collapse the panel and auto-compute with defaults.
-    raw.delete('runtests');
-    if (raw.toString() === '') return false;
-    // Expand short-form aliases → long-form field IDs (backward compat: long keys still work)
-    const SHORT_TO_LONG = {
+  // Short share-link keys → long-form field IDs (backward compat: long keys still work). Also read by
+  // the Send feedback dialog, which names a withheld field by its long name.
+  const SHORT_TO_LONG = {
       yr:'taxYear', s:'state', ft:'federalTax', stt:'stateTax',
       pft:'priorYearFedTax', pst:'priorYearStateTax', hi:'highIncomeFiler',
       i1r:'ira1Rmd', i1v:'ira1Voluntary', i1rt:'ira1RmdTaken', i1vt:'ira1VolTaken',
@@ -1054,7 +1074,42 @@
       // dollar amounts. Still accepted so old shared links keep working; see the ap handling in
       // loadFromUrl, which converts it into an equivalent value/basis pair.
       ap:'appreciationPct'
-    };
+  };
+
+  // Which share-link keys "Send feedback" may include when the person has NOT chosen to send the whole
+  // plan link (feedback.js). SAFE keys are choices and assumptions; PERSONAL keys are amounts. A key
+  // in neither list is withheld too, but feedback.tests.js fails until every key buildShareURL() can
+  // emit is in exactly one list. Declared after SHORT_TO_LONG, which init reads at once.
+  const SHARE_PRIVACY = {
+    safe: ['yr', 's', 'hi', 'pr', 'hysa', 'mor', 'cgr', 'i1rt', 'i1vt', 'i1cd', 'i2rt', 'i2vt', 'i2cd'],
+    personal: [
+      'ft', 'stt', 'pft', 'pst',                                // tax paid and owed
+      'i1r', 'i1v', 'i1c', 'i2r', 'i2v', 'i2c',                 // IRA amounts
+      'i1rw', 'i1vw', 'i1cw', 'i2rw', 'i2vw', 'i2cw',           // tax withheld from them
+      'ss', 'pen', 'int', 'qdiv', 'cg',                         // income
+      'bv', 'bb',                                               // brokerage value and basis
+    ],
+  };
+
+  FeedbackWidget.init({
+    tool: 'Retirement Tax Payment Planner',
+    getVersion: () => (document.title.match(/(\d+\.[0-9a-f]+)\s*$/) || [])[1] || '',
+    getPlanUrl: buildShareURL,
+    safeKeys: SHARE_PRIVACY.safe,
+    keyNames: SHORT_TO_LONG,
+    getTab: () => (document.querySelector('.tab.active') || {}).textContent || '',
+    settingsHelp: 'Tax year, state, rates and which payments are marked taken, plus any error messages'
+      + ' the page logged. Never tax amounts, IRA amounts, income or balances.',
+  });
+
+  function loadFromUrl() {
+    const raw = new URLSearchParams(window.location.search);
+    // These are page switches, not inputs. Left in, a bare ?runtests would look like pre-filled
+    // parameters and auto-collapse the panel and auto-compute with defaults.
+    raw.delete('runtests');
+    raw.delete('nerdknob');
+    if (raw.toString() === '') return false;
+    // Expand short-form aliases → long-form field IDs
     const sp = new URLSearchParams();
     raw.forEach((v, k) => sp.set(SHORT_TO_LONG[k] ?? k, v));
 

@@ -7,17 +7,25 @@
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
   // The page address WITHOUT its figures. A link carries the whole scenario in its query, and Google
-  // Analytics records the full address with every page view unless told otherwise. Only the state is
-  // kept, which is not a figure and is what is worth counting.
-  var _st = (new URLSearchParams(location.search).get('s') || '').toUpperCase();
-  gtag('config', 'G-DJ1KD88H79', { page_location: location.origin + location.pathname + (/^[A-Z]{2}$/.test(_st) ? '?s=' + _st : '') });
+  // Analytics records the full address with every page view unless told otherwise. Only the state and
+  // a short usage flag are kept: neither is a figure, and both are worth counting.
+  var _q = new URLSearchParams(location.search);
+  var _st = (_q.get('s') || '').toUpperCase();
+  var _flag = _q.has('nerdknob') ? (/^[a-z]{1,12}$/.test(_q.get('nerdknob')) ? '=' + _q.get('nerdknob') : '') : null;
+  var _keep = [];
+  if (/^[A-Z]{2}$/.test(_st)) _keep.push('s=' + _st);
+  if (_flag !== null) _keep.push('nerdknob' + _flag);
+  gtag('config', 'G-DJ1KD88H79', { page_location: location.origin + location.pathname + (_keep.length ? '?' + _keep.join('&') : '') });
 </script>
 <!-- Requests and links from this page carry only the site's origin as the referrer, never the page
      address, which holds the scenario in its query. -->
 <meta name="referrer" content="strict-origin">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Income Tax Planner · 2026+ · v2.10</title>
+<!-- The Send feedback dialog. NOT deferred: it records page errors from here on, so it has to load
+     before the scripts below. It builds nothing until FeedbackWidget.open(). -->
+<script src="../feedback.js?v=11195c"></script>
+<title>Income Tax Planner · 2026+ · v2.11</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
   // Global Chart.js tooltip defaults, set once so the chart config only says what differs.
@@ -219,11 +227,12 @@
 </head>
 <body>
 <header>
-  <h1>Income Tax Planner<span class="ver">v2.10</span></h1>
+  <h1>Income Tax Planner<span class="ver">v2.11</span></h1>
   <p>Federal + State · Capital Gains · IRMAA · SS torpedo · <span id="hdr-years">2026–2035</span> with inflation</p>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center;position:relative">
     <strong id="testsFailed" title="Unit tests status">🟢</strong>
     <button class="hdr-btn share" onclick="toggleSharePanel()">&#8258; Share</button>
+    <button type="button" class="hdr-btn" onclick="FeedbackWidget.open()" title="Send a problem report, a question or an idea to the author. You choose what goes with it.">&#9993; Feedback</button>
     <button class="hdr-btn" onclick="openModal()">How to Use</button>
     <button class="hdr-btn" onclick="showOtherTools()">&#9783; Other Tools</button>
     <!-- Share panel anchored below header buttons -->
@@ -2223,6 +2232,37 @@ SharePanel.init({
     : 'Copy this URL to restore your settings in any browser:',
 });
 
+// Which share-link keys "Send feedback" may include when the person has NOT chosen to send the whole
+// scenario link (feedback.js). SAFE keys are choices and assumptions; PERSONAL keys are ages and
+// amounts. A key in neither list is withheld too, but feedback.tests.js fails until every key
+// buildShareParams() can emit is in exactly one list.
+const SHARE_PRIVACY = {
+  safe: ['st', 's', 'yr', 'in', 'rw', 'ex'],
+  personal: [
+    'a1', 'a2',                                                    // ages
+    'ss', 'cs', 'cb', 'pm',                                        // Social Security, sale, basis, prior-year income
+    'wg', 'it', 'nd', 'sg', 'ri', 'ot', 'qd', 'mu', 'ui', 'sm', 'un', 'pt',   // income details
+    'vl', 'vh',                                                    // the income range on screen
+  ],
+};
+
+FeedbackWidget.init({
+  tool: 'Income Tax Planner',
+  getVersion: () => (document.title.match(/v(\d+\.\d+)\s*$/) || [])[1] || '',
+  getPlanUrl: buildShareURL,
+  safeKeys: SHARE_PRIVACY.safe,
+  // How a withheld key is named in the report; a key not listed here goes by its short name.
+  keyNames: {
+    a1: 'age1', a2: 'age2', ss: 'socialSecurity', cs: 'capitalGainSale', cb: 'costBasisPct',
+    pm: 'priorYearMagi', wg: 'wages', it: 'interest', nd: 'nonqualifiedDividends',
+    sg: 'shortTermGains', ri: 'retirementIncome', ot: 'otherIncome', qd: 'qualifiedDividends',
+    mu: 'muniInterest', ui: 'usInterest', sm: 'stateMuniInterest', un: 'untaxedIncome',
+    pt: 'propertyTax', vl: 'viewLow', vh: 'viewHigh',
+  },
+  settingsHelp: 'Filing status, state, year and inflation, plus any error messages the page logged.'
+    + ' Never income, ages, sale amounts or birth dates.',
+});
+
 // ─── OPEN IN RETIREMENT TAX PLANNER ─────────────────────────────────────────
 // Three things were wrong here, and two of them only bite together.
 //
@@ -2373,7 +2413,7 @@ function loadFromURL() {
 <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal-box">
     <div class="modal-hdr">
-      <h2>Income Tax Planner v2.10 — How to Use</h2>
+      <h2>Income Tax Planner v2.11 — How to Use</h2>
       <button class="modal-close" onclick="closeModal()">&#x2715;</button>
     </div>
 
@@ -2384,6 +2424,10 @@ function loadFromURL() {
     <details class="modal-section">
       <summary>Change Log</summary>
       <dl class="modal-kv">
+        <dt>v2.11</dt>
+        <dd><ul>
+          <li>A Feedback button sends the author a problem report, a question or an idea. You choose what goes with it, and Show exactly what will be sent prints the whole report before anything leaves your browser.</li>
+        </ul></dd>
         <dt>v2.10</dt>
         <dd><ul>
           <li>The Ordinary slider and entry box now change Other ordinary income, so the Income details always add up to the amount they show. Click the chart to set the ordinary income there.</li>

@@ -21,10 +21,10 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ## 11.1a3f
 
-**Annual Details shows in browsers with an ad blocker on.**  
+**Annual Details is no longer mistaken for an advertisement by ad blockers.**  
 *Display only: no plan's numbers change.*
 
-- **Blank Annual Details.** In a browser whose built-in ad blocker hides page elements by name, such as Brave with Shields up, the tab opened with its column boxes and nothing under them. The table's parts now have names those blockers leave alone.
+- **Blank Annual Details.** Annual Details could open with only its column boxes and no table. The likely cause is that an ad blocker, such as Brave Shields, took parts of the table for advertisements and hid them. The table's parts now have names those blockers leave alone.
 
 ---
 

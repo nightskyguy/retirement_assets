@@ -17,6 +17,17 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1a3f"></a>
+
+## 11.1a3f
+
+**Annual Details is no longer mistaken for an advertisement by ad blockers.**  
+*Display only: no plan's numbers change.*
+
+- **Blank Annual Details.** Annual Details could open with only its column boxes and no table. The likely cause is that an ad blocker, such as Brave Shields, took parts of the table for advertisements and hid them. The table's parts now have names those blockers leave alone.
+
+---
+
 <a id="11.198b"></a>
 
 ## 11.198b

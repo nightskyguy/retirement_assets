@@ -100,31 +100,31 @@ body {
 }
 
 /* Annual Details. Both header rows pin to the top of the box: the group banner at 0 and the column
-   names under it at the banner's fixed height, --ad-grp-h, so neither needs measuring. The year
+   names under it at the banner's fixed height, --ann-grp-h, so neither needs measuring. The year
    column pins to the left. Every body cell is opaque, because the rest of the row scrolls
    underneath the pinned ones. */
 #main-table {
-    --ad-grp-h: 1.25rem;
+    --ann-grp-h: 1.25rem;
     font-size: 0.75rem;
     text-align: right;
 }
-#main-table .ad-grp {
+#main-table .ann-grp {
     position: sticky;
     top: 0;
     z-index: 4;
-    height: var(--ad-grp-h);
+    height: var(--ann-grp-h);
     box-sizing: border-box;
     padding: 0 4px;
-    line-height: calc(var(--ad-grp-h) - 1px);
+    line-height: calc(var(--ann-grp-h) - 1px);
     font-size: 0.78em;
     font-weight: bold;
     text-align: center;
     white-space: nowrap;
     border-bottom-color: #bbb;
 }
-#main-table .ad-th {
+#main-table .ann-th {
     position: sticky;
-    top: var(--ad-grp-h);
+    top: var(--ann-grp-h);
     z-index: 4;
     background: #f8f9fa;
     padding: 6px 8px;
@@ -133,27 +133,27 @@ body {
     white-space: nowrap;
     border-bottom: 2px solid #dee2e6;
 }
-#main-table .ad-th[title] {
+#main-table .ann-th[title] {
     cursor: help;
     text-decoration: underline dotted;
     color: green;
 }
-#main-table .ad-td {
+#main-table .ann-td {
     padding: 4px 8px;
     white-space: nowrap;
     background: #fff;
 }
-#main-table .ad-pin {
+#main-table .ann-pin {
     position: sticky;
     left: 0;
     z-index: 2;
 }
-#main-table .ad-th.ad-pin {
+#main-table .ann-th.ann-pin {
     z-index: 6;
 }
 /* Underfunded year. The legend's swatch is #ffb6c180, which over white is this color; opaque here
    so the pinned year cell hides the cells scrolling beneath it. */
-#main-table .ad-short > .ad-td {
+#main-table .ann-short > .ann-td {
     background: #ffdae0;
 }
 
@@ -177,13 +177,13 @@ body {
     background-color: #fff3b0 !important;
 }
 
-/* An all-zero column, shown because Show Zero is on. After .ad-short, which it overrides. */
-#main-table .ad-th.empty-column {
+/* An all-zero column, shown because Show Zero is on. After .ann-short, which it overrides. */
+#main-table .ann-th.empty-column {
     background-color: #f0f0f0;
     font-style: italic;
     color: #666;
 }
-#main-table .ad-row > .empty-column {
+#main-table .ann-row > .empty-column {
     background-color: #fafafa;
 }
 

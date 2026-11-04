@@ -30,7 +30,7 @@
        Example: Jul 29 08:00 -> day 210 -> (210*24)+8 = 5048 = 0x13b8 -> "1.13b8"
        Bump major manually for significant feature batches. Hardcode it here: the heading
        reads it back out of this tag at runtime rather than duplicating the number. -->
-  <title>Retirement Tax Payment Planner 1.1a30</title>
+  <title>Retirement Tax Payment Planner 1.1cee</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
@@ -401,6 +401,7 @@
     </label>
 
     <div class="section-hdr">IRA 1 Draws and Conversions</div>
+    <div id="lump-note" hidden style="margin:4px 0 8px;padding:6px 8px;border:1px solid #F9A825;background:#FFF8E1;color:#5D4037;font-size:12px;border-radius:4px">These IRA figures came from the Income Tax Planner on a joint return, which does not tell your IRAs apart. All of it is entered as IRA 1. If you and your spouse each have an IRA, divide it between IRA 1 and IRA 2 below, because each is withheld and paid separately.</div>
     <label><span>IRA 1 RMD ($)</span>
       <input type="text" id="ira1Rmd" value="15000" autocomplete="off" oninput="updateComputed()">
     </label>
@@ -1108,6 +1109,9 @@
     // parameters and auto-collapse the panel and auto-compute with defaults.
     raw.delete('runtests');
     raw.delete('nerdknob');
+    // A hand-off from the Income Tax Planner on a joint return: its IRA figures all arrive as IRA 1.
+    document.getElementById('lump-note').hidden = raw.get('lump') !== '1';
+    raw.delete('lump');
     if (raw.toString() === '') return false;
     // Expand short-form aliases → long-form field IDs
     const sp = new URLSearchParams();

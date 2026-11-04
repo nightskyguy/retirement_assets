@@ -51,7 +51,8 @@ opens that section, even when the value is 0. The section is otherwise folded.
 | `it` | Interest | No |
 | `nd` | Non-qualified dividends | No |
 | `sg` | Short-term capital gains | Yes. A loss is netted against the long-term gain first. A net capital loss offsets only $3,000 of income a year, and the rest is ignored as a carryforward. |
-| `ri` | IRA, 401k or pension withdrawals | No |
+| `rd` | Required minimum distribution. Taxed as ordinary income, and counted as retirement income in the states that exempt it. It cannot be converted to a Roth | No |
+| `ri` | Other IRA, 401k or pension withdrawals (a pension is here because the states that exempt retirement income treat it like IRA money) | No |
 | `rc` | Roth conversion. Taxed as ordinary income, and counted as retirement income in the states that exempt it | No |
 | `rt` | IRA withdrawal taken to pay the year's income tax. Taxed as ordinary income, and counted as retirement income in the states that exempt it. `withdrawalForTax` works out the amount | No |
 | `ra` | Set to `1` to pay the tax from the IRA automatically: `rt` is then ignored and the withdrawal is always `withdrawalForTax` for the other entries. `bracketRoom` and `irmaaRoom` then count that withdrawal, so a conversion of the room stays on the line | Off unless set |
@@ -226,13 +227,14 @@ Dollar amounts are for the whole year, in the dollars of `yr`, rounded to cents.
 | `irmaaRoom` | Roth conversion room: how much more fits before MAGI reaches the next IRMAA tier (the tier it sets two years from `yr`). Blank in the top tier. |
 | `conversionTax` | The federal and state income tax the Roth conversion `rc` adds (0 when `rc` is not given) |
 | `withdrawalForTax` | The IRA withdrawal that pays the year's federal and state income tax, tax on the withdrawal itself included: the tax now, plus the tax that withdrawing it adds, plus the tax on that. Worked out from the income without `rt`, so it does not change when `rt` is set. Put it in `rt` to see the result. |
+| `iraTotal` | Everything taken from IRAs and 401ks: `rd` + `ri` + `rc` + `rt`. The most that can be converted is this less `rd`, which must be taken first |
 
 **Marker fields.** `inputs` and `calculated` hold no value. Each is a blank column carrying its name, so a
 line that mixes the two families shows where one ends and the other starts.
 
 **Input fields.** `return=all`, and any comma list, can also name the inputs, spelled as in the link:
 `st`, `s`, `a1`, `a2`, `yr`, `in`, `ss`, `cs`, `cb`, `pm`, `wg`, `it`, `nd`, `sg`, `ri`, `rc`, `rt`, `ot`, `qd`, `mu`,
-`ui`, `sm`, `pt`, `rw` and `ra`. `st` and `s` come back as text (`SGL`, `TX`). `a2` is blank for a single filer and `pm` is
+`ui`, `sm`, `pt`, `rw` and `ra` (and `rd`, which comes with the other withdrawals). `st` and `s` come back as text (`SGL`, `TX`). `a2` is blank for a single filer and `pm` is
 blank when it was not entered. A result can then say what it was a result of.
 
 ### What a spreadsheet can do with it

@@ -39,6 +39,7 @@
     { key:'nd', cfg:'ndiv',             neg:false },
     { key:'sg', cfg:'stcg',             neg:true  },
     { key:'ri', cfg:'retirementIncome', neg:false },
+    { key:'rd', cfg:'rmd',              neg:false },
     { key:'rc', cfg:'rothConv',         neg:false },
     { key:'rt', cfg:'taxWithdrawal',    neg:false },
     { key:'ot', cfg:'other',            neg:true  },
@@ -60,6 +61,7 @@
       status:'MFJ', state:'CA', ages:[65, 65],
       ssIncome:0, propTax:0,
       retirementIncome:0, retirementSwept:false,
+      rmd:0,                       // required minimum distribution: ordinary income, and retirement income for the states that exempt it
       rothConv:0,                  // Roth conversion: ordinary income, and retirement income for the states that exempt it
       taxWithdrawal:0,             // IRA withdrawal taken to pay the tax: the same kind of income as a Roth conversion
       autoTax:false,               // true: taxWithdrawal is not an entry, deriveIncome() sets it to the amount that covers the tax
@@ -161,7 +163,7 @@
       // Each is a part of another entry, so it cannot be larger than that entry.
       cfg.usIntEff  = Math.min(cfg.usInt, cfg.interest);
       cfg.stMuniEff = Math.min(cfg.stMuni, cfg.muni);
-      cfg.entOrdinary = cfg.wages + cfg.interest + cfg.ndiv + cfg.retirementIncome + cfg.rothConv + cfg.taxWithdrawal + cfg.other + net.ordinary;
+      cfg.entOrdinary = cfg.wages + cfg.interest + cfg.ndiv + cfg.retirementIncome + cfg.rmd + cfg.rothConv + cfg.taxWithdrawal + cfg.other + net.ordinary;
       settleTaxWithdrawal();
     }
 
@@ -189,7 +191,7 @@
       // Retirement part of the ordinary income, for the states that exempt it: what was entered, plus
       // (when asked) everything swept above what was entered. Never more than the ordinary income there is.
       const extraRet = cfg.retirementSwept ? Math.max(0, ordInc - cfg.entOrdinary) : 0;
-      const retInc = Math.max(0, Math.min(ordInc, cfg.retirementIncome + cfg.rothConv + cfg.taxWithdrawal + extraRet));
+      const retInc = Math.max(0, Math.min(ordInc, cfg.retirementIncome + cfg.rmd + cfg.rothConv + cfg.taxWithdrawal + extraRet));
 
       const r = calcTaxes({
         filingStatus:    status,
@@ -399,6 +401,7 @@
       c.grossOf = grossOf;
       c.bracketRoom = bracketRoom; c.irmaaRoom = irmaaRoom; c.conversionTax = conversionTax;
       c.withdrawalForTax = withdrawalForTax;
+      c.iraTotal = () => cfg.rmd + cfg.retirementIncome + cfg.rothConv + cfg.taxWithdrawal;
       const values = spec.names.map(n => {
         const v = all[n](c);
         if (typeof v === 'string') return v;     // filing status, state, or a blank
@@ -451,6 +454,9 @@
     irmaaRoom:       c => c.irmaaRoom()?.room ?? '',
     conversionTax:   c => c.conversionTax(),
     withdrawalForTax: c => c.withdrawalForTax().withdrawal,
+    // Everything taken from IRAs and 401ks: the RMD, other withdrawals (a pension entered there too), the
+    // Roth conversion and the withdrawal that pays the tax.
+    iraTotal:        c => c.iraTotal(),
   };
 
   // Two names that carry no value: a blank column labelled `inputs` or `calculated`, so a line that

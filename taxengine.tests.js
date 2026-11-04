@@ -1674,6 +1674,18 @@ test('taxcalc_core: the IRA withdrawal that pays the tax includes the tax on the
 	assertEqual(_row('st=MFJ&s=TX&return=withdrawalForTax').withdrawalForTax, '0', 'no tax needs no withdrawal');
 });
 
+test('taxcalc_core: the RMD (rd) is ordinary income, and iraTotal adds the RMD, withdrawals, conversion and tax withdrawal', () => {
+	const C = _core(); if (!C) return;
+	const L = 'st=MFJ&s=TX&yr=2026&a1=75&a2=75&ss=30000';
+	const none = _row(L + '&return=ordinary,iraTotal');
+	assertEqual(none.iraTotal, '0', 'nothing taken, nothing in the total');
+	const r = _row(L + '&rd=20000&ri=5000&rc=10000&rt=3000&return=ordinary,iraTotal,rd');
+	assertEqual(r.rd, '20000', 'rd comes back as an input');
+	assertEqual(+r.ordinary, 38000, 'all four are ordinary income');
+	assertEqual(+r.iraTotal, 38000, 'and the total is their sum');
+	assertEqual(+_row('st=MFJ&s=IL&ss=30000&rd=20000&return=totalTax').totalTax < +_row('st=MFJ&s=IL&ss=30000&ot=20000&return=totalTax').totalTax, true, 'an RMD is retirement income for a state that exempts it, other income is not');
+});
+
 test('taxcalc_core: with ra=1 the IRA withdrawal follows the tax, so the order of a conversion and the withdrawal does not matter', () => {
 	const C = _core(); if (!C) return;
 	const L = 'st=MFJ&s=CA&yr=2026&a1=67&a2=67&wg=60000&ri=40000&ss=40000';

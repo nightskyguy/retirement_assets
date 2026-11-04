@@ -1674,6 +1674,31 @@ test('taxcalc_core: the IRA withdrawal that pays the tax includes the tax on the
 	assertEqual(_row('st=MFJ&s=TX&return=withdrawalForTax').withdrawalForTax, '0', 'no tax needs no withdrawal');
 });
 
+test('taxcalc_core: with ra=1 the IRA withdrawal follows the tax, so the order of a conversion and the withdrawal does not matter', () => {
+	const C = _core(); if (!C) return;
+	const L = 'st=MFJ&s=CA&yr=2026&a1=67&a2=67&wg=60000&ri=40000&ss=40000';
+	const off = _row(L + '&return=ordinary,withdrawalForTax,irmaaRoom,bracketRoom,ra');
+	assertEqual(off.ra, '0', 'it is off unless the link turns it on');
+	const on = _row(L + '&ra=1&rt=5&return=ordinary,rt,incomeTax,withdrawalForTax,ra');
+	assertEqual(on.ra, '1', 'ra=1 turns it on');
+	assertEqual(on.rt, off.withdrawalForTax, 'the withdrawal is the one that covers the tax, whatever rt the link carried');
+	assertEqual(+on.ordinary, +off.ordinary + +off.withdrawalForTax, 'and it is in the ordinary income');
+	// A conversion changes the tax, and the withdrawal follows it.
+	const conv = _row(L + '&ra=1&rc=20000&return=rt,incomeTax,withdrawalForTax');
+	assertEqual(+conv.rt > +on.rt && +conv.rt === +conv.withdrawalForTax, true, 'a conversion raises the withdrawal, and it stays the amount that covers the tax');
+	assertEqual(+conv.incomeTax <= +conv.rt && +conv.rt - +conv.incomeTax < 1, true, 'covering it to within a dollar');
+	// The room counts the withdrawal: converting the room leaves MAGI under the next IRMAA tier,
+	// withdrawal included, and one dollar more reaches it.
+	const room = _row(L + '&ra=1&return=irmaaRoom,irmaaFutureTier');
+	assertEqual(+room.irmaaRoom > 0, true, 'there is room');
+	assertEqual(+room.irmaaRoom < +off.irmaaRoom, true, 'less than without the withdrawal, which uses some of it');
+	const at = _row(L + '&ra=1&rc=' + room.irmaaRoom + '&return=irmaaFutureTier');
+	const over = _row(L + '&ra=1&rc=' + (+room.irmaaRoom + 1) + '&return=irmaaFutureTier');
+	assertEqual(+over.irmaaFutureTier, +room.irmaaFutureTier + 1, 'one dollar past the room reaches the next tier');
+	assertEqual(+at.irmaaFutureTier, +room.irmaaFutureTier, 'and the room itself does not');
+	assertEqual(_row('st=MFJ&s=TX&ra=1&return=rt').rt, '0', 'no tax needs no withdrawal');
+});
+
 test('taxcalc_core: the pieces add up (fed + state + IRMAA = total; gross - total = net), and `pi` pins the ordinary income', () => {
 	const C = _core(); if (!C) return;
 	const r = _row('st=SGL&s=CA&wg=90000&it=3000&qd=2000&ss=20000&cs=50000&cb=40&pm=500000&return=all');

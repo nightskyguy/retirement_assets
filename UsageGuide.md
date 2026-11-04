@@ -54,6 +54,7 @@ opens that section, even when the value is 0. The section is otherwise folded.
 | `ri` | IRA, 401k or pension withdrawals | No |
 | `rc` | Roth conversion. Taxed as ordinary income, and counted as retirement income in the states that exempt it | No |
 | `rt` | IRA withdrawal taken to pay the year's income tax. Taxed as ordinary income, and counted as retirement income in the states that exempt it. `withdrawalForTax` works out the amount | No |
+| `ra` | Set to `1` to pay the tax from the IRA automatically: `rt` is then ignored and the withdrawal is always `withdrawalForTax` for the other entries. `bracketRoom` and `irmaaRoom` then count that withdrawal, so a conversion of the room stays on the line | Off unless set |
 | `rw` | Set to `1` to treat income swept above what you entered as IRA or 401k money | Only matters in states that exempt retirement income |
 | `ot` | Other ordinary income | Yes |
 | `mu` | Municipal bond interest (tax-exempt interest), entered separately from `it` | No. Not in income tax, but counted in MAGI (IRMAA), in how much Social Security is taxable and in the SALT phase-out. |
@@ -231,7 +232,7 @@ line that mixes the two families shows where one ends and the other starts.
 
 **Input fields.** `return=all`, and any comma list, can also name the inputs, spelled as in the link:
 `st`, `s`, `a1`, `a2`, `yr`, `in`, `ss`, `cs`, `cb`, `pm`, `wg`, `it`, `nd`, `sg`, `ri`, `rc`, `rt`, `ot`, `qd`, `mu`,
-`ui`, `sm`, `pt` and `rw`. `st` and `s` come back as text (`SGL`, `TX`). `a2` is blank for a single filer and `pm` is
+`ui`, `sm`, `pt`, `rw` and `ra`. `st` and `s` come back as text (`SGL`, `TX`). `a2` is blank for a single filer and `pm` is
 blank when it was not entered. A result can then say what it was a result of.
 
 ### What a spreadsheet can do with it

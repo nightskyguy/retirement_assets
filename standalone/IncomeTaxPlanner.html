@@ -231,8 +231,8 @@
 <script src="../sharepanel.js?v=1118e3"></script>
 <script src="../taxengine.js?v=1119e7"></script>
 <script src="../medicare_costs.js?v=111917"></script>
-<script src="../taxcalc_core.js?v=11d01"></script>
-<script src="../taxengine.tests.js?v=11d01"></script>
+<script src="../taxcalc_core.js?v=11d02"></script>
+<script src="../taxengine.tests.js?v=11d02"></script>
 </head>
 <body>
 <header>
@@ -312,7 +312,8 @@
       <div class="det-row"><label for="num-stcg">Short-term capital gains<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">A short-term loss (negative) is netted against your long-term gain. A net capital loss offsets ordinary income by $3,000 a year at most; the rest carries forward and is ignored here.</span></span></label><input type="text" id="num-stcg" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
       <div class="det-row"><label for="num-retinc">IRA, 401k or pension withdrawals</label><input type="text" id="num-retinc" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
       <div class="det-row"><label for="num-roth">Roth conversion<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Money moved from a traditional IRA or 401k to a Roth. It is taxed as ordinary income, like a withdrawal, but you keep it. The Roth conversion room below shows how much more you can convert before the next tax bracket or Medicare surcharge tier.</span></span></label><input type="text" id="num-roth" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
-      <div class="det-row"><label for="num-taxwd">IRA withdrawal to pay the tax<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">An extra IRA, 401k or pension withdrawal taken to pay this year's income tax. It is taxed as ordinary income, like any withdrawal. The Pay the tax from the IRA line below works out the amount that covers the tax, including the tax on the withdrawal itself.</span></span></label><input type="text" id="num-taxwd" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <div class="det-row"><label for="num-taxwd">IRA withdrawal to pay the tax<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">An extra IRA, 401k or pension withdrawal taken to pay this year's income tax. It is taxed as ordinary income, like any withdrawal. The Pay the tax from the IRA section below works out the amount that covers the tax, including the tax on the withdrawal itself. Typing here turns the automatic setting off.</span></span></label><input type="text" id="num-taxwd" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="taxWithdrawalTyped()" onchange="fmtDetail(this)"></div>
+      <label class="det-check" id="det-autotax-row"><input type="checkbox" id="chk-autotax" onchange="run()">Pay the tax from the IRA automatically<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Keeps the IRA withdrawal equal to the income tax, including the tax on the withdrawal itself, as you change anything else. Roth conversion room then counts that withdrawal, so a click never takes you past the line it names. Off by default.</span></span></label>
       <label class="det-check" id="det-swept-row"><input type="checkbox" id="chk-retinc-swept" onchange="run()">Extra income I sweep is also IRA/401k<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Used only by states that exempt retirement income (for example IL and PA), which are few. When checked, ordinary income above what you entered here is treated as IRA/401k distributions or conversions.</span></span></label>
       <div class="det-row"><label for="num-other">Other ordinary income<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Anything else taxed at regular rates. A loss can be entered as a negative number.</span></span></label><input type="text" id="num-other" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
       <div class="det-sum"><span>Ordinary income entered <b id="det-ord">$0</b></span></div>
@@ -521,6 +522,8 @@ function updDetails() {
   // "Extra income I sweep is also IRA/401k" only does anything in a state that exempts retirement
   // income, so it is shown only for those.
   $('det-swept-row').hidden = !TAXData[cfg.state]?.RETIREMENT_EXCLUSION;
+  // Automatic: the withdrawal entry shows the amount the calculation set, which is not typed in.
+  if (cfg.autoTax) $('num-taxwd').value = cfg.taxWithdrawal > 0 ? fmtMoney(cfg.taxWithdrawal) : '';
   $('det-ord').textContent = fmtMoney(cfg.entOrdinary);
   $('det-sum').textContent = cfg.entOrdinary !== 0 ? `ordinary ${fmtK(cfg.entOrdinary)}` : '';
   const notes = [];
@@ -984,6 +987,18 @@ function addConversion(room) {
 function setTaxWithdrawal(v) {
   const el = document.getElementById('num-taxwd');
   el.value = v > 0 ? fmtMoney(v) : '';
+  document.getElementById('chk-autotax').checked = false;   // a number was chosen
+  run();
+}
+
+// Typing in the withdrawal entry takes the amount back from the automatic setting.
+function taxWithdrawalTyped() {
+  document.getElementById('chk-autotax').checked = false;
+  run();
+}
+
+function setAutoTax(on) {
+  document.getElementById('chk-autotax').checked = on;
   run();
 }
 
@@ -1004,12 +1019,17 @@ function renderConversion() {
       `<button type="button" class="conv-btn" onclick="addConversion(-cfg.rothConv)">Clear</button></div>`);
   }
   const g = withdrawalForTax(), pay = [];
-  if (g.withdrawal > 0 || cfg.taxWithdrawal > 0) {
+  const payInfo = infoIcon(`The tax before the withdrawal is ${money(g.taxBefore)}. Withdrawing the money to pay it adds ${money(g.extraTax)} more tax, and that is covered too. Federal and state income tax; IRMAA is billed separately.`);
+  if (cfg.autoTax && g.withdrawal > 0) {
+    pay.push(`<div class="conv-line"><span>IRA withdrawal ${money(g.withdrawal)} covers the tax, tax on it included${payInfo}</span>` +
+      `<button type="button" class="conv-btn" onclick="setAutoTax(false)">Turn off</button></div>`);
+  } else if (g.withdrawal > 0 || cfg.taxWithdrawal > 0) {
     const same = Math.abs(cfg.taxWithdrawal - g.withdrawal) < 1;
-    pay.push(`<div class="conv-line"><span>IRA withdrawal that covers the tax, tax on it included` +
-      infoIcon(`The tax now is ${money(g.taxBefore)}. Withdrawing the money to pay it adds ${money(g.extraTax)} more tax, and that is covered too. Federal and state income tax; IRMAA is billed separately.`) +
-      `</span>` + (same ? `<span>covers it</span>`
+    pay.push(`<div class="conv-line"><span>IRA withdrawal that covers the tax, tax on it included${payInfo}</span>` +
+      (same ? `<span>covers it</span>`
         : `<button type="button" class="conv-btn" onclick="setTaxWithdrawal(${g.withdrawal})">Set ${money(g.withdrawal)}</button>`) + `</div>`);
+    pay.push(`<div class="conv-line"><span>Keep it covered as you change other entries</span>` +
+      `<button type="button" class="conv-btn" onclick="setAutoTax(true)">Turn on</button></div>`);
     if (cfg.taxWithdrawal > 0) {
       const short = g.taxNow - cfg.taxWithdrawal;
       pay.push(`<div class="conv-line"><span>Withdrawing ${money(cfg.taxWithdrawal)}: tax is ${money(g.taxNow)}` +
@@ -1694,7 +1714,8 @@ function readCfg() {
   cfg.ssIncome    = DisplayHelpers.parseShorthand(document.getElementById('num-ss').value)     || 0;
   for (const f of DETAIL_FIELDS) cfg[f.cfg] = detailAmount(f, document.getElementById(f.id).value);
   cfg.retirementSwept  = document.getElementById('chk-retinc-swept').checked;
-  cfg.cgSale      = DisplayHelpers.parseShorthand(document.getElementById('num-cg-sale').value)|| 0;
+  cfg.autoTax     = document.getElementById('chk-autotax').checked;
+  cfg.cgSale     = DisplayHelpers.parseShorthand(document.getElementById('num-cg-sale').value)|| 0;
   cfg.cgBasisPct  = +document.getElementById('sl-cg-basis').value;
   cfg.year        = +document.getElementById('sl-year').value;
   cfg.inflation   = +document.getElementById('sl-inf').value;
@@ -1878,6 +1899,7 @@ function exportLines() {
     ['Short-term capital gains', money(detail['num-stcg'])],
     ['IRA, 401k or pension withdrawals', money(detail['num-retinc'])],
     ['Extra swept income is also IRA/401k', cfg.retirementSwept ? 'Yes' : 'No'],
+    ['Pay the tax from the IRA automatically', cfg.autoTax ? 'Yes' : 'No'],
     ['Roth conversion', money(detail['num-roth'])],
     ['IRA withdrawal to pay the tax', money(detail['num-taxwd'])],
     ['Other ordinary income', money(detail['num-other'])],
@@ -2019,8 +2041,10 @@ function buildShareParams() {
     // and expire by year. Legacy links carrying any of them still load, ignoring the parameter.
   };
   if (cfg.prevMagi !== null) p.pm = cfg.prevMagi;
-  for (const f of DETAIL_FIELDS) if (cfg[f.cfg]) p[f.key] = cfg[f.cfg];   // Income details, when entered
+  // Income details, when entered. Automatic means the withdrawal is calculated, so it is not carried.
+  for (const f of DETAIL_FIELDS) if (cfg[f.cfg] && !(cfg.autoTax && f.key === 'rt')) p[f.key] = cfg[f.cfg];
   if (cfg.retirementSwept)  p.rw = 1;
+  if (cfg.autoTax)          p.ra = 1;
   if (!isFullZoom()) { p.vl = viewLo; p.vh = viewHi; }   // Fed income; legacy zl/zh were ordinary
   if (explainOn) p.ex = 1;
   return new URLSearchParams(p).toString();
@@ -2051,7 +2075,7 @@ SharePanel.init({
 // amounts. A key in neither list is withheld too, but feedback.tests.js fails until every key
 // buildShareParams() can emit is in exactly one list.
 const SHARE_PRIVACY = {
-  safe: ['st', 's', 'yr', 'in', 'rw', 'ex'],
+  safe: ['st', 's', 'yr', 'in', 'rw', 'ra', 'ex'],
   personal: [
     'a1', 'a2',                                                    // ages
     'ss', 'cs', 'cb', 'pm',                                        // Social Security, sale, basis, prior-year income
@@ -2184,6 +2208,10 @@ function loadFromURL() {
     $('chk-retinc-swept').checked = c.retirementSwept;
     $('details-income').open = true;
   }
+  if (has('ra')) {
+    $('chk-autotax').checked = c.autoTax;
+    $('details-income').open = true;
+  }
   if (has('pm') && c.prevMagi !== null) $('num-prevmagi').value = DisplayHelpers.formatDollar(c.prevMagi);
   if (has('cs')) {
     const v = c.cgSale;
@@ -2241,10 +2269,8 @@ function loadFromURL() {
       <dl class="modal-kv">
         <dt>v2.13</dt>
         <dd><ul>
-          <li>New IRA withdrawal to pay the tax entry. Under it, Pay the tax from the IRA works out the withdrawal that covers your federal and state income tax, including the tax on the withdrawal itself, and one click sets it. Open in Tax Planner carries it over with your other IRA withdrawals.</li>
-          <li>The How to Use window is set in larger type.</li>
+          <li>New IRA withdrawal to pay the tax entry. Under it, Pay the tax from the IRA works out the withdrawal that covers your federal and state income tax, including the tax on the withdrawal itself, and one click sets it. Or turn on Pay the tax from the IRA automatically: the withdrawal then follows the tax as you change anything else, and Roth conversion room counts it, so converting the room never takes you past the line it names. Open in Tax Planner carries it over with your other IRA withdrawals.</li>
           <li>New Roth conversion entry under Income details. Under it, Roth conversion room shows how much more you can convert before the next federal bracket and before the next Medicare (IRMAA) surcharge tier. Click an amount to convert that much, and the room recomputes. The tax the conversion adds is shown, and Open in Tax Planner carries the conversion over to plan the withholding.</li>
-          <li>Copy all fields, Export and a link with <code>return=all</code> now list the inputs first and the calculated results after, with a marked break between them. The room amounts and the conversion's tax are calculated results.</li>
         </ul></dd>
         <dt>v2.12</dt>
         <dd><ul>
@@ -2312,7 +2338,7 @@ function loadFromURL() {
         <li>Open <strong>Income details</strong> in the left panel to spell out your ordinary income: wages or business income (negative for a loss), interest, non-qualified dividends, short-term capital gains (negative for a loss), IRA, 401k or pension withdrawals, and other income (negative for a loss). They add up to the <em>ordinary income entered</em>, which is the teal line on the chart and the income the info panel describes. The chart's ordinary-income axis is still the total, so these entries do not stack on top of it.</li>
         <li><strong>Qualified dividends</strong> are taxed with your capital gains and added to the gain from the sale. A short-term loss is netted against that gain first, and a net capital loss offsets only $3,000 of income a year; the rest carries forward and is ignored.</li>
         <li><strong>Interest and tax-exempt interest.</strong> <strong>Municipal bond interest</strong> is entered on its own row, not in Interest. It is not in your income tax, but it counts toward MAGI, so it moves the IRMAA tiers, and toward how much Social Security is taxed. Two rows are indented as <em>of which</em>: <strong>US Treasury</strong>, under Interest, is the part of Interest that is exempt from state tax, and <strong>your state taxes</strong>, under municipal bond interest, is the part your state taxes anyway (usually out-of-state bonds). An <em>of which</em> amount cannot exceed the row above it, and the page says so. For a fund, enter only the part its year-end statement attributes to US obligations or to your state.</li>
-        <li><strong>IRA withdrawal to pay the tax</strong> is an extra withdrawal taxed as ordinary income. <strong>Pay the tax from the IRA</strong> (below Roth conversion room) shows the withdrawal that covers the year's income tax: the tax now, plus the tax the withdrawal itself adds, plus the tax on that. Click Set to enter it. It is worked out from your income without it, so after you change anything else, click Set again. IRMAA is not included, because Medicare bills it separately.</li>
+        <li><strong>IRA withdrawal to pay the tax</strong> is an extra withdrawal taxed as ordinary income. <strong>Pay the tax from the IRA</strong> (below Roth conversion room) shows the withdrawal that covers the year's income tax: the tax now, plus the tax the withdrawal itself adds, plus the tax on that. Click Set to enter it. It is worked out from your income without it, so after you change anything else, click Set again, or tick <strong>Pay the tax from the IRA automatically</strong> to have it kept current. With that on, the room figures count the withdrawal, so click a room amount in any order. Typing your own withdrawal turns it off. IRMAA is not included, because Medicare bills it separately.</li>
         <li><strong>Roth conversion</strong> is taxed as ordinary income and counts toward MAGI. Under Income details, <strong>Roth conversion room</strong> lists how much more fits in your current federal bracket and under the next IRMAA tier. Click an amount to add it to the conversion; click again to keep climbing. <strong>Open in Tax Planner</strong> then carries the conversion over so you can plan the IRA withholding for the year's taxes.</li>
         <li><strong>Untaxed</strong> is money that came in without tax, such as a Roth withdrawal or cash from savings. It is part of Gross income and Net income so you see the whole picture, and it changes no tax, no IRMAA and no Social Security taxation.</li>
         <li><strong>Property and local taxes</strong> are real estate and local taxes only. State income tax is computed for you and added to them for the SALT deduction.</li>

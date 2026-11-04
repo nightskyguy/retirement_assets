@@ -36,6 +36,8 @@ flowchart TD
         DH["displayhelpers.js<br/>parseShorthand, setDollarValue, tooltips"]
         TESTS["optimizer_tests.js<br/>runTests - in-browser console suite"]
         OTHER["other_tools.js<br/>shared Other Tools widget"]
+        SHARE["sharepanel.js<br/>SharePanel.init - the share-link panel"]
+        FB["feedback.js<br/>FeedbackWidget.init, open<br/>Send feedback dialog"]
         CSS["optimizer_styles_responsive.css"]
     end
 
@@ -49,11 +51,19 @@ flowchart TD
         HRET["historical_returns.js<br/>HISTORICAL_RETURNS data"]
     end
 
+    subgraph itp["Income Tax Planner - a sibling page, not loaded by the Optimizer"]
+        ITPHTML["standalone/IncomeTaxPlanner.html<br/>controls, chart, link read-out<br/>its badge runs taxengine.tests.js"]
+        TCC["taxcalc_core.js<br/>TaxCalc.create, configFromParams, run<br/>the planner's calculation, no DOM"]
+    end
+
     subgraph node["Node - no browser"]
         CORETEST["optimizer_core.tests.js<br/>node optimizer_core.tests.js<br/>require() + globalThis stubs"]
         GOLDEN["sweep_golden.js<br/>strategy-enumeration goldens<br/>data only - required by the suite"]
         TPPTEST["taxPaymentPlanner.tests.js"]
         DOCTEST["doclinks.tests.js"]
+        TAXTEST["taxengine.tests.js<br/>engine, medicare_costs.js,<br/>taxcalc_core.js and taxcalc.js"]
+        FBTEST["feedback.tests.js<br/>feedback.js, share-key classification,<br/>.feedback-worker/src/logic.cjs"]
+        TCJS["taxcalc.js<br/>node taxcalc.js - command line,<br/>--csv, --serve for LibreOffice Calc"]
     end
 
     HTML --> CSS
@@ -64,6 +74,8 @@ flowchart TD
     HTML -->|4| UI
     HTML -->|5| TESTS
     HTML --> OTHER
+    HTML --> SHARE
+    HTML --> FB
     HTML --> MCTAB
     HTML --> MCCTL
     HTML --> MCENG
@@ -93,17 +105,37 @@ flowchart TD
     CORETEST -->|require| CORE
     CORETEST -->|require| TAX
     CORETEST -->|require| GOLDEN
+    ITPHTML -->|1| DH
+    ITPHTML -->|2| TAX
+    ITPHTML -->|3| MED
+    ITPHTML -->|4| TCC
+    ITPHTML --> SHARE
+    ITPHTML --> FB
+    ITPHTML -->|badge| TAXTEST
+    FBTEST -->|require| FB
+    TCC --> TAX
+    TCC --> MED
+    TCJS -->|require| TCC
+    TAXTEST -->|require| TAX
+    TAXTEST -->|require| MED
+    TAXTEST -->|require| TCC
+    TAXTEST -->|require| TCJS
 
     classDef pure fill:#0d3b2e,stroke:#2f9e79,color:#e6fff5
     classDef dom fill:#26303f,stroke:#5b8def,color:#e8eefc
-    class TAX,CORE pure
-    class UI,DH,TESTS,OTHER dom
+    class TAX,MED,CORE,TCC pure
+    class UI,DH,TESTS,OTHER,SHARE,FB,ITPHTML dom
 ```
 
 **The contract that matters:** `optimizer_core.js` and `taxengine.js` touch no DOM, no
 `localStorage`, no `location` - at load time or runtime. That is what lets the same engine run in
 three places: the page, the Monte Carlo worker via `importScripts`, and Node via `require()`.
 Break it and the worker and the test suite both die.
+
+`taxcalc_core.js` keeps the same contract for the Income Tax Planner: everything that turns inputs
+into tax lives there, with no DOM, so the page and `taxcalc.js` (the command line and local server a
+spreadsheet calls) give the same line for the same link. The page owns only its controls and chart.
+A new input that changes the tax goes in `taxcalc_core.js`, never in the page.
 
 `getInputs()` in `optimizer_ui.js` is the single DOM-to-params bridge. Nothing else reads inputs.
 
@@ -551,11 +583,15 @@ Guardrails (GK-style) switch says; the knob shows only its cadence, path count a
 | `optimizer_styles_responsive.css` | page | the page's only stylesheet; its `?v=` token is the one most often forgotten |
 | `taxengine.js` | engine | `TAXData`, `RMD_TABLE`, `calculateTaxes`, `calcIRMAA`, `getIRMAATier`, `calculateProgressive`, `calculateTaxableSocialSecurity`, `getQCDLimit` |
 | `medicare_costs.js` | engine | `MEDICARE_COSTS`, `medicareGrowthRate`, `medicareGrowthFactor`. Loads with no dependencies at all, including no `taxengine.js`, so the helpers take ELAPSED YEARS and the caller does the anchoring. |
+| `taxcalc_core.js` | engine | `TaxCalc.create(cfg)` (`calcAt`, `deriveRow`, `resultFor`, `buildResult`), `configFromParams` (link keys to a config, each value snapped to what the page's control would hold), `returnSpec`, `run`, and the field tables `DETAIL_FIELDS`, `RESULT_FIELDS`, `RESULT_DEFAULT`. The Income Tax Planner's whole calculation; no DOM. Dual-mode: a classic script on the planner page (after `taxengine.js` and `medicare_costs.js`), `require()`d by `taxcalc.js` and the tests. `RESULT_FIELDS` order is an output contract, so a new field goes at the END |
+| `taxcalc.js` | tool | `node taxcalc.js` - one result line for a query string, `vary=` for a batch, `--csv` for one row per scenario row, `--serve` for a loopback server LibreOffice Calc's `WEBSERVICE()` can call. Exports `answer`, `answerCsv`, `parseCsv`, `makeServer`. Documented in `UsageGuide.md`; nothing leaves the machine |
 | `optimizer_core.js` | engine | `simulate`, year steps `beginYear` .. `endYear`, `optimizeSpend`, `optimizeSpendDown`, `optimizeConversionAmount`, `bestTimeLimitedConversion`, `bestConversionStopYear`, `breakEvenHeirsRate`, `lowestBreakEvenHeirsRate`, `selectConversionCandidates`, `baselineScoreOf`, `rankRowsByObjective`, `buildStrategyFamilies` (the strategy enumeration both sweeps share, through `sweepOptions` and `OPTIMIZER_GRIDS`), `buildVariations`, `planRuleTwin`, `calculateWithdrawals`, `computeBracketCeiling`, `splitPreferLarger`, `snapshotResume` / `resumeInputs` (continue a plan from any year), `RAIL_PRESETS`, `portfolioReturnOf` |
 | `optimizer_ui.js` | UI | `getInputs`, `runSimulation`, `runOptimizer`, `renderOptimizerTable`, `loadOptimizerResult`, `updateTable`, `updateStats`, `updateCharts`, `openTaxPlanner`, `buildShareURL`, `loadFromURL`, `saveScenario`, `applyScenario`, `setOptObjective`, `applyConvStopYear` |
 | `displayhelpers.js` | UI | `DisplayHelpers.setDollarValue`, `parseShorthand`, formatting and tooltip helpers |
 | `optimizer_tests.js` | UI | `runTests` - in-browser console suite |
 | `other_tools.js` | UI | shared Other Tools widget across all pages |
+| `sharepanel.js` | UI | `SharePanel.init` - the "share this link" panel: toggle, copy button with its clipboard fallback, click-outside close. Each page passes only its own `buildShareURL`; the field list and short codes stay with the tool |
+| `feedback.js` | UI | `FeedbackWidget.init`, `open` - the Send feedback dialog. Its pure half decides what a report contains and withholds and is run under node by `feedback.tests.js`; the dialog is built on first open. Reports go to the Cloudflare Worker in `.feedback-worker/`. Loaded by the Optimizer, the Income Tax Planner and `RetirementTaxPlanner.html` |
 | `doclinks.js` | UI | `DocLinks.docHref` - maps `.md` hrefs to the `.html` pages Pages generates |
 | `montecarlo/mc_tab.js` | MC | `initMCTab`, chart rendering, `_mcBase` / `_lastMCHash` |
 | `montecarlo/mc_controller.js` | MC | `runMCWorker` (one worker per job kind), `cancelMCWorker(kind)`, `_runMCMainThread` (file:// fallback - builds hooks, awaits `runJob` or `runRailsJob`), `estimateMCMs` / `recordMCTiming` |
@@ -570,7 +606,10 @@ Guardrails (GK-style) switch says; the knob shows only its cadence, path count a
 | `sweep_golden.gen.js` | test tool | `node sweep_golden.gen.js` - rewrites the `MC_GOLDEN` block of `sweep_golden.js` from source. Run only for a deliberate `buildVariations()` change, then read the diff |
 | `sweep_golden.import.js` | test tool | `node sweep_golden.import.js <dir>` - folds a browser capture into `OPT_GOLDEN`. That half cannot be generated: the Optimizer's enumeration needs a live `getInputs()`. Capture recipe is in the file header |
 | `doclinks.tests.js` | test | `node doclinks.tests.js` - `docHref()` mapping table |
+| `feedback.tests.js` | test | `node feedback.tests.js` - `feedback.js`'s pure half, which share-link keys each tax planner may send (every key classified safe or personal, exactly once), and `.feedback-worker/src/logic.cjs` driven through `handle()` with stand-ins for Cloudflare |
+| `taxengine.tests.js` | test | `node taxengine.tests.js` - `taxengine.js` and `medicare_costs.js`, and also `taxcalc_core.js` and `taxcalc.js` (the tool's tests are node only and return early in a browser so every environment reports the same count). Also loaded by `standalone/IncomeTaxPlanner.html`, whose badge it drives |
 | `taxPaymentPlanner.tests.js` | test | `node taxPaymentPlanner.tests.js` - covers `taxPaymentPlanner.js`, which the optimizer does not load |
+| `standalone/IncomeTaxPlanner.html` | sibling page | the controls, chart and details panel; reads its link through `TaxCalc.configFromParams` and calculates through `TaxCalc.create`, defining no calculation of its own (a `taxengine.tests.js` test enforces that) |
 | `RetirementTaxPlanner.html` | sibling page | handoff target of `openTaxPlanner()`; the only page that loads `taxPaymentPlanner.js` |
 | `taxPaymentPlanner.js` | engine | `TaxPaymentPlanner.computePaymentPlan`, `getStateInfo`, `dueDateFor`, `restoreDateFor`, holiday/business-day helpers. Same no-DOM contract as the other two engine files |
 | `optimizer_changelog.md` | docs | full release history; the 5 newest entries are duplicated inline in the HTML |
@@ -627,7 +666,14 @@ Run once per clone. On every commit the hook runs these in order and blocks on a
 3. **`page-suite.js`**, which runs the Optimizer page's own suite in a headless Chrome or Edge, with
    `?runtests=page` (below). It serves the repo from 127.0.0.1 with caching off, answers the Chart.js
    CDN request from a local copy, and refuses every other outside request, analytics included.
-4. **the markdown preview gate**, `md-html-scan.js`.
+4. **`check-asset-tokens.js`**, which blocks a commit in which a changed script or stylesheet kept the
+   `?v=` cache token a page loads it with, or a page references a file that is not there.
+5. **`check-comment-history.js`**, which counts comment lines that narrate history against a per-file
+   ceiling that may fall and should not rise.
+6. **`check-architecture.js`**, which blocks a commit in which a tracked script or stylesheet is not
+   named in this file, or a row of the file reference table names something that is not on disk. It
+   cannot see the module dependency graph, so drawing a new file and its edges there stays by hand.
+7. **the markdown preview gate**, `md-html-scan.js`.
 
 About 20 seconds on a fast machine, most of it the core node suite. `git commit --no-verify` is the
 deliberate escape hatch; `SKIP_PAGE_SUITE=1` skips only step 3, for a machine with no Chrome or Edge,

@@ -1590,6 +1590,146 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 
 // ── Runner ───────────────────────────────────────────────────────────────────────────────────
 // Returns the counts instead of setting process.exitCode, so the browser can render them.
+// ============================================================================
+// taxcalc_core.js (the Income Tax Planner's calculation) and taxcalc.js (its command line and local
+// server). The core runs here in node and on the planner page, which loads it; on a page that does not
+// (the Optimizer's ?runtests tier) these return early, so every environment reports the same count.
+// The command-line half and the page-source check are node only.
+// ============================================================================
+const _core = () => IS_NODE ? require('./taxcalc_core.js') : (typeof window !== 'undefined' ? window.TaxCalc : undefined);
+const _link = s => { const p = new URLSearchParams(s); return k => p.get(k); };
+const _row = (s, over) => {
+	const r = _core().run(_link(s), Object.assign({ header: true }, over));
+	const [names, values] = r.csv.split('\n');
+	return r.ok ? Object.fromEntries(names.split(',').map((n, i) => [n, values.split(',')[i]])) : r;
+};
+
+test('taxcalc_core: a link is read the way the page\'s controls would hold it (sliders snap and stop at their ends, bad keys are errors)', () => {
+	const C = _core(); if (!C) return;
+	const cfg = s => C.configFromParams(_link(s));
+	const y0 = C.BASE_YEAR;
+	assertEqual(cfg('yr=2099').cfg.year, y0 + 9, 'year stops at the last slider position');
+	assertEqual(cfg('yr=1990').cfg.year, y0, 'and at the first');
+	assertEqual(cfg('in=2.7').cfg.inflation, 2.5, 'inflation snaps to half a percent');
+	assertEqual(cfg('in=0').cfg.inflation, 0.5, 'and stops at 0.5');
+	assertEqual(cfg('cb=150').cfg.cgBasisPct, 100, 'basis percent stops at 100');
+	assertEqual(cfg('pm=250000.7').cfg.prevMagi, 250001, 'prior-year MAGI is whole dollars');
+	assertEqual(cfg('pm=-5').cfg.prevMagi, null, 'a negative prior-year MAGI is left out');
+	assertEqual(cfg('ss=-5&cs=-7').cfg.ssIncome + cfg('ss=-5&cs=-7').cfg.cgSale, 0, 'Social Security and a sale are not negative');
+	assertEqual(cfg('wg=80000.6').cfg.wages, 80001, 'an income entry is whole dollars');
+	assertEqual(cfg('it=-4').cfg.interest, 0, 'an entry that cannot be negative is not');
+	assertEqual(cfg('ot=-4').cfg.other, -4, 'one that can, is');
+	assertEqual(cfg('wg=abc&ss=&it=').given.size, 0, 'a value that is not a number, or is blank, is not given');
+	assertEqual(cfg('a1=0').cfg.ages[0], 40, 'an age of 0 is the page\'s 40');
+	assertEqual(cfg('s=tx').cfg.state, 'TX', 'a state in any case');
+	assertEqual(cfg('s=ZZ').errors, ['unknown state ZZ'], 'a state not in the tables is an error, not California');
+	assertEqual(cfg('st=JOINT').errors, ['unknown filing status JOINT'], 'so is a filing status');
+});
+
+test('taxcalc_core: the default result line keeps its field order, and `all` is the inputs then the calculated fields, each after its marker', () => {
+	const C = _core(); if (!C) return;
+	// The output contract: other people's sheets read the default line by position. Add at the END, never reorder.
+	assertEqual(C.RESULT_DEFAULT, ['ordinary', 'fedIncome', 'grossIncome', 'agi', 'magi', 'fedTax', 'stateTax', 'irmaa',
+		'irmaaFuture', 'totalTax', 'effRate', 'fedMarginal', 'stateMarginal'], 'RESULT_DEFAULT');
+	assertEqual(C.ALL_NAMES.length, new Set(C.ALL_NAMES).size, 'no field named twice');
+	const at = n => C.ALL_NAMES.indexOf(n);
+	assertEqual(at('inputs'), 0, 'the inputs marker opens the line');
+	assertEqual(at('inputs') < at('st') && at('rw') < at('calculated') && at('calculated') < at('ordinary'), true,
+		'inputs first, then the calculated marker, then the results');
+	assertEqual(at('irmaaFutureTier') < at('bracketRoom'), true, 'the room fields are appended after the earlier results');
+	assertEqual(C.run(_link('s=CA&wg=1000&return=fedTax,nonsense')).csv, 'ERROR: unknown field nonsense', 'a typo is an error, not a column of zeros');
+	assertEqual(C.run(_link('s=ZZ')).csv, 'ERROR: unknown state ZZ', 'a bad link is one ERROR line');
+});
+
+test('taxcalc_core: a Roth conversion (rc) is ordinary income, the room fills to the edge, and the marker names are blank columns', () => {
+	const C = _core(); if (!C) return;
+	const base = _row('st=MFJ&s=TX&yr=2026&a1=67&a2=67&wg=60000&ri=40000&ss=40000&return=ordinary,bracketRoom,irmaaRoom,conversionTax');
+	assertEqual(base.conversionTax, '0', 'no conversion adds no tax');
+	assertEqual(+base.bracketRoom > 0 && +base.irmaaRoom > 0, true, 'there is room in the bracket and under the next IRMAA tier');
+	// Converting exactly the room fills the bracket: the income sits on the edge, and the next dollar rises.
+	const filled = _row('st=MFJ&s=TX&yr=2026&a1=67&a2=67&wg=60000&ri=40000&ss=40000&rc=' + base.bracketRoom + '&return=ordinary,fedMarginal,conversionTax,bracketRoom');
+	assertEqual(+filled.ordinary, +base.ordinary + +base.bracketRoom, 'rc is ordinary income');
+	assertEqual(+filled.conversionTax > 0, true, 'the conversion adds income tax');
+	assertEqual(+filled.bracketRoom > 0, true, 'at the edge the next bracket up is offered');
+	// The IRMAA room stops under the tier: MAGI one dollar past it reaches the tier, at the room it does not.
+	const m = _row('st=MFJ&s=TX&yr=2026&a1=67&a2=67&wg=60000&ri=40000&ss=40000&rc=' + base.irmaaRoom + '&return=irmaaFutureTier');
+	const over = _row('st=MFJ&s=TX&yr=2026&a1=67&a2=67&wg=60000&ri=40000&ss=40000&rc=' + (+base.irmaaRoom + 1) + '&return=irmaaFutureTier');
+	assertEqual(+over.irmaaFutureTier, +m.irmaaFutureTier + 1, 'one dollar past the room reaches the next tier');
+	const marked = C.run(_link('st=MFJ&s=TX&rc=10000&return=inputs,st,calculated,ordinary'), { header: true });
+	assertEqual(marked.csv, 'inputs,st,calculated,ordinary\n,MFJ,,10000', 'the markers are blank columns carrying their names');
+});
+
+test('taxcalc_core: the pieces add up (fed + state + IRMAA = total; gross - total = net), and `pi` pins the ordinary income', () => {
+	const C = _core(); if (!C) return;
+	const r = _row('st=SGL&s=CA&wg=90000&it=3000&qd=2000&ss=20000&cs=50000&cb=40&pm=500000&return=all');
+	assertEqual(Math.abs(+r.fedTax + +r.stateTax + +r.irmaa - +r.totalTax) < 0.02, true, 'tax parts sum to the total');
+	assertEqual(Math.abs(+r.grossIncome - +r.totalTax - +r.netIncome) < 0.02, true, 'net income is gross less tax');
+	assertEqual(+r.irmaa > 0 && +r.irmaaTier > 0, true, 'a prior-year MAGI over the first threshold is charged IRMAA');
+	assertEqual(_row('st=SGL&s=CA&wg=90000&return=irmaa').irmaa, '0', 'and none is charged when none is entered');
+	const pinned = _row('st=MFJ&s=IL&ri=40000&ot=5&pi=90000&return=ordinary,wg,ri,ot');
+	assertEqual(pinned.ordinary, '90000', 'pi sets the ordinary income');
+	assertEqual(pinned.ri, '40000', 'without touching the entries it did not name');
+	assertEqual(pinned.ot, '50000', 'it is made up in Other ordinary income');
+	assertEqual(+_row('st=MFJ&s=CA&yr=2030&in=3&wg=200000&return=totalTax').totalTax > 0, true, 'a later year with inflation calculates');
+});
+
+test('taxcalc.js: vary gives one line per value in order, equal to the same request made alone; header is printed once', () => {
+	if (!IS_NODE) return;
+	const T = require('./taxcalc.js');
+	const one = wg => T.answer(new URLSearchParams(`st=SGL&s=CA&ss=24000&wg=${wg}&return=totalTax,fedTax`)).text;
+	const r = T.answer(new URLSearchParams('st=SGL&s=CA&ss=24000&vary=wg:40000,60000,80000&return=totalTax,fedTax&header=1'));
+	assertEqual(r.ok, true, 'ok');
+	assertEqual(r.text.split('\n'), ['totalTax,fedTax', one(40000), one(60000), one(80000)], 'header, then a line per value');
+	assertEqual(T.answer(new URLSearchParams('s=CA&vary=wg')).ok, false, 'vary needs key:values');
+	assertEqual(T.answer(new URLSearchParams('s=CA&vary=wg:1,,2')).ok, false, 'and no empty value');
+	assertEqual(T.answer(new URLSearchParams('s=ZZ&vary=wg:1,2')).text, 'ERROR: unknown state ZZ', 'one bad request is one ERROR line');
+});
+
+test('taxcalc.js: the format version is refused when it is not the one the tool writes', () => {
+	if (!IS_NODE) return;
+	const T = require('./taxcalc.js');
+	assertEqual(T.answer(new URLSearchParams(`s=CA&wg=1&v=${T.FORMAT_VERSION}`)).ok, true, 'the current version');
+	assertEqual(T.answer(new URLSearchParams('s=CA&wg=1&v=99')).text.startsWith('ERROR: this tool writes format version'), true, 'another');
+});
+
+test('taxcalc.js --csv: quoted cells, blank cells, extra columns, and the row an error is on', () => {
+	if (!IS_NODE) return;
+	const T = require('./taxcalc.js');
+	assertEqual(T.parseCsv('﻿a,b\r\n"x, y","say ""hi"""\r\n\r\n3,\r\n'), [['a', 'b'], ['x, y', 'say "hi"'], ['3', '']], 'RFC 4180 as a spreadsheet writes it');
+	const text = 'label,st,s,wg,ss\n"2026 plan",SGL,CA,60000,24000\n2027,SGL,CA,60000,\n';
+	const out = T.answerCsv(text, new URLSearchParams('return=totalTax&header=1'));
+	assertEqual(out.text.split('\n').length, 3, 'a header and a row per scenario');
+	assertEqual(out.text.split('\n')[1], T.answer(new URLSearchParams('st=SGL&s=CA&wg=60000&ss=24000&return=totalTax')).text, 'a row equals the same request alone');
+	assertEqual(out.text.split('\n')[2], T.answer(new URLSearchParams('st=SGL&s=CA&wg=60000&return=totalTax')).text, 'a blank cell is absent, not zero');
+	assertEqual(T.answerCsv('s,wg\nCA,1\nZZ,1\n', new URLSearchParams('')).text, 'ERROR: row 3: unknown state ZZ', 'the row is named');
+});
+
+test('taxcalc.js server: OPTIONS and HEAD are answered without calculating, GET carries the result, other methods are refused', () => {
+	if (!IS_NODE) return;
+	const T = require('./taxcalc.js');
+	const handler = T.makeServer().listeners('request')[0];
+	const call = (method, url) => {
+		const got = { status: null, body: '' };
+		handler({ method, url }, { writeHead: (s) => { got.status = s; }, end: (b) => { got.body = b || ''; } });
+		return got;
+	};
+	assertEqual(call('OPTIONS', '/').status, 204, 'OPTIONS');
+	assertEqual(call('HEAD', '/?s=ZZ').body, '', 'HEAD has no body');
+	assertEqual(call('POST', '/').status, 405, 'POST');
+	const g = call('GET', '/?st=SGL&s=CA&wg=60000&ss=24000&return=totalTax');
+	assertEqual([g.status, g.body], [200, T.answer(new URLSearchParams('st=SGL&s=CA&wg=60000&ss=24000&return=totalTax')).text], 'GET');
+	assertEqual(g.body.split(',').length === 1 && Number.isFinite(+g.body) && +g.body > 0, true, 'a bare number a cell can wrap in VALUE()');
+	assertEqual(call('GET', '/?s=ZZ').body, 'ERROR: unknown state ZZ', 'an error is a 200 with an ERROR line, which Calc shows instead of #VALUE!');
+});
+
+test('IncomeTaxPlanner.html reads its link and calculates through taxcalc_core.js, with no second copy of either', () => {
+	if (!IS_NODE) return;
+	const html = require('fs').readFileSync(require('path').join(__dirname, 'standalone', 'IncomeTaxPlanner.html'), 'utf8');
+	assertEqual(html.includes('<script src="../taxcalc_core.js'), true, 'the page loads the shared file');
+	assertEqual(html.includes('TaxCalc.configFromParams('), true, 'loadFromURL reads the link with it');
+	assertEqual(/function (calcAt|deriveRow|deriveIncome|resultFor)\(/.test(html), false, 'and does not define its own calculation');
+});
+
 function runTaxEngineTests() {
 	passed = 0;
 	failed = 0;

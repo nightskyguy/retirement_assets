@@ -374,7 +374,9 @@ const PLANNER_PAGES = {
       const literal = (fn.match(/const p = \{[\s\S]*?\r?\n  \};/) || [''])[0];
       const inLiteral = [...literal.matchAll(/^\s+'?([a-z0-9]+)'?:/gm)].map(m => m[1]);
       const assigned = [...fn.matchAll(/\bp\.([a-z0-9]+) = /g)].map(m => m[1]);
-      const details = (src.match(/const DETAIL_FIELDS = \[[\s\S]*?\r?\n\];/) || [''])[0];
+      // The Income details table lives in taxcalc_core.js, which the page maps onto its controls.
+      const core = require('fs').readFileSync(require('path').join(__dirname, 'taxcalc_core.js'), 'utf8');
+      const details = (core.match(/const DETAIL_FIELDS = \[[\s\S]*?\r?\n  \];/) || [''])[0];
       const detailKeys = [...details.matchAll(/key:'([a-z0-9]+)'/g)].map(m => m[1]);
       return [...new Set(inLiteral.concat(assigned, detailKeys))];
     },

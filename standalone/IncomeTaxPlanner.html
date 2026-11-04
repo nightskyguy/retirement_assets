@@ -25,7 +25,7 @@
 <!-- The Send feedback dialog. NOT deferred: it records page errors from here on, so it has to load
      before the scripts below. It builds nothing until FeedbackWidget.open(). -->
 <script src="../feedback.js?v=11195c"></script>
-<title>Income Tax Planner · 2026+ · v2.12</title>
+<title>Income Tax Planner · 2026+ · v2.13</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
   // Global Chart.js tooltip defaults, set once so the chart config only says what differs.
@@ -78,6 +78,15 @@
   .age-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px; }
   .age-grid.single { grid-template-columns:1fr; }
   .year-big { font-family:var(--mono); font-size:20px; font-weight:500; color:var(--teal); text-align:center; margin-bottom:.4rem; letter-spacing:.06em; }
+  .conv-box { margin-top:.6rem; font-family:var(--mono); font-size:11px; color:var(--muted); line-height:1.7; }
+  .conv-box:empty { display:none; }
+  .conv-title { font-size:10px; letter-spacing:.12em; text-transform:uppercase; }
+  .conv-line { display:flex; justify-content:space-between; align-items:center; gap:.5rem; margin-top:3px; }
+  .conv-line > :last-child { white-space:nowrap; }
+  .conv-sub { color:var(--muted); font-size:10px; }
+  .conv-btn { background:rgba(25,201,157,.12); border:1px solid rgba(25,201,157,.35); border-radius:5px; color:var(--teal); font-family:var(--mono); font-size:11px; padding:3px 9px; cursor:pointer; white-space:nowrap; }
+  .conv-btn:hover { background:rgba(25,201,157,.22); }
+  .conv-btn.future { background:rgba(192,132,252,.12); border-color:rgba(192,132,252,.4); color:var(--future); }
   .summary { font-family:var(--mono); font-size:11px; color:var(--muted); line-height:1.9; }
   .summary strong { color:var(--text); }
   .hi-teal { color:var(--teal); } .hi-amber { color:var(--amber); } .hi-red { color:var(--red); } .hi-future, .hi-future strong { color:var(--future); }
@@ -100,19 +109,19 @@
   .share-copy:hover { background:rgba(25,201,157,.25); }
   .share-status { font-family:var(--mono); font-size:10px; color:var(--teal); margin-top:.35rem; min-height:14px; }
   .modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.72); z-index:900; overflow:hidden; }
-  .modal-box { max-width:700px; margin:2.5rem auto; max-height:calc(100vh - 5rem); overflow-y:auto; overscroll-behavior:contain; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:2rem 2.2rem 2rem; }
+  .modal-box { max-width:780px; margin:2.5rem auto; max-height:calc(100vh - 5rem); overflow-y:auto; overscroll-behavior:contain; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:2rem 2.2rem 2rem; }
   .modal-hdr { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:1.2rem; border-bottom:1px solid var(--border); padding-bottom:.8rem; }
-  .modal-hdr h2 { font-family:var(--mono); font-size:.95rem; font-weight:500; color:var(--teal); }
+  .modal-hdr h2 { font-family:var(--mono); font-size:1.1rem; font-weight:500; color:var(--teal); }
   .modal-close { background:none; border:none; color:var(--muted); cursor:pointer; font-size:1.1rem; line-height:1; padding:0 2px; }
   .modal-close:hover { color:var(--text); }
   .modal-section { margin-bottom:1.2rem; }
-  .modal-section h3 { font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--muted); text-transform:uppercase; margin-bottom:.5rem; }
-  .modal-section p, .modal-section li { font-family:var(--sans); font-size:13px; color:var(--text); line-height:1.75; }
+  .modal-section h3 { font-family:var(--mono); font-size:12px; letter-spacing:.1em; color:var(--muted); text-transform:uppercase; margin-bottom:.5rem; }
+  .modal-section p, .modal-section li { font-family:var(--sans); font-size:15px; color:var(--text); line-height:1.75; }
   .modal-section ul { padding-left:1.2rem; margin-top:.3rem; }
   .modal-section li { margin-bottom:.25rem; }
   .modal-kv { display:grid; grid-template-columns:auto 1fr; gap:.2rem .9rem; }
-  .modal-kv dt { font-family:var(--mono); font-size:12px; color:var(--teal); white-space:nowrap; }
-  .modal-kv dd { font-family:var(--sans); font-size:12px; color:var(--text); line-height:1.65; }
+  .modal-kv dt { font-family:var(--mono); font-size:14px; color:var(--teal); white-space:nowrap; }
+  .modal-kv dd { font-family:var(--sans); font-size:14px; color:var(--text); line-height:1.65; }
   .modal-warn { font-family:var(--mono); font-size:13px; font-weight:600; color:#facc15; line-height:1.5; padding:.55rem .75rem; border:1px solid #facc1566; border-radius:6px; background:#facc1510; }
   /* ── v2: combined chart + info panel ── */
   .chart-top-row { display:flex; align-items:center; margin-bottom:.75rem; gap:.65rem; flex-wrap:nowrap; }
@@ -144,7 +153,7 @@
   .info-ic .tip { text-transform:none; letter-spacing:normal; display:none; position:absolute; top:17px; left:-8px; z-index:850; width:min(260px,70vw); padding:.55rem .7rem; background:var(--surf2); border:1px solid var(--border); border-radius:6px; box-shadow:0 6px 20px rgba(0,0,0,.5); font:400 10px/1.55 var(--mono); font-style:normal; color:var(--text); text-align:left; white-space:normal; cursor:default; }
   .info-ic.tip-r .tip { left:auto; right:-8px; }
   .info-ic:hover .tip, .info-ic.open .tip, .info-ic:focus .tip { display:block; }
-  details.modal-section > summary { font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--muted); text-transform:uppercase; cursor:pointer; margin-bottom:.5rem; }
+  details.modal-section > summary { font-family:var(--mono); font-size:12px; letter-spacing:.1em; color:var(--muted); text-transform:uppercase; cursor:pointer; margin-bottom:.5rem; }
   .modal-kv dd ul { padding-left:1.1rem; }
   .modal-kv dd li { margin-bottom:.2rem; }
   details.modal-section > summary:hover { color:var(--teal); }
@@ -223,12 +232,12 @@
 <script src="../sharepanel.js?v=1118e3"></script>
 <script src="../taxengine.js?v=1119e7"></script>
 <script src="../medicare_costs.js?v=111917"></script>
-<script src="../taxcalc_core.js?v=11cea"></script>
-<script src="../taxengine.tests.js?v=11cea"></script>
+<script src="../taxcalc_core.js?v=11d04"></script>
+<script src="../taxengine.tests.js?v=11d04"></script>
 </head>
 <body>
 <header>
-  <h1>Income Tax Planner<span class="ver">v2.12</span></h1>
+  <h1>Income Tax Planner<span class="ver">v2.13</span></h1>
   <p>Federal + State · Capital Gains · IRMAA · SS torpedo · <span id="hdr-years">2026–2035</span> with inflation</p>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center;position:relative">
     <strong id="testsFailed" title="Unit tests status">🟢</strong>
@@ -302,7 +311,12 @@
       <div class="det-warn" id="warn-usint" hidden></div>
       <div class="det-row"><label for="num-ndiv">Non-qualified dividends</label><input type="text" id="num-ndiv" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
       <div class="det-row"><label for="num-stcg">Short-term capital gains<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">A short-term loss (negative) is netted against your long-term gain. A net capital loss offsets ordinary income by $3,000 a year at most; the rest carries forward and is ignored here.</span></span></label><input type="text" id="num-stcg" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
-      <div class="det-row"><label for="num-retinc">IRA, 401k or pension withdrawals</label><input type="text" id="num-retinc" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <div class="det-row"><label for="num-rmd">Required minimum distribution (RMD)<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">The withdrawal the IRS requires from a traditional IRA or 401k. It is taxed as ordinary income, and it cannot be converted to a Roth.</span></span></label><input type="text" id="num-rmd" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <div class="det-row"><label for="num-retinc">Other IRA, 401k or pension withdrawals<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Withdrawals beyond the RMD, and pension income. A pension is entered here because states that exempt retirement income, such as Illinois and Pennsylvania, treat it like IRA money.</span></span></label><input type="text" id="num-retinc" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <div class="det-row"><label for="num-roth">Roth conversion<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Money moved from a traditional IRA or 401k to a Roth. It is taxed as ordinary income, like a withdrawal, but you keep it. A withdrawal becomes a conversion when you move it into a Roth within 60 days. The Roth conversion room below shows how much more you can convert before the next tax bracket or Medicare surcharge tier.</span></span></label><input type="text" id="num-roth" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <label class="det-check" id="det-autotax-row"><input type="checkbox" id="chk-autotax" onchange="run()">Pay taxes from IRA<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Adjust the IRA withdrawal so that Federal (and state taxes when applicable) can be paid from the IRA. Roth conversion room then counts that withdrawal, so a click never takes you past the line it names. Off by default.</span></span></label>
+      <div class="det-row"><label for="num-taxwd">IRA withdrawal to pay the tax<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">An extra IRA or 401k withdrawal taken to pay this year's income tax, taxed as ordinary income like any withdrawal. Pay taxes from IRA works out the amount that covers the tax, including the tax on the withdrawal itself. Typing here turns it off.</span></span></label><input type="text" id="num-taxwd" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="taxWithdrawalTyped()" onchange="fmtDetail(this)"></div>
+      <div class="det-sum"><span>Total IRA and 401k distributions<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">The RMD, other withdrawals, Roth conversion and the IRA withdrawal to pay the tax, added up. A pension entered under Other withdrawals is in it too. What you can actually convert is the total less the RMD: the RMD must be taken first and cannot be converted.</span></span> <b id="det-iratotal">$0</b></span></div>
       <label class="det-check" id="det-swept-row"><input type="checkbox" id="chk-retinc-swept" onchange="run()">Extra income I sweep is also IRA/401k<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Used only by states that exempt retirement income (for example IL and PA), which are few. When checked, ordinary income above what you entered here is treated as IRA/401k distributions or conversions.</span></span></label>
       <div class="det-row"><label for="num-other">Other ordinary income<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Anything else taxed at regular rates. A loss can be entered as a negative number.</span></span></label><input type="text" id="num-other" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
       <div class="det-sum"><span>Ordinary income entered <b id="det-ord">$0</b></span></div>
@@ -318,6 +332,8 @@
       <div class="det-row"><label for="num-prop">Property and local taxes (SALT)<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Real estate and local taxes. State income tax is computed by this tool and added automatically, so do not enter it here.</span></span></label><input type="text" id="num-prop" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
       <div class="note" id="det-note"></div>
     </details>
+
+    <div class="conv-box" id="conv-box"></div>
 
     <hr class="divider">
     <div class="panel-title" style="margin-bottom:.6rem">Capital Gains (fixed, not scaled)</div>
@@ -468,7 +484,8 @@ const TIER_CFG = [
 // command give the same line. This page owns `cfg` and the controls that fill it.
 const cfg = TaxCalc.newConfig();
 const calc = TaxCalc.create(cfg);
-const { indexFactors, deriveIncome, calcAt, grossOf, deriveRow, irmaaTiers, irmaaAt, resultFor } = calc;
+const { indexFactors, deriveIncome, calcAt, grossOf, deriveRow, irmaaTiers, irmaaAt, resultFor,
+        bracketRoom, irmaaRoom, conversionTax, conversionCost, nextConversionStep, withdrawalForTax } = calc;
 
 // IRMAA is charged from the MAGI of two years back, so the tax year's own MAGI decides the premium
 // two years out. Both clocks are modeled: the charge in force THIS year comes from the MAGI entered
@@ -488,7 +505,7 @@ const LINK_ERRORS = [];
 // whatever Other ordinary income makes the entries add up to it.
 let LINK_ORDINARY = null;
 
-const DETAIL_IDS = { wg:'num-wages', it:'num-int', nd:'num-ndiv', sg:'num-stcg', ri:'num-retinc', ot:'num-other',
+const DETAIL_IDS = { wg:'num-wages', it:'num-int', nd:'num-ndiv', sg:'num-stcg', ri:'num-retinc', rd:'num-rmd', rc:'num-roth', rt:'num-taxwd', ot:'num-other',
                      qd:'num-qdiv', mu:'num-muni', ui:'num-usint', sm:'num-stmuni', un:'num-untaxed', pt:'num-prop' };
 const DETAIL_FIELDS = TaxCalc.DETAIL_FIELDS.map(f => ({ ...f, id: DETAIL_IDS[f.key] }));
 const detailAmount = (f, text) => TaxCalc.detailValue(f, DisplayHelpers.parseShorthand(text));
@@ -502,13 +519,19 @@ function fmtDetail(el) {
   run();
 }
 
+// Everything taken from IRAs and 401ks this year (a pension entered with the withdrawals is in it too).
+const iraTotal = () => cfg.rmd + cfg.retirementIncome + cfg.rothConv + cfg.taxWithdrawal;
+
 // The Income details heading and note: the ordinary total, and anything the page did to an entry.
 function updDetails() {
   const $ = id => document.getElementById(id);
   // "Extra income I sweep is also IRA/401k" only does anything in a state that exempts retirement
   // income, so it is shown only for those.
   $('det-swept-row').hidden = !TAXData[cfg.state]?.RETIREMENT_EXCLUSION;
+  // Automatic: the withdrawal entry shows the amount the calculation set, which is not typed in.
+  if (cfg.autoTax) $('num-taxwd').value = cfg.taxWithdrawal > 0 ? fmtMoney(cfg.taxWithdrawal) : '';
   $('det-ord').textContent = fmtMoney(cfg.entOrdinary);
+  $('det-iratotal').textContent = fmtMoney(iraTotal());
   $('det-sum').textContent = cfg.entOrdinary !== 0 ? `ordinary ${fmtK(cfg.entOrdinary)}` : '';
   const notes = [];
   const pref = cfg.ltNet + cfg.qdiv;
@@ -954,6 +977,87 @@ function ordinaryAtMagi(magiAt) {
   return hi;
 }
 
+// ─── ROTH CONVERSION ROOM ────────────────────────────────────────────────────
+// The room maths (bracketRoom, irmaaRoom, conversionTax) is in taxcalc_core.js, shared with the
+// command-line tool, so a link and a command give the same figures.
+
+// Click a room button: converts that much more, then the room recomputes from the new total.
+function addConversion(room) {
+  const el = document.getElementById('num-roth');
+  const v = Math.max(0, cfg.rothConv + room);
+  el.value = v === 0 ? '' : fmtMoney(v);
+  run();
+}
+
+// Sets the withdrawal that pays the tax. Not additive: the amount is worked out from the income without it,
+// so asking again after any change gives the right figure.
+function setTaxWithdrawal(v) {
+  const el = document.getElementById('num-taxwd');
+  el.value = v > 0 ? fmtMoney(v) : '';
+  document.getElementById('chk-autotax').checked = false;   // a number was chosen
+  run();
+}
+
+// Typing in the withdrawal entry takes the amount back from the automatic setting.
+function taxWithdrawalTyped() {
+  document.getElementById('chk-autotax').checked = false;
+  run();
+}
+
+function setAutoTax(on) {
+  document.getElementById('chk-autotax').checked = on;
+  run();
+}
+
+function renderConversion() {
+  const box = document.getElementById('conv-box');
+  const money = v => '$' + Math.round(v).toLocaleString();
+  // One button: the nearest line ahead, the top of the federal bracket or the foot of an IRMAA tier,
+  // with what converting up to it adds in tax. Clear and start again to go back.
+  const step = nextConversionStep();
+  const rows = [];
+  if (step) {
+    const yr = cfg.year + IRMAA_AHEAD;
+    const label = step.kind === 'bracket'
+      ? `Up to the top of the ${Math.round(step.rate * 100)}% federal bracket`
+      : `Up to IRMAA Tier ${step.tier} (${yr})` +
+        infoIcon(`Medicare charges IRMAA from the income of two years back, so this conversion sets the ${yr} surcharge. One dollar over this line adds ${money(step.cliff)} a year.`);
+    const sub = `adds ${money(step.tax)} tax (${(step.tax / step.room * 100).toFixed(0)}% of it)` +
+      (step.irmaaReached ? `; reaches IRMAA Tier ${step.irmaaReached.to}, +${money(step.irmaaReached.adds)} a year` : '');
+    rows.push(`<div class="conv-line"><span>${label}<br><span class="conv-sub">${sub}</span></span>` +
+      `<button type="button" class="conv-btn ${step.kind === 'irmaa' ? 'future' : ''}" onclick="addConversion(${step.room})">+${money(step.room)}</button></div>`);
+  }
+  if (cfg.rothConv > 0) {
+    const c = conversionCost();
+    rows.push(`<div class="conv-line"><span>Converting ${money(cfg.rothConv)} adds ${money(c.own)} tax (${(c.own / cfg.rothConv * 100).toFixed(0)}% of it)` +
+      (cfg.autoTax && c.withdrawal >= 1 ? `<br><span class="conv-sub">paying it from the IRA adds ${money(c.withdrawal)} more</span>` : '') + `</span>` +
+      `<button type="button" class="conv-btn" onclick="addConversion(-cfg.rothConv)">Clear</button></div>`);
+  }
+  const g = withdrawalForTax(), pay = [];
+  const payInfo = infoIcon(`The tax before the withdrawal is ${money(g.taxBefore)}. Withdrawing the money to pay it adds ${money(g.extraTax)} more tax, and that is covered too. Federal and state income tax; IRMAA is billed separately.`);
+  if (cfg.autoTax && g.withdrawal > 0) {
+    pay.push(`<div class="conv-line"><span>IRA withdrawal ${money(g.withdrawal)} covers the tax, tax on it included${payInfo}</span>` +
+      `<button type="button" class="conv-btn" onclick="setAutoTax(false)">Turn off</button></div>`);
+  } else if (g.withdrawal > 0 || cfg.taxWithdrawal > 0) {
+    const same = Math.abs(cfg.taxWithdrawal - g.withdrawal) < 1;
+    pay.push(`<div class="conv-line"><span>IRA withdrawal that covers the tax, tax on it included${payInfo}</span>` +
+      (same ? `<span>covers it</span>`
+        : `<button type="button" class="conv-btn" onclick="setTaxWithdrawal(${g.withdrawal})">Set ${money(g.withdrawal)}</button>`) + `</div>`);
+    pay.push(`<div class="conv-line"><span>Keep it covered as you change other entries</span>` +
+      `<button type="button" class="conv-btn" onclick="setAutoTax(true)">Turn on</button></div>`);
+    if (cfg.taxWithdrawal > 0) {
+      const short = g.taxNow - cfg.taxWithdrawal;
+      pay.push(`<div class="conv-line"><span>Withdrawing ${money(cfg.taxWithdrawal)}: tax is ${money(g.taxNow)}` +
+        (short >= 1 ? ` <span class="hi-amber">(${money(short)} short)</span>` : '') + `</span>` +
+        `<button type="button" class="conv-btn" onclick="setTaxWithdrawal(0)">Clear</button></div>`);
+    }
+  }
+  box.innerHTML = (rows.length
+    ? `<div class="conv-title">Roth conversion room${infoIcon('Click the amount to add it to the Roth conversion, which fills your income up to the nearest line: the top of your federal bracket or the foot of the next IRMAA tier. Click again for the line after that; Clear starts over. The tax shown is the federal and state income tax that part of the conversion adds, before any IRA withdrawal that pays it. Use Open in Tax Planner to plan the withholding.')}</div>` + rows.join('')
+    : '') +
+    (pay.length ? `<div class="conv-title" style="margin-top:.5rem">Pay taxes from IRA</div>` + pay.join('') : '');
+}
+
 // A rate as text. Anything over 999% is a flat charge over almost no income and reads as a bug if
 // printed in full.
 const fmtPct = v => v > 9.99 ? '>999%' : (v * 100).toFixed(1) + '%';
@@ -1317,10 +1421,10 @@ const IRMAA_FUTURE_TIP = 'Medicare charges IRMAA from your MAGI of two years ear
 
 // The Medicare (IRMAA) block of the info panel: the tier this MAGI will fall in two years out, what
 // it costs then, and how far the next tier is, all in that year's indexed dollars.
-function irmaaPanelRows(magi) {
+function irmaaPanelRows(d) {
   const $v = fmtMoney;
   const y  = cfg.year + IRMAA_AHEAD;
-  const ir = irmaaAt(magi);
+  const magi = d.magi, ir = irmaaAt(magi);
   const row = (l, v) => `<div class="info-row future"><span class="ir-lbl">${l}</span><span class="ir-val">${v}</span></div>`;
   const rows = [row(`${y} IRMAA ${ir.tier ? 'Tier ' + ir.tier : 'none'}`, ir.tier ? `${$v(ir.annual)}/yr` : '')];
   if (ir.next) {
@@ -1328,6 +1432,19 @@ function irmaaPanelRows(magi) {
     rows.push(row('Crossing it adds', `+${$v(ir.next.cliff)}/yr, to ${$v(ir.annual + ir.next.cliff)}/yr`));
   } else {
     rows.push(row('Top tier', 'no higher tier'));
+  }
+  // NIIT is this year's tax and rises by degrees, so it is a line of information, not a place to stop.
+  // It needs investment income to charge, and counts AGI, which is not the IRMAA MAGI.
+  const nii = cfg.ltNet + cfg.qdiv + cfg.interest + cfg.ndiv;
+  if (nii > 0) {
+    const thr = TAXData.FEDERAL.NIIT[cfg.status], cap = TAXData.FEDERAL.NIIT.rate * nii;
+    const now = (l, v) => `<div class="info-row"><span class="ir-lbl">${l}</span><span class="ir-val">${v}</span></div>`;
+    if (d.fedAGI < thr) {
+      rows.push(now('NIIT starts at MAGI', $v(thr)));
+      rows.push(now('Crossing it adds', `3.8% of the excess, up to ${$v(cap)}`));
+    } else {
+      rows.push(now('NIIT in effect', `${$v(d.niit)} of up to ${$v(cap)}`));
+    }
   }
   return rows.join('');
 }
@@ -1369,7 +1486,7 @@ function updateInfoPanel(d) {
         <div class="info-row"><span class="ir-lbl">State deduction</span><span class="ir-val">${$v(d.stDed)}</span></div>
         ${d.senDed > 0 ? `<div class="info-row"><span class="ir-lbl">Senior ded. (OBBBA)</span><span class="ir-val">${$v(d.senDed)}</span></div>` : ''}
         <div class="info-divider"></div>
-        ${irmaaPanelRows(d.magi)}
+        ${irmaaPanelRows(d)}
       </div>
       <div>
         <div class="info-col-title">Tax Dollars&ensp;<span style="font-size:9px;color:var(--muted)">(% of Fed income)</span></div>
@@ -1530,6 +1647,7 @@ function renderSummary(data) {
   rows.push(`<div style="margin-top:8px;text-align:center"><button onclick="openInTaxPlanner()" class="hdr-btn" style="font-size:11px;padding:5px 14px" ` +
     `title="Opens the Tax Payment Planner with the tax computed at the ordinary income on the chart.">` +
     `Open in Tax Planner →</button></div>`);
+  if (cfg.status === 'MFJ') rows.push(`<div style="margin-top:4px;text-align:center;font-size:10px;color:var(--muted)">Joint return: the IRA figures open as IRA 1. Divide them between IRA 1 and IRA 2 there if you each have one.</div>`);
   document.getElementById('summary').innerHTML = rows.join('');
 }
 
@@ -1625,7 +1743,8 @@ function readCfg() {
   cfg.ssIncome    = DisplayHelpers.parseShorthand(document.getElementById('num-ss').value)     || 0;
   for (const f of DETAIL_FIELDS) cfg[f.cfg] = detailAmount(f, document.getElementById(f.id).value);
   cfg.retirementSwept  = document.getElementById('chk-retinc-swept').checked;
-  cfg.cgSale      = DisplayHelpers.parseShorthand(document.getElementById('num-cg-sale').value)|| 0;
+  cfg.autoTax     = document.getElementById('chk-autotax').checked;
+  cfg.cgSale     = DisplayHelpers.parseShorthand(document.getElementById('num-cg-sale').value)|| 0;
   cfg.cgBasisPct  = +document.getElementById('sl-cg-basis').value;
   cfg.year        = +document.getElementById('sl-year').value;
   cfg.inflation   = +document.getElementById('sl-inf').value;
@@ -1646,6 +1765,7 @@ function run() {
   renderIrmaaLegend();
   syncPinControls();
   updateInfoPanel(pinnedRow());
+  renderConversion();
   renderSummary(data);
   renderAssumptions();
   updCgBasis();
@@ -1781,25 +1901,19 @@ function chartTable() {
   return { header: cols.map(c => c[0]), rows: sweepData.map(d => cols.map(c => c[1](d))) };
 }
 
-// The export: the link that recreates the chart, a summary at the ordinary income shown, every
-// setting that went in, and then the table of points. Each line is a list of cells; a settings line
-// is a name and a value, so the file reads down a spreadsheet's first two columns.
+// The export: the link that recreates the chart, then every input (what went in), then what was
+// calculated at the ordinary income shown, then the table of points. Each line is a list of cells; a
+// settings line is a name and a value, so the file reads down a spreadsheet's first two columns.
 function exportLines() {
   const row = pinnedRow(), gross = grossOf(row), $ = id => document.getElementById(id);
   const money = v => Math.round(v);
   const detail = Object.fromEntries(DETAIL_FIELDS.map(f => [f.id, cfg[f.cfg]]));
-  const t = chartTable();
+  const t = chartTable(), bRoom = bracketRoom(), mRoom = irmaaRoom();
   return [
     ['Income Tax Planner export', cfg.year],
     ['Link that recreates this chart', buildShareURL()],
     [],
-    ['Summary at the ordinary income shown'],
-    ['Ordinary income', money(cfg.entOrdinary)],
-    ['Gross income (all sources)', money(gross)],
-    ['Total taxes', money(row.totalTax)],
-    ['Net income', money(gross - row.totalTax)],
-    [],
-    ['Settings'],
+    ['Inputs'],
     ['Filing status', cfg.status === 'MFJ' ? 'Married / Joint' : 'Single'],
     ['State', $('sel-state').selectedOptions[0].text],
     ['Age, person 1', cfg.ages[0]],
@@ -1812,8 +1926,12 @@ function exportLines() {
     ['of which US Treasury', money(detail['num-usint'])],
     ['Non-qualified dividends', money(detail['num-ndiv'])],
     ['Short-term capital gains', money(detail['num-stcg'])],
-    ['IRA, 401k or pension withdrawals', money(detail['num-retinc'])],
+    ['Required minimum distribution (RMD)', money(detail['num-rmd'])],
+    ['Other IRA, 401k or pension withdrawals', money(detail['num-retinc'])],
     ['Extra swept income is also IRA/401k', cfg.retirementSwept ? 'Yes' : 'No'],
+    ['Pay taxes from IRA', cfg.autoTax ? 'Yes' : 'No'],
+    ['Roth conversion', money(detail['num-roth'])],
+    ['IRA withdrawal to pay the tax', money(detail['num-taxwd'])],
     ['Other ordinary income', money(detail['num-other'])],
     ['Qualified dividends', money(detail['num-qdiv'])],
     ['Municipal bond interest', money(detail['num-muni'])],
@@ -1823,6 +1941,18 @@ function exportLines() {
     ['Sale proceeds', money(cfg.cgSale)],
     ['Cost basis (% of proceeds)', cfg.cgBasisPct],
     [`MAGI from ${cfg.year - 2}`, cfg.prevMagi === null ? '' : money(cfg.prevMagi)],
+    [],
+    ['Calculated at the ordinary income shown'],
+    ['Ordinary income', money(cfg.entOrdinary)],
+    ['Total IRA and 401k distributions', money(iraTotal())],
+    ['Gross income (all sources)', money(gross)],
+    ['Total taxes', money(row.totalTax)],
+    ['Net income', money(gross - row.totalTax)],
+    ['Roth conversion room in the federal bracket', bRoom ? money(bRoom.room) : ''],
+    ['Federal bracket rate', bRoom ? bRoom.rate : ''],
+    [`Roth conversion room under IRMAA Tier ${mRoom ? mRoom.tier : ''}`, mRoom ? money(mRoom.room) : ''],
+    ['Income tax added by the Roth conversion entered', money(conversionTax())],
+    ['IRA withdrawal that covers the income tax, tax on it included', money(withdrawalForTax().withdrawal)],
     [],
     ['Chart points, rates and dollars'],
     t.header,
@@ -1942,8 +2072,10 @@ function buildShareParams() {
     // and expire by year. Legacy links carrying any of them still load, ignoring the parameter.
   };
   if (cfg.prevMagi !== null) p.pm = cfg.prevMagi;
-  for (const f of DETAIL_FIELDS) if (cfg[f.cfg]) p[f.key] = cfg[f.cfg];   // Income details, when entered
+  // Income details, when entered. Automatic means the withdrawal is calculated, so it is not carried.
+  for (const f of DETAIL_FIELDS) if (cfg[f.cfg] && !(cfg.autoTax && f.key === 'rt')) p[f.key] = cfg[f.cfg];
   if (cfg.retirementSwept)  p.rw = 1;
+  if (cfg.autoTax)          p.ra = 1;
   if (!isFullZoom()) { p.vl = viewLo; p.vh = viewHi; }   // Fed income; legacy zl/zh were ordinary
   if (explainOn) p.ex = 1;
   return new URLSearchParams(p).toString();
@@ -1974,11 +2106,11 @@ SharePanel.init({
 // amounts. A key in neither list is withheld too, but feedback.tests.js fails until every key
 // buildShareParams() can emit is in exactly one list.
 const SHARE_PRIVACY = {
-  safe: ['st', 's', 'yr', 'in', 'rw', 'ex'],
+  safe: ['st', 's', 'yr', 'in', 'rw', 'ra', 'ex'],
   personal: [
     'a1', 'a2',                                                    // ages
     'ss', 'cs', 'cb', 'pm',                                        // Social Security, sale, basis, prior-year income
-    'wg', 'it', 'nd', 'sg', 'ri', 'ot', 'qd', 'mu', 'ui', 'sm', 'un', 'pt',   // income details
+    'wg', 'it', 'nd', 'sg', 'ri', 'rd', 'rc', 'rt', 'ot', 'qd', 'mu', 'ui', 'sm', 'un', 'pt',   // income details
     'vl', 'vh',                                                    // the income range on screen
   ],
 };
@@ -1992,9 +2124,9 @@ FeedbackWidget.init({
   keyNames: {
     a1: 'age1', a2: 'age2', ss: 'socialSecurity', cs: 'capitalGainSale', cb: 'costBasisPct',
     pm: 'priorYearMagi', wg: 'wages', it: 'interest', nd: 'nonqualifiedDividends',
-    sg: 'shortTermGains', ri: 'retirementIncome', ot: 'otherIncome', qd: 'qualifiedDividends',
+    sg: 'shortTermGains', ri: 'retirementIncome', rd: 'requiredMinimumDistribution', ot: 'otherIncome', qd: 'qualifiedDividends',
     mu: 'muniInterest', ui: 'usInterest', sm: 'stateMuniInterest', un: 'untaxedIncome',
-    pt: 'propertyTax', vl: 'viewLow', vh: 'viewHigh',
+    rc: 'rothConversion', rt: 'iraTaxWithdrawal', pt: 'propertyTax', vl: 'viewLow', vh: 'viewHigh',
   },
   settingsHelp: 'Filing status, state, year and inflation, plus any error messages the page logged.'
     + ' Never income, ages, sale amounts or birth dates.',
@@ -2035,7 +2167,9 @@ function buildTaxPlannerParams() {
   // as ordinary income there).
   const pen    = Math.max(0, Math.round(cfg.wages + cfg.other + cfg.stOrd));
   const intr   = Math.max(0, Math.round(cfg.interest + cfg.ndiv));
-  const iraEst = Math.max(0, Math.round(cfg.entOrdinary) - pen - intr);
+  const conv   = Math.round(cfg.rothConv);
+  const rmd    = Math.round(cfg.rmd);
+  const iraEst = Math.max(0, Math.round(cfg.entOrdinary) - conv - rmd - pen - intr);
   const gain   = Math.max(0, Math.round(cfg.ltNet));
 
   const sp = new URLSearchParams({
@@ -2050,10 +2184,13 @@ function buildTaxPlannerParams() {
     ss:  Math.round(cfg.ssIncome),
     cg:  gain,
     i1v: iraEst,
+    // This page has one IRA figure. On a joint return the planner is told, so it can say that IRA 1 holds both.
     // Explicit zeros for everything this page has no view of. Without them the planner's own
     // defaults supply an RMD and a conversion nobody asked for.
-    i1r: 0, i1c: 0, i2r: 0, i2v: 0, i2c: 0, pen: pen, int: intr, qdiv: Math.round(cfg.qdiv),
+    // The Roth conversion rides in IRA 1's conversion slot, which is what the planner prices.
+    i1r: rmd, i1c: conv, i2r: 0, i2v: 0, i2c: 0, pen: pen, int: intr, qdiv: Math.round(cfg.qdiv),
   });
+  if (cfg.status === 'MFJ') sp.set('lump', '1');
   return sp;
 }
 
@@ -2105,6 +2242,10 @@ function loadFromURL() {
     $('chk-retinc-swept').checked = c.retirementSwept;
     $('details-income').open = true;
   }
+  if (has('ra')) {
+    $('chk-autotax').checked = c.autoTax;
+    $('details-income').open = true;
+  }
   if (has('pm') && c.prevMagi !== null) $('num-prevmagi').value = DisplayHelpers.formatDollar(c.prevMagi);
   if (has('cs')) {
     const v = c.cgSale;
@@ -2149,7 +2290,7 @@ function loadFromURL() {
 <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal-box">
     <div class="modal-hdr">
-      <h2>Income Tax Planner v2.12 — How to Use</h2>
+      <h2>Income Tax Planner v2.13 — How to Use</h2>
       <button class="modal-close" onclick="closeModal()">&#x2715;</button>
     </div>
 
@@ -2160,6 +2301,12 @@ function loadFromURL() {
     <details class="modal-section">
       <summary>Change Log</summary>
       <dl class="modal-kv">
+        <dt>v2.13</dt>
+        <dd><ul>
+          <li>New Required minimum distribution entry, apart from other withdrawals, and a Total IRA and 401k distributions line under the entries. Open in Tax Planner sends the RMD as IRA 1's RMD. On a joint return the Tax Payment Planner says the IRA figures arrive as IRA 1.</li>
+          <li>New IRA withdrawal to pay the tax entry. Pay taxes from IRA works out the withdrawal that covers your federal and state income tax, including the tax on the withdrawal itself, and one click sets it. Tick Pay taxes from IRA and the withdrawal follows the tax as you change anything else, and Roth conversion room counts it, so converting the room never takes you past the line it names. Open in Tax Planner carries it over with your other IRA withdrawals.</li>
+          <li>New Roth conversion entry under Income details. Under it, Roth conversion room offers one button: the amount that fills your income up to the nearest line ahead, the top of your federal bracket or the foot of the next Medicare (IRMAA) surcharge tier, with the tax it adds and any IRMAA tier it reaches. Click again for the next line; Clear starts over. The info panel now says where the 3.8% investment income surtax (NIIT) starts and what it can add. Open in Tax Planner carries the conversion over to plan the withholding.</li>
+        </ul></dd>
         <dt>v2.12</dt>
         <dd><ul>
           <li>The tax calculation is also a small program, <code>taxcalc.js</code>, so LibreOffice Calc or a script can ask for the tax on its own figures and get the result back in cells, with nothing leaving your computer. The <a href="https://tools.netcitizen.us/UsageGuide.html#calculating-in-libreoffice-calc-or-from-a-script" target="_blank" rel="noopener">URL guide</a> shows how.</li>
@@ -2226,6 +2373,9 @@ function loadFromURL() {
         <li>Open <strong>Income details</strong> in the left panel to spell out your ordinary income: wages or business income (negative for a loss), interest, non-qualified dividends, short-term capital gains (negative for a loss), IRA, 401k or pension withdrawals, and other income (negative for a loss). They add up to the <em>ordinary income entered</em>, which is the teal line on the chart and the income the info panel describes. The chart's ordinary-income axis is still the total, so these entries do not stack on top of it.</li>
         <li><strong>Qualified dividends</strong> are taxed with your capital gains and added to the gain from the sale. A short-term loss is netted against that gain first, and a net capital loss offsets only $3,000 of income a year; the rest carries forward and is ignored.</li>
         <li><strong>Interest and tax-exempt interest.</strong> <strong>Municipal bond interest</strong> is entered on its own row, not in Interest. It is not in your income tax, but it counts toward MAGI, so it moves the IRMAA tiers, and toward how much Social Security is taxed. Two rows are indented as <em>of which</em>: <strong>US Treasury</strong>, under Interest, is the part of Interest that is exempt from state tax, and <strong>your state taxes</strong>, under municipal bond interest, is the part your state taxes anyway (usually out-of-state bonds). An <em>of which</em> amount cannot exceed the row above it, and the page says so. For a fund, enter only the part its year-end statement attributes to US obligations or to your state.</li>
+        <li><strong>IRA withdrawal to pay the tax</strong> is an extra withdrawal taxed as ordinary income. The <strong>Pay taxes from IRA</strong> section (below Roth conversion room) shows the withdrawal that covers the year's income tax: the tax now, plus the tax the withdrawal itself adds, plus the tax on that. Click Set to enter it, or tick <strong>Pay taxes from IRA</strong> to keep it current as you change other entries. With that on, the room figures count the withdrawal, so click a room amount in any order. Typing your own withdrawal turns it off. IRMAA is not included, because Medicare bills it separately.</li>
+        <li><strong>RMD, other withdrawals, Roth conversion and the tax withdrawal</strong> are all IRA money, taxed the same way as ordinary income. What makes a withdrawal a conversion is moving it into a Roth within 60 days. So the most you can convert is the <strong>Total IRA and 401k distributions</strong> less the RMD, which must be taken first and cannot be converted. If tax is withheld from a conversion, the part withheld does not reach the Roth unless you add that much from other money; if you do, it counts as converted.</li>
+        <li><strong>Roth conversion</strong> is taxed as ordinary income and counts toward MAGI. Under Income details, <strong>Roth conversion room</strong> offers one button naming the nearest line ahead: the top of your current federal bracket, or the foot of the next IRMAA tier. It shows the amount, the tax that part of the conversion adds, and any IRMAA tier it reaches. Click it to add that amount, then click again to keep climbing; <strong>Clear</strong> starts over. <strong>Open in Tax Planner</strong> then carries the conversion over so you can plan the IRA withholding for the year's taxes.</li>
         <li><strong>Untaxed</strong> is money that came in without tax, such as a Roth withdrawal or cash from savings. It is part of Gross income and Net income so you see the whole picture, and it changes no tax, no IRMAA and no Social Security taxation.</li>
         <li><strong>Property and local taxes</strong> are real estate and local taxes only. State income tax is computed for you and added to them for the SALT deduction.</li>
         <li><strong>Social Security</strong> is one combined amount for everyone on the return, because how much of it is taxed depends on all of your income together.</li>

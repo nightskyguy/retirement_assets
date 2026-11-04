@@ -382,7 +382,8 @@ const PLANNER_PAGES = {
     },
     withheld: {
       ages: ['a1', 'a2'],
-      amounts: ['ss', 'cs', 'cb', 'pm', 'wg', 'it', 'sg', 'ri', 'ot', 'un'],
+      amounts: ['ss', 'cs', 'cb', 'pm', 'wg', 'it', 'sg', 'ri', 'rd', 'rc', 'rt', 'ot', 'un'],
+      // `ra` (pay the tax automatically) is a choice, listed under safe in the page, so it is not an amount.
     },
     tool: 'Income Tax Planner',
   },

@@ -13,7 +13,8 @@
 //
 // `get(key)` returns the string a key carries, or null when it is absent - URLSearchParams.get does.
 // The field names and their meaning are documented in UsageGuide.md. Add fields at the END of
-// RESULT_FIELDS and never rename one: other people's sheets read the line by position.
+// RESULT_FIELDS and never rename one: other people's sheets read the line by position. `return=all`
+// is inputs first and calculated fields second, each after a marker column.
 
 (function (root) {
   // Inside this function scope the engine names are bare globals in a browser and a require() in node.
@@ -38,6 +39,9 @@
     { key:'nd', cfg:'ndiv',             neg:false },
     { key:'sg', cfg:'stcg',             neg:true  },
     { key:'ri', cfg:'retirementIncome', neg:false },
+    { key:'rd', cfg:'rmd',              neg:false },
+    { key:'rc', cfg:'rothConv',         neg:false },
+    { key:'rt', cfg:'taxWithdrawal',    neg:false },
     { key:'ot', cfg:'other',            neg:true  },
     { key:'qd', cfg:'qdiv',             neg:false },
     { key:'mu', cfg:'muni',             neg:false },
@@ -57,6 +61,10 @@
       status:'MFJ', state:'CA', ages:[65, 65],
       ssIncome:0, propTax:0,
       retirementIncome:0, retirementSwept:false,
+      rmd:0,                       // required minimum distribution: ordinary income, and retirement income for the states that exempt it
+      rothConv:0,                  // Roth conversion: ordinary income, and retirement income for the states that exempt it
+      taxWithdrawal:0,             // IRA withdrawal taken to pay the tax: the same kind of income as a Roth conversion
+      autoTax:false,               // true: taxWithdrawal is not an entry, deriveIncome() sets it to the amount that covers the tax
       wages:0, interest:0, ndiv:0, stcg:0, other:0, qdiv:0,
       muni:0, usInt:0, stMuni:0,   // tax-exempt interest, its state-exempt Treasury part, and the part a state taxes
       untaxed:0,                   // money that came in untaxed (Roth, cash): in gross income, in no tax
@@ -105,6 +113,8 @@
     for (const f of DETAIL_FIELDS) take(f.key, v => { cfg[f.cfg] = wholeDollars(detailValue(f, v)); });
     const rw = raw('rw');
     if (rw !== null) { cfg.retirementSwept = rw === '1'; given.add('rw'); }
+    const ra = raw('ra');
+    if (ra !== null) { cfg.autoTax = ra === '1'; given.add('ra'); }
     take('pm', v => { cfg.prevMagi = v >= 0 ? wholeDollars(v) : null; });
     take('cs', v => { cfg.cgSale = Math.max(0, v); });
     take('cb', v => { cfg.cgBasisPct = clamp(Math.round(v), 0, 100); });
@@ -153,7 +163,19 @@
       // Each is a part of another entry, so it cannot be larger than that entry.
       cfg.usIntEff  = Math.min(cfg.usInt, cfg.interest);
       cfg.stMuniEff = Math.min(cfg.stMuni, cfg.muni);
-      cfg.entOrdinary = cfg.wages + cfg.interest + cfg.ndiv + cfg.retirementIncome + cfg.other + net.ordinary;
+      cfg.entOrdinary = cfg.wages + cfg.interest + cfg.ndiv + cfg.retirementIncome + cfg.rmd + cfg.rothConv + cfg.taxWithdrawal + cfg.other + net.ordinary;
+      settleTaxWithdrawal();
+    }
+
+    // With autoTax the IRA withdrawal is whatever covers the tax on all the other entries, so it follows
+    // every change to them. Run after the entries and their derived figures are in place.
+    function settleTaxWithdrawal() {
+      if (!cfg.autoTax) return;
+      cfg.entOrdinary -= cfg.taxWithdrawal;
+      cfg.taxWithdrawal = 0;
+      const w = withdrawalForTax().withdrawal;
+      cfg.taxWithdrawal = w;
+      cfg.entOrdinary += w;
     }
 
     // Maps cfg to calculateTaxes() params and reshapes the result.
@@ -169,7 +191,7 @@
       // Retirement part of the ordinary income, for the states that exempt it: what was entered, plus
       // (when asked) everything swept above what was entered. Never more than the ordinary income there is.
       const extraRet = cfg.retirementSwept ? Math.max(0, ordInc - cfg.entOrdinary) : 0;
-      const retInc = Math.max(0, Math.min(ordInc, cfg.retirementIncome + extraRet));
+      const retInc = Math.max(0, Math.min(ordInc, cfg.retirementIncome + cfg.rmd + cfg.rothConv + cfg.taxWithdrawal + extraRet));
 
       const r = calcTaxes({
         filingStatus:    status,
@@ -264,6 +286,143 @@
                next: nx ? { n: nx.n, at: nx.at, away: nx.at - magi, cliff: nx.annualCost * med - annual } : null };
     }
 
+    // ─── ROTH CONVERSION ROOM ──────────────────────────────────────────────────
+    // How much more ordinary income fits before something changes: the federal bracket rises, or MAGI
+    // reaches the next IRMAA tier. Both are found by bisection on calcAt, so they hold the Social
+    // Security torpedo, the deduction phase-outs and the state in the answer. Both tests only ever turn
+    // true as income rises, which is what makes bisection valid.
+    //
+    // The row at `extra` more Roth conversion than is entered (negative takes some away). With autoTax
+    // the withdrawal that pays the tax moves with it, so a conversion is never counted without the tax
+    // on it; the inputs are put back afterwards.
+    function rowAfter(extra) {
+      const keep = { rc: cfg.rothConv, tw: cfg.taxWithdrawal, ent: cfg.entOrdinary };
+      try {
+        cfg.rothConv += extra;
+        cfg.entOrdinary += extra;
+        settleTaxWithdrawal();
+        return calcAt(cfg.entOrdinary);
+      } finally {
+        cfg.rothConv = keep.rc; cfg.taxWithdrawal = keep.tw; cfg.entOrdinary = keep.ent;
+      }
+    }
+
+    // The most extra conversion at or above `from` where `crossed(row)` is still false; null when
+    // nothing up to the search ceiling crosses it.
+    function lastExtraBefore(from, crossed) {
+      const CEIL = 5_000_000;
+      if (!crossed(rowAfter(CEIL))) return null;
+      let lo = from, hi = CEIL;
+      for (let i = 0; i < 40; i++) {
+        const mid = (lo + hi) / 2;
+        if (crossed(rowAfter(mid))) hi = mid; else lo = mid;
+      }
+      return lo;
+    }
+
+    // Room to the top of the federal bracket the income sits in. Sitting on the top edge already, it
+    // offers the bracket above, so a second click keeps climbing. null in the top bracket.
+    function bracketRoom() {
+      let from = 0;
+      for (let k = 0; k < 2; k++) {
+        const rate = rowAfter(from).fedBr;
+        const end = lastExtraBefore(from, r => r.fedBr > rate + 1e-9);
+        if (end === null) return null;
+        if (end >= 1) return { rate, room: Math.floor(end) };
+        from = end + 1;
+      }
+      return null;
+    }
+
+    // Room before MAGI reaches the next IRMAA tier (the tier this year's MAGI sets IRMAA_AHEAD years
+    // out). null in the top tier, which has a floor and no ceiling. Sitting on the edge already, it
+    // offers the tier above, like bracketRoom.
+    function irmaaRoom() {
+      let from = 0;
+      for (let k = 0; k < 2; k++) {
+        const next = irmaaAt(rowAfter(from).magi).next;
+        if (!next) return null;
+        const end = lastExtraBefore(from, r => r.magi >= next.at);
+        if (end === null) return null;
+        if (end >= 1) return { tier: next.n, cliff: next.cliff, room: Math.floor(end) };
+        from = end + 1;
+      }
+      return null;
+    }
+
+    const incomeTaxOf = r => r.fedTax + r.fedCGTax + r.niit + r.stTaxOrd + r.stTaxCG;
+
+    // The income tax at `extra` more conversion than is entered, with the tax withdrawal left out, so a
+    // difference of two of these is the tax on the conversion dollars themselves.
+    function ownTaxAfter(extra) {
+      const keep = { rc: cfg.rothConv, tw: cfg.taxWithdrawal, ent: cfg.entOrdinary };
+      try {
+        cfg.rothConv += extra;
+        cfg.entOrdinary += extra - cfg.taxWithdrawal;
+        cfg.taxWithdrawal = 0;
+        return incomeTaxOf(calcAt(cfg.entOrdinary));
+      } finally {
+        cfg.rothConv = keep.rc; cfg.taxWithdrawal = keep.tw; cfg.entOrdinary = keep.ent;
+      }
+    }
+
+    // The income tax the conversion itself adds, federal and state: the same year with and without it.
+    // The IRA withdrawal that pays the tax is left out of both.
+    function conversionTax() { return ownTaxAfter(0) - ownTaxAfter(-cfg.rothConv); }
+
+    // The tax the conversion adds, and with autoTax the further tax on the extra IRA withdrawal that
+    // pays it: { own, withdrawal, total }.
+    function conversionCost() {
+      const own = conversionTax();
+      const total = incomeTaxOf(rowAfter(0)) - incomeTaxOf(rowAfter(-cfg.rothConv));
+      return { own, withdrawal: total - own, total };
+    }
+
+    // The nearest line ahead, as one step: the top of the federal bracket or the foot of the next IRMAA
+    // tier, whichever is closer. `tax` is the income tax the step's conversion adds. null when neither
+    // has a ceiling. { kind:'bracket', rate, room, tax, irmaaReached } or { kind:'irmaa', tier, cliff, room,
+    // tax, irmaaReached }. irmaaReached is null, or { to, adds }: the step lifts MAGI into IRMAA tier `to`,
+    // adding `adds` a year.
+    function nextConversionStep() {
+      const b = bracketRoom(), m = irmaaRoom();
+      const pick = b && m ? (m.room < b.room ? { kind: 'irmaa', ...m } : { kind: 'bracket', ...b })
+                 : b ? { kind: 'bracket', ...b } : m ? { kind: 'irmaa', ...m } : null;
+      if (!pick) return null;
+      const was = irmaaAt(rowAfter(0).magi), now = irmaaAt(rowAfter(pick.room).magi);
+      return { ...pick, tax: ownTaxAfter(pick.room) - ownTaxAfter(0),
+               irmaaReached: now.tier > was.tier ? { to: now.tier, adds: now.annual - was.annual } : null };
+    }
+
+    // The IRA withdrawal that pays the year's income tax, tax on the withdrawal included: the W with
+    // W = tax(income without the withdrawal field, plus W). Each dollar withdrawn is itself taxed, so
+    // W is the tax now plus the tax the withdrawal adds, and that added tax is taxed too. The marginal
+    // rate is below 100%, so feeding the tax back in as the next withdrawal converges, and rounding W
+    // UP to a dollar leaves the tax covered. Income tax only (federal, capital gains, NIIT, state):
+    // IRMAA is a Medicare premium billed separately. Computed from the income WITHOUT the current
+    // taxWithdrawal, so asking again gives the same answer however much is already entered.
+    //   { withdrawal, tax, taxBefore, extraTax, taxNow }   taxNow is the tax at the withdrawal entered.
+    function withdrawalForTax() {
+      const tax = r => r.fedTax + r.fedCGTax + r.niit + r.stTaxOrd + r.stTaxCG;
+      const keepW = cfg.taxWithdrawal, keepEnt = cfg.entOrdinary, base = keepEnt - keepW;
+      const taxWith = w => {            // the tax with a withdrawal of w taken
+        cfg.taxWithdrawal = w; cfg.entOrdinary = base + w;
+        return tax(calcAt(base + w));
+      };
+      const taxNow = tax(calcAt(keepEnt));
+      const taxBefore = taxWith(0);
+      let w = taxBefore;
+      for (let i = 0; i < 200; i++) {
+        const next = taxWith(w);
+        const done = Math.abs(next - w) < 0.005;
+        w = next;
+        if (done) break;
+      }
+      const withdrawal = Math.ceil(w - 1e-9);
+      const taxAt = taxWith(withdrawal);
+      cfg.taxWithdrawal = keepW; cfg.entOrdinary = keepEnt;      // the caller's inputs are untouched
+      return { withdrawal, tax: taxAt, taxBefore, extraTax: taxAt - taxBefore, taxNow };
+    }
+
     // The result at one ordinary income. The marginal rates are measured over a $1,000 step.
     function resultFor(P) {
       const h = 1000;
@@ -277,11 +436,14 @@
     // a result.
     function buildResult(spec, P) {
       const inputs = inputFields(cfg);
-      const all = { ...RESULT_FIELDS, ...inputs };
+      const all = { ...RESULT_FIELDS, ...inputs, ...MARKER_FIELDS };
       const bad = spec.names.filter(n => !(n in all));
       if (bad.length) return { fields: [], values: [], csv: 'ERROR: unknown field ' + bad.join(' ') };
       const c = resultFor(P ?? cfg.entOrdinary);
       c.grossOf = grossOf;
+      c.bracketRoom = bracketRoom; c.irmaaRoom = irmaaRoom; c.conversionTax = conversionTax;
+      c.withdrawalForTax = withdrawalForTax;
+      c.iraTotal = () => cfg.rmd + cfg.retirementIncome + cfg.rothConv + cfg.taxWithdrawal;
       const values = spec.names.map(n => {
         const v = all[n](c);
         if (typeof v === 'string') return v;     // filing status, state, or a blank
@@ -292,7 +454,8 @@
     }
 
     return { cfg, indexFactors, deriveIncome, calcAt, grossOf, deriveRow, irmaaTiers, irmaaAt,
-             resultFor, buildResult };
+             resultFor, buildResult, bracketRoom, irmaaRoom, conversionTax, conversionCost, nextConversionStep,
+             withdrawalForTax };
   }
 
   // ─── THE RESULT LINE ───────────────────────────────────────────────────────
@@ -328,7 +491,20 @@
     cgRate:          c => c.d.cgRate,
     irmaaFuture:     c => c.d.IRMAAFuture,
     irmaaFutureTier: c => c.fut.tier,
+    // Roth conversion: the room left at the income calculated at, and the tax the conversion entered
+    // adds. Room is blank in the top bracket or tier, where there is no ceiling to fill up to.
+    bracketRoom:     c => c.bracketRoom()?.room ?? '',
+    irmaaRoom:       c => c.irmaaRoom()?.room ?? '',
+    conversionTax:   c => c.conversionTax(),
+    withdrawalForTax: c => c.withdrawalForTax().withdrawal,
+    // Everything taken from IRAs and 401ks: the RMD, other withdrawals (a pension entered there too), the
+    // Roth conversion and the withdrawal that pays the tax.
+    iraTotal:        c => c.iraTotal(),
   };
+
+  // Two names that carry no value: a blank column labelled `inputs` or `calculated`, so a line that
+  // mixes the two families shows where one ends and the other starts.
+  const MARKER_FIELDS = { inputs: () => '', calculated: () => '' };
 
   // The inputs the result was calculated from, named as in the link (st, s, ss, wg, ...), so a result
   // line can say what it was a result OF. `a2` is blank for a single filer and `pm` when not entered.
@@ -349,9 +525,11 @@
       ui: () => cfg.usIntEff,    // the amounts USED, which are limited to the entries they are part of
       sm: () => cfg.stMuniEff,
       rw: () => cfg.retirementSwept ? 1 : 0,
+      ra: () => cfg.autoTax ? 1 : 0,
     };
   }
-  const ALL_NAMES = [...Object.keys(RESULT_FIELDS), ...Object.keys(inputFields(newConfig()))];   // results, then inputs
+  // `all` is the inputs, then the calculated fields, each family after its marker.
+  const ALL_NAMES = ['inputs', ...Object.keys(inputFields(newConfig())), 'calculated', ...Object.keys(RESULT_FIELDS)];
 
   // The ordinary income a link's `pi` asks for becomes whatever Other ordinary income makes the
   // entries add up to it, in whole dollars like the entry it is written into.

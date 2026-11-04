@@ -1626,15 +1626,107 @@ test('taxcalc_core: a link is read the way the page\'s controls would hold it (s
 	assertEqual(cfg('st=JOINT').errors, ['unknown filing status JOINT'], 'so is a filing status');
 });
 
-test('taxcalc_core: the default result line keeps its field order, and `all` is the results then the inputs once each', () => {
+test('taxcalc_core: the default result line keeps its field order, and `all` is the inputs then the calculated fields, each after its marker', () => {
 	const C = _core(); if (!C) return;
-	// The output contract: other people's sheets read these by position. Add at the END, never reorder.
+	// The output contract: other people's sheets read the default line by position. Add at the END, never reorder.
 	assertEqual(C.RESULT_DEFAULT, ['ordinary', 'fedIncome', 'grossIncome', 'agi', 'magi', 'fedTax', 'stateTax', 'irmaa',
 		'irmaaFuture', 'totalTax', 'effRate', 'fedMarginal', 'stateMarginal'], 'RESULT_DEFAULT');
 	assertEqual(C.ALL_NAMES.length, new Set(C.ALL_NAMES).size, 'no field named twice');
-	assertEqual(C.ALL_NAMES.indexOf('irmaaFutureTier') < C.ALL_NAMES.indexOf('st'), true, 'results come before inputs');
+	const at = n => C.ALL_NAMES.indexOf(n);
+	assertEqual(at('inputs'), 0, 'the inputs marker opens the line');
+	assertEqual(at('inputs') < at('st') && at('rw') < at('calculated') && at('calculated') < at('ordinary'), true,
+		'inputs first, then the calculated marker, then the results');
+	assertEqual(at('irmaaFutureTier') < at('bracketRoom'), true, 'the room fields are appended after the earlier results');
 	assertEqual(C.run(_link('s=CA&wg=1000&return=fedTax,nonsense')).csv, 'ERROR: unknown field nonsense', 'a typo is an error, not a column of zeros');
 	assertEqual(C.run(_link('s=ZZ')).csv, 'ERROR: unknown state ZZ', 'a bad link is one ERROR line');
+});
+
+test('taxcalc_core: a Roth conversion (rc) is ordinary income, the room fills to the edge, and the marker names are blank columns', () => {
+	const C = _core(); if (!C) return;
+	const base = _row('st=MFJ&s=TX&yr=2026&a1=67&a2=67&wg=60000&ri=40000&ss=40000&return=ordinary,bracketRoom,irmaaRoom,conversionTax');
+	assertEqual(base.conversionTax, '0', 'no conversion adds no tax');
+	assertEqual(+base.bracketRoom > 0 && +base.irmaaRoom > 0, true, 'there is room in the bracket and under the next IRMAA tier');
+	// Converting exactly the room fills the bracket: the income sits on the edge, and the next dollar rises.
+	const filled = _row('st=MFJ&s=TX&yr=2026&a1=67&a2=67&wg=60000&ri=40000&ss=40000&rc=' + base.bracketRoom + '&return=ordinary,fedMarginal,conversionTax,bracketRoom');
+	assertEqual(+filled.ordinary, +base.ordinary + +base.bracketRoom, 'rc is ordinary income');
+	assertEqual(+filled.conversionTax > 0, true, 'the conversion adds income tax');
+	assertEqual(+filled.bracketRoom > 0, true, 'at the edge the next bracket up is offered');
+	// The IRMAA room stops under the tier: MAGI one dollar past it reaches the tier, at the room it does not.
+	const m = _row('st=MFJ&s=TX&yr=2026&a1=67&a2=67&wg=60000&ri=40000&ss=40000&rc=' + base.irmaaRoom + '&return=irmaaFutureTier');
+	const over = _row('st=MFJ&s=TX&yr=2026&a1=67&a2=67&wg=60000&ri=40000&ss=40000&rc=' + (+base.irmaaRoom + 1) + '&return=irmaaFutureTier');
+	assertEqual(+over.irmaaFutureTier, +m.irmaaFutureTier + 1, 'one dollar past the room reaches the next tier');
+	const marked = C.run(_link('st=MFJ&s=TX&rc=10000&return=inputs,st,calculated,ordinary'), { header: true });
+	assertEqual(marked.csv, 'inputs,st,calculated,ordinary\n,MFJ,,10000', 'the markers are blank columns carrying their names');
+});
+
+test('taxcalc_core: the IRA withdrawal that pays the tax includes the tax on the withdrawal itself, and asking again changes nothing', () => {
+	const C = _core(); if (!C) return;
+	const L = 'st=MFJ&s=CA&yr=2026&a1=67&a2=67&wg=60000&ri=40000&ss=40000';
+	const base = _row(L + '&return=incomeTax,withdrawalForTax');
+	const W = +base.withdrawalForTax, T0 = +base.incomeTax;
+	assertEqual(W > T0, true, 'it is more than the tax now, because the withdrawal is taxed too');
+	// Taking exactly W leaves the tax covered, and by no more than a dollar (W is rounded up to a dollar).
+	const at = _row(L + '&rt=' + W + '&return=incomeTax,withdrawalForTax,rt,ordinary');
+	assertEqual(+at.incomeTax <= W && W - +at.incomeTax < 1, true, 'W covers the tax with the withdrawal in it, to within a dollar');
+	assertEqual(+at.ordinary, +_row(L + '&return=ordinary').ordinary + W, 'rt is ordinary income');
+	assertEqual(+at.withdrawalForTax, W, 'asking again with rt set gives the same answer');
+	assertEqual(+_row(L + '&rt=' + (W - 2) + '&return=incomeTax').incomeTax > W - 2, true, 'a withdrawal two dollars short does not cover it');
+	assertEqual(_row('st=MFJ&s=TX&return=withdrawalForTax').withdrawalForTax, '0', 'no tax needs no withdrawal');
+});
+
+test('taxcalc_core: the conversion tax is its own, and the next step names the nearest line and the IRMAA tier it reaches', () => {
+	const C = _core(); if (!C) return;
+	const L = 'st=MFJ&s=CA&yr=2026&a1=66&a2=66&ss=29400&cs=99100&cb=0&it=2000&nd=1900&ri=14810&rd=9500&qd=18800&rc=26147';
+	const calcFor = q => { const p = new URLSearchParams(q); return C.run(k => p.get(k)).calc; };
+	const off = calcFor(L), on = calcFor(L + '&ra=1');
+	const alone = calcFor(L.replace('&rc=26147', '&rc=0'));
+	const tax = c => { const d = c.resultFor(c.cfg.entOrdinary).d; return d.fedTax + d.fedCGTax + d.niit + d.stTaxOrd + d.stTaxCG; };
+	assertEqual(Math.abs(off.conversionTax() - (tax(off) - tax(alone))) < 0.01, true, 'with no withdrawal it is the tax with the conversion less the tax without');
+	assertEqual(Math.abs(on.conversionTax() - off.conversionTax()) < 0.01, true, 'and the automatic withdrawal that pays it does not change it');
+	const cost = on.conversionCost();
+	assertEqual(cost.withdrawal > 0 && Math.abs(cost.own + cost.withdrawal - cost.total) < 0.01, true, 'the tax on the extra withdrawal is shown apart, and the two make the total');
+	const step = on.nextConversionStep();
+	assertEqual(step.kind, 'bracket', 'the 12% bracket top is nearer than the IRMAA tier above the one it sits at');
+	assertEqual(step.irmaaReached.to, 1, 'and getting there reaches IRMAA tier 1');
+	assertEqual(step.tax > 0 && step.tax < step.room, true, 'with a tax that is part of the amount');
+	assertEqual(on.irmaaRoom().tier, 2, 'sitting right under tier 1, the IRMAA room is the one to tier 2');
+});
+
+test('taxcalc_core: the RMD (rd) is ordinary income, and iraTotal adds the RMD, withdrawals, conversion and tax withdrawal', () => {
+	const C = _core(); if (!C) return;
+	const L = 'st=MFJ&s=TX&yr=2026&a1=75&a2=75&ss=30000';
+	const none = _row(L + '&return=ordinary,iraTotal');
+	assertEqual(none.iraTotal, '0', 'nothing taken, nothing in the total');
+	const r = _row(L + '&rd=20000&ri=5000&rc=10000&rt=3000&return=ordinary,iraTotal,rd');
+	assertEqual(r.rd, '20000', 'rd comes back as an input');
+	assertEqual(+r.ordinary, 38000, 'all four are ordinary income');
+	assertEqual(+r.iraTotal, 38000, 'and the total is their sum');
+	assertEqual(+_row('st=MFJ&s=IL&ss=30000&rd=20000&return=totalTax').totalTax < +_row('st=MFJ&s=IL&ss=30000&ot=20000&return=totalTax').totalTax, true, 'an RMD is retirement income for a state that exempts it, other income is not');
+});
+
+test('taxcalc_core: with ra=1 the IRA withdrawal follows the tax, so the order of a conversion and the withdrawal does not matter', () => {
+	const C = _core(); if (!C) return;
+	const L = 'st=MFJ&s=CA&yr=2026&a1=67&a2=67&wg=60000&ri=40000&ss=40000';
+	const off = _row(L + '&return=ordinary,withdrawalForTax,irmaaRoom,bracketRoom,ra');
+	assertEqual(off.ra, '0', 'it is off unless the link turns it on');
+	const on = _row(L + '&ra=1&rt=5&return=ordinary,rt,incomeTax,withdrawalForTax,ra');
+	assertEqual(on.ra, '1', 'ra=1 turns it on');
+	assertEqual(on.rt, off.withdrawalForTax, 'the withdrawal is the one that covers the tax, whatever rt the link carried');
+	assertEqual(+on.ordinary, +off.ordinary + +off.withdrawalForTax, 'and it is in the ordinary income');
+	// A conversion changes the tax, and the withdrawal follows it.
+	const conv = _row(L + '&ra=1&rc=20000&return=rt,incomeTax,withdrawalForTax');
+	assertEqual(+conv.rt > +on.rt && +conv.rt === +conv.withdrawalForTax, true, 'a conversion raises the withdrawal, and it stays the amount that covers the tax');
+	assertEqual(+conv.incomeTax <= +conv.rt && +conv.rt - +conv.incomeTax < 1, true, 'covering it to within a dollar');
+	// The room counts the withdrawal: converting the room leaves MAGI under the next IRMAA tier,
+	// withdrawal included, and one dollar more reaches it.
+	const room = _row(L + '&ra=1&return=irmaaRoom,irmaaFutureTier');
+	assertEqual(+room.irmaaRoom > 0, true, 'there is room');
+	assertEqual(+room.irmaaRoom < +off.irmaaRoom, true, 'less than without the withdrawal, which uses some of it');
+	const at = _row(L + '&ra=1&rc=' + room.irmaaRoom + '&return=irmaaFutureTier');
+	const over = _row(L + '&ra=1&rc=' + (+room.irmaaRoom + 1) + '&return=irmaaFutureTier');
+	assertEqual(+over.irmaaFutureTier, +room.irmaaFutureTier + 1, 'one dollar past the room reaches the next tier');
+	assertEqual(+at.irmaaFutureTier, +room.irmaaFutureTier, 'and the room itself does not');
+	assertEqual(_row('st=MFJ&s=TX&ra=1&return=rt').rt, '0', 'no tax needs no withdrawal');
 });
 
 test('taxcalc_core: the pieces add up (fed + state + IRMAA = total; gross - total = net), and `pi` pins the ordinary income', () => {

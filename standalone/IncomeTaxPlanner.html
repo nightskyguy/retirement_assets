@@ -25,7 +25,7 @@
 <!-- The Send feedback dialog. NOT deferred: it records page errors from here on, so it has to load
      before the scripts below. It builds nothing until FeedbackWidget.open(). -->
 <script src="../feedback.js?v=11195c"></script>
-<title>Income Tax Planner · 2026+ · v2.11</title>
+<title>Income Tax Planner · 2026+ · v2.12</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
   // Global Chart.js tooltip defaults, set once so the chart config only says what differs.
@@ -223,11 +223,12 @@
 <script src="../sharepanel.js?v=1118e3"></script>
 <script src="../taxengine.js?v=1119e7"></script>
 <script src="../medicare_costs.js?v=111917"></script>
-<script src="../taxengine.tests.js?v=1119e7"></script>
+<script src="../taxcalc_core.js?v=11cea"></script>
+<script src="../taxengine.tests.js?v=11cea"></script>
 </head>
 <body>
 <header>
-  <h1>Income Tax Planner<span class="ver">v2.11</span></h1>
+  <h1>Income Tax Planner<span class="ver">v2.12</span></h1>
   <p>Federal + State · Capital Gains · IRMAA · SS torpedo · <span id="hdr-years">2026–2035</span> with inflation</p>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center;position:relative">
     <strong id="testsFailed" title="Unit tests status">🟢</strong>
@@ -462,82 +463,35 @@ const TIER_CFG = [
   { label:'IRMAA T5', color:'#dc2626', dash:[4,2] },
 ];
 
-// ─── LIVE CONFIG ─────────────────────────────────────────────────────────────
-const cfg = {
-  status:'MFJ', state:'CA', ages:[65,65],
-  ssIncome:0, propTax:0,
-  retirementIncome:0, retirementSwept:false,
-  wages:0, interest:0, ndiv:0, stcg:0, other:0, qdiv:0,
-  muni:0, usInt:0, stMuni:0,   // tax-exempt interest, its state-exempt Treasury part, and the part a state taxes
-  untaxed:0,                   // money that came in untaxed (Roth, cash): in gross income, in no tax
-  cgSale:0, cgBasisPct:60,
-  // Derived from the entries above by deriveIncome(), never read from a control:
-  ltNet:0,          // long-term gain left after netting a short-term loss against it
-  stOrd:0,          // short-term result that joins ordinary income (a capped net loss is negative)
-  carry:0,          // net capital loss that does not offset anything this year
-  usIntEff:0,       // Treasury interest, limited to the Interest entered
-  stMuniEff:0,      // municipal interest a state taxes, limited to the municipal interest entered
-  entOrdinary:0,    // everything entered under Ordinary income, added up
-  year:2026, inflation:2.5,
-  prevMagi:null,   // MAGI from year - 2, or null when not entered; only the IRMAA-in-force line reads it
-  // OBBBA is current law, so it is always on and never user-switchable. The provisions still
-  // switch themselves off by year: calcAt() gates each one on its own sunsetYear.
-  obbaOn:true, saltHigh:true
-};
-
-// ─── INDEX FACTORS ───────────────────────────────────────────────────────────
-// The two index factors for the selected year, or for a year `ahead` of it. They are different axes
-// and not interchangeable: `inf` indexes every income threshold (brackets, IRMAA floors); `med`
-// scales the IRMAA surcharge DOLLARS, which ride their own published path from medicare_costs.js.
-// `med` is anchored to the year the IRMAA table states its dollars in, which is not necessarily
-// BASE_YEAR (the federal one). Memoized: calcAt runs a few hundred times per redraw.
-let _fxKey = '', _fx = {};
-function indexFactors(ahead = 0) {
-  const key = `${cfg.year}|${cfg.inflation}`;
-  if (key !== _fxKey) { _fxKey = key; _fx = {}; }
-  return _fx[ahead] ??= {
-    inf: Math.pow(1 + cfg.inflation / 100, cfg.year + ahead - BASE_YEAR),
-    med: medicareGrowthFactor(cfg.year + ahead - MEDICARE_COSTS.ANCHOR_YEAR)
-  };
-}
+// ─── LIVE CONFIG AND THE CALCULATION ─────────────────────────────────────────
+// The calculation itself is taxcalc_core.js, shared with the command-line tool, so a link and a
+// command give the same line. This page owns `cfg` and the controls that fill it.
+const cfg = TaxCalc.newConfig();
+const calc = TaxCalc.create(cfg);
+const { indexFactors, deriveIncome, calcAt, grossOf, deriveRow, irmaaTiers, irmaaAt, resultFor } = calc;
 
 // IRMAA is charged from the MAGI of two years back, so the tax year's own MAGI decides the premium
 // two years out. Both clocks are modeled: the charge in force THIS year comes from the MAGI entered
 // for year - 2 (nothing is charged when none is entered), and the charge this year's MAGI sets
 // is priced IRMAA_AHEAD years ahead, against thresholds and surcharges indexed that far forward.
-const IRMAA_AHEAD = -TAXData.IRMAA.LOOKBACK;
+const IRMAA_AHEAD = TaxCalc.IRMAA_AHEAD;
 
 // ─── INCOME DETAILS ──────────────────────────────────────────────────────────
-// One row per Income details entry: its control, its share-link key, its cfg name, and whether a
-// negative amount means something (a business loss, a short-term capital loss). The same table
-// drives reading the controls, writing and reading the share URL, and the "entered" total, so a
-// field added here is a field everywhere. Keys avoid the ones the page already uses (st s a1 a2 ss
-// cs cb yr in pm pi vl vh az rw); `ri` and `pt` are the original retirement-income and property-tax
-// keys and keep their meaning.
+// One row per Income details entry: TaxCalc.DETAIL_FIELDS (its share-link key, cfg name, and whether a
+// negative amount means something) plus the control that holds it here. The same table drives reading
+// the controls, writing and reading the share URL, and the "entered" total, so a field added there is
+// a field everywhere. Keys avoid the ones the page already uses (st s a1 a2 ss cs cb yr in pm pi vl
+// vh az rw); `ri` and `pt` are the original retirement-income and property-tax keys.
 // Problems found in the page address while loading it. They are shown, and a result line says ERROR.
 const LINK_ERRORS = [];
 // The ordinary income a link asked for with `pi`, applied once the entries are read: it becomes
 // whatever Other ordinary income makes the entries add up to it.
 let LINK_ORDINARY = null;
 
-const DETAIL_FIELDS = [
-  { id:'num-wages',  key:'wg', cfg:'wages',            neg:true  },
-  { id:'num-int',    key:'it', cfg:'interest',         neg:false },
-  { id:'num-ndiv',   key:'nd', cfg:'ndiv',             neg:false },
-  { id:'num-stcg',   key:'sg', cfg:'stcg',             neg:true  },
-  { id:'num-retinc', key:'ri', cfg:'retirementIncome', neg:false },
-  { id:'num-other',  key:'ot', cfg:'other',            neg:true  },
-  { id:'num-qdiv',   key:'qd', cfg:'qdiv',             neg:false },
-  { id:'num-muni',   key:'mu', cfg:'muni',             neg:false },
-  { id:'num-usint',  key:'ui', cfg:'usInt',            neg:false },
-  { id:'num-stmuni', key:'sm', cfg:'stMuni',           neg:false },
-  { id:'num-untaxed', key:'un', cfg:'untaxed',          neg:false },
-  { id:'num-prop',   key:'pt', cfg:'propTax',          neg:false },
-];
-const detailAmount = (f, text) => {
-  const v = DisplayHelpers.parseShorthand(text);
-  return Number.isFinite(v) ? (f.neg ? v : Math.max(0, v)) : 0;
-};
+const DETAIL_IDS = { wg:'num-wages', it:'num-int', nd:'num-ndiv', sg:'num-stcg', ri:'num-retinc', ot:'num-other',
+                     qd:'num-qdiv', mu:'num-muni', ui:'num-usint', sm:'num-stmuni', un:'num-untaxed', pt:'num-prop' };
+const DETAIL_FIELDS = TaxCalc.DETAIL_FIELDS.map(f => ({ ...f, id: DETAIL_IDS[f.key] }));
+const detailAmount = (f, text) => TaxCalc.detailValue(f, DisplayHelpers.parseShorthand(text));
 
 // Reformat once the entry is committed, not per keystroke, which would fight the typing. Zero and
 // blank both show as blank.
@@ -546,21 +500,6 @@ function fmtDetail(el) {
   const v = detailAmount(f, el.value);
   el.value = v === 0 ? '' : fmtMoney(v);
   run();
-}
-
-// Fills cfg's derived income figures from the entries. The short-term and long-term results are
-// netted the way the return does it (netCapitalLosses in taxengine.js); the long-term part is the
-// sale's gain, and everything that joins ordinary income is added up as `entOrdinary`.
-function deriveIncome() {
-  const lt  = cfg.cgSale > 0 ? cfg.cgSale * (1 - cfg.cgBasisPct / 100) : 0;
-  const net = netCapitalLosses(cfg.stcg, lt);
-  cfg.ltNet = net.longTerm;
-  cfg.stOrd = net.ordinary;
-  cfg.carry = net.carryforward;
-  // Each is a part of another entry, so it cannot be larger than that entry.
-  cfg.usIntEff  = Math.min(cfg.usInt, cfg.interest);
-  cfg.stMuniEff = Math.min(cfg.stMuni, cfg.muni);
-  cfg.entOrdinary = cfg.wages + cfg.interest + cfg.ndiv + cfg.retirementIncome + cfg.other + net.ordinary;
 }
 
 // The Income details heading and note: the ordinary total, and anything the page did to an entry.
@@ -580,79 +519,6 @@ function updDetails() {
   warn('warn-stmuni', cfg.stMuni > cfg.muni, `Must be less than or equal to the municipal bond interest entered (${fmtMoney(cfg.muni)}).`);
   if (cfg.carry > 0) notes.push(`<span class="hi-amber">Net capital loss: only ${fmtMoney(TAXData.FEDERAL.CAPITAL_LOSS_LIMIT)} offsets income this year; ${fmtMoney(cfg.carry)} carries forward and is ignored.</span>`);
   $('det-note').innerHTML = notes.join('<br>');
-}
-
-// ─── CALC ADAPTER ────────────────────────────────────────────────────────────
-// Thin wrapper that maps cfg → calculateTaxes() params and reshapes the result
-// to match the shape expected by sweep(), renderChart(), and renderSummary().
-function calcAt(ordInc) {
-  const {status, state, ages, ssIncome, propTax, obbaOn, saltHigh,
-         year} = cfg;
-
-  const {inf} = indexFactors();
-  const cgGain    = cfg.ltNet;
-
-  // Suppress saltHigh after OBBBA SALT provisions sunset (2030+)
-  const effectiveSaltHigh = saltHigh && year <= obbaSalt.sunsetYear;
-  // Suppress senior deduction after its sunset (2029+); SALT elevated cap continues through 2029
-  const effectiveObbaOn = obbaOn && year <= obbaSen.sunsetYear;
-
-  // Retirement-income portion of the swept ordinary income (for state exclusion states like IL/PA).
-  // Retirement part of the ordinary income, for the states that exempt it: what was entered, plus
-  // (when asked) everything swept above what was entered. Never more than the ordinary income there is.
-  const extraRet = cfg.retirementSwept ? Math.max(0, ordInc - cfg.entOrdinary) : 0;
-  const retInc = Math.max(0, Math.min(ordInc, cfg.retirementIncome + extraRet));
-
-  const r = calculateTaxes({
-    filingStatus:    status,
-    ages:            ages,
-    earnedIncome:    ordInc,
-    iraIncome:       retInc,
-    totalSS:         ssIncome,
-    capGains:        cgGain,
-    qualifiedDiv:    cfg.qdiv,
-    taxExemptInterest:   cfg.muni,          // federal MAGI only: IRMAA, Social Security taxability, SALT cap
-    stateExemptInterest: cfg.usIntEff,      // Treasury interest, out of state income
-    stateTaxableExempt:  cfg.stMuniEff,     // municipal interest the state taxes, into state income
-    inflation:       inf,
-    state:           state,
-    obbaOn:          effectiveObbaOn,
-    saltHigh:        effectiveSaltHigh,
-    propTax:         propTax,
-    taxYear:         year,          // P64d: indexes the SALT cap and its threshold 1%/yr from 2025
-    IRMAAAnnualCost: 0   // computed below from MAGI
-  });
-
-  // IRMAA is a step function on MAGI. Thresholds index at inflation, the surcharge does not.
-  // `IRMAA` is the charge in force this year: it is flat across the sweep, because it depends on the
-  // MAGI entered for year - 2 and not on the income being swept. `IRMAAFuture` is the charge THIS
-  // sweep point's MAGI sets IRMAA_AHEAD years out; it is shown, never added to this year's tax.
-  const now = indexFactors(), fut = indexFactors(IRMAA_AHEAD);
-  const IRMAA = cfg.prevMagi === null ? 0 : calcIRMAA(cfg.prevMagi, status, now.inf, now.med);
-  const IRMAAFuture = calcIRMAA(r.MAGI, status, fut.inf, fut.med);
-
-  return {
-    ordInc,
-    fedTax:    r.federalOrdinaryTax,
-    fedCGTax:  r.capitalGainsTax,
-    IRMAA,
-    IRMAAFuture,
-    stTaxOrd:  r.stateOrdinaryTax,
-    stTaxCG:   r.stateCapGainsTax,
-    ssTax:     r.taxableSS,
-    magi:      r.MAGI,
-    fedAGI:    r.AGI,
-    useItz:    r.useItemized,
-    senDed:    r.seniorDeduction,
-    fedDed:    r.federalStdDeduction,
-    stDed:     r.stateStdDeduction,
-    stMarg:    r.stateMarginalRate,
-    fedBr:     r.federalMarginalRate,   // statutory federal ordinary bracket, for the explanations
-    cgStat:    r.capitalGainsRate,      // statutory capital-gains bracket (NIIT is not in it)
-    niit:      r.niitTax,
-    cgRate:    r.capitalGainsRate + (r.MAGI > TAXData.FEDERAL.NIIT[status] ? TAXData.FEDERAL.NIIT.rate : 0),
-    cgGain:    cgGain + cfg.qdiv        // everything taxed at capital-gains rates
-  };
 }
 
 // ─── VIEW STATE ──────────────────────────────────────────────────────────────
@@ -678,9 +544,6 @@ let explainOn = false;    // label what changes the tax rate along the chart
 function fixedIncome() {
   return cfg.ssIncome + cfg.ltNet + cfg.qdiv;
 }
-// Everything that came in at a swept point: Fed income, tax-exempt interest, and the untaxed money
-// (Roth or cash). Takes a row from calcAt or deriveRow.
-const grossOf = d => d.ordInc + cfg.ssIncome + d.cgGain + cfg.muni + cfg.untaxed;
 const round2 = v => Math.round(v * 100) / 100;
 // "Full" is every total income from $0 up to FULL_MAX of ordinary income above the fixed amounts, so
 // the whole range is reachable whatever has been entered.
@@ -835,26 +698,6 @@ function onOrdLabelDbl() {
 
 // Stored sweep results for info panel access
 let sweepData = [];
-
-// Derived fields shared by the sweep and by the exact (off-grid) pinned row.
-// prevFedTax === null means "no left neighbor", so no marginal rate; h is the difference width.
-function deriveRow(p, prevFedTax, h) {
-  const denom    = Math.max(p.ordInc + cfg.ssIncome + p.cgGain, 1);
-  const totalTax = p.fedTax + p.fedCGTax + p.niit + p.IRMAA + p.stTaxOrd + p.stTaxCG;
-  const fedMarg = prevFedTax === null ? 0 : (p.fedTax - prevFedTax) / h;
-  // The solid effective rates are INCOME taxes. This year's IRMAA is a flat charge set by income two
-  // years ago, so over a small swept income it is an enormous "rate" and says nothing about what
-  // more income costs. `allIn` carries it, and is shown (allInShown) only where it stays within the
-  // sum of the two marginal rates; elsewhere it is null and the chart leaves a gap.
-  const allIn = totalTax / denom;
-  return {
-    ...p, totalTax, fedMarg, allIn,
-    fedEff:  (p.fedTax + p.fedCGTax + p.niit) / denom,
-    stEff:   (p.stTaxOrd + p.stTaxCG) / denom,
-    totEff:  (totalTax - p.IRMAA) / denom,
-    allInShown: p.IRMAA > 0 && allIn <= Math.max(0, fedMarg) + Math.max(0, p.stMarg) ? allIn : null
-  };
-}
 
 // Row for an arbitrary ordinary income, not necessarily a sampled column. Uses the same
 // difference width as the chart so the panel's Fed Marginal matches the purple line.
@@ -1093,29 +936,6 @@ function magiCrossIdx(data, thresh) {
 function niitLine(data) {
   const idx = magiCrossIdx(data, TAXData.FEDERAL.NIIT[cfg.status]);
   return idx === null ? [] : [{ index:idx, color:NIIT_COLOR, dash:[4,3], label:'NIIT' }];
-}
-
-// The paying IRMAA tiers in the dollars of the year `ahead` of the selected one. The default is the
-// year this year's MAGI decides, which is what the chart lines, legend, panel and summary show.
-// Tier lists come from getIRMAATiers, never from the raw rows.
-function irmaaTiers(ahead = IRMAA_AHEAD) {
-  const {inf} = indexFactors(ahead);
-  return getIRMAATiers(cfg.status).slice(0, TIER_CFG.length)
-    .map(t => ({ ...t, at: t.l * inf }));
-}
-
-// Where a MAGI sits on the ladder in the year `ahead` of the selected one (default: the year this
-// year's MAGI decides; pass 0 for the charge in force now). `tier` is 0 below the first surcharge.
-// `annual` is the household surcharge at that MAGI, Medicare growth included, and equals what
-// calcIRMAA charges. `next` is null in the top tier, which has a floor and no ceiling.
-function irmaaAt(magi, ahead = IRMAA_AHEAD) {
-  const {med} = indexFactors(ahead);
-  const tiers = irmaaTiers(ahead);
-  const tier  = tiers.filter(t => t.at <= magi).length;      // floors ascend, so a count is the index
-  const annual = tier ? tiers[tier - 1].annualCost * med : 0;
-  const nx = tiers[tier];
-  return { tier, annual,
-           next: nx ? { n: nx.n, at: nx.at, away: nx.at - magi, cliff: nx.annualCost * med - annual } : null };
 }
 
 // Ordinary income at which MAGI first reaches `magiAt`, found by bisection on calcAt rather than read
@@ -1866,101 +1686,18 @@ function populateStateDropdown() {
 // A link with `return` computes at ONE ordinary income (`pi`, or the ordinary income entered under
 // Income details when there is no `pi`) and shows the answer as a comma-separated line, so a
 // spreadsheet can build the link from its own cells and the person can paste the result back. The
-// field names and their meaning are documented in UsageGuide.md; keep the two together.
-const RESULT_DEFAULT = ['ordinary', 'fedIncome', 'grossIncome', 'agi', 'magi', 'fedTax', 'stateTax', 'irmaa',
-                        'irmaaFuture', 'totalTax', 'effRate', 'fedMarginal', 'stateMarginal'];
-const RESULT_RATES   = new Set(['effRate', 'allInRate', 'fedMarginal', 'stateMarginal', 'cgRate']);
-const RESULT_FIELDS = {
-  ordinary:        c => c.P,
-  fedIncome:       c => c.total,
-  grossIncome:     c => grossOf(c.d),
-  agi:             c => c.d.fedAGI,
-  magi:            c => c.d.magi,
-  taxableSS:       c => c.d.ssTax,
-  deduction:       c => c.d.fedDed,
-  seniorDeduction: c => c.d.senDed,
-  stateDeduction:  c => c.d.stDed,
-  itemized:        c => c.d.useItz ? 1 : 0,
-  fedOrdinaryTax:  c => c.d.fedTax,
-  fedCgTax:        c => c.d.fedCGTax,
-  niit:            c => c.d.niit,
-  fedTax:          c => c.d.fedTax + c.d.fedCGTax + c.d.niit,
-  stateTax:        c => c.d.stTaxOrd + c.d.stTaxCG,
-  incomeTax:       c => RESULT_FIELDS.fedTax(c) + RESULT_FIELDS.stateTax(c),
-  irmaa:           c => c.d.IRMAA,
-  irmaaTier:       c => c.now ? c.now.tier : 0,
-  totalTax:        c => c.d.totalTax,
-  netIncome:       c => grossOf(c.d) - c.d.totalTax,
-  effRate:         c => c.d.totEff,
-  allInRate:       c => c.d.allIn,
-  fedMarginal:     c => c.d.fedMarg,
-  stateMarginal:   c => c.d.stMarg,
-  cgRate:          c => c.d.cgRate,
-  irmaaFuture:     c => c.d.IRMAAFuture,
-  irmaaFutureTier: c => c.fut.tier,
-};
+// fields are TaxCalc.RESULT_FIELDS (taxcalc_core.js); their meaning is documented in UsageGuide.md.
+const RESULT_DEFAULT = TaxCalc.RESULT_DEFAULT;
+const ALL_NAMES = TaxCalc.ALL_NAMES;
 
-// The inputs the result was calculated from, named as in the link (st, s, ss, wg, ...), so a result
-// line can say what it was a result OF. `a2` is blank for a single filer and `pm` when not entered.
-const INPUT_FIELDS = {
-  st: () => cfg.status,
-  s:  () => cfg.state,
-  a1: () => cfg.ages[0],
-  a2: () => cfg.status === 'MFJ' ? cfg.ages[1] : '',
-  yr: () => cfg.year,
-  'in': () => cfg.inflation,
-  ss: () => cfg.ssIncome,
-  cs: () => cfg.cgSale,
-  cb: () => cfg.cgBasisPct,
-  pm: () => cfg.prevMagi ?? '',
-  ...Object.fromEntries(DETAIL_FIELDS.map(f => [f.key, () => cfg[f.cfg]])),
-  ui: () => cfg.usIntEff,    // the amounts USED, which are limited to the entries they are part of
-  sm: () => cfg.stMuniEff,
-  rw: () => cfg.retirementSwept ? 1 : 0,
-};
-const ALL_FIELDS = { ...RESULT_FIELDS, ...INPUT_FIELDS };
-const ALL_NAMES  = [...Object.keys(RESULT_FIELDS), ...Object.keys(INPUT_FIELDS)];   // results, then inputs
+// What the link asked for, read once: null without `return`.
+const RETURN_SPEC = TaxCalc.returnSpec(k => new URLSearchParams(window.location.search).get(k));
 
-// What the link asked for, read once: null without `return`. `return` alone (or 1) is the default
-// set, `all` is every field, and anything else is a comma list of field names.
-const RETURN_SPEC = (() => {
-  const p = new URLSearchParams(window.location.search);
-  const key = p.has('return') ? 'return' : p.has('result') ? 'result' : null;   // `result` is accepted as a synonym
-  if (!key) return null;
-  const raw = p.get(key).trim();
-  const names = (raw === '' || raw === '1' || raw === 'true') ? RESULT_DEFAULT
-              : raw === 'all' ? ALL_NAMES
-              : raw.split(',').map(x => x.trim()).filter(Boolean);
-  return { names };
-})();
-
-// The result at one ordinary income. The marginal rates are measured over a $1,000 step.
-function resultFor(P) {
-  const h = 1000;
-  const d = deriveRow(calcAt(P), calcAt(P - h).fedTax, h);
-  return { d, P, total: P + cfg.ssIncome + d.cgGain,
-           now: cfg.prevMagi === null ? null : irmaaAt(cfg.prevMagi, 0), fut: irmaaAt(d.magi) };
-}
-
-// { fields, values, csv } for the current inputs. A name the page does not know comes back as a
-// single "ERROR: ..." token rather than as a column of zeros, so a typo cannot pass as a result.
+// { fields, values, csv } for the current inputs.
 function buildResult(over = null) {
   if (LINK_ERRORS.length) return { fields: [], values: [], csv: 'ERROR: ' + LINK_ERRORS.join('; ') };
   const spec = over ?? RETURN_SPEC ?? { names: RESULT_DEFAULT, header: false };
-  const bad = spec.names.filter(n => !(n in ALL_FIELDS));
-  if (bad.length) {
-    const msg = 'ERROR: unknown field ' + bad.join(' ');
-    return { fields: [], values: [], csv: msg };
-  }
-  const P = over?.P ?? cfg.entOrdinary;
-  const c = resultFor(P);
-  const values = spec.names.map(n => {
-    const v = ALL_FIELDS[n](c);
-    if (typeof v === 'string') return v;     // filing status, state, or a blank
-    return RESULT_RATES.has(n) ? Math.round(v * 1e6) / 1e6 : Math.round(v * 100) / 100;
-  });
-  const csv = (spec.header ? spec.names.join(',') + '\n' : '') + values.join(',');
-  return { fields: spec.names, values, csv };
+  return calc.buildResult(spec, over?.P);
 }
 window.taxResult = buildResult;   // for scripts: window.taxResult().csv
 
@@ -2328,66 +2065,65 @@ function openInTaxPlanner() {
 function loadFromURL() {
   const p = new URLSearchParams(window.location.search);
   if (!p.size) return;
+  // What each key means is taxcalc_core.js, the same reading the command-line tool does, already
+  // snapped to what each control can hold. This function only puts the values into the controls.
+  const L = TaxCalc.configFromParams(k => p.get(k));
+  const c = L.cfg, has = k => L.given.has(k);
+  LINK_ERRORS.push(...L.errors);
+  const $ = id => document.getElementById(id);
 
-  if (p.has('st') && ['MFJ','SGL'].includes(p.get('st'))) {
-    const s = p.get('st');
+  if (has('st')) {
+    const s = c.status;
     cfg.status = s;
-    document.getElementById('btn-MFJ').classList.toggle('active', s==='MFJ');
-    document.getElementById('btn-SGL').classList.toggle('active', s==='SGL');
+    $('btn-MFJ').classList.toggle('active', s==='MFJ');
+    $('btn-SGL').classList.toggle('active', s==='SGL');
     const mfj = s==='MFJ';
-    document.getElementById('age-grid').classList.toggle('single', !mfj);
-    document.getElementById('age2').style.display = mfj ? '' : 'none';
-    document.getElementById('age-label').textContent = mfj ? 'Taxpayer Ages' : 'Taxpayer Age';
+    $('age-grid').classList.toggle('single', !mfj);
+    $('age2').style.display = mfj ? '' : 'none';
+    $('age-label').textContent = mfj ? 'Taxpayer Ages' : 'Taxpayer Age';
     applySsMax();   // slider travel depends on filing status
   }
-  if (p.has('s')) {
-    // Any case is accepted, but a code the page does not have is an ERROR, never a quiet fallback to
-    // California: a wrong state is a wrong tax.
-    const code = p.get('s').trim().toUpperCase(), sel = document.getElementById('sel-state');
-    if ([...sel.options].some(o => o.value === code)) sel.value = code;
-    else LINK_ERRORS.push('unknown state ' + p.get('s'));
-  }
-  if (p.has('a1')) document.getElementById('age1').value = +p.get('a1');
-  if (p.has('a2')) document.getElementById('age2').value = +p.get('a2');
+  if (has('s')) $('sel-state').value = c.state;
+  if (has('a1')) $('age1').value = c.ages[0];
+  if (has('a2')) $('age2').value = c.ages[1];
 
-  if (p.has('ss')) {
-    const v = +p.get('ss');
-    document.getElementById('num-ss').value = v;
-    document.getElementById('sl-ss').value  = Math.min(v, +document.getElementById('sl-ss').max);
-    document.getElementById('ss-val').textContent = '$'+v.toLocaleString();
+  if (has('ss')) {
+    const v = c.ssIncome;
+    $('num-ss').value = v;
+    $('sl-ss').value  = Math.min(v, +$('sl-ss').max);
+    $('ss-val').textContent = '$'+v.toLocaleString();
   }
 
   // Income details: every field in the table, and the section opens when a link carries any of them.
   for (const f of DETAIL_FIELDS) {
-    if (!p.has(f.key) || p.get(f.key).trim() === '' || !Number.isFinite(+p.get(f.key))) continue;
-    const v = detailAmount(f, p.get(f.key));
-    document.getElementById(f.id).value = v === 0 ? '' : fmtMoney(v);
-    document.getElementById('details-income').open = true;   // named in the link, so show it, even as 0
+    if (!has(f.key)) continue;
+    const v = c[f.cfg];
+    $(f.id).value = v === 0 ? '' : fmtMoney(v);
+    $('details-income').open = true;   // named in the link, so show it, even as 0
   }
-  if (p.has('rw')) {
-    document.getElementById('chk-retinc-swept').checked = p.get('rw') === '1';
-    document.getElementById('details-income').open = true;
+  if (has('rw')) {
+    $('chk-retinc-swept').checked = c.retirementSwept;
+    $('details-income').open = true;
   }
-  if (p.has('pm') && Number.isFinite(+p.get('pm')) && +p.get('pm') >= 0)
-    document.getElementById('num-prevmagi').value = DisplayHelpers.formatDollar(+p.get('pm'));
-  if (p.has('cs')) {
-    const v = +p.get('cs');
-    document.getElementById('num-cg-sale').value = v;
-    document.getElementById('sl-cg-sale').value  = Math.min(v, 500000);
-    document.getElementById('cg-sale-val').textContent = '$'+v.toLocaleString();
+  if (has('pm') && c.prevMagi !== null) $('num-prevmagi').value = DisplayHelpers.formatDollar(c.prevMagi);
+  if (has('cs')) {
+    const v = c.cgSale;
+    $('num-cg-sale').value = v;
+    $('sl-cg-sale').value  = Math.min(v, 500000);
+    $('cg-sale-val').textContent = '$'+v.toLocaleString();
   }
-  if (p.has('cb')) document.getElementById('sl-cg-basis').value = +p.get('cb');
-  if (p.has('yr')) {
-    document.getElementById('sl-year').value = +p.get('yr');
-    document.getElementById('year-display').textContent = p.get('yr');
+  if (has('cb')) $('sl-cg-basis').value = c.cgBasisPct;
+  if (has('yr')) {
+    $('sl-year').value = c.year;
+    $('year-display').textContent = c.year;
   }
-  if (p.has('in')) {
-    document.getElementById('sl-inf').value = p.get('in');
-    document.getElementById('inf-val').textContent = p.get('in')+'%';
+  if (has('in')) {
+    $('sl-inf').value = c.inflation;
+    $('inf-val').textContent = c.inflation+'%';
   }
   // 'ob' and 'sh' from pre-v2.5 links are intentionally ignored: OBBBA is current law and is
   // always applied, sunsetting by tax year rather than by switch.
-  if (p.has('pi') && p.get('pi').trim() !== '' && Number.isFinite(+p.get('pi'))) LINK_ORDINARY = +p.get('pi');   // may be negative
+  if (L.pin !== null) LINK_ORDINARY = L.pin;   // may be negative
   // The View is total income (vl, vh). Links from before that carried it as ordinary income (zl, zh,
   // zs), so those are shifted by the fixed income the same link supplies.
   if (p.has('vl') && p.has('vh')) {
@@ -2402,7 +2138,7 @@ function loadFromURL() {
   // `az` (AutoZoom) from older links is ignored: there is no AutoZoom.
   if (p.get('ex') === '1') {
     explainOn = true;
-    document.getElementById('btn-explain').classList.add('active');
+    $('btn-explain').classList.add('active');
   }
   updCgBasis();
   syncRangeSlider();
@@ -2413,7 +2149,7 @@ function loadFromURL() {
 <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal-box">
     <div class="modal-hdr">
-      <h2>Income Tax Planner v2.11 — How to Use</h2>
+      <h2>Income Tax Planner v2.12 — How to Use</h2>
       <button class="modal-close" onclick="closeModal()">&#x2715;</button>
     </div>
 
@@ -2424,6 +2160,11 @@ function loadFromURL() {
     <details class="modal-section">
       <summary>Change Log</summary>
       <dl class="modal-kv">
+        <dt>v2.12</dt>
+        <dd><ul>
+          <li>The tax calculation is also a small program, <code>taxcalc.js</code>, so LibreOffice Calc or a script can ask for the tax on its own figures and get the result back in cells, with nothing leaving your computer. The <a href="https://tools.netcitizen.us/UsageGuide.html#calculating-in-libreoffice-calc-or-from-a-script" target="_blank" rel="noopener">URL guide</a> shows how.</li>
+          <li>A link with a filing status other than MFJ or SGL now reports an error instead of quietly using MFJ, and a negative Social Security or sale amount in a link counts as 0.</li>
+        </ul></dd>
         <dt>v2.11</dt>
         <dd><ul>
           <li>A Feedback button sends the author a problem report, a question or an idea. You choose what goes with it, and Show exactly what will be sent prints the whole report before anything leaves your browser.</li>

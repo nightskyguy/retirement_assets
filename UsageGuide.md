@@ -230,16 +230,73 @@ blank when it was not entered. A result can then say what it was a result of.
 You open the link, copy the line, paste it into a cell, and split it into columns (**Data, Text to
 Columns** in Excel; **Data, Split text to columns** in Google Sheets). That works today.
 
-What does not work is a formula that fetches the answer by itself, such as Excel's `WEBSERVICE()` or
-Google Sheets' `IMPORTDATA()`. Those functions read whatever text a web server sends back. This site
-is a set of plain pages with no server behind them, and the planner calculates in your browser after
-the page loads, which `WEBSERVICE()` does not do: it would receive the page's source code and not
-the result. A formula-driven result needs a small hosted calculation service that takes the
-parameters above and answers with the comma-separated line. That has not been built, and it would
-mean your figures travel to that service, which the planner does not do today.
+What does not work against this site is a formula that fetches the answer by itself, such as Excel's
+`WEBSERVICE()` or Google Sheets' `IMPORTDATA()`. Those functions read whatever text a web server
+sends back. This site is a set of plain pages with no server behind them, and the planner calculates
+in your browser after the page loads, which `WEBSERVICE()` does not do: it would receive the page's
+source code and not the result.
+
+LibreOffice Calc can have the answer in cells by itself, with your figures never leaving your
+computer, by using the small program described next.
 
 For scripts that drive a real browser, the page exposes `window.taxResult()`, which returns
 `{ fields, values, csv }` for the current inputs.
+
+## Calculating in LibreOffice Calc, or from a script
+
+`taxcalc.js` is the planner's calculation as a program for [node](https://nodejs.org/), with no other
+installation. It takes the same parameter names as the link and writes the same line as `return`, so
+a link and a command give the same figures. Keep `taxcalc.js`, `taxcalc_core.js`, `taxengine.js` and
+`medicare_costs.js` together in one folder.
+
+```
+node taxcalc.js "st=SGL&s=CA&yr=2026&wg=60000&ss=24000&return=fedTax,stateTax,totalTax"
+```
+
+Besides the link parameters it understands four more:
+
+| Name | Meaning |
+|---|---|
+| `return` | The fields to write, as above: a comma list, `all`, or nothing for the default set |
+| `vary` | `key:value1,value2,...` repeats the request once per value of one key and writes one line each, for example `vary=wg:40000,60000,80000` |
+| `header` | `1` puts the field names on the first line |
+| `v` | The format of the line. This is `1`; any other number is refused. Fields are only ever added at the end of the default line and never renamed, so a sheet reading it by position keeps working |
+
+Dollar amounts and rates are as in the table above. An error is a single line beginning `ERROR:`, and
+on the command line it also exits with status 1.
+
+**A server a cell can call.** `node taxcalc.js --serve` listens on `127.0.0.1` only (port 8765, or the
+number you give) and answers the same parameters. In Calc, with the year in B2, wages in B3 and
+Social Security in B4:
+
+```
+=VALUE(WEBSERVICE("http://127.0.0.1:8765/?st=SGL&s=CA&yr="&B2&"&wg="&B3&"&ss="&B4&"&return=totalTax"))
+```
+
+Asking for one field gives a bare number. Asking for several gives one comma-separated line, which
+`TEXTSPLIT(cell, ",")` spreads across columns. A `vary` request gives one line per value, so
+`TEXTSPLIT(cell, ",", CHAR(10))` fills a block from a single call, which is much cheaper than a
+call per cell. In a locale whose decimal mark is a comma, use `NUMBERVALUE(text, ".")` in place of
+`VALUE()`.
+
+The server answers an error with the `ERROR:` line and a normal status, because Calc shows `#VALUE!`
+for any other status and hides the reason. Calc asks you to approve a document that fetches from an
+address the first time you reopen it; **Tools, Options, LibreOffice Calc, General, Update links when
+opening** controls that.
+
+**A forecast, one row per year.** Put a header row of parameter names (`yr`, `st`, `s`, `wg`, `ss`,
+`pm`, and so on) and one scenario per row, then save the sheet as CSV. A column that is not a
+parameter name, such as a label, is ignored, and a blank cell means the parameter was not given.
+
+```
+node taxcalc.js --csv forecast.csv --out tax.csv return=fedTax,stateTax,irmaa,totalTax
+```
+
+writes `tax.csv` with the field names and one result row for each scenario row, in the same order.
+Open it in Calc, or pull it into the forecast with **Sheet, Link to External Data**. Without `--out`
+the rows are printed. An error names the row it was on.
+
+The server never writes a file and keeps nothing; the program does not send anything anywhere.
 
 ## Before you share a link
 

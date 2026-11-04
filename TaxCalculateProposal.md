@@ -1,7 +1,10 @@
 # Proposal: letting a spreadsheet use the tax calculator
 
-**Status:** a proposal, nothing here is built except what is marked "exists today". Written
-2026-10-02 after the `return` link and the Result row shipped in the Income Tax Planner.
+**Status:** option H is built: `taxcalc_core.js` (the shared calculation), `taxcalc.js` (command line,
+`--csv` batch and `--serve`, with `vary=`, `header=` and `v=1`), documented in the
+[URL guide](UsageGuide.md#calculating-in-libreoffice-calc-or-from-a-script). Options A, B and F are
+still proposals, and C and D stay rejected. Written 2026-10-02 after the `return` link and the Result
+row shipped in the Income Tax Planner.
 
 ## The goal
 

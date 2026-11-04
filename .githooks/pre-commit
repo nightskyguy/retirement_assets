@@ -139,6 +139,14 @@ if ! node .githooks/check-comment-history.js; then
 	exit 1
 fi
 
+# A script or stylesheet that ARCHITECTURE.md does not name, or a table row naming a file that is
+# gone. The map is only useful while it is complete; the header of .githooks/check-architecture.js
+# says what it checks and what it cannot (the dependency graph).
+if ! node .githooks/check-architecture.js; then
+	echo "            Run it directly for the list: node .githooks/check-architecture.js" >&2
+	exit 1
+fi
+
 # Markdown that silently hides the rest of itself. A bare <select> in task_plan.md cost 4,430
 # lines of VS Code preview on 2026-08-28, and a bare <details> cost progress.md ~1,944.
 # GitHub sanitizes the tag away so the files review perfectly; only an unsanitized preview

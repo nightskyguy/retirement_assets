@@ -83,6 +83,7 @@
   .conv-title { font-size:10px; letter-spacing:.12em; text-transform:uppercase; }
   .conv-line { display:flex; justify-content:space-between; align-items:center; gap:.5rem; margin-top:3px; }
   .conv-line > :last-child { white-space:nowrap; }
+  .conv-sub { color:var(--muted); font-size:10px; }
   .conv-btn { background:rgba(25,201,157,.12); border:1px solid rgba(25,201,157,.35); border-radius:5px; color:var(--teal); font-family:var(--mono); font-size:11px; padding:3px 9px; cursor:pointer; white-space:nowrap; }
   .conv-btn:hover { background:rgba(25,201,157,.22); }
   .conv-btn.future { background:rgba(192,132,252,.12); border-color:rgba(192,132,252,.4); color:var(--future); }
@@ -231,8 +232,8 @@
 <script src="../sharepanel.js?v=1118e3"></script>
 <script src="../taxengine.js?v=1119e7"></script>
 <script src="../medicare_costs.js?v=111917"></script>
-<script src="../taxcalc_core.js?v=11d03"></script>
-<script src="../taxengine.tests.js?v=11d03"></script>
+<script src="../taxcalc_core.js?v=11d04"></script>
+<script src="../taxengine.tests.js?v=11d04"></script>
 </head>
 <body>
 <header>
@@ -484,7 +485,7 @@ const TIER_CFG = [
 const cfg = TaxCalc.newConfig();
 const calc = TaxCalc.create(cfg);
 const { indexFactors, deriveIncome, calcAt, grossOf, deriveRow, irmaaTiers, irmaaAt, resultFor,
-        bracketRoom, irmaaRoom, conversionTax, withdrawalForTax } = calc;
+        bracketRoom, irmaaRoom, conversionTax, conversionCost, nextConversionStep, withdrawalForTax } = calc;
 
 // IRMAA is charged from the MAGI of two years back, so the tax year's own MAGI decides the premium
 // two years out. Both clocks are modeled: the charge in force THIS year comes from the MAGI entered
@@ -1011,17 +1012,25 @@ function setAutoTax(on) {
 function renderConversion() {
   const box = document.getElementById('conv-box');
   const money = v => '$' + Math.round(v).toLocaleString();
-  const line = (label, r, cls) => r.room >= 1
-    ? `<div class="conv-line"><span>${label}</span><button type="button" class="conv-btn ${cls}" onclick="addConversion(${r.room})">+${money(r.room)}</button></div>`
-    : `<div class="conv-line"><span>${label}</span><span>at the limit</span></div>`;
-  const b = bracketRoom(), m = irmaaRoom();
+  // One button: the nearest line ahead, the top of the federal bracket or the foot of an IRMAA tier,
+  // with what converting up to it adds in tax. Clear and start again to go back.
+  const step = nextConversionStep();
   const rows = [];
-  if (b) rows.push(line(`Room in the ${Math.round(b.rate * 100)}% federal bracket`, b, ''));
-  if (m) rows.push(line(`Room under IRMAA Tier ${m.tier} (${cfg.year + IRMAA_AHEAD})` +
-    infoIcon(`Medicare charges IRMAA from the income of two years back, so this conversion sets the ${cfg.year + IRMAA_AHEAD} surcharge. One dollar over this line adds ${money(m.cliff)} a year.`), m, 'future'));
+  if (step) {
+    const yr = cfg.year + IRMAA_AHEAD;
+    const label = step.kind === 'bracket'
+      ? `Up to the top of the ${Math.round(step.rate * 100)}% federal bracket`
+      : `Up to IRMAA Tier ${step.tier} (${yr})` +
+        infoIcon(`Medicare charges IRMAA from the income of two years back, so this conversion sets the ${yr} surcharge. One dollar over this line adds ${money(step.cliff)} a year.`);
+    const sub = `adds ${money(step.tax)} tax (${(step.tax / step.room * 100).toFixed(0)}% of it)` +
+      (step.irmaaReached ? `; reaches IRMAA Tier ${step.irmaaReached.to}, +${money(step.irmaaReached.adds)} a year` : '');
+    rows.push(`<div class="conv-line"><span>${label}<br><span class="conv-sub">${sub}</span></span>` +
+      `<button type="button" class="conv-btn ${step.kind === 'irmaa' ? 'future' : ''}" onclick="addConversion(${step.room})">+${money(step.room)}</button></div>`);
+  }
   if (cfg.rothConv > 0) {
-    const t = conversionTax();
-    rows.push(`<div class="conv-line"><span>Converting ${money(cfg.rothConv)}: tax ${money(t)} (${(t / cfg.rothConv * 100).toFixed(0)}% of it)</span>` +
+    const c = conversionCost();
+    rows.push(`<div class="conv-line"><span>Converting ${money(cfg.rothConv)} adds ${money(c.own)} tax (${(c.own / cfg.rothConv * 100).toFixed(0)}% of it)` +
+      (cfg.autoTax && c.withdrawal >= 1 ? `<br><span class="conv-sub">paying it from the IRA adds ${money(c.withdrawal)} more</span>` : '') + `</span>` +
       `<button type="button" class="conv-btn" onclick="addConversion(-cfg.rothConv)">Clear</button></div>`);
   }
   const g = withdrawalForTax(), pay = [];
@@ -1044,7 +1053,7 @@ function renderConversion() {
     }
   }
   box.innerHTML = (rows.length
-    ? `<div class="conv-title">Roth conversion room${infoIcon('Click an amount to add it to the Roth conversion, which fills your income up to that line. The tax shown is the federal and state income tax the conversion adds. Use Open in Tax Planner to plan the withholding.')}</div>` + rows.join('')
+    ? `<div class="conv-title">Roth conversion room${infoIcon('Click the amount to add it to the Roth conversion, which fills your income up to the nearest line: the top of your federal bracket or the foot of the next IRMAA tier. Click again for the line after that; Clear starts over. The tax shown is the federal and state income tax that part of the conversion adds, before any IRA withdrawal that pays it. Use Open in Tax Planner to plan the withholding.')}</div>` + rows.join('')
     : '') +
     (pay.length ? `<div class="conv-title" style="margin-top:.5rem">Pay taxes from IRA</div>` + pay.join('') : '');
 }
@@ -1412,10 +1421,10 @@ const IRMAA_FUTURE_TIP = 'Medicare charges IRMAA from your MAGI of two years ear
 
 // The Medicare (IRMAA) block of the info panel: the tier this MAGI will fall in two years out, what
 // it costs then, and how far the next tier is, all in that year's indexed dollars.
-function irmaaPanelRows(magi) {
+function irmaaPanelRows(d) {
   const $v = fmtMoney;
   const y  = cfg.year + IRMAA_AHEAD;
-  const ir = irmaaAt(magi);
+  const magi = d.magi, ir = irmaaAt(magi);
   const row = (l, v) => `<div class="info-row future"><span class="ir-lbl">${l}</span><span class="ir-val">${v}</span></div>`;
   const rows = [row(`${y} IRMAA ${ir.tier ? 'Tier ' + ir.tier : 'none'}`, ir.tier ? `${$v(ir.annual)}/yr` : '')];
   if (ir.next) {
@@ -1423,6 +1432,19 @@ function irmaaPanelRows(magi) {
     rows.push(row('Crossing it adds', `+${$v(ir.next.cliff)}/yr, to ${$v(ir.annual + ir.next.cliff)}/yr`));
   } else {
     rows.push(row('Top tier', 'no higher tier'));
+  }
+  // NIIT is this year's tax and rises by degrees, so it is a line of information, not a place to stop.
+  // It needs investment income to charge, and counts AGI, which is not the IRMAA MAGI.
+  const nii = cfg.ltNet + cfg.qdiv + cfg.interest + cfg.ndiv;
+  if (nii > 0) {
+    const thr = TAXData.FEDERAL.NIIT[cfg.status], cap = TAXData.FEDERAL.NIIT.rate * nii;
+    const now = (l, v) => `<div class="info-row"><span class="ir-lbl">${l}</span><span class="ir-val">${v}</span></div>`;
+    if (d.fedAGI < thr) {
+      rows.push(now('NIIT starts at MAGI', $v(thr)));
+      rows.push(now('Crossing it adds', `3.8% of the excess, up to ${$v(cap)}`));
+    } else {
+      rows.push(now('NIIT in effect', `${$v(d.niit)} of up to ${$v(cap)}`));
+    }
   }
   return rows.join('');
 }
@@ -1464,7 +1486,7 @@ function updateInfoPanel(d) {
         <div class="info-row"><span class="ir-lbl">State deduction</span><span class="ir-val">${$v(d.stDed)}</span></div>
         ${d.senDed > 0 ? `<div class="info-row"><span class="ir-lbl">Senior ded. (OBBBA)</span><span class="ir-val">${$v(d.senDed)}</span></div>` : ''}
         <div class="info-divider"></div>
-        ${irmaaPanelRows(d.magi)}
+        ${irmaaPanelRows(d)}
       </div>
       <div>
         <div class="info-col-title">Tax Dollars&ensp;<span style="font-size:9px;color:var(--muted)">(% of Fed income)</span></div>
@@ -2283,7 +2305,7 @@ function loadFromURL() {
         <dd><ul>
           <li>New Required minimum distribution entry, apart from other withdrawals, and a Total IRA and 401k distributions line under the entries. Open in Tax Planner sends the RMD as IRA 1's RMD. On a joint return the Tax Payment Planner says the IRA figures arrive as IRA 1.</li>
           <li>New IRA withdrawal to pay the tax entry. Pay taxes from IRA works out the withdrawal that covers your federal and state income tax, including the tax on the withdrawal itself, and one click sets it. Tick Pay taxes from IRA and the withdrawal follows the tax as you change anything else, and Roth conversion room counts it, so converting the room never takes you past the line it names. Open in Tax Planner carries it over with your other IRA withdrawals.</li>
-          <li>New Roth conversion entry under Income details. Under it, Roth conversion room shows how much more you can convert before the next federal bracket and before the next Medicare (IRMAA) surcharge tier. Click an amount to convert that much, and the room recomputes. The tax the conversion adds is shown, and Open in Tax Planner carries the conversion over to plan the withholding.</li>
+          <li>New Roth conversion entry under Income details. Under it, Roth conversion room offers one button: the amount that fills your income up to the nearest line ahead, the top of your federal bracket or the foot of the next Medicare (IRMAA) surcharge tier, with the tax it adds and any IRMAA tier it reaches. Click again for the next line; Clear starts over. The info panel now says where the 3.8% investment income surtax (NIIT) starts and what it can add. Open in Tax Planner carries the conversion over to plan the withholding.</li>
         </ul></dd>
         <dt>v2.12</dt>
         <dd><ul>
@@ -2353,7 +2375,7 @@ function loadFromURL() {
         <li><strong>Interest and tax-exempt interest.</strong> <strong>Municipal bond interest</strong> is entered on its own row, not in Interest. It is not in your income tax, but it counts toward MAGI, so it moves the IRMAA tiers, and toward how much Social Security is taxed. Two rows are indented as <em>of which</em>: <strong>US Treasury</strong>, under Interest, is the part of Interest that is exempt from state tax, and <strong>your state taxes</strong>, under municipal bond interest, is the part your state taxes anyway (usually out-of-state bonds). An <em>of which</em> amount cannot exceed the row above it, and the page says so. For a fund, enter only the part its year-end statement attributes to US obligations or to your state.</li>
         <li><strong>IRA withdrawal to pay the tax</strong> is an extra withdrawal taxed as ordinary income. The <strong>Pay taxes from IRA</strong> section (below Roth conversion room) shows the withdrawal that covers the year's income tax: the tax now, plus the tax the withdrawal itself adds, plus the tax on that. Click Set to enter it, or tick <strong>Pay taxes from IRA</strong> to keep it current as you change other entries. With that on, the room figures count the withdrawal, so click a room amount in any order. Typing your own withdrawal turns it off. IRMAA is not included, because Medicare bills it separately.</li>
         <li><strong>RMD, other withdrawals, Roth conversion and the tax withdrawal</strong> are all IRA money, taxed the same way as ordinary income. What makes a withdrawal a conversion is moving it into a Roth within 60 days. So the most you can convert is the <strong>Total IRA and 401k distributions</strong> less the RMD, which must be taken first and cannot be converted. If tax is withheld from a conversion, the part withheld does not reach the Roth unless you add that much from other money; if you do, it counts as converted.</li>
-        <li><strong>Roth conversion</strong> is taxed as ordinary income and counts toward MAGI. Under Income details, <strong>Roth conversion room</strong> lists how much more fits in your current federal bracket and under the next IRMAA tier. Click an amount to add it to the conversion; click again to keep climbing. <strong>Open in Tax Planner</strong> then carries the conversion over so you can plan the IRA withholding for the year's taxes.</li>
+        <li><strong>Roth conversion</strong> is taxed as ordinary income and counts toward MAGI. Under Income details, <strong>Roth conversion room</strong> offers one button naming the nearest line ahead: the top of your current federal bracket, or the foot of the next IRMAA tier. It shows the amount, the tax that part of the conversion adds, and any IRMAA tier it reaches. Click it to add that amount, then click again to keep climbing; <strong>Clear</strong> starts over. <strong>Open in Tax Planner</strong> then carries the conversion over so you can plan the IRA withholding for the year's taxes.</li>
         <li><strong>Untaxed</strong> is money that came in without tax, such as a Roth withdrawal or cash from savings. It is part of Gross income and Net income so you see the whole picture, and it changes no tax, no IRMAA and no Social Security taxation.</li>
         <li><strong>Property and local taxes</strong> are real estate and local taxes only. State income tax is computed for you and added to them for the SALT deduction.</li>
         <li><strong>Social Security</strong> is one combined amount for everyone on the return, because how much of it is taxed depends on all of your income together.</li>

@@ -224,8 +224,8 @@ Dollar amounts are for the whole year, in the dollars of `yr`, rounded to cents.
 | `irmaaFuture` | The IRMAA this income will cause two years from `yr` |
 | `irmaaFutureTier` | Its tier, 0 to 5 |
 | `bracketRoom` | Roth conversion room: how much more ordinary income fits before the federal bracket rises. Blank in the top bracket. |
-| `irmaaRoom` | Roth conversion room: how much more fits before MAGI reaches the next IRMAA tier (the tier it sets two years from `yr`). Blank in the top tier. |
-| `conversionTax` | The federal and state income tax the Roth conversion `rc` adds (0 when `rc` is not given) |
+| `irmaaRoom` | Roth conversion room: how much more fits before MAGI reaches the next IRMAA tier (the tier it sets two years from `yr`). Sitting right under a tier line, it gives the room to the tier after. Blank in the top tier. |
+| `conversionTax` | The federal and state income tax the Roth conversion `rc` itself adds, before any IRA withdrawal that pays it (0 when `rc` is not given) |
 | `withdrawalForTax` | The IRA withdrawal that pays the year's federal and state income tax, tax on the withdrawal itself included: the tax now, plus the tax that withdrawing it adds, plus the tax on that. Worked out from the income without `rt`, so it does not change when `rt` is set. Put it in `rt` to see the result. |
 | `iraTotal` | Everything taken from IRAs and 401ks: `rd` + `ri` + `rc` + `rt`. The most that can be converted is this less `rd`, which must be taken first |
 

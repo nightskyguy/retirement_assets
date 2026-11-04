@@ -335,20 +335,62 @@
     }
 
     // Room before MAGI reaches the next IRMAA tier (the tier this year's MAGI sets IRMAA_AHEAD years
-    // out). null in the top tier, which has a floor and no ceiling. room is 0 on the edge.
+    // out). null in the top tier, which has a floor and no ceiling. Sitting on the edge already, it
+    // offers the tier above, like bracketRoom.
     function irmaaRoom() {
-      const next = irmaaAt(rowAfter(0).magi).next;
-      if (!next) return null;
-      const end = lastExtraBefore(0, r => r.magi >= next.at);
-      if (end === null) return null;
-      return { tier: next.n, cliff: next.cliff, room: Math.max(0, Math.floor(end)) };
+      let from = 0;
+      for (let k = 0; k < 2; k++) {
+        const next = irmaaAt(rowAfter(from).magi).next;
+        if (!next) return null;
+        const end = lastExtraBefore(from, r => r.magi >= next.at);
+        if (end === null) return null;
+        if (end >= 1) return { tier: next.n, cliff: next.cliff, room: Math.floor(end) };
+        from = end + 1;
+      }
+      return null;
     }
 
-    // The income tax the conversion adds: the same year with and without it, federal and state. With
-    // autoTax the tax paid by the extra withdrawal is part of it.
-    function conversionTax() {
-      const tax = r => r.fedTax + r.fedCGTax + r.niit + r.stTaxOrd + r.stTaxCG;
-      return tax(rowAfter(0)) - tax(rowAfter(-cfg.rothConv));
+    const incomeTaxOf = r => r.fedTax + r.fedCGTax + r.niit + r.stTaxOrd + r.stTaxCG;
+
+    // The income tax at `extra` more conversion than is entered, with the tax withdrawal left out, so a
+    // difference of two of these is the tax on the conversion dollars themselves.
+    function ownTaxAfter(extra) {
+      const keep = { rc: cfg.rothConv, tw: cfg.taxWithdrawal, ent: cfg.entOrdinary };
+      try {
+        cfg.rothConv += extra;
+        cfg.entOrdinary += extra - cfg.taxWithdrawal;
+        cfg.taxWithdrawal = 0;
+        return incomeTaxOf(calcAt(cfg.entOrdinary));
+      } finally {
+        cfg.rothConv = keep.rc; cfg.taxWithdrawal = keep.tw; cfg.entOrdinary = keep.ent;
+      }
+    }
+
+    // The income tax the conversion itself adds, federal and state: the same year with and without it.
+    // The IRA withdrawal that pays the tax is left out of both.
+    function conversionTax() { return ownTaxAfter(0) - ownTaxAfter(-cfg.rothConv); }
+
+    // The tax the conversion adds, and with autoTax the further tax on the extra IRA withdrawal that
+    // pays it: { own, withdrawal, total }.
+    function conversionCost() {
+      const own = conversionTax();
+      const total = incomeTaxOf(rowAfter(0)) - incomeTaxOf(rowAfter(-cfg.rothConv));
+      return { own, withdrawal: total - own, total };
+    }
+
+    // The nearest line ahead, as one step: the top of the federal bracket or the foot of the next IRMAA
+    // tier, whichever is closer. `tax` is the income tax the step's conversion adds. null when neither
+    // has a ceiling. { kind:'bracket', rate, room, tax, irmaaReached } or { kind:'irmaa', tier, cliff, room,
+    // tax, irmaaReached }. irmaaReached is null, or { to, adds }: the step lifts MAGI into IRMAA tier `to`,
+    // adding `adds` a year.
+    function nextConversionStep() {
+      const b = bracketRoom(), m = irmaaRoom();
+      const pick = b && m ? (m.room < b.room ? { kind: 'irmaa', ...m } : { kind: 'bracket', ...b })
+                 : b ? { kind: 'bracket', ...b } : m ? { kind: 'irmaa', ...m } : null;
+      if (!pick) return null;
+      const was = irmaaAt(rowAfter(0).magi), now = irmaaAt(rowAfter(pick.room).magi);
+      return { ...pick, tax: ownTaxAfter(pick.room) - ownTaxAfter(0),
+               irmaaReached: now.tier > was.tier ? { to: now.tier, adds: now.annual - was.annual } : null };
     }
 
     // The IRA withdrawal that pays the year's income tax, tax on the withdrawal included: the W with
@@ -412,7 +454,8 @@
     }
 
     return { cfg, indexFactors, deriveIncome, calcAt, grossOf, deriveRow, irmaaTiers, irmaaAt,
-             resultFor, buildResult, bracketRoom, irmaaRoom, conversionTax, withdrawalForTax };
+             resultFor, buildResult, bracketRoom, irmaaRoom, conversionTax, conversionCost, nextConversionStep,
+             withdrawalForTax };
   }
 
   // ─── THE RESULT LINE ───────────────────────────────────────────────────────

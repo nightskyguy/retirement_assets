@@ -1674,6 +1674,24 @@ test('taxcalc_core: the IRA withdrawal that pays the tax includes the tax on the
 	assertEqual(_row('st=MFJ&s=TX&return=withdrawalForTax').withdrawalForTax, '0', 'no tax needs no withdrawal');
 });
 
+test('taxcalc_core: the conversion tax is its own, and the next step names the nearest line and the IRMAA tier it reaches', () => {
+	const C = _core(); if (!C) return;
+	const L = 'st=MFJ&s=CA&yr=2026&a1=66&a2=66&ss=29400&cs=99100&cb=0&it=2000&nd=1900&ri=14810&rd=9500&qd=18800&rc=26147';
+	const calcFor = q => { const p = new URLSearchParams(q); return C.run(k => p.get(k)).calc; };
+	const off = calcFor(L), on = calcFor(L + '&ra=1');
+	const alone = calcFor(L.replace('&rc=26147', '&rc=0'));
+	const tax = c => { const d = c.resultFor(c.cfg.entOrdinary).d; return d.fedTax + d.fedCGTax + d.niit + d.stTaxOrd + d.stTaxCG; };
+	assertEqual(Math.abs(off.conversionTax() - (tax(off) - tax(alone))) < 0.01, true, 'with no withdrawal it is the tax with the conversion less the tax without');
+	assertEqual(Math.abs(on.conversionTax() - off.conversionTax()) < 0.01, true, 'and the automatic withdrawal that pays it does not change it');
+	const cost = on.conversionCost();
+	assertEqual(cost.withdrawal > 0 && Math.abs(cost.own + cost.withdrawal - cost.total) < 0.01, true, 'the tax on the extra withdrawal is shown apart, and the two make the total');
+	const step = on.nextConversionStep();
+	assertEqual(step.kind, 'bracket', 'the 12% bracket top is nearer than the IRMAA tier above the one it sits at');
+	assertEqual(step.irmaaReached.to, 1, 'and getting there reaches IRMAA tier 1');
+	assertEqual(step.tax > 0 && step.tax < step.room, true, 'with a tax that is part of the amount');
+	assertEqual(on.irmaaRoom().tier, 2, 'sitting right under tier 1, the IRMAA room is the one to tier 2');
+});
+
 test('taxcalc_core: the RMD (rd) is ordinary income, and iraTotal adds the RMD, withdrawals, conversion and tax withdrawal', () => {
 	const C = _core(); if (!C) return;
 	const L = 'st=MFJ&s=TX&yr=2026&a1=75&a2=75&ss=30000';

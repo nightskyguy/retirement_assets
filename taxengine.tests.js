@@ -1659,6 +1659,21 @@ test('taxcalc_core: a Roth conversion (rc) is ordinary income, the room fills to
 	assertEqual(marked.csv, 'inputs,st,calculated,ordinary\n,MFJ,,10000', 'the markers are blank columns carrying their names');
 });
 
+test('taxcalc_core: the IRA withdrawal that pays the tax includes the tax on the withdrawal itself, and asking again changes nothing', () => {
+	const C = _core(); if (!C) return;
+	const L = 'st=MFJ&s=CA&yr=2026&a1=67&a2=67&wg=60000&ri=40000&ss=40000';
+	const base = _row(L + '&return=incomeTax,withdrawalForTax');
+	const W = +base.withdrawalForTax, T0 = +base.incomeTax;
+	assertEqual(W > T0, true, 'it is more than the tax now, because the withdrawal is taxed too');
+	// Taking exactly W leaves the tax covered, and by no more than a dollar (W is rounded up to a dollar).
+	const at = _row(L + '&rt=' + W + '&return=incomeTax,withdrawalForTax,rt,ordinary');
+	assertEqual(+at.incomeTax <= W && W - +at.incomeTax < 1, true, 'W covers the tax with the withdrawal in it, to within a dollar');
+	assertEqual(+at.ordinary, +_row(L + '&return=ordinary').ordinary + W, 'rt is ordinary income');
+	assertEqual(+at.withdrawalForTax, W, 'asking again with rt set gives the same answer');
+	assertEqual(+_row(L + '&rt=' + (W - 2) + '&return=incomeTax').incomeTax > W - 2, true, 'a withdrawal two dollars short does not cover it');
+	assertEqual(_row('st=MFJ&s=TX&return=withdrawalForTax').withdrawalForTax, '0', 'no tax needs no withdrawal');
+});
+
 test('taxcalc_core: the pieces add up (fed + state + IRMAA = total; gross - total = net), and `pi` pins the ordinary income', () => {
 	const C = _core(); if (!C) return;
 	const r = _row('st=SGL&s=CA&wg=90000&it=3000&qd=2000&ss=20000&cs=50000&cb=40&pm=500000&return=all');

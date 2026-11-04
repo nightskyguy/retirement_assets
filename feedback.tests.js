@@ -382,7 +382,7 @@ const PLANNER_PAGES = {
     },
     withheld: {
       ages: ['a1', 'a2'],
-      amounts: ['ss', 'cs', 'cb', 'pm', 'wg', 'it', 'sg', 'ri', 'rc', 'ot', 'un'],
+      amounts: ['ss', 'cs', 'cb', 'pm', 'wg', 'it', 'sg', 'ri', 'rc', 'rt', 'ot', 'un'],
     },
     tool: 'Income Tax Planner',
   },

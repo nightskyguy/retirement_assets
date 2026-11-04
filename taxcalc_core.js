@@ -40,6 +40,7 @@
     { key:'sg', cfg:'stcg',             neg:true  },
     { key:'ri', cfg:'retirementIncome', neg:false },
     { key:'rc', cfg:'rothConv',         neg:false },
+    { key:'rt', cfg:'taxWithdrawal',    neg:false },
     { key:'ot', cfg:'other',            neg:true  },
     { key:'qd', cfg:'qdiv',             neg:false },
     { key:'mu', cfg:'muni',             neg:false },
@@ -60,6 +61,7 @@
       ssIncome:0, propTax:0,
       retirementIncome:0, retirementSwept:false,
       rothConv:0,                  // Roth conversion: ordinary income, and retirement income for the states that exempt it
+      taxWithdrawal:0,             // IRA withdrawal taken to pay the tax: the same kind of income as a Roth conversion
       wages:0, interest:0, ndiv:0, stcg:0, other:0, qdiv:0,
       muni:0, usInt:0, stMuni:0,   // tax-exempt interest, its state-exempt Treasury part, and the part a state taxes
       untaxed:0,                   // money that came in untaxed (Roth, cash): in gross income, in no tax
@@ -156,7 +158,7 @@
       // Each is a part of another entry, so it cannot be larger than that entry.
       cfg.usIntEff  = Math.min(cfg.usInt, cfg.interest);
       cfg.stMuniEff = Math.min(cfg.stMuni, cfg.muni);
-      cfg.entOrdinary = cfg.wages + cfg.interest + cfg.ndiv + cfg.retirementIncome + cfg.rothConv + cfg.other + net.ordinary;
+      cfg.entOrdinary = cfg.wages + cfg.interest + cfg.ndiv + cfg.retirementIncome + cfg.rothConv + cfg.taxWithdrawal + cfg.other + net.ordinary;
     }
 
     // Maps cfg to calculateTaxes() params and reshapes the result.
@@ -172,7 +174,7 @@
       // Retirement part of the ordinary income, for the states that exempt it: what was entered, plus
       // (when asked) everything swept above what was entered. Never more than the ordinary income there is.
       const extraRet = cfg.retirementSwept ? Math.max(0, ordInc - cfg.entOrdinary) : 0;
-      const retInc = Math.max(0, Math.min(ordInc, cfg.retirementIncome + cfg.rothConv + extraRet));
+      const retInc = Math.max(0, Math.min(ordInc, cfg.retirementIncome + cfg.rothConv + cfg.taxWithdrawal + extraRet));
 
       const r = calcTaxes({
         filingStatus:    status,
@@ -321,6 +323,36 @@
       return withIt - without;
     }
 
+    // The IRA withdrawal that pays the year's income tax, tax on the withdrawal included: the W with
+    // W = tax(income without the withdrawal field, plus W). Each dollar withdrawn is itself taxed, so
+    // W is the tax now plus the tax the withdrawal adds, and that added tax is taxed too. The marginal
+    // rate is below 100%, so feeding the tax back in as the next withdrawal converges, and rounding W
+    // UP to a dollar leaves the tax covered. Income tax only (federal, capital gains, NIIT, state):
+    // IRMAA is a Medicare premium billed separately. Computed from the income WITHOUT the current
+    // taxWithdrawal, so asking again gives the same answer however much is already entered.
+    //   { withdrawal, tax, taxBefore, extraTax, taxNow }   taxNow is the tax at the withdrawal entered.
+    function withdrawalForTax() {
+      const tax = r => r.fedTax + r.fedCGTax + r.niit + r.stTaxOrd + r.stTaxCG;
+      const keepW = cfg.taxWithdrawal, keepEnt = cfg.entOrdinary, base = keepEnt - keepW;
+      const taxWith = w => {            // the tax with a withdrawal of w taken
+        cfg.taxWithdrawal = w; cfg.entOrdinary = base + w;
+        return tax(calcAt(base + w));
+      };
+      const taxNow = tax(calcAt(keepEnt));
+      const taxBefore = taxWith(0);
+      let w = taxBefore;
+      for (let i = 0; i < 200; i++) {
+        const next = taxWith(w);
+        const done = Math.abs(next - w) < 0.005;
+        w = next;
+        if (done) break;
+      }
+      const withdrawal = Math.ceil(w - 1e-9);
+      const taxAt = taxWith(withdrawal);
+      cfg.taxWithdrawal = keepW; cfg.entOrdinary = keepEnt;      // the caller's inputs are untouched
+      return { withdrawal, tax: taxAt, taxBefore, extraTax: taxAt - taxBefore, taxNow };
+    }
+
     // The result at one ordinary income. The marginal rates are measured over a $1,000 step.
     function resultFor(P) {
       const h = 1000;
@@ -340,6 +372,7 @@
       const c = resultFor(P ?? cfg.entOrdinary);
       c.grossOf = grossOf;
       c.bracketRoom = bracketRoom; c.irmaaRoom = irmaaRoom; c.conversionTax = conversionTax;
+      c.withdrawalForTax = withdrawalForTax;
       const values = spec.names.map(n => {
         const v = all[n](c);
         if (typeof v === 'string') return v;     // filing status, state, or a blank
@@ -350,7 +383,7 @@
     }
 
     return { cfg, indexFactors, deriveIncome, calcAt, grossOf, deriveRow, irmaaTiers, irmaaAt,
-             resultFor, buildResult, bracketRoom, irmaaRoom, conversionTax };
+             resultFor, buildResult, bracketRoom, irmaaRoom, conversionTax, withdrawalForTax };
   }
 
   // ─── THE RESULT LINE ───────────────────────────────────────────────────────
@@ -391,6 +424,7 @@
     bracketRoom:     c => c.bracketRoom()?.room ?? '',
     irmaaRoom:       c => c.irmaaRoom()?.room ?? '',
     conversionTax:   c => c.conversionTax(),
+    withdrawalForTax: c => c.withdrawalForTax().withdrawal,
   };
 
   // Two names that carry no value: a blank column labelled `inputs` or `calculated`, so a line that

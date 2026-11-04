@@ -52,6 +52,7 @@ opens that section, even when the value is 0. The section is otherwise folded.
 | `nd` | Non-qualified dividends | No |
 | `sg` | Short-term capital gains | Yes. A loss is netted against the long-term gain first. A net capital loss offsets only $3,000 of income a year, and the rest is ignored as a carryforward. |
 | `ri` | IRA, 401k or pension withdrawals | No |
+| `rc` | Roth conversion. Taxed as ordinary income, and counted as retirement income in the states that exempt it | No |
 | `rw` | Set to `1` to treat income swept above what you entered as IRA or 401k money | Only matters in states that exempt retirement income |
 | `ot` | Other ordinary income | Yes |
 | `mu` | Municipal bond interest (tax-exempt interest), entered separately from `it` | No. Not in income tax, but counted in MAGI (IRMAA), in how much Social Security is taxable and in the SALT phase-out. |
@@ -60,7 +61,7 @@ opens that section, even when the value is 0. The section is otherwise folded.
 | `un` | Untaxed income, such as a Roth withdrawal or cash | No. Counts in Gross income and Net income only. |
 | `pt` | Property and local taxes, for the SALT deduction | No. Enter real estate and local taxes only: state income tax is computed for you. |
 
-`wg`, `it`, `nd`, `sg`, `ri` and `ot` add up to the **ordinary income entered**. The chart marks it
+`wg`, `it`, `nd`, `sg`, `ri`, `rc` and `ot` add up to the **ordinary income entered**. The chart marks it
 with a teal line, the Ordinary slider shows it, and it is the income a `return` link calculates at.
 
 ### Medicare
@@ -163,8 +164,7 @@ ordinary,fedIncome,grossIncome,agi,magi,fedTax,stateTax,irmaa,irmaaFuture,totalT
 
 The same result is on the page without a link: under the details panel at the bottom of the chart, the
 **Result for a spreadsheet** row has two buttons that copy it for the ordinary income on the chart. **Copy** puts the
-default fields on the clipboard with their names on a first line. **Copy all fields** adds every other result and the inputs
-the result was calculated from. Both carry names because the set of fields may change over time, and a
+default fields on the clipboard with their names on a first line. **Copy all fields** gives the inputs the result was calculated from, then every calculated field. Both carry names because the set of fields may change over time, and a
 bare line of numbers would not say which is which.
 
 **Which income it calculates at.** The ordinary income entered under Income details (`wg` + `it` +
@@ -173,8 +173,9 @@ at a different ordinary income: the page changes Other ordinary income (`ot`) by
 for the entries to add up to `pi`, so the inputs listed by `return=all` show that `ot`.
 
 **Which fields.** `return` by itself (or `return=1`) gives the default set shown above. `return=all`
-gives every result field and then every input it was calculated from. A comma list picks exactly the
-ones you want, in the order you give, and can mix results with inputs:
+gives every input, then every calculated field, each family after a blank column named `inputs` or
+`calculated` (use those two names in a list of your own to mark the same split). A comma list picks
+exactly the ones you want, in the order you give, and can mix results with inputs:
 
 ```
 ?st=SGL&s=CA&wg=60000&return=fedTax,stateTax,totalTax
@@ -219,9 +220,15 @@ Dollar amounts are for the whole year, in the dollars of `yr`, rounded to cents.
 | `cgRate` | Federal capital-gains rate, including NIIT when it applies |
 | `irmaaFuture` | The IRMAA this income will cause two years from `yr` |
 | `irmaaFutureTier` | Its tier, 0 to 5 |
+| `bracketRoom` | Roth conversion room: how much more ordinary income fits before the federal bracket rises. Blank in the top bracket. |
+| `irmaaRoom` | Roth conversion room: how much more fits before MAGI reaches the next IRMAA tier (the tier it sets two years from `yr`). Blank in the top tier. |
+| `conversionTax` | The federal and state income tax the Roth conversion `rc` adds (0 when `rc` is not given) |
+
+**Marker fields.** `inputs` and `calculated` hold no value. Each is a blank column carrying its name, so a
+line that mixes the two families shows where one ends and the other starts.
 
 **Input fields.** `return=all`, and any comma list, can also name the inputs, spelled as in the link:
-`st`, `s`, `a1`, `a2`, `yr`, `in`, `ss`, `cs`, `cb`, `pm`, `wg`, `it`, `nd`, `sg`, `ri`, `ot`, `qd`, `mu`,
+`st`, `s`, `a1`, `a2`, `yr`, `in`, `ss`, `cs`, `cb`, `pm`, `wg`, `it`, `nd`, `sg`, `ri`, `rc`, `ot`, `qd`, `mu`,
 `ui`, `sm`, `pt` and `rw`. `st` and `s` come back as text (`SGL`, `TX`). `a2` is blank for a single filer and `pm` is
 blank when it was not entered. A result can then say what it was a result of.
 

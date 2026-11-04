@@ -25,7 +25,7 @@
 <!-- The Send feedback dialog. NOT deferred: it records page errors from here on, so it has to load
      before the scripts below. It builds nothing until FeedbackWidget.open(). -->
 <script src="../feedback.js?v=11195c"></script>
-<title>Income Tax Planner · 2026+ · v2.11</title>
+<title>Income Tax Planner · 2026+ · v2.12</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
   // Global Chart.js tooltip defaults, set once so the chart config only says what differs.
@@ -78,6 +78,13 @@
   .age-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px; }
   .age-grid.single { grid-template-columns:1fr; }
   .year-big { font-family:var(--mono); font-size:20px; font-weight:500; color:var(--teal); text-align:center; margin-bottom:.4rem; letter-spacing:.06em; }
+  .conv-box { margin-top:.6rem; font-family:var(--mono); font-size:11px; color:var(--muted); line-height:1.7; }
+  .conv-box:empty { display:none; }
+  .conv-title { font-size:10px; letter-spacing:.12em; text-transform:uppercase; }
+  .conv-line { display:flex; justify-content:space-between; align-items:center; gap:.5rem; margin-top:3px; }
+  .conv-btn { background:rgba(25,201,157,.12); border:1px solid rgba(25,201,157,.35); border-radius:5px; color:var(--teal); font-family:var(--mono); font-size:11px; padding:3px 9px; cursor:pointer; white-space:nowrap; }
+  .conv-btn:hover { background:rgba(25,201,157,.22); }
+  .conv-btn.future { background:rgba(192,132,252,.12); border-color:rgba(192,132,252,.4); color:var(--future); }
   .summary { font-family:var(--mono); font-size:11px; color:var(--muted); line-height:1.9; }
   .summary strong { color:var(--text); }
   .hi-teal { color:var(--teal); } .hi-amber { color:var(--amber); } .hi-red { color:var(--red); } .hi-future, .hi-future strong { color:var(--future); }
@@ -227,7 +234,7 @@
 </head>
 <body>
 <header>
-  <h1>Income Tax Planner<span class="ver">v2.11</span></h1>
+  <h1>Income Tax Planner<span class="ver">v2.12</span></h1>
   <p>Federal + State · Capital Gains · IRMAA · SS torpedo · <span id="hdr-years">2026–2035</span> with inflation</p>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center;position:relative">
     <strong id="testsFailed" title="Unit tests status">🟢</strong>
@@ -302,6 +309,7 @@
       <div class="det-row"><label for="num-ndiv">Non-qualified dividends</label><input type="text" id="num-ndiv" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
       <div class="det-row"><label for="num-stcg">Short-term capital gains<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">A short-term loss (negative) is netted against your long-term gain. A net capital loss offsets ordinary income by $3,000 a year at most; the rest carries forward and is ignored here.</span></span></label><input type="text" id="num-stcg" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
       <div class="det-row"><label for="num-retinc">IRA, 401k or pension withdrawals</label><input type="text" id="num-retinc" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <div class="det-row"><label for="num-roth">Roth conversion<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Money moved from a traditional IRA or 401k to a Roth. It is taxed as ordinary income, like a withdrawal, but you keep it. The Roth conversion room below shows how much more you can convert before the next tax bracket or Medicare surcharge tier.</span></span></label><input type="text" id="num-roth" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
       <label class="det-check" id="det-swept-row"><input type="checkbox" id="chk-retinc-swept" onchange="run()">Extra income I sweep is also IRA/401k<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Used only by states that exempt retirement income (for example IL and PA), which are few. When checked, ordinary income above what you entered here is treated as IRA/401k distributions or conversions.</span></span></label>
       <div class="det-row"><label for="num-other">Other ordinary income<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Anything else taxed at regular rates. A loss can be entered as a negative number.</span></span></label><input type="text" id="num-other" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
       <div class="det-sum"><span>Ordinary income entered <b id="det-ord">$0</b></span></div>
@@ -317,6 +325,8 @@
       <div class="det-row"><label for="num-prop">Property and local taxes (SALT)<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Real estate and local taxes. State income tax is computed by this tool and added automatically, so do not enter it here.</span></span></label><input type="text" id="num-prop" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
       <div class="note" id="det-note"></div>
     </details>
+
+    <div class="conv-box" id="conv-box"></div>
 
     <hr class="divider">
     <div class="panel-title" style="margin-bottom:.6rem">Capital Gains (fixed, not scaled)</div>
@@ -467,6 +477,7 @@ const cfg = {
   status:'MFJ', state:'CA', ages:[65,65],
   ssIncome:0, propTax:0,
   retirementIncome:0, retirementSwept:false,
+  rothConv:0,                  // Roth conversion: ordinary income, and retirement income for the states that exempt it
   wages:0, interest:0, ndiv:0, stcg:0, other:0, qdiv:0,
   muni:0, usInt:0, stMuni:0,   // tax-exempt interest, its state-exempt Treasury part, and the part a state taxes
   untaxed:0,                   // money that came in untaxed (Roth, cash): in gross income, in no tax
@@ -526,6 +537,7 @@ const DETAIL_FIELDS = [
   { id:'num-ndiv',   key:'nd', cfg:'ndiv',             neg:false },
   { id:'num-stcg',   key:'sg', cfg:'stcg',             neg:true  },
   { id:'num-retinc', key:'ri', cfg:'retirementIncome', neg:false },
+  { id:'num-roth',   key:'rc', cfg:'rothConv',         neg:false },
   { id:'num-other',  key:'ot', cfg:'other',            neg:true  },
   { id:'num-qdiv',   key:'qd', cfg:'qdiv',             neg:false },
   { id:'num-muni',   key:'mu', cfg:'muni',             neg:false },
@@ -560,7 +572,7 @@ function deriveIncome() {
   // Each is a part of another entry, so it cannot be larger than that entry.
   cfg.usIntEff  = Math.min(cfg.usInt, cfg.interest);
   cfg.stMuniEff = Math.min(cfg.stMuni, cfg.muni);
-  cfg.entOrdinary = cfg.wages + cfg.interest + cfg.ndiv + cfg.retirementIncome + cfg.other + net.ordinary;
+  cfg.entOrdinary = cfg.wages + cfg.interest + cfg.ndiv + cfg.retirementIncome + cfg.rothConv + cfg.other + net.ordinary;
 }
 
 // The Income details heading and note: the ordinary total, and anything the page did to an entry.
@@ -601,7 +613,7 @@ function calcAt(ordInc) {
   // Retirement part of the ordinary income, for the states that exempt it: what was entered, plus
   // (when asked) everything swept above what was entered. Never more than the ordinary income there is.
   const extraRet = cfg.retirementSwept ? Math.max(0, ordInc - cfg.entOrdinary) : 0;
-  const retInc = Math.max(0, Math.min(ordInc, cfg.retirementIncome + extraRet));
+  const retInc = Math.max(0, Math.min(ordInc, cfg.retirementIncome + cfg.rothConv + extraRet));
 
   const r = calculateTaxes({
     filingStatus:    status,
@@ -1132,6 +1144,90 @@ function ordinaryAtMagi(magiAt) {
     if (calcAt(mid).magi >= magiAt) hi = mid; else lo = mid;
   }
   return hi;
+}
+
+// ─── ROTH CONVERSION ROOM ────────────────────────────────────────────────────
+// How much more ordinary income fits before something changes: the federal bracket rises, or MAGI
+// reaches the next IRMAA tier. Both are found by bisection on calcAt, so they hold the Social
+// Security torpedo, the deduction phase-outs and the state in the answer. Both tests only ever turn
+// true as income rises, which is what makes bisection valid.
+//
+// The last ordinary income at or above `from` where `crossed(row)` is still false, to the dollar
+// below; null when nothing up to the search ceiling crosses it.
+function lastOrdinaryBefore(from, crossed) {
+  const CEIL = 5_000_000;
+  if (!crossed(calcAt(CEIL))) return null;
+  let lo = from, hi = CEIL;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (crossed(calcAt(mid))) hi = mid; else lo = mid;
+  }
+  return lo;
+}
+
+// Room to the top of the federal bracket the income sits in. Sitting on the top edge already, it
+// offers the bracket above, so a second click keeps climbing. null in the top bracket.
+function bracketRoom() {
+  let from = cfg.entOrdinary;
+  for (let k = 0; k < 2; k++) {
+    const rate = calcAt(from).fedBr;
+    const end = lastOrdinaryBefore(from, r => r.fedBr > rate + 1e-9);
+    if (end === null) return null;
+    if (end - cfg.entOrdinary >= 1) return { rate, room: Math.floor(end - cfg.entOrdinary) };
+    from = end + 1;
+  }
+  return null;
+}
+
+// Room before MAGI reaches the next IRMAA tier (the tier this year's MAGI sets IRMAA_AHEAD years out).
+// null in the top tier, which has a floor and no ceiling. room is 0 when sitting on the edge.
+function irmaaRoom() {
+  const next = irmaaAt(calcAt(cfg.entOrdinary).magi).next;
+  if (!next) return null;
+  const end = lastOrdinaryBefore(cfg.entOrdinary, r => r.magi >= next.at);
+  if (end === null) return null;
+  return { tier: next.n, cliff: next.cliff, room: Math.max(0, Math.floor(end - cfg.entOrdinary)) };
+}
+
+// The income tax the conversion adds: the same year with and without it, federal and state.
+// Income tax only, like the figure the Tax Payment Planner link carries.
+function conversionTax() {
+  const tax = r => r.fedTax + r.fedCGTax + r.niit + r.stTaxOrd + r.stTaxCG;
+  const keep = cfg.rothConv;
+  const withIt = tax(calcAt(cfg.entOrdinary));
+  cfg.rothConv = 0;            // so a retirement-income exemption sees the plain income
+  const without = tax(calcAt(cfg.entOrdinary - keep));
+  cfg.rothConv = keep;
+  return withIt - without;
+}
+
+// Click a room button: converts that much more, then the room recomputes from the new total.
+function addConversion(room) {
+  const el = document.getElementById('num-roth');
+  const v = Math.max(0, cfg.rothConv + room);
+  el.value = v === 0 ? '' : fmtMoney(v);
+  run();
+}
+
+function renderConversion() {
+  const box = document.getElementById('conv-box');
+  const money = v => '$' + Math.round(v).toLocaleString();
+  const line = (label, r, cls) => r.room >= 1
+    ? `<div class="conv-line"><span>${label}</span><button type="button" class="conv-btn ${cls}" onclick="addConversion(${r.room})">+${money(r.room)}</button></div>`
+    : `<div class="conv-line"><span>${label}</span><span>at the limit</span></div>`;
+  const b = bracketRoom(), m = irmaaRoom();
+  const rows = [];
+  if (b) rows.push(line(`Room in the ${Math.round(b.rate * 100)}% federal bracket`, b, ''));
+  if (m) rows.push(line(`Room under IRMAA Tier ${m.tier} (${cfg.year + IRMAA_AHEAD})` +
+    infoIcon(`Medicare charges IRMAA from the income of two years back, so this conversion sets the ${cfg.year + IRMAA_AHEAD} surcharge. One dollar over this line adds ${money(m.cliff)} a year.`), m, 'future'));
+  if (cfg.rothConv > 0) {
+    const t = conversionTax();
+    rows.push(`<div class="conv-line"><span>Converting ${money(cfg.rothConv)}: tax ${money(t)} (${(t / cfg.rothConv * 100).toFixed(0)}% of it)</span>` +
+      `<button type="button" class="conv-btn" onclick="addConversion(-cfg.rothConv)">Clear</button></div>`);
+  }
+  box.innerHTML = rows.length
+    ? `<div class="conv-title">Roth conversion room${infoIcon('Click an amount to add it to the Roth conversion, which fills your income up to that line. The tax shown is the federal and state income tax the conversion adds. Use Open in Tax Planner to plan the withholding.')}</div>` + rows.join('')
+    : '';
 }
 
 // A rate as text. Anything over 999% is a flat charge over almost no income and reads as a bug if
@@ -1826,6 +1922,7 @@ function run() {
   renderIrmaaLegend();
   syncPinControls();
   updateInfoPanel(pinnedRow());
+  renderConversion();
   renderSummary(data);
   renderAssumptions();
   updCgBasis();
@@ -1898,6 +1995,11 @@ const RESULT_FIELDS = {
   cgRate:          c => c.d.cgRate,
   irmaaFuture:     c => c.d.IRMAAFuture,
   irmaaFutureTier: c => c.fut.tier,
+  // Roth conversion: the room left at the income calculated at, and the tax the conversion entered adds.
+  // Room is blank in the top bracket or tier, where there is no ceiling to fill up to.
+  bracketRoom:     () => bracketRoom()?.room ?? '',
+  irmaaRoom:       () => irmaaRoom()?.room ?? '',
+  conversionTax:   () => conversionTax(),
 };
 
 // The inputs the result was calculated from, named as in the link (st, s, ss, wg, ...), so a result
@@ -1918,8 +2020,11 @@ const INPUT_FIELDS = {
   sm: () => cfg.stMuniEff,
   rw: () => cfg.retirementSwept ? 1 : 0,
 };
-const ALL_FIELDS = { ...RESULT_FIELDS, ...INPUT_FIELDS };
-const ALL_NAMES  = [...Object.keys(RESULT_FIELDS), ...Object.keys(INPUT_FIELDS)];   // results, then inputs
+// Two names that carry no value: a blank column labelled `inputs` or `calculated`, so a line that
+// mixes the two families shows where one ends and the other starts. `all` is inputs, then calculated.
+const MARKER_FIELDS = { inputs: () => '', calculated: () => '' };
+const ALL_FIELDS = { ...RESULT_FIELDS, ...INPUT_FIELDS, ...MARKER_FIELDS };
+const ALL_NAMES  = ['inputs', ...Object.keys(INPUT_FIELDS), 'calculated', ...Object.keys(RESULT_FIELDS)];
 
 // What the link asked for, read once: null without `return`. `return` alone (or 1) is the default
 // set, `all` is every field, and anything else is a comma list of field names.
@@ -2044,25 +2149,19 @@ function chartTable() {
   return { header: cols.map(c => c[0]), rows: sweepData.map(d => cols.map(c => c[1](d))) };
 }
 
-// The export: the link that recreates the chart, a summary at the ordinary income shown, every
-// setting that went in, and then the table of points. Each line is a list of cells; a settings line
-// is a name and a value, so the file reads down a spreadsheet's first two columns.
+// The export: the link that recreates the chart, then every input (what went in), then what was
+// calculated at the ordinary income shown, then the table of points. Each line is a list of cells; a
+// settings line is a name and a value, so the file reads down a spreadsheet's first two columns.
 function exportLines() {
   const row = pinnedRow(), gross = grossOf(row), $ = id => document.getElementById(id);
   const money = v => Math.round(v);
   const detail = Object.fromEntries(DETAIL_FIELDS.map(f => [f.id, cfg[f.cfg]]));
-  const t = chartTable();
+  const t = chartTable(), bRoom = bracketRoom(), mRoom = irmaaRoom();
   return [
     ['Income Tax Planner export', cfg.year],
     ['Link that recreates this chart', buildShareURL()],
     [],
-    ['Summary at the ordinary income shown'],
-    ['Ordinary income', money(cfg.entOrdinary)],
-    ['Gross income (all sources)', money(gross)],
-    ['Total taxes', money(row.totalTax)],
-    ['Net income', money(gross - row.totalTax)],
-    [],
-    ['Settings'],
+    ['Inputs'],
     ['Filing status', cfg.status === 'MFJ' ? 'Married / Joint' : 'Single'],
     ['State', $('sel-state').selectedOptions[0].text],
     ['Age, person 1', cfg.ages[0]],
@@ -2077,6 +2176,7 @@ function exportLines() {
     ['Short-term capital gains', money(detail['num-stcg'])],
     ['IRA, 401k or pension withdrawals', money(detail['num-retinc'])],
     ['Extra swept income is also IRA/401k', cfg.retirementSwept ? 'Yes' : 'No'],
+    ['Roth conversion', money(detail['num-roth'])],
     ['Other ordinary income', money(detail['num-other'])],
     ['Qualified dividends', money(detail['num-qdiv'])],
     ['Municipal bond interest', money(detail['num-muni'])],
@@ -2086,6 +2186,16 @@ function exportLines() {
     ['Sale proceeds', money(cfg.cgSale)],
     ['Cost basis (% of proceeds)', cfg.cgBasisPct],
     [`MAGI from ${cfg.year - 2}`, cfg.prevMagi === null ? '' : money(cfg.prevMagi)],
+    [],
+    ['Calculated at the ordinary income shown'],
+    ['Ordinary income', money(cfg.entOrdinary)],
+    ['Gross income (all sources)', money(gross)],
+    ['Total taxes', money(row.totalTax)],
+    ['Net income', money(gross - row.totalTax)],
+    ['Roth conversion room in the federal bracket', bRoom ? money(bRoom.room) : ''],
+    ['Federal bracket rate', bRoom ? bRoom.rate : ''],
+    [`Roth conversion room under IRMAA Tier ${mRoom ? mRoom.tier : ''}`, mRoom ? money(mRoom.room) : ''],
+    ['Income tax added by the Roth conversion entered', money(conversionTax())],
     [],
     ['Chart points, rates and dollars'],
     t.header,
@@ -2241,7 +2351,7 @@ const SHARE_PRIVACY = {
   personal: [
     'a1', 'a2',                                                    // ages
     'ss', 'cs', 'cb', 'pm',                                        // Social Security, sale, basis, prior-year income
-    'wg', 'it', 'nd', 'sg', 'ri', 'ot', 'qd', 'mu', 'ui', 'sm', 'un', 'pt',   // income details
+    'wg', 'it', 'nd', 'sg', 'ri', 'rc', 'ot', 'qd', 'mu', 'ui', 'sm', 'un', 'pt',   // income details
     'vl', 'vh',                                                    // the income range on screen
   ],
 };
@@ -2257,7 +2367,7 @@ FeedbackWidget.init({
     pm: 'priorYearMagi', wg: 'wages', it: 'interest', nd: 'nonqualifiedDividends',
     sg: 'shortTermGains', ri: 'retirementIncome', ot: 'otherIncome', qd: 'qualifiedDividends',
     mu: 'muniInterest', ui: 'usInterest', sm: 'stateMuniInterest', un: 'untaxedIncome',
-    pt: 'propertyTax', vl: 'viewLow', vh: 'viewHigh',
+    rc: 'rothConversion', pt: 'propertyTax', vl: 'viewLow', vh: 'viewHigh',
   },
   settingsHelp: 'Filing status, state, year and inflation, plus any error messages the page logged.'
     + ' Never income, ages, sale amounts or birth dates.',
@@ -2298,7 +2408,8 @@ function buildTaxPlannerParams() {
   // as ordinary income there).
   const pen    = Math.max(0, Math.round(cfg.wages + cfg.other + cfg.stOrd));
   const intr   = Math.max(0, Math.round(cfg.interest + cfg.ndiv));
-  const iraEst = Math.max(0, Math.round(cfg.entOrdinary) - pen - intr);
+  const conv   = Math.round(cfg.rothConv);
+  const iraEst = Math.max(0, Math.round(cfg.entOrdinary) - conv - pen - intr);
   const gain   = Math.max(0, Math.round(cfg.ltNet));
 
   const sp = new URLSearchParams({
@@ -2315,7 +2426,8 @@ function buildTaxPlannerParams() {
     i1v: iraEst,
     // Explicit zeros for everything this page has no view of. Without them the planner's own
     // defaults supply an RMD and a conversion nobody asked for.
-    i1r: 0, i1c: 0, i2r: 0, i2v: 0, i2c: 0, pen: pen, int: intr, qdiv: Math.round(cfg.qdiv),
+    // The Roth conversion rides in IRA 1's conversion slot, which is what the planner prices.
+    i1r: 0, i1c: conv, i2r: 0, i2v: 0, i2c: 0, pen: pen, int: intr, qdiv: Math.round(cfg.qdiv),
   });
   return sp;
 }
@@ -2413,7 +2525,7 @@ function loadFromURL() {
 <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal-box">
     <div class="modal-hdr">
-      <h2>Income Tax Planner v2.11 — How to Use</h2>
+      <h2>Income Tax Planner v2.12 — How to Use</h2>
       <button class="modal-close" onclick="closeModal()">&#x2715;</button>
     </div>
 
@@ -2424,6 +2536,11 @@ function loadFromURL() {
     <details class="modal-section">
       <summary>Change Log</summary>
       <dl class="modal-kv">
+        <dt>v2.12</dt>
+        <dd><ul>
+          <li>New Roth conversion entry under Income details. Under it, Roth conversion room shows how much more you can convert before the next federal bracket and before the next Medicare (IRMAA) surcharge tier. Click an amount to convert that much, and the room recomputes. The tax the conversion adds is shown, and Open in Tax Planner carries the conversion over to plan the withholding.</li>
+          <li>Copy all fields, Export and a link with <code>return=all</code> now list the inputs first and the calculated results after, with a marked break between them. The room amounts and the conversion's tax are calculated results.</li>
+        </ul></dd>
         <dt>v2.11</dt>
         <dd><ul>
           <li>A Feedback button sends the author a problem report, a question or an idea. You choose what goes with it, and Show exactly what will be sent prints the whole report before anything leaves your browser.</li>
@@ -2485,6 +2602,7 @@ function loadFromURL() {
         <li>Open <strong>Income details</strong> in the left panel to spell out your ordinary income: wages or business income (negative for a loss), interest, non-qualified dividends, short-term capital gains (negative for a loss), IRA, 401k or pension withdrawals, and other income (negative for a loss). They add up to the <em>ordinary income entered</em>, which is the teal line on the chart and the income the info panel describes. The chart's ordinary-income axis is still the total, so these entries do not stack on top of it.</li>
         <li><strong>Qualified dividends</strong> are taxed with your capital gains and added to the gain from the sale. A short-term loss is netted against that gain first, and a net capital loss offsets only $3,000 of income a year; the rest carries forward and is ignored.</li>
         <li><strong>Interest and tax-exempt interest.</strong> <strong>Municipal bond interest</strong> is entered on its own row, not in Interest. It is not in your income tax, but it counts toward MAGI, so it moves the IRMAA tiers, and toward how much Social Security is taxed. Two rows are indented as <em>of which</em>: <strong>US Treasury</strong>, under Interest, is the part of Interest that is exempt from state tax, and <strong>your state taxes</strong>, under municipal bond interest, is the part your state taxes anyway (usually out-of-state bonds). An <em>of which</em> amount cannot exceed the row above it, and the page says so. For a fund, enter only the part its year-end statement attributes to US obligations or to your state.</li>
+        <li><strong>Roth conversion</strong> is taxed as ordinary income and counts toward MAGI. Under Income details, <strong>Roth conversion room</strong> lists how much more fits in your current federal bracket and under the next IRMAA tier. Click an amount to add it to the conversion; click again to keep climbing. <strong>Open in Tax Planner</strong> then carries the conversion over so you can plan the IRA withholding for the year's taxes.</li>
         <li><strong>Untaxed</strong> is money that came in without tax, such as a Roth withdrawal or cash from savings. It is part of Gross income and Net income so you see the whole picture, and it changes no tax, no IRMAA and no Social Security taxation.</li>
         <li><strong>Property and local taxes</strong> are real estate and local taxes only. State income tax is computed for you and added to them for the SALT deduction.</li>
         <li><strong>Social Security</strong> is one combined amount for everyone on the return, because how much of it is taxed depends on all of your income together.</li>

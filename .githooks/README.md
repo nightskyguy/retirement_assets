@@ -54,6 +54,12 @@ Then, in order:
   would break it, and what was measured or corrected goes in the commit message. `--list <file>` prints
   the lines. The ceiling may fall freely; raising one needs a sentence in the commit saying why the
   history had to stay.
+- **`check-architecture.js`** blocks a commit in which a tracked script or stylesheet (repo root,
+  `montecarlo/`, `.githooks/`) is not named in `ARCHITECTURE.md`, or a row of its section 6 file
+  reference table names a file that is not on disk. The module dependency graph in section 1 is a
+  drawing and is not checked: a new file that loads, or is loaded by, another gets its nodes and edges
+  there by hand. The standalone tool pages, `research/` and `plans/` are out of scope; each has its
+  own index.
 - **the markdown preview gate**, below.
 
 About 20 s total on a fast machine, most of it `optimizer_core.tests.js`. Run the page suite alone

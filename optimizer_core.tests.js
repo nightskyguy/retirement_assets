@@ -213,6 +213,10 @@ const BASE = {
     startInYear: 2026, dividendReinvest: false,
     startYear: 2026,
     hasSpouse: false,
+    // No announced Social Security COLAs: every test built on BASE indexes benefits at `cpi` alone,
+    // so its hand-checked amounts do not move when SS_COLA_PUBLISHED gains a year. The published
+    // table has its own tests.
+    ssColaTable: {},
 };
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -6340,6 +6344,84 @@ test('P81c: Social Security never falls, and absorbs the deflation on the way ba
         'a per-year floor must pay MORE than the high-water rule here, or the two are indistinguishable');
 });
 
+// ── Announced Social Security COLAs (SS_COLA_PUBLISHED) ──────────────────────
+// SSA announces each January's COLA the October before. For an announced year the Social Security
+// clock takes the published rate instead of the CPI input or the Monte Carlo draw, while brackets
+// and a pension COLA stay on CPI. Only years after "today" use it: benefits are entered in today's
+// dollars, which already include every COLA paid so far.
+const COLA_TABLE = { 2027: 0.036 };   // explicit, so a later entry in the shipped table cannot move these
+const COLA_BASE = { ...BASE, ss1: 30000, cpi: 0.025, inflation: 0.025, nYears: 10,
+                    pensionAnnual: 20000, pensionCola: 'full', pensionStartAge: 0,
+                    todayYear: 2026, ssColaTable: COLA_TABLE };
+const colaRow = (r, year) => r.log.find(e => e.year === year);
+const colaStep = (r, f, year) => f(colaRow(r, year)) / f(colaRow(r, year - 1));
+const ssOfRow = e => e.SSincome, cfOfRow = e => e['-cpiFactor'];
+
+test('SS COLA table: the shipped 2027 rate is the one SSA announced', () => {
+    assert(core.SS_COLA_PUBLISHED[2027] === 0.036, `2027 COLA should be 3.6%, got ${core.SS_COLA_PUBLISHED[2027]}`);
+    assert(Object.isFrozen(core.SS_COLA_PUBLISHED), 'the table is data, not state');
+    const pub = core.publishedSSCola;
+    assert(pub(2027, 2026) === 0.036, 'a future announced year returns its rate');
+    assert(pub(2027, 2027) === null, 'the current year is already in the entered benefit');
+    assert(pub(2027, 2028) === null, 'and so is a past year');
+    assert(pub(2031, 2026) === null, 'an unannounced year returns null, so the CPI is used');
+    assert(pub(2027, 2026, {}) === null, 'an empty table turns it off');
+    assert(pub(2027, 2026, { 2027: 'x' }) === null, 'a non-number is ignored rather than compounded');
+});
+
+test('SS COLA table: 2027 Social Security rises by the published rate, brackets and pension by CPI', () => {
+    const r = simulate({ ...COLA_BASE });
+    assert(ssOfRow(colaRow(r, 2026)) > 0, 'precondition: the benefit is already being paid in 2026');
+    assertNear(colaStep(r, ssOfRow, 2027), 1.036, '2027 Social Security uses the published COLA', 1e-9);
+    assertNear(colaStep(r, ssOfRow, 2028), 1.025, '2028 goes back to the CPI input', 1e-9);
+    assertNear(colaStep(r, ssOfRow, 2031), 1.025, 'and stays there', 1e-9);
+    assertNear(colaStep(r, cfOfRow, 2027), 1.025, 'the bracket index is untouched by the table', 1e-12);
+    assertNear(colaStep(r, e => e.pension, 2027), 1.025, 'a full pension COLA tracks CPI, not the SS announcement', 1e-9);
+    // The replacement is permanent: every later year compounds from the published level.
+    const off = simulate({ ...COLA_BASE, ssColaTable: {} });
+    assertNear(ssOfRow(colaRow(r, 2032)) / ssOfRow(colaRow(off, 2032)), 1.036 / 1.025,
+        'the 2027 difference carries into every later year', 1e-9);
+    // No override reads the shipped table.
+    const shipped = simulate({ ...COLA_BASE, ssColaTable: undefined });
+    assertNear(colaStep(shipped, ssOfRow, 2027), 1 + core.SS_COLA_PUBLISHED[2027],
+        'default inputs use SS_COLA_PUBLISHED', 1e-9);
+});
+
+test('SS COLA table: inert once the calendar reaches the year, so it is never counted twice', () => {
+    const r = simulate({ ...COLA_BASE, todayYear: 2027 });
+    assertNear(colaStep(r, ssOfRow, 2027), 1.025, 'in 2027 the entered benefit already includes the COLA', 1e-9);
+    const off = simulate({ ...COLA_BASE, todayYear: 2027, ssColaTable: {} });
+    assert(JSON.stringify(r.log) === JSON.stringify(off.log), 'a spent table entry must leave the plan byte-identical');
+});
+
+test('SS COLA table: a plan starting later carries the 2027 COLA in its opening benefit', () => {
+    const late = { ...COLA_BASE, startInYear: 2030, startYear: 2030 };
+    const on = simulate(late), off = simulate({ ...late, ssColaTable: {} });
+    assertNear(ssOfRow(colaRow(on, 2030)) / ssOfRow(colaRow(off, 2030)), 1.036 / 1.025,
+        'the gap years place the published rate in 2027 and CPI in the rest', 1e-9);
+    assertNear(cfOfRow(colaRow(on, 2030)), cfOfRow(colaRow(off, 2030)), 'the bracket index is unaffected', 1e-12);
+});
+
+test('SS COLA table: on a Monte Carlo path the announced year is fixed and the rest follow the draw', () => {
+    const seq = [0.07, 0.01, 0.05, 0.02, 0.04, 0.03, 0.02, 0.06, 0.01, 0.03, 0.02, 0.03];
+    const r = simulate({ ...COLA_BASE, inflationSequence: seq });
+    assertNear(colaStep(r, ssOfRow, 2027), 1.036, 'a drawn 7% does not reach a COLA already announced', 1e-9);
+    assertNear(colaStep(r, cfOfRow, 2027), 1.07, 'the bracket index still takes the draw', 1e-9);
+    assertNear(colaStep(r, ssOfRow, 2029), 1.05, 'later years follow the path', 1e-9);
+});
+
+test('SS COLA table: the high-water rule runs on the published level', () => {
+    // Two deflation years right after the announced one: the benefit holds at the 2027 level until
+    // the index climbs back past it, and then pays only the recovery beyond it.
+    const seq = [0.02, -0.01, -0.01, 0.03, 0.03, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02];
+    const r = simulate({ ...COLA_BASE, inflationSequence: seq });
+    const s = y => ssOfRow(colaRow(r, y));
+    assertNear(s(2027) / s(2026), 1.036, 'precondition: 2027 is the published rate', 1e-9);
+    assertNear(s(2028), s(2027), 'a deflation year after the announcement holds the benefit flat', 1e-6);
+    assertNear(s(2029), s(2027), 'and so does the second', 1e-6);
+    assertNear(s(2030) / s(2027), 0.99 * 0.99 * 1.03, 'the recovery is measured from the published peak', 1e-9);
+});
+
 test('P81c: a capped pension COLA is floored at zero per year, and does not claw back', () => {
     // A capped plan is NOT on the high-water rule: the cap already severs it from the index level
     // (P70i), and plan language grants an adjustment of the lesser of the cap and the year's CPI
@@ -8742,6 +8824,8 @@ test('P128: a resumed run IS the plan continued - every field of every later row
                                   convEndYear: 2036 }],
         ['risk-based + ceiling', { ...CEIL_BASE, spendRule: 'rbg', rbgPreset: 'normal', gkShapeCeiling: true,
                                    rbgRails: _p132Table(40, { 2: { cutAt: 1e-9, cutB: 0.03 }, 12: { raiseAt: 1e9, raiseB: 0.05 } }) }],
+        // Resumed on either side of an announced COLA, the Social Security clock must carry over.
+        ['announced SS COLA', { ...COLA_BASE }],
     ];
     // The bank adds nineteen real households in node, with the rule both ways.
     if (_planBank) {

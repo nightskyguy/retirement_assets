@@ -17,6 +17,25 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1d02"></a>
+
+## 11.1d02
+
+**Social Security's 2027 increase is the 3.6% Social Security announced.**  
+*Behavior change: a plan that collects Social Security in 2027 or later receives slightly more.*
+
+- **The announced COLA.** In 2027, Social Security benefits rise by 3.6%, the cost-of-living
+  adjustment Social Security announced in October, instead of your CPI/COLA rate. Later years grow
+  at your CPI/COLA rate from the higher 2027 amount, so the difference carries through the whole
+  plan. At the default 2.8% CPI, every benefit paid from 2027 on is about 0.8% higher.
+- **Only Social Security.** Tax brackets, IRMAA thresholds and pension COLAs still grow at your
+  CPI/COLA rate.
+- **Monte Carlo.** Every path pays the announced 3.6% in 2027; later years still follow each path.
+- **From January 2027,** enter your benefit at its 2027 amount. The tool then treats the increase as
+  already included and does not add it again.
+
+---
+
 <a id="11.1a3f"></a>
 
 ## 11.1a3f

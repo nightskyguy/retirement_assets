@@ -79,6 +79,7 @@ const PLAN = {
         propWithdraw: 0,
         iraWithdrawPct: 0.05,
         startInYear: 2026,
+        todayYear: 2026,
         dividendReinvest: true,
         startYear: 2026,
         hasSpouse: false

@@ -1170,21 +1170,13 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="feature"><b>11.1d09</b>
-					<strong>New: Additional Spend Control, for extra spending in the years you choose.</strong>
+				<li data-flag="behavior"><b>11.1d09</b>
+					<strong>Social Security's 2027 increase is the 3.6% Social Security announced, and new Additional Spend Control adds extra spending in the years you choose.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>Folded under Spend Delta: a dollar amount in today's dollars (a car every 7 years) or a percentage of that year's spending (100% until age 80 to front-load travel). A negative amount spends less.</li>
-					<li>It repeats every N years between a From and an Until, each a calendar year or your age. Your withdrawal strategy pays for it, so its tax cost shows everywhere; Guardrails adjust only your regular spending.</li>
+					<li>In 2027, Social Security benefits rise by the announced 3.6% instead of your CPI/COLA rate, and later years grow at your CPI/COLA rate from that higher amount. At the default 2.8% CPI, every benefit paid from 2027 on is about 0.8% higher. Tax brackets, IRMAA thresholds and pensions still use your CPI/COLA rate. From January 2027, enter your benefit at its 2027 amount; the tool will not add the increase again.</li>
+					<li>Additional Spend Control, folded under Spend Delta: a dollar amount in today's dollars (a car every 7 years) or a percentage of that year's spending (100% until age 80 to front-load travel), repeating every N years between a From and an Until. A negative amount spends less. Your withdrawal strategy pays for it, so its tax cost shows everywhere.</li>
 					</ul>
 					<a href="optimizer_changelog.md#11.1d09" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="behavior"><b>11.1d02</b>
-					<strong>Social Security's 2027 increase is the 3.6% Social Security announced.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>In 2027, Social Security benefits rise by the announced 3.6% instead of your CPI/COLA rate, and later years grow at your CPI/COLA rate from that higher amount. At the default 2.8% CPI, every benefit paid from 2027 on is about 0.8% higher. Tax brackets, IRMAA thresholds and pensions still use your CPI/COLA rate.</li>
-					<li>From January 2027, enter your benefit at its 2027 amount; the tool will not add the increase again.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.1d02" target="_blank" rel="noopener">Details</a>
 				</li>
 				<li data-flag="display"><b>11.1a3f</b>
 					<strong>Annual Details is no longer mistaken for an advertisement by ad blockers.</strong>
@@ -1218,6 +1210,16 @@
 					<li>Medicare cost no longer varies from one Monte Carlo path to another, which narrows the spread slightly.</li>
 					</ul>
 					<a href="optimizer_changelog.md#11.1917" target="_blank" rel="noopener">Details</a>
+				</li>
+				<li data-flag="behavior"><b>11.18fc</b>
+					<strong>IRMAA, state tax tables and ACA income limits corrected; Saved Scenarios handles any name.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>The Medicare IRMAA surcharge contained an error that has been corrected: it was charged at the wrong tier and included the standard premium, so it came out too high for every income above the first threshold. The surcharge and the base Medicare premium are now separate figures matching what Medicare publishes for 2026, and the income thresholds match to the dollar. If your plan reaches an IRMAA tier its numbers will move, and a plan close to the line may now fund where it did not before.</li>
+					<li>The tax tables for seven states contained errors that have been corrected, and the rates and brackets now match what each state publishes for 2026. Minnesota, Montana and Wisconsin were the largest, each charging more state tax than it should; Indiana, Kentucky and Mississippi have had rate cuts since the tables were last set; and Virginia carried a top bracket that does not exist. If your plan uses one of those states, its numbers will move.</li>
+					<li>The ACA Cliff limits contained an error that has been corrected. The error was small, and it made each limit slightly too strict. They now use the 2025 Federal Poverty Level figures, the ones 2026 coverage is measured against.</li>
+					<li>A saved scenario whose name contains a double quotation mark can now be opened, loaded, deleted and exported from Saved Scenarios.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.18fc" target="_blank" rel="noopener">Details</a>
 				</li>
 				</ul>
 				<script>

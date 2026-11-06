@@ -21,36 +21,25 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ## 11.1d09
 
-**New: Additional Spend Control, for extra spending in the years you choose.**
-
-- **Where.** Folded under Spend Delta. Its heading states the setting while it is closed.
-- **How much.** A dollar amount in today's dollars, such as $45k for a car, or a percentage of
-  that year's spending after Spend Delta, such as 100% to double it. A negative amount spends less.
-  It is spending only, never income.
-- **When.** Every year or every N years, between a From and an Until year, each a calendar year or
-  your age.
-- **What it costs.** Your withdrawal strategy pays for the extra, so its tax cost shows in the plan,
-  the Optimizer and Monte Carlo. Guardrails adjust only your regular spending. Annual Details shows
-  the extra in its own column, and share links and saved scenarios include it.
-
----
-
-<a id="11.1d02"></a>
-
-## 11.1d02
-
-**Social Security's 2027 increase is the 3.6% Social Security announced.**  
+**Social Security's 2027 increase is the 3.6% Social Security announced, and new Additional Spend
+Control adds extra spending in the years you choose.**  
 *Behavior change: a plan that collects Social Security in 2027 or later receives slightly more.*
 
 - **The announced COLA.** In 2027, Social Security benefits rise by 3.6%, the cost-of-living
   adjustment Social Security announced in October, instead of your CPI/COLA rate. Later years grow
-  at your CPI/COLA rate from the higher 2027 amount, so the difference carries through the whole
-  plan. At the default 2.8% CPI, every benefit paid from 2027 on is about 0.8% higher.
-- **Only Social Security.** Tax brackets, IRMAA thresholds and pension COLAs still grow at your
-  CPI/COLA rate.
-- **Monte Carlo.** Every path pays the announced 3.6% in 2027; later years still follow each path.
+  at your CPI/COLA rate from the higher 2027 amount, so every benefit paid from 2027 on is about
+  0.8% higher at the default 2.8% CPI. Tax brackets, IRMAA thresholds and pension COLAs still grow
+  at your CPI/COLA rate. Every Monte Carlo path pays 3.6% in 2027.
 - **From January 2027,** enter your benefit at its 2027 amount. The tool then treats the increase as
   already included and does not add it again.
+- **Additional Spend Control,** folded under Spend Delta, adds spending on top of After-Tax Spend:
+  a dollar amount in today's dollars, such as $45k for a car, or a percentage of that year's
+  spending, such as 100% to double it. A negative amount spends less. It is spending only, never
+  income, and repeats every N years between a From and an Until, each a calendar year or your age.
+  Its heading states the setting while it is closed.
+- **What the extra costs.** Your withdrawal strategy pays for it, so its tax cost shows in the plan,
+  the Optimizer and Monte Carlo. Guardrails adjust only your regular spending. Annual Details shows
+  the extra in its own column, and share links and saved scenarios include it.
 
 ---
 

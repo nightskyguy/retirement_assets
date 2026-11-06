@@ -17,6 +17,24 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1d09"></a>
+
+## 11.1d09
+
+**New: Additional Spend Control, for extra spending in the years you choose.**
+
+- **Where.** Folded under Spend Delta. Its heading states the setting while it is closed.
+- **How much.** A dollar amount in today's dollars, such as $45k for a car, or a percentage of
+  that year's spending after Spend Delta, such as 100% to double it. A negative amount spends less.
+  It is spending only, never income.
+- **When.** Every year or every N years, between a From and an Until year, each a calendar year or
+  your age.
+- **What it costs.** Your withdrawal strategy pays for the extra, so its tax cost shows in the plan,
+  the Optimizer and Monte Carlo. Guardrails adjust only your regular spending. Annual Details shows
+  the extra in its own column, and share links and saved scenarios include it.
+
+---
+
 <a id="11.1d02"></a>
 
 ## 11.1d02

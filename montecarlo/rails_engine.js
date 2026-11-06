@@ -487,7 +487,8 @@ async function runRailsJob(cfg, hooks) {
         years: out,
         // Every plan year of the spine, so the rule's table can interpolate between solved years in
         // dollars and net each year's own guaranteed income (railsRuleTable).
-        spine: log.map((r, k) => ({ k, year: r.year, wealth: r.totalNetWealth, planSpend: ruleOn ? r.ruleSpend : r.spendGoal,
+        // planSpend is the plan's own spending, without any Additional Spend Control extra.
+        spine: log.map((r, k) => ({ k, year: r.year, wealth: r.totalNetWealth, planSpend: ruleOn ? r.ruleSpend : r.spendGoal - (r.extraSpend ?? 0),
                                     inflationFactor: r.inflationFactor, guaranteedIncome: r.guaranteedIncome ?? 0 })),
         start,
         cost: {
@@ -768,7 +769,8 @@ function railsRuleRowFields(table, log) {
         const row = log[k], prev = log[k - 1];
         if (!t || !row || !prev || !(t.wealthReal > 0)) continue;
         const g = row.guaranteedIncome ?? 0;
-        const net = (row.spendGoal ?? 0) - g;
+        // In the rule's terms: the plan's own spending, without any Additional Spend Control extra.
+        const net = (row.spendGoal ?? 0) - (row.extraSpend ?? 0) - g;
         const infl = row.inflationFactor || 1;
         const railLower = t.cutAt == null ? null : t.cutAt === 0 ? null : net > 0 ? net / t.cutAt : null;
         const railUpper = t.raiseAt == null ? null : t.raiseAt === Infinity ? 0 : net > 0 ? net / t.raiseAt : null;

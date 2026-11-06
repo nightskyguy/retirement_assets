@@ -814,6 +814,13 @@ do now."
 ## P42: Lumpy Spending, no URL encoding  *(was PB; supersedes the old P3 spec)*
 **Why:** Users have one-time/irregular expenses (renovation, car, medical). Current P3 plan included URL encoding; user revised: not needed. Store in memory + named scenarios + auto-persist only.
 
+**Partly covered, 2026-11-05 (issue #255, v11.1d09):** Additional Spend Control ships ONE extra spending
+amount (today's $ or % of the year's own spending, negative spends less, never income) repeating every N
+years between a From and an Until. A single event is From = Until. What P42 still adds is several distinct
+events at once. If it is built, its rows should feed the same engine hook, `extraSpendFor` in
+`optimizer_core.js`, as a sum per year, so the guardrail, bracket-cap and rails handling already in place
+carry over unchanged.
+
 **Storage:** Global `let lumpyEvents = []` — array of `{year, amount, label}`. Included in `saveScenario()` / auto-persist; NOT URL-encoded.
 
 - [ ] **P42a** — Global `lumpyEvents = []` init in html

@@ -6422,6 +6422,102 @@ test('SS COLA table: the high-water rule runs on the published level', () => {
     assertNear(s(2030) / s(2027), 0.99 * 0.99 * 1.03, 'the recovery is measured from the published peak', 1e-9);
 });
 
+// ── Additional Spend Control (extraSpend) ────────────────────────────────────
+// One extra spending amount laid on top of the plan's own spending for the years it covers: today's
+// dollars grown by inflation, or a percent of that year's own spending. Spending only, never income.
+const XS_BASE = { ...BASE, growth: 0.05, inflation: 0.025, cpi: 0.025, spendChange: -0.01,
+                  IRA1: 1500000, Brokerage: 500000, BrokerageBasis: 250000 };
+const xsRow = (r, year) => r.log.find(e => e.year === year);
+const xsOwn = e => e.spendGoal - e.extraSpend;
+
+test('Additional Spend Control: extraSpendFor covers its years and nothing else', () => {
+    const f = core.extraSpendFor;
+    assert(f({}, 0, 2026, 100, 1) === 0, 'absent is off');
+    assert(f({ extraSpend: 0 }, 0, 2026, 100, 1) === 0, 'zero is off');
+    assert(f({ extraSpend: NaN }, 0, 2026, 100, 1) === 0, 'a non-number is off');
+    const car = { extraSpend: 40000, extraSpendEvery: 7, extraSpendFrom: 2027, extraSpendUntil: 2041 };
+    assert(f(car, 0, 2026, 100000, 1) === 0, 'before From');
+    assertNear(f(car, 1, 2027, 100000, 1.025), 41000, 'From itself, in that year\'s dollars', 1e-9);
+    assert(f(car, 2, 2028, 100000, 1) === 0, 'between repeats');
+    assert(f(car, 8, 2034, 100000, 1) === 40000, 'seven years on');
+    assert(f(car, 15, 2041, 100000, 1) === 40000, 'Until is inclusive');
+    assert(f(car, 22, 2048, 100000, 1) === 0, 'after Until');
+    const anchored = { extraSpend: 5000, extraSpendEvery: 2 };
+    assert(f(anchored, 0, 2026, 1, 1) === 5000 && f(anchored, 1, 2027, 1, 1) === 0 && f(anchored, 2, 2028, 1, 1) === 5000,
+        'with no From, every N counts from the plan\'s first year');
+    assert(f({ extraSpend: 0.2, extraSpendMode: 'pct' }, 0, 2026, 50000, 9) === 10000, 'a percent is of the base, not inflated again');
+    assert(f({ extraSpend: -3, extraSpendMode: 'pct' }, 0, 2026, 50000, 1) === -50000, 'never below zero spending');
+    assert(f({ extraSpend: -1e9 }, 0, 2026, 50000, 1) === -50000, 'a negative amount floors at zero spending too');
+});
+
+test('Additional Spend Control: blank leaves every plan exactly as it was', () => {
+    const plain = simulate({ ...XS_BASE });
+    for (const off of [{ extraSpend: 0 }, { extraSpend: undefined, extraSpendEvery: 3, extraSpendFrom: 2028 }]) {
+        const r = simulate({ ...XS_BASE, ...off });
+        assert(JSON.stringify(r.log) === JSON.stringify(plain.log), `log must be byte-identical for ${JSON.stringify(off)}`);
+    }
+    assert(plain.log.every(e => e.extraSpend === 0), 'the column is zero in every year');
+});
+
+test('Additional Spend Control: a dollar amount grows with inflation, ignores Spend Delta, and does not compound', () => {
+    const on = simulate({ ...XS_BASE, extraSpend: 10000, extraSpendEvery: 3, extraSpendFrom: 2027, extraSpendUntil: 2035 });
+    const off = simulate({ ...XS_BASE });
+    const years = on.log.filter(e => e.extraSpend !== 0).map(e => e.year);
+    assert(JSON.stringify(years) === JSON.stringify([2027, 2030, 2033]), `extra years ${years}`);
+    for (const y of years) {
+        const e = xsRow(on, y);
+        assertNear(e.extraSpend, 10000 * e.inflationFactor, `${y}: today's dollars at that year's price level`, 1e-6);
+    }
+    for (const e of on.log) {
+        assertNear(xsOwn(e), xsRow(off, e.year).spendGoal, `${e.year}: the plan's own spending is unchanged`, 1e-6);
+    }
+    assert(on.totals.spend > off.totals.spend, 'and lifetime spending includes the extra');
+});
+
+test('Additional Spend Control: a percent follows the plan\'s own spending, and ends cleanly', () => {
+    const on = simulate({ ...XS_BASE, extraSpend: 1.0, extraSpendMode: 'pct', extraSpendUntil: 2030 });
+    const off = simulate({ ...XS_BASE });
+    for (const y of [2026, 2028, 2030]) {
+        const e = xsRow(on, y);
+        assertNear(e.extraSpend, xsOwn(e), `${y}: +100% doubles that year's own spending`, 1e-6);
+        assertNear(xsOwn(e), xsRow(off, y).spendGoal, `${y}: on the Spend Delta path`, 1e-6);
+    }
+    assert(xsRow(on, 2031).extraSpend === 0, 'nothing after Until');
+    assertNear(xsRow(on, 2031).spendGoal, xsRow(off, 2031).spendGoal, 'and spending returns to the plan\'s own path', 1e-6);
+    const less = simulate({ ...XS_BASE, extraSpend: -0.4, extraSpendMode: 'pct', extraSpendFrom: 2035 });
+    assertNear(xsRow(less, 2036).spendGoal, 0.6 * xsRow(off, 2036).spendGoal, 'a negative percent spends less', 1e-6);
+});
+
+test('Additional Spend Control: the bracket ceiling caps the plan\'s own spending, never the extra', () => {
+    const big = { ...XS_BASE, strategy: 'fixed', extraSpend: 400000, extraSpendFrom: 2028, extraSpendUntil: 2028 };
+    const on = simulate(big), off = simulate({ ...XS_BASE, strategy: 'fixed' });
+    const e = xsRow(on, 2028);
+    assertNear(e.spendGoal, xsRow(off, 2028).spendGoal + e.extraSpend, 'the whole purchase is in the year\'s target', 1e-6);
+    assert(e.spendGoal > 400000, `precondition: the year is far above any bracket ceiling, got ${e.spendGoal}`);
+});
+
+test('Additional Spend Control: Guardrails read the plan\'s own spending, not the extra', () => {
+    const front = { ...CEIL_BASE, extraSpend: 0.5, extraSpendMode: 'pct', extraSpendUntil: 2030 };
+    const on = simulate(front);
+    assert(on.log.slice(0, 5).every(e => e.extraSpend > 0), 'precondition: the first five years carry the extra');
+    // The rule compares its goal with the plan's own path for the year. Had the path kept the extra,
+    // every extra year would read as spending far under the plan and earn a prosperity raise.
+    assert(!on.log.slice(1, 5).some(e => /pros/.test(e.ruleAdj ?? '')), 'no prosperity raise in an extra year: '
+        + on.log.slice(1, 5).map(e => e.ruleAdj).join(','));
+    assertNear(xsRow(on, 2026).ruleSpend, CEIL_BASE.spendGoal, 'the rule\'s own goal leaves the extra out', 1e-6);
+    // The extra ending in 2031 is not a cut, so the plan is as stable as the same plan without it.
+    const plain = simulate({ ...CEIL_BASE });
+    assert(core.gkSpendStable(on, {}, front) === core.gkSpendStable(plain, {}, CEIL_BASE),
+        'the end of the extra must not read as a slash');
+});
+
+test('Additional Spend Control: on a Monte Carlo path a dollar amount takes the path\'s inflation', () => {
+    const seq = [0.07, 0.01, 0.05, 0.02, 0.04, 0.03, 0.02, 0.06, 0.01, 0.03, 0.02, 0.03];
+    const r = simulate({ ...XS_BASE, extraSpend: 10000, extraSpendUntil: 2029, inflationSequence: seq });
+    assertNear(xsRow(r, 2027).extraSpend, 10000 * 1.07, 'the drawn 7%', 1e-6);
+    assertNear(xsRow(r, 2029).extraSpend, 10000 * 1.07 * 1.01 * 1.05, 'compounded along the path', 1e-6);
+});
+
 test('P81c: a capped pension COLA is floored at zero per year, and does not claw back', () => {
     // A capped plan is NOT on the high-water rule: the cap already severs it from the index level
     // (P70i), and plan language grants an adjustment of the lesser of the cap and the year's CPI
@@ -8826,6 +8922,9 @@ test('P128: a resumed run IS the plan continued - every field of every later row
                                    rbgRails: _p132Table(40, { 2: { cutAt: 1e-9, cutB: 0.03 }, 12: { raiseAt: 1e9, raiseB: 0.05 } }) }],
         // Resumed on either side of an announced COLA, the Social Security clock must carry over.
         ['announced SS COLA', { ...COLA_BASE }],
+        // An extra every other year, and one under Guardrails: neither may leak into a later year.
+        ['additional spend', { ...XS_BASE, extraSpend: 0.5, extraSpendMode: 'pct', extraSpendEvery: 2, extraSpendUntil: 2034 }],
+        ['additional spend + guardrails', { ...CEIL_BASE, extraSpend: 30000, extraSpendEvery: 5, extraSpendFrom: 2027 }],
     ];
     // The bank adds nineteen real households in node, with the rule both ways.
     if (_planBank) {

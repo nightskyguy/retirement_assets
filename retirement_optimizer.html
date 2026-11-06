@@ -31,7 +31,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1d02</title>
+    <title>Retirement Optimizer 11.1d09</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -81,14 +81,14 @@
 	<base target="_blank">	
 	<script src="taxengine.js?v=1119e7"></script>
 	<script src="medicare_costs.js?v=111917"></script>
-	<script src="optimizer_core.js?v=111d02"></script>
+	<script src="optimizer_core.js?v=111d09"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=111a3f"></script>
-	<script src="optimizer_tests.js?v=111d02"></script>
+	<script src="optimizer_ui.js?v=111d09"></script>
+	<script src="optimizer_tests.js?v=111d09"></script>
 </head>
 <body>
 
@@ -147,6 +147,25 @@
 				<input type="number" id="spendChange" value="-1" step="0.1" min="-25" max="25" placeholder="0.0" style="width:70px;font-size:14px;"></label></div>
 				</div><!-- spending -->
 			</div>	<!-- class=row -->
+			<!-- Additional Spend Control: one extra spending amount on top of After-Tax Spend for the years
+			     it covers. Spending only, never income. Folded and closed by default; the summary line states
+			     the setting while closed, so a folded control never hides one in force. Filled by
+			     updateExtraSpendSummary(). -->
+			<details id="extra-spend-fold" style="margin:2px 0 4px;font-size:0.9em;" ontoggle="rememberFoldState()">
+				<summary id="extra-spend-summary" style="cursor:pointer;">Additional Spend Control</summary>
+				<div style="font-size:0.85em;color:#555;margin:4px 0 4px;line-height:1.35;">Spend more, or less, on top of After-Tax Spend in the years you choose: a car every 7 years, or extra travel in your early years. Your withdrawal strategy decides which accounts pay for it.</div>
+				<div class="row" style="flex-wrap:wrap;gap:4px 10px;">
+					<div><label title="Extra spending in each year it applies. A dollar amount is in today's dollars and grows with inflation, but not with Spend Delta. Add % for a share of that year's After-Tax Spend after Spend Delta, so 100% doubles it. A negative amount spends less. Shorthand works: 40k. Blank = off.">Amount
+					<input type="text" id="extraSpend" value="" placeholder="none" data-plain oninput="updateExtraSpendSummary()" style="width:80px;font-size:14px;"></label></div>
+					<div><label title="1 = every year. 7 = every seventh year, counted from the From year.">Every
+					<input type="number" id="extraSpendEvery" value="1" min="1" max="50" step="1" oninput="updateExtraSpendSummary()" style="width:50px;font-size:14px;"> yr</label></div>
+					<div><label title="The first year it applies: a calendar year (4 digits, e.g. 2027) or your age (e.g. 66). Blank = the plan's first year.">From
+					<input type="text" id="extraSpendFrom" value="" placeholder="start" data-plain oninput="updateExtraSpendSummary()" style="width:60px;font-size:14px;"></label></div>
+					<div><label title="The last year it applies: a calendar year (4 digits, e.g. 2045) or your age (e.g. 80). Blank = the end of the plan.">Until
+					<input type="text" id="extraSpendUntil" value="" placeholder="end" data-plain oninput="updateExtraSpendSummary()" style="width:60px;font-size:14px;"></label></div>
+				</div>
+				<div id="extraSpendRead" style="font-size:0.85em;color:#555;margin-top:2px;"></div>
+			</details>
 			<!-- P126, P132. Guardrails: a spend rule. It sits beside the spend goal because it decides how
 			     much is spent, not which account pays. Two rules: GK-style (Guyton-Klinger) follows your
 			     savings; Risk-based follows the plan's chance of success, read from the rails panel under
@@ -1151,6 +1170,14 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="feature"><b>11.1d09</b>
+					<strong>New: Additional Spend Control, for extra spending in the years you choose.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>Folded under Spend Delta: a dollar amount in today's dollars (a car every 7 years) or a percentage of that year's spending (100% until age 80 to front-load travel). A negative amount spends less.</li>
+					<li>It repeats every N years between a From and an Until, each a calendar year or your age. Your withdrawal strategy pays for it, so its tax cost shows everywhere; Guardrails adjust only your regular spending.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.1d09" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="behavior"><b>11.1d02</b>
 					<strong>Social Security's 2027 increase is the 3.6% Social Security announced.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1191,16 +1218,6 @@
 					<li>Medicare cost no longer varies from one Monte Carlo path to another, which narrows the spread slightly.</li>
 					</ul>
 					<a href="optimizer_changelog.md#11.1917" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="behavior"><b>11.18fc</b>
-					<strong>IRMAA, state tax tables and ACA income limits corrected; Saved Scenarios handles any name.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>The Medicare IRMAA surcharge contained an error that has been corrected: it was charged at the wrong tier and included the standard premium, so it came out too high for every income above the first threshold. The surcharge and the base Medicare premium are now separate figures matching what Medicare publishes for 2026, and the income thresholds match to the dollar. If your plan reaches an IRMAA tier its numbers will move, and a plan close to the line may now fund where it did not before.</li>
-					<li>The tax tables for seven states contained errors that have been corrected, and the rates and brackets now match what each state publishes for 2026. Minnesota, Montana and Wisconsin were the largest, each charging more state tax than it should; Indiana, Kentucky and Mississippi have had rate cuts since the tables were last set; and Virginia carried a top bracket that does not exist. If your plan uses one of those states, its numbers will move.</li>
-					<li>The ACA Cliff limits contained an error that has been corrected. The error was small, and it made each limit slightly too strict. They now use the 2025 Federal Poverty Level figures, the ones 2026 coverage is measured against.</li>
-					<li>A saved scenario whose name contains a double quotation mark can now be opened, loaded, deleted and exported from Saved Scenarios.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.18fc" target="_blank" rel="noopener">Details</a>
 				</li>
 				</ul>
 				<script>
@@ -1667,7 +1684,7 @@
 <script src="montecarlo/mc_engine.js?v=11192e"></script>
 <!-- P128. The risk-based rails solver. Same arrangement as mc_engine.js: the worker imports it too,
      and on file:// the controller runs it here. -->
-<script src="montecarlo/rails_engine.js?v=11192e"></script>
+<script src="montecarlo/rails_engine.js?v=111d09"></script>
 <script src="montecarlo/mc_controller.js?v=111930"></script>
 <script src="montecarlo/mc_tab.js?v=111989"></script>
 
@@ -1870,7 +1887,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these seven are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111d02';
+    const V = '?v=111d09';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

@@ -34,7 +34,7 @@ const PLAN = {
         viability: {
             funded: "29/29",
             fundsEveryYear: true,
-            endingIRA: 1923271,
+            endingIRA: 1924029,
             peakIRAYear: 26,
             acaBreachYears: 0
         },
@@ -98,6 +98,7 @@ const PLAN = {
         iraWithdrawPct: 0.05,
         startAge: 65,
         startInYear: 2026,
+        todayYear: 2026,
         dividendReinvest: true,
         cyclicEnabled: true,
         cyclicOrder: "brokerage-first",

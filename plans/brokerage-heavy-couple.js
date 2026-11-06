@@ -74,6 +74,7 @@ const PLAN = {
         fundConversionWithCash: false,
         startAge: 64,
         startInYear: 2026,
+        todayYear: 2026,
         dividendReinvest: true,
         gkGuard: 0.2,
         gkAdjPct: 0.1,

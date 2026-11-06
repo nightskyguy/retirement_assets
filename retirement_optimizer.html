@@ -31,7 +31,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1a3f</title>
+    <title>Retirement Optimizer 11.1d09</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -81,14 +81,14 @@
 	<base target="_blank">	
 	<script src="taxengine.js?v=1119e7"></script>
 	<script src="medicare_costs.js?v=111917"></script>
-	<script src="optimizer_core.js?v=111932"></script>
+	<script src="optimizer_core.js?v=111d09"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
-	<script src="optimizer_ui.js?v=111a3f"></script>
-	<script src="optimizer_tests.js?v=11d04"></script>
+	<script src="optimizer_ui.js?v=111d09"></script>
+	<script src="optimizer_tests.js?v=111d09"></script>
 </head>
 <body>
 
@@ -147,6 +147,25 @@
 				<input type="number" id="spendChange" value="-1" step="0.1" min="-25" max="25" placeholder="0.0" style="width:70px;font-size:14px;"></label></div>
 				</div><!-- spending -->
 			</div>	<!-- class=row -->
+			<!-- Additional Spend Control: one extra spending amount on top of After-Tax Spend for the years
+			     it covers. Spending only, never income. Folded and closed by default; the summary line states
+			     the setting while closed, so a folded control never hides one in force. Filled by
+			     updateExtraSpendSummary(). -->
+			<details id="extra-spend-fold" style="margin:2px 0 4px;font-size:0.9em;" ontoggle="rememberFoldState()">
+				<summary id="extra-spend-summary" style="cursor:pointer;">Additional Spend Control</summary>
+				<div style="font-size:0.85em;color:#555;margin:4px 0 4px;line-height:1.35;">Spend more, or less, on top of After-Tax Spend in the years you choose: a car every 7 years, or extra travel in your early years. Your withdrawal strategy decides which accounts pay for it.</div>
+				<div class="row" style="flex-wrap:wrap;gap:4px 10px;">
+					<div><label title="Extra spending in each year it applies. A dollar amount is in today's dollars and grows with inflation, but not with Spend Delta. Add % for a share of that year's After-Tax Spend after Spend Delta, so 100% doubles it. A negative amount spends less. Shorthand works: 40k. Blank = off.">Amount
+					<input type="text" id="extraSpend" value="" placeholder="none" data-plain oninput="updateExtraSpendSummary()" style="width:80px;font-size:14px;"></label></div>
+					<div><label title="1 = every year. 7 = every seventh year, counted from the From year.">Every
+					<input type="number" id="extraSpendEvery" value="1" min="1" max="50" step="1" oninput="updateExtraSpendSummary()" style="width:50px;font-size:14px;"> yr</label></div>
+					<div><label title="The first year it applies: a calendar year (4 digits, e.g. 2027) or your age (e.g. 66). Blank = the plan's first year.">From
+					<input type="text" id="extraSpendFrom" value="" placeholder="start" data-plain oninput="updateExtraSpendSummary()" style="width:60px;font-size:14px;"></label></div>
+					<div><label title="The last year it applies: a calendar year (4 digits, e.g. 2045) or your age (e.g. 80). Blank = the end of the plan.">Until
+					<input type="text" id="extraSpendUntil" value="" placeholder="end" data-plain oninput="updateExtraSpendSummary()" style="width:60px;font-size:14px;"></label></div>
+				</div>
+				<div id="extraSpendRead" style="font-size:0.85em;color:#555;margin-top:2px;"></div>
+			</details>
 			<!-- P126, P132. Guardrails: a spend rule. It sits beside the spend goal because it decides how
 			     much is spent, not which account pays. Two rules: GK-style (Guyton-Klinger) follows your
 			     savings; Risk-based follows the plan's chance of success, read from the rails panel under
@@ -569,13 +588,13 @@
         <details class="section" open>
         <summary>3. Annual Income &amp; QCDs</summary>
         <div class="row">
-            <div><label title="Your gross annual Social Security benefit in today's dollars, at the start age below. Grows with the CPI/COLA rate each year.">Social Security Amt<input type="text" id="ss1" value="48000"></label></div>
+            <div><label title="Your gross annual Social Security benefit in today's dollars, at the start age below. Grows with the CPI/COLA rate each year, except a coming year whose COLA Social Security has already announced, which uses the announced rate.">Social Security Amt<input type="text" id="ss1" value="48000"></label></div>
             <div><label title="Age you start claiming Social Security. Benefits before this age are $0. Eligibility usually begins at 62; benefits stop increasing after 70.&#10;&#10;The first year is paid from your birth month onward, not in full: a June birth month means 6 months of benefit that year, and the default December means none at all until the following year.">Start Age<input type="number" id="ss1Age" value="70"
               oninput="(function(v,el){el.style.display=v>0&&v<62?'block':v>70?'block':'none';el.textContent=v<62?'⚠ SS eligibility usually begins at 62.':'⚠ SS benefits do not increase after 70.';})(+this.value,document.getElementById('ss1Age-warn'))"></label></div>
         </div>
         <div id="ss1Age-warn" style="display:none;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:3px 7px;font-size:0.82em;margin-top:3px;"></div>
         <div class="row spouse-field">
-            <div><label title="Your spouse's gross annual Social Security benefit in today's dollars, at their start age. Grows with the CPI/COLA rate each year."><B><I>Spouse</I></B> SS Amt<input type="text" id="ss2" value="24000"></label></div>
+            <div><label title="Your spouse's gross annual Social Security benefit in today's dollars, at their start age. Grows with the CPI/COLA rate each year, except a coming year whose COLA Social Security has already announced, which uses the announced rate."><B><I>Spouse</I></B> SS Amt<input type="text" id="ss2" value="24000"></label></div>
             <!-- TODO: Change default Spouse SS Start Age from 70 to 62. -->
             <div><label title="Age your spouse starts claiming Social Security. Benefits before this age are $0. Eligibility usually begins at 62; benefits stop increasing after 70.&#10;&#10;The first year is paid from their birth month onward, not in full: a June birth month means 6 months of benefit that year, and the default December means none at all until the following year."><B><I>Spouse</I></B> Start Age<input type="number" id="ss2Age" value="70"
               oninput="(function(v,el){el.style.display=v>0&&v<62?'block':v>70?'block':'none';el.textContent=v<62?'⚠ SS eligibility usually begins at 62.':'⚠ SS benefits do not increase after 70.';})(+this.value,document.getElementById('ss2Age-warn'))"></label></div>
@@ -641,7 +660,7 @@
         </div>
         <div class="row">
             <div><label title="General price inflation. Drives spending-goal escalation: your After-Tax Spend goal grows by this rate each year so it stays constant in today's dollars. Often differs slightly from CPI/COLA. It does NOT drive Medicare or IRMAA dollars, which follow a published Medicare path of their own."><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)%<input type="number" id="inflation" value="3.0" step="0.01" min="0" placeholder="0.00" oninput="updateGrowthDisplay();updateCpiSpreadDisplay()"></label></div>
-            <div><label title="Cost-of-living index. Drives federal &amp; IRMAA bracket indexing and Social Security COLA adjustments. Often differs from general inflation, so it is entered separately. It indexes the IRMAA income thresholds, but not the surcharge dollars: those follow a published Medicare path instead, because Medicare premiums have no measurable relationship to CPI."><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)%<input type="number" id="cpi" value="2.8" step="0.01" min="0" placeholder="0.00" oninput="updateCpiSpreadDisplay()"></label></div>
+            <div><label title="Cost-of-living index. Drives federal &amp; IRMAA bracket indexing and Social Security COLA adjustments. For a coming year whose COLA Social Security has already announced, Social Security uses the announced rate instead. Often differs from general inflation, so it is entered separately. It indexes the IRMAA income thresholds, but not the surcharge dollars: those follow a published Medicare path instead, because Medicare premiums have no measurable relationship to CPI."><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)%<input type="number" id="cpi" value="2.8" step="0.01" min="0" placeholder="0.00" oninput="updateCpiSpreadDisplay()"></label></div>
         </div>
         <!-- P70. The spread between the two rates IS the model: the statutory index runs below
              felt inflation, and under Monte Carlo the index is the drawn path less this gap.
@@ -878,7 +897,7 @@
 				     always said so. Distinct from the Fixed Inflation preset above: that one pins the
 				     generated paths, this one pins what the tax code does with whatever they produced. -->
 				<div style="margin-top:8px;">
-					<label style="font-size:0.85em;" title="Diagnostic. Indexes brackets, IRMAA tiers, the ACA cap, the QCD limit, Social Security COLA and Medicare premium growth at the CPI and Inflation rates you typed, ignoring each path's own inflation. Spending still follows the path. Run with it on and off to see what variable inflation costs in tax alone.">
+					<label style="font-size:0.85em;" title="Diagnostic. Indexes brackets, IRMAA tiers, the ACA cap, the QCD limit, Social Security COLA and Medicare premium growth at the CPI and Inflation rates you typed, ignoring each path's own inflation. A Social Security COLA already announced still applies. Spending still follows the path. Run with it on and off to see what variable inflation costs in tax alone.">
 						<input type="checkbox" id="fixedTaxIndexing"> Fixed tax indexing</label>
 					<div style="font-size:0.78em;color:#666;margin-top:2px;">Taxes index at your typed rates; spending still follows each path. Off by default.</div>
 				</div>
@@ -1151,6 +1170,14 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="behavior"><b>11.1d09</b>
+					<strong>Social Security's 2027 increase is the 3.6% Social Security announced, and new Additional Spend Control adds extra spending in the years you choose.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>In 2027, Social Security benefits rise by the announced 3.6% instead of your CPI/COLA rate, and later years grow at your CPI/COLA rate from that higher amount. At the default 2.8% CPI, every benefit paid from 2027 on is about 0.8% higher. Tax brackets, IRMAA thresholds and pensions still use your CPI/COLA rate. From January 2027, enter your benefit at its 2027 amount; the tool will not add the increase again.</li>
+					<li>Additional Spend Control, folded under Spend Delta: a dollar amount in today's dollars (a car every 7 years) or a percentage of that year's spending (100% until age 80 to front-load travel), repeating every N years between a From and an Until. A negative amount spends less. Your withdrawal strategy pays for it, so its tax cost shows everywhere.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.1d09" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="display"><b>11.1a3f</b>
 					<strong>Annual Details is no longer mistaken for an advertisement by ad blockers.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1193,15 +1220,6 @@
 					<li>A saved scenario whose name contains a double quotation mark can now be opened, loaded, deleted and exported from Saved Scenarios.</li>
 					</ul>
 					<a href="optimizer_changelog.md#11.18fc" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="behavior"><b>11.18bf</b>
-					<strong>GK-style Guardrails corrected; the risk-based rails get one preset menu, the article&rsquo;s own set, a replay solve, milestones and a column set.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>GK-style Guardrails contained an error that has been corrected: spending could be cut in the year Social Security or a pension started. The rule now measures what your portfolio funds (spending after Social Security and pension) against your plan&rsquo;s own draw for the same year, so on your plan&rsquo;s own assumptions nothing changes and it acts when markets take you off the plan. See the Details.</li>
-					<li>One preset menu, <i>Risk-based guidance</i>, under the Guardrails switch and always in view: <i>High Safety</i>, <i>Normal</i>, <i>More Tolerant</i> (a cut returns to 70%), the new <i>More Risk</i> (the 2024 article&rsquo;s own numbers) and <i>Custom</i>, four boxes of your own. The panel&rsquo;s <i>Market paths</i> menu is gone; the rails solve on the Monte Carlo tab&rsquo;s market.</li>
-					<li><i>Solve rails on this path</i> re-solves the chance of success along a replayed Monte Carlo path. Every Guardrails cut and raise is a milestone on the charts, and Annual Details has a <i>Guardrails</i> column set (<i>ruleSpend</i>, <i>ruleAdj</i>, <i>vsPlan%</i>). The Limit menu is in order of the income each entry caps, and its figures are that income. No other plan numbers change.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.18bf" target="_blank" rel="noopener">Details</a>
 				</li>
 				</ul>
 				<script>
@@ -1668,7 +1686,7 @@
 <script src="montecarlo/mc_engine.js?v=11192e"></script>
 <!-- P128. The risk-based rails solver. Same arrangement as mc_engine.js: the worker imports it too,
      and on file:// the controller runs it here. -->
-<script src="montecarlo/rails_engine.js?v=11192e"></script>
+<script src="montecarlo/rails_engine.js?v=111d09"></script>
 <script src="montecarlo/mc_controller.js?v=111930"></script>
 <script src="montecarlo/mc_tab.js?v=111989"></script>
 
@@ -1871,7 +1889,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these seven are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=11d04';
+    const V = '?v=111d09';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

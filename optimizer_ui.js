@@ -234,6 +234,9 @@ function applyNerdKnobVisibility() {
     // keys are not gated with any field either: hiding an input leaves its value in place, so a plan
     // loaded from a link carrying ?af= keeps its fee and still computes it.
     updateAdvisorFeeHint();
+    // Setting a field's value from a link or a saved scenario fires no oninput, so the fold's
+    // summary is refreshed here, which both loaders reach.
+    updateExtraSpendSummary();
     const irmaaMarginWrap = document.getElementById('irmaaMarginMode-wrap');
     if (irmaaMarginWrap) irmaaMarginWrap.style.display = NERD_KNOBS ? '' : 'none';
     // 💵 legend - only meaningful once nerdknob is sweeping the cash-funded arm
@@ -686,15 +689,21 @@ function getInputs() {
         // Conversion END: the LAST year conversions run; blank = never stop (today's behavior).
         // One field accepts a calendar year (4+ digits, e.g. 2031) or an age of person 1 (fewer
         // than 4 digits, e.g. 71 -> birthyear1 + 71). Engine reads it as a calendar year.
-        convEndYear: (() => {
-            const raw = (val('convEndYear') ?? '').toString().trim();
-            if (!raw) return undefined;
-            const n = parseInt(raw, 10);
-            if (!Number.isFinite(n) || n <= 0) return undefined;
-            const digits = raw.replace(/[^0-9]/g, '').length;
-            return digits < 4 ? (+val('birthyear1') + n) : n;
-        })(),
+        convEndYear: yearOrAgeToYear(val('convEndYear'), +val('birthyear1')),
         convEndMode: val('convEndMode') === 'extra' ? 'extra' : 'all',
+        // Additional Spend Control. Sent only when an amount is set, so a plan without one hands the
+        // engine exactly the inputs it always did. From and Until take a year or an age, as above.
+        ...(() => {
+            const p = parseExtraSpend(val('extraSpend'));
+            if (!p) return {};
+            const by1 = +val('birthyear1');
+            return {
+                extraSpend: p.amount, extraSpendMode: p.mode,
+                extraSpendEvery: Math.max(1, Math.floor(+val('extraSpendEvery') || 1)),
+                extraSpendFrom: yearOrAgeToYear(val('extraSpendFrom'), by1),
+                extraSpendUntil: yearOrAgeToYear(val('extraSpendUntil'), by1),
+            };
+        })(),
         ...(PROP_TAX_STATE || {}),
         propWithdraw: +val('propWithdraw') / 100.0,
         iraWithdrawPct: +val('iraWithdrawPct') / 100.0,
@@ -2628,7 +2637,7 @@ function toggleFailedRows() {
 // the saved-scenario blob under STORAGE_KEY, because this is not scenario data.
 const FOLD_STORAGE_KEY = 'optimizerChromeFolds';
 // The rails panel below the Charts tab's charts folds the same way, for the same reason.
-const FOLD_IDS = ['opt-fold-legend', 'rails-panel', 'guardrails-note-fold', 'ui-rbg-custom'];
+const FOLD_IDS = ['opt-fold-legend', 'rails-panel', 'guardrails-note-fold', 'ui-rbg-custom', 'extra-spend-fold'];
 // Chrome fires a `toggle` event when it PARSES a <details open>, before any of our init code has
 // run. The strip carries `open` in the markup, so that toggle lands first, the inline handler
 // writes "both open" to storage, and restoreFoldState then reads back the value it just
@@ -2830,6 +2839,7 @@ const columnCategories = {
     'age2': ['Summary'],
     'status': ['Summary', 'Taxation'],
     'spendGoal': ['Summary', 'Income', 'Guardrails'],
+    'extraSpend': ['Summary', 'Income', 'Spending'],
     // Social Security plus pension: what the portfolio does not have to fund. The risk-based rule
     // compares spending NET of it, so it belongs beside the rule's columns (user, 2026-09-19).
     'guaranteedIncome': ['Income', 'Guardrails'],
@@ -2957,7 +2967,7 @@ const columnCategories = {
 // Maps each column key to a visual group label for the group header row
 const columnGroupDefs = {
     'year': 'Who', 'age1': 'Who', 'age2': 'Who', 'status': 'Who',
-    'SSincome': 'Income', 'pension': 'Income', 'spendGoal': 'Income', 'guaranteedIncome': 'Income',
+    'SSincome': 'Income', 'pension': 'Income', 'spendGoal': 'Income', 'extraSpend': 'Income', 'guaranteedIncome': 'Income',
     'netIncome': 'Income', 'totalIncome': 'Income', 'surplus': 'Income',
     'shortfall': 'Income', 'RMDwd': 'Income', 'cashD+I': 'Income',
     'IRAwd': 'Withdrawals', 'IRA1-': 'Withdrawals', 'IRA2-': 'Withdrawals',
@@ -3446,7 +3456,8 @@ function updateTable(log) {
         'BracketOverage': 'Amount MAGI exceeded the bracket target. Two things put it above: spending needs that could not be funded inside the ceiling, and an Extra Annual Roth Conversion, which is added on top of the ceiling rather than fitted inside it.',
         'acaBreach': 'Yes in a year an ACA Cliff plan could not both stay under its income cap and fund the Spend Goal. Two outcomes reach it: MAGI went over the cap anyway, which shows as BracketOverage, or the plan held the cap and left spending unfunded, which shows as shortfall. Blank on every plan that is not using an ACA FPL cap, and on cap years that held without costing anything.',
         'ForcedIRA': 'Extra IRA withdrawn to fund mandatory spending after Cash, Brokerage and Roth were exhausted. For the Fill Bracket and IRMAA Tier strategies this draw goes above their ceiling, which is what makes those ceilings soft. ACA Cliff never does this while its cap is in force: an IRA withdrawal is taxable income and crossing the cap forfeits the premium subsidy, so it leaves a shortfall instead. Once that cap ends at Medicare it is funded like any other strategy.',
-        'spendGoal': 'This amount increases by inflation less Spend Delta%.',
+        'spendGoal': 'This amount increases by inflation less Spend Delta%. It includes any Additional Spend Control amount, which is also shown on its own as extraSpend.',
+        'extraSpend': 'The Additional Spend Control amount in this year: extra spending on top of the plan\'s own, or less when negative. Already included in spendGoal.',
         'Roth': 'Combined Roth balance at year end.',
         'Roth1': "Person 1's Roth balance at year end.",
         'Roth2': "Person 2's Roth balance at year end.",
@@ -6127,6 +6138,67 @@ function valChecked(id) { return document.getElementById(id)?.checked; }
 // An explicit marker always wins over the magnitude: "0.9%" is a percent even though a bare 0.9
 // would be too, and "$15" is fifteen dollars a year even though a bare 15 would read as 15%.
 // Everything else falls to the engine's own threshold, so the rule lives in ONE place.
+// One field, a calendar year or an age: 4 or more digits is a year (2031), fewer is an age of person 1
+// (71 -> birthyear1 + 71). Returns the calendar year the engine reads, or undefined when blank or
+// unreadable. Shared by the conversion stop year and the Additional Spend Control's From and Until.
+function yearOrAgeToYear(raw, birthyear1) {
+    const txt = (raw ?? '').toString().trim();
+    if (!txt) return undefined;
+    const n = parseInt(txt, 10);
+    if (!Number.isFinite(n) || n <= 0) return undefined;
+    return txt.replace(/[^0-9]/g, '').length < 4 ? birthyear1 + n : n;
+}
+
+// Additional Spend Control's amount. One field read two ways, like the advisor fee: a trailing % is a
+// share of the year's After-Tax Spend (a fraction to the engine), anything else is today's dollars.
+// Shorthand and a minus sign work. Blank, zero or unreadable is off: null.
+function parseExtraSpend(raw) {
+    const txt = (raw ?? '').toString().trim();
+    if (!txt) return null;
+    const pct = /%\s*$/.test(txt);
+    const n = DisplayHelpers.parseShorthand(txt.replace(/%\s*$/, ''));
+    if (n == null || !Number.isFinite(n) || n === 0) return null;
+    return pct ? { amount: n / 100, mode: 'pct' } : { amount: n, mode: 'amount' };
+}
+
+// States the Additional Spend Control setting in words: in full under the fields, and in short on the
+// fold's own summary line, so a closed fold still says when an extra is in force.
+function updateExtraSpendSummary() {
+    const sum = document.getElementById('extra-spend-summary');
+    if (!sum) return;
+    const read = document.getElementById('extraSpendRead');
+    const p = parseExtraSpend(document.getElementById('extraSpend')?.value);
+    if (!p) {
+        sum.textContent = 'Additional Spend Control';
+        sum.style.fontWeight = '';
+        if (read) read.textContent = 'Off.';
+        return;
+    }
+    const every = Math.max(1, Math.floor(+document.getElementById('extraSpendEvery')?.value || 1));
+    const by1 = +document.getElementById('birthyear1')?.value;
+    // A From or Until is named the way it was typed: "age 80" or "2045". Unreadable is left out.
+    const when = id => {
+        const t = (document.getElementById(id)?.value ?? '').trim();
+        const y = yearOrAgeToYear(t, by1);
+        if (y == null) return null;
+        return t.replace(/[^0-9]/g, '').length < 4 ? `age ${parseInt(t, 10)}` : String(y);
+    };
+    const from = when('extraSpendFrom'), until = when('extraSpendUntil');
+    const span = from && until ? `, ${from} through ${until}`
+               : from ? `, from ${from}` : until ? `, through ${until}` : '';
+    const sign = p.amount > 0 ? '+' : '-';
+    const short = p.mode === 'pct'
+        ? `${sign}${+(Math.abs(p.amount) * 100).toFixed(2)}%`
+        : `${sign}$${Math.round(Math.abs(p.amount)).toLocaleString()}`;
+    const often = every === 1 ? 'every year' : `every ${every} years`;
+    sum.textContent = `Additional Spend Control: ${short} ${often}${span}`;
+    sum.style.fontWeight = '600';
+    if (read) {
+        const what = p.mode === 'pct' ? `${short} of that year's After-Tax Spend` : `${short} in today's dollars`;
+        read.textContent = `${what}, ${often}${span || ' for the whole plan'}.`;
+    }
+}
+
 function parseAdvisorFeeAmount(raw) {
     const txt = (raw ?? '').toString().trim();
     if (!txt) return { amount: 0, mode: 'pct', explicit: false };
@@ -6250,6 +6322,7 @@ function setupSmallScreenUX() {
 function setupAutoRecalc() {
     const LABELS = {
         spendGoal: 'Spend Goal', spendChange: 'Spend Δ%', strategy: 'Strategy', spendRule: 'Guardrails',
+        extraSpend: 'Extra Spend', extraSpendEvery: 'Extra Every', extraSpendFrom: 'Extra From', extraSpendUntil: 'Extra Until',
         gkShapeCeiling: 'Never Above Plan',
         nYears: 'N Years', stratRate: 'Bracket', propWithdraw: 'Boost%',
         iraBaseGoal: 'IRA Goal', maximizeConversions: 'Max Conversions',
@@ -7042,6 +7115,7 @@ function toggleStrategyUI() {
 
 const OPT_LONG_TO_SHORT = {
     spendGoal:'sg', spendChange:'sc', strategy:'str', nYears:'ny',
+    extraSpend:'xs', extraSpendEvery:'xse', extraSpendFrom:'xsf', extraSpendUntil:'xsu',
     propWithdraw:'pw', stratRate:'sr', iraWithdrawPct:'iwp', orderedSeq:'os', rothGapFill:'rgf',
     convertExcessToRoth:'mc', fundConversionWithCash:'fcc', extraConversionAmount:'eca', iraBaseGoal:'ibg',
     convEndYear:'cey', convEndMode:'cem', irmaaMarginMode:'imm', fixedTaxIndexing:'fti',
@@ -7097,13 +7171,14 @@ const OPT_SHARE_PRIVACY = {
         'grk', 'rbp', 'rbt', 'rbu', 'rbl', 'rbc',                         // the spend rule's menu and preset
         'swi', 'swb', 'swc', 'swr',
         'obj', 'ptxm', 'ptxr',
+        'xse',                                                          // how often the extra spend repeats
     ],
     personal: [
-        'sg', 'eca', 'ibg', 'af', 'qm', 'ptx',                          // spending and dollar targets
+        'sg', 'eca', 'ibg', 'af', 'qm', 'ptx', 'xs',                    // spending and dollar targets
         'i1', 'i2', 'ro', 'ro2', 'bk', 'bb', 'ca', 'cr',                // balances
         'ss1', 'ss2', 'pa', 'pc', 'sur',                                // income and pension terms
         'by1', 'bm1', 'd1', 'by2', 'bm2', 'd2', 'sa',                   // ages and dates
-        'ss1a', 'ss2a', 'psa', 'cey',
+        'ss1a', 'ss2a', 'psa', 'cey', 'xsf', 'xsu',
         'me1', 'me2',                                                   // Medicare coverage
     ],
 };

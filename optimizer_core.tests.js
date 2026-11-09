@@ -2805,7 +2805,10 @@ const _worst = rows => rows.length ? Math.max(...rows.map(e => Math.abs(e.shortf
 const FUNDING_ARMS = [
     { name: 'bracket 22%',    over: { strategy: 'bracket',  stratRate: 0.22 },                              iraStranded:  0, worst:      0 },
     { name: 'IRMAA tier1',    over: { strategy: 'bracket',  stratRate: 0, stratIRMAATier: 1 },            iraStranded:  0, worst:      0 },
-    { name: 'fixedpct 2%',    over: { strategy: 'fixedpct', iraWithdrawPct: 0.02 },                         iraStranded:  0, worst:      0 },
+    // One year ends $1.46 short with $2.2M of IRA left. The per-person senior deduction changed the tax
+    // path and with it which year the forced-IRA loop stops a dollar or two short of; the same
+    // convergence residual as the `ordered` rows below, pinned rather than blessed.
+    { name: 'fixedpct 2%',    over: { strategy: 'fixedpct', iraWithdrawPct: 0.02 },                         iraStranded:  1, worst:   1.46 },
     { name: 'propwd 0%',      over: { strategy: 'propwd',   propWithdraw: 0,    stratRate: 0 },             iraStranded:  0, worst:      0 },
     { name: 'propwd 10%',     over: { strategy: 'propwd',   propWithdraw: 0.10, stratRate: 0 },             iraStranded:  0, worst:      0 },
     { name: 'propwd 50%',     over: { strategy: 'propwd',   propWithdraw: 0.50, stratRate: 0 },             iraStranded:  0, worst:      0 },
@@ -10302,6 +10305,29 @@ test.critical('Retirement Start: a calendar year and the matching age name the s
     const base = _planBank.get('ira-heavy-couple').inputs;
     const r = simulate({ ...base, startAge: 2027, startInYear: pfy(base.birthyear1, 2027) });
     assert(r && r.log && r.log.length > 0, 'a plan whose start was typed as a year must simulate');
+});
+
+test('taxArgs: taxable interest is investment income for NIIT and is taxed like earned income otherwise', () => {
+    const { taxArgs } = core; if (!taxArgs) return;
+    const eq = (a, b, m) => assert(a === b, `${m}: expected ${b}, got ${a}`);
+    const sim = { birthyear1: 1955, birthyear2: 1955, cpiRate: 0.025 };
+    const yr = { status: 'MFJ', age1: 71, age2: 71, s1: 0, s2: 0, IRMAA: 0, pension: 300000, taxableRMD: 0,
+                 netWithdrawals: { IRA: 0 }, taxableInterest: 50000, taxableDividends: 0, capitalGains: 0,
+                 fedRateCreep: 1, stateRateCreep: 1, obbaOn: true, saltHigh: true, propTax: 0, taxYear: 2026 };
+    const args = taxArgs(sim, yr);
+    eq(args.ordDivInterest, 50000, 'the interest goes to the engine as investment income');
+    eq(args.earnedIncome, 300000, 'and leaves earned income, so nothing is counted twice');
+    const t = calculateTaxes(args);
+    const lumped = calculateTaxes({ ...args, earnedIncome: 350000, ordDivInterest: 0 });
+    assertNear(t.niitTax, 0.038 * 50000, 'NIIT on the interest: MAGI is 100,000 over the threshold, more than the 50,000', 0.01);
+    eq(lumped.niitTax, 0, 'lumped into earned income the same dollars were never charged NIIT');
+    for (const k of ['AGI', 'federalOrdinaryTax', 'stateOrdinaryTax', 'taxableSS', 'federalStdDeduction'])
+        eq(t[k], lumped[k], `${k} is identical either way`);
+    // A caller that supplies its own earnedIncome gets the same split, never more interest than income.
+    const own = taxArgs(sim, yr, { earnedIncome: 120000 });
+    eq([own.earnedIncome, own.ordDivInterest].join(), '70000,50000', 'an override that includes the interest is split');
+    const small = taxArgs(sim, yr, { earnedIncome: 20000 });
+    eq([small.earnedIncome, small.ordDivInterest].join(), '0,20000', 'and the interest is capped at the income there is');
 });
 
 const _planBank = IS_NODE ? require('./plans') : (typeof window !== 'undefined' ? window.PlanBank : null);

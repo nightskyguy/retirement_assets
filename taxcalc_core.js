@@ -193,10 +193,17 @@
       const extraRet = cfg.retirementSwept ? Math.max(0, ordInc - cfg.entOrdinary) : 0;
       const retInc = Math.max(0, Math.min(ordInc, cfg.retirementIncome + cfg.rmd + cfg.rothConv + cfg.taxWithdrawal + extraRet));
 
+      // The ordinary income that is also investment income, for the net investment income tax: interest,
+      // non-qualified dividends and a short-term gain. Handed over as ordDivInterest, which the engine
+      // taxes like earned income everywhere except that surtax. A short-term loss is not subtracted
+      // (it never lowers investment income), and it can never exceed the ordinary income there is.
+      const investOrd = Math.min(Math.max(0, ordInc), cfg.interest + cfg.ndiv + Math.max(0, cfg.stOrd));
+
       const r = calcTaxes({
         filingStatus:    status,
         ages:            ages,
-        earnedIncome:    ordInc,
+        earnedIncome:    ordInc - investOrd,
+        ordDivInterest:  investOrd,
         iraIncome:       retInc,
         totalSS:         ssIncome,
         capGains:        cgGain,

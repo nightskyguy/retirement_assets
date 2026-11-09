@@ -1204,7 +1204,7 @@ TAXData.OBBBA = {
     SENIOR_DED: {
         perSenior:    6000,                          // deduction per person aged ≥ 65 (P.L. 119-21)
         phaseoutAGI:  { MFJ: 150000, SGL: 75000 },  // AGI above which deduction phases out
-        phaseoutRate: 0.06,                          // $0.06 reduction per $1 above threshold
+        phaseoutRate: 0.06,                          // $0.06 off EACH person's $6,000 per $1 above threshold
         sunsetYear:   2028                           // deduction expires after this tax year (2025–2028 only)
     }
 };
@@ -1731,9 +1731,13 @@ function calculateTaxes(params = {}) {
 
     let seniorDeduction = 0;
     if (obbaOn && nSeniors > 0) {
-        const rawSenDed = obbaSen.perSenior * nSeniors;
+        // The reduction comes off EACH person's $6,000, not off the couple's total: IRS Schedule 1-A
+        // Part V finds one per-person amount (line 35) and gives it to the taxpayer (36a) and to the
+        // spouse (36b). Two seniors on a joint return therefore lose 12 cents per dollar over the
+        // threshold and reach zero at $250,000, not $350,000. See 26 U.S.C. 151(d)(5)(C)(iii).
         const phaseoutExcess = Math.max(0, federalAGI - obbaSen.phaseoutAGI[status]);
-        seniorDeduction = Math.max(0, rawSenDed - phaseoutExcess * obbaSen.phaseoutRate);
+        const perPerson = Math.max(0, obbaSen.perSenior - phaseoutExcess * obbaSen.phaseoutRate);
+        seniorDeduction = perPerson * nSeniors;
     }
     federalDeduction += seniorDeduction;
 

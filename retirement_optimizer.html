@@ -31,7 +31,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1d09</title>
+    <title>Retirement Optimizer 11.1d67</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -79,16 +79,16 @@
     .share-panel .share-status { font-family:monospace; font-size:10px; color:#1a7a1a; margin-top:.35rem; min-height:14px; }
 	</style>
 	<base target="_blank">	
-	<script src="taxengine.js?v=1119e7"></script>
+	<script src="taxengine.js?v=111d67"></script>
 	<script src="medicare_costs.js?v=111917"></script>
-	<script src="optimizer_core.js?v=111d09"></script>
+	<script src="optimizer_core.js?v=111d67"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
 	<script src="optimizer_ui.js?v=111d09"></script>
-	<script src="optimizer_tests.js?v=111d09"></script>
+	<script src="optimizer_tests.js?v=111d67"></script>
 </head>
 <body>
 
@@ -1170,6 +1170,14 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="behavior"><b>11.1d67</b>
+					<strong>The extra senior deduction shrinks for each spouse separately, and the 3.8% investment surtax now counts interest.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>The extra $6,000 deduction for age 65 and over (2025 to 2028) is reduced for each person by 6 cents per dollar of income over $150,000 on a joint return, so a couple who are both 65 or older lose 12 cents per dollar and reach zero at $250,000. A plan with both spouses 65 or older and income in that range shows a smaller deduction and more tax. Single filers, and joint returns with only one spouse 65 or older, do not change.</li>
+					<li>The 3.8% net investment income tax now applies to interest, non-qualified dividends and short-term gains, as well as long-term gains and qualified dividends, once income passes $250,000 joint or $200,000 single. Pension and IRA withdrawals are still not investment income.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.1d67" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="behavior"><b>11.1d09</b>
 					<strong>Social Security's 2027 increase is the 3.6% Social Security announced, and new Additional Spend Control adds extra spending in the years you choose.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1210,16 +1218,6 @@
 					<li>Medicare cost no longer varies from one Monte Carlo path to another, which narrows the spread slightly.</li>
 					</ul>
 					<a href="optimizer_changelog.md#11.1917" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="behavior"><b>11.18fc</b>
-					<strong>IRMAA, state tax tables and ACA income limits corrected; Saved Scenarios handles any name.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>The Medicare IRMAA surcharge contained an error that has been corrected: it was charged at the wrong tier and included the standard premium, so it came out too high for every income above the first threshold. The surcharge and the base Medicare premium are now separate figures matching what Medicare publishes for 2026, and the income thresholds match to the dollar. If your plan reaches an IRMAA tier its numbers will move, and a plan close to the line may now fund where it did not before.</li>
-					<li>The tax tables for seven states contained errors that have been corrected, and the rates and brackets now match what each state publishes for 2026. Minnesota, Montana and Wisconsin were the largest, each charging more state tax than it should; Indiana, Kentucky and Mississippi have had rate cuts since the tables were last set; and Virginia carried a top bracket that does not exist. If your plan uses one of those states, its numbers will move.</li>
-					<li>The ACA Cliff limits contained an error that has been corrected. The error was small, and it made each limit slightly too strict. They now use the 2025 Federal Poverty Level figures, the ones 2026 coverage is measured against.</li>
-					<li>A saved scenario whose name contains a double quotation mark can now be opened, loaded, deleted and exported from Saved Scenarios.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.18fc" target="_blank" rel="noopener">Details</a>
 				</li>
 				</ul>
 				<script>
@@ -1889,7 +1887,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these seven are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111d09';
+    const V = '?v=111d67';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

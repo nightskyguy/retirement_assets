@@ -33,8 +33,7 @@ income over the surtax threshold, pays more tax.*
   are unchanged.
 - **Interest is investment income.** The 3.8% net investment income tax now applies to interest,
   non-qualified dividends and short-term gains, as well as long-term gains and qualified dividends,
-  once income passes $250,000 joint or $200,000 single. Pension and IRA withdrawals are still not
-  investment income.
+  once income passes $250,000 joint or $200,000 single.
 - The Income Tax Planner and the other tools that share the tax engine give the same answers.
 
 ---

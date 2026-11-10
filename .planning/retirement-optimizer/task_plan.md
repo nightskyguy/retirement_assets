@@ -85,6 +85,230 @@ The plan bank is **19 households**, and #244 added none: correcting the IRMAA la
 built in `3c30911`. Measured with `plans.list()` on 2026-09-25, after the 2026-09-24 entry in
 `progress.md` said 20 and said the household had been restored. Both halves of that were wrong.
 
+## P138: an age-driven spending shape (the "smirk" and the "smile") as an alternative to Spend Delta  *(2026-11-10, user-raised. PRIORITY UNASSIGNED. PROPOSAL, revised the same day for Tharp (2026): prototype measured in scratch, nothing in the tree)*
+
+**The user's request:** "Tharpe proposed that the 'Spending Smile' of Blanchett is in fact a 'Spending
+Smirk' (doi 10.1002/cfp2.70032). Add implementation of that finding as an alternative to the Spend
+Delta that exists currently. Evaluate the cost, write up a proposal." Follow-up the same day: the user
+supplied Tharp's own paper (doi 10.1002/cfp2.70051, PDF in hand) and asked for it to be cited here.
+
+**Sources: two 2026 papers in the same journal, and they are different papers.**
+
+1. **David Blanchett, "How Spending Evolves in Retirement: A Smile, a Smirk, or Something Else?",
+   *Financial Planning Review* 9(2), e70032, June 2026, open access.**
+   [doi.org/10.1002/cfp2.70032](https://doi.org/10.1002/cfp2.70032). Blanchett revisiting his own 2014 smile with HRS data
+   through 2021. It publishes the two curves below. The "smirk" reading it tests comes from Hurd and
+   Rohwedder (2022).
+2. **Derek Tharp, "The Retirement Spending Smile Revisited: Cross-Sectional Patterns Versus
+   Within-Household Dynamics", *Financial Planning Review* (2026, issue 4), e70051, first published
+   19 October 2026, open access.** [doi.org/10.1002/cfp2.70051](https://doi.org/10.1002/cfp2.70051). Replication code:
+   [github.com/DerekTharp/blanchett-spending-smile-replication](https://github.com/DerekTharp/blanchett-spending-smile-replication). An independent
+   reconstruction of Blanchett 2014, then a household-panel extension. It argues the smile is a
+   pooled pattern that individual households do not follow. It publishes no smirk equation: its
+   planning advice is a constant decline (below).
+
+An earlier draft of this section said Tharp was not an author. That was true of the first DOI only:
+Tharp's paper is the second one. Tharp discloses an ownership stake in Income Lab, whose default
+age-based income path is Blanchett's smile.
+
+**What Blanchett (2026) finds** (read in full 2026-11-10):
+
+- Data: RAND HRS CAMS 2001-2021 (11 waves) with the RAND HRS Longitudinal File 2022; ages 60-90;
+  first-wave real spending $25k-$500k; 7,843 consumption-change observations from 2,262 respondents;
+  changes are log changes, annualized, real by CPI-U, weighted.
+- The **median** retiree's real spending keeps falling at older ages (the smirk); the **average**
+  turns up after about 80 (the smile). The paper puts the gap down to healthcare shocks, which move
+  the mean and not the median.
+- Even well-funded households cut real spending, so the decline is largely choice. Higher spenders
+  cut more: in the fixed-effects regression (Table C1) spending of $100k or more and funded status are
+  the largest coefficients, and age is weak.
+- In Blanchett's withdrawal model the smile and the smirk each allow about 20% more initial withdrawal
+  than constant real spending (6.2% and 6.4% against 5.2%, moderate risk aversion), and are far closer
+  to each other than to constant. **Leaving constant spending matters more than which shape.**
+- Two published curves, the annual real change `rΔS` at age `Age`:
+  - Smile, eq (1): `rΔS = 0.00008·Age² − 0.0125·Age + 0.474589`. This is Blanchett 2014 with its
+    spending term fixed at $50,000: `0.546 − 0.0066·ln(50,000) = 0.474589`, checked to six places.
+  - Smirk, eq (2): `rΔS = 0.000019·Age² − 0.0036679·Age + 0.155202`. A stylized fit built from 2014
+    and this paper's data, published without standard errors.
+
+| age | smile | smirk | Spend Delta default |
+|---|---|---|---|
+| 60 | +1.26% | +0.35% | -1.00% |
+| 65 | +0.01% | -0.29% | -1.00% |
+| 70 | -0.84% | -0.85% | -1.00% |
+| 75 | -1.29% | -1.30% | -1.00% |
+| 80 | -1.34% | -1.66% | -1.00% |
+| 85 | -0.99% | -1.93% | -1.00% |
+| 90 | -0.24% | -2.10% | -1.00% |
+| 95 | +0.91% | -2.18% | -1.00% |
+
+The smirk turns negative at 62.6 and bottoms at 96.5 (-2.18%). The smile is zero at 65, bottoms at 78
+(-1.37%) and turns positive at 91. Real spending relative to 65, compounded: at 75, -1% gives 0.904,
+smile 0.931, smirk 0.925; at 85, 0.818 / 0.818 / 0.786; at 95, 0.740 / 0.796 / 0.637. Over 30 years
+from 65 at a 2% real discount the smirk spends what a constant -1.09% does, and the smile what -0.84%
+does. **So the page's -1% default is already close to both in total. What a curve adds is WHEN the
+decline happens** (slower in the late 60s, faster after 80) **and that it depends on age**: a household
+starting at 58 and one starting at 72 no longer get the same slope.
+
+**What Tharp (2026) finds** (read in full 2026-11-10, from the published PDF):
+
+- **The 2014 smile only partly reproduces.** Same data and period (RAND HRS/CAMS 2001-2009, 679
+  households against Blanchett's 591): every coefficient sign matches, but the 95% bootstrap
+  intervals for `Age²` and `Age` both include zero, so the curvature cannot be told apart from a
+  straight line. The fitted trough moves to 88.7, outside the 60-85 window it was fit on, so any
+  late-life rise is extrapolation.
+- **The published 2014 equation is partly a calibration, not raw regression output.** Blanchett
+  (2014, p. 39) says it "was adjusted slightly so that increases in spending are higher than noted
+  by historical data". His 2013 working paper puts that adjustment at about +0.5 points a year for
+  households spending over $85,000, and calls it subjective. **The smile curve above uses those
+  published coefficients**, so whatever the adjustment did is in eq (1).
+- **Following the same households over time removes the curvature.** Extension 2001-2021, 4,900
+  households, 20,189 two-year intervals. Pooled, as Blanchett fits it: `Age²` +0.000151. With
+  household fixed effects and Blanchett's spending-level term: +0.000011, standard error 0.000039,
+  so zero. Without the spending-level term some within-household curvature remains (+0.000141), but
+  it is concentrated in the early waves (+0.000460 in 2001-2009, +0.000077 and not significant in
+  2011-2021), and its mid-70s trough cannot be separated from calendar-time effects. **No
+  specification gives a late-life rise stable enough to plan on.**
+- **The spending-level term is fragile.** Its sign flips depending on whether spending is measured at
+  the start or the end of the interval (start: negative in 24 of 24 specifications; end: positive in
+  12 of 12). Tharp's estimate is about four times Blanchett's (-0.0261 against -0.0066), and it
+  reads as mean reversion and measurement coupling rather than behavior.
+- **Planning advice:** for an individual household, a **constant real decline of about 1% a year,
+  with sensitivity from 0% to 2%**, is a more defensible baseline than a smile. Anchor it to the
+  household's actual spending and revise it annually. Put healthcare and long-term care in a separate
+  line, not inside a smooth age path. Supporting figures: reconstruction mean -0.9% a year, extension
+  median -2.0%; Hurd and Rohwedder (2022) find -1.7% a year for singles and -2.4% for couples.
+- **On Blanchett (2026):** Tharp reads its median smirk as pointing the same way as his own result,
+  but notes it is still a pooled comparison of different households at different ages, not one
+  household's path.
+
+**What Tharp changes in this proposal:**
+
+- **Spend Delta at its -1% default is already Tharp's recommended baseline.** So the smirk is a
+  scenario to compare against, not a better default, and the default must not move.
+- **The smile loses its case.** Its upturn is the least supported part of the evidence, it carries a
+  deliberate upward adjustment, and Tharp's advice to keep health costs out of a smooth age path
+  removes the reason the first draft gave for offering it. Decision 5 below now recommends the smirk
+  only.
+- **The spending-level term should stay out entirely,** not just be deferred.
+- **Spend Delta's help text should cite the evidence:** -1% as the baseline, 0% to -2% as the range to
+  try. This is worth shipping even if the smirk is not built.
+
+**What the code does today.** Spend Delta (`spendChange`, page default -1%, ±25% accepted) is one
+constant. `simulate()` seeds `sim.spendDelta = 1 + spendChange`, and `endYear` multiplies the goal by
+it every year in three branches (no rule, GK-style, risk-based) and the Guardrails shape twin
+`gkShapeGoal` in two of them. Everything else reads the goal and so would follow a curve with no
+change: Additional Spend Control's % amount, `_gkShapeOf`, `resumeInputs` and the rails, Monte Carlo,
+the sweep, Optimize Spend, the suggested-spend menu. **One reader assumes a constant:** `gkSpendStable`
+rebuilds the plan's own path as `Math.pow(delta, y)`.
+
+**Prototype** (a patched scratch copy of `optimizer_core.js`, nothing in the tree): the five
+`sim.spendDelta` reads in `endYear` replaced by a function of the year's age, age = mean of the living
+spouses clamped to 60-90, factor `1 + rΔS`.
+
+- Shape off: 19 of 19 `plans/` households byte-identical to the shipped engine (only `loopMs`, a
+  timer, differs).
+- Run time: none measurable, 0.92 against 0.85 ms per `simulate()` (min of 5x60; that is noise).
+- `suggestSustainableSpend` (5-year terminal buffer) against the -1% default, all 19 households:
+
+| arm | median | range |
+|---|---|---|
+| flat 0% | -11.3% | -12.6% to -3.1% |
+| smirk | -0.5% | -4.7% to +4.8% |
+| smile | -4.1% | -7.8% to +1.0% |
+
+  Smirk against flat 0% is +12.8% at the median (-1.6% to +17.1%): the paper's direction, smaller
+  than its 20% once taxes, Social Security and each plan's own horizon are in it.
+- Who moves: households starting at 66-74 gain 2-5%, being already on the curve's steep part; those
+  starting at 56-61 lose 4-5%, because the curve is flat or rising before 63, where -1% was cutting.
+  The smile costs 3-4 points more than the smirk on every plan: its late upturn is spending the plan
+  must fund.
+- Whose age: the older spouse instead of the mean moves the median from -0.5% to +0.5%, and only
+  age-gapped couples by much (`long-widowhood`, 71/58: +0.5% to +5.9%; `age-gap-ira-heavy-ca`,
+  66/74: +3.5% to +6.5%). The clamp, 60-90 against 60-95 against none, moves no plan by more than 0.8
+  points.
+
+**Proposal.**
+
+- **Engine.** New input `spendShape`: `'constant'` (the default: Spend Delta exactly as today),
+  `'smirk'`, and `'smile'` only if decision 5 keeps it. A coefficient table `SPEND_SHAPES` in `optimizer_core.js` carrying each
+  curve's source and fitted range, and one pure `spendShapeChange(inputs, yr)` returning the year's
+  real change. `endYear` calls it at all five sites; `'constant'` returns `sim.spendDelta` untouched,
+  which is what keeps every existing plan byte-identical.
+  - Age: the mean of the living spouses (decision 1), the survivor's own after a death, from the
+    year's `age1`/`age2`/`alive1`/`alive2`.
+  - Range: hold the age inside 60-95 (decision 2).
+  - Timing: the year-t age sets the change from t to t+1, exactly where Spend Delta acts now, so
+    year 0 is still the user's After-Tax Spend.
+  - Factor `1 + rΔS`, as Spend Delta. The paper's changes are log changes; `exp` against `1 +`
+    differs by under 0.03 points a year.
+  - `gkSpendStable`: under a shape, the plan's own path is the running product of the per-year
+    change, carried on the log row as a new column (`spendShape%`, also worth showing in Annual
+    Details). `'constant'` keeps `Math.pow`, so a plan sitting on the floor stays bit-identical.
+  - Resume: no new carried state, since the age comes from the calendar year. A resumed run must
+    reproduce the full run's goal path, and a test says so.
+- **Page.** A "Spending shape" select beside Spend Delta %: `Constant (Spend Delta %)` and
+  `Smirk: typical retiree (Blanchett 2026)`, plus `Smile (Blanchett 2014)` only if decision 5 keeps
+  it. Spend Delta greys out while a curve is chosen (decision 3). A visible one-line readout at the
+  household's own ages ("about -0.3% a year at 65, -1.7% at 80, -2.1% at 90"), since essential
+  information is never tooltip-only. Share-link key `shp` (unused today), the saved scenario, the
+  comparison label map, and three tooltips: Spend Delta's own, rewritten to the evidence (it says
+  "spending smile", which a constant decline is not; the new text gives -1% as the baseline and 0% to
+  -2% as the range to try, after Tharp 2026), the `spendGoal` column, and Additional Spend Control's
+  % amount ("after Spend Delta").
+
+**Decisions for the user:**
+
+1. **A couple's age:** the mean of the living spouses (recommended: a CAMS respondent can be either
+   spouse, the mean is symmetric, and it was measured to matter only for age-gapped couples), or the
+   older spouse (+3 to +5 points for those couples).
+2. **Age range:** hold the age within 60-95 (recommended: 60 is the data's floor, 95 the end of the
+   paper's own 30-year path; measured at under 0.8 points). Below 60 that means +0.35% a year real for
+   the smirk and +1.26% for the smile, because the curves rise there. Holding 0% before 63 instead
+   would be an invention, not the paper.
+3. **Spend Delta while a curve is on:** replaced (recommended), or stacked as an offset. An offset is a
+   knob with no source, and its one real use, a high spender declining faster as Table C1 shows, is
+   better served by the deferred spending-level term.
+4. **Released or gated:** for everyone (recommended: the default is unchanged, the source is
+   published, there is no new failure mode; README and changelog), or behind `?nerdknob`
+   (`ExperimentalFeatures.md` only).
+5. **The smirk only, or both curves:** the smirk only (recommended, changed after reading Tharp
+   2026: the smile's late upturn is the part his household-level analysis cannot find, the 2014
+   coefficients carry a deliberate upward adjustment, and he advises keeping health costs out of a
+   smooth age path, which was the first draft's reason for offering the smile). Both curves remains
+   possible as a "what if": Blanchett (2026) still reports the smile as the average retiree's path.
+
+**Left out, not deferred:** the 2014 spending-level term (`−0.0066·ln(spend)`, which at $150k would
+take another 0.72 points a year). Blanchett (2026) dropped it from both curves, and Tharp (2026) shows
+its sign depends on when spending is measured and its size is four times larger in his estimate, so
+there is no stable number to build. **Deferred:** funded-status effects; late-life healthcare and
+long-term care as a separate line, which is where Tharp puts them (Medicare premiums and IRMAA are
+already modeled; long-term care is not).
+
+**Cost: small.** Smaller than Additional Spend Control, which needed a schedule; this is one table and
+one function. No new run time.
+
+- [ ] **P138a engine** - `SPEND_SHAPES`, `spendShapeChange`, `endYear`'s five sites, the log column,
+      the cumulative path in `gkSpendStable`. About 60 lines.
+- [ ] **P138b page** - the select, the readout, Spend Delta greyed out and its range warning skipped
+      under a curve, share key, saved scenario, label map, three tooltips. About 50 lines. Measure the
+      control VISIBLE, and click it through its label.
+- [ ] **P138c tests** - the curve values at the published ages; shape off byte-identical over the 19
+      plans; the mean-age rule and the switch at a death; the clamp; resumed run equals full run on the
+      goal path; `gkSpendStable` passes a Guardrails plan riding the smirk and fails a slashed one;
+      share-link round trip. About seven. Reconcile `TestTiers.EXPECTED` and `.githooks/README.md` from
+      the MEASURED totals of all five suites.
+- [ ] **P138d docs** - README Key Features, its Spend Delta paragraph and the Blanchett citation (add
+      both 2026 papers, Blanchett's and Tharp's, with their DOIs); one changelog entry and its `<li>`;
+      the version stamp at all four sites. If gated, `ExperimentalFeatures.md` instead and README and
+      changelog stay silent.
+- Nothing to change: Monte Carlo, the rails, the sweep, Optimize Spend, the suggested-spend menu,
+  and the other tools, which never read Spend Delta.
+
+**Verify:** five suites green and counts reconciled; constant-mode byte-identity on the 19 plans; the
+curve table above reproduced from the shipped function; a browser pass with each shape (readout
+visible, Annual Details column, a Monte Carlo run under the smirk, share link round trip).
+
 ## P137: a selectable "success" condition for Monte Carlo and the Optimizer  *(2026-10-04, user-raised. O1, PLANNED, NOT STARTED)*
 
 **The user's request:** change the success/fail metric. In some places success means three more years

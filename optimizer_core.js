@@ -3503,13 +3503,11 @@ function resolveResidualAndForcedIRA(sim, yr) {
     //     falls through to the baseline branch, and it is backstopped like any other.
     //   - Ordered, which has its own user-chosen sequence and runs it in the third pass above.
     if (!yr.isACAStrategy && !yr.isOrderedStrategy) {
-        // Iteration cap raised 4 -> 6 when OBBBA was switched on. Lowering the tax bill changes the
-        // convergence path, and `fixedpct` 2% started finishing 2027 with $21 still unfunded while
-        // the IRA held $2.16M - the 4th iteration was simply one short. 6 clears it; 8 is identical,
-        // so it has converged rather than merely been papered over. Costs nothing in the common
-        // case: the loop breaks the moment the residual drops under $1, so the extra iterations only
-        // run in the years that actually need them.
-        for (let _i = 0; _i < 6; _i++) {
+        // Each pass draws the residual, reprices the year, and draws the tax that draw created. The cap
+        // must be high enough to converge on every tax path: `fixedpct` 2% on the funding fixture
+        // needs 7 passes, and 10 and 20 give the same result as 8. It costs nothing in the common
+        // case, because the loop breaks the moment the residual drops under $1.
+        for (let _i = 0; _i < 8; _i++) {
             const _inc = yr.fixedInc + yr.netWithdrawals.IRA + yr.pension +
                 yr.netWithdrawals.Roth + yr.netWithdrawals.Cash + yr.netWithdrawals.Brokerage + yr.taxableRMD;
             const _res = yr.targetSpend - (_inc - yr.totalTax);

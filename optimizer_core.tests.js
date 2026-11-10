@@ -2805,10 +2805,7 @@ const _worst = rows => rows.length ? Math.max(...rows.map(e => Math.abs(e.shortf
 const FUNDING_ARMS = [
     { name: 'bracket 22%',    over: { strategy: 'bracket',  stratRate: 0.22 },                              iraStranded:  0, worst:      0 },
     { name: 'IRMAA tier1',    over: { strategy: 'bracket',  stratRate: 0, stratIRMAATier: 1 },            iraStranded:  0, worst:      0 },
-    // One year ends $1.46 short with $2.2M of IRA left. The per-person senior deduction changed the tax
-    // path and with it which year the forced-IRA loop stops a dollar or two short of; the same
-    // convergence residual as the `ordered` rows below, pinned rather than blessed.
-    { name: 'fixedpct 2%',    over: { strategy: 'fixedpct', iraWithdrawPct: 0.02 },                         iraStranded:  1, worst:   1.46 },
+    { name: 'fixedpct 2%',    over: { strategy: 'fixedpct', iraWithdrawPct: 0.02 },                         iraStranded:  0, worst:      0 },
     { name: 'propwd 0%',      over: { strategy: 'propwd',   propWithdraw: 0,    stratRate: 0 },             iraStranded:  0, worst:      0 },
     { name: 'propwd 10%',     over: { strategy: 'propwd',   propWithdraw: 0.10, stratRate: 0 },             iraStranded:  0, worst:      0 },
     { name: 'propwd 50%',     over: { strategy: 'propwd',   propWithdraw: 0.50, stratRate: 0 },             iraStranded:  0, worst:      0 },

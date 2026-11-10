@@ -982,9 +982,29 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 		});
 
 		// AGI = 200000; phaseoutExcess = 200000-150000 = 50000
-		// seniorDeduction = max(0, 12000 - 50000*0.06) = max(0, 12000-3000) = 9000
+		// Each person: 6000 - 50000*0.06 = 3000, so two seniors get 6000 (IRS Schedule 1-A, lines 35-37)
 		assertEqual(result.AGI, 200000, 'AGI');
-		assertEqual(result.seniorDeduction, 9000, 'Senior Deduction (partial phase-out)');
+		assertEqual(result.seniorDeduction, 6000, 'Senior Deduction (partial phase-out, per person)');
+	});
+
+	// ============================================================================
+	// TEST CASE 11b: the reduction is per person, so a couple reaches zero at $250,000
+	// ============================================================================
+	test('TEST CASE 11b: OBBBA senior deduction - per-person phase-out on a joint return', () => {
+		const at = (ages, agi) => calculateTaxes({
+			filingStatus: 'MFJ', ages, earnedIncome: agi, totalSS: 0, ordDivInterest: 0, qualifiedDiv: 0,
+			capGains: 0, taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'TESTTAXATION', obbaOn: true
+		}).seniorDeduction;
+
+		const assertNear = (actual, expected, tol, name) =>
+			assertEqual(Math.abs(actual - expected) <= tol, true, `${name}: ${actual} vs ${expected}`);
+
+		// Schedule 1-A: 207,444 MAGI -> 6000 - 0.06*57,444 = 2,553.36 per person
+		assertNear(at([66, 74], 207444), 5106.72, 0.01, 'Two seniors at 207,444 (the tax-plan case)');
+		assertNear(at([66, 60], 207444), 2553.36, 0.01, 'One senior at 207,444 gets one person amount');
+		assertEqual(at([66, 74], 250000), 0, 'Two seniors reach zero at 250,000');
+		assertNear(at([66, 74], 249999), 0.12, 0.001, 'Two seniors are down to 12 cents one dollar under 250,000');
+		assertEqual(at([66, 60], 250000), 0, 'One senior reaches zero at 250,000 as well');
 	});
 
 	// ============================================================================
@@ -1007,8 +1027,7 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 			obbaOn: true
 		});
 
-		// AGI = 350000; phaseoutExcess = 200000; reduction = 200000*0.06=12000 > 8000
-		// seniorDeduction = max(0, 8000-12000) = 0
+		// AGI = 350000; phaseoutExcess = 200000; each person: max(0, 6000 - 200000*0.06) = 0
 		assertEqual(result.AGI, 350000, 'AGI');
 		assertEqual(result.seniorDeduction, 0, 'Senior Deduction (fully phased out)');
 	});
@@ -1676,7 +1695,10 @@ test('taxcalc_core: the IRA withdrawal that pays the tax includes the tax on the
 
 test('taxcalc_core: the conversion tax is its own, and the next step names the nearest line and the IRMAA tier it reaches', () => {
 	const C = _core(); if (!C) return;
-	const L = 'st=MFJ&s=CA&yr=2026&a1=66&a2=66&ss=29400&cs=99100&cb=0&it=2000&nd=1900&ri=14810&rd=9500&qd=18800&rc=26147';
+	// cs is tuned so the MAGI that includes the automatic withdrawal lands $1 under the IRMAA tier 1
+	// foot. The withdrawal covers the tax, which depends on the senior deduction, so this number moves
+	// whenever that deduction does.
+	const L = 'st=MFJ&s=CA&yr=2026&a1=66&a2=66&ss=29400&cs=97645&cb=0&it=2000&nd=1900&ri=14810&rd=9500&qd=18800&rc=26147';
 	const calcFor = q => { const p = new URLSearchParams(q); return C.run(k => p.get(k)).calc; };
 	const off = calcFor(L), on = calcFor(L + '&ra=1');
 	const alone = calcFor(L.replace('&rc=26147', '&rc=0'));
@@ -1727,6 +1749,23 @@ test('taxcalc_core: with ra=1 the IRA withdrawal follows the tax, so the order o
 	assertEqual(+over.irmaaFutureTier, +room.irmaaFutureTier + 1, 'one dollar past the room reaches the next tier');
 	assertEqual(+at.irmaaFutureTier, +room.irmaaFutureTier, 'and the room itself does not');
 	assertEqual(_row('st=MFJ&s=TX&ra=1&return=rt').rt, '0', 'no tax needs no withdrawal');
+});
+
+test('taxcalc_core: interest, non-qualified dividends and a short-term gain are investment income for NIIT, and nothing else moves', () => {
+	const C = _core(); if (!C) return;
+	// The 2026 tax-plan case: MAGI 392,444, so NIIT is 3.8% of the whole investment income:
+	// 5,075 interest + 2,500 non-qualified + 7,950 qualified + 405 short-term + 100,220 long-term.
+	const base = 'st=MFJ&s=CA&a1=66&a2=74&yr=2026&ss=29858&nd=2500&qd=7950&sg=405&cs=100220&cb=0&rd=9126&rc=240000';
+	const f = 'return=agi,taxableSS,fedOrdinaryTax,fedCgTax,niit,stateTax';
+	const asInterest = _row(base + '&ot=1789&it=5075&' + f), asOther = _row(base + '&ot=6864&' + f);
+	assertEqual(Math.abs(+asInterest.niit - 0.038 * 116150) < 0.5, true, `NIIT counts every kind of investment income, got ${asInterest.niit}`);
+	// The same dollars entered as other income are not investment income, and are taxed identically.
+	for (const k of ['agi', 'taxableSS', 'fedOrdinaryTax', 'fedCgTax', 'stateTax'])
+		assertEqual(asInterest[k], asOther[k], `${k} is the same whether the 5,075 is interest or other income`);
+	assertEqual(+asInterest.niit - +asOther.niit > 190, true, 'only NIIT differs, by 3.8% of the interest');
+	// A short-term loss never reduces investment income.
+	const loss = _row('st=MFJ&s=TX&yr=2026&wg=400000&it=10000&sg=-3000&return=niit');
+	assertEqual(Math.abs(+loss.niit - 0.038 * 10000) < 0.5, true, 'a capped short-term loss leaves NIIT on the full interest');
 });
 
 test('taxcalc_core: the pieces add up (fed + state + IRMAA = total; gross - total = net), and `pi` pins the ordinary income', () => {

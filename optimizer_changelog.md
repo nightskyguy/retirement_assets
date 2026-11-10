@@ -17,6 +17,27 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1d67"></a>
+
+## 11.1d67
+
+**The extra senior deduction shrinks for each spouse separately, and the 3.8% investment surtax now
+counts interest.**  
+*Behavior change: a plan with both spouses 65 or older and income over $150,000, or with interest and
+income over the surtax threshold, pays more tax.*
+
+- **Per-person phase-out.** The extra $6,000 deduction for age 65 and over (2025 to 2028) is reduced
+  for each person by 6 cents per dollar of income over $150,000 on a joint return. A couple who are
+  both 65 or older therefore lose 12 cents per dollar and reach zero at $250,000, as Part V of IRS
+  Schedule 1-A (Form 1040) works it. Single filers, and joint returns with one spouse 65 or older,
+  are unchanged.
+- **Interest is investment income.** The 3.8% net investment income tax now applies to interest,
+  non-qualified dividends and short-term gains, as well as long-term gains and qualified dividends,
+  once income passes $250,000 joint or $200,000 single.
+- The Income Tax Planner and the other tools that share the tax engine give the same answers.
+
+---
+
 <a id="11.1d09"></a>
 
 ## 11.1d09

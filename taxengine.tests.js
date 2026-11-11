@@ -151,9 +151,10 @@ function installBracketFixture() {
 		SGL: { std: 100/2, brackets: [{ l: 1000/2, r: 0.1, nr: 0.1 }, { l: 2000/2, r: 0.2, nr: 0.15 }, { l: 40000/2, r: 0.8, nr: 0.45 }] },
 	};
 }
+// The jurisdictions installTestState() adds. Tests that walk every state in TAXData skip these.
+const SYNTHETIC_STATES = ['TESTTAXATION', 'TEST'];
 function removeTestState() {
-	delete TAXData.TESTTAXATION;
-	delete TAXData.TEST;
+	for (const k of SYNTHETIC_STATES) delete TAXData[k];
 }
 
 // ── Bracket and limit lookups ────────────────────────────────────────────────────────────────
@@ -182,7 +183,7 @@ test('findLimitByRate on FEDERAL and CA, and the Social Security 85% tier (sensi
     assertEqual(findLimitByRate('FEDERAL', 'MFJ', 0.24, 1), {limit: 403550, rate: 0.24}, 
                 '😭findLimitByRate: FEDERAL MFJ 24% bracket');
 	
-    assertEqual(findLimitByRate('CA', 'SGL', 0.06, 1), { limit: 55867, rate: 0.06 },
+    assertEqual(findLimitByRate('CA', 'SGL', 0.06, 1), { limit: 59498, rate: 0.06 },
                 '😭findLimitByRate: State SGL 6% bracket');
 
 		
@@ -1607,6 +1608,109 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 			'AZ tracks the federal standard deduction rather than restating it');
 	});
 
+	// ── TEST CASE 27b: the tables research/STATE_TAX_TABLE_YEARS.md found a year or more behind ────
+	// Same rule as 27: the dollar figures are the state's own, printed on its 2026 schedule.
+	test('TEST CASE 27b: CA, MD, OR, ME, MA, MI and MS carry their published 2026 figures', () => {
+		const tax = (st, status, x) => Math.round(calculateProgressive(st, status, x).total * 100) / 100;
+		const rate = (st, status, x) => calculateProgressive(st, status, x).marginal;
+		// California, FTB 2026 Schedules X and Y: the "enter on line 31" base at the top of a band.
+		assertEqual(tax('CA', 'SGL', 27157), 428.58, 'CA single: 428.58 at 27,157');
+		assertEqual(tax('CA', 'SGL', 384109), 32039.70, 'CA single: 32,039.70 at 384,109');
+		assertEqual(tax('CA', 'SGL', 768213), 74675.27, 'CA single: 74,675.27 at 768,213');
+		assertEqual(tax('CA', 'MFJ', 150394), 6621.76, 'CA joint: 6,621.76 at 150,394');
+		assertEqual(tax('CA', 'MFJ', 921854), 79903.90, 'CA joint: 79,903.90 at 921,854');
+		// Above $1M the schedule's 12.3% gains the 1% Mental Health Services Act surcharge.
+		assertEqual(tax('CA', 'SGL', 1200000), Math.round((74675.27 + 0.123 * (1200000 - 768213) + 0.01 * 200000) * 100) / 100,
+			'CA single at 1.2M: the schedule plus 1% of the excess over $1M');
+		assertEqual([TAXData.CA.MFJ.std, TAXData.CA.SGL.std], [11800, 5900], 'CA 2026 standard deduction');
+
+		// Maryland, Tax Rate Schedules I and II: the joint schedule is NOT the single one, and every
+		// band is a real band (the 6.25% rate was once a band one dollar wide).
+		assertEqual(rate('MD', 'MFJ', 140000), 0.0475, 'MD joint: 4.75% runs to 150,000');
+		assertEqual(rate('MD', 'MFJ', 200000), 0.0525, 'MD joint: 5.25% from 175,000 to 225,000');
+		assertEqual(rate('MD', 'MFJ', 280000), 0.055, 'MD joint: 5.5% from 225,000 to 300,000');
+		assertEqual(rate('MD', 'MFJ', 900000), 0.0625, 'MD joint: 6.25% from 600,000 to 1,200,000');
+		assertEqual(rate('MD', 'SGL', 700000), 0.0625, 'MD single: 6.25% from 500,000 to 1,000,000');
+		assertEqual(rate('MD', 'SGL', 1100000), 0.065, 'MD single: 6.5% above 1,000,000');
+		assertEqual([TAXData.MD.MFJ.std, TAXData.MD.SGL.std], [6800, 3400], 'MD 2026 standard deduction');
+
+		// Oregon, withholding formulas 150-206-436 (Rev. 12-31-25), which carry the 2026 schedule.
+		assertEqual([rate('OR', 'SGL', 4500), rate('OR', 'SGL', 4600)], [0.0475, 0.0675], 'OR single: 4.75% to 4,550');
+		assertEqual(rate('OR', 'SGL', 11000), 0.0675, 'OR single: 6.75% to 11,400');
+		assertEqual(rate('OR', 'MFJ', 22000), 0.0675, 'OR joint: 6.75% to 22,800');
+		assertEqual([TAXData.OR.MFJ.std, TAXData.OR.SGL.std], [5820, 2910], 'OR 2026 standard deduction');
+
+		// Maine: its own standard deduction plus the 5,300 personal exemption, and the 2% surcharge.
+		assertEqual([TAXData.ME.MFJ.std, TAXData.ME.SGL.std], [31400 + 2 * 5300, 15700 + 5300],
+			'ME std is Maine\'s own deduction plus one exemption per person');
+		assertEqual(rate('ME', 'MFJ', 1600000), 0.0915, 'ME joint: 7.15% + 2% over 1,500,000');
+		assertEqual(rate('ME', 'SGL', 900000), 0.0715, 'ME single: no surcharge below 1,000,000');
+		assertEqual(TAXData.ME.RETIREMENT_EXCLUSION.cap, 49824, 'ME 2026 pension deduction cap');
+
+		// Massachusetts: 5%, and 9% (5% + the 4% surtax) above 1,107,750 on either filing status.
+		for (const status of ['MFJ', 'SGL']) {
+			assertEqual(rate('MA', status, 1000000), 0.05, `MA ${status}: 5% below the surtax line`);
+			assertEqual(rate('MA', status, 1200000), 0.09, `MA ${status}: 9% above 1,107,750`);
+		}
+
+		// Michigan: no standard deduction, a 5,900 personal exemption per person. Mississippi: its own
+		// standard deduction plus its personal exemption, never the federal figure.
+		assertEqual([TAXData.MI.MFJ.std, TAXData.MI.SGL.std], [2 * 5900, 5900], 'MI exemption counts each spouse');
+		assertEqual([TAXData.MS.MFJ.std, TAXData.MS.SGL.std], [4600 + 12000, 2300 + 6000],
+			'MS std is its standard deduction plus its personal exemption');
+	});
+
+	// ── TEST CASE 28: every state figure names where it came from ──────────────────────────────
+	// checkStateSources() is what keeps the tables current: rolling TAXData.FEDERAL.YEAR forward
+	// fails every state figure not re-checked for the new year, unless it is marked pending.
+	test('TEST CASE 28: every income-tax state sources its brackets and std, none of them stale', () => {
+		const live = Object.fromEntries(Object.entries(_engine().TAXData)
+			.filter(([k]) => !SYNTHETIC_STATES.includes(k)));
+		const { errors, flagged } = _engine().checkStateSources(live);
+		assertEqual(errors, [], 'no state figure is unsourced, malformed, or behind the federal year');
+		// Not a failure, a to-do list: what is still waiting on a publication or a check.
+		if (IS_NODE && flagged.length) console.log(`    not yet published or checked (${flagged.length}):\n      ` + flagged.join('\n      '));
+	});
+
+	test('TEST CASE 28b: checkStateSources rejects a missing, stale, or malformed source', () => {
+		const fed = { FEDERAL: { YEAR: 2026 } };
+		const st = (src, extra = {}) => ({ STATE: 'X', SOURCES: src, MFJ: { std: 1, brackets: [{ l: Infinity, r: 0.05 }] },
+			SGL: { std: 1, brackets: [{ l: Infinity, r: 0.05 }] }, ...extra });
+		const ok = { year: 2026, status: 'published', doc: 'form' };
+		const errs = td => _engine().checkStateSources({ ...fed, ...td }).errors.length;
+		assertEqual(errs({ A: st({ brackets: ok, std: ok }) }), 0, 'a fully sourced state passes');
+		assertEqual(errs({ A: { ...st(undefined), SOURCES: undefined } }), 1, 'no SOURCES at all');
+		assertEqual(errs({ A: st({ brackets: ok }) }), 1, 'std missing');
+		assertEqual(errs({ A: st({ brackets: ok, std: { ...ok, year: 2025 } }) }), 1, 'a 2025 figure in a 2026 table');
+		assertEqual(errs({ A: st({ brackets: ok, std: { ...ok, year: 2025, status: 'pending' } }) }), 0,
+			'unless it is marked pending');
+		assertEqual(errs({ A: st({ brackets: ok, std: { ...ok, status: 'guessed' } }) }), 1, 'an unknown status');
+		assertEqual(errs({ A: st({ brackets: ok, std: { ...ok, doc: ' ' } }) }), 1, 'a blank doc');
+		assertEqual(errs({ A: st({ brackets: ok, std: ok, RETIREMENT_EXCLUSION: ok }) }), 1,
+			'a source for a field the state does not have');
+		// A state with no income tax carries no figures, so it needs no sources.
+		assertEqual(errs({ A: { STATE: 'X', MFJ: { std: 0, brackets: [{ l: Infinity, r: 0 }] },
+			SGL: { std: 0, brackets: [{ l: Infinity, r: 0 }] } } }), 0, 'a no-tax state needs none');
+	});
+
+	// ── TEST CASE 28c: every bracket table is a well-formed schedule ────────────────────────────
+	// Catches the transcription errors a year check cannot: a band one dollar wide, thresholds out of
+	// order, a missing terminator, a rate typed as a percent.
+	test('TEST CASE 28c: every state bracket table is increasing, ends at Infinity, and has no sliver bands', () => {
+		for (const [code, st] of Object.entries(_engine().TAXData)) {
+			if (SYNTHETIC_STATES.includes(code) || !st || !st.STATE || !st.MFJ) continue;
+			for (const status of ['MFJ', 'SGL']) {
+				const brks = st[status].brackets;
+				assertEqual(brks[brks.length - 1].l, Infinity, `${code} ${status}: ends at Infinity`);
+				brks.forEach((b, i) => {
+					if (!(b.r >= 0 && b.r < 0.2)) throw new Error(`${code} ${status}: rate ${b.r} is not a fraction under 0.2`);
+					if (i > 0 && isFinite(b.l) && !(b.l - brks[i - 1].l > 100))
+						throw new Error(`${code} ${status}: band ending ${b.l} is ${b.l - brks[i - 1].l} wide`);
+				});
+			}
+		}
+	});
+
 // ── Runner ───────────────────────────────────────────────────────────────────────────────────
 // Returns the counts instead of setting process.exitCode, so the browser can render them.
 // ============================================================================
@@ -1696,9 +1800,9 @@ test('taxcalc_core: the IRA withdrawal that pays the tax includes the tax on the
 test('taxcalc_core: the conversion tax is its own, and the next step names the nearest line and the IRMAA tier it reaches', () => {
 	const C = _core(); if (!C) return;
 	// cs is tuned so the MAGI that includes the automatic withdrawal lands $1 under the IRMAA tier 1
-	// foot. The withdrawal covers the tax, which depends on the senior deduction, so this number moves
-	// whenever that deduction does.
-	const L = 'st=MFJ&s=CA&yr=2026&a1=66&a2=66&ss=29400&cs=97645&cb=0&it=2000&nd=1900&ri=14810&rd=9500&qd=18800&rc=26147';
+	// foot. The withdrawal covers the tax, which depends on the senior deduction and on California's
+	// table, so this number moves whenever either does.
+	const L = 'st=MFJ&s=CA&yr=2026&a1=66&a2=66&ss=29400&cs=98167&cb=0&it=2000&nd=1900&ri=14810&rd=9500&qd=18800&rc=26147';
 	const calcFor = q => { const p = new URLSearchParams(q); return C.run(k => p.get(k)).calc; };
 	const off = calcFor(L), on = calcFor(L + '&ra=1');
 	const alone = calcFor(L.replace('&rc=26147', '&rc=0'));

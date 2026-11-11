@@ -87,7 +87,7 @@ built in `3c30911`. Measured with `plans.list()` on 2026-09-25, after the 2026-0
 
 ## P138: an age-driven spending shape (the "smirk" and the "smile") as an alternative to Spend Delta  *(2026-11-10, user-raised. PRIORITY UNASSIGNED. PROPOSAL, revised the same day for Tharp (2026): prototype measured in scratch, nothing in the tree)*
 
-**The user's request:** "Tharpe proposed that the 'Spending Smile' of Blanchett is in fact a 'Spending
+**The user's request:** "Tharp proposed that the 'Spending Smile' of Blanchett is in fact a 'Spending
 Smirk' (doi 10.1002/cfp2.70032). Add implementation of that finding as an alternative to the Spend
 Delta that exists currently. Evaluate the cost, write up a proposal." Follow-up the same day: the user
 supplied Tharp's own paper (doi 10.1002/cfp2.70051, PDF in hand) and asked for it to be cited here.

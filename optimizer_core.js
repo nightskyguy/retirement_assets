@@ -3827,7 +3827,7 @@ const TAX_BASIS_FIELDS = Object.freeze([
     'MAGI', 'AGI', 'federalTaxableIncome', 'stateAGI', 'stateTaxableIncome',
     'taxableSS', 'provisionalIncome', 'taxableOrdinaryIncome', 'taxablePreferentialIncome',
     'ordinaryIncomeInAGI', 'preferentialIncomeInAGI',
-    'federalStdDeduction', 'stateStdDeduction', 'seniorDeduction', 'useItemized',
+    'federalStdDeduction', 'stateStdDeduction', 'stateExemptions', 'seniorDeduction', 'useItemized',
 ]);
 function adoptTaxBasis(yr, calc) {
     if (!yr.tax || !calc) return;

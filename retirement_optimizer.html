@@ -79,16 +79,16 @@
     .share-panel .share-status { font-family:monospace; font-size:10px; color:#1a7a1a; margin-top:.35rem; min-height:14px; }
 	</style>
 	<base target="_blank">	
-	<script src="taxengine.js?v=111d93"></script>
+	<script src="taxengine.js?v=111d93a"></script>
 	<script src="medicare_costs.js?v=111917"></script>
-	<script src="optimizer_core.js?v=111d68"></script>
+	<script src="optimizer_core.js?v=111d93a"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
 	     ahead of the <title> here on purpose: P102b changed only nerdknob-gated code, so there is
 	     nothing an ungated user can see or feel, no changelog entry, and therefore no new release
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
 	<script src="optimizer_ui.js?v=111d09"></script>
-	<script src="optimizer_tests.js?v=111d93"></script>
+	<script src="optimizer_tests.js?v=111d93a"></script>
 </head>
 <body>
 
@@ -1889,7 +1889,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these seven are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111d93';
+    const V = '?v=111d93a';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

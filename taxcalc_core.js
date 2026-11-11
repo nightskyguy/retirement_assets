@@ -242,7 +242,7 @@
         useItz:    r.useItemized,
         senDed:    r.seniorDeduction,
         fedDed:    r.federalStdDeduction,
-        stDed:     r.stateStdDeduction,
+        stDed:     r.stateStdDeduction + r.stateExemptions,   // all that comes off before the state rates
         stMarg:    r.stateMarginalRate,
         fedBr:     r.federalMarginalRate,   // statutory federal ordinary bracket
         cgStat:    r.capitalGainsRate,      // statutory capital-gains bracket (NIIT is not in it)

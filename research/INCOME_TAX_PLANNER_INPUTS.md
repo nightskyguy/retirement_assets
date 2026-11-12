@@ -1,7 +1,14 @@
 # Entering a state tax refund, and the other inputs worth adding to the Income Tax Planner
 
 *(Measured 2026-11-11 on `main` at `5e11da4`, which includes the senior-deduction and NIIT fixes of
-PR #259. Research only: nothing here is implemented.)*
+PR #259.)*
+
+**Status.** The three largest items are implemented: `D1` (California's 2026 table, Optimizer
+11.1d93), `C1` (California's exemption credits, as part of every state's exemptions and credits,
+11.1d9d) and `RF` (the Taxable state or local tax refund entry, link key `sr`, Income Tax Planner
+v2.15). With all three, the planner gives the tax program's California tax to the dollar in all four
+columns and its federal tax as measured for `R2` below. Still open: `T1`, `G1`, `F1`, `I1`, and the
+$21 NIIT difference in the 240,000 column. The measurements below are as taken before those changes.
 
 A tax program's 2026 projection for a real California couple was compared against the
 [Income Tax Planner](../standalone/IncomeTaxPlanner.html) at four Roth conversion sizes. After PR #259

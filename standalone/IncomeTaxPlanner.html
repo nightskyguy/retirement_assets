@@ -25,7 +25,7 @@
 <!-- The Send feedback dialog. NOT deferred: it records page errors from here on, so it has to load
      before the scripts below. It builds nothing until FeedbackWidget.open(). -->
 <script src="../feedback.js?v=11195c"></script>
-<title>Income Tax Planner · 2026+ · v2.14</title>
+<title>Income Tax Planner · 2026+ · v2.15</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
   // Global Chart.js tooltip defaults, set once so the chart config only says what differs.
@@ -173,6 +173,7 @@
   .det-row.sub label { padding-left:.9rem; }
   .det-warn { font-family:var(--mono); font-size:9px; color:var(--amber); margin:0 0 3px .9rem; }
   .det-warn[hidden] { display:none; }
+  .det-hint { font-size:10px; line-height:1.35; color:var(--muted); margin:0 0 5px .9rem; }
   .det-check[hidden] { display:none; }
   .det-check { display:flex; align-items:center; gap:.4rem; margin:3px 0; font-family:var(--mono); font-size:10px; color:var(--muted); cursor:pointer; }
   .det-sum { display:flex; justify-content:space-between; align-items:center; margin-top:.4rem; padding-top:.35rem; border-top:1px solid var(--border); font-family:var(--mono); font-size:10px; color:var(--muted); }
@@ -232,12 +233,12 @@
 <script src="../sharepanel.js?v=1118e3"></script>
 <script src="../taxengine.js?v=111d9d"></script>
 <script src="../medicare_costs.js?v=111917"></script>
-<script src="../taxcalc_core.js?v=111d93a"></script>
-<script src="../taxengine.tests.js?v=111d9d"></script>
+<script src="../taxcalc_core.js?v=111d9da"></script>
+<script src="../taxengine.tests.js?v=111d9da"></script>
 </head>
 <body>
 <header>
-  <h1>Income Tax Planner<span class="ver">v2.14</span></h1>
+  <h1>Income Tax Planner<span class="ver">v2.15</span></h1>
   <p>Federal + State · Capital Gains · IRMAA · SS torpedo · <span id="hdr-years">2026–2035</span> with inflation</p>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center;position:relative">
     <strong id="testsFailed" title="Unit tests status">🟢</strong>
@@ -319,6 +320,8 @@
       <div class="det-sum"><span>Total IRA and 401k distributions<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">The RMD, other withdrawals, Roth conversion and the IRA withdrawal to pay the tax, added up. A pension entered under Other withdrawals is in it too. What you can actually convert is the total less the RMD: the RMD must be taken first and cannot be converted.</span></span> <b id="det-iratotal">$0</b></span></div>
       <label class="det-check" id="det-swept-row"><input type="checkbox" id="chk-retinc-swept" onchange="run()">Extra income I sweep is also IRA/401k<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Used only by states that exempt retirement income (for example IL and PA), which are few. When checked, ordinary income above what you entered here is treated as IRA/401k distributions or conversions.</span></span></label>
       <div class="det-row"><label for="num-other">Other ordinary income<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Anything else taxed at regular rates. A loss can be entered as a negative number.</span></span></label><input type="text" id="num-other" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <div class="det-row"><label for="num-staterefund">Taxable state or local tax refund<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">The part of last year's state or local income tax refund that counts as federal income (Schedule 1, line 1); your tax software shows the exact amount. It is federal income only: your own state does not tax it. Interest paid on a refund goes in Interest. A federal refund is not income and goes nowhere.</span></span></label><input type="text" id="num-staterefund" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
+      <div class="det-hint">0 if you took the standard deduction last year; usually all of it if you itemized. Federal income only.</div>
       <div class="det-sum"><span>Ordinary income entered <b id="det-ord">$0</b></span></div>
       <div class="det-head">Taxed at capital-gains rates</div>
       <div class="det-row"><label for="num-qdiv">Qualified dividends<span class="info-ic" tabindex="0" role="button" aria-label="More information">i<span class="tip">Taxed with your capital gains and added to the gain from the sale below.</span></span></label><input type="text" id="num-qdiv" inputmode="decimal" autocomplete="off" placeholder="$0" oninput="run()" onchange="fmtDetail(this)"></div>
@@ -506,7 +509,8 @@ const LINK_ERRORS = [];
 let LINK_ORDINARY = null;
 
 const DETAIL_IDS = { wg:'num-wages', it:'num-int', nd:'num-ndiv', sg:'num-stcg', ri:'num-retinc', rd:'num-rmd', rc:'num-roth', rt:'num-taxwd', ot:'num-other',
-                     qd:'num-qdiv', mu:'num-muni', ui:'num-usint', sm:'num-stmuni', un:'num-untaxed', pt:'num-prop' };
+                     qd:'num-qdiv', mu:'num-muni', ui:'num-usint', sm:'num-stmuni', un:'num-untaxed', pt:'num-prop',
+                     sr:'num-staterefund' };
 const DETAIL_FIELDS = TaxCalc.DETAIL_FIELDS.map(f => ({ ...f, id: DETAIL_IDS[f.key] }));
 const detailAmount = (f, text) => TaxCalc.detailValue(f, DisplayHelpers.parseShorthand(text));
 
@@ -1933,6 +1937,7 @@ function exportLines() {
     ['Roth conversion', money(detail['num-roth'])],
     ['IRA withdrawal to pay the tax', money(detail['num-taxwd'])],
     ['Other ordinary income', money(detail['num-other'])],
+    ['Taxable state or local tax refund', money(detail['num-staterefund'])],
     ['Qualified dividends', money(detail['num-qdiv'])],
     ['Municipal bond interest', money(detail['num-muni'])],
     ['of which your state taxes', money(detail['num-stmuni'])],
@@ -2110,7 +2115,7 @@ const SHARE_PRIVACY = {
   personal: [
     'a1', 'a2',                                                    // ages
     'ss', 'cs', 'cb', 'pm',                                        // Social Security, sale, basis, prior-year income
-    'wg', 'it', 'nd', 'sg', 'ri', 'rd', 'rc', 'rt', 'ot', 'qd', 'mu', 'ui', 'sm', 'un', 'pt',   // income details
+    'wg', 'it', 'nd', 'sg', 'ri', 'rd', 'rc', 'rt', 'ot', 'qd', 'mu', 'ui', 'sm', 'un', 'pt', 'sr',   // income details
     'vl', 'vh',                                                    // the income range on screen
   ],
 };
@@ -2126,7 +2131,7 @@ FeedbackWidget.init({
     pm: 'priorYearMagi', wg: 'wages', it: 'interest', nd: 'nonqualifiedDividends',
     sg: 'shortTermGains', ri: 'retirementIncome', rd: 'requiredMinimumDistribution', ot: 'otherIncome', qd: 'qualifiedDividends',
     mu: 'muniInterest', ui: 'usInterest', sm: 'stateMuniInterest', un: 'untaxedIncome',
-    rc: 'rothConversion', rt: 'iraTaxWithdrawal', pt: 'propertyTax', vl: 'viewLow', vh: 'viewHigh',
+    rc: 'rothConversion', rt: 'iraTaxWithdrawal', pt: 'propertyTax', sr: 'stateTaxRefund', vl: 'viewLow', vh: 'viewHigh',
   },
   settingsHelp: 'Filing status, state, year and inflation, plus any error messages the page logged.'
     + ' Never income, ages, sale amounts or birth dates.',
@@ -2162,10 +2167,10 @@ function buildTaxPlannerParams() {
 
   // The entered ordinary income IS the chart's x value, with Social Security held separately. The planner has
   // slots for pension, interest, qualified dividends and capital gains, and the rest of the ordinary
-  // income goes in as an IRA distribution, which is what a swept amount is. Wages, business and
-  // other income have no slot of their own, so they ride in the pension slot (all three are taxed
-  // as ordinary income there).
-  const pen    = Math.max(0, Math.round(cfg.wages + cfg.other + cfg.stOrd));
+  // income goes in as an IRA distribution, which is what a swept amount is. Wages, business, other
+  // income and a taxable state tax refund have no slot of their own, so they ride in the pension
+  // slot (all are taxed as ordinary income there).
+  const pen    = Math.max(0, Math.round(cfg.wages + cfg.other + cfg.stateRefund + cfg.stOrd));
   const intr   = Math.max(0, Math.round(cfg.interest + cfg.ndiv));
   const conv   = Math.round(cfg.rothConv);
   const rmd    = Math.round(cfg.rmd);
@@ -2290,7 +2295,7 @@ function loadFromURL() {
 <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal-box">
     <div class="modal-hdr">
-      <h2>Income Tax Planner v2.14 — How to Use</h2>
+      <h2>Income Tax Planner v2.15 — How to Use</h2>
       <button class="modal-close" onclick="closeModal()">&#x2715;</button>
     </div>
 
@@ -2301,6 +2306,11 @@ function loadFromURL() {
     <details class="modal-section">
       <summary>Change Log</summary>
       <dl class="modal-kv">
+        <dt>v2.15</dt>
+        <dd><ul>
+          <li>New Taxable state or local tax refund entry, under Income details. It counts as federal income, so it can raise how much of your Social Security is taxed and shrink the senior deduction, and it stays out of your state income, as your state does not tax its own refund. Before, a refund entered as Other income was taxed by the state too.</li>
+          <li>State income tax now applies each state's personal exemptions, credits and age-65 add-ons, and California, Maryland, Maine, Mississippi, Michigan and Oregon use their 2026 tables. State credits, such as Ohio's retirement credit, now show in the state tax lines. <a href="https://tools.netcitizen.us/optimizer_changelog.html#11.1d9d" target="_blank" rel="noopener">Details</a> are in the Optimizer changelog, which shares this tax engine.</li>
+        </ul></dd>
         <dt>v2.14</dt>
         <dd><ul>
           <li>The extra senior deduction now shrinks for each spouse separately, as IRS Schedule 1-A works it: a couple who are both 65 or older lose 12 cents per dollar of income over $150,000 and reach zero at $250,000.</li>
@@ -2335,7 +2345,7 @@ function loadFromURL() {
           <li>Enter your MAGI from two years earlier and this year's taxes include that IRMAA, as its own purple bar. The IRMAA this income causes two years out is shown below Total Tax.</li>
           <li>The View is set in Fed income and can start below your entered income. Ordinary income can be negative. Double-click the View or Ordinary label to let the sliders reach negative values.</li>
           <li>Total Effective is income taxes only. A purple line adds this year's IRMAA where that is meaningful.</li>
-          <li>Income details: ordinary income by type, qualified dividends, tax-exempt interest (municipal, Treasury, and municipal interest a state taxes), and property and local taxes. All of it is in the Share link.</li>
+          <li>Income details: ordinary income by type, qualified dividends, tax-exempt interest (municipal, Treasury, and municipal interest a state taxes), the taxable part of a state tax refund, and property and local taxes. All of it is in the Share link.</li>
           <li>The Result for a spreadsheet row copies the results. Adding <code>return</code> to a link shows the same result and copies it. The <a href="https://tools.netcitizen.us/UsageGuide.html" target="_blank" rel="noopener">URL guide</a> lists every parameter.</li>
         </ul></dd>
         <dt>v2.8</dt>

@@ -2024,6 +2024,37 @@ test('taxcalc_core: the conversion tax is its own, and the next step names the n
 	assertEqual(on.irmaaRoom().tier, 2, 'sitting right under tier 1, the IRMAA room is the one to tier 2');
 });
 
+test('taxcalc_core: a taxable state tax refund (sr) is federal ordinary income and nothing else', () => {
+	const C = _core(); if (!C) return;
+	const at = q => { const p = new URLSearchParams(q); const c = C.run(k => p.get(k)).calc; return { c, d: c.resultFor(c.cfg.entOrdinary).d }; };
+	const tax = d => d.fedTax + d.fedCGTax + d.niit;
+	// The real 2026 California return in research/INCOME_TAX_PLANNER_INPUTS.md, at its four Roth
+	// conversion sizes, with and without its $1,789 refund. California is the tax program's figure
+	// in every column, with the refund or without it: the state does not tax its own refund.
+	const L = 'st=MFJ&s=CA&a1=66&a2=74&yr=2026&ss=29858&it=5075&nd=2500&qd=7950&sg=405&cs=100220&cb=0&rd=9126&mu=1600&sm=1100&ui=50';
+	const program = { 0: 3210, 55000: 7769, 120000: 13814, 240000: 24974 };
+	for (const rc of [0, 55000, 120000, 240000]) {
+		const off = at(`${L}&rc=${rc}`), on = at(`${L}&rc=${rc}&sr=1789`);
+		assertEqual(Math.round(on.d.stTaxOrd + on.d.stTaxCG), program[rc], `rc ${rc}: California tax unchanged by the refund, the program's figure`);
+		assertEqual(on.d.magi - off.d.magi, 1789, `rc ${rc}: the refund is in MAGI`);
+		assertEqual(tax(on.d) > tax(off.d), true, `rc ${rc}: and raises federal tax`);
+		assertEqual(on.c.cfg.entOrdinary - off.c.cfg.entOrdinary, 1789, `rc ${rc}: it is ordinary income entered`);
+	}
+	// Not investment income: where net investment income is what limits the 3.8% surtax, more MAGI
+	// from a refund leaves it where it was.
+	assertEqual(at(`${L}&rc=240000&sr=1789`).d.niit, at(`${L}&rc=240000`).d.niit, 'the refund is not investment income');
+	// Not a retirement distribution.
+	assertEqual(at(`${L}&sr=1789&return=iraTotal`).c.cfg.rmd, 9126, 'the RMD entry is untouched');
+	assertEqual(+_row(`${L}&sr=1789&return=iraTotal`).iraTotal, +_row(`${L}&return=iraTotal`).iraTotal, 'and the IRA total does not count the refund');
+	// Near the Social Security thresholds a $2,000 refund pulls $1,700 more of the benefit into tax:
+	// AGI rises $3,700, which is why leaving a refund out misleads most here.
+	const ss = 'st=MFJ&s=CA&a1=70&a2=70&yr=2026&ss=40000&it=3000&rd=30000';
+	assertEqual(at(`${ss}&sr=2000`).d.fedAGI - at(ss).d.fedAGI, 3700, 'the refund raises taxable Social Security too');
+	// The link: a whole-dollar amount, never negative, and returned with the inputs.
+	assertEqual(C.configFromParams(_link('sr=-50')).cfg.stateRefund, 0, 'a negative refund is not a refund');
+	assertEqual(_row(`${L}&sr=1789&return=sr`).sr, '1789', 'sr comes back as an input');
+});
+
 test('taxcalc_core: the RMD (rd) is ordinary income, and iraTotal adds the RMD, withdrawals, conversion and tax withdrawal', () => {
 	const C = _core(); if (!C) return;
 	const L = 'st=MFJ&s=TX&yr=2026&a1=75&a2=75&ss=30000';

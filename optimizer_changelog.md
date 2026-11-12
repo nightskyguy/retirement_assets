@@ -17,6 +17,28 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1d93"></a>
+
+## 11.1d93
+
+**Seven states' income tax tables now carry their 2026 figures.**  
+*Behavior change: a plan in California, Maryland, Maine, Mississippi, Michigan, Oregon or
+Massachusetts pays a different state tax, so a saved scenario or shared link for one of them gives a
+different answer.*
+
+- **Maryland.** A married couple is taxed on the joint brackets, not the single ones: up to about
+  $600 a year less from $300,000 of taxable income, and more above $600,000. Single filers between
+  $500,000 and $1 million pay less too.
+- **Maine.** Maine's own standard deduction plus its $5,300-per-person exemption replaces the federal
+  standard deduction, about $570 to $700 a year less for a couple. The 2% surcharge above $1.5
+  million joint ($1 million single) is included.
+- **Mississippi.** Its own standard deduction and exemption replace the federal one, so tax on income
+  other than retirement income rises by up to about $620 a year for a couple.
+- **California** and **Oregon** use their 2026 brackets and standard deductions: at most about $460
+  and $100 a year less.
+- **Michigan** counts the $5,900 exemption for each spouse, about $260 a year less for a couple.
+- **Massachusetts** includes the 4% surtax on income above $1,107,750.
+
 <a id="11.1d67"></a>
 
 ## 11.1d67

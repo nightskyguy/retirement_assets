@@ -31,7 +31,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1d67</title>
+    <title>Retirement Optimizer 11.1d93</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -79,7 +79,7 @@
     .share-panel .share-status { font-family:monospace; font-size:10px; color:#1a7a1a; margin-top:.35rem; min-height:14px; }
 	</style>
 	<base target="_blank">	
-	<script src="taxengine.js?v=111d67"></script>
+	<script src="taxengine.js?v=111d93"></script>
 	<script src="medicare_costs.js?v=111917"></script>
 	<script src="optimizer_core.js?v=111d68"></script>
 	<!-- These tokens are cache-busters and move with the FILE, not with the release. They are
@@ -88,7 +88,7 @@
 	     to name. The <title> and the first changelog <li> stay matched to each other, which is the
 	     rule the maintenance note further down states. -->
 	<script src="optimizer_ui.js?v=111d09"></script>
-	<script src="optimizer_tests.js?v=111d67"></script>
+	<script src="optimizer_tests.js?v=111d93"></script>
 </head>
 <body>
 
@@ -1170,6 +1170,16 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="behavior"><b>11.1d93</b>
+					<strong>Seven states' income tax tables now carry their 2026 figures.</strong>
+					<ul style="margin:4px 0 0 0;padding-left:18px;">
+					<li>Maryland taxes a married couple on the joint brackets, not the single ones: up to about $600 a year less from $300,000 of taxable income, and more above $600,000.</li>
+					<li>Maine uses its own standard deduction and $5,300-per-person exemption instead of the federal standard deduction (about $570 to $700 a year less for a couple) and includes its new 2% surcharge.</li>
+					<li>Mississippi uses its own standard deduction and exemption, raising tax on non-retirement income by up to about $620 a year for a couple.</li>
+					<li>California and Oregon use their 2026 brackets, Michigan counts the exemption for each spouse, and Massachusetts includes its 4% surtax above $1,107,750.</li>
+					</ul>
+					<a href="optimizer_changelog.md#11.1d93" target="_blank" rel="noopener">Details</a>
+				</li>
 				<li data-flag="behavior"><b>11.1d67</b>
 					<strong>The extra senior deduction shrinks for each spouse separately, and the 3.8% investment surtax now counts interest.</strong>
 					<ul style="margin:4px 0 0 0;padding-left:18px;">
@@ -1210,14 +1220,6 @@
 					<li>North Dakota, Nebraska, South Carolina and Georgia were each charging too much state tax and now match what the state publishes for 2026: North Dakota has a 0% band the table did not carry, South Carolina rewrote its tax for 2026, Nebraska is graduated rather than flat 4.55%, and Georgia's larger standard deduction starts this year. On a couple drawing $120,000 a year, state tax falls 91% in North Dakota, 25% in South Carolina and 13% in Nebraska.</li>
 					</ul>
 					<a href="optimizer_changelog.md#11.1933" target="_blank" rel="noopener">Details</a>
-				</li>
-				<li data-flag="behavior"><b>11.1917</b>
-					<strong>Medicare and IRMAA costs now grow on a published path instead of your inflation rate.</strong>
-					<ul style="margin:4px 0 0 0;padding-left:18px;">
-					<li>Medicare premiums and IRMAA surcharges used to grow at your CPI plus your Inflation, about 5.8% a year on the defaults. They now follow the path the Medicare Trustees publish: about 6.6% a year to start, easing toward 3.8% in the long run. The new path starts higher and ends lower, so whether your plan pays more or less depends on how much of your Medicare life is early. If your plan reaches an IRMAA tier, its numbers will move.</li>
-					<li>Medicare cost no longer varies from one Monte Carlo path to another, which narrows the spread slightly.</li>
-					</ul>
-					<a href="optimizer_changelog.md#11.1917" target="_blank" rel="noopener">Details</a>
 				</li>
 				</ul>
 				<script>
@@ -1887,7 +1889,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these seven are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111d68';
+    const V = '?v=111d93';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js', 'optimizer_core.tests.js',

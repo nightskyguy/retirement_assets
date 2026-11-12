@@ -48,6 +48,12 @@ the commit messages are the record. Nothing here is kept as a historical record.
 |---|---|
 | [MEDICARE_ESCALATION.md](MEDICARE_ESCALATION.md) | Five tools grow Medicare premiums and IRMAA surcharges five different ways, and none of the rates has a source. Measures four growth models against the Part B standard premium 2003-2026 and against the Trustees' own forward path. **A fixed rate fits the record best in all three windows** (5, 10 and 20 years) but the win is narrow and the fitted value runs 6.60% / 5.36% / 4.45% depending only on which window you pick. **CPI carries no signal in any window** - beta is -0.18 / 0.44 / 0.24 against standard errors near 1 - and hold harmless gives it the WRONG SIGN, because a small COLA protects most beneficiaries and drives the standard premium up (2016: CPI 0.70%, premium +16.11%; 2023: CPI 6.50%, premium -3.06%). So `cpi + inflation` is not a model, it is a coincidence of the default inputs. **The 8.5% often quoted is aggregate Part B SPENDING, not a premium**: the Trustees' own premium grows 5.93% over that same window, and 8.5% used as an escalator overstates a 30-year premium bill by 92%. **No flat rate can carry both ends** of the officially projected future (a 6.6% ramp to 2035, a 3.8% long run): the best one possible still carries 6.94% path error against 2.96% for a two-phase model, and each flat rate is only right at the single tail assumption that suits it, swinging 25 points or more across a plausible range where two-phase stays within 1.2%. Today's 5.6% and the Optimizer's 5.8% overstate the 30-year bill by 11% and 15%; IncomeTaxPlanner's 2.5% understates it by 36%. |
 
+## What the tax tables hold
+
+| report | what it covers |
+|---|---|
+| [STATE_TAX_TABLE_YEARS.md](STATE_TAX_TABLE_YEARS.md) | Whether each `TAXData` state block stamped `YEAR: 2026` really carries 2026 figures, checked against each state's own 2026 publication (no engine run, no harness). 21 of 29 matched; the rest (CA, OR, MD, MI, ME, MS) were corrected in 11.1d93, and every state now names the source of each figure in a `SOURCES` map that the tests hold to the federal table's year. **What is left:** DC's standard deduction and ID's 0% band wait on 2026 publications, MD's joint standard deduction is derived and its pension cap is 2025's, and AL's deduction is unaudited. Also records that the engine indexes figures the law fixes (MS, the CA $1M surcharge line, OR's top thresholds) and which structures the audit did not cover. |
+
 ## Index of the scripts
 
 | report | what it covers |

@@ -230,14 +230,14 @@ var TAXData = {
 	// FLAT-RATE — 12 included  (15 total across all 51 jurisdictions)
 	//   Included (single Infinity bracket):
 	//     AZ  2.5%    CO  4.4%    GA  4.99%  IA  3.8%  ID  5.3% (with income threshold)
-	//     IL  4.95%   IN  3.05%   KY  4.0%   MA  5.0%
+	//     IL  4.95%   IN  2.95%   KY  3.5%   MA  5.0% (9% over the surtax line)
 	//     MI  4.25%   NC  3.99%   PA  3.07%
 	//   Nebraska is NOT flat: its top rate is 4.55% but the schedule is graduated (2.46 / 3.51 / 4.55).
 	//   Scheduled or possible reductions (the brackets govern; these are notes on where they head):
 	//     GA — 4.99% from TY2026 (HB 463), then 0.125 points a year from 2027 toward 4.99%'s successor
 	//     NE — LB754 phase-down continuing toward a 3.99% top rate
 	//     IN — HEA 1002/1001 phase-down ongoing
-	//     KY — revenue-trigger reduction possible (not triggered for 2026)
+	//     KY — 3.5% from 2026 under the HB 8 (2022) revenue triggers; further cuts possible
 	//   Not yet coded (2 flat-rate states):
 	//     LA  3.0%  constitutional amendment, effective 2025
 	//     UT  4.65% cut from 4.85% in 2022; no further changes scheduled
@@ -288,26 +288,32 @@ var TAXData = {
 		BasisStepUp: 1.00,
 		YEAR: 2026,
 		Default: true,
-		NOTE: 'Excludes CA SDI and CA personal exemption credits. Because those credits are not applied, the California tax shown here is slightly over-calculated — your actual California tax would be a bit lower.',
+		NOTE: 'California\'s personal exemption credit ($158 per person in 2026) and senior exemption credit (another $158 per person 65 or older) are not applied, so California tax is overstated by up to $316 a year for a single filer 65+ and $632 for a married couple both 65+. California SDI, a payroll tax on wages, is not included, so tax is understated for filers with wages.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		HSA_DEDUCTIBLE: false,   // CA does not conform to the federal HSA deduction; absent means deductible
-		// Thresholds inflation-adjusted by CA FTB (~2.971% CCPI); 13.3% = 12.3% + 1% MHSA surtax on income >$1M.
-		// MFJ brackets >$1M: $1M triggers MHSA (+1%), nominal 12.3% bracket starts at $1,442,628 (= 2×SGL).
+		// FTB 2026 Schedules X and Y and the 2026 standard deduction (Tax News, October 2026).
+		// The 1,000,000 rows are the 1% Mental Health Services Act surcharge on taxable income over
+		// $1M (13.3% = 12.3% + 1%). The law does not index that $1M, but calculateProgressive indexes
+		// every row, so later plan years start the surcharge a little above $1M.
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'FTB Tax News, October 2026: 2026 California tax rate schedules X and Y' },
+			std:      { year: 2026, status: 'published', doc: 'FTB Tax News, October 2026: 2026 standard deduction' },
+		},
         MFJ: {
-            std: 11700,
+            std: 11800,
             brackets: [
-                { l: 21512, r: 0.01 }, { l: 50998, r: 0.02 }, { l: 80490, r: 0.04 },
-                { l: 111734, r: 0.06 }, { l: 141212, r: 0.08 }, { l: 721318, r: 0.093 },
-                { l: 865574, r: 0.103 }, { l: 1000000, r: 0.113 }, { l: 1442628, r: 0.123 },
+                { l: 22912, r: 0.01 }, { l: 54314, r: 0.02 }, { l: 85722, r: 0.04 },
+                { l: 118996, r: 0.06 }, { l: 150394, r: 0.08 }, { l: 768218, r: 0.093 },
+                { l: 921854, r: 0.103 }, { l: 1000000, r: 0.113 }, { l: 1536426, r: 0.123 },
                 { l: Infinity, r: 0.133 }
             ]
         },
         SGL: {
-            std: 5850,
+            std: 5900,
             brackets: [
-                { l: 10756, r: 0.01 }, { l: 25499, r: 0.02 }, { l: 40245, r: 0.04 },
-                { l: 55867, r: 0.06 }, { l: 70606, r: 0.08 }, { l: 360659, r: 0.093 },
-                { l: 432787, r: 0.103 }, { l: 721314, r: 0.113 }, { l: 1000000, r: 0.123 },
+                { l: 11456, r: 0.01 }, { l: 27157, r: 0.02 }, { l: 42861, r: 0.04 },
+                { l: 59498, r: 0.06 }, { l: 75197, r: 0.08 }, { l: 384109, r: 0.093 },
+                { l: 460927, r: 0.103 }, { l: 768213, r: 0.113 }, { l: 1000000, r: 0.123 },
                 { l: Infinity, r: 0.133 }
             ]
         }
@@ -335,6 +341,10 @@ var TAXData = {
 					{l: 150000, r: 0.025}, {l: Infinity, r: 0}
 				]
 			}
+		},
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'C.G.S. 12-700: rates and thresholds unchanged for 2026' },
+			std:      { year: 2026, status: 'published', doc: 'C.G.S. 12-702: personal exemption 24,000 / 15,000, not indexed before 2028 (HB 5444)' },
 		},
 		MFJ: {
 			std: 24000,  // CT uses personal exemptions instead, not standard deduction
@@ -375,6 +385,11 @@ var TAXData = {
 			mode: 'cap', types: ['pension', 'ira'],
 			ageGateTiers: [ { minAge: 62, capPerPerson: 35000 }, { minAge: 65, capPerPerson: 65000 } ]
 		},
+		SOURCES: {
+			brackets:             { year: 2026, status: 'published', doc: 'HB 463 (2026): flat 4.99% from 2026-01-01' },
+			std:                  { year: 2026, status: 'published', doc: 'HB 463 (2026): standard deduction 30,000 / 15,000 from 2026' },
+			RETIREMENT_EXCLUSION: { year: 2026, status: 'published', doc: 'O.C.G.A. 48-7-27: 35,000 (62-64) / 65,000 (65+) per person; 70,000 from 2027' },
+		},
 		MFJ: {
 			std: 30000,  // HB 463 (2026), applicable from TY2026; then +$750/yr from 2027 toward $36,000
 			brackets: [
@@ -396,6 +411,10 @@ var TAXData = {
 		BasisStepUp: 1.00,
 		YEAR: 2026,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		SOURCES: {
+			brackets: { year: 2025, status: 'pending', doc: 'Tax Commission withholding update (Aug 2026): 5.3% for 2026; the 0% band is 2025\'s, the 2026 figure comes with the 2026 Form 40 instructions' },
+			std:      { year: 2026, status: 'published', doc: 'Idaho conforms to the federal standard deduction' },
+		},
 		MFJ: {
 			std: 32200,
 			brackets: [
@@ -422,6 +441,10 @@ var TAXData = {
 		// IL Schedule M subtracts federally-taxed retirement income (qualified plans, IRA distributions,
 		// govt/RR/military pensions). Assumes retirees are past plan-qualification age.
 		RETIREMENT_EXCLUSION: { mode: 'full', types: ['pension', 'ira'] },
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'Booklet IL-700-T (2026): flat 4.95%' },
+			std:      { year: 2026, status: 'published', doc: 'Booklet IL-700-T (2026): exemption allowance 2,925 per person' },
+		},
 		MFJ: {
 			std: 5850,  // Illinois personal exemption: 2 × $2,925 per person
 			exemption: 5850,  // $2,925 per person (up from $2,850 in 2025)
@@ -444,18 +467,27 @@ var TAXData = {
 		STATE: 'Mississippi',
 		BasisStepUp: 0.50,
 		YEAR: 2026,
-		NOTE: 'Mississippi fully exempts all retirement income (Social Security, pension, IRA/401k/403b, annuity, disability, military) — no age or income limit. Non-retirement income is taxed at a flat 4.3% above a $10,000 exemption.',
+		NOTE: 'Mississippi fully exempts all retirement income (Social Security, pension, IRA/401k/403b, annuity, disability, military) - no age or income limit. Other income is taxed at 4% (2026) above the standard deduction, the personal exemption and a first $10,000 taxed at 0%. The extra $1,500 exemption for each person 65 or older is not applied, so tax is overstated for those filers. A married couple filing a combined return gets the 0% band on each spouse\'s income ($20,000 together) where this calculator gives one $10,000, so tax may be overstated by up to $400 a year. The rate is scheduled to fall to 3.75% in 2027; this calculator keeps 4% for every year.',
 		SSTaxation: 0.00,
 		RETIREMENT_EXCLUSION: { mode: 'full', types: ['pension', 'ira'] },
+		// `std` is Mississippi's standard deduction (4,600 joint / 2,300 single) plus its personal
+		// exemption (12,000 / 6,000), which reach taxable income the same way. Mississippi does not
+		// use the federal standard deduction. The law does not index either amount, nor the $10,000
+		// 0% band, but calculateTaxes indexes every `std` and calculateProgressive every bracket row,
+		// so later plan years carry slightly more of both than the law allows.
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'MS DOR Individual Income Tax general information: 2026 rate 4% over $10,000' },
+			std:      { year: 2026, status: 'published', doc: 'MS DOR Individual Income Tax general information: exemptions and standard deductions' },
+		},
 		MFJ: {
-			std: 'FEDERAL',
+			std: 16600,
 			brackets: [
 				{ l: 10000, r: 0.0 },
 				{ l: Infinity, r: 0.04 }
 			]
 		},
 		SGL: {
-			std: 'FEDERAL',
+			std: 8300,
 			brackets: [
 				{ l: 10000, r: 0.0 },
 				{ l: Infinity, r: 0.04 }
@@ -471,6 +503,10 @@ var TAXData = {
 		NOTE: 'Iowa fully exempts pension, IRA, 401(k), and other retirement-plan income for filers 55+ (Social Security is already separately exempt). Most Iowa school districts also levy a surtax (a percentage of the Iowa income tax owed, up to about 20%), plus a small emergency-services surtax; because Iowa still taxes interest, dividends, and capital gains, this calculator understates tax by that surtax on the investment-income portion for residents of surtax districts.',
 		SSTaxation: 0.00,
 		RETIREMENT_EXCLUSION: { mode: 'full', types: ['pension', 'ira'], ageGate: 55 },
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'Iowa Code 422.5A: flat 3.8% from 2025' },
+			std:      { year: 2026, status: 'published', doc: 'Iowa starts from federal taxable income, so the federal standard deduction' },
+		},
 		MFJ: {
 			std: 'FEDERAL',
 			brackets: [
@@ -492,52 +528,67 @@ var TAXData = {
 		YEAR: 2026,  // Flat 5% rate; personal exemption $4,400/person
 		NOTE: 'Retirement income: Massachusetts fully exempts pensions from federal, state, and municipal government employers (private pensions, IRA, and 401(k) distributions remain taxable at the flat 5% rate). This calculator does not apply that exclusion, so tax may be overstated for retirees with a government pension.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		// The 1,107,750 row is the 4% surtax (5% + 4%) on taxable income above that amount, the same
+		// threshold on a joint return as on a single one; it is indexed every year.
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'mass.gov personal income tax rates: 5%, and the 4% surtax over $1,107,750 (2026)' },
+			std:      { year: 2026, status: 'published', doc: 'mass.gov personal exemptions 4,400 / 8,800, not indexed' },
+		},
 		MFJ: {
 			std: 8800,  // 2 × $4,400 personal exemption
 			exemption: 8800,
 			brackets: [
-				{ l: Infinity, r: 0.05 }
+				{ l: 1107750, r: 0.05 },
+				{ l: Infinity, r: 0.09 }
 			]
 		},
 		SGL: {
 			std: 4400,
 			exemption: 4400,
 			brackets: [
-				{ l: Infinity, r: 0.05 }
+				{ l: 1107750, r: 0.05 },
+				{ l: Infinity, r: 0.09 }
 			]
 		},
 	}, // MASSACHUSETTS
 
-	// MARYLAND - 2025/2026
+	// MARYLAND - 2026
 	MD: {
 		STATE: 'Maryland',
 		BasisStepUp: 0.50,
-		YEAR: 2026,  // Brackets effective July 1, 2025 remain in effect; std deductions COLA-indexed (may be slightly higher)
-		NOTE: 'Retirement income: Maryland excludes up to $40,600 (2026) of qualified pension income for filers 65+ or disabled, reduced dollar-for-dollar by Social Security/Railroad Retirement received (traditional IRA distributions do not qualify). Maryland county/local income taxes (2.25% to 3.3% depending on county) apply to all Maryland taxable income, including IRA/401(k) distributions, interest, dividends, and capital gains, and every county plus Baltimore City levies one; this calculator does not include them, so total tax is understated for essentially every Maryland resident.',
+		YEAR: 2026,
+		NOTE: 'Retirement income: Maryland excludes up to $41,200 (the 2025 figure; 2026 is not yet published) of qualified pension income for filers 65+ or disabled, reduced dollar-for-dollar by Social Security/Railroad Retirement received (traditional IRA distributions do not qualify). Maryland\'s personal exemption ($3,200 per person, plus $1,000 per person 65+) is not applied, so tax is overstated for households below the income where it phases out ($150,000 to $200,000 federal AGI for a married couple). Maryland county/local income taxes (2.25% to 3.3% depending on county) apply to all Maryland taxable income, including IRA/401(k) distributions, interest, dividends, and capital gains, and every county plus Baltimore City levies one; this calculator does not include them, so total tax is understated for essentially every Maryland resident.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
-		RETIREMENT_EXCLUSION: { mode: 'cap', types: ['pension'], cap: 40600, ageGate: 65, reduceBySS: true },
+		RETIREMENT_EXCLUSION: { mode: 'cap', types: ['pension'], cap: 41200, ageGate: 65, reduceBySS: true },
 		CAPITAL_GAINS: {
 			MFJ: { brackets: [ {l: 350000 - 1, r: 0.0}, {l: Infinity, r: 0.02 }] },
 			SGL: { brackets: [ {l: 350000 - 1, r: 0.0}, {l: Infinity, r: 0.02 }] }
 		},
+		// Brackets: Comptroller Tax Rate Schedules I (single) and II (joint), as amended for tax years
+		// after 2024 (6.25% and 6.5% top bands). Standard deduction: a flat amount, COLA-indexed from
+		// 2025; the 2026 single figure is the withholding guide's, and joint is twice single by statute.
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'Comptroller tax alert rev. 2025-12-22; resident booklet Tax Rate Schedules I and II' },
+			std:      { year: 2026, status: 'derived',   doc: '2026 withholding guide (single 3,400); joint = 2 x single per statute, confirm on 2026 Form 502 instructions' },
+			RETIREMENT_EXCLUSION: { year: 2025, status: 'pending', doc: '2025 resident booklet pension exclusion cap 41,200; 2026 cap not yet published' },
+		},
 		MFJ: {
-			std: 6700,  // New for 2025, was income-based before
+			std: 6800,
 			brackets: [
 				{ l: 1000, r: 0.02 },
 				{ l: 2000, r: 0.03 },
 				{ l: 3000, r: 0.04 },
-				{ l: 100000, r: 0.0475 },
-				{ l: 125000, r: 0.05 },
-				{ l: 150000, r: 0.0525 },
-				{ l: 250000, r: 0.055 },
+				{ l: 150000, r: 0.0475 },
+				{ l: 175000, r: 0.05 },
+				{ l: 225000, r: 0.0525 },
+				{ l: 300000, r: 0.055 },
 				{ l: 600000, r: 0.0575 },
-				{ l: 600001, r: 0.0625 },  // New bracket for 2025
-				{ l: 1200000, r: 0.065 },  // New top bracket for 2025
+				{ l: 1200000, r: 0.0625 },
 				{ l: Infinity, r: 0.065 }
 			]
 		},
 		SGL: {
-			std: 3350,  // New for 2025, was income-based before
+			std: 3400,
 			brackets: [
 				{ l: 1000, r: 0.02 },
 				{ l: 2000, r: 0.03 },
@@ -547,8 +598,7 @@ var TAXData = {
 				{ l: 150000, r: 0.0525 },
 				{ l: 250000, r: 0.055 },
 				{ l: 500000, r: 0.0575 },
-				{ l: 500001, r: 0.0625 },  // New bracket for 2025
-				{ l: 1000000, r: 0.065 },  // New top bracket for 2025
+				{ l: 1000000, r: 0.0625 },
 				{ l: Infinity, r: 0.065 }
 			]
 		},
@@ -563,14 +613,20 @@ var TAXData = {
 		NOTE: 'Retirement income: 2026 is the final phase-in year of Michigan\'s retirement-income tax relief — pension/IRA/401(k) income is exempt up to $67,610/person ($135,220 for a married couple). Filers born before 1946 have unlimited exemption, but only for government pensions; this calculator can\'t tell government from private pensions, so it only grants the unlimited exemption when both spouses were born before 1946, and applies the standard per-person cap otherwise. Tax may be overstated for a household born before 1946 with a private pension and only one qualifying spouse. Separately, about two dozen Michigan cities (Detroit at 2.4%, most others near 1%) levy a resident income tax that exempts pension and Social Security income but does tax interest, dividends, and capital gains; this calculator does not include it, so total tax is understated for residents of those cities who hold taxable brokerage income.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: { mode: 'cap', types: ['pension', 'ira'], capPerPerson: 67610, birthYearFullExemptBefore: 1946 },
+		// Michigan has no standard deduction. `std` is its personal exemption, 5,900 per person in
+		// 2026, so a joint return carries two.
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'Michigan Treasury notice 2026-04-15: 2026 individual income tax rate 4.25%' },
+			std:      { year: 2026, status: 'published', doc: 'Michigan Treasury 2026 withholding guide: personal exemption 5,900' },
+		},
 		MFJ: {
-			std: 5600,
+			std: 11800,
 			brackets: [
 				{ l: Infinity, r: 0.0425 }  // Flat tax rate
 			]
 		},
 		SGL: {
-			std: 5600,
+			std: 5900,
 			brackets: [
 				{ l: Infinity, r: 0.0425 }  // Flat tax rate
 			]
@@ -587,6 +643,10 @@ var TAXData = {
 		RETIREMENT_EXCLUSION: { mode: 'cap', types: ['pension', 'ira'], capPerPerson: 20000, ageGate: 60 },
 		// FY2026 budget (signed May 2025): first 5 brackets each cut 0.1%; top brackets unchanged.
 		// A further 0.1% cut phases in for 2027 (total 0.2% reduction fully phased in by 2027).
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'IT-2105-I (2026): tax rate schedules' },
+			std:      { year: 2026, status: 'published', doc: 'Tax Law 614: standard deduction 16,050 / 8,000, not indexed' },
+		},
 		MFJ: {
 			std: 16050,
 			brackets: [
@@ -611,6 +671,10 @@ var TAXData = {
 		YEAR: 2026,
 		NOTE: 'Retirement income: North Carolina fully exempts government and military pension income for retirees with 5+ years of service credit as of August 12, 1989 (the Bailey settlement); other retirement income is fully taxable. This calculator does not apply that exclusion, so tax may be overstated for qualifying retirees.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'NCDOR 2026 estimated tax worksheet: flat 3.99%' },
+			std:      { year: 2026, status: 'published', doc: 'G.S. 105-153.5: 25,500 / 12,750, not indexed' },
+		},
 		MFJ: {
 			std: 25500,
 			brackets: [
@@ -631,18 +695,25 @@ var TAXData = {
 		BasisStepUp: 0.50,
 		YEAR: 2026,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
-		// Lower bracket thresholds indexed for inflation annually; rates unchanged
+		// The lower thresholds and `std` are indexed every year; the 9.9% thresholds (125,000 single /
+		// 250,000 joint) are set in statute and do not index, but calculateProgressive indexes every
+		// row, so later plan years start the top rate a little high. Oregon's 2026 withholding
+		// formulas carry the tax schedule itself: the 2025 formulas match Publication OR-17 (2025).
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'Oregon Withholding Tax Formulas 150-206-436 (Rev. 12-31-25)' },
+			std:      { year: 2026, status: 'published', doc: 'Oregon Withholding Tax Formulas 150-206-436 (Rev. 12-31-25)' },
+		},
 		MFJ: {
-			std: 5495,
+			std: 5820,
 			brackets: [
-				{ l: 8100, r: 0.0475 }, { l: 20400, r: 0.0675 }, { l: 250000, r: 0.0875 },
+				{ l: 9100, r: 0.0475 }, { l: 22800, r: 0.0675 }, { l: 250000, r: 0.0875 },
 				{ l: Infinity, r: 0.099 }
 			]
 		},
 		SGL: {
-			std: 2745,
+			std: 2910,
 			brackets: [
-				{ l: 4050, r: 0.0475 }, { l: 10200, r: 0.0675 }, { l: 125000, r: 0.0875 },
+				{ l: 4550, r: 0.0475 }, { l: 11400, r: 0.0675 }, { l: 125000, r: 0.0875 },
 				{ l: Infinity, r: 0.099 }
 			]
 		}
@@ -656,6 +727,10 @@ var TAXData = {
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		// PA does not tax distributions from eligible employer plans or IRAs after 59½/retirement.
 		RETIREMENT_EXCLUSION: { mode: 'full', types: ['pension', 'ira'] },
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: '72 P.S. 7302: flat 3.07%' },
+			std:      { year: 2026, status: 'published', doc: 'Pennsylvania has no standard deduction' },
+		},
 		MFJ: {
 			std: 0,  // Pennsylvania has no standard deduction
 			brackets: [
@@ -675,7 +750,7 @@ var TAXData = {
 		STATE: 'Virginia',
 		BasisStepUp: 0.50,
 		YEAR: 2026,
-		NOTE: 'Retirement income: Virginia offers a $12,000/person age deduction for filers 65+, phased out dollar-for-dollar above $75,000 AGI (MFJ, zero at $99,000) / $50,000 AGI (Single). This calculator approximates that phase-out in steps rather than a smooth dollar-for-dollar reduction, so tax may be slightly over- or understated depending on exactly where your income falls within the phase-out range; it also applies the deduction only to pension/IRA income rather than all income, which understates the deduction (overstates tax) for filers with other income sources. Standard deduction is the tax year 2026 amount published by Virginia Tax ($17,500 MFJ / $8,750 Single); the elevated amount sunsets after TY2026 unless extended by the legislature. The top marginal rate is 5.75% on taxable income over $17,000, and there is no bracket above it.',
+		NOTE: 'Retirement income: Virginia offers a $12,000/person age deduction for filers 65+, phased out dollar-for-dollar above $75,000 AGI (MFJ, zero at $99,000) / $50,000 AGI (Single). This calculator approximates that phase-out in steps rather than a smooth dollar-for-dollar reduction, so tax may be slightly over- or understated depending on exactly where your income falls within the phase-out range; it also applies the deduction only to pension/IRA income rather than all income, which understates the deduction (overstates tax) for filers with other income sources. Standard deduction is the tax year 2026 amount published by Virginia Tax ($17,500 MFJ / $8,750 Single); the 2026 Appropriation Act raises it to $18,400 / $9,200 for 2027, which this calculator does not apply, so tax is slightly overstated from 2027. The top marginal rate is 5.75% on taxable income over $17,000, and there is no bracket above it.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: {
 			mode: 'phaseout', types: ['pension', 'ira'], capPerPerson: 12000, ageGate: 65,
@@ -684,8 +759,12 @@ var TAXData = {
 				SGL: [ {l: 50000, r: 1.00}, {l: 53000, r: 0.75}, {l: 56000, r: 0.50}, {l: 59000, r: 0.25}, {l: Infinity, r: 0} ]
 			}
 		},
-		// HB1754: std deduction raised to $12,000/$24,000 (TY2025-2026, indexed for inflation); sunset after 2026 unless extended.
-		// HB1754 also adds 7% top bracket on income > $600,000 beginning TY2026.
+		// Standard deduction 8,750 / 17,500 for 2025 and 2026; the 2026 Appropriation Act sets 9,200 /
+		// 18,400 for 2027, which this table does not carry. Rates top out at 5.75%; there is no 7% band.
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'Va. Code 58.1-320: 2% / 3% / 5% / 5.75%, not indexed' },
+			std:      { year: 2026, status: 'published', doc: 'Virginia Tax: 2026 standard deduction 8,750 / 17,500' },
+		},
 		MFJ: {
 			std: 17500,
 			brackets: [
@@ -712,6 +791,10 @@ var TAXData = {
 		BasisStepUp: 0.50,
 		YEAR: 2026,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'D.C. Code 47-1806.03: rates and thresholds unchanged for 2026' },
+			std:      { year: 2025, status: 'pending', doc: 'OTR: 2025 standard deduction 30,000 / 15,000; the 2026 figure is unpublished and contested (FY2027 BSA indexing vs federal conformity)' },
+		},
 		MFJ: {
 			std: 30000,
 			brackets: [
@@ -742,6 +825,10 @@ var TAXData = {
 		// GRADUATED, not flat - 2.46%, then 3.51%, then 4.55%. The top two rows of the published schedule
 		// are both 4.55% at different thresholds, which is one band here. Standard deductions and bracket
 		// thresholds are indexed annually (8,600 / 17,200 in 2025 to 8,850 / 17,700 in 2026).
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'Nebraska Tax Calculation Schedule 8-460-2026' },
+			std:      { year: 2026, status: 'published', doc: 'Nebraska Tax Calculation Schedule 8-460-2026: standard deduction' },
+		},
 		MFJ: {
 			std: 17700,
 			brackets: [
@@ -772,6 +859,10 @@ var TAXData = {
 			{ mode: 'full', types: ['pension'] },
 			{ mode: 'cap', types: ['ira'], cap: 6000, ageGate: 65 }
 		],
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'Ala. Code 40-18-5: 2% / 4% / 5%, thresholds unchanged since 2006 and not indexed' },
+			std:      { year: 2026, status: 'unverified', doc: 'maximum standard deduction; its income-based reduction and the personal exemption are not yet audited' },
+		},
 		MFJ: {
 			std: 8500,
 			brackets: [
@@ -797,6 +888,10 @@ var TAXData = {
 		YEAR: 2026,
 		NOTE: 'Retirement income: Arizona exempts up to $2,500/person of government pension income (Arizona, other states, or the U.S. government), and fully exempts military retirement pay. Private pension, IRA, and 401(k) income remain fully taxable. This calculator does not apply the government-pension exclusion, so tax may be overstated for qualifying retirees.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'A.R.S. 43-1011: flat 2.5%' },
+			std:      { year: 2026, status: 'published', doc: 'A.R.S. 43-1041: the federal standard deduction' },
+		},
 		MFJ: {
 			std: 'FEDERAL',  // AZ uses federal standard deduction
 			brackets: [
@@ -819,6 +914,10 @@ var TAXData = {
 		NOTE: 'Retirement income: as of 2026, Colorado removed all dollar caps on the pension/annuity/IRA subtraction for filers 55+ (the prior $20,000 age 55–64 / $24,000 age 65+ caps no longer apply). Fully exempt once at least one spouse is 55 or older. Social Security: Colorado is treated here as not taxing benefits, which is correct from age 65, where the subtraction is unlimited. From 55 to 64 the full subtraction applies only below $75,000 AGI (single) or $95,000 (joint) and is capped at $20,000 above that, so tax is understated for a Colorado retiree in that age band with income over the limit.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: { mode: 'full', types: ['pension', 'ira'], ageGate: 55 },
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'C.R.S. 39-22-104: flat 4.4%; no TABOR-surplus rate reduction announced for 2026' },
+			std:      { year: 2026, status: 'published', doc: 'Colorado starts from federal taxable income, so the federal standard deduction' },
+		},
 		MFJ: {
 			std: 'FEDERAL',  // CO uses federal standard deduction
 			brackets: [
@@ -833,13 +932,17 @@ var TAXData = {
 		},
 	}, // COLORADO
 
-	// INDIANA - flat 3.05% (HEA 1002/1001 phase-down; 2026 rate confirmed 3.05%; county taxes not modeled)
+	// INDIANA - flat 2.95% for 2026 (HEA 1002/1001 phase-down; county taxes not modeled)
 	IN: {
 		STATE: 'Indiana',
 		BasisStepUp: 0.50,
 		YEAR: 2026,
 		NOTE: 'Indiana county income taxes (roughly 0.5% to 3% depending on county) apply to Indiana adjusted gross income, including IRA/401(k) distributions, interest, dividends, and capital gains, and all 92 counties levy one; this calculator does not include them, so total tax is understated for essentially every Indiana resident.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'IC 6-3-2-1: 2.95% for 2026' },
+			std:      { year: 2026, status: 'published', doc: 'IC 6-3-1-3.5: personal exemption 1,000 per person' },
+		},
 		MFJ: {
 			std: 2000,  // $1,000 personal exemption per taxpayer
 			brackets: [
@@ -854,7 +957,7 @@ var TAXData = {
 		},
 	}, // INDIANA
 
-	// KENTUCKY - flat 4.0% (phased down from 5.0%; revenue trigger not met for 2026 reduction)
+	// KENTUCKY - flat 3.5% for 2026 (down from 4.0% under the HB 8 revenue triggers)
 	KY: {
 		STATE: 'Kentucky',
 		BasisStepUp: 0.50,
@@ -862,6 +965,10 @@ var TAXData = {
 		NOTE: 'Rate and standard deduction are tax year 2026 values from the Kentucky Department of Revenue; the flat rate fell from 4.0% to 3.5% on 2026-01-01 under the 2022 tax triggers. Retirement income: Kentucky exempts up to $31,110/person of pension/IRA/401(k) income.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: { mode: 'cap', types: ['pension', 'ira'], capPerPerson: 31110 },
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'Kentucky DOR: 3.5% for 2026 under the HB 8 (2022) triggers' },
+			std:      { year: 2026, status: 'published', doc: 'Kentucky DOR: 2026 standard deduction 3,360' },
+		},
 		MFJ: {
 			std: 3360,  // KY standard deduction per return, same for every filing status (2026)
 			brackets: [
@@ -876,34 +983,45 @@ var TAXData = {
 		},
 	}, // KENTUCKY
 
-	// MAINE - 2025 (brackets inflation-adjusted annually by Maine Revenue Services)
+	// MAINE - 2026 (brackets inflation-adjusted annually by Maine Revenue Services)
 	ME: {
 		STATE: 'Maine',
 		BasisStepUp: 0.50,
 		YEAR: 2026,
-		NOTE: 'Retirement income: Maine deducts up to $48,216 of pension/IRA income, reduced dollar-for-dollar by Social Security/Railroad Retirement received. The deduction phases out above $125,000 AGI (Single)/$250,000 (MFJ); this calculator applies the phase-out as a single step at the threshold rather than Maine\'s actual gradual reduction, so tax may be overstated for filers just above the threshold. Brackets reflect 2026 values (inflation-adjusted by Maine Revenue Services); rates unchanged.',
+		NOTE: 'Maine\'s standard deduction and personal exemption both phase out at higher incomes, which this calculator does not apply, so tax may be understated for higher-income filers. Retirement income: Maine deducts up to $49,824 of pension/IRA income, reduced dollar-for-dollar by Social Security/Railroad Retirement received. The deduction phases out above $125,000 AGI (Single)/$250,000 (MFJ); this calculator applies the phase-out as a single step at the threshold rather than Maine\'s actual gradual reduction, so tax may be overstated for filers just above the threshold. Brackets reflect 2026 values (inflation-adjusted by Maine Revenue Services); rates unchanged.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: {
-			mode: 'phaseout', types: ['pension', 'ira'], cap: 48216, reduceBySS: true,
+			mode: 'phaseout', types: ['pension', 'ira'], cap: 49824, reduceBySS: true,
 			brackets: {
 				SGL: [ {l: 125000, r: 1.00}, {l: Infinity, r: 0} ],
 				MFJ: [ {l: 250000, r: 1.00}, {l: Infinity, r: 0} ]
 			}
 		},
+		// `std` is Maine's own standard deduction (31,400 joint / 15,700 single) plus its personal
+		// exemption of 5,300 per person, which reaches taxable income the same way. Maine does not use
+		// the federal standard deduction. The top row is the 2% surcharge on taxable income over
+		// $1,500,000 joint / $1,000,000 single (7.15% + 2%), new for 2026.
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'MRS 2026 individual income tax rate schedule (rev. 2026-05-20)' },
+			std:      { year: 2026, status: 'published', doc: 'MRS 2026 rate schedule and 2026 Form 1040ES: standard deduction and personal exemption' },
+			RETIREMENT_EXCLUSION: { year: 2026, status: 'published', doc: 'MRS 2026 rate schedule: pension income deduction cap' },
+		},
 		MFJ: {
-			std: 'FEDERAL',  // ME uses federal standard deduction
+			std: 42000,
 			brackets: [
 				{ l: 54850, r: 0.058 },
 				{ l: 129750, r: 0.0675 },
-				{ l: Infinity, r: 0.0715 },
+				{ l: 1500000, r: 0.0715 },
+				{ l: Infinity, r: 0.0915 },
 			]
 		},
 		SGL: {
-			std: 'FEDERAL',
+			std: 21000,
 			brackets: [
 				{ l: 27400, r: 0.058 },
 				{ l: 64850, r: 0.0675 },
-				{ l: Infinity, r: 0.0715 },
+				{ l: 1000000, r: 0.0715 },
+				{ l: Infinity, r: 0.0915 },
 			]
 		},
 	}, // MAINE
@@ -921,6 +1039,10 @@ var TAXData = {
 		// federal amount, which handed every MN plan $800 single / $1,600 joint too much deduction.
 		// Source: MN DOR, "Minnesota income tax brackets, standard deduction and dependent exemption
 		// amounts for tax year 2026", 2025-12-16.
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'MN DOR 2025-12-16: tax year 2026 brackets' },
+			std:      { year: 2026, status: 'published', doc: 'MN DOR 2025-12-16: tax year 2026 standard deduction' },
+		},
 		MFJ: {
 			std: 30600,
 			brackets: [
@@ -955,6 +1077,10 @@ var TAXData = {
 		// the 2024 ones - a $20,500 single threshold and a 5.9% top rate - until 2026-09-22.
 		// Montana also stopped using its own 20%-of-AGI standard deduction when SB 399 conformed it
 		// to the federal amount, so the cap approximation the NOTE describes no longer applies.
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'HB 337 (2025): 4.7% / 5.65% for 2026, thresholds not indexed' },
+			std:      { year: 2026, status: 'published', doc: 'SB 399: Montana starts from federal taxable income, so the federal standard deduction' },
+		},
 		MFJ: {
 			std: 'FEDERAL',
 			brackets: [
@@ -981,6 +1107,10 @@ var TAXData = {
 		// 2026 Forms ND-1 and ND-EZ Tax Rate Schedules (Form ND-1ES, SFN 28709, 12-2025): a 0% band,
 		// then 1.95%, then 2.50%. The thresholds move with inflation each year - the 0% band top went
 		// from 48,475 in 2025 to 49,575 in 2026 - so they are not flagged as statutory-fixed.
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: '2026 Form ND-1ES tax rate schedules' },
+			std:      { year: 2026, status: 'published', doc: 'North Dakota starts from federal taxable income, so the federal standard deduction' },
+		},
 		MFJ: {
 			std: 'FEDERAL',  // ND taxable income starts from federal taxable income
 			brackets: [
@@ -1016,6 +1146,10 @@ var TAXData = {
 				{l: 5000, amount: 80}, {l: 8000, amount: 130}, {l: Infinity, amount: 200}
 			]
 		},
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'HB 96 (2025): 0% to 26,050, then 2.75% from 2026; not indexed' },
+			std:      { year: 2026, status: 'published', doc: 'R.C. 5747.025: personal exemption 2,400 (the MAGI tiers to 1,900 are not applied)' },
+		},
 		MFJ: {
 			std: 4800,  // $2,400 personal exemption per taxpayer (2 for MFJ); unchanged
 			brackets: [
@@ -1032,8 +1166,8 @@ var TAXData = {
 		},
 	}, // OHIO
 
-	// SOUTH CAROLINA - Act 47 (2022) phase-down: 6.5%→6.4%→6.3%→6.2%→6.1% (triggers met each year)
-	// Bracket thresholds are statutory fixed values; not CPI-indexed.
+	// SOUTH CAROLINA - H. 4216 (2026): two rates, 1.99% and 5.21%, and the SC Income Adjusted Deduction.
+	// INFLATION_INDEXED: false holds the $30,000 threshold flat across a projection (see NOTE).
 	SC: {
 		STATE: 'South Carolina',
 		BasisStepUp: 0.50,
@@ -1050,6 +1184,10 @@ var TAXData = {
 		// decoupled from IRC 63(b)-(g) and now starts from federal AGI, which is the base this engine
 		// already builds. The SCIAD is reduced at higher federal AGI by a formula published in SCDOR
 		// Information Letter #26-20; that reduction is not modeled - see NOTE.
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'H. 4216 (2026): 1.99% / 5.21% at 30,000' },
+			std:      { year: 2026, status: 'published', doc: 'H. 4216 (2026): SC Income Adjusted Deduction 30,000 / 15,000 (its AGI reduction is not applied)' },
+		},
 		MFJ: {
 			std: 30000,
 			brackets: [
@@ -1066,7 +1204,7 @@ var TAXData = {
 		},
 	}, // SOUTH CAROLINA
 
-	// WISCONSIN - 2025 (brackets inflation-adjusted annually by WI DOR; rates unchanged since 2024 reform)
+	// WISCONSIN - 2026 (brackets inflation-adjusted annually by WI DOR; rates unchanged since 2024 reform)
 	// Std deduction phases out at higher income — using base amount
 	WI: {
 		STATE: 'Wisconsin',
@@ -1079,6 +1217,10 @@ var TAXData = {
 		// from $39,150 to $67,300 - for tax years after 2024. This table missed it until 2026-09-22
 		// and taxed the whole gap at 5.30% instead. Figures are tax year 2026 from the WI DOR 2026
 		// Form 1-ES instructions; `std` is the MAXIMUM, which phases out with income (see NOTE).
+		SOURCES: {
+			brackets: { year: 2026, status: 'published', doc: 'WI DOR 2026 Form 1-ES instructions: tax rate schedules' },
+			std:      { year: 2026, status: 'published', doc: 'WI DOR 2026 Form 1-ES instructions: standard deduction maximum' },
+		},
 		MFJ: {
 			std: 25840,
 			brackets: [
@@ -1123,6 +1265,52 @@ TAXData.TX = { STATE: 'Texas', ...NO_TAX_SHELL, BasisStepUp: 1.00 };
 TAXData.WA = { STATE: 'Washington', ...NO_TAX_SHELL, BasisStepUp: 1.00,
     NOTE: 'Washington levies no income tax, but it DOES tax long-term capital gains: 7% on gain above a standard deduction of about $278,000 (2025, indexed annually), and 9.9% on gain above $1,000,000. Retirement accounts and real estate are exempt, so IRA, Roth and pension withdrawals are unaffected; only realized brokerage gains would be taxed. This calculator does not apply it, so tax is understated for a Washington resident whose brokerage gains in a single year clear that deduction - which a large harvest year can do.' };
 TAXData.WY = { STATE: 'Wyoming', ...NO_TAX_SHELL };
+
+// ─────────────────────────────────────────────────────────────────────────
+// Where each state figure comes from. Every state that levies an income tax carries a SOURCES map
+// with one entry per figure it holds (`brackets` and `std` always, `RETIREMENT_EXCLUSION` and the
+// rest once they are checked): { year, status, doc }. `year` is the tax year the figure is for,
+// `doc` names the publication or statute, and `status` is one of:
+//   published   read from the state's own publication or law for that year
+//   derived     computed from published figures (e.g. joint = 2 x single), not printed anywhere yet
+//   pending     the state has not published this year's figure; the table holds the latest one
+//   unverified  carried over, not yet checked against a publication
+// One YEAR stamp per state is not enough: a state stamped with the current year once carried a
+// two-year-old schedule. checkStateSources() fails a figure behind TAXData.FEDERAL.YEAR unless it is
+// marked pending, so rolling the federal table forward a year forces every state to be re-checked.
+// ─────────────────────────────────────────────────────────────────────────
+const SOURCE_STATUSES = ['published', 'derived', 'pending', 'unverified'];
+const SOURCE_FIELDS_REQUIRED = ['brackets', 'std'];
+
+// Returns { errors, flagged }: `errors` must be empty; `flagged` lists every figure that is not
+// 'published', so a suite run can print what is still waiting on a publication. Takes the table as
+// an argument so a test can hand it a broken one.
+function checkStateSources(td = TAXData) {
+    const errors = [], flagged = [];
+    const fedYear = td.FEDERAL.YEAR;
+    for (const code of Object.keys(td)) {
+        const st = td[code];
+        if (!st || !st.STATE || !st.MFJ || !st.SGL) continue;
+        const levies = [st.MFJ, st.SGL].some(f => (f.brackets || []).some(b => b.r > 0));
+        if (!levies) continue;   // a no-income-tax shell holds no figures to source
+        const src = st.SOURCES;
+        if (!src) { errors.push(`${code}: no SOURCES`); continue; }
+        for (const f of SOURCE_FIELDS_REQUIRED) if (!src[f]) errors.push(`${code}: SOURCES.${f} missing`);
+        for (const [field, e] of Object.entries(src)) {
+            const where = `${code}: SOURCES.${field}`;
+            if (!SOURCE_FIELDS_REQUIRED.includes(field) && st[field] === undefined)
+                errors.push(`${where} names a field the state does not have`);
+            if (!e || typeof e !== 'object') { errors.push(`${where} is not an entry`); continue; }
+            if (!SOURCE_STATUSES.includes(e.status)) errors.push(`${where}: unknown status '${e.status}'`);
+            if (typeof e.doc !== 'string' || !e.doc.trim()) errors.push(`${where}: no doc`);
+            if (!Number.isInteger(e.year)) errors.push(`${where}: year is not a whole number`);
+            else if (e.year < fedYear && e.status !== 'pending')
+                errors.push(`${where} is for ${e.year}, behind the ${fedYear} federal table, and not marked pending`);
+            if (e.status !== 'published') flagged.push(`${code}.${field}: ${e.status} ${e.year} (${e.doc})`);
+        }
+    }
+    return { errors, flagged };
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // Derived LTCG constants. Both were literal 0.15 scattered across optimizer_core.js,
@@ -1991,7 +2179,7 @@ if (typeof module !== 'undefined' && module.exports) {
         findLimitByRate, findUpperLimitByAmount, calculateProgressive,
         calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATiers, netCapitalLosses, getIRMAATierTargetMAGI,
         getQCDLimit, isQCDEligible,
-        calculateTaxableSocialSecurity, nonSSIncomeForMAGI
+        calculateTaxableSocialSecurity, nonSSIncomeForMAGI, checkStateSources
     };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser. The page itself does NOT need this - every name above is
@@ -2005,6 +2193,6 @@ if (typeof module !== 'undefined' && module.exports) {
         findLimitByRate, findUpperLimitByAmount, calculateProgressive,
         calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATiers, netCapitalLosses, getIRMAATierTargetMAGI,
         getQCDLimit, isQCDEligible,
-        calculateTaxableSocialSecurity, nonSSIncomeForMAGI
+        calculateTaxableSocialSecurity, nonSSIncomeForMAGI, checkStateSources
     };
 }

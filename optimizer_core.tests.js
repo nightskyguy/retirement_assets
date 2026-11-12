@@ -558,13 +558,12 @@ test('P32c: forcedIRAAllowBrokerage keeps the backstop alive after the IRA empti
     // must actually redirect it. "The logs differ" was too weak - it passes on any incidental
     // difference, and it fails on a fixture that is merely unlucky without saying which.
     //
-    // The spend goal has moved twice for this reason. 130,000 -> 150,000 on 2026-09-23, when
-    // correcting the IRMAA ladder cut the surcharge enough that the IRA no longer drained;
-    // 150,000 -> 155,000 on 2026-09-24 with the two-phase Medicare model, where 150,000 landed on a
-    // spot that drains the IRA but leaves Brokerage unable to take the draw, so both arms forced the
-    // same $65,762. Raise it again rather than relaxing the assertions.
+    // The spend goal is tuned, and it moves whenever this household's tax does: it must drain the
+    // IRA while leaving Brokerage able to take the draw, and a goal that only drains the IRA has
+    // both arms force the same amount. On the 2026 tables every goal from 159,000 to 163,000 holds;
+    // 161,000 is the middle of that run. Raise it again rather than relaxing the assertions.
     const scen = { ...BASE, IRA1: 120000, Cash: 1000, Brokerage: 1500000, BrokerageBasis: 200000,
-                   ss1: 30000, ss1Age: 66, spendGoal: 155000, nYears: 25 };
+                   ss1: 30000, ss1Age: 66, spendGoal: 161000, nYears: 25 };
     const off = simulate({ ...scen });
     const on = simulate({ ...scen, forcedIRAAllowBrokerage: 'brokerageFirst' });
     assert(off.totals.forcedIRATotal > 0,
@@ -725,19 +724,19 @@ test('P104b1: a malformed or absent vector runs as the baseline draw, byte-ident
 });
 
 test.critical('P104b1x: a year funded from Cash by the primary pass is not funded again by the gap fill', () => {
-    // BASE year 0: the need is $36,717 and Cash holds $50,000, so a {Cash:1} vector funds the year
-    // from Cash alone and touches nothing else. Until 2026-09-02 it did not: fillSpendingGap sized
-    // its gap from yr.possibleIncome, which counts IRA and Brokerage draws and not Cash or Roth
-    // ones, so it saw the same $36,717 gap again, drained the remaining $13,283 of Cash, spilled
-    // $29,292 into the IRA, and the year-end surplus routine refunded $38,233 to Cash - an IRA
+    // BASE year 0: the need is $36,709 (it includes California tax, so it moves with that table) and
+    // Cash holds $50,000, so a {Cash:1} vector funds the year from Cash alone and touches nothing
+    // else. Until 2026-09-02 it did not: fillSpendingGap sized its gap from yr.possibleIncome, which
+    // counts IRA and Brokerage draws and not Cash or Roth ones, so it saw the same gap again, drained
+    // the rest of Cash, spilled $29,292 into the IRA, and the year-end surplus routine refunded $38,233 to Cash - an IRA
     // draw nobody asked for, taxed, parked in Cash. The Ordered branch's comment had named the
     // loop since July; the oracle weight path (P51b) and every family with Cash in its primary
     // order ran through it. Those defect numbers are recorded here so the guard reads as what it
     // is: the fix moved every Proportional and Guyton-Klinger plan (see the changelog at 11.1703).
     const y0 = simulate({ ...BASE, strategy: 'split', splitWeights: [0, 0, 1, 0] }).log[0];
     assert((y0.IRAwd ?? 0) < 1, `no IRA may be drawn by choice while Cash covers the year, got IRAwd ${y0.IRAwd} (the defect read 29,292)`);
-    assertNear(y0.Cash ?? 0, 13283.38, 'Cash at year end is the balance less the one draw that funded the year (the defect read 38,233)', 5);
-    assertNear(y0.CashWD ?? 0, 36716.62, 'the whole need came from Cash, once', 5);
+    assertNear(y0.Cash ?? 0, 13291.38, 'Cash at year end is the balance less the one draw that funded the year (the defect read 38,233)', 5);
+    assertNear(y0.CashWD ?? 0, 36708.62, 'the whole need came from Cash, once', 5);
     assert((y0['Brokerage-'] ?? 0) < 1, `Brokerage must be untouched, got ${y0['Brokerage-']}`);
 });
 
@@ -7967,7 +7966,8 @@ test('single-row bracket tables: the affected jurisdictions are pinned', () => {
     // whatever the lookup does at its edges.
     const single = Object.keys(TAXData).filter(k => k.length === 2)
         .filter(k => (getRateBracket(k, 'MFJ') || []).length === 1).sort();
-    const expected = ['AK','AZ','CO','FL','GA','IA','IL','IN','KY','MA','MI','NC','NH','NV','PA','SD','TN','TX','WA','WY'];
+    // MA left this list when its 4% surtax became a second row.
+    const expected = ['AK','AZ','CO','FL','GA','IA','IL','IN','KY','MI','NC','NH','NV','PA','SD','TN','TX','WA','WY'];
     assert(JSON.stringify(single) === JSON.stringify(expected),
         `single-row tables changed:\n         expected ${JSON.stringify(expected)}\n         actual   ${JSON.stringify(single)}`);
 });

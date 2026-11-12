@@ -17,27 +17,31 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1d93"></a>
+<a id="11.1d9d"></a>
 
-## 11.1d93
+## 11.1d9d
 
-**Seven states' income tax tables now carry their 2026 figures.**  
-*Behavior change: a plan in California, Maryland, Maine, Mississippi, Michigan, Oregon or
-Massachusetts pays a different state tax, so a saved scenario or shared link for one of them gives a
-different answer.*
+**State income tax now applies each state's personal exemptions, credits and age-65 add-ons, on its
+2026 tables.**  
+*Behavior change: a plan in almost any state with an income tax pays a different state tax, so a
+saved scenario or shared link can give a different answer. Figures are for a married couple both 65
+or older.*
 
-- **Maryland.** A married couple is taxed on the joint brackets, not the single ones: up to about
-  $600 a year less from $300,000 of taxable income, and more above $600,000. Single filers between
-  $500,000 and $1 million pay less too.
-- **Maine.** Maine's own standard deduction plus its $5,300-per-person exemption replaces the federal
-  standard deduction, about $570 to $700 a year less for a couple. The 2% surcharge above $1.5
-  million joint ($1 million single) is included.
-- **Mississippi.** Its own standard deduction and exemption replace the federal one, so tax on income
-  other than retirement income rises by up to about $620 a year for a couple.
-- **California** and **Oregon** use their 2026 brackets and standard deductions: at most about $460
-  and $100 a year less.
-- **Michigan** counts the $5,900 exemption for each spouse, about $260 a year less for a couple.
-- **Massachusetts** includes the 4% surtax on income above $1,107,750.
+- **Exemptions and credits now apply.** South Carolina's $15,000-per-person deduction at 65 (about
+  $1,560 a year less), Oregon's credit and 65+ add-on (about $690 less), California's personal and
+  senior credits (about $630 less), Maryland's exemption with its income steps (about $400 less),
+  Nebraska's and Iowa's credits, the age-65 exemptions in Virginia, Illinois, Indiana, Wisconsin,
+  Massachusetts and Mississippi, and the federal 65+ add-on in Colorado, Idaho, Montana and North Dakota.
+- **Connecticut's exemption phases out** between $48,000 and $71,000 of income for a couple, as the
+  state's does: about $1,100 to $2,600 a year more.
+- **2026 tables.** Maryland's joint brackets (up to about $600 a year less above $300,000 of taxable
+  income), Maine's and Mississippi's own deductions in place of the federal one, California's and
+  Oregon's 2026 brackets, Michigan's exemption for each spouse, and the top-income surtaxes in
+  Massachusetts, Maine and California.
+- **Amounts the law fixes stay fixed** across a long plan (New York, North Carolina, Virginia,
+  Connecticut, Maryland, Mississippi, DC), so later years there cost a little more.
+- **Ohio's retirement credit** now reaches the Income Tax Planner, and the state tax deducted
+  federally is the tax after credits.
 
 <a id="11.1d67"></a>
 

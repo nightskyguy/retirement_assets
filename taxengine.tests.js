@@ -1170,9 +1170,10 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 
 		// CT SSTaxation=0.25 → stateTaxableSS = 40000*0.25 = 10000
 		// stateAGI = 50000 + 10000 + 0 + 0 + 0 = 60000
-		// CT MFJ std = 24000 → stateTaxableIncome = 60000-24000 = 36000
+		// CT's 24,000 joint exemption loses $1,000 for each $1,000 of CT AGI over 48,000: 12 steps at
+		// 60,000 leave 12,000, so stateTaxableIncome = 60000-12000 = 48000
 		assertEqual(result.stateAGI, 60000, 'CT stateAGI includes 25% of SS');
-		assertEqual(result.stateTaxableIncome, 36000, 'CT state taxable income');
+		assertEqual(result.stateTaxableIncome, 48000, 'CT state taxable income, exemption phased down to 12,000');
 	});
 
 	// ============================================================================
@@ -1266,7 +1267,8 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 		assertEqual(result.AGI, 105000, 'CT test setup: federal AGI lands exactly on the 85% tier');
 		// stateRetExcl = 50000 * 0.85 = 42500; stateAGI = 50000+55000-42500 = 62500
 		assertEqual(result.stateAGI, 62500, 'CT stateAGI reflects 85% (not 100%) retirement-income exclusion');
-		assertEqual(result.stateTaxableIncome, 38500, 'CT state taxable income (62500 - 24000 std)');
+		// The exemption: 14,500 over 48,000 is 15 steps (part of a step counts), so 24,000 - 15,000 = 9,000
+		assertEqual(result.stateTaxableIncome, 53500, 'CT state taxable income (62500 - the 9,000 exemption left)');
 	});
 
 	// ============================================================================
@@ -1280,9 +1282,11 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 			totalSS: 0, ordDivInterest: 0, qualifiedDiv: 0, capGains: 0,
 			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'OH'
 		});
-		// stateTaxableIncome = 60000-2400=57600; stateTax pre-credit = (57600-26050)*0.0275 = 867.625
-		// $6,000 of retirement income received -> $130 credit tier -> stateTax = 867.625-130 = 737.625
-		assertEqual(underGate.stateTax, 737.625, 'OH state tax reduced by $130 retirement-income credit');
+		// MAGI 60,000 puts the exemption at its middle tier, 2,150: taxable 57,850, and the tax before
+		// credits (57850-26050)*0.0275 = 874.50. $6,000 of retirement income received is the $130
+		// credit tier, so stateTax = 874.50 - 130 = 744.50.
+		assertEqual(underGate.stateTax, 744.5, 'OH state tax reduced by $130 retirement-income credit');
+		assertEqual(underGate.stateCredits, 130, 'and the credit is reported');
 
 		const overGate = calculateTaxes({
 			filingStatus: 'SGL', ages: [70],
@@ -1290,8 +1294,8 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 			totalSS: 0, ordDivInterest: 0, qualifiedDiv: 0, capGains: 0,
 			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'OH'
 		});
-		// MAGI (150000) >= $100,000 gate -> credit is zero, stateTax unreduced
-		const preCreditTax = ((150000 - 2400) - 26050) * 0.0275;
+		// MAGI (150000) >= $100,000 gate -> credit is zero, stateTax unreduced (exemption at its 1,900 tier)
+		const preCreditTax = ((150000 - 1900) - 26050) * 0.0275;
 		assertEqual(overGate.stateTax, preCreditTax, 'OH credit is zero once MAGI >= $100,000 gate');
 	});
 
@@ -1302,13 +1306,13 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 
 		const result = calculateTaxes({
 			filingStatus: 'SGL', ages: [70],
-			earnedIncome: 30000, pensionIncome: 20000, iraIncome: 10000,
+			earnedIncome: 31500, pensionIncome: 20000, iraIncome: 10000,
 			totalSS: 0, ordDivInterest: 0, qualifiedDiv: 0, capGains: 0,
 			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'AL'
 		});
 		// stateRetExcl = 20000 (pension, full) + min(10000,6000) (IRA, capped at 65+) = 26000
-		// stateAGI = 30000 - 26000 = 4000; std 3000 -> taxable 1000
-		assertEqual(result.stateAGI, 4000, 'AL stateAGI: pension fully excluded, IRA capped at $6,000');
+		// stateAGI = 31500 - 26000 = 5500; the 3,000 standard deduction and 1,500 exemption -> taxable 1000
+		assertEqual(result.stateAGI, 5500, 'AL stateAGI: pension fully excluded, IRA capped at $6,000');
 		assertEqual(result.stateTax, 30, 'AL state tax on the remaining $1,000 taxable (2%*500 + 4%*500)');
 	});
 
@@ -1813,7 +1817,8 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 			assertEqual([r.stateStdDeduction, r.stateExemptions], [4000, 2000], 'the standard deduction and the exemptions, reported apart');
 			assertEqual(r.stateTaxableIncome, 54000, 'both come off before the rates');
 			assertEqual([r.stateCredits, r.stateTax], [100, 0.05 * 54000 - 100], 'two $50 credits come off the tax');
-			assertEqual(r.stateOrdinaryTax, 0.05 * 44000, 'the ordinary part is figured with the same deductions');
+			assertEqual(r.stateOrdinaryTax, 0.05 * 44000 - 100, 'the ordinary part uses the same deductions, and takes the credits first');
+			assertEqual(r.stateOrdinaryTax + r.stateCapGainsTax, r.stateTax, 'so the two parts add up to the tax charged');
 			const small = at(6500);
 			assertEqual([small.stateTax, small.stateCredits], [0, 25], 'credits stop at zero tax and report only what they used');
 			// FEDERAL_WITH_AGE: the federal basic deduction plus the federal 65+ add-on for each senior.
@@ -1860,6 +1865,56 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 		for (const name of ['calculateTaxes', 'calculateProgressive', 'evaluateAllowance', 'sumAllowances',
 		                    'checkStateAllowances', 'checkStateSources'])
 			assertEqual(compares.test(String(_engine()[name])), false, `${name} compares against a state abbreviation`);
+	});
+
+	// ── TEST CASE 30: invariants every state's live data must keep ───────────────────────────────
+	// Not figures (those change with the tables) but relations that hold for any correct table.
+	test('TEST CASE 30: every state keeps the credit, split and phase-out invariants on a grid', () => {
+		const states = Object.keys(_engine().TAXData).filter(k => !SYNTHETIC_STATES.includes(k) && TAXData[k] && TAXData[k].STATE);
+		const incomes = [0, 15000, 45000, 90000, 160000, 260000, 420000, 700000, 1500000];
+		for (const st of states) for (const [status, ages] of [['MFJ', [67, 66]], ['MFJ', [50, 48]], ['SGL', [70]]]) {
+			let prevExempt = Infinity;
+			for (const inc of incomes) {
+				const r = calculateTaxes({ filingStatus: status, ages, earnedIncome: inc, iraIncome: inc * 0.5, pensionIncome: inc * 0.1,
+					ordDivInterest: inc * 0.1, capGains: inc * 0.1, totalSS: 30000, inflation: 1.2, state: st, taxYear: 2026, propTax: 8000 });
+				const at = `${st} ${status} ${ages.join('/')} at ${inc}`;
+				if (!(r.stateTax >= 0)) throw new Error(`${at}: state tax ${r.stateTax} is negative`);
+				if (!(r.stateCredits >= 0 && r.stateCredits <= r.stateTax + r.stateCredits + 1e-9)) throw new Error(`${at}: credits ${r.stateCredits} out of range`);
+				if (Math.abs(r.stateOrdinaryTax + r.stateCapGainsTax - r.stateTax) > 1e-6) throw new Error(`${at}: ordinary + gains != state tax`);
+				if (r.stateOrdinaryTax < -1e-9 || r.stateCapGainsTax < -1e-9) throw new Error(`${at}: a negative part of the state tax`);
+				if (r.stateExemptions > prevExempt + 1e-9) throw new Error(`${at}: exemptions rose with income (${prevExempt} -> ${r.stateExemptions})`);
+				prevExempt = r.stateExemptions;
+				if (r.useItemized) {
+					const cap = r.federalStdDeduction - r.seniorDeduction;
+					if (cap > r.stateTax + 8000 + 1e-6) throw new Error(`${at}: SALT deducts more than the state tax after credits plus property tax`);
+				}
+			}
+		}
+	});
+
+	test('TEST CASE 30b: statutory lines stay put while indexed ones grow, and the ceilings agree with the tax', () => {
+		const lim = (st, status, x, f) => _engine().findUpperLimitByAmount(st, status, x, f).limit;
+		// A statutory schedule: the same line at any inflation, in the tax and in the ceiling lookup.
+		assertEqual(lim('NY', 'MFJ', 30000, 1.5), lim('NY', 'MFJ', 30000, 1), 'NY thresholds do not index');
+		// One statutory row in an indexed table: Oregon's 9.9% line holds while the lower lines grow.
+		assertEqual(lim('OR', 'SGL', 100000, 1.5), 125000 - 1, 'OR 9.9% line stays at 125,000');
+		assertEqual(lim('OR', 'SGL', 1000, 1.5), Math.round(4550 * 1.5) - 1, 'OR lower line grows');
+		// A surtax line that does not index next to brackets that do: California's $1M stays $1M.
+		const ca = x => calculateProgressive('CA', 'SGL', x, 1.5).marginal;
+		assertEqual([ca(999000), ca(1001000)], [0.113, 0.123], 'CA: the 1% starts at $1,000,000 even when the brackets have grown 50%');
+		// One that does index: Massachusetts' surtax line grows with the plan.
+		const ma = x => calculateProgressive('MA', 'SGL', x, 1.5).marginal;
+		assertEqual([ma(1107750 * 1.5 - 100), ma(1107750 * 1.5 + 100)], [0.05, 0.09], 'MA surtax line indexes');
+		// A statutory standard deduction holds; an indexed one grows.
+		const std = (st, f) => calculateTaxes({ filingStatus: 'MFJ', ages: [50, 50], earnedIncome: 1, state: st, inflation: f }).stateStdDeduction;
+		assertEqual([std('NC', 1.5), std('NE', 1.5)], [25500, 17700 * 1.5], 'NC std statutory, NE std indexed');
+		// The ceiling a strategy fills up to is where the marginal rate actually changes.
+		for (const [st, status, x] of [['OH', 'MFJ', 20000], ['MD', 'MFJ', 140000], ['CA', 'SGL', 50000], ['OR', 'MFJ', 15000], ['NY', 'SGL', 50000]]) {
+			const top = lim(st, status, x, 1.4);
+			const below = calculateProgressive(st, status, top - 10, 1.4).marginal;
+			const above = calculateProgressive(st, status, top + 10, 1.4).marginal;
+			if (!(above > below)) throw new Error(`${st} ${status}: the ceiling ${top} is not where the rate steps (${below} -> ${above})`);
+		}
 	});
 
 // ── Runner ───────────────────────────────────────────────────────────────────────────────────
@@ -1953,7 +2008,7 @@ test('taxcalc_core: the conversion tax is its own, and the next step names the n
 	// cs is tuned so the MAGI that includes the automatic withdrawal lands $1 under the IRMAA tier 1
 	// foot. The withdrawal covers the tax, which depends on the senior deduction and on California's
 	// table, so this number moves whenever either does.
-	const L = 'st=MFJ&s=CA&yr=2026&a1=66&a2=66&ss=29400&cs=98167&cb=0&it=2000&nd=1900&ri=14810&rd=9500&qd=18800&rc=26147';
+	const L = 'st=MFJ&s=CA&yr=2026&a1=66&a2=66&ss=29400&cs=98885&cb=0&it=2000&nd=1900&ri=14810&rd=9500&qd=18800&rc=26147';
 	const calcFor = q => { const p = new URLSearchParams(q); return C.run(k => p.get(k)).calc; };
 	const off = calcFor(L), on = calcFor(L + '&ra=1');
 	const alone = calcFor(L.replace('&rc=26147', '&rc=0'));

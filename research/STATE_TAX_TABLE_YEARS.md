@@ -46,22 +46,18 @@ re-fetched in this pass.
 
 ## Found while applying the corrections
 
-- **Statutory amounts are indexed anyway.** `calculateProgressive` indexes every bracket row unless
-  a state sets `INFLATION_INDEXED: false`, and `calculateTaxes` indexes every `std`. Several
-  figures the law fixes therefore grow across a projection: Mississippi's $10,000 0% band and its
-  standard deduction and exemption, California's $1M Mental Health Services surcharge line, and
-  Oregon's 125,000 / 250,000 top thresholds. The graduated tables of NY, CT, VA, DC and MD are
-  probably statutory too, and are not flagged. Fixing this needs an indexing flag per figure, not
-  per state.
 - **Mississippi's combined return.** A married couple filing a combined return gets the $10,000 0%
   band on each spouse's income, so $20,000 together; the table gives one. Tax is overstated by up to
   $400/yr for a couple who both have income (the MS `NOTE` says so).
 
+Personal exemptions, credits, age-65 add-ons and per-figure indexing, which this audit did not cover,
+were modeled in 11.1d9d (`ALLOWANCES`, `SURTAXES`, `STD_INDEXED` and per-row `indexed` in
+`taxengine.js`). What remains open there - the 2026 Oregon and Nebraska credits, the AZ, GA and MN
+add-ons, Connecticut's Table E, the federal senior-deduction conformity of the states that start from
+federal taxable income - is each state's `SOURCES.ALLOWANCES` entry, printed by TEST CASE 28.
+
 ## What this audit did not cover
 
-- Structure beyond year: personal exemptions, their phase-outs and the age-65 add-ons (AL, AZ, CA,
-  CT, GA, IL, IN, IA, MA, MD, ME, MN, NE, OH, OR, VA, WI), and the states whose taxable income starts
-  from the federal figure (CO, ID, MT, ND) and so would carry the federal 65+ add-on.
 - The `RETIREMENT_EXCLUSION` caps other than GA, ME, MD and MI.
 - No-tax states (`NO_TAX_SHELL`) carry no figures to check.
 - Effects are hand arithmetic, not engine runs.

@@ -230,10 +230,10 @@
 <!-- Shared tax modules — NOTE: these require file:// or http:// (CORS blocks in data: URLs) -->
 <script src="../displayhelpers.js"></script>
 <script src="../sharepanel.js?v=1118e3"></script>
-<script src="../taxengine.js?v=111d93a"></script>
+<script src="../taxengine.js?v=111d9d"></script>
 <script src="../medicare_costs.js?v=111917"></script>
 <script src="../taxcalc_core.js?v=111d93a"></script>
-<script src="../taxengine.tests.js?v=111d93a"></script>
+<script src="../taxengine.tests.js?v=111d9d"></script>
 </head>
 <body>
 <header>
@@ -1664,7 +1664,7 @@ function renderAssumptions() {
       <div><strong>IRMAA:</strong> Step function on MAGI, charged from the MAGI of two years earlier. This year's charge comes from the MAGI you enter for ${cfg.year - 2}; none is charged if it is blank. The tier lines and the purple ${cfg.year + IRMAA_AHEAD} figures show what the MAGI at each income level will cost in ${cfg.year + IRMAA_AHEAD}, with the thresholds inflated two more years. The income thresholds index at inflation, but the surcharge dollars do NOT: they follow the published Medicare path, which starts near 6.6% a year and eases toward 3.8%.</div>
       <div><strong>OBBBA senior ded.:</strong> $${obbaSen.perSenior.toLocaleString()}/person ≥ 65. Each person's amount phases out at ${(obbaSen.phaseoutRate*100).toFixed(0)}¢/$1 above $${obbaSen.phaseoutAGI[cfg.status].toLocaleString()} AGI, so two people on a joint return lose ${(obbaSen.phaseoutRate*200).toFixed(0)}¢/$1 (IRS Schedule 1-A; P.L. 119-21; expires after ${obbaSen.sunsetYear}).</div>
       <div><strong>SALT:</strong> max(std ded. + age bumps, min(total state taxes incl. CG + property tax, cap)). Age bumps forfeited when itemizing. OBBBA $${obbaSalt.capHigh.toLocaleString()} cap phases out ${(obbaSalt.phaseoutRate*100).toFixed(0)}¢/$1 above $${obbaSalt.phaseoutThreshold.toLocaleString()} MAGI, flooring at $${obbaSalt.capLow.toLocaleString()} (fully phased out at $${(obbaSalt.phaseoutThreshold + Math.round((obbaSalt.capHigh - obbaSalt.capLow)/obbaSalt.phaseoutRate)).toLocaleString()} MAGI); sunsets after ${obbaSalt.sunsetYear}.</div>
-      <div><strong>Excluded:</strong> AMT, SE tax, CA SDI, muni interest, qualif. dividends, CA personal exemption credits. Effective rate denominator = ordinary + SS + CG gain.</div>
+      <div><strong>Excluded:</strong> AMT, SE tax, CA SDI, muni interest, qualif. dividends. Effective rate denominator = ordinary + SS + CG gain.</div>
     </details>
   `;
 }

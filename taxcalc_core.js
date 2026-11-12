@@ -49,6 +49,7 @@
     { key:'sm', cfg:'stMuni',           neg:false },
     { key:'un', cfg:'untaxed',          neg:false },
     { key:'pt', cfg:'propTax',          neg:false },
+    { key:'sr', cfg:'stateRefund',      neg:false },   // last, so the input columns before it keep their place
   ];
 
   // The amount an entry means: a number, not below 0 unless the entry may be negative.
@@ -68,6 +69,8 @@
       wages:0, interest:0, ndiv:0, stcg:0, other:0, qdiv:0,
       muni:0, usInt:0, stMuni:0,   // tax-exempt interest, its state-exempt Treasury part, and the part a state taxes
       untaxed:0,                   // money that came in untaxed (Roth, cash): in gross income, in no tax
+      stateRefund:0,               // the taxable part of last year's state or local income tax refund:
+                                   // federal ordinary income only (Schedule 1, line 1); no state taxes its own
       cgSale:0, cgBasisPct:60,
       // Derived from the entries above by deriveIncome(), never set directly:
       ltNet:0,          // long-term gain left after netting a short-term loss against it
@@ -163,7 +166,7 @@
       // Each is a part of another entry, so it cannot be larger than that entry.
       cfg.usIntEff  = Math.min(cfg.usInt, cfg.interest);
       cfg.stMuniEff = Math.min(cfg.stMuni, cfg.muni);
-      cfg.entOrdinary = cfg.wages + cfg.interest + cfg.ndiv + cfg.retirementIncome + cfg.rmd + cfg.rothConv + cfg.taxWithdrawal + cfg.other + net.ordinary;
+      cfg.entOrdinary = cfg.wages + cfg.interest + cfg.ndiv + cfg.retirementIncome + cfg.rmd + cfg.rothConv + cfg.taxWithdrawal + cfg.other + cfg.stateRefund + net.ordinary;
       settleTaxWithdrawal();
     }
 
@@ -209,7 +212,10 @@
         capGains:        cgGain,
         qualifiedDiv:    cfg.qdiv,
         taxExemptInterest:   cfg.muni,          // federal MAGI only: IRMAA, Social Security taxability, SALT cap
-        stateExemptInterest: cfg.usIntEff,      // Treasury interest, out of state income
+        // Out of state income, in federal: Treasury interest, and the state tax refund (the engine's
+        // stateExemptInterest is its one federal-only subtraction; it is not investment income here,
+        // since investOrd above never counts the refund).
+        stateExemptInterest: cfg.usIntEff + cfg.stateRefund,
         stateTaxableExempt:  cfg.stMuniEff,     // municipal interest the state taxes, into state income
         inflation:       inf,
         state:           state,
@@ -242,7 +248,7 @@
         useItz:    r.useItemized,
         senDed:    r.seniorDeduction,
         fedDed:    r.federalStdDeduction,
-        stDed:     r.stateStdDeduction,
+        stDed:     r.stateStdDeduction + r.stateExemptions,   // all that comes off before the state rates
         stMarg:    r.stateMarginalRate,
         fedBr:     r.federalMarginalRate,   // statutory federal ordinary bracket
         cgStat:    r.capitalGainsRate,      // statutory capital-gains bracket (NIIT is not in it)

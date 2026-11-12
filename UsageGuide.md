@@ -58,13 +58,14 @@ opens that section, even when the value is 0. The section is otherwise folded.
 | `ra` | Set to `1` to pay the tax from the IRA automatically: `rt` is then ignored and the withdrawal is always `withdrawalForTax` for the other entries. `bracketRoom` and `irmaaRoom` then count that withdrawal, so a conversion of the room stays on the line | Off unless set |
 | `rw` | Set to `1` to treat income swept above what you entered as IRA or 401k money | Only matters in states that exempt retirement income |
 | `ot` | Other ordinary income | Yes |
+| `sr` | The taxable part of last year's state or local income tax refund (Schedule 1, line 1): 0 if you took the standard deduction last year, usually all of it if you itemized | No. Federal ordinary income only: it is in AGI, MAGI and Social Security taxability, never in state income, investment income or retirement income. |
 | `mu` | Municipal bond interest (tax-exempt interest), entered separately from `it` | No. Not in income tax, but counted in MAGI (IRMAA), in how much Social Security is taxable and in the SALT phase-out. |
 | `ui` | US Treasury interest, a part of `it` that is exempt from state tax | No. Limited to `it`. |
 | `sm` | Municipal interest your state taxes, a part of `mu` | No. Limited to `mu`. Added to state income only. |
 | `un` | Untaxed income, such as a Roth withdrawal or cash | No. Counts in Gross income and Net income only. |
 | `pt` | Property and local taxes, for the SALT deduction | No. Enter real estate and local taxes only: state income tax is computed for you. |
 
-`wg`, `it`, `nd`, `sg`, `ri`, `rc`, `rt` and `ot` add up to the **ordinary income entered**. The chart marks it
+`wg`, `it`, `nd`, `sg`, `ri`, `rc`, `rt`, `ot` and `sr` add up to the **ordinary income entered**. The chart marks it
 with a teal line, the Ordinary slider shows it, and it is the income a `return` link calculates at.
 
 ### Medicare

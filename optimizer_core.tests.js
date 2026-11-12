@@ -560,10 +560,11 @@ test('P32c: forcedIRAAllowBrokerage keeps the backstop alive after the IRA empti
     //
     // The spend goal is tuned, and it moves whenever this household's tax does: it must drain the
     // IRA while leaving Brokerage able to take the draw, and a goal that only drains the IRA has
-    // both arms force the same amount. On the 2026 tables every goal from 159,000 to 163,000 holds;
-    // 161,000 is the middle of that run. Raise it again rather than relaxing the assertions.
+    // both arms force the same amount. On the 2026 tables, with California's exemption credits,
+    // every goal from 163,000 to 166,000 holds; 165,000 sits inside that run. Raise it again rather
+    // than relaxing the assertions.
     const scen = { ...BASE, IRA1: 120000, Cash: 1000, Brokerage: 1500000, BrokerageBasis: 200000,
-                   ss1: 30000, ss1Age: 66, spendGoal: 161000, nYears: 25 };
+                   ss1: 30000, ss1Age: 66, spendGoal: 165000, nYears: 25 };
     const off = simulate({ ...scen });
     const on = simulate({ ...scen, forcedIRAAllowBrokerage: 'brokerageFirst' });
     assert(off.totals.forcedIRATotal > 0,
@@ -724,7 +725,7 @@ test('P104b1: a malformed or absent vector runs as the baseline draw, byte-ident
 });
 
 test.critical('P104b1x: a year funded from Cash by the primary pass is not funded again by the gap fill', () => {
-    // BASE year 0: the need is $36,709 (it includes California tax, so it moves with that table) and
+    // BASE year 0: the need is $36,471 (it includes California tax, so it moves with that table) and
     // Cash holds $50,000, so a {Cash:1} vector funds the year from Cash alone and touches nothing
     // else. Until 2026-09-02 it did not: fillSpendingGap sized its gap from yr.possibleIncome, which
     // counts IRA and Brokerage draws and not Cash or Roth ones, so it saw the same gap again, drained
@@ -735,8 +736,8 @@ test.critical('P104b1x: a year funded from Cash by the primary pass is not funde
     // is: the fix moved every Proportional and Guyton-Klinger plan (see the changelog at 11.1703).
     const y0 = simulate({ ...BASE, strategy: 'split', splitWeights: [0, 0, 1, 0] }).log[0];
     assert((y0.IRAwd ?? 0) < 1, `no IRA may be drawn by choice while Cash covers the year, got IRAwd ${y0.IRAwd} (the defect read 29,292)`);
-    assertNear(y0.Cash ?? 0, 13291.38, 'Cash at year end is the balance less the one draw that funded the year (the defect read 38,233)', 5);
-    assertNear(y0.CashWD ?? 0, 36708.62, 'the whole need came from Cash, once', 5);
+    assertNear(y0.Cash ?? 0, 13529.41, 'Cash at year end is the balance less the one draw that funded the year (the defect read 38,233)', 5);
+    assertNear(y0.CashWD ?? 0, 36470.59, 'the whole need came from Cash, once', 5);
     assert((y0['Brokerage-'] ?? 0) < 1, `Brokerage must be untouched, got ${y0['Brokerage-']}`);
 });
 
@@ -5847,8 +5848,10 @@ test('tax creep: calculateTaxes scales the right walk and nothing else', () => {
     assertNear(fed.federalOrdinaryTax, base.federalOrdinaryTax * 1.5, 'federal ordinary tax scales', 0.01);
     assert(fed.stateTax === base.stateTax, 'federal creep must not move state tax');
     assert(fed.capitalGainsTax === base.capitalGainsTax, 'federal creep must not move cap gains tax');
-    // State creep: state tax scales exactly; federal untouched.
-    assertNear(st.stateTax, base.stateTax * 1.5, 'state tax scales', 0.01);
+    // State creep: the state tax BEFORE credits scales exactly (credits are dollars, not rates, so
+    // they do not creep); federal untouched.
+    assertNear(st.stateTax + st.stateCredits, (base.stateTax + base.stateCredits) * 1.5, 'state tax before credits scales', 0.01);
+    assert(st.stateCredits === base.stateCredits, 'state creep must not move the credits');
     assert(st.federalTax === base.federalTax, 'state creep must not move federal tax');
     // The applied multipliers are echoed back for logging.
     assert(fed.fedRateCreep === 1.5 && fed.stateRateCreep === 1, 'multipliers echoed back');
@@ -7966,8 +7969,7 @@ test('single-row bracket tables: the affected jurisdictions are pinned', () => {
     // whatever the lookup does at its edges.
     const single = Object.keys(TAXData).filter(k => k.length === 2)
         .filter(k => (getRateBracket(k, 'MFJ') || []).length === 1).sort();
-    // MA left this list when its 4% surtax became a second row.
-    const expected = ['AK','AZ','CO','FL','GA','IA','IL','IN','KY','MI','NC','NH','NV','PA','SD','TN','TX','WA','WY'];
+    const expected = ['AK','AZ','CO','FL','GA','IA','IL','IN','KY','MA','MI','NC','NH','NV','PA','SD','TN','TX','WA','WY'];
     assert(JSON.stringify(single) === JSON.stringify(expected),
         `single-row tables changed:\n         expected ${JSON.stringify(expected)}\n         actual   ${JSON.stringify(single)}`);
 });

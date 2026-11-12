@@ -52,7 +52,13 @@ the commit messages are the record. Nothing here is kept as a historical record.
 
 | report | what it covers |
 |---|---|
-| [STATE_TAX_TABLE_YEARS.md](STATE_TAX_TABLE_YEARS.md) | Whether each `TAXData` state block stamped `YEAR: 2026` really carries 2026 figures, checked against each state's own 2026 publication (no engine run, no harness). 21 of 29 matched; the rest (CA, OR, MD, MI, ME, MS) were corrected in 11.1d93, and every state now names the source of each figure in a `SOURCES` map that the tests hold to the federal table's year. **What is left:** DC's standard deduction and ID's 0% band wait on 2026 publications, MD's joint standard deduction is derived and its pension cap is 2025's, and AL's deduction is unaudited. Also records that the engine indexes figures the law fixes (MS, the CA $1M surcharge line, OR's top thresholds) and which structures the audit did not cover. |
+| [STATE_TAX_TABLE_YEARS.md](STATE_TAX_TABLE_YEARS.md) | Whether each `TAXData` state block stamped `YEAR: 2026` really carries 2026 figures, checked against each state's own 2026 publication (no engine run, no harness). 21 of 29 matched; the rest (CA, OR, MD, MI, ME, MS) were corrected in 11.1d93, and every state now names the source of each figure in a `SOURCES` map that the tests hold to the federal table's year. **What is left:** DC's standard deduction and ID's 0% band wait on 2026 publications, and MD's joint standard deduction is derived and its pension cap is 2025's. Exemptions, credits, age add-ons and per-figure indexing, which the audit did not cover, were modeled in 11.1d9d; what is open there is printed by TEST CASE 28. |
+
+## The Income Tax Planner's inputs
+
+| report | what it covers |
+|---|---|
+| [INCOME_TAX_PLANNER_INPUTS.md](INCOME_TAX_PLANNER_INPUTS.md) | What the Income Tax Planner should add so a state tax refund can be entered, and which other simple inputs would make it noticeably more accurate, measured on a real 2026 California joint return a tax program projected at four Roth conversion sizes. **The refund needs one entry, the taxable part, federal only**: today a user can either overstate California by $143 to $166 or understate federal tax by $301 to $541. **The two largest fixes need no input at all**: California's "2026" tax table is FTB's 2024 one ($279 to $450 high) and its exemption credits are not applied ($632 for this couple). With those two fixed and the refund kept out of California income, the planner matches the tax program's California tax to the dollar in all four columns. All three are now implemented (the refund is the `sr` entry, Income Tax Planner v2.15). Also ranks Treasury fund dividends, the non-itemizer charitable deduction, the foreign tax credit and itemized deductions by dollars per unit of user effort; those remain open. |
 
 ## Index of the scripts
 

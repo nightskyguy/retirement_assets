@@ -151,8 +151,9 @@ function installBracketFixture() {
 		SGL: { std: 100/2, brackets: [{ l: 1000/2, r: 0.1, nr: 0.1 }, { l: 2000/2, r: 0.2, nr: 0.15 }, { l: 40000/2, r: 0.8, nr: 0.45 }] },
 	};
 }
-// The jurisdictions installTestState() adds. Tests that walk every state in TAXData skip these.
-const SYNTHETIC_STATES = ['TESTTAXATION', 'TEST'];
+// The jurisdictions installTestState() adds, and the one TEST CASE 29b installs for itself. Tests
+// that walk every state in TAXData skip these.
+const SYNTHETIC_STATES = ['TESTTAXATION', 'TEST', 'ALLOWTEST'];
 function removeTestState() {
 	for (const k of SYNTHETIC_STATES) delete TAXData[k];
 }
@@ -1169,9 +1170,10 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 
 		// CT SSTaxation=0.25 → stateTaxableSS = 40000*0.25 = 10000
 		// stateAGI = 50000 + 10000 + 0 + 0 + 0 = 60000
-		// CT MFJ std = 24000 → stateTaxableIncome = 60000-24000 = 36000
+		// CT's 24,000 joint exemption loses $1,000 for each $1,000 of CT AGI over 48,000: 12 steps at
+		// 60,000 leave 12,000, so stateTaxableIncome = 60000-12000 = 48000
 		assertEqual(result.stateAGI, 60000, 'CT stateAGI includes 25% of SS');
-		assertEqual(result.stateTaxableIncome, 36000, 'CT state taxable income');
+		assertEqual(result.stateTaxableIncome, 48000, 'CT state taxable income, exemption phased down to 12,000');
 	});
 
 	// ============================================================================
@@ -1265,7 +1267,8 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 		assertEqual(result.AGI, 105000, 'CT test setup: federal AGI lands exactly on the 85% tier');
 		// stateRetExcl = 50000 * 0.85 = 42500; stateAGI = 50000+55000-42500 = 62500
 		assertEqual(result.stateAGI, 62500, 'CT stateAGI reflects 85% (not 100%) retirement-income exclusion');
-		assertEqual(result.stateTaxableIncome, 38500, 'CT state taxable income (62500 - 24000 std)');
+		// The exemption: 14,500 over 48,000 is 15 steps (part of a step counts), so 24,000 - 15,000 = 9,000
+		assertEqual(result.stateTaxableIncome, 53500, 'CT state taxable income (62500 - the 9,000 exemption left)');
 	});
 
 	// ============================================================================
@@ -1279,9 +1282,11 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 			totalSS: 0, ordDivInterest: 0, qualifiedDiv: 0, capGains: 0,
 			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'OH'
 		});
-		// stateTaxableIncome = 60000-2400=57600; stateTax pre-credit = (57600-26050)*0.0275 = 867.625
-		// $6,000 of retirement income received -> $130 credit tier -> stateTax = 867.625-130 = 737.625
-		assertEqual(underGate.stateTax, 737.625, 'OH state tax reduced by $130 retirement-income credit');
+		// MAGI 60,000 puts the exemption at its middle tier, 2,150: taxable 57,850, and the tax before
+		// credits (57850-26050)*0.0275 = 874.50. $6,000 of retirement income received is the $130
+		// credit tier, so stateTax = 874.50 - 130 = 744.50.
+		assertEqual(underGate.stateTax, 744.5, 'OH state tax reduced by $130 retirement-income credit');
+		assertEqual(underGate.stateCredits, 130, 'and the credit is reported');
 
 		const overGate = calculateTaxes({
 			filingStatus: 'SGL', ages: [70],
@@ -1289,8 +1294,8 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 			totalSS: 0, ordDivInterest: 0, qualifiedDiv: 0, capGains: 0,
 			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'OH'
 		});
-		// MAGI (150000) >= $100,000 gate -> credit is zero, stateTax unreduced
-		const preCreditTax = ((150000 - 2400) - 26050) * 0.0275;
+		// MAGI (150000) >= $100,000 gate -> credit is zero, stateTax unreduced (exemption at its 1,900 tier)
+		const preCreditTax = ((150000 - 1900) - 26050) * 0.0275;
 		assertEqual(overGate.stateTax, preCreditTax, 'OH credit is zero once MAGI >= $100,000 gate');
 	});
 
@@ -1301,13 +1306,13 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 
 		const result = calculateTaxes({
 			filingStatus: 'SGL', ages: [70],
-			earnedIncome: 30000, pensionIncome: 20000, iraIncome: 10000,
+			earnedIncome: 31500, pensionIncome: 20000, iraIncome: 10000,
 			totalSS: 0, ordDivInterest: 0, qualifiedDiv: 0, capGains: 0,
 			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'AL'
 		});
 		// stateRetExcl = 20000 (pension, full) + min(10000,6000) (IRA, capped at 65+) = 26000
-		// stateAGI = 30000 - 26000 = 4000; std 3000 -> taxable 1000
-		assertEqual(result.stateAGI, 4000, 'AL stateAGI: pension fully excluded, IRA capped at $6,000');
+		// stateAGI = 31500 - 26000 = 5500; the 3,000 standard deduction and 1,500 exemption -> taxable 1000
+		assertEqual(result.stateAGI, 5500, 'AL stateAGI: pension fully excluded, IRA capped at $6,000');
 		assertEqual(result.stateTax, 30, 'AL state tax on the remaining $1,000 taxable (2%*500 + 4%*500)');
 	});
 
@@ -1641,8 +1646,8 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 		assertEqual([TAXData.OR.MFJ.std, TAXData.OR.SGL.std], [5820, 2910], 'OR 2026 standard deduction');
 
 		// Maine: its own standard deduction plus the 5,300 personal exemption, and the 2% surcharge.
-		assertEqual([TAXData.ME.MFJ.std, TAXData.ME.SGL.std], [31400 + 2 * 5300, 15700 + 5300],
-			'ME std is Maine\'s own deduction plus one exemption per person');
+		assertEqual([TAXData.ME.MFJ.std, TAXData.ME.SGL.std], [31400, 15700], 'ME std is Maine\'s own deduction');
+		assertEqual(TAXData.ME.ALLOWANCES[0].amount, { perFiler: 5300 }, 'ME personal exemption, one per person');
 		assertEqual(rate('ME', 'MFJ', 1600000), 0.0915, 'ME joint: 7.15% + 2% over 1,500,000');
 		assertEqual(rate('ME', 'SGL', 900000), 0.0715, 'ME single: no surcharge below 1,000,000');
 		assertEqual(TAXData.ME.RETIREMENT_EXCLUSION.cap, 49824, 'ME 2026 pension deduction cap');
@@ -1655,9 +1660,10 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 
 		// Michigan: no standard deduction, a 5,900 personal exemption per person. Mississippi: its own
 		// standard deduction plus its personal exemption, never the federal figure.
-		assertEqual([TAXData.MI.MFJ.std, TAXData.MI.SGL.std], [2 * 5900, 5900], 'MI exemption counts each spouse');
-		assertEqual([TAXData.MS.MFJ.std, TAXData.MS.SGL.std], [4600 + 12000, 2300 + 6000],
-			'MS std is its standard deduction plus its personal exemption');
+		assertEqual([TAXData.MI.MFJ.std, TAXData.MI.ALLOWANCES[0].amount], [0, { perFiler: 5900 }],
+			'MI has no std; its exemption counts each spouse');
+		assertEqual([TAXData.MS.MFJ.std, TAXData.MS.SGL.std, TAXData.MS.ALLOWANCES[0].amount], [4600, 2300, { perFiler: 6000 }],
+			'MS: its own standard deduction, and an exemption of 12,000 joint / 6,000 single');
 	});
 
 	// ── TEST CASE 28: every state figure names where it came from ──────────────────────────────
@@ -1668,26 +1674,36 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 			.filter(([k]) => !SYNTHETIC_STATES.includes(k)));
 		const { errors, flagged } = _engine().checkStateSources(live);
 		assertEqual(errors, [], 'no state figure is unsourced, malformed, or behind the federal year');
-		// Not a failure, a to-do list: what is still waiting on a publication or a check.
-		if (IS_NODE && flagged.length) console.log(`    not yet published or checked (${flagged.length}):\n      ` + flagged.join('\n      '));
+		assertEqual(_engine().checkStateAllowances(live), [], 'every income-tax state has an ALLOWANCES list of well-formed rules');
+		// Not a failure, a to-do list: what is still waiting on a publication or a check. Allowance
+		// lists not yet audited are folded onto one line.
+		const lists = flagged.filter(f => /^\w+\.ALLOWANCES: unverified/.test(f)).map(f => f.split('.')[0]);
+		const rest = flagged.filter(f => !/^\w+\.ALLOWANCES: unverified/.test(f));
+		if (IS_NODE && flagged.length) console.log(`    not yet published or checked (${flagged.length}):\n      `
+			+ rest.concat(lists.length ? [`ALLOWANCES lists not yet audited: ${lists.join(' ')}`] : []).join('\n      '));
 	});
 
 	test('TEST CASE 28b: checkStateSources rejects a missing, stale, or malformed source', () => {
 		const fed = { FEDERAL: { YEAR: 2026 } };
-		const st = (src, extra = {}) => ({ STATE: 'X', SOURCES: src, MFJ: { std: 1, brackets: [{ l: Infinity, r: 0.05 }] },
+		const st = (src, extra = {}) => ({ STATE: 'X', SOURCES: src, ALLOWANCES: [], MFJ: { std: 1, brackets: [{ l: Infinity, r: 0.05 }] },
 			SGL: { std: 1, brackets: [{ l: Infinity, r: 0.05 }] }, ...extra });
 		const ok = { year: 2026, status: 'published', doc: 'form' };
+		const all = { brackets: ok, std: ok, ALLOWANCES: ok };
 		const errs = td => _engine().checkStateSources({ ...fed, ...td }).errors.length;
-		assertEqual(errs({ A: st({ brackets: ok, std: ok }) }), 0, 'a fully sourced state passes');
+		assertEqual(errs({ A: st(all) }), 0, 'a fully sourced state passes');
 		assertEqual(errs({ A: { ...st(undefined), SOURCES: undefined } }), 1, 'no SOURCES at all');
-		assertEqual(errs({ A: st({ brackets: ok }) }), 1, 'std missing');
-		assertEqual(errs({ A: st({ brackets: ok, std: { ...ok, year: 2025 } }) }), 1, 'a 2025 figure in a 2026 table');
-		assertEqual(errs({ A: st({ brackets: ok, std: { ...ok, year: 2025, status: 'pending' } }) }), 0,
+		assertEqual(errs({ A: st({ brackets: ok, ALLOWANCES: ok }) }), 1, 'std missing');
+		assertEqual(errs({ A: st({ brackets: ok, std: ok }) }), 1, 'the allowance list missing');
+		assertEqual(errs({ A: st({ ...all, std: { ...ok, year: 2025 } }) }), 1, 'a 2025 figure in a 2026 table');
+		assertEqual(errs({ A: st({ ...all, std: { ...ok, year: 2025, status: 'pending' } }) }), 0,
 			'unless it is marked pending');
-		assertEqual(errs({ A: st({ brackets: ok, std: { ...ok, status: 'guessed' } }) }), 1, 'an unknown status');
-		assertEqual(errs({ A: st({ brackets: ok, std: { ...ok, doc: ' ' } }) }), 1, 'a blank doc');
-		assertEqual(errs({ A: st({ brackets: ok, std: ok, RETIREMENT_EXCLUSION: ok }) }), 1,
+		assertEqual(errs({ A: st({ ...all, std: { ...ok, status: 'guessed' } }) }), 1, 'an unknown status');
+		assertEqual(errs({ A: st({ ...all, std: { ...ok, doc: ' ' } }) }), 1, 'a blank doc');
+		assertEqual(errs({ A: st({ ...all, RETIREMENT_EXCLUSION: ok }) }), 1,
 			'a source for a field the state does not have');
+		const rule = { apply: 'deduction', amount: { perFiler: 1 }, indexed: true };
+		assertEqual(errs({ A: st(all, { ALLOWANCES: [rule] }) }), 1, 'a rule with no source');
+		assertEqual(errs({ A: st(all, { ALLOWANCES: [{ ...rule, source: { ...ok, year: 2024 } }] }) }), 1, 'a rule whose source is stale');
 		// A state with no income tax carries no figures, so it needs no sources.
 		assertEqual(errs({ A: { STATE: 'X', MFJ: { std: 0, brackets: [{ l: Infinity, r: 0 }] },
 			SGL: { std: 0, brackets: [{ l: Infinity, r: 0 }] } } }), 0, 'a no-tax state needs none');
@@ -1708,6 +1724,196 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 						throw new Error(`${code} ${status}: band ending ${b.l} is ${b.l - brks[i - 1].l} wide`);
 				});
 			}
+		}
+	});
+
+	// ── TEST CASE 29: the ALLOWANCES grammar, one primitive at a time ──────────────────────────
+	// Fixture rules, never live data, so updating a state's figures cannot break these. Where a state
+	// publishes a worksheet the fixture follows it, and the expected figure is the worksheet's.
+	test('TEST CASE 29: each ALLOWANCES primitive gives the worked figure', () => {
+		const base = { status: 'MFJ', ages: [67, 66], inflation: 1, federalAGI: 0, stateAGI: 0, magi: 0, retirementExclusion: 0, taxBeforeCredits: 0 };
+		const ev = (rule, ctx) => _engine().evaluateAllowance(rule, { ...base, ...ctx });
+		const src = { year: 2026, status: 'published', doc: 'fixture' };
+
+		// Amounts. perFiler is two on a joint return whatever ages are passed; perSenior counts ages.
+		const pf = { apply: 'deduction', amount: { perFiler: 1000 }, indexed: false, source: src };
+		assertEqual([ev(pf, {}), ev(pf, { ages: [] }), ev(pf, { status: 'SGL', ages: [70] })], [2000, 2000, 1000], 'perFiler');
+		const ps = { apply: 'deduction', amount: { perSenior: 800, minAge: 65 }, indexed: false, source: src };
+		assertEqual([ev(ps, {}), ev(ps, { ages: [67, 60] }), ev(ps, { status: 'SGL', ages: [60] })], [1600, 800, 0], 'perSenior');
+		const fl = { apply: 'deduction', amount: { flat: { MFJ: 24000, SGL: 15000 } }, indexed: false, source: src };
+		assertEqual([ev(fl, {}), ev(fl, { status: 'SGL' })], [24000, 15000], 'flat, one amount per return');
+		assertEqual([ev({ ...pf, indexed: true }, { inflation: 1.25 }), ev(pf, { inflation: 1.25 })], [2500, 2000],
+			'the amount grows with inflation only when the rule is indexed');
+
+		// Linear, per unit, rounded up: California's exemption credits lose $6 per credit for each
+		// $2,500 or part of it by which federal AGI passes the line. Two personal and two senior
+		// credits of $158, $10,000 over: 4 steps x $6 = $24 off each, $96 in all, $632 -> $536.
+		const caLine = { kind: 'linear', basis: 'federalAGI', start: { MFJ: 504411, SGL: 252203 },
+			step: 2500, reduce: 6, per: 'unit', ceil: true, indexed: true };
+		const caRules = [
+			{ apply: 'credit', amount: { perFiler: 158 }, indexed: true, phaseout: caLine, source: src },
+			{ apply: 'credit', amount: { perSenior: 158, minAge: 65 }, indexed: true, phaseout: caLine, source: src },
+		];
+		const ca = agi => _engine().sumAllowances(caRules, 'credit', { ...base, federalAGI: agi });
+		assertEqual(ca(400000), 632, 'CA: under the line, all four credits');
+		assertEqual(ca(514411), 536, 'CA: $10,000 over, $96 off');
+		assertEqual(ca(514412), 512, 'CA: a dollar more is part of a fifth step');
+		assertEqual(ca(504411 + 2500 * 27), 0, 'CA: 27 steps take $162 off each $158 credit, so none is left');
+		assertEqual(_engine().sumAllowances(caRules, 'deduction', base), 0, 'credits are not deductions');
+
+		// Linear, per rule: Connecticut's exemption loses $1,000 for each $1,000 or part of it over $48,000.
+		const ct = { apply: 'deduction', amount: { flat: { MFJ: 24000, SGL: 15000 } }, indexed: false, source: src,
+			phaseout: { kind: 'linear', basis: 'stateAGI', start: { MFJ: 48000, SGL: 30000 }, step: 1000, reduce: 1000, ceil: true, indexed: false } };
+		assertEqual([48000, 60000, 60500, 71000, 71001].map(x => ev(ct, { stateAGI: x })), [24000, 12000, 11000, 1000, 0],
+			'CT: gone by $71,001');
+
+		// Floors: a dollar minimum (a sliding standard deduction), and a share of the amount.
+		const al = { apply: 'deduction', amount: { flat: { MFJ: 8500, SGL: 3000 } }, indexed: false, source: src,
+			phaseout: { kind: 'linear', basis: 'federalAGI', start: { MFJ: 23500, SGL: 10500 }, step: 500, reduce: 175, ceil: true,
+				floor: { MFJ: 5000, SGL: 2500 }, indexed: false } };
+		assertEqual([23500, 25000, 90000].map(x => ev(al, { federalAGI: x })), [8500, 7975, 5000], 'floor in dollars');
+		const mn = { apply: 'deduction', amount: { flat: { MFJ: 30000, SGL: 15000 } }, indexed: false, source: src,
+			phaseout: { kind: 'linear', basis: 'federalAGI', start: { MFJ: 200000, SGL: 100000 }, step: 1, reduce: 0.03, floorFraction: 0.2, indexed: false } };
+		assertEqual([300000, 2000000].map(x => ev(mn, { federalAGI: x })), [27000, 6000], '3% of the excess, never below 20% of the amount');
+
+		// Steps: a fraction of the amount (Maryland's exemption chart), or a replacement amount (Ohio's tiers).
+		const md = { apply: 'deduction', amount: { perFiler: 3200 }, indexed: false, source: src,
+			phaseout: { kind: 'steps', basis: 'federalAGI', indexed: false, table: {
+				MFJ: [{ l: 150000, r: 1 }, { l: 175000, r: 0.5 }, { l: 200000, r: 0.25 }, { l: Infinity, r: 0 }],
+				SGL: [{ l: 100000, r: 1 }, { l: 125000, r: 0.5 }, { l: 150000, r: 0.25 }, { l: Infinity, r: 0 }] } } };
+		assertEqual([150000, 160000, 190000, 250000].map(x => ev(md, { federalAGI: x })), [6400, 3200, 1600, 0], 'steps scaling the amount');
+		const ohRows = [{ l: 40000, value: 2400 }, { l: 80000, value: 2150 }, { l: Infinity, value: 1900 }];
+		const oh = { apply: 'deduction', amount: { perFiler: 2400 }, indexed: false, source: src,
+			phaseout: { kind: 'steps', basis: 'magi', indexed: false, table: { MFJ: ohRows, SGL: ohRows } } };
+		assertEqual([30000, 60000, 90000].map(x => ev(oh, { magi: x })), [4800, 4300, 3800], 'steps replacing the per-filer amount');
+		// A cliff, whose line does not index while the exemption does: Illinois' shape.
+		const il = { apply: 'deduction', amount: { perFiler: 2925 }, indexed: true, source: src,
+			phaseout: { kind: 'steps', basis: 'federalAGI', indexed: false, table: {
+				MFJ: [{ l: 500000, r: 1 }, { l: Infinity, r: 0 }], SGL: [{ l: 250000, r: 1 }, { l: Infinity, r: 0 }] } } };
+		assertEqual([500000, 500001].map(x => ev(il, { federalAGI: x, inflation: 1.2 })), [7020, 0], 'a cliff at an unindexed line');
+
+		// pctOfTax: a share of the tax before credits, chosen by income (Connecticut's Table E shape).
+		const e = { apply: 'credit', indexed: false, source: src, amount: { basis: 'stateAGI',
+			pctOfTax: { MFJ: [{ l: 48000, r: 0.75 }, { l: 100000, r: 0.1 }, { l: Infinity, r: 0 }], SGL: [{ l: Infinity, r: 0 }] } } };
+		assertEqual([40000, 60000, 200000].map(x => ev(e, { stateAGI: x, taxBeforeCredits: 1000 })), [750, 100, 0], 'pctOfTax');
+
+		// offsetBy: an age deduction reduced by the retirement exclusion already taken, never below zero.
+		const sc = { apply: 'deduction', amount: { perSenior: 15000, minAge: 65 }, indexed: false, offsetBy: 'retirementExclusion', source: src };
+		assertEqual([10000, 40000].map(x => ev(sc, { retirementExclusion: x })), [20000, 0], 'offsetBy');
+	});
+
+	test('TEST CASE 29b: calculateTaxes takes ALLOWANCES deductions before the rates and credits after them', () => {
+		const src = { year: 2026, status: 'published', doc: 'fixture' };
+		TAXData.ALLOWTEST = { STATE: 'Allowance test', YEAR: 2026, SSTaxation: 0,
+			ALLOWANCES: [
+				{ apply: 'deduction', amount: { perFiler: 1000 }, indexed: false, source: src },
+				{ apply: 'credit', amount: { perFiler: 50 }, indexed: false, source: src },
+			],
+			MFJ: { std: 4000, brackets: [{ l: Infinity, r: 0.05 }] },
+			SGL: { std: 2000, brackets: [{ l: Infinity, r: 0.05 }] } };
+		try {
+			const at = (earned, extra = {}) => calculateTaxes({ filingStatus: 'MFJ', ages: [67, 66], earnedIncome: earned, state: 'ALLOWTEST', ...extra });
+			const r = at(50000, { capGains: 10000 });
+			assertEqual([r.stateStdDeduction, r.stateExemptions], [4000, 2000], 'the standard deduction and the exemptions, reported apart');
+			assertEqual(r.stateTaxableIncome, 54000, 'both come off before the rates');
+			assertEqual([r.stateCredits, r.stateTax], [100, 0.05 * 54000 - 100], 'two $50 credits come off the tax');
+			assertEqual(r.stateOrdinaryTax, 0.05 * 44000 - 100, 'the ordinary part uses the same deductions, and takes the credits first');
+			assertEqual(r.stateOrdinaryTax + r.stateCapGainsTax, r.stateTax, 'so the two parts add up to the tax charged');
+			const small = at(6500);
+			assertEqual([small.stateTax, small.stateCredits], [0, 25], 'credits stop at zero tax and report only what they used');
+			// FEDERAL_WITH_AGE: the federal basic deduction plus the federal 65+ add-on for each senior.
+			TAXData.ALLOWTEST.MFJ.std = 'FEDERAL_WITH_AGE';
+			const f = TAXData.FEDERAL.MFJ;
+			assertEqual(at(50000, { inflation: 1.1 }).stateStdDeduction, (f.std + 2 * f.stdbump) * 1.1, 'FEDERAL_WITH_AGE counts both seniors');
+			assertEqual(at(50000, { ages: [60, 58] }).stateStdDeduction, f.std, 'and adds nothing below the federal age');
+		} finally { delete TAXData.ALLOWTEST; }
+	});
+
+	test('TEST CASE 29c: checkStateAllowances rejects a rule it could not evaluate', () => {
+		const src = { year: 2026, status: 'published', doc: 'fixture' };
+		const ok = { apply: 'deduction', amount: { perFiler: 1000 }, indexed: true, source: src };
+		const state = rules => ({ STATE: 'X', ALLOWANCES: rules, MFJ: { std: 0, brackets: [{ l: Infinity, r: 0.05 }] },
+			SGL: { std: 0, brackets: [{ l: Infinity, r: 0.05 }] } });
+		const n = rules => _engine().checkStateAllowances({ X: state(rules) }).length;
+		assertEqual([n([ok]), n([])], [0, 0], 'a well-formed rule passes, and an empty list means none');
+		assertEqual(n(undefined), 1, 'a taxing state with no list at all fails');
+		const lin = { kind: 'linear', basis: 'federalAGI', start: { MFJ: 1, SGL: 1 }, step: 1, reduce: 1, indexed: false };
+		const bad = [
+			['an unknown field', { ...ok, phaseOut: lin }],
+			['no indexed flag', { apply: 'deduction', amount: { perFiler: 1 }, source: src }],
+			['an unknown apply', { ...ok, apply: 'refund' }],
+			['two amount kinds', { ...ok, amount: { perFiler: 1, flat: { MFJ: 1, SGL: 1 } } }],
+			['perSenior without minAge', { ...ok, amount: { perSenior: 1 } }],
+			['pctOfTax as a deduction', { ...ok, amount: { basis: 'stateAGI', pctOfTax: { MFJ: [{ l: Infinity, r: 0.1 }], SGL: [{ l: Infinity, r: 0.1 }] } } }],
+			['a steps table not ending at Infinity', { ...ok, phaseout: { kind: 'steps', basis: 'federalAGI', indexed: false,
+				table: { MFJ: [{ l: 1000, r: 1 }], SGL: [{ l: 1000, r: 1 }] } } }],
+			['a steps row with both r and value', { ...ok, phaseout: { kind: 'steps', basis: 'federalAGI', indexed: false,
+				table: { MFJ: [{ l: Infinity, r: 1, value: 2 }], SGL: [{ l: Infinity, r: 1 }] } } }],
+			['an unknown phaseout kind', { ...ok, phaseout: { ...lin, kind: 'curve' } }],
+			['an unknown basis', { ...ok, phaseout: { ...lin, basis: 'income' } }],
+			['a phaseout with no indexed flag', { ...ok, phaseout: { ...lin, indexed: undefined } }],
+			['a zero step', { ...ok, phaseout: { ...lin, step: 0 } }],
+		];
+		for (const [what, rule] of bad) assertEqual(n([rule]) > 0, true, `rejects ${what}`);
+	});
+
+	test('TEST CASE 29d: no state is named in the code that applies the tables', () => {
+		// Every state-specific figure and rule belongs in TAXData; the code reads fields. A comparison
+		// against a state abbreviation in that code is what this repo has ruled out.
+		const compares = /(===?|!==?)\s*['"][A-Z]{2}['"]|['"][A-Z]{2}['"]\s*(===?|!==?)|case\s+['"][A-Z]{2}['"]/;
+		assertEqual(compares.test("if (state === 'CA') x = 1;"), true, 'the guard recognizes a state comparison');
+		for (const name of ['calculateTaxes', 'calculateProgressive', 'evaluateAllowance', 'sumAllowances',
+		                    'checkStateAllowances', 'checkStateSources'])
+			assertEqual(compares.test(String(_engine()[name])), false, `${name} compares against a state abbreviation`);
+	});
+
+	// ── TEST CASE 30: invariants every state's live data must keep ───────────────────────────────
+	// Not figures (those change with the tables) but relations that hold for any correct table.
+	test('TEST CASE 30: every state keeps the credit, split and phase-out invariants on a grid', () => {
+		const states = Object.keys(_engine().TAXData).filter(k => !SYNTHETIC_STATES.includes(k) && TAXData[k] && TAXData[k].STATE);
+		const incomes = [0, 15000, 45000, 90000, 160000, 260000, 420000, 700000, 1500000];
+		for (const st of states) for (const [status, ages] of [['MFJ', [67, 66]], ['MFJ', [50, 48]], ['SGL', [70]]]) {
+			let prevExempt = Infinity;
+			for (const inc of incomes) {
+				const r = calculateTaxes({ filingStatus: status, ages, earnedIncome: inc, iraIncome: inc * 0.5, pensionIncome: inc * 0.1,
+					ordDivInterest: inc * 0.1, capGains: inc * 0.1, totalSS: 30000, inflation: 1.2, state: st, taxYear: 2026, propTax: 8000 });
+				const at = `${st} ${status} ${ages.join('/')} at ${inc}`;
+				if (!(r.stateTax >= 0)) throw new Error(`${at}: state tax ${r.stateTax} is negative`);
+				if (!(r.stateCredits >= 0 && r.stateCredits <= r.stateTax + r.stateCredits + 1e-9)) throw new Error(`${at}: credits ${r.stateCredits} out of range`);
+				if (Math.abs(r.stateOrdinaryTax + r.stateCapGainsTax - r.stateTax) > 1e-6) throw new Error(`${at}: ordinary + gains != state tax`);
+				if (r.stateOrdinaryTax < -1e-9 || r.stateCapGainsTax < -1e-9) throw new Error(`${at}: a negative part of the state tax`);
+				if (r.stateExemptions > prevExempt + 1e-9) throw new Error(`${at}: exemptions rose with income (${prevExempt} -> ${r.stateExemptions})`);
+				prevExempt = r.stateExemptions;
+				if (r.useItemized) {
+					const cap = r.federalStdDeduction - r.seniorDeduction;
+					if (cap > r.stateTax + 8000 + 1e-6) throw new Error(`${at}: SALT deducts more than the state tax after credits plus property tax`);
+				}
+			}
+		}
+	});
+
+	test('TEST CASE 30b: statutory lines stay put while indexed ones grow, and the ceilings agree with the tax', () => {
+		const lim = (st, status, x, f) => _engine().findUpperLimitByAmount(st, status, x, f).limit;
+		// A statutory schedule: the same line at any inflation, in the tax and in the ceiling lookup.
+		assertEqual(lim('NY', 'MFJ', 30000, 1.5), lim('NY', 'MFJ', 30000, 1), 'NY thresholds do not index');
+		// One statutory row in an indexed table: Oregon's 9.9% line holds while the lower lines grow.
+		assertEqual(lim('OR', 'SGL', 100000, 1.5), 125000 - 1, 'OR 9.9% line stays at 125,000');
+		assertEqual(lim('OR', 'SGL', 1000, 1.5), Math.round(4550 * 1.5) - 1, 'OR lower line grows');
+		// A surtax line that does not index next to brackets that do: California's $1M stays $1M.
+		const ca = x => calculateProgressive('CA', 'SGL', x, 1.5).marginal;
+		assertEqual([ca(999000), ca(1001000)], [0.113, 0.123], 'CA: the 1% starts at $1,000,000 even when the brackets have grown 50%');
+		// One that does index: Massachusetts' surtax line grows with the plan.
+		const ma = x => calculateProgressive('MA', 'SGL', x, 1.5).marginal;
+		assertEqual([ma(1107750 * 1.5 - 100), ma(1107750 * 1.5 + 100)], [0.05, 0.09], 'MA surtax line indexes');
+		// A statutory standard deduction holds; an indexed one grows.
+		const std = (st, f) => calculateTaxes({ filingStatus: 'MFJ', ages: [50, 50], earnedIncome: 1, state: st, inflation: f }).stateStdDeduction;
+		assertEqual([std('NC', 1.5), std('NE', 1.5)], [25500, 17700 * 1.5], 'NC std statutory, NE std indexed');
+		// The ceiling a strategy fills up to is where the marginal rate actually changes.
+		for (const [st, status, x] of [['OH', 'MFJ', 20000], ['MD', 'MFJ', 140000], ['CA', 'SGL', 50000], ['OR', 'MFJ', 15000], ['NY', 'SGL', 50000]]) {
+			const top = lim(st, status, x, 1.4);
+			const below = calculateProgressive(st, status, top - 10, 1.4).marginal;
+			const above = calculateProgressive(st, status, top + 10, 1.4).marginal;
+			if (!(above > below)) throw new Error(`${st} ${status}: the ceiling ${top} is not where the rate steps (${below} -> ${above})`);
 		}
 	});
 
@@ -1802,7 +2008,7 @@ test('taxcalc_core: the conversion tax is its own, and the next step names the n
 	// cs is tuned so the MAGI that includes the automatic withdrawal lands $1 under the IRMAA tier 1
 	// foot. The withdrawal covers the tax, which depends on the senior deduction and on California's
 	// table, so this number moves whenever either does.
-	const L = 'st=MFJ&s=CA&yr=2026&a1=66&a2=66&ss=29400&cs=98167&cb=0&it=2000&nd=1900&ri=14810&rd=9500&qd=18800&rc=26147';
+	const L = 'st=MFJ&s=CA&yr=2026&a1=66&a2=66&ss=29400&cs=98885&cb=0&it=2000&nd=1900&ri=14810&rd=9500&qd=18800&rc=26147';
 	const calcFor = q => { const p = new URLSearchParams(q); return C.run(k => p.get(k)).calc; };
 	const off = calcFor(L), on = calcFor(L + '&ra=1');
 	const alone = calcFor(L.replace('&rc=26147', '&rc=0'));
@@ -1816,6 +2022,37 @@ test('taxcalc_core: the conversion tax is its own, and the next step names the n
 	assertEqual(step.irmaaReached.to, 1, 'and getting there reaches IRMAA tier 1');
 	assertEqual(step.tax > 0 && step.tax < step.room, true, 'with a tax that is part of the amount');
 	assertEqual(on.irmaaRoom().tier, 2, 'sitting right under tier 1, the IRMAA room is the one to tier 2');
+});
+
+test('taxcalc_core: a taxable state tax refund (sr) is federal ordinary income and nothing else', () => {
+	const C = _core(); if (!C) return;
+	const at = q => { const p = new URLSearchParams(q); const c = C.run(k => p.get(k)).calc; return { c, d: c.resultFor(c.cfg.entOrdinary).d }; };
+	const tax = d => d.fedTax + d.fedCGTax + d.niit;
+	// The real 2026 California return in research/INCOME_TAX_PLANNER_INPUTS.md, at its four Roth
+	// conversion sizes, with and without its $1,789 refund. California is the tax program's figure
+	// in every column, with the refund or without it: the state does not tax its own refund.
+	const L = 'st=MFJ&s=CA&a1=66&a2=74&yr=2026&ss=29858&it=5075&nd=2500&qd=7950&sg=405&cs=100220&cb=0&rd=9126&mu=1600&sm=1100&ui=50';
+	const program = { 0: 3210, 55000: 7769, 120000: 13814, 240000: 24974 };
+	for (const rc of [0, 55000, 120000, 240000]) {
+		const off = at(`${L}&rc=${rc}`), on = at(`${L}&rc=${rc}&sr=1789`);
+		assertEqual(Math.round(on.d.stTaxOrd + on.d.stTaxCG), program[rc], `rc ${rc}: California tax unchanged by the refund, the program's figure`);
+		assertEqual(on.d.magi - off.d.magi, 1789, `rc ${rc}: the refund is in MAGI`);
+		assertEqual(tax(on.d) > tax(off.d), true, `rc ${rc}: and raises federal tax`);
+		assertEqual(on.c.cfg.entOrdinary - off.c.cfg.entOrdinary, 1789, `rc ${rc}: it is ordinary income entered`);
+	}
+	// Not investment income: where net investment income is what limits the 3.8% surtax, more MAGI
+	// from a refund leaves it where it was.
+	assertEqual(at(`${L}&rc=240000&sr=1789`).d.niit, at(`${L}&rc=240000`).d.niit, 'the refund is not investment income');
+	// Not a retirement distribution.
+	assertEqual(at(`${L}&sr=1789&return=iraTotal`).c.cfg.rmd, 9126, 'the RMD entry is untouched');
+	assertEqual(+_row(`${L}&sr=1789&return=iraTotal`).iraTotal, +_row(`${L}&return=iraTotal`).iraTotal, 'and the IRA total does not count the refund');
+	// Near the Social Security thresholds a $2,000 refund pulls $1,700 more of the benefit into tax:
+	// AGI rises $3,700, which is why leaving a refund out misleads most here.
+	const ss = 'st=MFJ&s=CA&a1=70&a2=70&yr=2026&ss=40000&it=3000&rd=30000';
+	assertEqual(at(`${ss}&sr=2000`).d.fedAGI - at(ss).d.fedAGI, 3700, 'the refund raises taxable Social Security too');
+	// The link: a whole-dollar amount, never negative, and returned with the inputs.
+	assertEqual(C.configFromParams(_link('sr=-50')).cfg.stateRefund, 0, 'a negative refund is not a refund');
+	assertEqual(_row(`${L}&sr=1789&return=sr`).sr, '1789', 'sr comes back as an input');
 });
 
 test('taxcalc_core: the RMD (rd) is ordinary income, and iraTotal adds the RMD, withdrawals, conversion and tax withdrawal', () => {

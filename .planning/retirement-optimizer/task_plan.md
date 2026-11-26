@@ -85,7 +85,7 @@ The plan bank is **19 households**, and #244 added none: correcting the IRMAA la
 built in `3c30911`. Measured with `plans.list()` on 2026-09-25, after the 2026-09-24 entry in
 `progress.md` said 20 and said the household had been restored. Both halves of that were wrong.
 
-## P140: tax tables keyed by year - the published 2027 federal figures, and the prior year  *(2026-11-26, user-raised. PRIORITY UNASSIGNED. `P140a` COMMITTED `b053c35`, must merge before 2027-01-01; `P140b` NEXT by the user's choice; `c`-`g` PROPOSAL)*
+## P140: tax tables keyed by year - the published 2027 federal figures, and the prior year  *(2026-11-26, user-raised. PRIORITY UNASSIGNED. `P140a` and `P140b` MERGED (PRs #264, #265; Pages built `15d72dc` 2026-11-26, so the 2027-01-01 deadline is met); `c` NEXT by the user's order; `c`-`g` PROPOSAL)*
 
 **The user's request:** "2027 Federal tax figures are (I believe) now available - propose a plan for
 handling real rather than inflated figures for next year - perhaps a parallel table indexed by the
@@ -170,7 +170,7 @@ its own commit, with the difference it makes measured. A refactor that moves num
 that moves numbers never share a diff.
 
 - [x] **P140a the wall-clock anchor, Optimizer and Projection.** BUILT 2026-11-26, committed `b053c35`,
-  not pushed; MUST MERGE BEFORE 2027-01-01. `simulate` now carries `sim.taxIndex`, the statutory clock anchored at
+  MERGED in PR #264 before 2027-01-01. `simulate` now carries `sim.taxIndex`, the statutory clock anchored at
   `TAXData.FEDERAL.YEAR` and stepped by the same `cpi_t` as `cpiRate`; the 16 tax-table call sites
   (brackets, deductions, LTCG, IRMAA thresholds, FPL, QCD, `taxArgs`) read it, and `cpiRate` keeps the
   amounts typed in today's dollars (Social Security, pension, IRA goal, flat advisor fee). New log key
@@ -181,10 +181,9 @@ that moves numbers never share a diff.
   households x as-is, `todayYear` 2026, start 2029, a bumpy inflation path, the same with fixed
   indexing); under a 2027 clock all 19 move, the old engine overcharging lifetime tax 0.4%-4.7%
   ($8.8k-$90k) and bracket fillers under-filling year 0 by up to $2,453; no success flips. Suites
-  545 / 80 / 62 / 15 / 50, page suite 540. No changelog entry and no title bump: nothing a user can see
-  today. If it merges AFTER 1 January, users will have seen 2027 priced on 2026 tables and it then
-  needs an entry.
-- [ ] **P140b the index and the resolver. NEXT (user, 2026-11-26).** `FEDERAL_BY_YEAR` with the 2026
+  545 / 80 / 62 / 15 / 50, page suite 540. No changelog entry and no title bump: nothing a user could see,
+  and it reached `main` before 1 January, so no user ever saw 2027 priced on 2026 tables.
+- [x] **P140b the index and the resolver. DONE, `b1`-`b4` in PR #264, `b5`-`b6` in PR #265.** `FEDERAL_BY_YEAR` with the 2026
   entry only, `federalFor`, the index, every caller converted. Gate: byte-identical, above. Research it
   builds on: `findings.md`, "Tax tables and the year". Steps, each with what done looks like:
   - [x] **b1 data shape.** BUILT 2026-11-26, committed `2b32fb2`. `FEDERAL_BY_YEAR` in `taxengine.js` (a
@@ -209,7 +208,7 @@ that moves numbers never share a diff.
     **Hazard for `b4`:** `calculateTaxes` defaults `taxYear` to `OBBBA.SALT.indexBaseYear`, 2025, which
     resolves to `null` here. A caller that omits `taxYear` today silently gets that default; under
     `b4` it must be required (throw when absent), and every caller checked for passing it.
-  - [x] **b3 the index object.** BUILT 2026-11-26, uncommitted. One shape, `{ year, from(tableYear) }`,
+  - [x] **b3 the index object.** BUILT 2026-11-26, committed `45811f6` (with b4), PR #264. One shape, `{ year, from(tableYear) }`,
     where `from(T)` is exactly 1 for T at or after `year` (a later table is used as printed, never
     deflated). `taxIndexAtRate(taxYear, rate)` in `taxengine.js` is the closed form,
     `Math.pow(1 + rate, max(0, year - T))` - the very expression the planner and the Projection page
@@ -229,7 +228,7 @@ that moves numbers never share a diff.
     and so over-indexes by the years before the anchor. No plan-bank household and no page-built plan
     starts that early (16 start in 2026, 3 on the wall clock); only test fixtures do, so `b4` may move
     those tests and nothing else.
-  - [x] **b4 engine reads.** BUILT 2026-11-26, uncommitted. **One rule changed from the plan:** a bare
+  - [x] **b4 engine reads.** BUILT 2026-11-26, committed `45811f6` (with b3), PR #264. **One rule changed from the plan:** a bare
     number does NOT throw. The suites pass a plain factor at about 200 sites to test table mechanics,
     where a number is the right input, so a number keeps exactly its old meaning (one factor, FEDERAL
     from the anchor entry) and an index makes a lookup year-aware. What the throw was for - a missed
@@ -253,7 +252,7 @@ that moves numbers never share a diff.
     (77 ms minimum both ways, 6 alternating runs). Suites 548 / 88 / 62 / 15 / 50, page suite 540,
     the planner's badge 88 of 88. Tokens `111ef9c`.
   - [x] **b5 callers.** BUILT 2026-11-26 on `worktrees/tax-index-callers-p140b5` (from `92f807b`, the
-    merge of PR #264), uncommitted. Engine callers: `simulate` builds `yr.taxIx = taxIndexOfSim(sim)`
+    merge of PR #264), committed `e0f5dc2`, PR #265. Engine callers: `simulate` builds `yr.taxIx = taxIndexOfSim(sim)`
     in `resolveHousehold` and all 16 table sites plus `taxArgs` take it; `taxcalc_core.js` adds `ix` to
     `indexFactors` for `calculateTaxes` and both `calcIRMAA` calls; `Retirement_Projection.html` and
     `standalone/irmaa_and_rmds.html` hand `calculateTaxes` / `calcIRMAA` a `taxIndexAtRate`. Display
@@ -318,11 +317,11 @@ here is older than 2026 today, except California's 2025 figures in
 2026 law (wrong wherever a state changed for 2026, on a figure someone may copy onto a return), and
 sourcing every state's 2025 table (weeks of work for a year that stops mattering in April).
 
-**Order (user, 2026-11-26):** `P140a` done (`b053c35`), and it must reach `main` before 2027-01-01;
-`P140b` NEXT; then `c` -> `d` -> `e`, with `f` and `g` riding each. `P139` any time, it does not touch
+**Order (user, 2026-11-26):** `P140a` and `P140b` done and on `main` (PRs #264, #265), before
+2027-01-01 as required; `P140c` NEXT; then `d` -> `e`, with `f` and `g` riding each. `P139` any time, it does not touch
 the engine.
 
-## P139: saved plans for the Income Tax Planner  *(2026-11-26, user-raised. PRIORITY UNASSIGNED. PROPOSAL, nothing in the tree)*
+## P139: saved plans for the Income Tax Planner  *(2026-11-26, user-raised. BUILT 2026-11-26 as v2.16 after the user approved the mockup, uncommitted. Build record at the end of this section)*
 
 **The user's request:** "IncomeTaxPlanner.html needs a save function like the RetirementOptimizer."
 The page is `standalone/IncomeTaxPlanner.html` (v2.15); the root `IncomeTaxPlanner.html` is a redirect.
@@ -347,35 +346,93 @@ Export and `taxcalc.js`: an input added to the share link is saved with no furth
 no second schema to drift. `loadFromURL()` becomes `applyParams(get)`, with the URL as one caller and a
 saved plan as the other.
 
-- [ ] **P139a a storage module**, `savedplans.js`: storage key, format `version`, normalize,
+- [x] **P139a a storage module**, `savedplans.js`: storage key, format `version`, normalize,
   list / save / delete, export to `.json` and import with a preview. Page-agnostic: the page supplies
   `getPayload`, `applyPayload`, `summarize` and `appVersion`, the way `sharepanel.js` serves seven
   pages. Key `IncomeTaxPlannerPlans`, and no `ad-` / `ads` / `banner` names anywhere (Brave Shields
   hides them). Every `localStorage` call in try/catch: a blocked store gives a message, not a dead page.
   Reuse the Optimizer's filename rules (`safeExportFilename`, `stripFileExtension`) rather than copy them.
-- [ ] **P139b the page.** A Saved plans control beside Share and Export: name, notes, Save, Save &
+- [x] **P139b the page.** A Saved plans control beside Share and Export: name, notes, Save, Save &
   Export, the Load / Delete / Export list, Import. The list shows name, tax year, state, filing status,
   saved date and the first line of the notes. Usable on a phone: nothing essential in a tooltip. Same
   wording as the Optimizer wherever the action is the same.
-- [ ] **P139c what changed since the save.** The snapshot is the pinned row's federal, state, NIIT,
+  **Mockup for approval (user asked for one before building, 2026-11-26):**
+  `.planning/mockups/income_tax_planner_saved_plans.html`, invented data, no storage, an amber bar
+  switching ten states. Checked at desktop width and at 375px (no sideways scroll). What it proposes:
+  a `Saved plans` header button beside Share opening a dropdown panel, full screen width on a phone;
+  the header button row wraps (it overflows a phone today, see findings); a blank name saves as
+  "year · state · status"; rows as cards with Load / Delete / Export; the after-load line under the
+  header, kept until dismissed or the next load. **Departures from this spec, each for the user to
+  accept or refuse:** Delete asks inline (Delete / Keep) rather than with the browser's `confirm()` the
+  Optimizer uses; the details view shows a "When saved / Today" tax table, computed before loading,
+  which moves some of `P139c` forward; with storage blocked the panel offers Export of the current
+  plan and Import with Load only. Build nothing in the page until it is approved.
+  **Revised the same day for two user requests.** (1) Every saved plan shows three figures, **Gross
+  income, AGI, Total tax**, on its card and at the top of the details table ("clearer than the notes");
+  a Total tax a release has moved carries an amber "now $X" under it. The snapshot therefore records
+  `grossIncome` and `agi` too (both already `TaxCalc` result fields), not only the taxes. (2) The
+  Notes box **opens pre-filled** with one line in the user's order: `Federal 22% bracket · IRMAA 2027
+  Tier 1, 2029 Tier 1 · CA 9.3% bracket`. Federal and state are the STATUTORY rates at the ordinary
+  income shown (what Explain labels "Fed bracket" / "State bracket"), not `fedMarginal`, which carries
+  the torpedo and phase-outs (a 12% filer read 22.2% in the mock household). IRMAA names the tier in
+  force this year only when a MAGI from two years back is entered, and always the tier this year's
+  MAGI sets two years out. The line follows the entries until the user types in the box; after that a
+  "Put the current brackets back" link rewrites it. Cards show two lines of notes. The mock's figures
+  come from `taxcalc.js` runs, except the "now" column of the two 2027 plans, which is invented.
+- [x] **P139c what changed since the save.** The snapshot is the pinned row's federal, state, NIIT,
   IRMAA, total tax and net income, with `yr` and `appVersion`. On Load the page recomputes, and when
   the total differs says so in one line: "Total tax was $41,210 when saved under v2.15; $40,870 now."
   This is what makes `P140` survivable: a 2027 plan saved on inflated figures moves when the published
   table lands, and the line tells the person a release moved it, not their inputs.
-- [ ] **P139d import guards.** An Optimizer scenario file is refused by name ("this is a Retirement
+- [x] **P139d import guards.** An Optimizer scenario file is refused by name ("this is a Retirement
   Optimizer plan"), never half-applied. A file from a later planner version loads with a warning, as
   in the Optimizer.
-- [ ] **P139e tests.** Round trip over every `DETAIL_FIELDS` key (`buildShareParams` -> save -> load ->
+- [x] **P139e tests.** Round trip over every `DETAIL_FIELDS` key (`buildShareParams` -> save -> load ->
   `buildShareParams`, identical); a payload with no `version`; an Optimizer file refused; storage
   that throws. Pick the suite that already covers `taxcalc_core.js`, and reconcile `TestTiers.EXPECTED`
   and `.githooks/README.md` in the same commit.
-- [ ] **P139f docs.** The How to Use modal, README's Income Tax Planner section, `UsageGuide.md` where
+- [x] **P139f docs.** The How to Use modal, README's Income Tax Planner section, `UsageGuide.md` where
   it lists the page's controls, a v2.16 change note. The privacy line, short and true: saved plans stay
   in this browser on this device; an exported file holds your income figures.
 
 **Not in scope, offered:** moving the Optimizer onto `savedplans.js`. Its store has a legacy key,
 `SCENARIO_VERSION` 4, the GK and rails folding in `applyScenario` and the `P113` load report; that is
 its own phase with its own zero-diff check. Build the module so it COULD; do not do it here.
+
+**Build record (2026-11-26, v2.16, uncommitted).** The user approved the revised mockup and renamed
+the button **Save/Load** (the panel's own heading too). What landed:
+- `savedplans.js` (new, ~240 lines, no DOM): `SavedPlans.create({ key, kind, toolName, formatVersion,
+  appVersion, storage, now, fileFallback })` with `normalize`, `makeEntry`, `list`, `get`, `put`,
+  `save`, `remove`, `fileFor`, `parseFile`, `available`. Key `IncomeTaxPlannerPlans`, kind
+  `income-tax-planner`. A store that will not parse is reported and never written over.
+- `taxcalc_core.js`: `TaxCalc.planSummary(get)`, the snapshot and the "Today" column alike - gross,
+  AGI, the taxes, net, the statutory brackets (`fedBr`, `stMarg`), `stateNoTax`, `irmaaNow` (null
+  without a `pm`) and `irmaaAhead`. One function for both sides, so a difference is the release or a
+  snapped entry, never two computations.
+- The page: `loadFromURL` is now `applyParams(get, { complete })`; `complete` sets EVERY control, a
+  key the plan leaves out going to its default, because the share link drops defaults and a saved plan
+  is loaded over a filled page. Load puts the View back to Full when the plan has none. After a load
+  the page compares the entries back with the payload (view keys excluded) and names any a control
+  could not hold, and says "your entries are unchanged, so the difference is this release's figures"
+  only when none moved.
+- **Departures from the spec above:** (1) the filename rule is a COPY in `savedplans.js`, not a reuse:
+  the Monte Carlo worker loads `optimizer_core.js` without `displayhelpers.js`, so moving it out of
+  core would break the worker; a parity test holds the two copies equal until the Optimizer moves onto
+  the module. (2) P139e's round trip is a config-side test (every key read back whole) plus the
+  in-page compare above, which is what catches a page-side drift at run time; `buildShareParams` stays
+  in the page because `feedback.tests.js` reads its keys from the page source. (3) On a phone the
+  panel is `position:absolute` under the buttons, not `fixed`: the page is 905px wide on a 375px
+  phone, and Chrome widens the box fixed elements are placed in to match, so a fixed panel ran off
+  the screen (measured 12-893px). The Share panel has the same problem and was left alone.
+- Tests: 8 in `taxengine.tests.js` (89 -> 97), pins reconciled. Mutations: the optimizer-refusal
+  branch, the scalar filter, the bracket-for-marginal swap and the whole unreadable-store guard each
+  fail their own test; removing only the first of the guard's two checks changes nothing (the second
+  still refuses) and survives, correctly.
+- Docs: How to Use (its own Save/Load section and the v2.16 change note), README, `UsageGuide.md`,
+  `ARCHITECTURE.md` (graph node, edges and a file-table row; `check-architecture.js` will require it
+  once the file is tracked).
+- Not done: a page-level automated test of the panel (no harness runs the planner page's own code;
+  the in-browser checks above were by hand), and the Share panel's phone overflow.
 
 **Size:** a module of about 250 lines, about 150 in the page, 6-8 tests. No engine change.
 

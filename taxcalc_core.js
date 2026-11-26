@@ -571,8 +571,33 @@
     return { ok: !r.csv.startsWith('ERROR:'), ...r, calc };
   }
 
+  // What a saved plan records and its list shows: the figures the page's info panel reports at the
+  // ordinary income entered, in whole dollars, plus the brackets that income sits in. The federal and
+  // state brackets are the STATUTORY rates (`fedBr`, `stMarg`), not `fedMarginal`, which carries the
+  // Social Security torpedo and the phase-outs. `irmaaNow` is null when no MAGI from two years back
+  // was entered, as the page then charges none. { ok: false, errors } for a link with errors.
+  function planSummary(get) {
+    const L = configFromParams(get);
+    if (L.errors.length) return { ok: false, errors: L.errors };
+    const calc = create(L.cfg);
+    calc.deriveIncome();
+    if (L.pin !== null) applyPin(calc, L.pin);
+    const cfg = L.cfg, r = calc.resultFor(cfg.entOrdinary), d = r.d;
+    const gross = calc.grossOf(d);
+    const rows = (TD[cfg.state] && TD[cfg.state][cfg.status] && TD[cfg.state][cfg.status].brackets) || [];
+    const $ = v => Math.round(v);
+    return {
+      ok: true, year: cfg.year, state: cfg.state, status: cfg.status, ordinary: $(r.P),
+      gross: $(gross), agi: $(d.fedAGI),
+      fedTax: $(d.fedTax + d.fedCGTax), niit: $(d.niit), stateTax: $(d.stTaxOrd + d.stTaxCG),
+      irmaa: $(d.IRMAA), totalTax: $(d.totalTax), netIncome: $(gross - d.totalTax),
+      fedBracket: d.fedBr, stateBracket: d.stMarg, stateNoTax: rows.length > 0 && rows.every(b => b.r === 0),
+      irmaaNow: r.now ? r.now.tier : null, irmaaAhead: r.fut.tier, irmaaAheadYear: cfg.year + IRMAA_AHEAD,
+    };
+  }
+
   const api = { BASE_YEAR, IRMAA_AHEAD, DETAIL_FIELDS, RESULT_DEFAULT, RESULT_RATES, RESULT_FIELDS, ALL_NAMES,
-                detailValue, wholeDollars, newConfig, configFromParams, returnSpec, create, applyPin, run };
+                detailValue, wholeDollars, newConfig, configFromParams, returnSpec, create, applyPin, run, planSummary };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TaxCalc = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

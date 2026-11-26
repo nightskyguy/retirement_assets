@@ -25,7 +25,7 @@
 <!-- The Send feedback dialog. NOT deferred: it records page errors from here on, so it has to load
      before the scripts below. It builds nothing until FeedbackWidget.open(). -->
 <script src="../feedback.js?v=11195c"></script>
-<title>Income Tax Planner · 2026+ · v2.15</title>
+<title>Income Tax Planner · 2026+ · v2.16</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
   // Global Chart.js tooltip defaults, set once so the chart config only says what differs.
@@ -227,22 +227,104 @@
   /* ── the Income details heading is the section a person starts with ── */
   #details-income > summary { font-size:14px; font-weight:500; color:var(--text); white-space:nowrap; }
   #details-income > summary .val { font-size:10px; font-weight:400; }
+  /* ── header buttons: the row wraps rather than running off a narrow screen ── */
+  .hdr-actions { margin-left:auto; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; align-items:center; position:relative; }
+  .hdr-btn.plans { border-color:rgba(25,201,157,.35); color:var(--teal); }
+  .hdr-btn.plans:hover, .hdr-btn.plans[aria-expanded="true"] { background:rgba(25,201,157,.08); }
+  /* ── Save/Load panel (sp- prefix: Brave Shields hides ad-/ads/banner class names) ── */
+  .sp-panel { position:absolute; top:calc(100% + 8px); right:0; z-index:800; width:min(560px, calc(100vw - 3rem)); max-height:min(78vh, 720px); overflow-y:auto; overscroll-behavior:contain; background:var(--surface); border:1px solid var(--teal); border-radius:8px; padding:.9rem 1rem 1rem; box-shadow:0 8px 32px rgba(0,0,0,.5); text-align:left; }
+  .sp-panel[hidden] { display:none; }
+  .sp-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:.55rem; gap:.5rem; }
+  .sp-h { font-family:var(--mono); font-size:10px; letter-spacing:.12em; color:var(--muted); text-transform:uppercase; }
+  .sp-x { background:none; border:none; color:var(--muted); cursor:pointer; font-size:1.05rem; line-height:1; padding:0 2px; }
+  .sp-x:hover { color:var(--text); }
+  .sp-field { width:100%; background:var(--surf2); border:1px solid var(--border); border-radius:5px; color:var(--text); font-family:var(--mono); font-size:12px; padding:6px 8px; outline:none; }
+  .sp-field:focus { border-color:var(--teal); }
+  .sp-field::placeholder { color:#5a6180; }
+  textarea.sp-field { resize:vertical; min-height:2.6rem; font-family:var(--sans); font-size:13px; line-height:1.45; margin-top:6px; }
+  .sp-btns { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center; }
+  .sp-btn { background:var(--surf2); border:1px solid var(--border); border-radius:4px; color:var(--text); font-family:var(--mono); font-size:11px; padding:5px 12px; cursor:pointer; white-space:nowrap; }
+  .sp-btn:hover { border-color:var(--teal); color:var(--teal); }
+  .sp-btn.primary { background:rgba(25,201,157,.15); border-color:rgba(25,201,157,.4); color:var(--teal); }
+  .sp-btn.primary:hover { background:rgba(25,201,157,.25); }
+  .sp-btn.danger { border-color:rgba(242,92,92,.45); color:var(--red); }
+  .sp-btn.danger:hover { background:rgba(242,92,92,.1); }
+  .sp-hint, .sp-prefill { font-family:var(--mono); font-size:10px; color:var(--muted); line-height:1.6; margin-top:6px; }
+  .sp-prefill { margin-top:3px; }
+  .sp-prefill button { background:none; border:none; padding:0; font:inherit; color:var(--teal); cursor:pointer; text-decoration:underline; }
+  .sp-status { font-family:var(--mono); font-size:11px; color:var(--teal); line-height:1.5; margin-top:6px; }
+  .sp-status:empty { display:none; }
+  .sp-status.warn { color:var(--amber); }
+  .sp-rule { border:none; border-top:1px solid var(--border); margin:.85rem 0 .7rem; }
+  .sp-list { display:flex; flex-direction:column; gap:6px; }
+  .sp-row { background:var(--surf2); border:1px solid var(--border); border-radius:6px; padding:.55rem .7rem; }
+  .sp-row.confirm { border-color:rgba(242,92,92,.5); }
+  .sp-name { background:none; border:none; padding:0; font:500 13px var(--sans); color:var(--text); cursor:pointer; text-align:left; display:inline-flex; gap:6px; align-items:baseline; }
+  .sp-name:hover .sp-nm { color:var(--teal); }
+  .sp-nm { text-decoration:underline dotted var(--muted); text-underline-offset:3px; word-break:break-word; }
+  .sp-i { display:inline-flex; align-items:center; justify-content:center; width:13px; height:13px; border:1px solid var(--muted); border-radius:50%; font:italic 600 9px var(--mono); color:var(--muted); flex:none; position:relative; top:-1px; }
+  .sp-meta { font-family:var(--mono); font-size:10.5px; color:var(--muted); margin-top:3px; line-height:1.5; }
+  .sp-meta .rel { color:#5a6180; }
+  .sp-figs { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:.5rem; margin:.45rem 0 .1rem; }
+  .sp-fig .k { font-family:var(--mono); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+  .sp-fig .v { font-family:var(--mono); font-size:14px; color:var(--text); }
+  .sp-fig .now { font-family:var(--mono); font-size:10.5px; color:var(--amber); }
+  .sp-note { font-size:12.5px; color:#b9bed2; margin-top:4px; white-space:pre-line; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.45; }
+  .sp-row .sp-btns { justify-content:flex-end; margin-top:6px; }
+  .sp-confirm { font-size:12.5px; color:var(--text); margin-top:6px; }
+  .sp-empty { font-size:13px; color:var(--muted); line-height:1.6; padding:.4rem 0; }
+  .sp-back { background:none; border:none; color:var(--muted); font-family:var(--mono); font-size:11px; cursor:pointer; padding:0; }
+  .sp-back:hover { color:var(--teal); }
+  .sp-title { font:500 15px var(--sans); color:var(--text); margin:.45rem 0 .5rem; word-break:break-word; }
+  .sp-kv { display:grid; grid-template-columns:auto 1fr; gap:.15rem .9rem; font-size:12.5px; }
+  .sp-kv dt { font-family:var(--mono); font-size:11px; color:var(--muted); padding-top:1px; }
+  .sp-kv dd { color:var(--text); word-break:break-word; }
+  .sp-sub { font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--muted); text-transform:uppercase; margin:.8rem 0 .3rem; }
+  .sp-notes { font-size:13px; color:var(--text); white-space:pre-wrap; line-height:1.55; word-break:break-word; }
+  .sp-notes.none { color:var(--muted); }
+  .sp-tbl { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:11.5px; }
+  .sp-tbl th { font-weight:400; color:var(--muted); text-align:right; padding:3px 0 4px 10px; border-bottom:1px solid var(--border); font-size:10px; }
+  .sp-tbl th:first-child, .sp-tbl td:first-child { text-align:left; padding-left:0; }
+  .sp-tbl td { text-align:right; padding:3px 0 3px 10px; color:var(--text); }
+  .sp-tbl td:first-child { color:var(--muted); }
+  .sp-tbl tr.moved td:not(:first-child) { color:var(--amber); }
+  .sp-tbl tr.total td { border-top:1px solid var(--border); padding-top:5px; }
+  .sp-box { border-radius:6px; padding:.55rem .75rem; font-size:12.5px; line-height:1.55; margin-bottom:.6rem; }
+  .sp-box.info { background:rgba(79,156,249,.08); border:1px solid rgba(79,156,249,.35); color:#c9dcf7; }
+  .sp-box.warn { background:rgba(245,166,35,.08); border:1px solid rgba(245,166,35,.4); color:#f3d69d; }
+  .sp-box.stop { background:rgba(242,92,92,.08); border:1px solid rgba(242,92,92,.45); color:#f4b4b4; }
+  /* ── what the last load changed; stays until dismissed or the next load or save ── */
+  .sp-report { max-width:1300px; margin:-.4rem auto 1.1rem; display:flex; gap:.75rem; align-items:flex-start; background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--teal); border-radius:6px; padding:.6rem .85rem; font-size:13px; line-height:1.55; }
+  .sp-report.moved { border-left-color:var(--amber); }
+  .sp-report[hidden] { display:none; }
+  .sp-report .txt { flex:1; }
+  .sp-report b { font-weight:500; }
+  .sp-report .amt { font-family:var(--mono); font-size:12.5px; }
+  /* Narrow screens: under the buttons, as wide as the screen. Not position:fixed - the page below is
+     wider than a phone, and a phone widens the box fixed elements are placed in to match it, so a
+     fixed panel runs off the right edge. vw counts the screen, not the page. */
+  @media (max-width:640px) {
+    .hdr-actions { margin-left:0; justify-content:flex-start; }
+    .sp-panel { left:0; right:auto; width:calc(100vw - 3rem); max-height:75vh; }
+  }
 </style>
 <!-- Shared tax modules — NOTE: these require file:// or http:// (CORS blocks in data: URLs) -->
 <script src="../displayhelpers.js"></script>
 <script src="../sharepanel.js?v=1118e3"></script>
+<script src="../savedplans.js?v=111efb"></script>
 <script src="../taxengine.js?v=111efa"></script>
 <script src="../medicare_costs.js?v=111917"></script>
-<script src="../taxcalc_core.js?v=111efa"></script>
-<script src="../taxengine.tests.js?v=111efa"></script>
+<script src="../taxcalc_core.js?v=111efb"></script>
+<script src="../taxengine.tests.js?v=111efb"></script>
 </head>
 <body>
 <header>
-  <h1>Income Tax Planner<span class="ver">v2.15</span></h1>
+  <h1>Income Tax Planner<span class="ver">v2.16</span></h1>
   <p>Federal + State · Capital Gains · IRMAA · SS torpedo · <span id="hdr-years">2026–2035</span> with inflation</p>
-  <div style="margin-left:auto;display:flex;gap:8px;align-items:center;position:relative">
+  <div class="hdr-actions">
     <strong id="testsFailed" title="Unit tests status">🟢</strong>
     <button class="hdr-btn share" onclick="toggleSharePanel()">&#8258; Share</button>
+    <button type="button" class="hdr-btn plans" id="sp-open" aria-expanded="false" aria-controls="sp-panel" onclick="togglePlansPanel()">&#9636; Save/Load</button>
     <button type="button" class="hdr-btn" onclick="FeedbackWidget.open()" title="Send a problem report, a question or an idea to the author. You choose what goes with it.">&#9993; Feedback</button>
     <button class="hdr-btn" onclick="openModal()">How to Use</button>
     <button class="hdr-btn" onclick="showOtherTools()">&#9783; Other Tools</button>
@@ -255,8 +337,13 @@
       </div>
       <div class="share-status" id="share-status"></div>
     </div>
+    <!-- Save/Load panel, filled by renderPlansPanel() -->
+    <div class="sp-panel" id="sp-panel" role="dialog" aria-label="Save or load a plan" hidden></div>
+    <input type="file" id="sp-file" accept=".json,application/json" hidden>
   </div>
 </header>
+
+<div class="sp-report" id="sp-report" role="status" aria-live="polite" hidden></div>
 
 <div class="ret-banner" id="ret-banner" hidden>
   <div class="ret-title"><span>Result <span id="ret-for"></span> <span id="ret-status" style="color:var(--muted)"></span></span>
@@ -2007,6 +2094,401 @@ function saveChartImage() {
   out.toBlob(b => { if (b) saveBlob(b, chartFileName('png')); }, 'image/png');
 }
 
+// ─── SAVE / LOAD ─────────────────────────────────────────────────────────────
+// Plans saved in this browser through savedplans.js, which owns storage, entries and files. A plan's
+// payload IS the share-link key set (buildShareParams), and a load puts it back through applyParams,
+// so Share, Save, Export and taxcalc.js read one format: an input added to the share link is saved
+// with no further work. The figures a plan records are TaxCalc.planSummary of that payload, the same
+// function "Today" is computed with, so a difference between the two comes from the release or from
+// an entry the controls could not hold, never from two ways of computing.
+// This section runs before the page's init calls run(), so its state exists by then.
+const plannerRelease = () => 'v' + ((document.title.match(/v(\d+\.\d+)\s*$/) || [])[1] || '?');
+const PLANS = SavedPlans.create({
+  key: 'IncomeTaxPlannerPlans', kind: 'income-tax-planner', toolName: 'Income Tax Planner',
+  formatVersion: 1, fileFallback: 'income-tax-plan', appVersion: plannerRelease,
+});
+const VIEW_KEYS = ['vl', 'vh', 'ex'];   // where the chart looks, not what the return is
+const STATUS_NAME = { MFJ: 'Married / Joint', SGL: 'Single' };
+const SUMMARY_ROWS = [['gross', 'Gross income'], ['agi', 'AGI'], ['fedTax', 'Federal tax'], ['stateTax', 'State tax'],
+                      ['niit', 'NIIT'], ['irmaa', 'IRMAA this year'], ['totalTax', 'Total tax'], ['netIncome', 'Net income']];
+const KEY_NAMES = { st: 'filing status', s: 'state', a1: 'age', a2: 'second age', ss: 'Social Security', cs: 'sale proceeds',
+                    cb: 'cost basis', yr: 'tax year', in: 'bracket inflation', pm: 'MAGI from two years earlier',
+                    rw: 'extra income is IRA/401k', ra: 'pay taxes from IRA' };
+const EDITED_HINT = 'You have edited the notes, so the brackets line no longer follows your entries. ' +
+  '<button type="button" data-act="refill">Put the current brackets back</button>';
+// open, which view, the plan a view is about, the rows as last drawn (actions name them by index),
+// the status line, and what has been typed into Name and Notes. notesDraft null = untouched, so the
+// box shows the brackets line for the entries as they are each time the panel opens.
+const SP = { open: false, view: 'list', detail: null, pending: null, confirm: null, rows: [],
+             status: '', warn: false, nameDraft: '', notesDraft: null };
+const spEsc = DisplayHelpers.escapeHtml;
+const currentPayload = () => Object.fromEntries(new URLSearchParams(buildShareParams()));
+const payloadGetter = payload => k => Object.prototype.hasOwnProperty.call(payload, k) ? payload[k] : null;
+const summaryOf = payload => TaxCalc.planSummary(payloadGetter(payload));
+const pctText = r => `${+(r * 100).toFixed(2)}%`;
+const tierText = t => t ? `Tier ${t}` : 'none';
+const savedWhen = iso => new Date(iso).toLocaleString(undefined,
+  { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const planAutoName = s => s && s.ok ? `${s.year} · ${s.state} · ${STATUS_NAME[s.status]}` : 'Income tax plan';
+
+// One line, in the order federal, IRMAA, state: the statutory brackets at the ordinary income shown,
+// the IRMAA tier in force this year (only when the MAGI from two years back was entered) and the tier
+// this year's MAGI sets two years out.
+function bracketLine(s) {
+  if (!s || !s.ok) return '';
+  const irmaa = s.irmaaNow === null ? `${s.irmaaAheadYear} ${tierText(s.irmaaAhead)}`
+              : `${s.year} ${tierText(s.irmaaNow)}, ${s.irmaaAheadYear} ${tierText(s.irmaaAhead)}`;
+  const state = s.stateNoTax ? `${s.state} no income tax` : `${s.state} ${pctText(s.stateBracket)} bracket`;
+  return `Federal ${pctText(s.fedBracket)} bracket · IRMAA ${irmaa} · ${state}`;
+}
+
+// The total a release moved, or null: both sides known and at least a dollar apart.
+function movedTotal(entry, now) {
+  const then = entry.summary;
+  if (!then || !Number.isFinite(then.totalTax) || !now || !now.ok) return null;
+  return Math.abs(now.totalTax - then.totalTax) >= 1 ? now.totalTax : null;
+}
+
+function togglePlansPanel(force) {
+  SP.open = typeof force === 'boolean' ? force : !SP.open;
+  if (SP.open) { SP.view = 'list'; SP.confirm = null; SP.pending = null; }
+  else { SP.status = ''; SP.warn = false; }
+  renderPlansPanel();
+}
+
+function renderPlansPanel() {
+  const panel = document.getElementById('sp-panel');
+  document.getElementById('sp-open').setAttribute('aria-expanded', String(SP.open));
+  panel.hidden = !SP.open;
+  if (!SP.open) return;
+  panel.innerHTML = SP.view === 'detail' ? planDetailView()
+                  : SP.view === 'import' ? planImportView()
+                  : SP.view === 'refused' ? planRefusedView()
+                  : planListView();
+}
+
+const spClose = '<button type="button" class="sp-x" data-act="close" aria-label="Close">&times;</button>';
+const spStatus = () => `<div class="sp-status${SP.warn ? ' warn' : ''}" aria-live="polite">${SP.status}</div>`;
+
+function planListView() {
+  const current = summaryOf(currentPayload());
+  if (!PLANS.available()) {
+    return `<div class="sp-head"><span class="sp-h">Save/Load</span>${spClose}</div>
+      <div class="sp-box warn">This browser is not letting the page keep data (a private window, or site data
+        blocked for this site), so plans cannot be saved here. <b>Export</b> still works: it downloads this plan
+        as a file you can Import later.</div>
+      <div class="sp-btns"><button type="button" class="sp-btn primary" data-act="export-current">Export</button>
+        <button type="button" class="sp-btn" data-act="import">Import</button></div>${spStatus()}`;
+  }
+  const notes = SP.notesDraft ?? bracketLine(current) + '\n';
+  const plans = PLANS.list();
+  SP.rows = plans.map(p => p.entry);
+  const list = plans.length
+    ? `<div class="sp-list">${SP.rows.map(planRowHtml).join('')}</div>`
+    : plans.error === 'unreadable'
+      ? '<div class="sp-box stop">The saved plans in this browser could not be read. Nothing has been written over them.</div>'
+      : `<div class="sp-empty">No saved plans yet. <b>Save</b> keeps the plan you see in this browser;
+         <b>Import</b> opens a file you exported earlier, here or on another device.</div>`;
+  return `
+    <div class="sp-head"><span class="sp-h">Save this plan</span>${spClose}</div>
+    <input class="sp-field" id="sp-name" type="text" autocomplete="off" maxlength="120" placeholder="Name (optional)"
+      aria-label="Plan name" value="${spEsc(SP.nameDraft)}">
+    <textarea class="sp-field" id="sp-notes" rows="3" aria-label="Notes"
+      placeholder="Notes (optional): what is this plan for?">${spEsc(notes)}</textarea>
+    <div class="sp-prefill">${SP.notesDraft === null
+      ? 'The first line is this plan\'s brackets at the ordinary income shown. It follows your entries until you type in the box; add your own words below it, or replace it.'
+      : EDITED_HINT}</div>
+    <div class="sp-btns">
+      <button type="button" class="sp-btn primary" data-act="save">Save</button>
+      <button type="button" class="sp-btn" data-act="save-export" title="Save this plan in the browser and download it as a file, in one step.">Save &amp; Export</button>
+    </div>
+    <div class="sp-hint">With no name it is saved as "${spEsc(planAutoName(current))}". Saving also records gross
+      income, AGI and this year's taxes at the ordinary income shown, and the release you are on, so a later load
+      can say what changed. Saved plans stay in this browser on this device.</div>
+    ${spStatus()}
+    <hr class="sp-rule">
+    <div class="sp-head"><span class="sp-h">In this browser · ${plans.length}</span>
+      <button type="button" class="sp-btn" data-act="import">Import</button></div>
+    ${list}`;
+}
+
+function planRowHtml(e, i) {
+  const s = e.summary;
+  const meta = s ? `${s.year} · ${spEsc(s.state)} · ${spEsc(STATUS_NAME[s.status] || s.status)} · ` : '';
+  const rel = e.appVersion ? ` <span class="rel">(${spEsc(e.appVersion)})</span>` : '';
+  if (SP.confirm === i) {
+    return `<div class="sp-row confirm">
+      <div class="sp-title" style="margin:0">${spEsc(e.name)}</div>
+      <div class="sp-confirm">Delete this saved plan? It cannot be undone.</div>
+      <div class="sp-btns"><button type="button" class="sp-btn danger" data-act="delete-yes" data-i="${i}">Delete</button>
+        <button type="button" class="sp-btn" data-act="delete-no">Keep</button></div></div>`;
+  }
+  const now = movedTotal(e, summaryOf(e.payload));
+  const fig = (k, v, extra = '') => `<div class="sp-fig"><div class="k">${k}</div><div class="v">${v}</div>${extra}</div>`;
+  const figs = s ? `<div class="sp-figs">${fig('Gross income', fmtMoney(s.gross))}${fig('AGI', fmtMoney(s.agi))}${
+      fig('Total tax', fmtMoney(s.totalTax), now === null ? '' : `<div class="now">now ${fmtMoney(now)}</div>`)}</div>` : '';
+  const notes = (e.notes || '').trim();
+  return `<div class="sp-row">
+    <button type="button" class="sp-name" data-act="detail" data-i="${i}" title="Notes and the figures recorded for this plan"><span class="sp-i">i</span><span class="sp-nm">${spEsc(e.name)}</span></button>
+    <div class="sp-meta">${meta}saved ${spEsc(savedWhen(e.savedAt))}${rel}</div>
+    ${figs}
+    ${notes ? `<div class="sp-note">${spEsc(notes)}</div>` : ''}
+    <div class="sp-btns">
+      <button type="button" class="sp-btn primary" data-act="load" data-i="${i}">Load</button>
+      <button type="button" class="sp-btn" data-act="delete" data-i="${i}">Delete</button>
+      <button type="button" class="sp-btn" data-act="export" data-i="${i}">Export</button>
+    </div></div>`;
+}
+
+// What a plan is, before it is loaded: where it came from, its notes, and its figures as recorded
+// and as this release computes them from the same entries. Real content, not a tooltip, because a
+// phone cannot hover over anything.
+function planInfoHtml(e) {
+  const then = e.summary, now = summaryOf(e.payload), cur = plannerRelease();
+  const kv = (k, v) => `<dt>${k}</dt><dd>${spEsc(v)}</dd>`;
+  const s = now.ok ? now : then;
+  let html = `<div class="sp-title">${spEsc(e.name)}</div><dl class="sp-kv">`;
+  if (s) html += kv('Tax year', s.year) + kv('State', s.state) + kv('Filing status', STATUS_NAME[s.status] || s.status);
+  html += kv('Saved', savedWhen(e.savedAt)) + kv('Saved under release', e.appVersion || 'not recorded');
+  if (e.sourceFile) html += kv('From file', e.sourceFile);
+  html += '</dl><div class="sp-sub">Notes</div>';
+  html += e.notes ? `<div class="sp-notes">${spEsc(e.notes)}</div>` : '<div class="sp-notes none">No notes recorded.</div>';
+  if (!now.ok) {
+    return html + `<div class="sp-box warn" style="margin-top:.8rem">This release cannot read part of this plan:
+      ${spEsc(now.errors.join('; '))}.</div>`;
+  }
+  html += `<div class="sp-sub">Figures at ordinary income ${fmtMoney(now.ordinary)}</div>`;
+  html += `<table class="sp-tbl"><thead><tr><th></th>${then ? `<th>When saved (${spEsc(e.appVersion || '?')})</th>` : ''}<th>Today (${spEsc(cur)})</th></tr></thead><tbody>`;
+  for (const [k, label] of SUMMARY_ROWS) {
+    const a = then ? then[k] : null, b = now[k];
+    const moved = then && Number.isFinite(a) && Math.abs(a - b) >= 1;
+    html += `<tr class="${[moved ? 'moved' : '', k === 'totalTax' ? 'total' : ''].join(' ').trim()}"><td>${label}</td>` +
+            (then ? `<td>${Number.isFinite(a) ? fmtMoney(a) : '-'}</td>` : '') + `<td>${fmtMoney(b)}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  const moved = movedTotal(e, now);
+  if (!then) html += '<div class="sp-hint">No figures were recorded with this plan, so there is nothing to compare.</div>';
+  else if (moved === null) html += `<div class="sp-hint">Same total tax under ${spEsc(cur)} as when it was saved.</div>`;
+  else html += `<div class="sp-hint" style="color:var(--amber)">The same entries give ${fmtMoney(moved)} of tax under
+    ${spEsc(cur)}, ${fmtMoney(Math.abs(moved - then.totalTax))} ${moved < then.totalTax ? 'less' : 'more'} than when it was saved.</div>`;
+  return html;
+}
+
+function planDetailView() {
+  const e = SP.rows[SP.detail];
+  if (!e) { SP.view = 'list'; return planListView(); }
+  return `<div class="sp-head"><button type="button" class="sp-back" data-act="back">&larr; Save/Load</button>${spClose}</div>
+    ${planInfoHtml(e)}
+    <div class="sp-btns" style="margin-top:.8rem">
+      <button type="button" class="sp-btn primary" data-act="load" data-i="${SP.detail}">Load</button>
+      <button type="button" class="sp-btn" data-act="export" data-i="${SP.detail}">Export</button>
+      <button type="button" class="sp-btn" data-act="back">Back</button>
+    </div>`;
+}
+
+function planImportView() {
+  const { entry, warnings } = SP.pending;
+  const canSave = PLANS.available();
+  const clash = canSave && PLANS.get(entry.name) !== null;
+  return `<div class="sp-head"><span class="sp-h">Import</span>${spClose}</div>
+    <div class="sp-box info">Read from <b>${spEsc(entry.sourceFile || 'the file')}</b>. Nothing has been saved or loaded yet.</div>
+    ${warnings.map(w => `<div class="sp-box warn">${spEsc(w)}</div>`).join('')}
+    ${clash ? `<div class="sp-box warn">A plan named "${spEsc(entry.name)}" is already saved here. Load &amp; Save replaces it.</div>` : ''}
+    ${planInfoHtml(entry)}
+    <div class="sp-btns" style="margin-top:.8rem">
+      <button type="button" class="sp-btn primary" data-act="import-yes">${canSave ? 'Load &amp; Save' : 'Load'}</button>
+      <button type="button" class="sp-btn" data-act="import-no">Cancel</button>
+    </div>`;
+}
+
+function planRefusedView() {
+  return `<div class="sp-head"><span class="sp-h">Import</span>${spClose}</div>
+    <div class="sp-box stop">${spEsc(SP.pending.message)}</div>
+    <div class="sp-btns"><button type="button" class="sp-btn" data-act="import">Choose another file</button>
+      <button type="button" class="sp-btn" data-act="back">Back</button></div>`;
+}
+
+function exportPlanEntry(entry) {
+  const f = PLANS.fileFor(entry);
+  saveBlob(new Blob([f.text], { type: 'application/json' }), f.filename);
+  return f.filename;
+}
+
+function savePlan(alsoExport) {
+  const payload = currentPayload();
+  const summary = summaryOf(payload);
+  const name = SP.nameDraft.trim() || planAutoName(summary);
+  const notesEl = document.getElementById('sp-notes');
+  const notes = (notesEl ? notesEl.value : '').trim();
+  const { ok, ...record } = summary;
+  try {
+    const { replaced, entry } = PLANS.save(name, { payload, notes, summary: ok ? record : null });
+    SP.status = replaced ? `Plan "${spEsc(name)}" updated - it replaced the earlier save with that name.`
+                         : `Plan "${spEsc(name)}" saved.`;
+    if (alsoExport) SP.status += ` Downloaded as ${spEsc(exportPlanEntry(entry))}.`;
+    SP.warn = false;
+    document.getElementById('sp-report').hidden = true;
+  } catch (err) {
+    SP.status = spEsc(err.message);
+    SP.warn = true;
+  }
+}
+
+// Every control is set from the plan, then the page runs once. A plan without a View is shown at
+// Full, which is what the share link leaves the View out for.
+function loadSavedPlan(entry) {
+  const get = payloadGetter(entry.payload);
+  LINK_ORDINARY = null;
+  const L = applyParams(get, { complete: true });
+  // The two dollar boxes the page formats once at start-up, formatted the same way here.
+  for (const id of ['num-ss', 'num-cg-sale']) {
+    const el = document.getElementById(id);
+    el.value = DisplayHelpers.formatDollar(DisplayHelpers.parseShorthand(el.value) || 0);
+  }
+  applySsMax();
+  readCfg();
+  if (LINK_ORDINARY !== null) { setOrdinaryQuietly(LINK_ORDINARY); readCfg(); LINK_ORDINARY = null; }
+  if (get('vl') === null && get('zl') === null) { viewLo = 0; viewHi = fullHi(); }
+  updateZoomUI();
+  destroyCharts();
+  run();
+  SP.nameDraft = entry.name;
+  SP.notesDraft = entry.notes ? entry.notes : null;
+  reportLoad(entry, L.errors);
+}
+
+// The line under the header after a load. It compares the entries back with what was saved (an entry
+// a control could not hold is named) and the total tax with what was recorded, and says which of the
+// two a difference came from.
+function reportLoad(entry, errors) {
+  const after = currentPayload(), now = summaryOf(after);
+  const strip = p => Object.fromEntries(Object.entries(p).filter(([k]) => !VIEW_KEYS.includes(k)));
+  const want = strip(entry.payload), got = strip(after);
+  const adjusted = [...new Set([...Object.keys(want), ...Object.keys(got)])]
+    .filter(k => String(want[k] ?? '') !== String(got[k] ?? ''))
+    .map(k => {
+      const f = DETAIL_FIELDS.find(x => x.key === k);
+      const label = f && document.querySelector(`label[for="${f.id}"]`);
+      return label ? label.childNodes[0].textContent.trim() : (KEY_NAMES[k] || k);
+    });
+  const then = entry.summary, moved = movedTotal(entry, now);
+  const parts = [`Loaded <b>"${spEsc(entry.name)}"</b>.`];
+  if (!then || !now.ok) {
+    if (!then) parts.push('No figures were recorded with it, so there is nothing to compare.');
+  } else if (moved === null) {
+    parts.push(`Total tax <span class="amt">${fmtMoney(now.totalTax)}</span>, the same as when it was saved.`);
+  } else {
+    parts.push(`Total tax was <span class="amt">${fmtMoney(then.totalTax)}</span> when saved under ` +
+               `${spEsc(entry.appVersion || 'an earlier release')}; <span class="amt">${fmtMoney(moved)}</span> now.`);
+    if (!adjusted.length && !errors.length) parts.push(`Your entries are unchanged, so the difference is this release's ${now.year} tax figures.`);
+  }
+  if (adjusted.length) parts.push(`Changed to what this release can hold: ${spEsc(adjusted.join(', '))}.`);
+  if (errors.length) parts.push(`Not loaded: ${spEsc(errors.join('; '))}.`);
+  const r = document.getElementById('sp-report');
+  r.className = 'sp-report' + (moved !== null || adjusted.length || errors.length ? ' moved' : '');
+  r.innerHTML = `<div class="txt">${parts.join(' ')}</div>` +
+    '<button type="button" class="sp-x" data-act="report-x" aria-label="Dismiss">&times;</button>';
+  r.hidden = false;
+}
+
+async function importPlanFile(file) {
+  let text;
+  try { text = await file.text(); }
+  catch (e) { SP.pending = { message: `${file.name} could not be read. Nothing was loaded or saved.` }; SP.view = 'refused'; renderPlansPanel(); return; }
+  const r = PLANS.parseFile(text, file.name);
+  SP.pending = r.ok ? { entry: r.entry, warnings: r.warnings } : { message: r.message };
+  SP.view = r.ok ? 'import' : 'refused';
+  SP.open = true;
+  renderPlansPanel();
+}
+
+function commitImport() {
+  const { entry } = SP.pending;
+  if (PLANS.available()) {
+    try { PLANS.put(entry); }
+    catch (err) { SP.status = spEsc(err.message); SP.warn = true; SP.view = 'list'; return renderPlansPanel(); }
+  }
+  SP.pending = null;
+  togglePlansPanel(false);
+  loadSavedPlan(entry);
+}
+
+document.getElementById('sp-panel').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b) return;
+  const i = +b.dataset.i, row = SP.rows[i];
+  switch (b.dataset.act) {
+    case 'close':        return togglePlansPanel(false);
+    case 'back':         SP.view = 'list'; SP.detail = null; SP.pending = null; break;
+    case 'detail':       SP.view = 'detail'; SP.detail = i; SP.confirm = null; break;
+    case 'save':         savePlan(false); break;
+    case 'save-export':  savePlan(true); break;
+    case 'load':         if (!row) return; togglePlansPanel(false); return loadSavedPlan(row);
+    case 'delete':       SP.confirm = i; break;
+    case 'delete-no':    SP.confirm = null; break;
+    case 'delete-yes':
+      try { PLANS.remove(row.name); SP.status = `Deleted "${spEsc(row.name)}".`; SP.warn = false; }
+      catch (err) { SP.status = spEsc(err.message); SP.warn = true; }
+      SP.confirm = null;
+      break;
+    case 'export':
+      SP.status = `Downloaded ${spEsc(exportPlanEntry(row))}. It holds your income figures; keep it somewhere private.`;
+      SP.warn = false; SP.view = 'list';
+      break;
+    case 'export-current': {
+      const payload = currentPayload(), summary = summaryOf(payload), { ok, ...record } = summary;
+      const name = planAutoName(summary);
+      SP.status = `Downloaded ${spEsc(exportPlanEntry(PLANS.makeEntry(name, { payload, summary: ok ? record : null })))}. ` +
+                  'It holds your income figures; keep it somewhere private.';
+      SP.warn = false;
+      break;
+    }
+    case 'import':       document.getElementById('sp-file').click(); return;
+    case 'import-yes':   return commitImport();
+    case 'import-no':    SP.pending = null; SP.view = 'list'; SP.status = 'Import canceled.'; SP.warn = true; break;
+    case 'refill': {
+      const el = document.getElementById('sp-notes'), lines = (el ? el.value : '').split('\n');
+      if (/^Federal \d.*bracket/.test(lines[0])) lines[0] = bracketLine(summaryOf(currentPayload()));
+      else lines.unshift(bracketLine(summaryOf(currentPayload())));
+      SP.notesDraft = lines.join('\n');
+      break;
+    }
+    default: return;
+  }
+  renderPlansPanel();
+});
+
+document.getElementById('sp-report').addEventListener('click', e => {
+  if (e.target.closest('[data-act="report-x"]')) document.getElementById('sp-report').hidden = true;
+});
+
+// Typed text survives a redraw. The first keystroke in Notes stops the brackets line following the
+// entries, and the hint under the box changes in place: redrawing here would swap the Save button
+// out from under a click that blurred the box.
+document.getElementById('sp-panel').addEventListener('input', e => {
+  if (e.target.id === 'sp-name') SP.nameDraft = e.target.value;
+  if (e.target.id === 'sp-notes') {
+    if (SP.notesDraft === null) document.querySelector('#sp-panel .sp-prefill').innerHTML = EDITED_HINT;
+    SP.notesDraft = e.target.value;
+  }
+});
+
+document.getElementById('sp-file').addEventListener('change', e => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';   // the same file can be chosen again
+  if (file) importPlanFile(file);
+});
+
+// A click anywhere else closes the panel, as the Share panel does. A click that redrew the panel has
+// a target no longer in the page, and Import's click on the hidden file input is the panel's own;
+// neither is "elsewhere".
+document.addEventListener('click', e => {
+  if (!SP.open || !e.target.isConnected || e.target.id === 'sp-file') return;
+  if (document.getElementById('sp-panel').contains(e.target) || e.target.closest('#sp-open')) return;
+  togglePlansPanel(false);
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && SP.open) togglePlansPanel(false); });
+
 // Copy table and Save image are shown only with ?nerdknob.
 if (new URLSearchParams(window.location.search).has('nerdknob'))
   document.querySelectorAll('.nerd-only').forEach(b => { b.hidden = false; });
@@ -2209,11 +2691,17 @@ function openInTaxPlanner() {
 function loadFromURL() {
   const p = new URLSearchParams(window.location.search);
   if (!p.size) return;
-  // What each key means is taxcalc_core.js, the same reading the command-line tool does, already
-  // snapped to what each control can hold. This function only puts the values into the controls.
-  const L = TaxCalc.configFromParams(k => p.get(k));
-  const c = L.cfg, has = k => L.given.has(k);
-  LINK_ERRORS.push(...L.errors);
+  LINK_ERRORS.push(...applyParams(k => p.get(k)).errors);
+}
+
+// Puts link keys into the controls. What each key means is taxcalc_core.js, the same reading the
+// command-line tool does, already snapped to what each control can hold. A link sets only the keys it
+// carries, over the page's defaults. `complete` (a saved plan, loaded over whatever is on screen) sets
+// EVERY control, a key it does not carry going back to its default, because the share link leaves out
+// what is at its default. Returns configFromParams's result, errors included.
+function applyParams(get, { complete = false } = {}) {
+  const L = TaxCalc.configFromParams(get);
+  const c = L.cfg, has = k => complete || L.given.has(k);
   const $ = id => document.getElementById(id);
 
   if (has('st')) {
@@ -2238,22 +2726,24 @@ function loadFromURL() {
     $('ss-val').textContent = '$'+v.toLocaleString();
   }
 
-  // Income details: every field in the table, and the section opens when a link carries any of them.
+  // Income details: every field in the table, and the section opens when the link names any of them,
+  // even as 0. A complete load clears the ones it does not name without opening the section for them.
+  const named = k => L.given.has(k);
   for (const f of DETAIL_FIELDS) {
     if (!has(f.key)) continue;
     const v = c[f.cfg];
     $(f.id).value = v === 0 ? '' : fmtMoney(v);
-    $('details-income').open = true;   // named in the link, so show it, even as 0
+    if (named(f.key)) $('details-income').open = true;
   }
   if (has('rw')) {
     $('chk-retinc-swept').checked = c.retirementSwept;
-    $('details-income').open = true;
+    if (named('rw')) $('details-income').open = true;
   }
   if (has('ra')) {
     $('chk-autotax').checked = c.autoTax;
-    $('details-income').open = true;
+    if (named('ra')) $('details-income').open = true;
   }
-  if (has('pm') && c.prevMagi !== null) $('num-prevmagi').value = DisplayHelpers.formatDollar(c.prevMagi);
+  if (has('pm')) $('num-prevmagi').value = c.prevMagi === null ? '' : DisplayHelpers.formatDollar(c.prevMagi);
   if (has('cs')) {
     const v = c.cgSale;
     $('num-cg-sale').value = v;
@@ -2273,23 +2763,26 @@ function loadFromURL() {
   // always applied, sunsetting by tax year rather than by switch.
   if (L.pin !== null) LINK_ORDINARY = L.pin;   // may be negative
   // The View is total income (vl, vh). Links from before that carried it as ordinary income (zl, zh,
-  // zs), so those are shifted by the fixed income the same link supplies.
-  if (p.has('vl') && p.has('vh')) {
-    viewLo = +p.get('vl');
-    viewHi = +p.get('vh');
-  } else if (p.has('zl') && p.has('zh')) {
-    const cs = p.has('cs') ? +p.get('cs') : 0, cb = p.has('cb') ? +p.get('cb') : 60;
-    const F = (p.has('ss') ? +p.get('ss') : 0) + (cs > 0 ? cs * (1 - cb / 100) : 0);
-    viewLo = +p.get('zl') + F;
-    viewHi = +p.get('zh') + F;
+  // zs), so those are shifted by the fixed income the same link supplies. A link without either keeps
+  // the page's View; the share link leaves them out at Full, which is what loadSavedPlan restores.
+  const got = k => get(k) !== null && get(k) !== undefined;
+  if (got('vl') && got('vh')) {
+    viewLo = +get('vl');
+    viewHi = +get('vh');
+  } else if (got('zl') && got('zh')) {
+    const cs = got('cs') ? +get('cs') : 0, cb = got('cb') ? +get('cb') : 60;
+    const F = (got('ss') ? +get('ss') : 0) + (cs > 0 ? cs * (1 - cb / 100) : 0);
+    viewLo = +get('zl') + F;
+    viewHi = +get('zh') + F;
   }
   // `az` (AutoZoom) from older links is ignored: there is no AutoZoom.
-  if (p.get('ex') === '1') {
-    explainOn = true;
-    $('btn-explain').classList.add('active');
+  if (complete || get('ex') === '1') {
+    explainOn = get('ex') === '1';
+    $('btn-explain').classList.toggle('active', explainOn);
   }
   updCgBasis();
   syncRangeSlider();
+  return L;
 }
 </script>
 
@@ -2297,7 +2790,7 @@ function loadFromURL() {
 <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal-box">
     <div class="modal-hdr">
-      <h2>Income Tax Planner v2.15 — How to Use</h2>
+      <h2>Income Tax Planner v2.16 — How to Use</h2>
       <button class="modal-close" onclick="closeModal()">&#x2715;</button>
     </div>
 
@@ -2308,6 +2801,11 @@ function loadFromURL() {
     <details class="modal-section">
       <summary>Change Log</summary>
       <dl class="modal-kv">
+        <dt>v2.16</dt>
+        <dd><ul>
+          <li>New <strong>Save/Load</strong> button beside Share. Save a plan under a name, with notes that start with its federal bracket, IRMAA tiers and state bracket; each saved plan shows its gross income, AGI and total tax. Load puts every entry back and says whether the total tax still matches what was saved. Export and Import move a plan to a file and back. Plans stay in this browser on this device.</li>
+          <li>The buttons at the top wrap onto a second line on a narrow screen instead of running off the edge.</li>
+        </ul></dd>
         <dt>v2.15</dt>
         <dd><ul>
           <li>New Taxable state or local tax refund entry, under Income details. It counts as federal income, so it can raise how much of your Social Security is taxed and shrink the senior deduction, and it stays out of your state income, as your state does not tax its own refund. Before, a refund entered as Other income was taxed by the state too.</li>
@@ -2421,6 +2919,13 @@ function loadFromURL() {
         <li><strong>IRMAA tier lines</strong> — one dashed line per surcharge tier, drawn where MAGI reaches that tier and labeled with the threshold (for example T1 $241k). The thresholds are the ones that will apply two years from the selected year, inflated to that year. A tier outside the visible range is an arrow marker at the nearest edge. Click an entry in the IRMAA legend row under the chart to hide or show its line. The info panel gives the tier at a pinned income, its surcharge, the MAGI room before the next tier and what crossing it adds, all in purple because they are a future cost.</li>
         <li><strong>Top axis</strong> — shows Fed income (ordinary + SS + CG) at each major ordinary income mark. When SS and CG are zero it matches the bottom axis.</li>
       </ul>
+    </div>
+
+    <div class="modal-section">
+      <h3>Save/Load button</h3>
+      <p style="margin-bottom:.6rem"><strong>Save/Load</strong> keeps named plans in this browser. Type a name (or leave it blank, and the plan is named for its year, state and filing status) and press <strong>Save</strong>; saving under a name already in the list replaces that plan, and the panel says so. The Notes box starts with one line for the plan as it stands: the federal bracket, the Medicare (IRMAA) tier in force this year if you entered the MAGI from two years earlier, the tier this year's income sets two years out, and the state bracket. That line follows your entries until you type in the box; add your own words below it.</p>
+      <p style="margin-bottom:.6rem">Each saved plan shows its gross income, AGI and total tax. Press a plan's name for its notes and its figures as saved beside the same entries' figures today. <strong>Load</strong> puts every entry back, and the line under the header says whether the total tax still matches. If a later release has changed the tax figures for that year, it gives both totals and says your entries are unchanged. <strong>Export</strong> downloads a plan as a file, and <strong>Import</strong> opens one, showing it before anything is loaded or saved. <strong>Save &amp; Export</strong> does both in one step.</p>
+      <p>Saved plans stay in this browser on this device. An exported file holds your income figures, so keep it somewhere private. In a private window, or where this site cannot keep data, plans cannot be saved, but Export and Import still work.</p>
     </div>
 
     <div class="modal-section">

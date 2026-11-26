@@ -5886,7 +5886,7 @@ which is the e-ORP-shaped idea. Its gate `P103c1` is PROVISIONALLY FAILING: only
 plan-years land within \$1,000 of an edge, and the first version of that measurement was wrong, so the
 next step is counting binding years per family to confirm 6 of 33 generalizes before anything is built.
 
-## 2026-11-26 - P139 and P140 proposed; P140a built (branch `worktrees/income-tax-planner-save-years-7c03f2`, uncommitted)
+## 2026-11-26 - P139 and P140 proposed; P140a built (branch `worktrees/income-tax-planner-save-years-7c03f2`, commit `b053c35`)
 
 **Two phases written from the user's requests**: `P139` saved plans for the Income Tax Planner (the
 payload is the share-link parameter set, so Share, Save, Export and `taxcalc.js` share one reader), and
@@ -5910,3 +5910,22 @@ five variants against `HEAD`'s engine - 95 of 95 identical. Under a 2027 clock a
 regression test, and a pin that IRMAA, QCD, FPL and LTCG tables share the federal year); page suite 540;
 pins, comment-history, architecture and markdown checks clean. Cache tokens `111ef8` on the changed
 scripts; the `<title>` stays at 11.1d9d with no changelog entry, since nothing is visible today.
+Committed as `b053c35` at the user's request; not pushed.
+
+**Planning pass (`/plan`), same day.** Session catch-up found nothing unsynced. The day's research went
+to `findings.md` under "Tax tables and the year" - the web-sourced 2027 figures belong there rather than
+in `task_plan.md` - with a new rule under "On engine code": an index is anchored at its figures' year,
+never the wall clock. Two user decisions recorded in `P140`: **`P140b` is next**, and **a prior year
+prices state tax only where a table for that year exists**, never deflated. `P140b` is now six steps
+(`b1` data shape through `b6` the gate), each with what done looks like.
+
+**`P140b1` built, uncommitted.** The 2026 federal figures moved into `FEDERAL_BY_YEAR` in
+`taxengine.js`; `TAXData.FEDERAL`'s status tables and capital-gains tables now reference that entry,
+so there is still one copy of each figure and no reader changed. One correction on the way: the plan
+and findings said `nr` had no reader, and `nominalRateAtLimit` reads it - the grep behind the claim was
+cut off by its result limit. Both records corrected, a measurement rule added, and `nr` kept typed with
+a test that re-derives it. Two engine tests added (31, 31b), each shown to fail on a mutated table.
+Evidence: 95 of 95 plan-bank runs byte-identical to `b053c35` plus the 2027-clock set; suites
+545 / 82 / 62 / 15 / 50, pins matched, page suite 540, the Income Tax Planner's badge 82 of 82 on the
+fresh copy. Tokens `111ef9` on `taxengine.js` (four pages), `taxengine.tests.js`, `optimizer_tests.js`
+and the tier-2 loader.

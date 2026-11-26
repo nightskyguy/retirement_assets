@@ -14,6 +14,73 @@ const IRMAA_SGL_BRACKETS = [
 	{ l: Infinity, monthlyCost: 487.00 + 91.00, tier: "Tier 5" },
 ];
 
+// The federal figures a Revenue Procedure re-issues every year, one entry per tax year, exposed as
+// TAXData.FEDERAL_BY_YEAR. An entry holds only what is indexed: the standard deduction and its 65+
+// add-on, the ordinary brackets and the capital-gains brackets. Figures set by statute and never
+// indexed (NIIT thresholds, the capital-loss limit, the safe-harbor AGI) stay in TAXData.FEDERAL, once.
+//
+// TAXData.FEDERAL.MFJ / .SGL and TAXData.FEDERAL.CAPITAL_GAINS.MFJ / .SGL are the SAME objects as the
+// entry for TAXData.FEDERAL.YEAR, the anchor year - not copies. An entry for another year sits beside
+// the anchor without replacing it, because checkStateSources() measures every state against
+// FEDERAL.YEAR. Out here rather than inside TAXData for the reason IRMAA_SGL_BRACKETS is.
+//
+// Ordinary bracket rows: `l` is the top of the band taxed at `r`, and the last row's is Infinity. `nr`
+// is the average rate on taxable income of exactly `l` (the last row's is its own `r`), which
+// nominalRateAtLimit reads. It is typed, not computed, and taxengine.tests.js re-derives every one from
+// the rows above it, so a new year's typing is checked.
+const FEDERAL_BY_YEAR = {
+	2026: {
+		YEAR: 2026,
+		source: { status: 'published', url: 'https://www.irs.gov/pub/irs-drop/rp-25-32.pdf',
+		          doc: 'IRS Rev. Proc. 2025-32, the 2026 inflation adjustments with the P.L. 119-21 amendments' },
+		MFJ: {
+			std: 32200,
+			age: 65,
+			stdbump: 1650,
+			brackets: [
+				{ l: 24800, r: 0.10, nr: 0.1000 },
+				{ l: 100800, r: 0.12, nr: 0.1151 },
+				{ l: 211400, r: 0.22, nr: 0.1700 },
+				{ l: 403550, r: 0.24, nr: 0.2033 },
+				{ l: 512450, r: 0.32, nr: 0.2281 },
+				{ l: 768700, r: 0.35, nr: 0.2687 },
+				{ l: Infinity, r: 0.37, nr: 0.37 }
+			]
+		},
+		SGL: {
+			std: 16100,
+			age: 65,
+			stdbump: 2050,
+			brackets: [
+				{ l: 12400, r: 0.10, nr: 0.1000 },
+				{ l: 50400, r: 0.12, nr: 0.1151 },
+				{ l: 105700, r: 0.22, nr: 0.1700 },
+				{ l: 201775, r: 0.24, nr: 0.2033 },
+				{ l: 256225, r: 0.32, nr: 0.2281 },
+				{ l: 640600, r: 0.35, nr: 0.3012 },
+				{ l: Infinity, r: 0.37, nr: 0.37 }
+			]
+		},
+		// Ceilings on TAXABLE income; see TAXData.FEDERAL.CAPITAL_GAINS for how they meet NIIT.
+		CAPITAL_GAINS: {
+			MFJ: {
+				brackets: [
+					{ l: 98900, r: 0.00 },      // 0%, always below the NIIT threshold, so a true 0%
+					{ l: 613700, r: 0.15 },     // 15% up to ~$217,800 taxable, 18.8% above it
+					{ l: Infinity, r: 0.20 }    // 20% + 3.8% NIIT = 23.8%, always
+				]
+			},
+			SGL: {
+				brackets: [
+					{ l: 49450, r: 0.00 },      // 0%, always below the NIIT threshold, so a true 0%
+					{ l: 545500, r: 0.15 },     // 15% up to ~$183,900 taxable, 18.8% above it
+					{ l: Infinity, r: 0.20 }    // 20% + 3.8% NIIT = 23.8%, always
+				]
+			}
+		},
+	},
+};
+
 var TAXData = {
 	FEDERAL: {
 		YEAR: 2026,  // Official IRS Revenue Procedure 2025-32
@@ -67,49 +134,13 @@ var TAXData = {
 			// of 0.387 (MFJ) / 0.356 (SGL), which needs about 94 years at optimizer_core.js's
 			// CPI_INDEX_FLOOR of -1%/yr. Not reachable by any plan this tool can build. Pinned by
 			// TEST CASE 6f.
-			MFJ: {
-				brackets: [
-					{ l: 98900, r: 0.00 },      // 0%, always below the NIIT threshold, so a true 0%
-					{ l: 613700, r: 0.15 },     // 15% up to ~$217,800 taxable, 18.8% above it
-					{ l: Infinity, r: 0.20 }    // 20% + 3.8% NIIT = 23.8%, always
-				]
-			},
-			SGL: {
-				brackets: [
-					{ l: 49450, r: 0.00 },      // 0%, always below the NIIT threshold, so a true 0%
-					{ l: 545500, r: 0.15 },     // 15% up to ~$183,900 taxable, 18.8% above it
-					{ l: Infinity, r: 0.20 }    // 20% + 3.8% NIIT = 23.8%, always
-				]
-			}
+			MFJ: FEDERAL_BY_YEAR[2026].CAPITAL_GAINS.MFJ,
+			SGL: FEDERAL_BY_YEAR[2026].CAPITAL_GAINS.SGL,
 		},
-		MFJ: {
-			std: 32200, 
-			age: 65,
-			stdbump: 1650,
-			brackets: [ 
-				{ l: 24800, r: 0.10, nr: 0.1000 },
-				{ l: 100800, r: 0.12, nr: 0.1151 },
-				{ l: 211400, r: 0.22, nr: 0.1700 },
-				{ l: 403550, r: 0.24, nr: 0.2033 },
-				{ l: 512450, r: 0.32, nr: 0.2281 },
-				{ l: 768700, r: 0.35, nr: 0.2687 },
-				{ l: Infinity, r: 0.37, nr: 0.37 }
-			]
-		},
-		SGL: {
-			std: 16100,
-			age: 65,
-			stdbump: 2050,
-			brackets: [
-				{ l: 12400, r: 0.10, nr: 0.1000 },
-				{ l: 50400, r: 0.12, nr: 0.1151 },
-				{ l: 105700, r: 0.22, nr: 0.1700 },
-				{ l: 201775, r: 0.24, nr: 0.2033 },
-				{ l: 256225, r: 0.32, nr: 0.2281 },
-				{ l: 640600, r: 0.35, nr: 0.3012 },
-				{ l: Infinity, r: 0.37, nr: 0.37 }
-			]
-		}
+		// The anchor year's entry, by reference (see FEDERAL_BY_YEAR). The index must match YEAR above;
+		// taxengine.tests.js pins it.
+		MFJ: FEDERAL_BY_YEAR[2026].MFJ,
+		SGL: FEDERAL_BY_YEAR[2026].SGL,
 	},
 		
 	SOCIALSECURITY: {
@@ -1390,6 +1421,10 @@ var TAXData = {
 
 
 }; // TAXdata
+
+// Every year's federal entry, the anchor year's included (see FEDERAL_BY_YEAR above). A top-level
+// key, not a state: everything that lists states filters on STATE or a two-letter key.
+TAXData.FEDERAL_BY_YEAR = FEDERAL_BY_YEAR;
 
 // No-income-tax states, each as its own dropdown entry (Object.keys(TAXData).length===2 drives
 // the dropdown — see generateStateOptions() in optimizer_ui.js). Shared shape via spread, not by reference,

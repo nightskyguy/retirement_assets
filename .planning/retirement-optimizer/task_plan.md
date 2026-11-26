@@ -85,7 +85,7 @@ The plan bank is **19 households**, and #244 added none: correcting the IRMAA la
 built in `3c30911`. Measured with `plans.list()` on 2026-09-25, after the 2026-09-24 entry in
 `progress.md` said 20 and said the household had been restored. Both halves of that were wrong.
 
-## P140: tax tables keyed by year - the published 2027 federal figures, and the prior year  *(2026-11-26, user-raised. PRIORITY UNASSIGNED. `P140a` BUILT the same day, uncommitted, must merge before 2027-01-01; `b`-`g` PROPOSAL)*
+## P140: tax tables keyed by year - the published 2027 federal figures, and the prior year  *(2026-11-26, user-raised. PRIORITY UNASSIGNED. `P140a` COMMITTED `b053c35`, must merge before 2027-01-01; `P140b` NEXT by the user's choice; `c`-`g` PROPOSAL)*
 
 **The user's request:** "2027 Federal tax figures are (I believe) now available - propose a plan for
 handling real rather than inflated figures for next year - perhaps a parallel table indexed by the
@@ -145,8 +145,8 @@ low and every household is priced slightly high.
   what a Rev. Proc. indexes: `std`, `stdbump`, the ordinary brackets and the capital-gains brackets,
   each entry with its `YEAR` and a `source` (Rev. Proc. number and date). Figures that never index
   (NIIT thresholds, the $3,000 loss limit, the safe-harbor AGI, the Social Security thresholds) stay
-  once, in `FEDERAL`. Every entry ends at the `{ l: Infinity }` row. The `nr` column has no reader
-  by that name; derive it or drop it rather than retype it per year.
+  once, in `FEDERAL`. Every entry ends at the `{ l: Infinity }` row. The `nr` column IS read
+  (`nominalRateAtLimit`, the average rate at a band's top); it stays typed, and a test re-derives it.
 - **`federalFor(taxYear)`**: a published year gets its own table at factor 1; a later year gets the
   newest published table indexed from ITS year; a year before the earliest table is REFUSED, never
   deflated - a prior-year return priced on deflated current law is wrong wherever the law changed.
@@ -169,8 +169,8 @@ five suites (PR #234's byte-identity harness is the template). Only then does th
 its own commit, with the difference it makes measured. A refactor that moves numbers and a data change
 that moves numbers never share a diff.
 
-- [x] **P140a the wall-clock anchor, Optimizer and Projection.** BUILT 2026-11-26, uncommitted; MUST
-  MERGE BEFORE 2027-01-01. `simulate` now carries `sim.taxIndex`, the statutory clock anchored at
+- [x] **P140a the wall-clock anchor, Optimizer and Projection.** BUILT 2026-11-26, committed `b053c35`,
+  not pushed; MUST MERGE BEFORE 2027-01-01. `simulate` now carries `sim.taxIndex`, the statutory clock anchored at
   `TAXData.FEDERAL.YEAR` and stepped by the same `cpi_t` as `cpiRate`; the 16 tax-table call sites
   (brackets, deductions, LTCG, IRMAA thresholds, FPL, QCD, `taxArgs`) read it, and `cpiRate` keeps the
   amounts typed in today's dollars (Social Security, pension, IRA goal, flat advisor fee). New log key
@@ -184,8 +184,42 @@ that moves numbers never share a diff.
   545 / 80 / 62 / 15 / 50, page suite 540. No changelog entry and no title bump: nothing a user can see
   today. If it merges AFTER 1 January, users will have seen 2027 priced on 2026 tables and it then
   needs an entry.
-- [ ] **P140b the index and the resolver.** `FEDERAL_BY_YEAR` with the 2026 entry only, `federalFor`,
-  the index, every caller converted. Gate: byte-identical, above.
+- [ ] **P140b the index and the resolver. NEXT (user, 2026-11-26).** `FEDERAL_BY_YEAR` with the 2026
+  entry only, `federalFor`, the index, every caller converted. Gate: byte-identical, above. Research it
+  builds on: `findings.md`, "Tax tables and the year". Steps, each with what done looks like:
+  - [x] **b1 data shape.** BUILT 2026-11-26, uncommitted. `FEDERAL_BY_YEAR` in `taxengine.js` (a
+    const above `TAXData`, like `IRMAA_SGL_BRACKETS`, exposed as `TAXData.FEDERAL_BY_YEAR`) holds the
+    2026 entry: `YEAR`, a `source` (Rev. Proc. 2025-32), `MFJ` / `SGL` with `std`, `age`, `stdbump`
+    and the brackets, and `CAPITAL_GAINS.MFJ` / `.SGL`. `FEDERAL.MFJ`, `.SGL` and
+    `.CAPITAL_GAINS.MFJ` / `.SGL` reference it - one copy of every figure, key order unchanged.
+    `nr` was NOT dead, as first written here: `nominalRateAtLimit` reads it. Deriving it would move
+    the 4th decimal and break identity, so it stays typed and TEST CASE 31 re-derives every value to
+    0.00005. TEST CASE 31 (sourced, rising, `Infinity`-terminated, `nr` adds up) and 31b (the aliases
+    are the anchor entry's objects) both fail on a mistyped `nr` and on a copied table. 95 of 95
+    plan-bank runs byte-identical to `b053c35`, and the 2027-clock set too. Suites 545 / 82 / 62 / 15 /
+    50, page suite 540, the planner's in-page badge 82 of 82. Tokens `111ef9`.
+  - [ ] **b2 resolver.** `federalTableFor(taxYear)` returns `{ table, year }`: the exact year if
+    published, else the newest table before it; `null` before the earliest. Done: tests for all three.
+  - [ ] **b3 the index object.** One shape everywhere, `{ year, from(tableYear) }`, the factor from a
+    table's year to the tax year. Optimizer: `sim.taxIndex` divided by the factor recorded for
+    `tableYear` - the sim records its cumulative factor per calendar year as it passes, and a year
+    before the plan starts is the deterministic `(1 + cpi)` power, so a Monte Carlo path stays exact.
+    Income Tax Planner, Projection and `irmaa_and_rmds.html`: the closed form. Done: a unit test that
+    `from(year)` is 1 and `from(year - k)` is the path product over those k years.
+  - [ ] **b4 engine reads.** `calculateTaxes` and the eleven helpers in `findings.md`'s classification
+    take the index object where they take a bare factor today. A federal lookup resolves its table by
+    `taxYear` and scales by `from(table.YEAR)`; a state table, IRMAA, QCD and the FPL by `from(their
+    YEAR)`. A bare number passed where the object belongs THROWS, so a missed caller fails loudly
+    rather than pricing on the wrong year. Done: no helper reads `TAXData.FEDERAL[status]` directly.
+  - [ ] **b5 callers.** `optimizer_core.js` (`taxArgs` and the 16 `sim.taxIndex` sites), the UI readers
+    of `-taxIndex`, `taxcalc_core.js`, `Retirement_Projection.html`, `standalone/irmaa_and_rmds.html`,
+    the planner page and the suites. Done: grep finds no bare factor handed to an engine function.
+  - [ ] **b6 gate.** Byte-identical to `b053c35`: the 19 households x 5 variants plus a 2027-clock
+    variant (the scratch `identity.js` harness, rebuilt in the repo's scratch space); the planner's
+    results over 2026-2035 from `taxcalc.js`; the Projection page's rows read in the browser before and
+    after. All five suites, the page suite, then a timing check on a sweep and on 100 Monte Carlo
+    paths (alternate runs, compare minima), because the object adds a call per lookup inside the
+    ceiling searches and the audience runs old laptops.
 - [ ] **P140c the 2027 data.** Rev. Proc. 2026-35 read from irs.gov, every figure, both statuses. Add
   ONLY what is published, check each: the CMS 2027 IRMAA ladder and Part B / D premiums (CMS usually
   publishes mid-November; same year-keyed shape, own entry), the 2027 QCD limit (an IRS notice). The
@@ -201,7 +235,8 @@ that moves numbers never share a diff.
   and the $40,000 SALT cap already begin in 2025 in `TAXData.OBBBA`. **The cheap half first:** from
   January, "last year" is 2026, already the anchor table, so the case most people want - last year's
   return in February - needs only `P140d`'s range to reach below the calendar year. 2025 itself is for
-  amended returns and for IRMAA (2025 income sets the 2027 surcharge). State tax: user decision below.
+  amended returns and for IRMAA (2025 income sets the 2027 surcharge). State tax: decided below,
+  federal plus the states that have a table for that year.
 - [ ] **P140f tests**, invariants and not engine-output literals: a published year resolves to its own
   table at factor 1; the year after the newest resolves to it indexed one year; a year before the
   earliest is refused; every entry has a source, a `YEAR`, ascending floors and the `Infinity` row;
@@ -213,16 +248,17 @@ that moves numbers never share a diff.
   about $400 in 2026. Untrue since `P64d`: `calcAt` passes `taxYear` and the engine indexes both.
   Fix it here or sooner.
 
-**DECISION NEEDED (user): state tax for a prior year.** No state table here is older than 2026, except
-the California 2025 figures recorded in `research/INCOME_TAX_PLANNER_INPUTS.md`.
-1. **Recommended:** federal for the prior year; state only where a table for that year exists,
-   otherwise the state line says there is no 2025 table and the total says it leaves state out.
-2. Deflate 2026 state law to 2025, labeled an estimate. Wrong for every state that changed rates or
-   brackets for 2026, on a figure someone may copy onto a return.
-3. Source 2025 tables for every taxing state. Weeks of work for a year that stops mattering in April.
+**DECIDED (user, 2026-11-26): state tax for a prior year is priced only where a table for that year
+exists.** The prior year prices federal tax in full; a state with no table for that year shows a line
+saying so, and the total says it leaves state tax out. Never deflated from current law. No state table
+here is older than 2026 today, except California's 2025 figures in
+`research/INCOME_TAX_PLANNER_INPUTS.md`, which `P140e` can turn into the first one. Rejected: deflating
+2026 law (wrong wherever a state changed for 2026, on a figure someone may copy onto a return), and
+sourcing every state's 2025 table (weeks of work for a year that stops mattering in April).
 
-**Order:** `P140a` before 2027-01-01; `P139` any time, it does not touch the engine; then
-`P140b` -> `c` -> `d` -> `e`, with `f` and `g` riding each.
+**Order (user, 2026-11-26):** `P140a` done (`b053c35`), and it must reach `main` before 2027-01-01;
+`P140b` NEXT; then `c` -> `d` -> `e`, with `f` and `g` riding each. `P139` any time, it does not touch
+the engine.
 
 ## P139: saved plans for the Income Tax Planner  *(2026-11-26, user-raised. PRIORITY UNASSIGNED. PROPOSAL, nothing in the tree)*
 

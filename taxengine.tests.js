@@ -1917,6 +1917,57 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 		}
 	});
 
+	// ── TEST CASE 31: the federal tables, one entry per tax year ──────────────────────────────────
+	// The checks a new year's typing needs: a source, the year it claims, schedules that rise and
+	// end at Infinity, and every `nr` re-derived from the rows beneath it (nominalRateAtLimit reads
+	// `nr` as the average rate at the band's top, so a mistyped one moves a strategy's ceiling).
+	test('TEST CASE 31: every FEDERAL_BY_YEAR entry is a sourced, well-formed schedule with nr that adds up', () => {
+		const byYear = _engine().TAXData.FEDERAL_BY_YEAR;
+		const years = Object.keys(byYear);
+		if (!years.length) throw new Error('FEDERAL_BY_YEAR holds no year');
+		const ladder = (where, brks) => {
+			assertEqual(brks[brks.length - 1].l, Infinity, `${where}: ends at Infinity`);
+			brks.forEach((b, i) => {
+				if (!(b.r >= 0 && b.r < 0.5)) throw new Error(`${where}: rate ${b.r} is not a fraction`);
+				if (i > 0 && !(b.l > brks[i - 1].l)) throw new Error(`${where}: ${b.l} does not rise above ${brks[i - 1].l}`);
+			});
+		};
+		for (const y of years) {
+			const e = byYear[y];
+			assertEqual(e.YEAR, Number(y), `FEDERAL_BY_YEAR[${y}].YEAR is its key`);
+			if (!['published', 'derived', 'pending', 'unverified'].includes(e.source?.status))
+				throw new Error(`${y}: source.status '${e.source?.status}' is not a source status`);
+			if (!(typeof e.source.doc === 'string' && e.source.doc.trim())) throw new Error(`${y}: no source.doc`);
+			for (const status of ['MFJ', 'SGL']) {
+				const t = e[status];
+				if (!(t.std > 0 && t.stdbump > 0 && t.age > 0)) throw new Error(`${y} ${status}: std, stdbump and age must be positive`);
+				ladder(`${y} ${status}`, t.brackets);
+				let tax = 0, floor = 0;
+				for (const b of t.brackets) {
+					if (!isFinite(b.l)) { assertEqual(b.nr, b.r, `${y} ${status}: the top row's nr is its own rate`); break; }
+					tax += (b.l - floor) * b.r;
+					floor = b.l;
+					const derived = tax / b.l;
+					if (!(Math.abs(b.nr - derived) <= 0.00005))
+						throw new Error(`${y} ${status}: nr ${b.nr} at ${b.l}, the rows give ${derived.toFixed(5)}`);
+				}
+				ladder(`${y} CAPITAL_GAINS ${status}`, e.CAPITAL_GAINS[status].brackets);
+			}
+		}
+	});
+
+	test('TEST CASE 31b: TAXData.FEDERAL\'s figures ARE the anchor year\'s entry, not a copy of it', () => {
+		const { FEDERAL, FEDERAL_BY_YEAR } = _engine().TAXData;
+		const anchor = FEDERAL_BY_YEAR[FEDERAL.YEAR];
+		if (!anchor) throw new Error(`FEDERAL_BY_YEAR has no entry for the anchor year ${FEDERAL.YEAR}`);
+		for (const status of ['MFJ', 'SGL']) {
+			assertEqual(FEDERAL[status] === anchor[status], true, `FEDERAL.${status} is the ${FEDERAL.YEAR} entry's object`);
+			assertEqual(FEDERAL.CAPITAL_GAINS[status] === anchor.CAPITAL_GAINS[status], true,
+				`FEDERAL.CAPITAL_GAINS.${status} is the ${FEDERAL.YEAR} entry's object`);
+		}
+		assertEqual(FEDERAL.CAPITAL_GAINS.YEAR, FEDERAL.YEAR, 'the capital-gains breakpoints are the anchor year\'s');
+	});
+
 // ── Runner ───────────────────────────────────────────────────────────────────────────────────
 // Returns the counts instead of setting process.exitCode, so the browser can render them.
 // ============================================================================

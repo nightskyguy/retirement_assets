@@ -147,6 +147,12 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
 ` therefore silently merged two entries into one physical line and
   pushed the marker off 30 while `sed -n 30p` still looked right. **Write the file's own newline, and
   check the marker with the same tool the hook uses.** (2026-09-08)
+- *An index is anchored at the year its figures are stated in, never at the wall clock.* The
+  Optimizer indexed every tax table from `todayYear`, which was right only while today was the tables'
+  year: from 2027-01-01 each plan would have priced its first year on the 2026 tables unindexed and
+  stayed a year behind. Medicare dollars had already been fixed for exactly this, and the tables were
+  not. `sim.taxIndex` carries TAXData figures, `cpiRate` only amounts typed in today's dollars; pinned
+  by the wall-clock regression test in `optimizer_core.tests.js`. ("Tax tables and the year")
 
 **On the browser, the build and the worker**
 
@@ -198,6 +204,10 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
   way to find it.** ("which_plan")
 **On measurement**
 
+- *A search cut short by a result limit is not a negative.* A grep for readers of `nr` returned only
+  the table's own rows because the output limit stopped it there, and "no reader" went into the plan.
+  `nominalRateAtLimit` reads it three times. **Before writing "nothing reads X", run the search with no
+  limit, and exclude the defining file.** ("Tax tables and the year", 2026-11-26)
 - *A coarse probe grid invents answers, and a drained IRA is not the absence of an opportunity.*
   Both traps were caught only by cross-validating against brute force. Kept live above under "Two
   traps this work fell into".
@@ -226,6 +236,60 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
   where the user had chosen a cap to stay under. A substitute has to be chosen on MEANING. Pinned by
   `anUnavailableCapFallsBackToTheDefaultAndSaysSo`, which asserts the landing spot is not a federal
   bracket rather than asserting a value, so a re-sort cannot quietly restore it. ("P95")
+
+## Tax tables and the year: the 2027 figures are out, and the index read the wall clock (2026-11-26, P140, P139)
+
+**The 2027 federal figures: IRS Rev. Proc. 2026-35, released 2026-11-05.** Read so far only through
+web search results (KPMG's tax news flash, Financial Planning, CPA Practice Advisor), which agree on:
+standard deduction $33,200 joint, $16,600 single, $24,925 head of household; the 65+ add-on $1,700
+per married person, $2,100 unmarried; the seven rates unchanged; thresholds up about 3.2%; 37% from
+$793,650 joint and $661,375 single. The results themselves warn that some secondary sites are careless.
+**Not yet read: the Rev. Proc. itself, every other bracket edge, the capital-gains breakpoints.**
+`P140c` types nothing until it has the primary source. Against the 2026 tables at the tools' 2.5%
+default, the published figures are higher everywhere checked: deduction joint +195, single +97, the
+joint 37% floor +5,732, single +4,760. One-signed, so every household is priced slightly high.
+
+**The Optimizer's statutory index was anchored at the wall clock.** `simulate` seeded `cpiRate` with
+`(1 + cpi)^(startYear - todayYear)`. Correct in 2026 only because 2026 is also `TAXData.FEDERAL.YEAR`.
+Measured with `todayYear` pinned to 2027 on `HEAD`: a joint 65+ CA plan starting 2027 got a $35,500
+deduction (the 2026 figure as printed) against $36,565 indexed and $36,600 real; a single CA filer got
+$24,150 against $24,694.50. Over the 19 plan-bank households under a 2027 clock the old engine
+overcharged lifetime tax by 0.4% to 4.7% ($8.8k to $90k) and bracket fillers under-filled year 0 by up
+to $2,453, with no success flips. `Retirement_Projection.html` had the same defect (`inflMult` counted
+from the plan's first year). The Income Tax Planner did not: `indexFactors` in `taxcalc_core.js` counts
+from the tables' year. Fixed by `P140a`, commit `b053c35`; 95 of 95 plan-bank runs byte-identical to
+`HEAD` under today's clock.
+
+**The classification `P140a` made, which `P140b` inherits.** TAXData consumers, on `sim.taxIndex`:
+`calculateTaxes` via `taxArgs`, `calcIRMAA` and `getIRMAATier` (twice each), `findUpperLimitByAmount`,
+`findLimitByRate`, `computeBracketCeiling` (three sites, the FPL inside it), `getLTCGBracketRoom`,
+`getLTCGBracketTopRate`, `ratesAtLimit`, `getQCDLimit` and `computeAnnualQCDs`. Today's-dollar amounts,
+on `cpiRate`: `iraGoalNominal`, the Social Security high-water factor, the pension COLA seed, the flat
+advisor fee. Medicare dollars are on their own clock (`medicareRate`, anchored at `IRMAA.YEAR`).
+UI readers of table figures use the log key `-taxIndex`: the Taxation threshold series, the ACA ladder
+note, the plan MAGI marker and the Limit menu's deduction.
+
+**What `P140b` has to work around**, read from the code:
+- `calculateTaxes` takes ONE `inflation` factor for federal, capital-gains, state and IRMAA-threshold
+  figures. A 2027 federal table beside 2026 state tables needs two factors, or a factor per table.
+- `checkStateSources()` fails any state figure older than `TAXData.FEDERAL.YEAR` unless `pending`, so
+  `FEDERAL.YEAR` must stay the ANCHOR year and a newer table has to live beside it, not replace it.
+- 27 `calculateTaxes` call sites across `optimizer_core.js`, `taxcalc_core.js`,
+  `Retirement_Projection.html`, `standalone/irmaa_and_rmds.html`, the planner page and the suites.
+- The `nr` column in `FEDERAL.*.brackets` IS read: `nominalRateAtLimit` takes it as the average rate
+  at the band's top, which feeds `nominalFedTaxRateAtLimit` and so the draw ordering. Federal only, 14
+  rows. Recomputing it moves the 4th decimal, so it is typed per year and TEST CASE 31 checks it. (The
+  first version of this line said "no reader": the search behind it was cut off by a result limit.)
+- `taxcalc_core.js` clamps the planner's year to `BASE_YEAR`..`BASE_YEAR + 9` and defaults to
+  `BASE_YEAR`, so in 2027 the page would still open on 2026.
+- The planner's How to Use modal says the SALT cap is held at its 2025 amount. False since `P64d`:
+  `calcAt` passes `taxYear` and `calculateTaxes` indexes the cap and its threshold.
+
+**What `P139` builds on.** `standalone/IncomeTaxPlanner.html` (the root file is a redirect) has a Share
+link and a CSV Export and touches no `localStorage`. `buildShareParams()` serializes every input and
+`TaxCalc.configFromParams` reads it back, legacy keys included, for the page and `taxcalc.js` alike, so
+it is the save format. The Optimizer's saved-plan entry is `{ version, data, savedAt, appVersion, notes,
+summary, sourceFile }`, normalized on the way in by `normalizeScenarioEntry` (`optimizer_ui.js`).
 
 ## Two invented rates are READ in the draw, and one "fallback" is unreachable (2026-09-25, P133b)
 

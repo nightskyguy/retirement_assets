@@ -426,7 +426,7 @@ function computeAnnualQCDs(inputs, balance, simYear, qcdLimit, provisionalMAGI, 
         // the household for charity. The asymmetry is structural - a surcharge is a few thousand a
         // year while the MAGI needed to clear a threshold is tens of thousands - so no setting could
         // pay for itself here.
-        const effCpi = cpiRate * irmaaFwdFactor({ ...inputs, irmaaMarginMode: 'none' });
+        const effCpi = scaleTaxIndex(cpiRate, irmaaFwdFactor({ ...inputs, irmaaMarginMode: 'none' }));
         const tierTarget = getIRMAATierTargetMAGI(provisionalMAGI, status, effCpi, 2);
         // 0 means the household is already clear of every surcharge, so there is nothing to escape
         // and donating anyway would be charity the tool never asked for.
@@ -994,7 +994,8 @@ function computeBETR(tNow, rIRA, rTaxable, n) {
 // Returns how many LTCG dollars can stack above ordinaryIncome while staying in
 // brackets with LTCG rate strictly below maxRate (e.g. 0.15 → only the 0% bracket).
 function getLTCGBracketRoom(ordinaryIncome, status, maxRate, cpiRate) {
-    const brackets = TAXData.FEDERAL.CAPITAL_GAINS[status]?.brackets ?? [];
+    const brackets = federalTablesFor(cpiRate).CAPITAL_GAINS[status]?.brackets ?? [];
+    cpiRate = federalFactor(cpiRate);
     // Room spans ALL brackets whose rate is strictly below maxRate, combined into one continuous
     // span from $0 up to the last such bracket's ceiling (not just the single bracket ordinaryIncome
     // currently sits in) - e.g. maxRate=0.20 combines the 0% AND 15% brackets into one span.
@@ -1009,7 +1010,8 @@ function getLTCGBracketRoom(ordinaryIncome, status, maxRate, cpiRate) {
 // Returns the LTCG rate (0, 0.15, or 0.20) of the bracket that (ordinaryIncome + totalGains)
 // falls into - used by Cycle Brokerage to know which bracket a spend-forced harvest lands in.
 function getLTCGBracketTopRate(ordinaryIncome, totalGains, status, cpiRate) {
-    const brackets = TAXData.FEDERAL.CAPITAL_GAINS[status]?.brackets ?? [];
+    const brackets = federalTablesFor(cpiRate).CAPITAL_GAINS[status]?.brackets ?? [];
+    cpiRate = federalFactor(cpiRate);
     const totalIncome = ordinaryIncome + totalGains;
     for (const { l, r } of brackets) {
         if (!isFinite(l) || totalIncome <= l * cpiRate) return r;
@@ -1042,7 +1044,7 @@ function getLTCGBracketTopRate(ordinaryIncome, totalGains, status, cpiRate) {
 function nominalRateAtLimit(entity, status, limit, inflation, rateCreep = 1) {
     if (!(limit > 0)) return 0;
     if (!isFinite(limit)) {
-        const brks = getRateBracket(entity, status);
+        const brks = entityBrackets(entity, status, inflation);
         return (brks[brks.length - 1]?.r ?? 0) * rateCreep;
     }
     return calculateProgressive(entity, status, limit, inflation, rateCreep).cumulative / limit;
@@ -1099,8 +1101,8 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         // will be indexed when THIS year's MAGI is actually charged, |LOOKBACK| years from now, less
         // whatever safety margin irmaaMarginMode asks for. See the irmaaFwdFactor block above.
         const IRMAABrks = getRateBracket('IRMAA', status);
-        const effCpi = cpiRate * irmaaFwdFactor(inputs);
-        const rawThreshold = IRMAABrks[inputs.stratIRMAATier + 1].l * effCpi;
+        const effCpi = scaleTaxIndex(cpiRate, irmaaFwdFactor(inputs));
+        const rawThreshold = IRMAABrks[inputs.stratIRMAATier + 1].l * entityFactor('IRMAA', effCpi);
         const maxAliveAge = Math.max(alive1 ? age1 : -1, alive2 ? age2 : -1);
         const IRMAARelevant = maxAliveAge >= TAXData.IRMAA.ELIGIBILITY_AGE + TAXData.IRMAA.LOOKBACK;
         if (IRMAARelevant) {
@@ -1131,7 +1133,7 @@ function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, a
         // where cpiRate is 1 and cpiRate indexes it after that, with no extra year of CPI on top.
         // The Limit menu and the limit ladder in optimizer_ui.js compute the same figure.
         const fplBase = TAXData.FPL[status];
-        limit = Math.round(fplBase * inputs.stratACAMultiple / 100 * cpiRate) - 1;
+        limit = Math.round(fplBase * inputs.stratACAMultiple / 100 * factorOf(cpiRate, TAXData.FPL.PLAN_YEAR)) - 1;
         ({ marginalFedTaxRate, nominalFedTaxRateAtLimit, marginalStateTaxRate, nominalStateTaxAtLimit } =
             ratesAtLimit(limit, status, cpiRate, STATEname, fedRateCreep, stateRateCreep));
         rateBasis = limit;
@@ -3148,6 +3150,20 @@ function taxArgs(sim, yr, overrides) {
     return args;
 }
 
+// The tax index for the year `sim` is in (the shape is taxIndexAtRate's, in taxengine.js), built from
+// this run's own path rather than one rate, so it follows a Monte Carlo path exactly. A year the
+// run has passed through reads `taxIndexByYear`; a year before the run starts is the typed `cpi`
+// compounded from the tables' year, which is how `simulate` seeds `taxIndex`. `cpi` is a parameter
+// because a '-resume' record's sim carries no `inputs`.
+function taxIndexOfSim(sim, cpi = sim.inputs.cpi) {
+    const year = sim.currentYear, idx = sim.taxIndex, byYear = sim.taxIndexByYear || {};
+    const anchor = TAXData.FEDERAL.YEAR;
+    return {
+        year,
+        from: T => T >= year ? 1 : idx / (byYear[T] ?? Math.pow(1 + cpi, Math.max(0, T - anchor))),
+    };
+}
+
 // Re-price the year after a pass has drawn more money: the gains the Brokerage draws realized, the
 // tax on the whole year's income, and the total the year owes. Called by the second pass, by both
 // loops in the third pass and by the forced-IRA backstop.
@@ -4663,6 +4679,7 @@ function endYear(sim, yr) {
     sim.inflation    *= (1 + yr.yearInflation);   // spending always follows the path
     sim.cpiRate      *= (1 + cpi_t);
     sim.taxIndex     *= (1 + cpi_t);              // same clock, anchored at the tables' year
+    sim.taxIndexByYear[sim.currentYear] = sim.taxIndex;
     // Medicare dollars grow on their OWN clock, not the drawn path's. `sim.currentYear` was already
     // advanced above, so the rate carrying year Y into Y+1 is the one for Y: hence the -1.
     //
@@ -4949,6 +4966,9 @@ function simulate(inputs) {
         inputs, balance, log, totals,
         birthyear1, birthmonth1, birthyear2, birthmonth2,
         currentYear, cpiRate, taxIndex, inflation, medicareRate, pensionFactor, ssFactor, ssAdj, todayYear,
+        // `taxIndex` as each simulated year opened, by calendar year, for taxIndexOfSim. `endYear`
+        // adds the year it steps into.
+        taxIndexByYear: { [currentYear]: taxIndex },
         fixedWithdrawal, spendDelta, spendGoal,
         nominalTaxRate, capitalGainsRate,
         subCycleIRAYears, prevPortfolio,
@@ -4964,6 +4984,9 @@ function simulate(inputs) {
         cashInterestCarry: 0,
     };
     if (resume) Object.assign(sim, resume.sim);
+    // Copied, so this run's years are written into its own record and not into the resume record,
+    // which the rails solver hands to many runs.
+    sim.taxIndexByYear = { ...sim.taxIndexByYear };
     // The plan's whole length in plan years, resumed or not: P127's cut suspension counts back from
     // its end, and a resumed run's maxYears is only what is left of it.
     sim.planYears = y0 + maxYears;
@@ -7099,7 +7122,7 @@ function planNameDefaults({ lastPlanName, lastFileName } = {}) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, SS_COLA_PUBLISHED, publishedSSCola, CPI_INDEX_FLOOR, extraSpendFor, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, _conversionHelpsAtRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, sweepOptions, describeSelection, planRuleTwin, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit, growthFactor, applyGrowth, combineGains, applyWithdrawals, calculateWithdrawals, calculateAmortizedWithdrawal, getRMDPercentage, calculateInflationAdjustedWithdrawal, optimizeSpendDown, timingShift, resolveStartAge, gkSpendStable, KNOWN_STRATEGIES, assertKnownStrategy, GK_DEFAULTS, FUNDED_TOLERANCE, minSpendFloor, BASIS_STEP_UP_FALLBACK, BE_NEVER, BREAK_EVEN_SEARCH, STRATEGY, SPEND_RULE, KNOWN_SPEND_RULES, assertKnownSpendRule, ROTH_GAP_FILL, RAIL_PRESETS, GK_CPI_RAISE_CAP, GK_NO_CUT_FINAL_YEARS, portfolioReturnOf, snapshotResume, resumeInputs, taxArgs };
+    module.exports = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, SS_COLA_PUBLISHED, publishedSSCola, CPI_INDEX_FLOOR, extraSpendFor, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, _conversionHelpsAtRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, sweepOptions, describeSelection, planRuleTwin, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit, growthFactor, applyGrowth, combineGains, applyWithdrawals, calculateWithdrawals, calculateAmortizedWithdrawal, getRMDPercentage, calculateInflationAdjustedWithdrawal, optimizeSpendDown, timingShift, resolveStartAge, gkSpendStable, KNOWN_STRATEGIES, assertKnownStrategy, GK_DEFAULTS, FUNDED_TOLERANCE, minSpendFloor, BASIS_STEP_UP_FALLBACK, BE_NEVER, BREAK_EVEN_SEARCH, STRATEGY, SPEND_RULE, KNOWN_SPEND_RULES, assertKnownSpendRule, ROTH_GAP_FILL, RAIL_PRESETS, GK_CPI_RAISE_CAP, GK_NO_CUT_FINAL_YEARS, portfolioReturnOf, snapshotResume, resumeInputs, taxArgs, taxIndexOfSim };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -7107,7 +7130,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const OPTIMIZER_GRIDS` is a global LEXICAL binding and is not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, SS_COLA_PUBLISHED, publishedSSCola, CPI_INDEX_FLOOR, extraSpendFor, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, _conversionHelpsAtRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, sweepOptions, describeSelection, planRuleTwin, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit, growthFactor, applyGrowth, combineGains, applyWithdrawals, calculateWithdrawals, calculateAmortizedWithdrawal, getRMDPercentage, calculateInflationAdjustedWithdrawal, optimizeSpendDown, timingShift, resolveStartAge, gkSpendStable, KNOWN_STRATEGIES, assertKnownStrategy, GK_DEFAULTS, FUNDED_TOLERANCE, minSpendFloor, BASIS_STEP_UP_FALLBACK, BE_NEVER, BREAK_EVEN_SEARCH, STRATEGY, SPEND_RULE, KNOWN_SPEND_RULES, assertKnownSpendRule, ROTH_GAP_FILL, RAIL_PRESETS, GK_CPI_RAISE_CAP, GK_NO_CUT_FINAL_YEARS, portfolioReturnOf, snapshotResume, resumeInputs, taxArgs };
+    window.OptimizerCore = { simulate, summarizeRun, diffSummaries, safeExportFilename, stripFileExtension, planNameDefaults, SUMMARY_FIELDS, SUMMARY_TERMINAL_FIELDS, IRA_GOAL_BLIND_STRATEGIES, terminalIRARateFromLog, sustainedBreakEvenYear, compileScheduleFromRun, scheduleOptionsForRun, ADVISOR_FEE_MODES, ADVISOR_FEE_SCOPES, ADVISOR_FEE_BASIS, ADVISOR_FEE_PCT_MAX, inferAdvisorFeeMode, pensionColaCap, SS_COLA_PUBLISHED, publishedSSCola, CPI_INDEX_FLOOR, extraSpendFor, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, _conversionHelpsAtRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, OPT_TIEBREAK_KEYS, OPT_TIEBREAK_DEFAULT, compareByTiebreakChain, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, planFirstYear, buildVariations, buildStrategyFamilies, sweepOptions, describeSelection, planRuleTwin, OPTIMIZER_GRIDS, ORDERED_SEQS, SPLIT_VECTORS, splitVectorLabel, splitVectorSortVal, ROTH_GAP_EXCLUDED, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit, growthFactor, applyGrowth, combineGains, applyWithdrawals, calculateWithdrawals, calculateAmortizedWithdrawal, getRMDPercentage, calculateInflationAdjustedWithdrawal, optimizeSpendDown, timingShift, resolveStartAge, gkSpendStable, KNOWN_STRATEGIES, assertKnownStrategy, GK_DEFAULTS, FUNDED_TOLERANCE, minSpendFloor, BASIS_STEP_UP_FALLBACK, BE_NEVER, BREAK_EVEN_SEARCH, STRATEGY, SPEND_RULE, KNOWN_SPEND_RULES, assertKnownSpendRule, ROTH_GAP_FILL, RAIL_PRESETS, GK_CPI_RAISE_CAP, GK_NO_CUT_FINAL_YEARS, portfolioReturnOf, snapshotResume, resumeInputs, taxArgs, taxIndexOfSim };
 }
 
 

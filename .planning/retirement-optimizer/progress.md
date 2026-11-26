@@ -5936,4 +5936,30 @@ that is not a whole year. Two tests (32, 32b) on a gapped synthetic table and on
 nearest-year mutant is rejected. Nothing calls it yet, so the plan bank stays 95 of 95 identical.
 Suites 545 / 84 / 62 / 15 / 50, page suite 540, planner badge 84 of 84. Tokens `111ef9a` (same hour as
 `b1`, hence the letter). Found while writing it: `calculateTaxes` defaults `taxYear` to 2025, which
-this resolver refuses - recorded against `b4`, where `taxYear` has to become required.
+this resolver refuses - recorded against `b4`, where `taxYear` has to become required. Committed
+`9df5427`.
+
+**`P140b3` built, uncommitted.** The tax index object, `{ year, from(tableYear) }`, in two
+constructors: `taxIndexAtRate` (closed form, `taxengine.js`) and `taxIndexOfSim` (the run's own path,
+`optimizer_core.js`, backed by a new per-year record `sim.taxIndexByYear` that a resumed run copies).
+One test of mine was wrong on the first run, not the code: it assumed `nYears` is the horizon, while a
+run lasts to the death age, so the years past the 6-value path stepped at the typed 3% - the index's
+1.5301 was exactly 1.2079 x 1.03^8. Fixed the expectation. Each Optimizer line was then removed in a
+scratch copy and caught by its own test. One new comment tripped the history-comment counter
+("reproduced"), reworded, budget back at 304. Nothing reads the index yet: plan bank 95 of 95 and the
+2027-clock set identical to `b053c35`. Suites 547 / 85 / 62 / 15 / 50, page suite 540, planner badge 85
+of 85. Tokens `111ef9b`. An `rm -rf` of a scratch folder was refused by the safety check (an
+unguarded variable path); the folders were new, so the removal was simply dropped.
+
+**`P140b4` built, uncommitted.** Every engine lookup now takes a tax index as well as a factor. One
+rule changed from the plan: a bare number does not throw, because the suites pass a plain factor at
+about 200 sites where it is the right input; it keeps its old meaning exactly, and catching a missed
+production caller moves to `b5`'s guard tests. The federal figures resolve by the index's year, every
+other table from its own YEAR, and `calculateTaxes` takes its tax year from the index (a disagreeing
+`taxYear` throws). Three engine tests (34: index and factor bit-identical across states, statuses,
+incomes and every lookup; 34b: a synthetic later federal entry is used for its year and after while
+states and IRMAA index from their own; 34c: misuse throws) and one core test, all green on the first
+run. Callers still pass numbers, so the plan bank and the 2027-clock set are 95 of 95 identical, and
+the number path's timing moved +0.2% (77 ms minimum both ways). Suites 548 / 88 / 62 / 15 / 50, page
+suite 540, planner badge 88 of 88. Tokens `111ef9c` (b3's `111ef9b` had been loaded in the preview, so
+a reload could have served it from cache).

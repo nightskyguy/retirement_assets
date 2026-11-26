@@ -7630,6 +7630,67 @@ test('P140a: every table the tax index scales is stated in the federal table\'s 
     assert(TAXData.FEDERAL.CAPITAL_GAINS.YEAR === T, `LTCG brackets are ${TAXData.FEDERAL.CAPITAL_GAINS.YEAR}, federal tables ${T}`);
 });
 
+test('P140b3: taxIndexOfSim reproduces the run\'s own inflation path, and the typed rate before it', () => {
+    // A plan starting three years after the tables' year, on a bumpy path. The expectation is built
+    // from the PATH, not from the log's index column, so the check cannot agree with itself: with cpi
+    // equal to inflation the statutory step each year is exactly that year's path value.
+    const T = TAXData.FEDERAL.YEAR, start = T + 3, cpi = 0.03;
+    const path = [0.05, -0.004, 0.021, 0.08, 0.012, 0.035];
+    const rows = simulate({ ...BASE, IRA1: 1000000, cpi, inflation: cpi, inflationSequence: path,
+                            nYears: path.length, startInYear: start, startYear: start, captureResume: true }).log;
+    const last = rows[rows.length - 1], sim = last['-resume'].sim;
+    const ix = core.taxIndexOfSim(sim, cpi);
+    assert(ix.year === last.year + 1, `the record is for the year after the last row: ${ix.year}`);
+    assert(ix.from(ix.year) === 1 && ix.from(ix.year + 2) === 1, 'its own year, and a later table, index nothing');
+    // The run lasts to the death age, not nYears; a year past the path's end steps at the typed rate.
+    const product = (from, to) => { let p = 1; for (let j = from; j < to; j++) p *= 1 + (path[j] ?? cpi); return p; };
+    assert(rows.length > path.length, 'precondition: the run outlasts the path, so both regimes are checked');
+    rows.forEach((r, j) => assertNear(ix.from(r.year), product(j, rows.length),
+        `from(${r.year}) is the path over the years since`, 1e-12));
+    // Before the run: the typed rate from the tables' year up to the start, then the whole path.
+    assertNear(ix.from(T), Math.pow(1 + cpi, 3) * product(0, rows.length), 'from the tables\' year', 1e-12);
+    assertNear(ix.from(T + 1), Math.pow(1 + cpi, 2) * product(0, rows.length), 'from a year in the gap', 1e-12);
+});
+
+test('P140b4: the LTCG and average-rate helpers take a tax index, and read a later federal entry by its year', () => {
+    const A = TAXData.FEDERAL.YEAR, ix = taxIndexAtRate(A + 4, 0.025), f = Math.pow(1.025, 4);
+    for (const status of ['MFJ', 'SGL']) {
+        for (const ord of [20000, 80000, 400000]) {
+            assert(getLTCGBracketRoom(ord, status, 0.15, ix) === getLTCGBracketRoom(ord, status, 0.15, f), `room ${status} ${ord}`);
+            assert(getLTCGBracketRoom(ord, status, 0.20, ix) === getLTCGBracketRoom(ord, status, 0.20, f), `room20 ${status} ${ord}`);
+        }
+        for (const lim of [50000, 250000, Infinity, 0])
+            assert(nominalRateAtLimit('FEDERAL', status, lim, ix, 1.1) === nominalRateAtLimit('FEDERAL', status, lim, f, 1.1),
+                `nominal rate ${status} ${lim}`);
+    }
+    // A synthetic later entry whose 0% capital-gains band is wider: the index finds it, the factor does not.
+    const byYear = TAXData.FEDERAL_BY_YEAR, base = byYear[A];
+    byYear[A + 1] = { ...base, YEAR: A + 1, CAPITAL_GAINS: { MFJ: { brackets: [{ l: 120000, r: 0 }, ...base.CAPITAL_GAINS.MFJ.brackets.slice(1)] },
+                                                          SGL: base.CAPITAL_GAINS.SGL } };
+    try {
+        assert(getLTCGBracketRoom(20000, 'MFJ', 0.15, taxIndexAtRate(A + 1, 0.03)) === 100000,
+            'the later entry\'s 0% band, as printed, in its own year');
+        assertNear(getLTCGBracketRoom(20000, 'MFJ', 0.15, 1.03), base.CAPITAL_GAINS.MFJ.brackets[0].l * 1.03 - 20000,
+            'a plain factor stays on the anchor entry', 1e-6);
+    } finally {
+        delete byYear[A + 1];
+    }
+});
+
+test('P140b3: a resumed run writes its years into its own record, not into the record it resumed from', () => {
+    // The rails solver resumes many runs from one record; the second must see the record as the
+    // first found it.
+    const T = TAXData.FEDERAL.YEAR;
+    const base = { ...BASE, IRA1: 1000000, cpi: 0.03, inflation: 0.03, nYears: 6, startInYear: T, startYear: T,
+                   captureResume: true };
+    const rec = simulate(base).log[1]['-resume'];
+    const before = JSON.stringify(rec.sim.taxIndexByYear);
+    const a = simulate(core.resumeInputs({ ...base, inflationSequence: [0.09, 0.09, 0.09, 0.09] }, rec)).log;
+    assert(JSON.stringify(rec.sim.taxIndexByYear) === before, `the record changed: ${before} -> ${JSON.stringify(rec.sim.taxIndexByYear)}`);
+    const b = simulate(core.resumeInputs({ ...base }, rec)).log;
+    assert(a[a.length - 1]['-taxIndex'] > b[b.length - 1]['-taxIndex'], 'the two resumed paths did diverge');
+});
+
 // ── P89: the plan's first year has one definition, and the ACA age gate uses it ────────────────
 // `startAge` is the user's real-world age, so the year they ARE that age is birthyear + startAge -
 // clamped forward, because a simulation cannot start in the past. getInputs() always clamped when

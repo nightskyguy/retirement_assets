@@ -198,7 +198,7 @@ that moves numbers never share a diff.
     are the anchor entry's objects) both fail on a mistyped `nr` and on a copied table. 95 of 95
     plan-bank runs byte-identical to `b053c35`, and the 2027-clock set too. Suites 545 / 82 / 62 / 15 /
     50, page suite 540, the planner's in-page badge 82 of 82. Tokens `111ef9`.
-  - [x] **b2 resolver.** BUILT 2026-11-26, uncommitted. `federalTableFor(taxYear, td = TAXData)` in
+  - [x] **b2 resolver.** BUILT 2026-11-26, committed `9df5427`. `federalTableFor(taxYear, td = TAXData)` in
     `taxengine.js`, exported in both the node and browser lists, returns `{ table, year }`: the year's
     own entry, else the newest before it, `null` before the earliest. A taxYear that is not a whole
     number THROWS a TypeError. TEST CASE 32 (a gapped synthetic table: exact, between, past the end,
@@ -209,20 +209,55 @@ that moves numbers never share a diff.
     **Hazard for `b4`:** `calculateTaxes` defaults `taxYear` to `OBBBA.SALT.indexBaseYear`, 2025, which
     resolves to `null` here. A caller that omits `taxYear` today silently gets that default; under
     `b4` it must be required (throw when absent), and every caller checked for passing it.
-  - [ ] **b3 the index object.** One shape everywhere, `{ year, from(tableYear) }`, the factor from a
-    table's year to the tax year. Optimizer: `sim.taxIndex` divided by the factor recorded for
-    `tableYear` - the sim records its cumulative factor per calendar year as it passes, and a year
-    before the plan starts is the deterministic `(1 + cpi)` power, so a Monte Carlo path stays exact.
-    Income Tax Planner, Projection and `irmaa_and_rmds.html`: the closed form. Done: a unit test that
-    `from(year)` is 1 and `from(year - k)` is the path product over those k years.
-  - [ ] **b4 engine reads.** `calculateTaxes` and the eleven helpers in `findings.md`'s classification
-    take the index object where they take a bare factor today. A federal lookup resolves its table by
-    `taxYear` and scales by `from(table.YEAR)`; a state table, IRMAA, QCD and the FPL by `from(their
-    YEAR)`. A bare number passed where the object belongs THROWS, so a missed caller fails loudly
-    rather than pricing on the wrong year. Done: no helper reads `TAXData.FEDERAL[status]` directly.
+  - [x] **b3 the index object.** BUILT 2026-11-26, uncommitted. One shape, `{ year, from(tableYear) }`,
+    where `from(T)` is exactly 1 for T at or after `year` (a later table is used as printed, never
+    deflated). `taxIndexAtRate(taxYear, rate)` in `taxengine.js` is the closed form,
+    `Math.pow(1 + rate, max(0, year - T))` - the very expression the planner and the Projection page
+    compute today, so `b4` moves no bit there. `taxIndexOfSim(sim, cpi)` in `optimizer_core.js` is the
+    path form: `simulate` now records `sim.taxIndexByYear` (the index each simulated year opened with,
+    written in `endYear`), a year before the run is the typed `cpi` from the tables' year, and a
+    resumed run copies the record so the rails solver's shared resume record is never written into.
+    Tests: TEST CASE 33 (the closed form, bit-exact against `Math.pow`, throws on a non-year or
+    non-number), and two core tests - the path form checked against a product built from the
+    inflation PATH, not the log's index column (both the path and the typed-rate tail past it, and two
+    years before the run), and resume isolation. Each of the two Optimizer lines (the per-year record,
+    the copy on resume) was removed in a scratch copy and caught by exactly its own test. Nothing
+    reads either form yet: 95 of 95 plan-bank runs identical to `b053c35`, and the 2027-clock set.
+    Suites 547 / 85 / 62 / 15 / 50, page suite 540, the planner's badge 85 of 85. Tokens `111ef9b`.
+    **Note for `b4`:** for a plan starting BEFORE the tables' year, `taxIndexOfSim(...).from(anchor)`
+    is the true index from the tables' year, while today's `sim.taxIndex` is clamped to 1 at the start
+    and so over-indexes by the years before the anchor. No plan-bank household and no page-built plan
+    starts that early (16 start in 2026, 3 on the wall clock); only test fixtures do, so `b4` may move
+    those tests and nothing else.
+  - [x] **b4 engine reads.** BUILT 2026-11-26, uncommitted. **One rule changed from the plan:** a bare
+    number does NOT throw. The suites pass a plain factor at about 200 sites to test table mechanics,
+    where a number is the right input, so a number keeps exactly its old meaning (one factor, FEDERAL
+    from the anchor entry) and an index makes a lookup year-aware. What the throw was for - a missed
+    PRODUCTION caller - moves to `b5`'s guard tests. Anything that is neither still throws a TypeError.
+    In `taxengine.js`: `isTaxIndex`, `federalTablesFor` / `federalFactor` (memoized per index in a
+    WeakMap), `factorOf`, `entityFactor` (FEDERAL through its year's entry, any other table from its
+    own YEAR - all 42 stamps are 2026 today), `entityBrackets`, `scaleTaxIndex` (for the IRMAA
+    forecast factor). `findLimitByRate`, `findUpperLimitByAmount`, `calculateProgressive` (a bare
+    bracket array still needs a number), `getIRMAATier`, `getIRMAATierTargetMAGI`, `getQCDLimit` and
+    `calculateTaxes` (federal deduction and 65+ add-on, AZ's federal-referenced state deduction, the
+    allowance context, the capital-gains schedule) resolve through them. `calculateTaxes` takes its
+    tax year from the index and throws a RangeError if a `taxYear` names a different year, which also
+    retires the default-2025 hazard for index callers. In `optimizer_core.js`: `getLTCGBracketRoom`,
+    `getLTCGBracketTopRate`, `nominalRateAtLimit`, the IRMAA and ACA branches of
+    `computeBracketCeiling` and the QCD trim. Remaining direct reads of `TAXData.FEDERAL` in production
+    are RATES only (the same every year) and the UI displays (`b5`). Tests: TEST CASE 34 (index and
+    factor bit-identical across 7 states x 2 statuses x 4 incomes and every lookup), 34b (a synthetic
+    later entry prices its year and after, states and IRMAA still index from their own, a factor
+    ignores it), 34c (misuse throws), and a core test for the LTCG and average-rate helpers. 95 of 95
+    plan-bank runs and the 2027-clock set identical to `b053c35`; timing on the number path +0.2%
+    (77 ms minimum both ways, 6 alternating runs). Suites 548 / 88 / 62 / 15 / 50, page suite 540,
+    the planner's badge 88 of 88. Tokens `111ef9c`.
   - [ ] **b5 callers.** `optimizer_core.js` (`taxArgs` and the 16 `sim.taxIndex` sites), the UI readers
     of `-taxIndex`, `taxcalc_core.js`, `Retirement_Projection.html`, `standalone/irmaa_and_rmds.html`,
-    the planner page and the suites. Done: grep finds no bare factor handed to an engine function.
+    the planner page. Done: each passes an index, and guard tests say so - the existing `calculateTaxes`
+    spy in `optimizer_core.tests.js` asserts every call's `inflation` is an index, and the same for the
+    planner's core and the Projection page. `computeBracketCeiling`'s IRMAA and ACA paths are covered
+    by the identity gate through the plan bank's ACA and IRMAA-tier households.
   - [ ] **b6 gate.** Byte-identical to `b053c35`: the 19 households x 5 variants plus a 2027-clock
     variant (the scratch `identity.js` harness, rebuilt in the repo's scratch space); the planner's
     results over 2026-2035 from `taxcalc.js`; the Projection page's rows read in the browser before and

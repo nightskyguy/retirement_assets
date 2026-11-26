@@ -2380,6 +2380,129 @@ test('IncomeTaxPlanner.html reads its link and calculates through taxcalc_core.j
 	assertEqual(/function (calcAt|deriveRow|deriveIncome|resultFor)\(/.test(html), false, 'and does not define its own calculation');
 });
 
+test('taxcalc_core: planSummary is the result line\'s own figures, and names the statutory brackets, not the marginal rates', () => {
+	const C = _core(); if (!C) return;
+	const link = `st=SGL&s=OR&a1=67&ss=30000&ri=30000&it=3000&yr=${C.BASE_YEAR}`;
+	const s = C.planSummary(_link(link));
+	const r = _row(link + '&return=grossIncome,agi,totalTax,fedMarginal,irmaaFutureTier');
+	assertEqual([s.gross, s.agi, s.totalTax], [Math.round(+r.grossIncome), Math.round(+r.agi), Math.round(+r.totalTax)],
+		'gross income, AGI and total tax as the result line has them');
+	const rates = _engine().TAXData.FEDERAL.SGL.brackets.map(b => b.r);
+	assertEqual(rates.includes(s.fedBracket), true, 'the federal bracket is a rate the table prints');
+	assertEqual(+r.fedMarginal > s.fedBracket + 0.05, true, 'and not the marginal rate, which the Social Security torpedo lifts here');
+	assertEqual([s.irmaaNow, s.irmaaAhead, s.irmaaAheadYear], [null, +r.irmaaFutureTier, C.BASE_YEAR + 2],
+		'no IRMAA tier in force without the MAGI from two years back, and the tier this year sets');
+	assertEqual(C.planSummary(_link(link + '&pm=400000')).irmaaNow > 0, true, 'a tier in force once that MAGI is entered');
+	assertEqual([s.stateNoTax, C.planSummary(_link('st=SGL&s=NV&wg=60000')).stateNoTax], [false, true], 'a state with no income tax is named as one');
+	assertEqual(C.planSummary(_link('s=ZZ')).ok, false, 'a link with an error has no figures');
+});
+
+test('taxcalc_core: a saved plan carrying every key the share link can is read back whole', () => {
+	const C = _core(); if (!C) return;
+	const p = { st: 'SGL', s: 'OR', a1: '67', a2: '64', ss: '31000', cs: '50000', cb: '40', yr: String(C.BASE_YEAR + 1),
+	            in: '3', pm: '120000', rw: '1', ra: '1' };
+	C.DETAIL_FIELDS.forEach((f, i) => { p[f.key] = String(1000 * (i + 1)); });
+	const L = C.configFromParams(k => (k in p ? p[k] : null));
+	assertEqual(Object.keys(p).filter(k => !L.given.has(k)), [], 'every key is read');
+	assertEqual(L.errors, [], 'none is an error');
+	assertEqual(C.DETAIL_FIELDS.filter(f => String(L.cfg[f.cfg]) !== p[f.key]).map(f => f.key), [], 'every Income details amount comes back as saved');
+	const c = L.cfg;
+	assertEqual([c.status, c.state, c.ages, c.ssIncome, c.cgSale, c.cgBasisPct, c.year, c.inflation, c.prevMagi, c.retirementSwept, c.autoTax],
+		['SGL', 'OR', [67, 64], 31000, 50000, 40, C.BASE_YEAR + 1, 3, 120000, true, true], 'and every other entry');
+});
+
+// savedplans.js, the store behind the planner's Save/Load. Each test gets a store over an in-memory
+// Storage, so it runs the same in node and on the planner page and never touches the reader's plans.
+const _saved = () => IS_NODE ? require('./savedplans.js') : (typeof window !== 'undefined' ? window.SavedPlans : undefined);
+function _plans(over = {}) {
+	const m = new Map();
+	const mem = { getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => { m.set(k, String(v)); }, removeItem: k => { m.delete(k); }, m };
+	const store = _saved().create(Object.assign({ key: 'TestPlans', kind: 'income-tax-planner', toolName: 'Income Tax Planner',
+		appVersion: () => 'v2.16', storage: () => mem, now: () => '2026-11-26T12:00:00.000Z' }, over));
+	return { store, mem };
+}
+
+test('savedplans: Save keeps the entries, notes, figures and release, and saving over a name replaces it and says so', () => {
+	if (!_saved()) return;
+	const { store } = _plans();
+	const payload = { st: 'MFJ', s: 'CA', wg: '60000' };
+	const a = store.save('  2026 return ', { payload, notes: 'n1', summary: { totalTax: 100 } });
+	assertEqual([a.replaced, a.entry.name], [false, '2026 return'], 'a new name, trimmed');
+	const e = store.get('2026 return');
+	assertEqual([e.payload, e.notes, e.summary, e.appVersion, e.savedAt, e.version, e.kind],
+		[payload, 'n1', { totalTax: 100 }, 'v2.16', '2026-11-26T12:00:00.000Z', 1, 'income-tax-planner'], 'everything comes back');
+	assertEqual(store.save('2026 return', { payload: { st: 'SGL' } }).replaced, true, 'the same name again replaces');
+	assertEqual([store.list().length, store.get('2026 return').payload], [1, { st: 'SGL' }], 'one plan, the newer one');
+	assertEqual([store.remove('2026 return'), store.list().length], [true, 0], 'and Delete removes it');
+});
+
+test('savedplans: one shape in, from Save or Import alike, and what Import stores Load reads back', () => {
+	if (!_saved()) return;
+	const { store } = _plans();
+	const raw = { kind: 'income-tax-planner', name: 'Old', payload: { st: 'MFJ', ss: 48000, nested: { x: 1 }, 'bad key': '1' } };
+	const e = store.normalize(raw);
+	assertEqual([e.version, e.payload, e.notes, e.summary, e.appVersion, e.savedAt],
+		[1, { st: 'MFJ', ss: '48000' }, '', null, null, '2026-11-26T12:00:00.000Z'], 'missing fields filled, values as strings, the rest dropped');
+	const file = store.parseFile(JSON.stringify(raw), 'old.json');
+	assertEqual(file.ok, true, 'Import reads it');
+	store.put(file.entry);
+	assertEqual([store.get('Old').payload, store.get('Old').sourceFile], [e.payload, 'old.json'], 'Load gets back what Import stored, and where it came from');
+	assertEqual(JSON.parse(store.fileFor(store.get('Old')).text).sourceFile, undefined, 'which an exported file leaves out');
+	const out = store.parseFile(store.fileFor(store.get('Old')).text, 'Old.json');
+	assertEqual([out.ok, out.entry.payload, out.entry.name], [true, e.payload, 'Old'], 'an exported file imports as the same plan');
+});
+
+test('savedplans: an Optimizer plan, another file and broken JSON are refused by name, and nothing is stored', () => {
+	if (!_saved()) return;
+	const { store, mem } = _plans();
+	const opt = store.parseFile(JSON.stringify({ version: 4, data: { iraBaseGoal: 1 }, appVersion: '11.1d9d' }), 'retirement-plan.json');
+	assertEqual([opt.ok, opt.reason, /retirement-plan\.json is a Retirement Optimizer plan/.test(opt.message)], [false, 'optimizer', true],
+		'an Optimizer plan is named as one');
+	assertEqual(store.parseFile('{"a":1}', 'x.json').reason, 'other', 'another JSON file');
+	assertEqual(store.parseFile('{nope', 'x.json').reason, 'json', 'not JSON');
+	assertEqual(store.parseFile(JSON.stringify({ kind: 'income-tax-planner' }), 'x.json').reason, 'broken', 'a plan with no entries');
+	assertEqual(mem.m.size, 0, 'and nothing was written');
+});
+
+test('savedplans: a file from a later release loads with a warning, and a plan with no name is named for its file', () => {
+	const S = _saved(); if (!S) return;
+	const { store } = _plans();
+	const later = store.parseFile(JSON.stringify({ kind: 'income-tax-planner', payload: { s: 'CA' }, appVersion: 'v2.18' }), 'Sam.json');
+	assertEqual([later.ok, later.entry.name, later.warnings.length], [true, 'Sam', 1], 'loads, named for its file, with one warning');
+	assertEqual(/v2\.18.*v2\.16/.test(later.warnings[0]), true, 'naming both releases');
+	assertEqual(store.parseFile(JSON.stringify({ kind: 'income-tax-planner', payload: {}, appVersion: 'v2.9' }), 'a.json').warnings, [],
+		'an earlier release does not warn');
+	assertEqual([S.compareVersions('v2.16', 'v2.9'), S.compareVersions('v2.16', 'v2.16'), S.compareVersions('x', 'v1')], [1, 0, 0],
+		'releases compare by number, and an unreadable one compares equal');
+});
+
+test('savedplans: storage that throws gives an empty list and a message, never a dead page, and an unreadable store is never written over', () => {
+	const S = _saved(); if (!S) return;
+	const no = () => { throw new Error('SecurityError'); };
+	for (const storage of [() => ({ getItem: no, setItem: no, removeItem: no }), no]) {
+		const blocked = S.create({ key: 'T', kind: 'k', toolName: 'T', storage });
+		assertEqual([blocked.available(), blocked.list().length], [false, 0], 'not available, and an empty list');
+		let storageError = false;
+		try { blocked.save('a', { payload: {} }); } catch (e) { storageError = e.storage === true; }
+		assertEqual(storageError, true, 'Save throws an error the page can show');
+	}
+	const { store, mem } = _plans();
+	mem.setItem('TestPlans', '{not json');
+	assertEqual(store.list().error, 'unreadable', 'an unreadable store is reported');
+	let threw = false;
+	try { store.save('a', { payload: {} }); } catch (e) { threw = true; }
+	assertEqual([threw, mem.getItem('TestPlans')], [true, '{not json'], 'and Save leaves it as it was');
+});
+
+test('savedplans: an exported file is named by the Optimizer\'s own rule', () => {
+	if (!IS_NODE) return;
+	const S = _saved(), O = require('./optimizer_core.js');
+	const names = ['2026 return', '2026-09-06 14:22:01', 'a\tb', '', 'CON', 'my.json.backup', 'a/b\\c<d>', 'x'.repeat(130), 'trailing. ',
+	               '2027 · CA · Married / Joint'];
+	for (const n of names) assertEqual(S.safeExportFilename(n), O.safeExportFilename(n), 'the same file name for ' + JSON.stringify(n));
+	for (const n of ['my.json.backup.json', 'plan', 'a.b.c']) assertEqual(S.stripFileExtension(n), O.stripFileExtension(n), 'the same name for ' + n);
+});
+
 function runTaxEngineTests() {
 	passed = 0;
 	failed = 0;

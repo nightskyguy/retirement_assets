@@ -16,6 +16,11 @@ Leave out any parameter you do not need and the page uses its default. The **Sha
 page writes a link like this for whatever is on screen, so the quickest way to learn the names is to
 set the page up by hand, press Share, and read the address.
 
+A plan kept with the page's **Save/Load** button holds these same parameters, and so does a file it
+exports (under `payload`, each value as text). Loading it reads them the way a link is read, except
+that any parameter the plan leaves out goes back to its default rather than keeping what was on
+screen.
+
 ## Parameters
 
 Amounts are plain numbers in dollars a year, with no `$` and no commas (`60000`, not `$60,000`).

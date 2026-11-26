@@ -5988,3 +5988,60 @@ Identity: Optimizer 95/95 and the 2027-clock set against `b053c35`; planner 70/7
 against `main`. Timing on the index path started at +5.5% / +6.2%; three trims took it to +3.1% on the
 plan bank and +2.2% on 100 paths, and made `calculateTaxes` about 40% faster on both paths. Suites
 549 / 89 / 62 / 15 / 50, page suite 540, tokens `111efa`. Next in `P140`: `c`, the 2027 data.
+
+`P140b5` and the `b6` gate shipped as PR #265 (`e0f5dc2`), merged as `15d72dc`.
+
+## 2026-11-26 (continued) - planning pass, P140 records brought up to date (branch `worktrees/planning-with-files-5cc760`)
+
+`/plan` catch-up found nothing unsynced in the session logs, but `task_plan.md` lagged the tree: it
+still said `P140a` was unmerged with a 2027-01-01 deadline open, left `P140b` unticked and marked
+`b3`, `b4` and `b5` uncommitted. Checked against git, not memory: `b053c35`, `2b32fb2`, `9df5427`,
+`45811f6` and `e0f5dc2` are all ancestors of `main`, and the Pages build for `15d72dc` reports
+`built`. The P140 header, the `P140a` and `P140b` boxes and the Order line now say so. The worktree
+was fast-forwarded from `92f807b` to `15d72dc` first. No code touched. Next: `P140c`.
+
+## 2026-11-26 (continued) - P139 started: a UI mockup for approval (branch `worktrees/planning-with-files-5cc760`)
+
+The user chose `P139` (saved plans for the Income Tax Planner) over `P140c`, and asked for a sample UI
+to approve before building far. Mockup at `.planning/mockups/income_tax_planner_saved_plans.html`:
+the planner's own tokens and header CSS, invented plans, no storage, and a MOCKUP bar switching ten
+states (panel, details, after load moved / same, import preview, newer file, Optimizer file refused,
+saving blocked, no plans, closed). Save over a name, inline delete and Load were clicked through in
+the browser pane; desktop and a 375px phone viewport both checked, the phone with no sideways scroll.
+Found on the way and written to findings: the real planner is 905px wide on a 375px phone, its header
+buttons already run off the edge, and `safeExportFilename` lives in `optimizer_core.js`, which the
+planner does not load. Nothing in the page or the engine changed. Waiting on the user's approval.
+
+**Mockup revised for the user's two requests:** each plan shows Gross income, AGI and Total tax (card
+and details), and Notes opens pre-filled with a line such as
+`Federal 22% bracket · IRMAA 2027 Tier 1, 2029 Tier 1 · CA 9.3% bracket`, following the entries
+until typed in, with a link to put it back. (Those mock runs passed `in=6000` meaning interest; `in`
+is the inflation key, so they ran at 6% inflation. The mock is illustrative; interest is `it`.) The
+mock households are now real `taxcalc.js` results (2026 CA joint, a 2027 CA joint $170k conversion
+reaching IRMAA Tier 1 in both years, the same in NV, a 2026 OR single). One thing measured on the way:
+the planner's `fedMarginal` is 22.2% for that OR single filer whose statutory bracket is 12%, so the
+notes line must read the bracket, not the marginal rate. Edit-then-restore and Save clicked through;
+desktop and 375px both checked, no sideways scroll.
+
+## 2026-11-26 (continued) - P139 built: Save/Load in the Income Tax Planner, v2.16 (uncommitted)
+
+The user approved the mockup and renamed the button **Save/Load**. Built as `savedplans.js` (store,
+entries, files; no DOM), `TaxCalc.planSummary` in `taxcalc_core.js` (recorded figures and "Today"
+from one function), and the page: `applyParams(get, { complete })` in place of `loadFromURL`'s body,
+the panel, the after-load line, Import's preview and refusals. Build record and three departures from
+the spec are under P139 in `task_plan.md`.
+
+Checked in the browser pane on the real page: save, save over a name, load over a page with five
+entries changed (status, state, wages, auto-tax, View) came back byte-equal to the saved payload; a
+plan whose recorded total was altered by $340 reported "was $55,111 under v2.15; $54,771 now. Your
+entries are unchanged"; an Optimizer file refused by name; a v2.18 file previewed with a warning and
+then loaded and stored; export (downloads stubbed out, so nothing reached the disk) and inline delete;
+storage made to throw shows the Export/Import-only panel. Found at 375px: the real page is 905px wide,
+so a `position:fixed` panel ran to x=893; anchored under the buttons instead (24-351px). Test plans
+removed from the pane's storage afterwards.
+
+Suites 549 / 97 / 62 / 15 / 50 (+8 engine-suite tests), page suite 540, pins, comment history,
+architecture and markdown checks clean, planner badge 97 of 97. Tokens `111efb` on `taxcalc_core.js`,
+`taxengine.tests.js`, `optimizer_tests.js` and the tier-2 loader; `savedplans.js` new at `111efb`.
+One slip on the way: a stray `sed -i` rewrote ARCHITECTURE.md to LF in the working copy; restored to
+CRLF and measured (no lone LF). Nothing committed.

@@ -302,6 +302,15 @@ link and a CSV Export and touches no `localStorage`. `buildShareParams()` serial
 it is the save format. The Optimizer's saved-plan entry is `{ version, data, savedAt, appVersion, notes,
 summary, sourceFile }`, normalized on the way in by `normalizeScenarioEntry` (`optimizer_ui.js`).
 
+**The planner page is a desktop layout today, measured 2026-11-26 for the `P139b` mockup.** It has no
+`@media` rule at all. At a 375px phone viewport the document is 905px wide: the shell grid is
+`272px 1fr`, and the header's button row is a flex row with no wrap, so Other Tools already runs off
+the right edge (343-460px). A fifth header button makes that worse unless the row wraps. The mockup
+wraps the header buttons and opens the Saved plans panel full width on a narrow screen; making the
+whole page phone-friendly is NOT part of `P139` and would be its own phase. The export filename rule
+to reuse is `OptimizerCore.safeExportFilename(name, ext)` in `optimizer_core.js`, which the planner
+does not load - `P139a` has to move it somewhere both pages load, or into `savedplans.js`.
+
 ## Two invented rates are READ in the draw, and one "fallback" is unreachable (2026-09-25, P133b)
 
 Found while naming the literals of review section 1.3, both measured rather than reasoned.

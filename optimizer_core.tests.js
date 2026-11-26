@@ -2327,7 +2327,7 @@ const CEIL_FILL = { ...BASE, strategy: 'bracket', stratRate: 0.22, stratIRMAATie
 
 test('P92a: a Fill Bracket ceiling reaches the top of the bracket, not one deduction short', () => {
     const e = simulate({ ...CEIL_FILL }).log[0];
-    const top = findLimitByRate('FEDERAL', e.status, 0.22, e['-cpiFactor']).limit;
+    const top = findLimitByRate('FEDERAL', e.status, 0.22, e['-taxIndex']).limit;
     // The whole claim, in one line: the plan's federal TAXABLE income lands on the bracket top.
     // Before, this sat a full deduction below it and the year still counted as "filled".
     assertNear(e['-fedTaxableInc'], top, 'taxable income must reach the top of the chosen bracket', 500);
@@ -2712,7 +2712,7 @@ test('ACA untenable flag is monotonic: a lower FPL multiple is a STRICTER cap', 
         `fixture must span all three shapes, got none=${sawNone} partial=${sawPartial} all=${sawAll}`);
 });
 
-test('ACA cap: the FPL guideline applies as published where cpiRate is 1, and cpiRate indexes it after', () => {
+test('ACA cap: the FPL guideline applies as published where the tax index is 1, and the index carries it after', () => {
     // TAXData.FPL is already the guideline a plan starting in its PLAN_YEAR is measured against,
     // so the first year's ceiling is that guideline times the multiple whatever the CPI assumption,
     // and each later year carries the year's own CPI factor, with no extra year of CPI on top.
@@ -2720,10 +2720,10 @@ test('ACA cap: the FPL guideline applies as published where cpiRate is 1, and cp
     const want = (status, f) => Math.round(TAXData.FPL[status] * 4 * f) - 1;
     for (const cpi of [0, 0.025, 0.05]) {
         const log = simulate({ ...ACA_LIVE, ...ACA_ARM, cpi }).log;
-        assert(log[0]['-cpiFactor'] === 1, `fixture must open where cpiRate is 1, got ${log[0]['-cpiFactor']}`);
+        assert(log[0]['-taxIndex'] === 1, `fixture must open where the tax index is 1, got ${log[0]['-taxIndex']}`);
         for (const e of log.slice(0, 3))
-            assert(e.BracketTarget === want('MFJ', e['-cpiFactor']),
-                `cpi ${cpi}, ${e.year}: ceiling ${e.BracketTarget}, want ${want('MFJ', e['-cpiFactor'])}`);
+            assert(e.BracketTarget === want('MFJ', e['-taxIndex']),
+                `cpi ${cpi}, ${e.year}: ceiling ${e.BracketTarget}, want ${want('MFJ', e['-taxIndex'])}`);
     }
     const single = simulate({ ...ACA_LIVE, ...ACA_ARM, hasSpouse: false, birthyear2: 0 }).log[0];
     assert(single.status === 'SGL' && single.BracketTarget === want('SGL', 1),
@@ -7589,18 +7589,45 @@ test('bothOnMedicareAtStart: AND semantics, single filer, and the missing-input 
     assert(both(0, 65, true, 1952, Y) === false,    'missing inputs are not an assertion of anything');
 });
 
-test('a plan that starts in a future year opens with the brackets already aged to it', () => {
-    // simulate pre-compounds cpi/inflation/medicare over `gapYears`, the distance from the wall
-    // clock to the plan's first year, so year 0 of a 2031 plan is not priced in today's brackets.
-    // The wall clock is read inside the engine, so the expectation is computed from the same clock:
-    // a pinned year would start failing on 1 January. Both Math.max and the subtraction survived
-    // the mutation run.
-    const here = new Date().getFullYear();
-    const at = y => simulate({ ...BASE, IRA1: 1000000, cpi: 0.03, startInYear: y, startYear: y }).log[0]['-cpiFactor'];
-    assertNear(at(here), 1, 'a plan starting this year has no gap to close', 1e-9);
-    assertNear(at(here + 5), Math.pow(1.03, 5), 'five years out opens five years of CPI ahead', 1e-6);
-    // Math.max(0, ...) is the floor: a start year already behind us cannot wind the brackets back.
-    assertNear(at(here - 5), 1, 'a start year in the past is clamped, never negative', 1e-9);
+test('a plan that starts in a future year opens with both indexes already aged to it', () => {
+    // Two anchors. `-cpiFactor` counts from the wall clock, for amounts typed in today's dollars;
+    // `-taxIndex` counts from the year TAXData is stated in, for the tables. Each expectation is
+    // computed from its own anchor, so neither starts failing on 1 January.
+    const here = new Date().getFullYear(), T = TAXData.FEDERAL.YEAR;
+    const row = y => simulate({ ...BASE, IRA1: 1000000, cpi: 0.03, startInYear: y, startYear: y }).log[0];
+    assertNear(row(here)['-cpiFactor'], 1, 'a plan starting this year has no gap to close', 1e-9);
+    assertNear(row(here + 5)['-cpiFactor'], Math.pow(1.03, 5), 'five years out opens five years of CPI ahead', 1e-6);
+    // Math.max(0, ...) is the floor on both: a start year behind the anchor cannot wind anything back.
+    assertNear(row(here - 5)['-cpiFactor'], 1, 'a start year in the past is clamped, never negative', 1e-9);
+    assertNear(row(T)['-taxIndex'], 1, 'a plan starting in the tables\' year prices them as printed', 1e-12);
+    assertNear(row(T + 5)['-taxIndex'], Math.pow(1.03, 5), 'five years past the tables\' year, five years of CPI', 1e-6);
+    assertNear(row(T - 5)['-taxIndex'], 1, 'a start before the tables\' year is clamped, never deflated', 1e-9);
+});
+
+test('P140a: the tax tables are indexed from their own year, whatever the wall clock reads', () => {
+    // The same plan, starting the year after the tables' year, run with "today" in the tables' year
+    // and again with today in the plan's first year - which is what every run does from 1 January of
+    // that year. Spending is typed in today's dollars, so the second run types it one year higher to
+    // describe the same plan. Nothing else in BASE is in today's dollars. Every tax figure must agree;
+    // before the fix the second run priced its first year on the tables unindexed.
+    const T = TAXData.FEDERAL.YEAR;
+    const plan = { ...BASE, IRA1: 1000000, cpi: 0.03, inflation: 0.03, startInYear: T + 1, startYear: T + 1 };
+    const early = simulate({ ...plan, todayYear: T }).log[0];
+    const late  = simulate({ ...plan, todayYear: T + 1, spendGoal: BASE.spendGoal * 1.03 }).log[0];
+    assertNear(late['-taxIndex'], 1.03, 'one year past the tables\' year carries one year of CPI', 1e-12);
+    assertNear(late['-cpiFactor'], 1, 'while amounts typed today are already in the start year\'s dollars', 1e-12);
+    for (const k of ['-taxIndex', '-fedDeduction', 'FedTax', 'StateTax', 'totalTax', 'IRMAA'])
+        assertNear(late[k], early[k], `${k} must not depend on the wall clock`, 1e-9);
+});
+
+test('P140a: every table the tax index scales is stated in the federal table\'s year', () => {
+    // `simulate` anchors one index at TAXData.FEDERAL.YEAR and scales these with it. A table
+    // refreshed to a different year without that anchor moving would be indexed from the wrong year.
+    const T = TAXData.FEDERAL.YEAR;
+    assert(TAXData.IRMAA.YEAR === T, `IRMAA thresholds are ${TAXData.IRMAA.YEAR}, federal tables ${T}`);
+    assert(TAXData.QCD.YEAR === T, `the QCD limit is ${TAXData.QCD.YEAR}, federal tables ${T}`);
+    assert(TAXData.FPL.PLAN_YEAR === T, `the FPL serves ${TAXData.FPL.PLAN_YEAR}, federal tables ${T}`);
+    assert(TAXData.FEDERAL.CAPITAL_GAINS.YEAR === T, `LTCG brackets are ${TAXData.FEDERAL.CAPITAL_GAINS.YEAR}, federal tables ${T}`);
 });
 
 // ── P89: the plan's first year has one definition, and the ACA age gate uses it ────────────────

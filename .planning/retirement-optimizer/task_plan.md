@@ -85,6 +85,202 @@ The plan bank is **19 households**, and #244 added none: correcting the IRMAA la
 built in `3c30911`. Measured with `plans.list()` on 2026-09-25, after the 2026-09-24 entry in
 `progress.md` said 20 and said the household had been restored. Both halves of that were wrong.
 
+## P140: tax tables keyed by year - the published 2027 federal figures, and the prior year  *(2026-11-26, user-raised. PRIORITY UNASSIGNED. `P140a` BUILT the same day, uncommitted, must merge before 2027-01-01; `b`-`g` PROPOSAL)*
+
+**The user's request:** "2027 Federal tax figures are (I believe) now available - propose a plan for
+handling real rather than inflated figures for next year - perhaps a parallel table indexed by the
+year. A logical extension might be to allow calculation of the prior year taxes, too."
+
+**They are published.** IRS Rev. Proc. 2026-35, released 2026-11-05
+([KPMG summary](https://kpmg.com/us/en/taxnewsflash/news/2026/11/rev-proc-2026-35-inflation-adjustments-2027.html)).
+Secondary sources agree on: standard deduction $33,200 joint / $16,600 single; the 65+ add-on $1,700
+per person joint, $2,100 single; thresholds up about 3.2%; 37% from $793,650 joint / $661,375 single.
+**Read the Rev. Proc. itself before typing any figure**; the search results already warn that some
+summaries are careless. What every tool prices for 2027 today, at the 2.5% default inflation:
+
+| figure | published 2027 | 2026 x 1.025, what the tools use | tools are |
+|---|---|---|---|
+| standard deduction, joint | 33,200 | 33,005 | 195 low |
+| standard deduction, single | 16,600 | 16,503 | 97 low |
+| 65+ add-on, joint, per person | 1,700 | 1,691 | 9 low |
+| 37% floor, joint | 793,650 | 787,918 | 5,732 low |
+| 37% floor, single | 661,375 | 656,615 | 4,760 low |
+
+Small per figure, one-signed: indexing ran about 3.2% against an assumed 2.5%, so every threshold is
+low and every household is priced slightly high.
+
+**How the year works today** (read and measured 2026-11-26):
+
+1. Every table carries ONE `YEAR` (2026), and `calculateTaxes` scales federal, capital-gains, state and
+   IRMAA-threshold figures by ONE factor, `inflation`. There is nowhere to put a second year.
+2. **The Income Tax Planner is anchored correctly**: year `y` is priced at `(1 + i)^(y - 2026)`
+   (`indexFactors` in `taxcalc_core.js`), counted from the tables' year. Its year runs 2026-2035 and
+   cannot go back, and it opens on 2026 whatever the date.
+3. **The Optimizer is anchored at the wall clock, not at the tables' year.** `simulate` sets
+   `cpiRate = (1 + cpi)^(startYear - todayYear)` with `todayYear = new Date().getFullYear()`. That is
+   1.0 in 2026 because 2026 is also the tables' year - right by coincidence. **From 2027-01-01 it is a
+   year short for every plan, in every year of the plan.** Measured with `todayYear` pinned, one joint
+   65+ CA household starting 2027 at 3% CPI: the federal deduction is $35,500 (2026's figure, not
+   indexed) against $36,565 with the year indexed, and year-0 tax rises $1,748 (federal $1,356, state
+   $393) for no change in the plan. The real 2027 deduction for that couple is $36,600. Medicare
+   dollars already had exactly this fixed: `medicareRate` is anchored at `TAXData.IRMAA.YEAR`, and the
+   comment in `simulate` says why. Rolling `FEDERAL` to 2027 in January hides the federal half only;
+   all 51 state tables stay 2026 and go unindexed in 2027. `QCD.AMOUNT` carries the same dependency,
+   stated in its own comment as a refresh chore.
+4. `cpiRate` does two jobs: it carries today's-dollar inputs forward (`iraBaseGoal`, spending), which
+   SHOULD count from today, and it indexes tax tables, which must count from each table's own year.
+   Splitting the two jobs is the core of the fix.
+5. `checkStateSources()` fails a state figure older than `TAXData.FEDERAL.YEAR` unless it is marked
+   `pending`. Moving `FEDERAL.YEAR` to 2027 now would fail about 40 states whose 2027 figures are not
+   out.
+
+**Proposed design: every table is priced from its own year.**
+
+- **One tax index**, answering "CPI from year A to year B". The Income Tax Planner's is
+  `(1 + i)^(B - A)`. The Optimizer's records its cumulative factor for each calendar year it simulates
+  (a Monte Carlo path included, since CPI differs by path) and extrapolates at the assumed CPI for years
+  before the plan starts. Every lookup scales a table by `index(table.YEAR, taxYear)`, so a 2027
+  federal table and the 2026 state tables are each right in the same plan year.
+- **`TAXData.FEDERAL_BY_YEAR`**, the parallel table the user suggested, keyed by year and holding only
+  what a Rev. Proc. indexes: `std`, `stdbump`, the ordinary brackets and the capital-gains brackets,
+  each entry with its `YEAR` and a `source` (Rev. Proc. number and date). Figures that never index
+  (NIIT thresholds, the $3,000 loss limit, the safe-harbor AGI, the Social Security thresholds) stay
+  once, in `FEDERAL`. Every entry ends at the `{ l: Infinity }` row. The `nr` column has no reader
+  by that name; derive it or drop it rather than retype it per year.
+- **`federalFor(taxYear)`**: a published year gets its own table at factor 1; a later year gets the
+  newest published table indexed from ITS year; a year before the earliest table is REFUSED, never
+  deflated - a prior-year return priced on deflated current law is wrong wherever the law changed.
+- **`TAXData.FEDERAL` stays the anchor**: the year the tool calls "this year", which every state must
+  be current for, so `checkStateSources()` keeps its meaning. The 2027 entry is data AHEAD of the
+  anchor until January; when the anchor rolls, the state re-check fires as designed.
+- **Engine signature.** `calculateTaxes` and the helpers that read a federal table with a factor
+  (`getRateBracket`, `findUpperLimitByAmount`, `findLimitByRate`, `computeBracketCeiling`,
+  `getLTCGBracketRoom`, `getLTCGBracketTopRate`, `ratesAtLimit`, `nominalRateAtLimit`, `calcIRMAA`,
+  `getIRMAATier`, `getQCDLimit`) take `taxYear` and the index instead of a bare factor. About 27
+  `calculateTaxes` call sites across `optimizer_core.js`, `taxcalc_core.js`, `Retirement_Projection.html`,
+  `standalone/irmaa_and_rmds.html`, the planner page and the suites. Considered and deferred: pricing a
+  year's tables ONCE into an object and passing that. Cleaner, and faster on the old laptops the
+  audience runs, since the ceiling search calls the engine many times a year, but a much larger diff.
+  Thread `(taxYear, index)` first; pre-pricing is a performance follow-up if `P34` measures it worth it.
+
+**The gate: plumbing first, data second.** With `FEDERAL_BY_YEAR` holding only the 2026 entry and
+`todayYear` pinned to 2026, the refactor must be byte-identical over the 19 `plans/` households and all
+five suites (PR #234's byte-identity harness is the template). Only then does the 2027 entry go in, as
+its own commit, with the difference it makes measured. A refactor that moves numbers and a data change
+that moves numbers never share a diff.
+
+- [x] **P140a the wall-clock anchor, Optimizer and Projection.** BUILT 2026-11-26, uncommitted; MUST
+  MERGE BEFORE 2027-01-01. `simulate` now carries `sim.taxIndex`, the statutory clock anchored at
+  `TAXData.FEDERAL.YEAR` and stepped by the same `cpi_t` as `cpiRate`; the 16 tax-table call sites
+  (brackets, deductions, LTCG, IRMAA thresholds, FPL, QCD, `taxArgs`) read it, and `cpiRate` keeps the
+  amounts typed in today's dollars (Social Security, pension, IRA goal, flat advisor fee). New log key
+  `-taxIndex`; the four UI readers that convert table figures (threshold series, ACA note, MAGI marker,
+  Limit-menu deduction) read it. `Retirement_Projection.html` had the same defect (`inflMult` counted
+  from the plan's first year): a `taxMult` from the tables' year now feeds `calculateTaxes`, `calcIRMAA`
+  and the chart's threshold lines. Evidence: 95 of 95 plan-bank runs byte-identical to `HEAD` (19
+  households x as-is, `todayYear` 2026, start 2029, a bumpy inflation path, the same with fixed
+  indexing); under a 2027 clock all 19 move, the old engine overcharging lifetime tax 0.4%-4.7%
+  ($8.8k-$90k) and bracket fillers under-filling year 0 by up to $2,453; no success flips. Suites
+  545 / 80 / 62 / 15 / 50, page suite 540. No changelog entry and no title bump: nothing a user can see
+  today. If it merges AFTER 1 January, users will have seen 2027 priced on 2026 tables and it then
+  needs an entry.
+- [ ] **P140b the index and the resolver.** `FEDERAL_BY_YEAR` with the 2026 entry only, `federalFor`,
+  the index, every caller converted. Gate: byte-identical, above.
+- [ ] **P140c the 2027 data.** Rev. Proc. 2026-35 read from irs.gov, every figure, both statuses. Add
+  ONLY what is published, check each: the CMS 2027 IRMAA ladder and Part B / D premiums (CMS usually
+  publishes mid-November; same year-keyed shape, own entry), the 2027 QCD limit (an IRS notice). The
+  SALT cap needs nothing: its 1%/yr step is statutory and already computed. Measure the change over
+  the plan bank, year-0 and lifetime tax per household, and report it in the commit.
+- [ ] **P140d the planner's year.** Range: earliest table year to calendar year + 9. Opens on the
+  calendar year, clamped to the range; a share link's `yr` still wins. The year readout says where
+  the figures came from, ON the page and not in a tooltip (phones cannot hover over anything):
+  "2027: IRS figures, Rev. Proc. 2026-35" or "2030: 2027 IRS figures + 2.5%/yr". `taxcalc.js` gets the
+  same range through `configFromParams`.
+- [ ] **P140e the prior year.** 2025 federal from Rev. Proc. 2024-40 AS AMENDED by P.L. 119-21, which
+  raised the 2025 standard deduction after the Rev. Proc. was issued; read both. The senior deduction
+  and the $40,000 SALT cap already begin in 2025 in `TAXData.OBBBA`. **The cheap half first:** from
+  January, "last year" is 2026, already the anchor table, so the case most people want - last year's
+  return in February - needs only `P140d`'s range to reach below the calendar year. 2025 itself is for
+  amended returns and for IRMAA (2025 income sets the 2027 surcharge). State tax: user decision below.
+- [ ] **P140f tests**, invariants and not engine-output literals: a published year resolves to its own
+  table at factor 1; the year after the newest resolves to it indexed one year; a year before the
+  earliest is refused; every entry has a source, a `YEAR`, ascending floors and the `Infinity` row;
+  the `P140a` anchor regression. Counts reconciled in `TestTiers.EXPECTED` and `.githooks/README.md`.
+- [ ] **P140g docs.** README for both tools ("federal figures are the IRS's published ones through
+  2027; later years are indexed at your inflation assumption"); one Optimizer changelog entry for the
+  branch; the planner's change note. Also a stale line found while reading: the planner's How to Use
+  modal says the SALT cap and its threshold are held at their 2025 amounts and understate the cap by
+  about $400 in 2026. Untrue since `P64d`: `calcAt` passes `taxYear` and the engine indexes both.
+  Fix it here or sooner.
+
+**DECISION NEEDED (user): state tax for a prior year.** No state table here is older than 2026, except
+the California 2025 figures recorded in `research/INCOME_TAX_PLANNER_INPUTS.md`.
+1. **Recommended:** federal for the prior year; state only where a table for that year exists,
+   otherwise the state line says there is no 2025 table and the total says it leaves state out.
+2. Deflate 2026 state law to 2025, labeled an estimate. Wrong for every state that changed rates or
+   brackets for 2026, on a figure someone may copy onto a return.
+3. Source 2025 tables for every taxing state. Weeks of work for a year that stops mattering in April.
+
+**Order:** `P140a` before 2027-01-01; `P139` any time, it does not touch the engine; then
+`P140b` -> `c` -> `d` -> `e`, with `f` and `g` riding each.
+
+## P139: saved plans for the Income Tax Planner  *(2026-11-26, user-raised. PRIORITY UNASSIGNED. PROPOSAL, nothing in the tree)*
+
+**The user's request:** "IncomeTaxPlanner.html needs a save function like the RetirementOptimizer."
+The page is `standalone/IncomeTaxPlanner.html` (v2.15); the root `IncomeTaxPlanner.html` is a redirect.
+
+**What it has today:** a Share link and a CSV Export. Nothing persists; nothing on the page touches
+`localStorage`. A person who wants to come back to a return keeps a URL.
+
+**What "like the Optimizer" means** (`P113`, `P114`; the File tab and the `saveScenario` /
+`applyScenario` / `exportScenario` / `importScenario` family in `optimizer_ui.js`): a name box and a
+notes box; Save, where saving over a name replaces that plan and says so; Save & Export; one list for
+Load, Delete and Export; Import through the same preview Load uses. Every entry carries `version` (the
+payload format), `appVersion` (the release that produced its numbers), `savedAt`, `notes`, a `summary`
+snapshot and `sourceFile`, and `normalizeScenarioEntry` brings any entry to one shape on the way in, so
+Import cannot store something Load refuses.
+
+**The decision that keeps it small: the saved payload IS the share-link parameter set.**
+`buildShareParams()` already serializes every input, and `TaxCalc.configFromParams` in
+`taxcalc_core.js` already reads it back - snapped to what each control can hold, tolerant of the
+retired keys (`me`, `ob`, `sh`, `zl`/`zh`), and shared with the command-line tool. A saved plan stores
+that object and Load runs it through the same reader the URL does. One serialization for Share, Save,
+Export and `taxcalc.js`: an input added to the share link is saved with no further work, and there is
+no second schema to drift. `loadFromURL()` becomes `applyParams(get)`, with the URL as one caller and a
+saved plan as the other.
+
+- [ ] **P139a a storage module**, `savedplans.js`: storage key, format `version`, normalize,
+  list / save / delete, export to `.json` and import with a preview. Page-agnostic: the page supplies
+  `getPayload`, `applyPayload`, `summarize` and `appVersion`, the way `sharepanel.js` serves seven
+  pages. Key `IncomeTaxPlannerPlans`, and no `ad-` / `ads` / `banner` names anywhere (Brave Shields
+  hides them). Every `localStorage` call in try/catch: a blocked store gives a message, not a dead page.
+  Reuse the Optimizer's filename rules (`safeExportFilename`, `stripFileExtension`) rather than copy them.
+- [ ] **P139b the page.** A Saved plans control beside Share and Export: name, notes, Save, Save &
+  Export, the Load / Delete / Export list, Import. The list shows name, tax year, state, filing status,
+  saved date and the first line of the notes. Usable on a phone: nothing essential in a tooltip. Same
+  wording as the Optimizer wherever the action is the same.
+- [ ] **P139c what changed since the save.** The snapshot is the pinned row's federal, state, NIIT,
+  IRMAA, total tax and net income, with `yr` and `appVersion`. On Load the page recomputes, and when
+  the total differs says so in one line: "Total tax was $41,210 when saved under v2.15; $40,870 now."
+  This is what makes `P140` survivable: a 2027 plan saved on inflated figures moves when the published
+  table lands, and the line tells the person a release moved it, not their inputs.
+- [ ] **P139d import guards.** An Optimizer scenario file is refused by name ("this is a Retirement
+  Optimizer plan"), never half-applied. A file from a later planner version loads with a warning, as
+  in the Optimizer.
+- [ ] **P139e tests.** Round trip over every `DETAIL_FIELDS` key (`buildShareParams` -> save -> load ->
+  `buildShareParams`, identical); a payload with no `version`; an Optimizer file refused; storage
+  that throws. Pick the suite that already covers `taxcalc_core.js`, and reconcile `TestTiers.EXPECTED`
+  and `.githooks/README.md` in the same commit.
+- [ ] **P139f docs.** The How to Use modal, README's Income Tax Planner section, `UsageGuide.md` where
+  it lists the page's controls, a v2.16 change note. The privacy line, short and true: saved plans stay
+  in this browser on this device; an exported file holds your income figures.
+
+**Not in scope, offered:** moving the Optimizer onto `savedplans.js`. Its store has a legacy key,
+`SCENARIO_VERSION` 4, the GK and rails folding in `applyScenario` and the `P113` load report; that is
+its own phase with its own zero-diff check. Build the module so it COULD; do not do it here.
+
+**Size:** a module of about 250 lines, about 150 in the page, 6-8 tests. No engine change.
+
 ## P138: an age-driven spending shape (the "smirk" and the "smile") as an alternative to Spend Delta  *(2026-11-10, user-raised. PRIORITY UNASSIGNED. PROPOSAL, revised the same day for Tharp (2026): prototype measured in scratch, nothing in the tree)*
 
 **The user's request:** "Tharp proposed that the 'Spending Smile' of Blanchett is in fact a 'Spending

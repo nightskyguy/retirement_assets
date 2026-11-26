@@ -5885,3 +5885,28 @@ income targets - ordinary income realized and LTCG realized - over a menu of abo
 which is the e-ORP-shaped idea. Its gate `P103c1` is PROVISIONALLY FAILING: only 4.2% of best-row
 plan-years land within \$1,000 of an edge, and the first version of that measurement was wrong, so the
 next step is counting binding years per family to confirm 6 of 33 generalizes before anything is built.
+
+## 2026-11-26 - P139 and P140 proposed; P140a built (branch `worktrees/income-tax-planner-save-years-7c03f2`, uncommitted)
+
+**Two phases written from the user's requests**: `P139` saved plans for the Income Tax Planner (the
+payload is the share-link parameter set, so Share, Save, Export and `taxcalc.js` share one reader), and
+`P140` tax tables keyed by year (IRS Rev. Proc. 2026-35, released 2026-11-05, has the 2027 figures;
+`FEDERAL_BY_YEAR`, each table indexed from its own year, plumbing proved byte-identical before any data
+goes in; the prior year without deflating current law). One user decision is open in `P140`: state tax
+for a prior year.
+
+**`P140a` built, because it has a date on it.** Reading how the year works found the Optimizer's
+statutory index anchored at the wall clock (`todayYear`) rather than at the tables' year. Right in 2026
+by coincidence; from 2027-01-01 every plan prices its first year on the 2026 tables unindexed and stays
+a year behind. Measured before the fix, `todayYear` pinned: one single CA filer starting 2027 got a
+$24,150 deduction where $24,694.50 is the indexed figure. `sim.taxIndex` now carries the tables, and
+`cpiRate` the amounts typed in today's dollars. `Retirement_Projection.html` had the same defect and
+the same fix (`taxMult`). The Income Tax Planner was already anchored correctly (`indexFactors`).
+
+Proof of neutrality today: a scratch harness hashed log and totals for the 19 plan-bank households in
+five variants against `HEAD`'s engine - 95 of 95 identical. Under a 2027 clock all 19 move: lifetime tax
+0.4%-4.7% lower, bracket fillers filling up to $2,453 more in year 0, no success flips. Suites
+545 / 80 / 62 / 15 / 50 (core +2 tests: the start-year test rewritten for both anchors, a wall-clock
+regression test, and a pin that IRMAA, QCD, FPL and LTCG tables share the federal year); page suite 540;
+pins, comment-history, architecture and markdown checks clean. Cache tokens `111ef8` on the changed
+scripts; the `<title>` stays at 11.1d9d with no changelog entry, since nothing is visible today.

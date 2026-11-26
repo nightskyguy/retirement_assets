@@ -5885,3 +5885,81 @@ income targets - ordinary income realized and LTCG realized - over a menu of abo
 which is the e-ORP-shaped idea. Its gate `P103c1` is PROVISIONALLY FAILING: only 4.2% of best-row
 plan-years land within \$1,000 of an edge, and the first version of that measurement was wrong, so the
 next step is counting binding years per family to confirm 6 of 33 generalizes before anything is built.
+
+## 2026-11-26 - P139 and P140 proposed; P140a built (branch `worktrees/income-tax-planner-save-years-7c03f2`, commit `b053c35`)
+
+**Two phases written from the user's requests**: `P139` saved plans for the Income Tax Planner (the
+payload is the share-link parameter set, so Share, Save, Export and `taxcalc.js` share one reader), and
+`P140` tax tables keyed by year (IRS Rev. Proc. 2026-35, released 2026-11-05, has the 2027 figures;
+`FEDERAL_BY_YEAR`, each table indexed from its own year, plumbing proved byte-identical before any data
+goes in; the prior year without deflating current law). One user decision is open in `P140`: state tax
+for a prior year.
+
+**`P140a` built, because it has a date on it.** Reading how the year works found the Optimizer's
+statutory index anchored at the wall clock (`todayYear`) rather than at the tables' year. Right in 2026
+by coincidence; from 2027-01-01 every plan prices its first year on the 2026 tables unindexed and stays
+a year behind. Measured before the fix, `todayYear` pinned: one single CA filer starting 2027 got a
+$24,150 deduction where $24,694.50 is the indexed figure. `sim.taxIndex` now carries the tables, and
+`cpiRate` the amounts typed in today's dollars. `Retirement_Projection.html` had the same defect and
+the same fix (`taxMult`). The Income Tax Planner was already anchored correctly (`indexFactors`).
+
+Proof of neutrality today: a scratch harness hashed log and totals for the 19 plan-bank households in
+five variants against `HEAD`'s engine - 95 of 95 identical. Under a 2027 clock all 19 move: lifetime tax
+0.4%-4.7% lower, bracket fillers filling up to $2,453 more in year 0, no success flips. Suites
+545 / 80 / 62 / 15 / 50 (core +2 tests: the start-year test rewritten for both anchors, a wall-clock
+regression test, and a pin that IRMAA, QCD, FPL and LTCG tables share the federal year); page suite 540;
+pins, comment-history, architecture and markdown checks clean. Cache tokens `111ef8` on the changed
+scripts; the `<title>` stays at 11.1d9d with no changelog entry, since nothing is visible today.
+Committed as `b053c35` at the user's request; not pushed.
+
+**Planning pass (`/plan`), same day.** Session catch-up found nothing unsynced. The day's research went
+to `findings.md` under "Tax tables and the year" - the web-sourced 2027 figures belong there rather than
+in `task_plan.md` - with a new rule under "On engine code": an index is anchored at its figures' year,
+never the wall clock. Two user decisions recorded in `P140`: **`P140b` is next**, and **a prior year
+prices state tax only where a table for that year exists**, never deflated. `P140b` is now six steps
+(`b1` data shape through `b6` the gate), each with what done looks like.
+
+**`P140b1` built, committed `2b32fb2`.** The 2026 federal figures moved into `FEDERAL_BY_YEAR` in
+`taxengine.js`; `TAXData.FEDERAL`'s status tables and capital-gains tables now reference that entry,
+so there is still one copy of each figure and no reader changed. One correction on the way: the plan
+and findings said `nr` had no reader, and `nominalRateAtLimit` reads it - the grep behind the claim was
+cut off by its result limit. Both records corrected, a measurement rule added, and `nr` kept typed with
+a test that re-derives it. Two engine tests added (31, 31b), each shown to fail on a mutated table.
+Evidence: 95 of 95 plan-bank runs byte-identical to `b053c35` plus the 2027-clock set; suites
+545 / 82 / 62 / 15 / 50, pins matched, page suite 540, the Income Tax Planner's badge 82 of 82 on the
+fresh copy. Tokens `111ef9` on `taxengine.js` (four pages), `taxengine.tests.js`, `optimizer_tests.js`
+and the tier-2 loader.
+
+**`P140b2` built, uncommitted.** `federalTableFor(taxYear, td)` picks the entry a tax year is priced
+from: its own, else the newest before it, `null` before the earliest, and a TypeError for anything
+that is not a whole year. Two tests (32, 32b) on a gapped synthetic table and on the real anchor; a
+nearest-year mutant is rejected. Nothing calls it yet, so the plan bank stays 95 of 95 identical.
+Suites 545 / 84 / 62 / 15 / 50, page suite 540, planner badge 84 of 84. Tokens `111ef9a` (same hour as
+`b1`, hence the letter). Found while writing it: `calculateTaxes` defaults `taxYear` to 2025, which
+this resolver refuses - recorded against `b4`, where `taxYear` has to become required. Committed
+`9df5427`.
+
+**`P140b3` built, uncommitted.** The tax index object, `{ year, from(tableYear) }`, in two
+constructors: `taxIndexAtRate` (closed form, `taxengine.js`) and `taxIndexOfSim` (the run's own path,
+`optimizer_core.js`, backed by a new per-year record `sim.taxIndexByYear` that a resumed run copies).
+One test of mine was wrong on the first run, not the code: it assumed `nYears` is the horizon, while a
+run lasts to the death age, so the years past the 6-value path stepped at the typed 3% - the index's
+1.5301 was exactly 1.2079 x 1.03^8. Fixed the expectation. Each Optimizer line was then removed in a
+scratch copy and caught by its own test. One new comment tripped the history-comment counter
+("reproduced"), reworded, budget back at 304. Nothing reads the index yet: plan bank 95 of 95 and the
+2027-clock set identical to `b053c35`. Suites 547 / 85 / 62 / 15 / 50, page suite 540, planner badge 85
+of 85. Tokens `111ef9b`. An `rm -rf` of a scratch folder was refused by the safety check (an
+unguarded variable path); the folders were new, so the removal was simply dropped.
+
+**`P140b4` built, uncommitted.** Every engine lookup now takes a tax index as well as a factor. One
+rule changed from the plan: a bare number does not throw, because the suites pass a plain factor at
+about 200 sites where it is the right input; it keeps its old meaning exactly, and catching a missed
+production caller moves to `b5`'s guard tests. The federal figures resolve by the index's year, every
+other table from its own YEAR, and `calculateTaxes` takes its tax year from the index (a disagreeing
+`taxYear` throws). Three engine tests (34: index and factor bit-identical across states, statuses,
+incomes and every lookup; 34b: a synthetic later federal entry is used for its year and after while
+states and IRMAA index from their own; 34c: misuse throws) and one core test, all green on the first
+run. Callers still pass numbers, so the plan bank and the 2027-clock set are 95 of 95 identical, and
+the number path's timing moved +0.2% (77 ms minimum both ways). Suites 548 / 88 / 62 / 15 / 50, page
+suite 540, planner badge 88 of 88. Tokens `111ef9c` (b3's `111ef9b` had been loaded in the preview, so
+a reload could have served it from cache).

@@ -4524,7 +4524,7 @@ function computeTaxThresholdSeries(log, adj) {
     const boundary = (table, idx) => log.map(r => {
         const brks = table?.[r.status]?.brackets;
         const l = brks?.[idx]?.l;
-        return (l == null || !isFinite(l)) ? null : l * (r['-cpiFactor'] ?? 1);
+        return (l == null || !isFinite(l)) ? null : l * (r['-taxIndex'] ?? 1);
     });
     const out = [];
 
@@ -9070,7 +9070,7 @@ function buildLimitLadderSVG(status, cpiAdj, selectedLimit) {
     let acaNote = '';
     if (showLadderACA) {
         const row = Array.isArray(lastSimulationLog) ? lastSimulationLog[0] : null;
-        const cpiOf = row ? (row['-cpiFactor'] || 1) : 1;
+        const cpiOf = row ? (row['-taxIndex'] || 1) : 1;
         // `fixedInc` is the WHOLE benefit and `-taxableSS` the part that reaches AGI, which is the
         // same pair ceilingMAGI() differences. Not SS1/SS2 - no such log fields exist, and reading
         // them would have quietly made this offset zero in every plan.
@@ -9104,7 +9104,7 @@ function buildLimitLadderSVG(status, cpiAdj, selectedLimit) {
     out += `<line x1="${x(selMagi).toFixed(1)}" y1="${MARK_TOP}" x2="${x(selMagi).toFixed(1)}" y2="${MARK_BOT}" stroke="${STROKE.limit}" stroke-width="2" stroke-dasharray="4 3"/>`;
 
     const e = Array.isArray(lastSimulationLog) ? lastSimulationLog[0] : null;
-    const planMagi = e && e.MAGI > 0 ? e.MAGI / (e['-cpiFactor'] || 1) : null;
+    const planMagi = e && e.MAGI > 0 ? e.MAGI / (e['-taxIndex'] || 1) : null;
     if (planMagi) {
         out += `<line x1="${x(planMagi).toFixed(1)}" y1="${MARK_TOP}" x2="${x(planMagi).toFixed(1)}" y2="${MARK_BOT}" stroke="${STROKE.plan}" stroke-width="1.5"/>`;
     }
@@ -9335,7 +9335,7 @@ function updateACAWarning() {
 // more than the drift it removes.
 function dropdownDeduction(status) {
     const e = Array.isArray(lastSimulationLog) ? lastSimulationLog[0] : null;
-    if (e && e['-fedDeduction'] > 0) return e['-fedDeduction'] / (e['-cpiFactor'] || 1);
+    if (e && e['-fedDeduction'] > 0) return e['-fedDeduction'] / (e['-taxIndex'] || 1);
     return TAXData.FEDERAL[status]?.std ?? 0;
 }
 
@@ -9384,9 +9384,9 @@ function generateStratRateOptions() {
     const status = getDropdownStatus();
     const isMFJ = status === 'MFJ';
 
-    // Compound CPI from TAX_DATA_BASE_YEAR to current year. For tables of the current year this is
-    // 1, which is exactly what the engine uses for a plan starting this year (`sim.cpiRate` opens at
-    // 1 in the plan's first year and compounds from there), so the menu and the engine agree.
+    // Compound CPI from TAX_DATA_BASE_YEAR to the current year: exactly the factor the engine prices
+    // a plan starting this year with (`sim.taxIndex`, anchored at the tables' year), so the menu and
+    // the engine agree whether or not the tables are this year's.
     const currentYear = new Date().getFullYear();
     const yearsFromBase = Math.max(0, currentYear - TAX_DATA_BASE_YEAR);
     const cpiAdj = Math.pow(1 + cpi, yearsFromBase);
@@ -9487,8 +9487,8 @@ function generateStratRateOptions() {
     // the Optimizer's ⚠️ row flag (from acaBreachYears) is the signal for that.
     //
     // Each figure is the cap the engine holds MAGI under (the ACA branch of computeBracketCeiling):
-    //     TAXData.FPL * multiple/100 * cpiRate
-    // with `cpiAdj` standing in for `cpiRate` at a plan starting this calendar year. TAXData.FPL
+    //     TAXData.FPL * multiple/100 * taxIndex
+    // with `cpiAdj` standing in for `taxIndex` at a plan starting this calendar year. TAXData.FPL
     // carries the year lag and the Alaska/Hawaii caveat, and no year of CPI goes on top of it.
     const fplBase = TAXData.FPL[status];
     const acaEntries = [

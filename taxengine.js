@@ -14,6 +14,73 @@ const IRMAA_SGL_BRACKETS = [
 	{ l: Infinity, monthlyCost: 487.00 + 91.00, tier: "Tier 5" },
 ];
 
+// The federal figures a Revenue Procedure re-issues every year, one entry per tax year, exposed as
+// TAXData.FEDERAL_BY_YEAR. An entry holds only what is indexed: the standard deduction and its 65+
+// add-on, the ordinary brackets and the capital-gains brackets. Figures set by statute and never
+// indexed (NIIT thresholds, the capital-loss limit, the safe-harbor AGI) stay in TAXData.FEDERAL, once.
+//
+// TAXData.FEDERAL.MFJ / .SGL and TAXData.FEDERAL.CAPITAL_GAINS.MFJ / .SGL are the SAME objects as the
+// entry for TAXData.FEDERAL.YEAR, the anchor year - not copies. An entry for another year sits beside
+// the anchor without replacing it, because checkStateSources() measures every state against
+// FEDERAL.YEAR. Out here rather than inside TAXData for the reason IRMAA_SGL_BRACKETS is.
+//
+// Ordinary bracket rows: `l` is the top of the band taxed at `r`, and the last row's is Infinity. `nr`
+// is the average rate on taxable income of exactly `l` (the last row's is its own `r`), which
+// nominalRateAtLimit reads. It is typed, not computed, and taxengine.tests.js re-derives every one from
+// the rows above it, so a new year's typing is checked.
+const FEDERAL_BY_YEAR = {
+	2026: {
+		YEAR: 2026,
+		source: { status: 'published', url: 'https://www.irs.gov/pub/irs-drop/rp-25-32.pdf',
+		          doc: 'IRS Rev. Proc. 2025-32, the 2026 inflation adjustments with the P.L. 119-21 amendments' },
+		MFJ: {
+			std: 32200,
+			age: 65,
+			stdbump: 1650,
+			brackets: [
+				{ l: 24800, r: 0.10, nr: 0.1000 },
+				{ l: 100800, r: 0.12, nr: 0.1151 },
+				{ l: 211400, r: 0.22, nr: 0.1700 },
+				{ l: 403550, r: 0.24, nr: 0.2033 },
+				{ l: 512450, r: 0.32, nr: 0.2281 },
+				{ l: 768700, r: 0.35, nr: 0.2687 },
+				{ l: Infinity, r: 0.37, nr: 0.37 }
+			]
+		},
+		SGL: {
+			std: 16100,
+			age: 65,
+			stdbump: 2050,
+			brackets: [
+				{ l: 12400, r: 0.10, nr: 0.1000 },
+				{ l: 50400, r: 0.12, nr: 0.1151 },
+				{ l: 105700, r: 0.22, nr: 0.1700 },
+				{ l: 201775, r: 0.24, nr: 0.2033 },
+				{ l: 256225, r: 0.32, nr: 0.2281 },
+				{ l: 640600, r: 0.35, nr: 0.3012 },
+				{ l: Infinity, r: 0.37, nr: 0.37 }
+			]
+		},
+		// Ceilings on TAXABLE income; see TAXData.FEDERAL.CAPITAL_GAINS for how they meet NIIT.
+		CAPITAL_GAINS: {
+			MFJ: {
+				brackets: [
+					{ l: 98900, r: 0.00 },      // 0%, always below the NIIT threshold, so a true 0%
+					{ l: 613700, r: 0.15 },     // 15% up to ~$217,800 taxable, 18.8% above it
+					{ l: Infinity, r: 0.20 }    // 20% + 3.8% NIIT = 23.8%, always
+				]
+			},
+			SGL: {
+				brackets: [
+					{ l: 49450, r: 0.00 },      // 0%, always below the NIIT threshold, so a true 0%
+					{ l: 545500, r: 0.15 },     // 15% up to ~$183,900 taxable, 18.8% above it
+					{ l: Infinity, r: 0.20 }    // 20% + 3.8% NIIT = 23.8%, always
+				]
+			}
+		},
+	},
+};
+
 var TAXData = {
 	FEDERAL: {
 		YEAR: 2026,  // Official IRS Revenue Procedure 2025-32
@@ -67,49 +134,13 @@ var TAXData = {
 			// of 0.387 (MFJ) / 0.356 (SGL), which needs about 94 years at optimizer_core.js's
 			// CPI_INDEX_FLOOR of -1%/yr. Not reachable by any plan this tool can build. Pinned by
 			// TEST CASE 6f.
-			MFJ: {
-				brackets: [
-					{ l: 98900, r: 0.00 },      // 0%, always below the NIIT threshold, so a true 0%
-					{ l: 613700, r: 0.15 },     // 15% up to ~$217,800 taxable, 18.8% above it
-					{ l: Infinity, r: 0.20 }    // 20% + 3.8% NIIT = 23.8%, always
-				]
-			},
-			SGL: {
-				brackets: [
-					{ l: 49450, r: 0.00 },      // 0%, always below the NIIT threshold, so a true 0%
-					{ l: 545500, r: 0.15 },     // 15% up to ~$183,900 taxable, 18.8% above it
-					{ l: Infinity, r: 0.20 }    // 20% + 3.8% NIIT = 23.8%, always
-				]
-			}
+			MFJ: FEDERAL_BY_YEAR[2026].CAPITAL_GAINS.MFJ,
+			SGL: FEDERAL_BY_YEAR[2026].CAPITAL_GAINS.SGL,
 		},
-		MFJ: {
-			std: 32200, 
-			age: 65,
-			stdbump: 1650,
-			brackets: [ 
-				{ l: 24800, r: 0.10, nr: 0.1000 },
-				{ l: 100800, r: 0.12, nr: 0.1151 },
-				{ l: 211400, r: 0.22, nr: 0.1700 },
-				{ l: 403550, r: 0.24, nr: 0.2033 },
-				{ l: 512450, r: 0.32, nr: 0.2281 },
-				{ l: 768700, r: 0.35, nr: 0.2687 },
-				{ l: Infinity, r: 0.37, nr: 0.37 }
-			]
-		},
-		SGL: {
-			std: 16100,
-			age: 65,
-			stdbump: 2050,
-			brackets: [
-				{ l: 12400, r: 0.10, nr: 0.1000 },
-				{ l: 50400, r: 0.12, nr: 0.1151 },
-				{ l: 105700, r: 0.22, nr: 0.1700 },
-				{ l: 201775, r: 0.24, nr: 0.2033 },
-				{ l: 256225, r: 0.32, nr: 0.2281 },
-				{ l: 640600, r: 0.35, nr: 0.3012 },
-				{ l: Infinity, r: 0.37, nr: 0.37 }
-			]
-		}
+		// The anchor year's entry, by reference (see FEDERAL_BY_YEAR). The index must match YEAR above;
+		// taxengine.tests.js pins it.
+		MFJ: FEDERAL_BY_YEAR[2026].MFJ,
+		SGL: FEDERAL_BY_YEAR[2026].SGL,
 	},
 		
 	SOCIALSECURITY: {
@@ -1391,6 +1422,10 @@ var TAXData = {
 
 }; // TAXdata
 
+// Every year's federal entry, the anchor year's included (see FEDERAL_BY_YEAR above). A top-level
+// key, not a state: everything that lists states filters on STATE or a two-letter key.
+TAXData.FEDERAL_BY_YEAR = FEDERAL_BY_YEAR;
+
 // No-income-tax states, each as its own dropdown entry (Object.keys(TAXData).length===2 drives
 // the dropdown — see generateStateOptions() in optimizer_ui.js). Shared shape via spread, not by reference,
 // so any future per-state divergence (e.g. NH's now-repealed interest/dividends tax) is safe.
@@ -1663,6 +1698,109 @@ const RMD_TABLE = {
 // and every HTML consumer now get them from here.
 // ============================================================================
 
+// The federal entry a tax year is priced from: the year's own entry when one is published, otherwise
+// the newest one before it, which the caller indexes forward by `taxYear - year`. Returns
+// { table, year }, or null for a year before the earliest entry - never an entry from a LATER year
+// deflated backward, because a prior year priced on deflated current law is wrong wherever the law
+// changed. A year that is not a whole number throws: a missing taxYear must fail where it is passed,
+// not resolve quietly to some table. `td` is a parameter so a test can hand it a table of its own.
+function federalTableFor(taxYear, td = TAXData) {
+    if (!Number.isInteger(taxYear)) throw new TypeError(`federalTableFor: taxYear must be a whole year, got ${taxYear}`);
+    const byYear = td.FEDERAL_BY_YEAR;
+    let best = null;
+    for (const key of Object.keys(byYear)) {
+        const y = Number(key);
+        if (y <= taxYear && (best === null || y > best)) best = y;
+    }
+    return best === null ? null : { table: byYear[best], year: best };
+}
+
+// A TAX INDEX is the factor that carries a table's figures into a tax year's dollars:
+//   { year, from(tableYear) }
+// `from(T)` is the statutory index from year T to `year`, and exactly 1 when T is `year` or LATER: a
+// table stated after the year being priced is used as printed, never deflated. Every table carries
+// its own YEAR, so one index serves a federal table and a state table of different years in the
+// same tax year. This one compounds a single fixed rate, for the tools that assume one
+// (`rate` 0.025 for 2.5%); the Optimizer builds the same shape from its own path (taxIndexOfSim).
+function taxIndexAtRate(taxYear, rate) {
+    if (!Number.isInteger(taxYear)) throw new TypeError(`taxIndexAtRate: taxYear must be a whole year, got ${taxYear}`);
+    if (!Number.isFinite(rate)) throw new TypeError(`taxIndexAtRate: rate must be a number, got ${rate}`);
+    return { year: taxYear, from: T => Math.pow(1 + rate, Math.max(0, taxYear - T)) };
+}
+
+// Every lookup below takes its index argument as EITHER a tax index or a plain number. A number is
+// one factor for every table, with FEDERAL read from the anchor year's entry - exactly what a lookup
+// did before the tables were keyed by year, and what the tests of table mechanics pass. An index
+// prices FEDERAL from the entry federalTableFor picks for its year, and every other table from its
+// own YEAR. Anything else throws, so a caller handing over the wrong thing fails where it calls.
+function isTaxIndex(ix) {
+    return ix !== null && typeof ix === 'object' && typeof ix.from === 'function' && Number.isInteger(ix.year);
+}
+
+function _notAnIndex(ix) {
+    return new TypeError(`expected a factor or a tax index, got ${ix === null ? 'null' : typeof ix}`);
+}
+
+// The federal entry an index prices from and its factor, kept per index object: the Optimizer's
+// ceiling searches ask the same index many times a year. A year before every entry throws rather than
+// pricing on a later year's law.
+const _federalForIndex = new WeakMap();
+function _federalOfIndex(ix) {
+    let hit = _federalForIndex.get(ix);
+    if (!hit) {
+        const r = federalTableFor(ix.year);
+        if (!r) throw new RangeError(`no federal table at or before ${ix.year}`);
+        hit = { table: r.table, factor: ix.from(r.year) };
+        _federalForIndex.set(ix, hit);
+    }
+    return hit;
+}
+
+// The federal tables (`[status]` and `.CAPITAL_GAINS[status]`) a lookup prices from.
+function federalTablesFor(ix) {
+    if (typeof ix === 'number') return TAXData.FEDERAL;
+    if (isTaxIndex(ix)) return _federalOfIndex(ix).table;
+    throw _notAnIndex(ix);
+}
+
+// The factor that carries those federal tables into the year being priced.
+function federalFactor(ix) {
+    if (typeof ix === 'number') return ix;
+    if (isTaxIndex(ix)) return _federalOfIndex(ix).factor;
+    throw _notAnIndex(ix);
+}
+
+// The factor for a table stated in `tableYear`.
+function factorOf(ix, tableYear) {
+    if (typeof ix === 'number') return ix;
+    if (isTaxIndex(ix)) return ix.from(tableYear);
+    throw _notAnIndex(ix);
+}
+
+// The factor for a TAXData entity by name: FEDERAL through its year's entry, any other table (a
+// state, IRMAA) from its own YEAR, or the anchor year for one that states none.
+function entityFactor(entity, ix) {
+    if (typeof ix === 'number') return ix;
+    if (entity === 'FEDERAL') return federalFactor(ix);
+    return factorOf(ix, TAXData[entity]?.YEAR ?? TAXData.FEDERAL.YEAR);
+}
+
+// An entity's bracket rows for `status`: FEDERAL from its year's entry under an index.
+function entityBrackets(entity, status, ix) {
+    if (entity !== 'FEDERAL' || typeof ix === 'number') return getRateBracket(entity, status);
+    const brks = federalTablesFor(ix)[status]?.brackets;
+    if (!brks) console.error(`Invalid tax data: entity="FEDERAL", status="${status}"`);
+    return brks ?? null;
+}
+
+// An index whose every factor is `k` times the one given: what a threshold the plan FORECASTS
+// (indexed a further k beyond the year) is priced with. A number is simply multiplied.
+function scaleTaxIndex(ix, k) {
+    if (typeof ix === 'number') return ix * k;
+    if (isTaxIndex(ix)) return { year: ix.year, from: T => ix.from(T) * k };
+    throw _notAnIndex(ix);
+}
+
 function getRateBracket(entity, status) {
     let brks = TAXData?.[entity]?.[status]?.brackets;
 
@@ -1723,12 +1861,12 @@ function findBracketIndex(brackets, amount, multiplier = 1) {
  * @note Does not validate input parameters for reasonableness
  */
 function findLimitByRate(entity, status, tgtrate, inflation = 1) {
-    let brks = getRateBracket(entity, status)
+    let brks = entityBrackets(entity, status, inflation)
 
     let limit = 0;
     let rate = 0;
 
-    const lims = rowThresholds(entity, brks, inflation);
+    const lims = rowThresholds(entity, brks, entityFactor(entity, inflation));
     for (let i = 0; i < brks.length; i++) {
         if (brks[i].r <= tgtrate) {
             limit = lims[i];
@@ -1742,8 +1880,8 @@ function findLimitByRate(entity, status, tgtrate, inflation = 1) {
 // For example if the limits are 10, 100, 1000 and the amount is 150 - we want the 1000 (less 1).
 // If amount is 99, we want 100.
 function findUpperLimitByAmount(entity, status, amount, inflation = 1) {
-    let brks = getRateBracket(entity, status)
-    const lims = rowThresholds(entity, brks, inflation);
+    let brks = entityBrackets(entity, status, inflation)
+    const lims = rowThresholds(entity, brks, entityFactor(entity, inflation));
     let idx = -1;
     for (let i = 0; i < brks.length; i++) { if (lims[i] <= amount) idx = i; else break; }
 
@@ -1794,10 +1932,14 @@ function findUpperLimitByAmount(entity, status, amount, inflation = 1) {
 // brackets fully below startPosition are skipped, and the walk proceeds from there.
 function calculateProgressive(entity, status, amount, inflation = 1, ratecreep = 1, startPosition = 0) {
 
-    let brks = Array.isArray(entity) ? entity : getRateBracket(entity, status)
+    // A schedule handed over as an array carries no year, so its caller resolves the factor first.
+    if (Array.isArray(entity) && typeof inflation !== 'number')
+        throw new TypeError('calculateProgressive: a bracket array takes its factor as a number');
+    let brks = Array.isArray(entity) ? entity : entityBrackets(entity, status, inflation)
     if (!brks) {
         return { cumulative: 0, total: 0, marginal: 0, limit: 0, error: `Invalid entity (${entity}) or status (${status})` };
     }
+    inflation = Array.isArray(entity) ? inflation : entityFactor(entity, inflation);
 
     // Thresholds come from rowThreshold (statutory rows and schedules do not inflate), kept
     // non-decreasing the same way rowThresholds does; computed inline because this runs on every call.
@@ -2186,7 +2328,7 @@ function calculateTaxes(params = {}) {
         obbaOn = false,
         saltHigh = false,
         propTax = 0,
-        taxYear = TAXData.OBBBA.SALT.indexBaseYear,
+        taxYear: taxYearGiven = TAXData.OBBBA.SALT.indexBaseYear,
         pensionIncome = 0,   // employer/govt pension + annuity portion of earnedIncome
         iraIncome     = 0,   // IRA/401k/RMD distribution portion of earnedIncome
         fedRateCreep   = 1,  // tax-rate creep multipliers (1 = today's statutory rates)
@@ -2195,16 +2337,25 @@ function calculateTaxes(params = {}) {
 
     const status = filingStatus ?? "MFJ";
 
+    // `inflation` is a factor or a tax index (see isTaxIndex). An index names the year it prices, so a
+    // taxYear that names a different one is a caller pricing two years at once.
+    if (isTaxIndex(inflation) && params.taxYear !== undefined && params.taxYear !== inflation.year)
+        throw new RangeError(`calculateTaxes: taxYear ${params.taxYear} but the tax index prices ${inflation.year}`);
+    const taxYear = isTaxIndex(inflation) ? inflation.year : taxYearGiven;
+    const fedTables = federalTablesFor(inflation);
+    const fedFactor = federalFactor(inflation);
+    const stateFactor = entityFactor(state, inflation);
+
     // ========================================================================
     // STEP 1: Federal Standard Deduction (age bumps + OBBBA parameters)
     // ========================================================================
-    const federalStdBase = TAXData.FEDERAL[status].std;
-    const federalAgeThreshold = TAXData.FEDERAL[status].age;
-    const federalAgeBump = TAXData.FEDERAL[status].stdbump;
+    const federalStdBase = fedTables[status].std;
+    const federalAgeThreshold = fedTables[status].age;
+    const federalAgeBump = fedTables[status].stdbump;
 
     const nSeniors = countQualifyingFilers(ages, status, federalAgeThreshold);
 
-    let federalStdDeduction = (federalStdBase + federalAgeBump * nSeniors) * inflation;
+    let federalStdDeduction = (federalStdBase + federalAgeBump * nSeniors) * fedFactor;
 
     const obbaSalt = TAXData.OBBBA.SALT;
     const obbaSen  = TAXData.OBBBA.SENIOR_DED;
@@ -2270,18 +2421,18 @@ function calculateTaxes(params = {}) {
     // `std` is a number, 'FEDERAL' (the federal basic standard deduction) or 'FEDERAL_WITH_AGE' (that
     // plus the federal 65+ add-on, for a state whose taxable income starts from the federal figure).
     // A number indexes with inflation unless the state sets STD_INDEXED: false (a statutory amount);
-    // the federal references always index, as the federal amounts do.
+    // the federal references always index, as the federal amounts do, and from the federal table's year.
     const rawStateStd = stateData[status].std;
-    const stateStdDeduction = rawStateStd === 'FEDERAL' ? federalStdBase * inflation
-        : rawStateStd === 'FEDERAL_WITH_AGE' ? (federalStdBase + federalAgeBump * nSeniors) * inflation
-        : rawStateStd * (stateData.STD_INDEXED === false ? 1 : inflation);
+    const stateStdDeduction = rawStateStd === 'FEDERAL' ? federalStdBase * fedFactor
+        : rawStateStd === 'FEDERAL_WITH_AGE' ? (federalStdBase + federalAgeBump * nSeniors) * fedFactor
+        : rawStateStd * (stateData.STD_INDEXED === false ? 1 : stateFactor);
 
     // Personal exemptions and age add-ons (ALLOWANCES deduction rules, see evaluateAllowance). The
     // context object is built only for a state that has rules: this runs on every call.
     const magi = federalAGI + taxExemptInterest;
     const allowanceRules = stateData.ALLOWANCES;
     const allowanceCtx = allowanceRules && allowanceRules.length
-        ? { status, ages, inflation, federalAGI, stateAGI, magi, retirementExclusion: stateRetExcl, taxBeforeCredits: 0 }
+        ? { status, ages, inflation: stateFactor, federalAGI, stateAGI, magi, retirementExclusion: stateRetExcl, taxBeforeCredits: 0 }
         : null;
     const stateExemptions = allowanceCtx ? sumAllowances(allowanceRules, 'deduction', allowanceCtx) : 0;
     const stateDeductions = stateStdDeduction + stateExemptions;
@@ -2357,8 +2508,8 @@ function calculateTaxes(params = {}) {
     // ========================================================================
     // STEP 8: Capital Gains Tax (0 / 15 / 20% — NIIT calculated separately)
     // ========================================================================
-    const capGainsBrackets = TAXData.FEDERAL.CAPITAL_GAINS[status].brackets;
-    const capGainsResult = calculateProgressive(capGainsBrackets, status, taxablePreferentialIncome, inflation, 1, taxableOrdinaryIncome);
+    const capGainsBrackets = fedTables.CAPITAL_GAINS[status].brackets;
+    const capGainsResult = calculateProgressive(capGainsBrackets, status, taxablePreferentialIncome, fedFactor, 1, taxableOrdinaryIncome);
     const federalCapGainsTax = capGainsResult.total;
     const capitalGainsRate   = capGainsResult.marginal;
 
@@ -2488,7 +2639,7 @@ function calcIRMAA(magi, status, cpiRate, medicareRate = 1, onMedicareCount = nu
 function getIRMAATier(magi, status, cpiRate) {
 	const brks = getRateBracket('IRMAA', status);
 	if (!brks) return '-';
-	const idx = findBracketIndex(brks, magi, cpiRate);
+	const idx = findBracketIndex(brks, magi, entityFactor('IRMAA', cpiRate));
 	return idx === -1 ? (brks[0].tier ?? '-') : (brks[idx].tier ?? '-');
 }
 
@@ -2540,10 +2691,11 @@ function netCapitalLosses(shortTerm, longTerm, limit = TAXData.FEDERAL.CAPITAL_L
 // trap, and recomputing from a scalar meant this limit could not follow a Monte Carlo path once
 // the rest of the tax code started to.
 //
-// AMOUNT is stated in TAXData.QCD.YEAR dollars and cpiFactor is anchored at the real current
-// year. Keep QCD.YEAR in step with the rest of the table when the data is refreshed.
+// AMOUNT is stated in TAXData.QCD.YEAR dollars and the Optimizer's cpiFactor (`sim.taxIndex`) is
+// anchored at TAXData.FEDERAL.YEAR. Keep QCD.YEAR in step with the rest of the table when the data
+// is refreshed.
 function getQCDLimit(cpiFactor) {
-	return TAXData.QCD.AMOUNT * (cpiFactor ?? 1);
+	return TAXData.QCD.AMOUNT * (cpiFactor == null ? 1 : factorOf(cpiFactor, TAXData.QCD.YEAR));
 }
 
 // True if a person has reached TAXData.QCD.ELIGIBILITY_AGE (70½) during simYear. A half-year age
@@ -2565,6 +2717,7 @@ function isQCDEligible(birthYear, birthMonth, simYear) {
 function getIRMAATierTargetMAGI(magi, status, cpiRate, tiersDown) {
 	const brks = getRateBracket('IRMAA', status);
 	if (!brks) return 0;
+	cpiRate = entityFactor('IRMAA', cpiRate);
 	const currentIdx = findBracketIndex(brks, magi, cpiRate);
 	// At index 0 ("-none-" / no surcharge) or below: nothing to escape
 	if (currentIdx <= 0) return 0;
@@ -2579,7 +2732,7 @@ function getIRMAATierTargetMAGI(magi, status, cpiRate, tiersDown) {
 // Dual-mode export: inert in browser/worker (classic script); lets Node tests require() this file.
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
-        TAXData, RMD_TABLE, RMD_START_AGE, rmdStartAge, rmdDivisor, getRateBracket,
+        TAXData, RMD_TABLE, RMD_START_AGE, rmdStartAge, rmdDivisor, federalTableFor, taxIndexAtRate, isTaxIndex, federalTablesFor, federalFactor, factorOf, entityFactor, entityBrackets, scaleTaxIndex, getRateBracket,
         findLimitByRate, findUpperLimitByAmount, calculateProgressive,
         calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATiers, netCapitalLosses, getIRMAATierTargetMAGI,
         getQCDLimit, isQCDEligible,
@@ -2594,7 +2747,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // test reading RMD_TABLE off globalThis would get undefined and fail somewhere unrelated
     // rather than at the point of the mistake.
     window.TaxEngine = {
-        TAXData, RMD_TABLE, RMD_START_AGE, rmdStartAge, rmdDivisor, getRateBracket,
+        TAXData, RMD_TABLE, RMD_START_AGE, rmdStartAge, rmdDivisor, federalTableFor, taxIndexAtRate, isTaxIndex, federalTablesFor, federalFactor, factorOf, entityFactor, entityBrackets, scaleTaxIndex, getRateBracket,
         findLimitByRate, findUpperLimitByAmount, calculateProgressive,
         calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATiers, netCapitalLosses, getIRMAATierTargetMAGI,
         getQCDLimit, isQCDEligible,

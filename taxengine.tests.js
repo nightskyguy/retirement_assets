@@ -1917,6 +1917,187 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 		}
 	});
 
+	// ── TEST CASE 31: the federal tables, one entry per tax year ──────────────────────────────────
+	// The checks a new year's typing needs: a source, the year it claims, schedules that rise and
+	// end at Infinity, and every `nr` re-derived from the rows beneath it (nominalRateAtLimit reads
+	// `nr` as the average rate at the band's top, so a mistyped one moves a strategy's ceiling).
+	test('TEST CASE 31: every FEDERAL_BY_YEAR entry is a sourced, well-formed schedule with nr that adds up', () => {
+		const byYear = _engine().TAXData.FEDERAL_BY_YEAR;
+		const years = Object.keys(byYear);
+		if (!years.length) throw new Error('FEDERAL_BY_YEAR holds no year');
+		const ladder = (where, brks) => {
+			assertEqual(brks[brks.length - 1].l, Infinity, `${where}: ends at Infinity`);
+			brks.forEach((b, i) => {
+				if (!(b.r >= 0 && b.r < 0.5)) throw new Error(`${where}: rate ${b.r} is not a fraction`);
+				if (i > 0 && !(b.l > brks[i - 1].l)) throw new Error(`${where}: ${b.l} does not rise above ${brks[i - 1].l}`);
+			});
+		};
+		for (const y of years) {
+			const e = byYear[y];
+			assertEqual(e.YEAR, Number(y), `FEDERAL_BY_YEAR[${y}].YEAR is its key`);
+			if (!['published', 'derived', 'pending', 'unverified'].includes(e.source?.status))
+				throw new Error(`${y}: source.status '${e.source?.status}' is not a source status`);
+			if (!(typeof e.source.doc === 'string' && e.source.doc.trim())) throw new Error(`${y}: no source.doc`);
+			for (const status of ['MFJ', 'SGL']) {
+				const t = e[status];
+				if (!(t.std > 0 && t.stdbump > 0 && t.age > 0)) throw new Error(`${y} ${status}: std, stdbump and age must be positive`);
+				ladder(`${y} ${status}`, t.brackets);
+				let tax = 0, floor = 0;
+				for (const b of t.brackets) {
+					if (!isFinite(b.l)) { assertEqual(b.nr, b.r, `${y} ${status}: the top row's nr is its own rate`); break; }
+					tax += (b.l - floor) * b.r;
+					floor = b.l;
+					const derived = tax / b.l;
+					if (!(Math.abs(b.nr - derived) <= 0.00005))
+						throw new Error(`${y} ${status}: nr ${b.nr} at ${b.l}, the rows give ${derived.toFixed(5)}`);
+				}
+				ladder(`${y} CAPITAL_GAINS ${status}`, e.CAPITAL_GAINS[status].brackets);
+			}
+		}
+	});
+
+	test('TEST CASE 31b: TAXData.FEDERAL\'s figures ARE the anchor year\'s entry, not a copy of it', () => {
+		const { FEDERAL, FEDERAL_BY_YEAR } = _engine().TAXData;
+		const anchor = FEDERAL_BY_YEAR[FEDERAL.YEAR];
+		if (!anchor) throw new Error(`FEDERAL_BY_YEAR has no entry for the anchor year ${FEDERAL.YEAR}`);
+		for (const status of ['MFJ', 'SGL']) {
+			assertEqual(FEDERAL[status] === anchor[status], true, `FEDERAL.${status} is the ${FEDERAL.YEAR} entry's object`);
+			assertEqual(FEDERAL.CAPITAL_GAINS[status] === anchor.CAPITAL_GAINS[status], true,
+				`FEDERAL.CAPITAL_GAINS.${status} is the ${FEDERAL.YEAR} entry's object`);
+		}
+		assertEqual(FEDERAL.CAPITAL_GAINS.YEAR, FEDERAL.YEAR, 'the capital-gains breakpoints are the anchor year\'s');
+	});
+
+	// ── TEST CASE 32: which federal entry a tax year is priced from ────────────────────────────────
+	test('TEST CASE 32: federalTableFor takes the year\'s own entry, else the newest before it, never a later one', () => {
+		const { federalTableFor } = _engine();
+		// A gap between the two years, so "the next entry" or "the nearest entry" cannot stand in for the
+		// rule: 2026 must take 2025, and 2024 must take nothing rather than the nearest, 2025.
+		const A = { YEAR: 2025 }, B = { YEAR: 2027 };
+		const td = { FEDERAL_BY_YEAR: { 2025: A, 2027: B } };
+		const at = y => { const r = federalTableFor(y, td); return r && [r.table === A ? 'A' : r.table === B ? 'B' : '?', r.year]; };
+		assertEqual(at(2025), ['A', 2025], 'a published year resolves to its own entry');
+		assertEqual(at(2027), ['B', 2027], 'and so does a later published one');
+		assertEqual(at(2026), ['A', 2025], 'a year between entries takes the newest one before it');
+		assertEqual(at(2040), ['B', 2027], 'a year past every entry takes the newest');
+		assertEqual(at(2024), null, 'a year before the earliest entry is refused, never priced on a later one');
+	});
+
+	test('TEST CASE 32b: the real tables resolve the anchor year to its own entry, and a non-year throws', () => {
+		const { federalTableFor, TAXData: td } = _engine();
+		const r = federalTableFor(td.FEDERAL.YEAR);
+		assertEqual(r.year, td.FEDERAL.YEAR, 'the anchor year resolves to itself');
+		assertEqual(r.table === td.FEDERAL_BY_YEAR[td.FEDERAL.YEAR], true, 'and to that entry\'s object');
+		for (const bad of [undefined, null, NaN, 2026.5, '2026']) {
+			let threw = false;
+			try { federalTableFor(bad); } catch (e) { threw = e instanceof TypeError; }
+			assertEqual(threw, true, `federalTableFor(${JSON.stringify(bad)}) throws a TypeError`);
+		}
+	});
+
+	// ── TEST CASE 33: the tax index at one fixed rate ──────────────────────────────────────────────
+	test('TEST CASE 33: taxIndexAtRate is 1 at its own year, compounds back to older tables, never deflates', () => {
+		const { taxIndexAtRate } = _engine();
+		const ix = taxIndexAtRate(2030, 0.025);
+		assertEqual(ix.year, 2030, 'the index names the year it prices');
+		assertEqual(ix.from(2030), 1, 'a table of the year itself is used as printed');
+		// Exact, not near: the tools this replaces compute this very Math.pow, and b4 must not move a bit.
+		assertEqual(ix.from(2026) === Math.pow(1.025, 4), true, 'a 2026 table carried to 2030 is four years of the rate');
+		assertEqual(ix.from(2031), 1, 'a table from a later year is used as printed, never deflated');
+		assertEqual(taxIndexAtRate(2030, 0).from(2020), 1, 'a zero rate indexes nothing');
+		for (const [y, r] of [[2030.5, 0.02], [undefined, 0.02], [2030, NaN], [2030, '0.02']]) {
+			let threw = false;
+			try { taxIndexAtRate(y, r); } catch (e) { threw = e instanceof TypeError; }
+			assertEqual(threw, true, `taxIndexAtRate(${y}, ${JSON.stringify(r)}) throws a TypeError`);
+		}
+	});
+
+	// ── TEST CASE 34: every lookup takes a tax index as well as a factor ──────────────────────────
+	// While every table is the anchor year's, an index must price exactly what its factor does - to
+	// the bit, since the callers switch from one to the other with an identity check as the gate.
+	test('TEST CASE 34: with only anchor-year tables, a tax index prices every lookup exactly as its factor does', () => {
+		const E = _engine();
+		const ix = E.taxIndexAtRate(2030, 0.025), f = Math.pow(1.025, 4);
+		const same = (a, b, what) => {
+			const ja = JSON.stringify(a), jb = JSON.stringify(b);
+			if (ja !== jb) throw new Error(`${what}: index ${ja.slice(0, 160)} vs factor ${jb.slice(0, 160)}`);
+		};
+		for (const state of ['CA', 'AZ', 'NY', 'PA', 'OR', 'MA', 'TX']) {
+			for (const status of ['MFJ', 'SGL']) {
+				for (const earned of [20000, 90000, 250000, 900000]) {
+					const p = { filingStatus: status, ages: status === 'MFJ' ? [67, 64] : [67], state, earnedIncome: earned,
+					            totalSS: 30000, qualifiedDiv: 8000, capGains: 40000, propTax: 12000, obbaOn: true, saltHigh: true };
+					same(E.calculateTaxes({ ...p, inflation: ix }), E.calculateTaxes({ ...p, inflation: f, taxYear: 2030 }),
+						`calculateTaxes ${state} ${status} ${earned}`);
+					same(E.findUpperLimitByAmount(state, status, earned, ix), E.findUpperLimitByAmount(state, status, earned, f), `state ceiling ${state}`);
+				}
+			}
+		}
+		for (const status of ['MFJ', 'SGL']) {
+			same(E.findLimitByRate('FEDERAL', status, 0.22, ix), E.findLimitByRate('FEDERAL', status, 0.22, f), 'findLimitByRate');
+			same(E.calculateProgressive('FEDERAL', status, 300000, ix, 1.1), E.calculateProgressive('FEDERAL', status, 300000, f, 1.1), 'calculateProgressive');
+			for (const magi of [150000, 300000, 900000]) {
+				same(E.calcIRMAA(magi, status, ix, 1.2, 1), E.calcIRMAA(magi, status, f, 1.2, 1), 'calcIRMAA');
+				same(E.getIRMAATier(magi, status, ix), E.getIRMAATier(magi, status, f), 'getIRMAATier');
+				same(E.getIRMAATierTargetMAGI(magi, status, ix, 2), E.getIRMAATierTargetMAGI(magi, status, f, 2), 'getIRMAATierTargetMAGI');
+				same(E.calcIRMAA(magi, status, E.scaleTaxIndex(ix, 1.06), 1, 1), E.calcIRMAA(magi, status, f * 1.06, 1, 1), 'scaled index');
+			}
+		}
+		same(E.getQCDLimit(ix), E.getQCDLimit(f), 'getQCDLimit');
+	});
+
+	// The whole point of the year-keyed tables, on a synthetic later entry: the federal figures come from
+	// the entry for (or newest before) the year, indexed from THAT entry's year, while a state table and
+	// IRMAA keep indexing from their own. A plain factor ignores the later entry altogether.
+	test('TEST CASE 34b: a later federal entry prices its year and after, while state tables index from their own year', () => {
+		const E = _engine(), byYear = E.TAXData.FEDERAL_BY_YEAR, A = E.TAXData.FEDERAL.YEAR;
+		const scaled = (brks, k) => brks.map(b => ({ ...b, l: isFinite(b.l) ? Math.round(b.l * k) : Infinity }));
+		const base = byYear[A];
+		const later = { YEAR: A + 1, source: { status: 'unverified', doc: 'TEST CASE 34b synthetic entry' },
+		                MFJ: { ...base.MFJ, std: 40000, brackets: scaled(base.MFJ.brackets, 1.1) },
+		                SGL: { ...base.SGL, std: 20000, brackets: scaled(base.SGL.brackets, 1.1) },
+		                CAPITAL_GAINS: { MFJ: { brackets: scaled(base.CAPITAL_GAINS.MFJ.brackets, 1.1) },
+		                                 SGL: { brackets: scaled(base.CAPITAL_GAINS.SGL.brackets, 1.1) } } };
+		byYear[A + 1] = later;
+		try {
+			const r = 0.03, p = { filingStatus: 'SGL', ages: [50], state: 'CA', earnedIncome: 100000 };
+			const at1 = E.calculateTaxes({ ...p, inflation: E.taxIndexAtRate(A + 1, r) });
+			assertEqual(at1.federalStdDeduction, 20000, 'the later entry\'s deduction, as printed, in its own year');
+			const at3 = E.calculateTaxes({ ...p, inflation: E.taxIndexAtRate(A + 3, r) });
+			assertEqual(at3.federalStdDeduction, 20000 * Math.pow(1 + r, 2), 'and indexed from ITS year two years on');
+			assertEqual(E.findLimitByRate('FEDERAL', 'SGL', 0.12, E.taxIndexAtRate(A + 1, r)).limit,
+				later.SGL.brackets[1].l, 'a federal bracket top from the later entry');
+			assertEqual(E.findLimitByRate('CA', 'SGL', 0.04, E.taxIndexAtRate(A + 1, r)).limit,
+				E.findLimitByRate('CA', 'SGL', 0.04, 1 + r).limit, 'a state table still indexes one year from its own');
+			assertEqual(E.getIRMAATierTargetMAGI(300000, 'SGL', E.taxIndexAtRate(A + 1, r), 1),
+				E.getIRMAATierTargetMAGI(300000, 'SGL', 1 + r, 1), 'and so does IRMAA');
+			const ix0 = E.taxIndexAtRate(A, r);
+			assertEqual(E.calculateTaxes({ ...p, inflation: ix0 }).federalStdDeduction, base.SGL.std,
+				'the anchor year still prices from the anchor entry');
+			assertEqual(E.calculateTaxes({ ...p, inflation: Math.pow(1 + r, 3), taxYear: A + 3 }).federalStdDeduction,
+				base.SGL.std * Math.pow(1 + r, 3), 'a plain factor ignores the later entry');
+		} finally {
+			delete byYear[A + 1];
+		}
+	});
+
+	test('TEST CASE 34c: a lookup handed the wrong thing, or two different years, throws', () => {
+		const E = _engine(), A = E.TAXData.FEDERAL.YEAR;
+		const throwsA = (Kind, fn, what) => {
+			let threw = false;
+			try { fn(); } catch (e) { threw = e instanceof Kind; }
+			assertEqual(threw, true, `${what} throws a ${Kind.name}`);
+		};
+		const p = { filingStatus: 'SGL', ages: [50], state: 'CA', earnedIncome: 100000 };
+		throwsA(RangeError, () => E.calculateTaxes({ ...p, inflation: E.taxIndexAtRate(A + 2, 0.02), taxYear: A + 1 }),
+			'a taxYear naming a different year from its index');
+		throwsA(RangeError, () => E.calculateTaxes({ ...p, inflation: E.taxIndexAtRate(A - 1, 0.02) }),
+			'an index for a year before every federal table');
+		throwsA(TypeError, () => E.findLimitByRate('FEDERAL', 'SGL', 0.22, '1.02'), 'a factor given as a string');
+		throwsA(TypeError, () => E.calculateProgressive([{ l: Infinity, r: 0.1 }], 'SGL', 1000, E.taxIndexAtRate(A, 0.02)),
+			'an index handed to a bare bracket array');
+	});
+
 // ── Runner ───────────────────────────────────────────────────────────────────────────────────
 // Returns the counts instead of setting process.exitCode, so the browser can render them.
 // ============================================================================

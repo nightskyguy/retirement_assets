@@ -14,7 +14,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="displayhelpers.js"></script>
 <script src="sharepanel.js?v=1118e3"></script>
-<script src="taxengine.js?v=111ef9c"></script>
+<script src="taxengine.js?v=111efa"></script>
 <script src="medicare_costs.js?v=111917"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
@@ -1099,11 +1099,13 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
     const age      = startAge + (y - 1);
     const calYear  = CURRENT_YEAR + (y - 1);
     const inflMult = Math.pow(1 + inflRate/100, y - 1);
-    // The tax tables' factor: counted from the year TAXData is stated in, not from this plan's first
-    // year, so a plan starting the year after the tables' year prices that year on indexed tables
-    // rather than on the tables as printed. Equal to inflMult while today is the tables' year.
-    // Amounts the user typed in today's dollars stay on inflMult.
-    const taxMult  = Math.pow(1 + inflRate/100, Math.max(0, calYear - TAXData.FEDERAL.YEAR));
+    // The year's tax index (taxIndexAtRate): every engine call is handed this, so the federal figures
+    // come from the table for calYear and each other table carries from its own year. It also names
+    // the tax year, which prices the SALT cap for calYear. `taxMult` is its factor from the anchor
+    // tables' year, for the threshold lines this page reads off those tables. Amounts the user typed in
+    // today's dollars stay on inflMult.
+    const taxIx    = taxIndexAtRate(calYear, inflRate/100);
+    const taxMult  = taxIx.from(TAXData.FEDERAL.YEAR);
 
     // Active withdrawal period: Period 2 takes over at wd2StartAge (ignored if amount is 0)
     const withdrawing = age >= wd1StartAge && age >= retireAge;
@@ -1208,7 +1210,7 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
     // plan starting in 2030 charging 2026 premiums. medicareGrowthFactor is a loop over a rate that
     // changes every year, so it cannot be written as one rate to a power - see medicare_costs.js.
     const medicareGrowth  = medicareGrowthFactor(calYear - MEDICARE_COSTS.ANCHOR_YEAR);
-    const IRMAAAnnualCost = calcIRMAA(prevPrevMagi, filingStatus, taxMult, medicareGrowth, onMedicareCount);
+    const IRMAAAnnualCost = calcIRMAA(prevPrevMagi, filingStatus, taxIx, medicareGrowth, onMedicareCount);
 
     // OBBBA (P.L. 119-21) provisions are calendar-year-gated, not permanent — mirrors
     // optimizer_core.js's per-year yr.obbaOn/yr.saltHigh so the two tools price the same law.
@@ -1229,7 +1231,7 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
           ordDivInterest:  cashInterest,
           qualifiedDiv:    dividends,
           capGains:        capitalGain,
-          inflation:       taxMult,
+          inflation:       taxIx,
           state:           selectedState,
           filingStatus:    filingStatus,
           ages:            isSingle ? [age] : [age, spouseCurrentAge],

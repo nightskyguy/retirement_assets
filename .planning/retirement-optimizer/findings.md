@@ -147,6 +147,17 @@ in parentheses. Read this section before adding a guard, a test or an invariant.
 ` therefore silently merged two entries into one physical line and
   pushed the marker off 30 while `sed -n 30p` still looked right. **Write the file's own newline, and
   check the marker with the same tool the hook uses.** (2026-09-08)
+- *A divisor names the dollars a figure lands in.* Dividing a plan figure by `-taxIndex` gives the
+  TABLES' year's dollars; by `-cpiFactor`, TODAY's. `P140a` moved four UI readers to `-taxIndex`, and
+  three of them (the Limit menu's deduction, the ladder's MAGI marker, its ACA note) feed a chart drawn
+  in today's dollars, so they needed `-cpiFactor`. Equal while today is the tables' year, a year of CPI
+  apart from 1 January. Ask which dollars the figure is compared against before choosing the index.
+  ("Tax tables and the year", `P140b5`)
+- *No suite runs the Income Tax Planner page's own code.* `taxengine.tests.js` covers `taxcalc_core.js`
+  and the page's badge runs that suite, but `renderSummary` and the rest of the page are reached by
+  nothing automated: `P140b5` left an `inf` the page still read, every suite stayed green, and only a
+  browser load showed the ReferenceError. **After editing the planner page, load it and read the
+  console.** ("Tax tables and the year", `P140b5`)
 - *An index is anchored at the year its figures are stated in, never at the wall clock.* The
   Optimizer indexed every tax table from `todayYear`, which was right only while today was the tables'
   year: from 2027-01-01 each plan would have priced its first year on the 2026 tables unindexed and

@@ -5963,3 +5963,28 @@ run. Callers still pass numbers, so the plan bank and the 2027-clock set are 95 
 the number path's timing moved +0.2% (77 ms minimum both ways). Suites 548 / 88 / 62 / 15 / 50, page
 suite 540, planner badge 88 of 88. Tokens `111ef9c` (b3's `111ef9b` had been loaded in the preview, so
 a reload could have served it from cache).
+
+`P140a` and `P140b1`-`b4` shipped as PR #264, merged by the user as `92f807b`.
+
+## 2026-11-26 (continued) - P140b5 and the b6 gate (branch `worktrees/tax-index-callers-p140b5`, uncommitted)
+
+**Every real caller now hands the engine a tax index.** Optimizer (`yr.taxIx` into all 16 table sites
+and `taxArgs`), the planner core, the Projection page, the IRMAA page, and the display readers: the
+Optimizer's Limit menu, ladder and Taxation chart lines, and the planner's summary. The guards are
+behavioral, not spies: a synthetic federal entry for the year after the anchor has to reach the
+Optimizer's deduction and the planner's; each caller reverted to a bare factor fails its own guard.
+
+**Three corrections found on the way.** P140a's own UI change was wrong at three of four sites (they
+convert a plan figure to TODAY's dollars and need `-cpiFactor`; restored, rule added to findings). The
+Projection page never passed `taxYear`, so its SALT cap sat at the 2025 base: now the statutory 1%/yr
+step, -$96 to -$390 a year for an itemizer above the cap through 2029. A plan starting before the
+earliest federal table is now refused instead of priced on later law (a test fixture only).
+
+**One bug caught only in the browser:** the planner's summary still read the removed `inf`, threw a
+ReferenceError, and every suite stayed green - no suite reaches the planner page's own code. Fixed;
+rule added. The IRMAA and Projection pages load clean.
+
+Identity: Optimizer 95/95 and the 2027-clock set against `b053c35`; planner 70/70 blocks (1,680 links)
+against `main`. Timing on the index path started at +5.5% / +6.2%; three trims took it to +3.1% on the
+plan bank and +2.2% on 100 paths, and made `calculateTaxes` about 40% faster on both paths. Suites
+549 / 89 / 62 / 15 / 50, page suite 540, tokens `111efa`. Next in `P140`: `c`, the 2027 data.

@@ -252,18 +252,36 @@ that moves numbers never share a diff.
     plan-bank runs and the 2027-clock set identical to `b053c35`; timing on the number path +0.2%
     (77 ms minimum both ways, 6 alternating runs). Suites 548 / 88 / 62 / 15 / 50, page suite 540,
     the planner's badge 88 of 88. Tokens `111ef9c`.
-  - [ ] **b5 callers.** `optimizer_core.js` (`taxArgs` and the 16 `sim.taxIndex` sites), the UI readers
-    of `-taxIndex`, `taxcalc_core.js`, `Retirement_Projection.html`, `standalone/irmaa_and_rmds.html`,
-    the planner page. Done: each passes an index, and guard tests say so - the existing `calculateTaxes`
-    spy in `optimizer_core.tests.js` asserts every call's `inflation` is an index, and the same for the
-    planner's core and the Projection page. `computeBracketCeiling`'s IRMAA and ACA paths are covered
-    by the identity gate through the plan bank's ACA and IRMAA-tier households.
-  - [ ] **b6 gate.** Byte-identical to `b053c35`: the 19 households x 5 variants plus a 2027-clock
-    variant (the scratch `identity.js` harness, rebuilt in the repo's scratch space); the planner's
-    results over 2026-2035 from `taxcalc.js`; the Projection page's rows read in the browser before and
-    after. All five suites, the page suite, then a timing check on a sweep and on 100 Monte Carlo
-    paths (alternate runs, compare minima), because the object adds a call per lookup inside the
-    ceiling searches and the audience runs old laptops.
+  - [x] **b5 callers.** BUILT 2026-11-26 on `worktrees/tax-index-callers-p140b5` (from `92f807b`, the
+    merge of PR #264), uncommitted. Engine callers: `simulate` builds `yr.taxIx = taxIndexOfSim(sim)`
+    in `resolveHousehold` and all 16 table sites plus `taxArgs` take it; `taxcalc_core.js` adds `ix` to
+    `indexFactors` for `calculateTaxes` and both `calcIRMAA` calls; `Retirement_Projection.html` and
+    `standalone/irmaa_and_rmds.html` hand `calculateTaxes` / `calcIRMAA` a `taxIndexAtRate`. Display
+    readers: the Optimizer's Limit menu, ladder, notes and default deduction read this year's federal
+    table through `menuTaxIndex` / `menuFederal`, the ladder taking a factor OR an index like the engine
+    (its page test passes factors); the Taxation chart's federal lines read each row's year's table on
+    a new log key `-fedFactor`; the planner's summary reads the year's table. Guards, chosen over spies:
+    a synthetic federal entry for the year after the anchor must reach the Optimizer's
+    `-fedDeduction` and the planner's `deduction`; reverting either caller to a bare factor in a scratch
+    copy fails exactly its own guard. Three corrections found on the way, each in the commit: (1)
+    `P140a` switched three UI readers to `-taxIndex` that convert a PLAN figure to this year's dollars
+    and need `-cpiFactor` (menu deduction, ladder MAGI marker, ACA note) - equal in 2026, a year of CPI
+    apart from January; restored. (2) The Projection page never passed `taxYear`, so its SALT cap was
+    the 2025 base in every year; the index names the year, so an itemizer above the cap now gets the
+    statutory 1%/yr step: federal tax -$96 in 2026 to -$390 in 2029, nothing after. (3) A plan starting
+    before the earliest federal table is now refused (RangeError) where it used to price on later law;
+    only a test fixture did that, rewritten with a pinned "today". Projection's threshold LINES stay on
+    the anchor table by design: they are user-editable amounts, and follow the anchor when it rolls.
+  - [x] **b6 gate.** Done inside b5. Optimizer 95 of 95 plan-bank runs and the 2027-clock set
+    identical to `b053c35`; planner 70 of 70 (year x state) blocks over 1,680 links x 62 fields
+    identical to `main` for 2026-2035; Projection's default rows unchanged in the browser; the IRMAA page
+    renders projected years. Timing, index path in production against `b053c35`, minima of 5
+    alternating runs: +5.5% / +6.2% at first, then +3.1% on the plan bank and +2.2% on 100 Monte Carlo
+    paths after three trims - `taxIndexOfSim` remembers its last answer, `calculateTaxes` passes its
+    resolved factors and the federal rows down instead of re-resolving, and `calculateProgressive`
+    reads the table's INFLATION_INDEXED flag once per call instead of per row. That last two also
+    took `calculateTaxes` from about 400 to 240 ns a call on BOTH paths. Suites 549 / 89 / 62 / 15 / 50,
+    page suite 540. Tokens `111efa`.
 - [ ] **P140c the 2027 data.** Rev. Proc. 2026-35 read from irs.gov, every figure, both statuses. Add
   ONLY what is published, check each: the CMS 2027 IRMAA ladder and Part B / D premiums (CMS usually
   publishes mid-November; same year-keyed shape, own entry), the 2027 QCD limit (an IRS notice). The

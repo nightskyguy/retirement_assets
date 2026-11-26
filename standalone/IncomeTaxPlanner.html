@@ -231,10 +231,10 @@
 <!-- Shared tax modules — NOTE: these require file:// or http:// (CORS blocks in data: URLs) -->
 <script src="../displayhelpers.js"></script>
 <script src="../sharepanel.js?v=1118e3"></script>
-<script src="../taxengine.js?v=111ef9c"></script>
+<script src="../taxengine.js?v=111efa"></script>
 <script src="../medicare_costs.js?v=111917"></script>
-<script src="../taxcalc_core.js?v=111d9da"></script>
-<script src="../taxengine.tests.js?v=111ef9c"></script>
+<script src="../taxcalc_core.js?v=111efa"></script>
+<script src="../taxengine.tests.js?v=111efa"></script>
 </head>
 <body>
 <header>
@@ -1586,10 +1586,12 @@ function commitOrdinary(v) {
 
 // ─── SUMMARY & ASSUMPTIONS ───────────────────────────────────────────────────
 function renderSummary(data) {
-  const inf   = Math.pow(1+cfg.inflation/100, cfg.year-BASE_YEAR);
-  const fm    = TAXData.FEDERAL[cfg.status];
+  // The year's federal table and its factor, the same ones the calculation priced the year with.
+  const {ix}  = indexFactors();
+  const fm    = federalTablesFor(ix)[cfg.status];
+  const fedF  = federalFactor(ix);
   const nSen  = (cfg.ages[0]>=fm.age?1:0)+(cfg.status==='MFJ'&&cfg.ages[1]>=fm.age?1:0);
-  const stdF  = (fm.std + fm.stdbump*nSen)*inf;
+  const stdF  = (fm.std + fm.stdbump*nSen)*fedF;
   const cgGain= cfg.ltNet + cfg.qdiv;   // everything taxed at capital-gains rates
 
   let peakMarg=0, peakInc=0;
@@ -1603,7 +1605,7 @@ function renderSummary(data) {
   const sample   = data.find(d => d.ordInc >= 200_000) ?? data[Math.floor(data.length / 2)];
 
   const rows = [
-    `<div><strong>Year:</strong> ${cfg.year} · factor ×${inf.toFixed(3)}</div>`,
+    `<div><strong>Year:</strong> ${cfg.year} · factor ×${fedF.toFixed(3)}</div>`,
     `<div><strong>SALT cap:</strong> $${saltCap.toLocaleString()} · ${saltLive
         ? `OBBBA cap <span class="hi-teal">applies</span>, last year ${obbaSalt.sunsetYear}`
         : `OBBBA cap <span class="hi-amber">expired</span> after ${obbaSalt.sunsetYear}, back to the TCJA floor`}</div>`,

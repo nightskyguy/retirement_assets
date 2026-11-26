@@ -2114,6 +2114,25 @@ const _row = (s, over) => {
 	return r.ok ? Object.fromEntries(names.split(',').map((n, i) => [n, values.split(',')[i]])) : r;
 };
 
+test('taxcalc_core: a tax year is priced on the federal table published for it, not the anchor table inflated', () => {
+	// The guard that the planner hands the engine a tax index: a synthetic entry for the year after the
+	// anchor must reach its deduction. Passing a bare factor would give 16,100 x 1.025 instead.
+	const C = _core(); if (!C) return;
+	const td = _engine().TAXData, A = td.FEDERAL.YEAR, byYear = td.FEDERAL_BY_YEAR, base = byYear[A];
+	const link = `st=SGL&s=TX&a1=50&yr=${A + 1}&in=2.5&pi=60000&return=all`;
+	const before = Number(_row(link).deduction);
+	byYear[A + 1] = { ...base, YEAR: A + 1, source: { status: 'unverified', doc: 'planner guard synthetic entry' },
+	                  SGL: { ...base.SGL, std: 20000 } };
+	try {
+		assertEqual(Number(_row(link).deduction), 20000, 'the later entry\'s deduction, as printed, in its own year');
+		assertEqual(Number(_row(link.replace(`yr=${A + 1}`, `yr=${A + 3}`)).deduction), 20000 * Math.pow(1.025, 2),
+			'and carried from that entry\'s year two years on');
+	} finally {
+		delete byYear[A + 1];
+	}
+	assertEqual(Number(_row(link).deduction), before, 'with the entry gone the year is the anchor table inflated again');
+});
+
 test('taxcalc_core: a link is read the way the page\'s controls would hold it (sliders snap and stop at their ends, bad keys are errors)', () => {
 	const C = _core(); if (!C) return;
 	const cfg = s => C.configFromParams(_link(s));

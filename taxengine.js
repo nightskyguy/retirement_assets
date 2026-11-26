@@ -1741,17 +1741,16 @@ function _notAnIndex(ix) {
     return new TypeError(`expected a factor or a tax index, got ${ix === null ? 'null' : typeof ix}`);
 }
 
-// The federal entry an index prices from and its factor, kept per index object: the Optimizer's
-// ceiling searches ask the same index many times a year. A year before every entry throws rather than
-// pricing on a later year's law.
-const _federalForIndex = new WeakMap();
+// The federal entry an index prices from and its factor, kept ON the index object under a symbol: the
+// Optimizer's ceiling searches ask the same index many times a year, and a property read is cheaper
+// than a WeakMap. A year before every entry throws rather than pricing on a later year's law.
+const _FEDERAL_OF_INDEX = Symbol('federalOfIndex');
 function _federalOfIndex(ix) {
-    let hit = _federalForIndex.get(ix);
+    let hit = ix[_FEDERAL_OF_INDEX];
     if (!hit) {
         const r = federalTableFor(ix.year);
         if (!r) throw new RangeError(`no federal table at or before ${ix.year}`);
-        hit = { table: r.table, factor: ix.from(r.year) };
-        _federalForIndex.set(ix, hit);
+        hit = ix[_FEDERAL_OF_INDEX] = { table: r.table, factor: ix.from(r.year) };
     }
     return hit;
 }
@@ -1770,10 +1769,11 @@ function federalFactor(ix) {
     throw _notAnIndex(ix);
 }
 
-// The factor for a table stated in `tableYear`.
+// The factor for a table stated in `tableYear`. On the hot path, so an index is recognized by its
+// `from` alone; isTaxIndex's fuller test runs where an index first enters (federalTablesFor).
 function factorOf(ix, tableYear) {
     if (typeof ix === 'number') return ix;
-    if (isTaxIndex(ix)) return ix.from(tableYear);
+    if (ix !== null && typeof ix === 'object' && typeof ix.from === 'function') return ix.from(tableYear);
     throw _notAnIndex(ix);
 }
 
@@ -1782,7 +1782,8 @@ function factorOf(ix, tableYear) {
 function entityFactor(entity, ix) {
     if (typeof ix === 'number') return ix;
     if (entity === 'FEDERAL') return federalFactor(ix);
-    return factorOf(ix, TAXData[entity]?.YEAR ?? TAXData.FEDERAL.YEAR);
+    const t = TAXData[entity];
+    return factorOf(ix, (t && t.YEAR) || TAXData.FEDERAL.YEAR);
 }
 
 // An entity's bracket rows for `status`: FEDERAL from its year's entry under an index.
@@ -1941,8 +1942,10 @@ function calculateProgressive(entity, status, amount, inflation = 1, ratecreep =
     }
     inflation = Array.isArray(entity) ? inflation : entityFactor(entity, inflation);
 
-    // Thresholds come from rowThreshold (statutory rows and schedules do not inflate), kept
-    // non-decreasing the same way rowThresholds does; computed inline because this runs on every call.
+    // Thresholds as rowThreshold computes them (statutory rows and schedules do not inflate), kept
+    // non-decreasing the same way rowThresholds does; inline, with the table's flag read once, because
+    // this runs on every call.
+    const tableFixed = typeof entity === 'string' && TAXData[entity]?.INFLATION_INDEXED === false;
     let prevLimit = startPosition;
     let cumulative = 0;
     let marginalRate = 0;
@@ -1950,7 +1953,7 @@ function calculateProgressive(entity, status, amount, inflation = 1, ratecreep =
     let floorSoFar = -Infinity;
 
     for (let b of brks) {
-        floorSoFar = Math.max(floorSoFar, rowThreshold(entity, b, inflation));
+        floorSoFar = Math.max(floorSoFar, b.l * ((b.indexed === false || tableFixed) ? 1 : inflation));
         let currentLimit = floorSoFar;
         if (currentLimit <= startPosition) continue;   // bracket entirely below the starting position
 
@@ -2339,9 +2342,10 @@ function calculateTaxes(params = {}) {
 
     // `inflation` is a factor or a tax index (see isTaxIndex). An index names the year it prices, so a
     // taxYear that names a different one is a caller pricing two years at once.
-    if (isTaxIndex(inflation) && params.taxYear !== undefined && params.taxYear !== inflation.year)
+    const byIndex = isTaxIndex(inflation);
+    if (byIndex && params.taxYear !== undefined && params.taxYear !== inflation.year)
         throw new RangeError(`calculateTaxes: taxYear ${params.taxYear} but the tax index prices ${inflation.year}`);
-    const taxYear = isTaxIndex(inflation) ? inflation.year : taxYearGiven;
+    const taxYear = byIndex ? inflation.year : taxYearGiven;
     const fedTables = federalTablesFor(inflation);
     const fedFactor = federalFactor(inflation);
     const stateFactor = entityFactor(state, inflation);
@@ -2438,7 +2442,7 @@ function calculateTaxes(params = {}) {
     const stateDeductions = stateStdDeduction + stateExemptions;
 
     const stateTaxableIncome = Math.max(0, stateAGI - stateDeductions);
-    const stateResult = calculateProgressive(state, status, stateTaxableIncome, inflation, stateRateCreep);
+    const stateResult = calculateProgressive(state, status, stateTaxableIncome, stateFactor, stateRateCreep);
     const stateTax = stateResult.total;
     const stateMarginalRate = stateResult.marginal;
 
@@ -2457,7 +2461,7 @@ function calculateTaxes(params = {}) {
     // the credits come off the ordinary part first, so the two always add up to the tax charged.
     // Must use the SAME creep as the total above.
     const stateOrdinaryBeforeCredits = calculateProgressive(
-        state, status, Math.max(0, stateAGI - capGains - stateDeductions), inflation, stateRateCreep).total;
+        state, status, Math.max(0, stateAGI - capGains - stateDeductions), stateFactor, stateRateCreep).total;
     const stateOrdinaryTax = Math.max(0, stateOrdinaryBeforeCredits - stateCredits);
     const stateCapGainsTax = stateTaxFinal - stateOrdinaryTax;
 
@@ -2500,8 +2504,11 @@ function calculateTaxes(params = {}) {
     // ========================================================================
     // STEP 7: Federal Ordinary Income Tax
     // ========================================================================
-    const federalOrdinaryResult = calculateProgressive('FEDERAL', status,
-                                                       taxableOrdinaryIncome, inflation, fedRateCreep);
+    // The year's rows and factor, resolved once above, passed as an array: FEDERAL carries no
+    // INFLATION_INDEXED flag, no `indexed: false` row and no SURTAXES, so the array prices exactly as
+    // the name would, without resolving the index again.
+    const federalOrdinaryResult = calculateProgressive(fedTables[status].brackets, status,
+                                                       taxableOrdinaryIncome, fedFactor, fedRateCreep);
     const federalOrdinaryTax = federalOrdinaryResult.total;
     const federalMarginalRate = federalOrdinaryResult.marginal;
 

@@ -4520,11 +4520,15 @@ function computeTaxThresholdSeries(log, adj) {
         }
         return below && atOrAbove;
     };
-    // Inflated per-year boundary value for table[status].brackets[idx].l (null if non-finite).
+    // Inflated per-year boundary value for table[status].brackets[idx].l (null if non-finite). The
+    // federal lines come from the federal table that priced each year, on that year's federal factor;
+    // every other table (IRMAA) is the anchor year's, on `-taxIndex`.
     const boundary = (table, idx) => log.map(r => {
-        const brks = table?.[r.status]?.brackets;
+        const fedYear = table === TAXData?.FEDERAL ? federalTableFor(r.year) : null;
+        const brks = (fedYear ? fedYear.table : table)?.[r.status]?.brackets;
         const l = brks?.[idx]?.l;
-        return (l == null || !isFinite(l)) ? null : l * (r['-taxIndex'] ?? 1);
+        const factor = fedYear ? (r['-fedFactor'] ?? r['-taxIndex'] ?? 1) : (r['-taxIndex'] ?? 1);
+        return (l == null || !isFinite(l)) ? null : l * factor;
     });
     const out = [];
 
@@ -8628,16 +8632,14 @@ function updateBracketFeedback() {
     updateSuggestSpendTooltip();
 }
 
-// Federal marginal-rate % for a given CPI-adjusted (current-year $) income, or null. Mirrors the
-// CPI compounding in generateStratRateOptions so the boundary lines up with the dropdown limits.
+// Federal marginal-rate % for a given current-year $ income, or null. The same table and factor as
+// generateStratRateOptions (menuFederal), so the boundary lines up with the dropdown limits.
 function federalBracketRateAt(income) {
     if (!isFinite(income) || income <= 0) return null;
-    const cpi = (+document.getElementById('cpi')?.value || defaultNumOf('cpi')) / 100;
-    const cpiAdj = Math.pow(1 + cpi, Math.max(0, new Date().getFullYear() - TAX_DATA_BASE_YEAR));
-    const status = getDropdownStatus();
-    const brks = (status === 'MFJ' ? TAXData.FEDERAL.MFJ : TAXData.FEDERAL.SGL).brackets;
+    const fed = menuFederal(getDropdownStatus());
+    const brks = fed.table.brackets;
     for (const b of brks) {
-        if (income <= b.l * cpiAdj) return Math.round(b.r * 100);
+        if (income <= b.l * fed.factor) return Math.round(b.r * 100);
     }
     return Math.round(brks[brks.length - 1].r * 100);
 }
@@ -8845,8 +8847,8 @@ function updateLimitBasisNote() {
         const brks = TAXData.IRMAA[status]?.brackets ?? [];
         const floor = tier === 0 ? 0 : Math.round(brks[tier].l * cpiAdj);
         const ded = dropdownDeduction(status);
-        const topBracket = fedBracketPctAt(Math.max(0, limit - ded), status, cpiAdj);
-        const floorBracket = fedBracketPctAt(Math.max(0, floor - ded), status, cpiAdj);
+        const topBracket = fedBracketPctAt(Math.max(0, limit - ded), status);
+        const floorBracket = fedBracketPctAt(Math.max(0, floor - ded), status);
         // P87f. "Income" named, not left to the reader. An IRMAA tier is a limit on MAGI, which is
         // total income before the deduction and counts at most 85% of a Social Security benefit -
         // a different quantity from the federal branch's taxable income AND from the ACA branch's
@@ -8862,7 +8864,7 @@ function updateLimitBasisNote() {
         // P87f / P87d. ACA MAGI is its own quantity and the difference is not a footnote: it adds
         // back the untaxed part of the benefit, so a household with a large benefit sits tens of
         // thousands higher against this cap than against an IRMAA one printed with the same dollars.
-        sentence = `This cap holds ACA MAGI to ${money(limit)}, which is inside the ${fedBracketPctAt(Math.max(0, limit - ded), status, cpiAdj)}% bracket. ACA MAGI counts your <b>whole</b> Social Security benefit, including the part that is not taxed. It is a cap to stay under, not a target to fill.`;
+        sentence = `This cap holds ACA MAGI to ${money(limit)}, which is inside the ${fedBracketPctAt(Math.max(0, limit - ded), status)}% bracket. ACA MAGI counts your <b>whole</b> Social Security benefit, including the part that is not taxed. It is a cap to stay under, not a target to fill.`;
     } else {
         const ded = dropdownDeduction(status);
         const magi = limit + ded;
@@ -8888,7 +8890,7 @@ function updateLimitBasisNote() {
           + `${showLadderACA ? 'Hide ACA/FPL' : 'Show ACA/FPL'}</span>`
           + `<span id="limit-ladder-close" onclick="toggleLimitLadder()" `
           + `style="cursor:pointer;color:#78350f;font-size:0.85em;">close ✕</span></div>`
-          + buildLimitLadderSVG(status, cpiAdj, limit);
+          + buildLimitLadderSVG(status, menuTaxIndex(), limit);
     }
 }
 
@@ -8955,9 +8957,17 @@ function toggleLimitLadder() {
 // carries that warning). A string of SVG has neither problem.
 //
 // NOTHING IN HERE IS INTERACTIVE. No onclick, no title, no hover. A test pins that.
-function buildLimitLadderSVG(status, cpiAdj, selectedLimit) {
+function buildLimitLadderSVG(status, ix, selectedLimit) {
     const ded = dropdownDeduction(status);
-    const fedBrks = (TAXData.FEDERAL[status]?.brackets ?? []).filter(b => isFinite(b.l));
+    // `ix` follows the engine's convention: a tax index (the menu passes menuTaxIndex()) or a plain
+    // factor (one factor for every table, the anchor federal table). The federal rows, ordinary and
+    // capital gains, come from the table it resolves to on its federal factor; IRMAA and the FPL each
+    // carry from their own year.
+    const fedTables = federalTablesFor(ix);
+    const fed = { table: fedTables[status], cg: fedTables.CAPITAL_GAINS[status], factor: federalFactor(ix) };
+    const cpiAdj = factorOf(ix, TAXData.IRMAA.YEAR);
+    const fplAdj = factorOf(ix, TAXData.FPL.PLAN_YEAR);
+    const fedBrks = (fed.table?.brackets ?? []).filter(b => isFinite(b.l));
     const irmaaBrks = (TAXData.IRMAA[status]?.brackets ?? []).filter(b => isFinite(b.l));
     if (!fedBrks.length || !irmaaBrks.length) return '';
 
@@ -8965,7 +8975,7 @@ function buildLimitLadderSVG(status, cpiAdj, selectedLimit) {
     // offers falls off the end. The top federal bracket and top IRMAA tier are unbounded and are
     // drawn as open-ended bands rather than dropped.
     const maxX = Math.max(irmaaBrks[irmaaBrks.length - 1].l * cpiAdj,
-                          fedBrks[fedBrks.length - 1].l * cpiAdj + ded) * 1.08;
+                          fedBrks[fedBrks.length - 1].l * fed.factor + ded) * 1.08;
 
     // LAYOUT. The scale sits along the TOP edge, not the bottom: the rows below it carry their own
     // text (the capital-gains band labels, and the ACA row's caption) and an axis underneath them
@@ -9002,7 +9012,7 @@ function buildLimitLadderSVG(status, cpiAdj, selectedLimit) {
     // Federal band: each bracket drawn where its MAGI equivalent falls, so the rows line up.
     let prev = 0;
     fedBrks.forEach((b, i) => {
-        const top = b.l * cpiAdj + ded;
+        const top = b.l * fed.factor + ded;
         band(ROW_Y.fed, prev, top, FED[i % FED.length], Math.round(b.r * 100) + '%');
         prev = top;
     });
@@ -9029,17 +9039,17 @@ function buildLimitLadderSVG(status, cpiAdj, selectedLimit) {
     // 0 / 15 / 18.8 / 23.8. The 20% band never appears bare - see the derivation in taxengine.js
     // above the CAPITAL_GAINS table, and TEST CASE 6f which pins it.
     //
-    // THE ONE BOUNDARY ON THIS CHART THAT IS NOT MULTIPLIED BY cpiAdj is the NIIT threshold. Its
-    // statute does not index it; every other line here inflates. That asymmetry is the whole
+    // THE ONE BOUNDARY ON THIS CHART THAT IS NOT MULTIPLIED BY A CPI FACTOR is the NIIT threshold.
+    // Its statute does not index it; every other line here inflates. That asymmetry is the whole
     // reason the split point drifts year to year, and it is why the split cannot be baked into
     // the bracket table as a fixed row. Do not "make it consistent" - a test pins it.
-    const cgBrks = TAXData.FEDERAL.CAPITAL_GAINS[status]?.brackets ?? [];
+    const cgBrks = fed.cg?.brackets ?? [];
     const niitAt = TAXData.FEDERAL.NIIT[status];
     const niitRate = TAXData.FEDERAL.NIIT.rate;
     const cgBands = [];
     prev = 0;
     for (const b of cgBrks) {
-        const top = isFinite(b.l) ? b.l * cpiAdj + ded : maxX;
+        const top = isFinite(b.l) ? b.l * fed.factor + ded : maxX;
         // Split across the surtax threshold when it lands inside this bracket.
         if (niitAt > prev && niitAt < top) {
             cgBands.push({ from: prev, to: niitAt, rate: b.r });
@@ -9070,7 +9080,9 @@ function buildLimitLadderSVG(status, cpiAdj, selectedLimit) {
     let acaNote = '';
     if (showLadderACA) {
         const row = Array.isArray(lastSimulationLog) ? lastSimulationLog[0] : null;
-        const cpiOf = row ? (row['-taxIndex'] || 1) : 1;
+        // This chart is in this year's dollars, so a plan figure comes back by `-cpiFactor`, the index
+        // counted from today - not `-taxIndex`, which counts from the tables' year.
+        const cpiOf = row ? (row['-cpiFactor'] || 1) : 1;
         // `fixedInc` is the WHOLE benefit and `-taxableSS` the part that reaches AGI, which is the
         // same pair ceilingMAGI() differences. Not SS1/SS2 - no such log fields exist, and reading
         // them would have quietly made this offset zero in every plan.
@@ -9078,7 +9090,7 @@ function buildLimitLadderSVG(status, cpiAdj, selectedLimit) {
         const fplBase = TAXData.FPL?.[status] ?? 0;
         const mult = TAXData.FPL?.MULTIPLES ?? [];
         const caps = mult
-            .map(m => Math.max(0, Math.round(fplBase * m / 100 * cpiAdj) - untaxedSS))
+            .map(m => Math.max(0, Math.round(fplBase * m / 100 * fplAdj) - untaxedSS))
             .filter(v => v > 0 && v < maxX);
         if (caps.length) {
             band(ROW_Y.aca, caps[0], caps[caps.length - 1], '#ede9fe', '');
@@ -9104,7 +9116,7 @@ function buildLimitLadderSVG(status, cpiAdj, selectedLimit) {
     out += `<line x1="${x(selMagi).toFixed(1)}" y1="${MARK_TOP}" x2="${x(selMagi).toFixed(1)}" y2="${MARK_BOT}" stroke="${STROKE.limit}" stroke-width="2" stroke-dasharray="4 3"/>`;
 
     const e = Array.isArray(lastSimulationLog) ? lastSimulationLog[0] : null;
-    const planMagi = e && e.MAGI > 0 ? e.MAGI / (e['-taxIndex'] || 1) : null;
+    const planMagi = e && e.MAGI > 0 ? e.MAGI / (e['-cpiFactor'] || 1) : null;   // this year's dollars
     if (planMagi) {
         out += `<line x1="${x(planMagi).toFixed(1)}" y1="${MARK_TOP}" x2="${x(planMagi).toFixed(1)}" y2="${MARK_BOT}" stroke="${STROKE.plan}" stroke-width="1.5"/>`;
     }
@@ -9322,11 +9334,12 @@ function updateACAWarning() {
 
 // The deduction that converts between the two bases. THE PLAN'S OWN, not a second derivation of it:
 // `-fedDeduction` is what `calculateTaxes` charged in the plan's first year - standard or itemized,
-// the age bumps, and the senior deduction after its phase-out. Divided by that year's CPI factor to
-// bring it back to the table-year dollars the dropdown prints, since a plan starting years out logs
-// a deduction inflated by that many years.
+// the age bumps, and the senior deduction after its phase-out. Divided by `-cpiFactor`, the index
+// counted from TODAY, to bring it back to this year's dollars, which is what the dropdown prints
+// (menuFederal and cpiAdj carry the tables to this calendar year). NOT `-taxIndex`: that one counts
+// from the tables' year, and the two differ by a year of CPI once the calendar passes the tables.
 //
-// Before the first run there is no log, so this falls back to the bare statutory standard deduction:
+// Before the first run there is no log, so this falls back to this year's bare standard deduction:
 // no age bumps, no senior deduction, and wrong only until the first simulation finishes, which
 // happens on page load.
 //
@@ -9335,8 +9348,23 @@ function updateACAWarning() {
 // more than the drift it removes.
 function dropdownDeduction(status) {
     const e = Array.isArray(lastSimulationLog) ? lastSimulationLog[0] : null;
-    if (e && e['-fedDeduction'] > 0) return e['-fedDeduction'] / (e['-taxIndex'] || 1);
-    return TAXData.FEDERAL[status]?.std ?? 0;
+    if (e && e['-fedDeduction'] > 0) return e['-fedDeduction'] / (e['-cpiFactor'] || 1);
+    const fed = menuFederal(status);
+    return (fed.table?.std ?? 0) * fed.factor;
+}
+
+// The Limit menu, its ladder and the notes under it price a plan starting this calendar year, on the
+// typed CPI: federal figures from the table for this year (federalTablesFor), so the menu shows the
+// same bracket tops the engine fills to. Other tables (IRMAA, the FPL) carry from their own year,
+// which for the anchor tables is `cpiAdj`.
+function menuTaxIndex() {
+    const cpi = (+document.getElementById('cpi')?.value || defaultNumOf('cpi')) / 100;
+    return taxIndexAtRate(new Date().getFullYear(), cpi);
+}
+function menuFederal(status) {
+    const ix = menuTaxIndex();
+    const tables = federalTablesFor(ix);
+    return { table: tables[status], cg: tables.CAPITAL_GAINS[status], factor: federalFactor(ix) };
 }
 
 // Which IRMAA band a MAGI figure falls in, by the names the dropdown itself uses.
@@ -9353,13 +9381,14 @@ function irmaaBandNameAt(magi, status, cpiAdj) {
 // want two different words around the same number - the dropdown label says "24% Fed" to match its
 // own entries, the sentence below it says "the 24% bracket" - so the number comes back bare and
 // each caller writes its own sentence.
-function fedBracketPctAt(taxable, status, cpiAdj) {
-    const brks = TAXData.FEDERAL[status]?.brackets ?? [];
-    for (const b of brks) if (!isFinite(b.l) || taxable <= b.l * cpiAdj) return Math.round(b.r * 100);
+function fedBracketPctAt(taxable, status) {
+    const fed = menuFederal(status);
+    const brks = fed.table?.brackets ?? [];
+    for (const b of brks) if (!isFinite(b.l) || taxable <= b.l * fed.factor) return Math.round(b.r * 100);
     return null;
 }
-function fedBracketNameAt(taxable, status, cpiAdj) {
-    const pct = fedBracketPctAt(taxable, status, cpiAdj);
+function fedBracketNameAt(taxable, status) {
+    const pct = fedBracketPctAt(taxable, status);
     return pct == null ? '' : `${pct}% Fed`;
 }
 
@@ -9368,7 +9397,7 @@ function crossLadderNote(kind, limit, status, cpiAdj) {
     const ded = dropdownDeduction(status);
     return kind === 'fed'
         ? irmaaBandNameAt(limit + ded, status, cpiAdj)                  // taxable top -> MAGI
-        : fedBracketNameAt(Math.max(0, limit - ded), status, cpiAdj);   // MAGI threshold -> taxable
+        : fedBracketNameAt(Math.max(0, limit - ded), status);   // MAGI threshold -> taxable
 }
 
 /**
@@ -9384,12 +9413,14 @@ function generateStratRateOptions() {
     const status = getDropdownStatus();
     const isMFJ = status === 'MFJ';
 
-    // Compound CPI from TAX_DATA_BASE_YEAR to the current year: exactly the factor the engine prices
-    // a plan starting this year with (`sim.taxIndex`, anchored at the tables' year), so the menu and
-    // the engine agree whether or not the tables are this year's.
+    // A plan starting this year, priced the way the engine prices it: the federal entries from this
+    // year's federal table on its own factor (menuFederal), IRMAA and the FPL on `cpiAdj`, the factor
+    // from the anchor tables' year. So the menu and the engine agree whether or not the tables are
+    // this year's, and whether or not a newer federal table has been published.
     const currentYear = new Date().getFullYear();
     const yearsFromBase = Math.max(0, currentYear - TAX_DATA_BASE_YEAR);
     const cpiAdj = Math.pow(1 + cpi, yearsFromBase);
+    const fed = menuFederal(status);
     // P92e. Every entry now carries its own figure AND its position on the other ladder, so the
     // dollars are shortened to make room. 3 significant figures: $24.8k at the bottom of the ladder
     // where that precision means something, $211k where it does not.
@@ -9411,9 +9442,7 @@ function generateStratRateOptions() {
     // It stays in the list, disabled, showing the income where it BEGINS rather than a ceiling it
     // does not have, because that is the one thing a reader wants from it: where the ladder they
     // are choosing from runs out. Same treatment as the top IRMAA tier below.
-    const fedBrks = isMFJ
-        ? TAXData.FEDERAL.MFJ.brackets
-        : TAXData.FEDERAL.SGL.brackets;
+    const fedBrks = fed.table.brackets;
     let prevFedLimit = 0;
     for (let i = 0; i < fedBrks.length; i++) {
         const ratePct = Math.round(fedBrks[i].r * 100);
@@ -9431,7 +9460,7 @@ function generateStratRateOptions() {
             });
             continue;
         }
-        const limit = Math.round(fedBrks[i].l * cpiAdj);
+        const limit = Math.round(fedBrks[i].l * fed.factor);
         prevFedLimit = limit;
         options.push({
             value: String(ratePct),

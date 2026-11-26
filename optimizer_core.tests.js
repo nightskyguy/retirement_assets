@@ -7590,18 +7590,22 @@ test('bothOnMedicareAtStart: AND semantics, single filer, and the missing-input 
 });
 
 test('a plan that starts in a future year opens with both indexes already aged to it', () => {
-    // Two anchors. `-cpiFactor` counts from the wall clock, for amounts typed in today's dollars;
-    // `-taxIndex` counts from the year TAXData is stated in, for the tables. Each expectation is
-    // computed from its own anchor, so neither starts failing on 1 January.
-    const here = new Date().getFullYear(), T = TAXData.FEDERAL.YEAR;
-    const row = y => simulate({ ...BASE, IRA1: 1000000, cpi: 0.03, startInYear: y, startYear: y }).log[0];
-    assertNear(row(here)['-cpiFactor'], 1, 'a plan starting this year has no gap to close', 1e-9);
-    assertNear(row(here + 5)['-cpiFactor'], Math.pow(1.03, 5), 'five years out opens five years of CPI ahead', 1e-6);
-    // Math.max(0, ...) is the floor on both: a start year behind the anchor cannot wind anything back.
-    assertNear(row(here - 5)['-cpiFactor'], 1, 'a start year in the past is clamped, never negative', 1e-9);
+    // Two anchors. `-cpiFactor` counts from "today", for amounts typed in today's dollars; `-taxIndex`
+    // counts from the year TAXData is stated in, for the tables. Today is pinned three years past the
+    // tables, so a start behind today can be checked without reaching back before the tables.
+    const T = TAXData.FEDERAL.YEAR, today = T + 3;
+    const row = y => simulate({ ...BASE, IRA1: 1000000, cpi: 0.03, startInYear: y, startYear: y, todayYear: today }).log[0];
+    assertNear(row(today)['-cpiFactor'], 1, 'a plan starting today has no gap to close', 1e-9);
+    assertNear(row(today + 5)['-cpiFactor'], Math.pow(1.03, 5), 'five years out opens five years of CPI ahead', 1e-6);
+    // Math.max(0, ...) is the floor: a start year behind today cannot wind the index back.
+    assertNear(row(today - 2)['-cpiFactor'], 1, 'a start year in the past is clamped, never negative', 1e-9);
     assertNear(row(T)['-taxIndex'], 1, 'a plan starting in the tables\' year prices them as printed', 1e-12);
     assertNear(row(T + 5)['-taxIndex'], Math.pow(1.03, 5), 'five years past the tables\' year, five years of CPI', 1e-6);
-    assertNear(row(T - 5)['-taxIndex'], 1, 'a start before the tables\' year is clamped, never deflated', 1e-9);
+    // Before the earliest federal table there is no law to price the year on, and later law is never
+    // deflated onto it: the run is refused where the year is first priced.
+    let err = null;
+    try { row(T - 5); } catch (e) { err = e; }
+    assert(err instanceof RangeError && /before/.test(err.message), `a start before every federal table is refused: ${err}`);
 });
 
 test('P140a: the tax tables are indexed from their own year, whatever the wall clock reads', () => {
@@ -7672,6 +7676,24 @@ test('P140b4: the LTCG and average-rate helpers take a tax index, and read a lat
             'the later entry\'s 0% band, as printed, in its own year');
         assertNear(getLTCGBracketRoom(20000, 'MFJ', 0.15, 1.03), base.CAPITAL_GAINS.MFJ.brackets[0].l * 1.03 - 20000,
             'a plain factor stays on the anchor entry', 1e-6);
+    } finally {
+        delete byYear[A + 1];
+    }
+});
+
+test('P140b5: a simulated year is priced on the federal table published for it, through every caller', () => {
+    // The guard that every tax lookup in the year is handed the year's index and not a bare factor: a
+    // synthetic entry for the year after the anchor must reach the result. A caller still passing a
+    // number would read the anchor entry and land on 16,100 x 1.03 instead.
+    const A = TAXData.FEDERAL.YEAR, byYear = TAXData.FEDERAL_BY_YEAR, base = byYear[A];
+    const wider = brks => brks.map(b => ({ ...b, l: isFinite(b.l) ? Math.round(b.l * 1.1) : Infinity }));
+    byYear[A + 1] = { ...base, YEAR: A + 1, source: { status: 'unverified', doc: 'P140b5 synthetic entry' },
+                      SGL: { ...base.SGL, std: 20000, brackets: wider(base.SGL.brackets) } };
+    try {
+        const rows = simulate({ ...BASE, STATEname: 'TX', IRA1: 1000000, birthyear1: A + 1 - 50, die1: 90,
+                                cpi: 0.03, inflation: 0.03, startInYear: A + 1, startYear: A + 1, todayYear: A + 1 }).log;
+        assertNear(rows[0]['-fedDeduction'], 20000, 'the later entry\'s deduction, as printed, in its own year', 1e-6);
+        assertNear(rows[1]['-fedDeduction'], 20000 * 1.03, 'carried one year of CPI from that entry\'s year', 1e-6);
     } finally {
         delete byYear[A + 1];
     }

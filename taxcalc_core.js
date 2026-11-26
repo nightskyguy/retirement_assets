@@ -20,9 +20,11 @@
   // Inside this function scope the engine names are bare globals in a browser and a require() in node.
   const ENG = (typeof module !== 'undefined' && module.exports)
     ? Object.assign({}, require('./taxengine.js'), require('./medicare_costs.js'))
-    : { TAXData, calculateTaxes, calcIRMAA, netCapitalLosses, getIRMAATiers, medicareGrowthFactor, MEDICARE_COSTS };
+    : { TAXData, calculateTaxes, calcIRMAA, netCapitalLosses, getIRMAATiers, medicareGrowthFactor, MEDICARE_COSTS,
+        taxIndexAtRate };
   const { TAXData: TD, calculateTaxes: calcTaxes, calcIRMAA: irmaaCharge, netCapitalLosses: netLosses,
-          getIRMAATiers: tiersOf, medicareGrowthFactor: medGrowth, MEDICARE_COSTS: MED } = ENG;
+          getIRMAATiers: tiersOf, medicareGrowthFactor: medGrowth, MEDICARE_COSTS: MED,
+          taxIndexAtRate: taxIndexAt } = ENG;
 
   const BASE_YEAR = TD.FEDERAL.YEAR;        // the year the tax tables are stated in
   const YEARS_AHEAD = 9;                    // the tax year runs BASE_YEAR .. BASE_YEAR + 9
@@ -142,14 +144,18 @@
 
   // ─── THE CALCULATION, BOUND TO ONE CFG ─────────────────────────────────────
   function create(cfg) {
-    // The two index factors for the selected year, or for a year `ahead` of it. `inf` indexes every
-    // income threshold (brackets, IRMAA floors); `med` scales the IRMAA surcharge DOLLARS, which ride
-    // their own published path. Memoized: calcAt runs a few hundred times per redraw.
+    // The index factors for the selected year, or for a year `ahead` of it. `ix` is the tax index
+    // every engine call is handed, so the federal figures come from the table for that year; `inf` is
+    // its factor from the anchor tables' year, for figures this file reads off those tables itself (the
+    // IRMAA floors); `med` scales the IRMAA surcharge DOLLARS, which ride their own published path.
+    // Memoized: calcAt runs a few hundred times per redraw, and the engine keeps its federal lookup per
+    // index object.
     let fxKey = '', fx = {};
     function indexFactors(ahead = 0) {
       const key = `${cfg.year}|${cfg.inflation}`;
       if (key !== fxKey) { fxKey = key; fx = {}; }
       return fx[ahead] ??= {
+        ix:  taxIndexAt(cfg.year + ahead, cfg.inflation / 100),
         inf: Math.pow(1 + cfg.inflation / 100, cfg.year + ahead - BASE_YEAR),
         med: medGrowth(cfg.year + ahead - MED.ANCHOR_YEAR)
       };
@@ -184,7 +190,7 @@
     // Maps cfg to calculateTaxes() params and reshapes the result.
     function calcAt(ordInc) {
       const {status, state, ages, ssIncome, propTax, obbaOn, saltHigh, year} = cfg;
-      const {inf} = indexFactors();
+      const {ix} = indexFactors();
       const cgGain = cfg.ltNet;
 
       // The elevated SALT cap and the senior deduction each switch off after their own sunset year.
@@ -217,7 +223,7 @@
         // since investOrd above never counts the refund).
         stateExemptInterest: cfg.usIntEff + cfg.stateRefund,
         stateTaxableExempt:  cfg.stMuniEff,     // municipal interest the state taxes, into state income
-        inflation:       inf,
+        inflation:       ix,
         state:           state,
         obbaOn:          effectiveObbaOn,
         saltHigh:        effectiveSaltHigh,
@@ -231,8 +237,8 @@
       // flat across a sweep. `IRMAAFuture` is the charge THIS point's MAGI sets IRMAA_AHEAD years out;
       // it is reported, never added to this year's tax.
       const now = indexFactors(), fut = indexFactors(IRMAA_AHEAD);
-      const IRMAA = cfg.prevMagi === null ? 0 : irmaaCharge(cfg.prevMagi, status, now.inf, now.med);
-      const IRMAAFuture = irmaaCharge(r.MAGI, status, fut.inf, fut.med);
+      const IRMAA = cfg.prevMagi === null ? 0 : irmaaCharge(cfg.prevMagi, status, now.ix, now.med);
+      const IRMAAFuture = irmaaCharge(r.MAGI, status, fut.ix, fut.med);
 
       return {
         ordInc,

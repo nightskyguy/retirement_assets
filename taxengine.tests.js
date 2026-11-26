@@ -1968,6 +1968,33 @@ test('calculateProgressive: the TEST entity, invalid entities, and which states 
 		assertEqual(FEDERAL.CAPITAL_GAINS.YEAR, FEDERAL.YEAR, 'the capital-gains breakpoints are the anchor year\'s');
 	});
 
+	// ── TEST CASE 32: which federal entry a tax year is priced from ────────────────────────────────
+	test('TEST CASE 32: federalTableFor takes the year\'s own entry, else the newest before it, never a later one', () => {
+		const { federalTableFor } = _engine();
+		// A gap between the two years, so "the next entry" or "the nearest entry" cannot stand in for the
+		// rule: 2026 must take 2025, and 2024 must take nothing rather than the nearest, 2025.
+		const A = { YEAR: 2025 }, B = { YEAR: 2027 };
+		const td = { FEDERAL_BY_YEAR: { 2025: A, 2027: B } };
+		const at = y => { const r = federalTableFor(y, td); return r && [r.table === A ? 'A' : r.table === B ? 'B' : '?', r.year]; };
+		assertEqual(at(2025), ['A', 2025], 'a published year resolves to its own entry');
+		assertEqual(at(2027), ['B', 2027], 'and so does a later published one');
+		assertEqual(at(2026), ['A', 2025], 'a year between entries takes the newest one before it');
+		assertEqual(at(2040), ['B', 2027], 'a year past every entry takes the newest');
+		assertEqual(at(2024), null, 'a year before the earliest entry is refused, never priced on a later one');
+	});
+
+	test('TEST CASE 32b: the real tables resolve the anchor year to its own entry, and a non-year throws', () => {
+		const { federalTableFor, TAXData: td } = _engine();
+		const r = federalTableFor(td.FEDERAL.YEAR);
+		assertEqual(r.year, td.FEDERAL.YEAR, 'the anchor year resolves to itself');
+		assertEqual(r.table === td.FEDERAL_BY_YEAR[td.FEDERAL.YEAR], true, 'and to that entry\'s object');
+		for (const bad of [undefined, null, NaN, 2026.5, '2026']) {
+			let threw = false;
+			try { federalTableFor(bad); } catch (e) { threw = e instanceof TypeError; }
+			assertEqual(threw, true, `federalTableFor(${JSON.stringify(bad)}) throws a TypeError`);
+		}
+	});
+
 // ── Runner ───────────────────────────────────────────────────────────────────────────────────
 // Returns the counts instead of setting process.exitCode, so the browser can render them.
 // ============================================================================

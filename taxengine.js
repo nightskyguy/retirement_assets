@@ -1698,6 +1698,23 @@ const RMD_TABLE = {
 // and every HTML consumer now get them from here.
 // ============================================================================
 
+// The federal entry a tax year is priced from: the year's own entry when one is published, otherwise
+// the newest one before it, which the caller indexes forward by `taxYear - year`. Returns
+// { table, year }, or null for a year before the earliest entry - never an entry from a LATER year
+// deflated backward, because a prior year priced on deflated current law is wrong wherever the law
+// changed. A year that is not a whole number throws: a missing taxYear must fail where it is passed,
+// not resolve quietly to some table. `td` is a parameter so a test can hand it a table of its own.
+function federalTableFor(taxYear, td = TAXData) {
+    if (!Number.isInteger(taxYear)) throw new TypeError(`federalTableFor: taxYear must be a whole year, got ${taxYear}`);
+    const byYear = td.FEDERAL_BY_YEAR;
+    let best = null;
+    for (const key of Object.keys(byYear)) {
+        const y = Number(key);
+        if (y <= taxYear && (best === null || y > best)) best = y;
+    }
+    return best === null ? null : { table: byYear[best], year: best };
+}
+
 function getRateBracket(entity, status) {
     let brks = TAXData?.[entity]?.[status]?.brackets;
 
@@ -2615,7 +2632,7 @@ function getIRMAATierTargetMAGI(magi, status, cpiRate, tiersDown) {
 // Dual-mode export: inert in browser/worker (classic script); lets Node tests require() this file.
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
-        TAXData, RMD_TABLE, RMD_START_AGE, rmdStartAge, rmdDivisor, getRateBracket,
+        TAXData, RMD_TABLE, RMD_START_AGE, rmdStartAge, rmdDivisor, federalTableFor, getRateBracket,
         findLimitByRate, findUpperLimitByAmount, calculateProgressive,
         calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATiers, netCapitalLosses, getIRMAATierTargetMAGI,
         getQCDLimit, isQCDEligible,
@@ -2630,7 +2647,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // test reading RMD_TABLE off globalThis would get undefined and fail somewhere unrelated
     // rather than at the point of the mistake.
     window.TaxEngine = {
-        TAXData, RMD_TABLE, RMD_START_AGE, rmdStartAge, rmdDivisor, getRateBracket,
+        TAXData, RMD_TABLE, RMD_START_AGE, rmdStartAge, rmdDivisor, federalTableFor, getRateBracket,
         findLimitByRate, findUpperLimitByAmount, calculateProgressive,
         calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATiers, netCapitalLosses, getIRMAATierTargetMAGI,
         getQCDLimit, isQCDEligible,

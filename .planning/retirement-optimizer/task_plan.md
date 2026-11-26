@@ -187,7 +187,7 @@ that moves numbers never share a diff.
 - [ ] **P140b the index and the resolver. NEXT (user, 2026-11-26).** `FEDERAL_BY_YEAR` with the 2026
   entry only, `federalFor`, the index, every caller converted. Gate: byte-identical, above. Research it
   builds on: `findings.md`, "Tax tables and the year". Steps, each with what done looks like:
-  - [x] **b1 data shape.** BUILT 2026-11-26, uncommitted. `FEDERAL_BY_YEAR` in `taxengine.js` (a
+  - [x] **b1 data shape.** BUILT 2026-11-26, committed `2b32fb2`. `FEDERAL_BY_YEAR` in `taxengine.js` (a
     const above `TAXData`, like `IRMAA_SGL_BRACKETS`, exposed as `TAXData.FEDERAL_BY_YEAR`) holds the
     2026 entry: `YEAR`, a `source` (Rev. Proc. 2025-32), `MFJ` / `SGL` with `std`, `age`, `stdbump`
     and the brackets, and `CAPITAL_GAINS.MFJ` / `.SGL`. `FEDERAL.MFJ`, `.SGL` and
@@ -198,8 +198,17 @@ that moves numbers never share a diff.
     are the anchor entry's objects) both fail on a mistyped `nr` and on a copied table. 95 of 95
     plan-bank runs byte-identical to `b053c35`, and the 2027-clock set too. Suites 545 / 82 / 62 / 15 /
     50, page suite 540, the planner's in-page badge 82 of 82. Tokens `111ef9`.
-  - [ ] **b2 resolver.** `federalTableFor(taxYear)` returns `{ table, year }`: the exact year if
-    published, else the newest table before it; `null` before the earliest. Done: tests for all three.
+  - [x] **b2 resolver.** BUILT 2026-11-26, uncommitted. `federalTableFor(taxYear, td = TAXData)` in
+    `taxengine.js`, exported in both the node and browser lists, returns `{ table, year }`: the year's
+    own entry, else the newest before it, `null` before the earliest. A taxYear that is not a whole
+    number THROWS a TypeError. TEST CASE 32 (a gapped synthetic table: exact, between, past the end,
+    before the start) and 32b (the real anchor resolves to its own object; undefined, null, NaN,
+    2026.5 and the string '2026' all throw). A nearest-year mutant resolves 2024 to 2025 and is
+    rejected. Nothing calls it yet, so 95 of 95 plan-bank runs stay identical to `b053c35`. Suites
+    545 / 84 / 62 / 15 / 50, page suite 540, the planner's badge 84 of 84. Tokens `111ef9a`.
+    **Hazard for `b4`:** `calculateTaxes` defaults `taxYear` to `OBBBA.SALT.indexBaseYear`, 2025, which
+    resolves to `null` here. A caller that omits `taxYear` today silently gets that default; under
+    `b4` it must be required (throw when absent), and every caller checked for passing it.
   - [ ] **b3 the index object.** One shape everywhere, `{ year, from(tableYear) }`, the factor from a
     table's year to the tax year. Optimizer: `sim.taxIndex` divided by the factor recorded for
     `tableYear` - the sim records its cumulative factor per calendar year as it passes, and a year

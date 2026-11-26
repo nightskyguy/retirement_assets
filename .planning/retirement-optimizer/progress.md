@@ -5919,7 +5919,7 @@ never the wall clock. Two user decisions recorded in `P140`: **`P140b` is next**
 prices state tax only where a table for that year exists**, never deflated. `P140b` is now six steps
 (`b1` data shape through `b6` the gate), each with what done looks like.
 
-**`P140b1` built, uncommitted.** The 2026 federal figures moved into `FEDERAL_BY_YEAR` in
+**`P140b1` built, committed `2b32fb2`.** The 2026 federal figures moved into `FEDERAL_BY_YEAR` in
 `taxengine.js`; `TAXData.FEDERAL`'s status tables and capital-gains tables now reference that entry,
 so there is still one copy of each figure and no reader changed. One correction on the way: the plan
 and findings said `nr` had no reader, and `nominalRateAtLimit` reads it - the grep behind the claim was
@@ -5929,3 +5929,11 @@ Evidence: 95 of 95 plan-bank runs byte-identical to `b053c35` plus the 2027-cloc
 545 / 82 / 62 / 15 / 50, pins matched, page suite 540, the Income Tax Planner's badge 82 of 82 on the
 fresh copy. Tokens `111ef9` on `taxengine.js` (four pages), `taxengine.tests.js`, `optimizer_tests.js`
 and the tier-2 loader.
+
+**`P140b2` built, uncommitted.** `federalTableFor(taxYear, td)` picks the entry a tax year is priced
+from: its own, else the newest before it, `null` before the earliest, and a TypeError for anything
+that is not a whole year. Two tests (32, 32b) on a gapped synthetic table and on the real anchor; a
+nearest-year mutant is rejected. Nothing calls it yet, so the plan bank stays 95 of 95 identical.
+Suites 545 / 84 / 62 / 15 / 50, page suite 540, planner badge 84 of 84. Tokens `111ef9a` (same hour as
+`b1`, hence the letter). Found while writing it: `calculateTaxes` defaults `taxYear` to 2025, which
+this resolver refuses - recorded against `b4`, where `taxYear` has to become required.

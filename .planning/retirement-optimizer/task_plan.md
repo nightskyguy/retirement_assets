@@ -85,6 +85,91 @@ The plan bank is **19 households**, and #244 added none: correcting the IRMAA la
 built in `3c30911`. Measured with `plans.list()` on 2026-09-25, after the 2026-09-24 entry in
 `progress.md` said 20 and said the household had been restored. Both halves of that were wrong.
 
+## P141: store the solved rails with a saved plan, so a load does not solve again  *(2026-11-26, user-raised. PRIORITY UNASSIGNED. PROPOSAL, NOT STARTED; follows PR #267)*
+
+**Where this came from.** A saved plan using the risk-based spend rule (`spendRule: 'rbg'`) loaded with
+a false "12 figure(s) differ on the same release ... may not have been restored exactly". The rule
+reads a rails table that `runRails` solves in the background for each plan, and the load report ran
+before it existed, so the plan ran without its rule. PR #267 (branch
+`worktrees/christenson-optimizer-results-a56c2c`) makes Load and Save WAIT for that solve
+(`rbgAwaitingRails`, `settleLoadCompare`, `settleSaveStats`). The user then asked whether the solved
+rails could be stored with the plan so there is nothing to wait for. This phase is that build; #267's
+waiting stays as the fallback whenever a stored solve cannot be used.
+
+**Why it is worth it.** The wait is the whole solve. Measured 2026-11-26 on the dev box: 18 s for the
+default plan with the rule on (25 years), 10-15 s for the reported plan. `P132f` already projected the
+default job at 50-85 s on the audience's laptops, so a load of a risk-based plan currently shows the
+plan without its rule for about a minute before the real figures appear.
+
+**This reverses a `P132` decision**, which says the table is "derived from the plan and solved again on
+load, never saved". The comments stating it sit in `applyScenario`, `getInputs` (the `rbgPreset` block)
+and `saveScenario`, and must be rewritten by this phase. Confirm the reversal with the user before
+building; asking for this write-up is not that confirmation.
+
+**Sizes, measured 2026-11-26** (default plan, rule on, 25 years, `JSON.stringify` length):
+
+| what | bytes | what it serves |
+|---|---|---|
+| `RailsState.result`, the full solve | 24,957 | every preset, the rails panel, the charts, After-Tax Spend |
+| `lastSimInputs.rbgRails`, the rule's table for one preset | 7,105 | only the rule |
+| `getInputs()`, the plan itself | 8,707 | - |
+| `RailsState.fingerprint` | 1,876 | the identity check |
+
+**Store the full solve, not the table.** The table alone would let the rule run at once but leave the
+panel, the preset menu and After-Tax Spend solving anyway, and a preset change would need a solve the
+stored table cannot answer. At about 30 KB a plan, localStorage's ~5 MB holds roughly 150 such plans.
+
+**How it fits the code that exists.** `rbgRuleTable` already refuses a solve whose
+`RailsState.fingerprint` is not `railsFingerprint()` of the plan on screen. So a load can SEED
+`RailsState` from the file and let that existing check decide: a match runs the rule on the first run
+and `railsScheduleAutoRun` starts nothing; a mismatch is ignored and the page solves exactly as #267
+does today. No second validity rule is needed for the plan itself.
+
+**The three things that make a stored solve unusable**, each falling back to a fresh solve:
+1. **The Monte Carlo tab's settings.** `railsModelCfg` puts method, mu, sigma, seed, bear fraction and
+   the inflation model into the fingerprint, and none of them is saved with a plan (that is `P91d`'s
+   open item). A loader whose tab differs re-solves.
+2. **A different release.** A solve stored under an older engine would hide an engine change from the
+   very report that exists to show one. Discard when the entry's `appVersion` is not
+   `appVersionString()`, or the result's own `version` is not the rails engine's current one.
+3. **A malformed or hand-edited file.** Validate the shape (`years` array of the right length, the
+   preset keys) and ignore anything else; never throw on load. A doctored table only steers that
+   user's own view, but a bad one must not break the page.
+
+Share links cannot carry 25 KB and are out of scope: opening one still solves.
+
+- [ ] **P141a** - **Save attaches the solve when it is current.** `saveScenario` writes
+      `rails: { result, fingerprint, startFingerprint, appVersion }` only when `RailsState.result` exists,
+      `RailsState.fingerprint === railsFingerprint()` and no replay is active. A save made mid-solve
+      (#267's `settleSaveStats` path) attaches it when it settles. On a quota error, save the plan
+      WITHOUT the rails rather than fail the save, and say so.
+- [ ] **P141b** - **Load and Import seed it.** `commitScenario` (both Load and `commitImport` pass
+      through it) seeds `RailsState.result`, `fingerprint` and `startFingerprint` from a valid, same-release
+      entry BEFORE `applyScenario` runs the plan, keeping the solve on screen as `previous`. Everything
+      else is the existing fingerprint check. `normalizeScenarioEntry` carries the new key through.
+- [ ] **P141c** - **What the load report says.** A stored solve used: nothing extra, the comparison is
+      immediate. A stored solve discarded: one short line naming the reason (another release, different
+      Monte Carlo settings), so a reader knows why the wait came back.
+- [ ] **P141d** - **Tests.** In-page: a save with current rails carries them and one with stale rails does
+      not; a load of a same-release entry has `lastSimInputs.rbgRails` on its FIRST run and starts no
+      rails job; another release, a changed Monte Carlo seed and a malformed `rails` each fall back to
+      the wait. Node, if `normalizeScenarioEntry`'s handling moves to `optimizer_core.js`: the shape check.
+- [ ] **P141e** - **Docs and housekeeping.** Rewrite the "never saved" comments named above.
+      `ExperimentalFeatures.md` gets a line under the risk-based rule (the rule is nerdknob-gated, so no
+      changelog entry and no README text); file tokens only, no release stamp, per the page's own rule.
+- [ ] **Verify** with the plan that started this (`Christenson_20261007`, the user's file): save, reload,
+      and the report reads "reproduces the numbers it was saved with" with no wait and
+      `RailsState.running` false throughout; then change the Monte Carlo seed and reload, and the wait
+      returns.
+
+**Open questions for the user, to ask before `P141a`:**
+1. The reversal of `P132`'s "never saved" decision - confirm.
+2. Attach the solve only to plans with the risk-based rule on (what reproducing their figures needs), or
+   to any plan with a current solve (which also spares a GK-style or no-rule plan the panel's solve when
+   Auto-run is on)? The first keeps storage small and is the default proposed here.
+3. Save and restore the Monte Carlo tab's settings with the plan as well, closing `P91d` and making a
+   stored solve usable on any machine, or accept a re-solve when they differ?
+
 ## P140: tax tables keyed by year - the published 2027 federal figures, and the prior year  *(2026-11-26, user-raised. PRIORITY UNASSIGNED. `P140a` and `P140b` MERGED (PRs #264, #265; Pages built `15d72dc` 2026-11-26, so the 2027-01-01 deadline is met); `c` NEXT by the user's order; `c`-`g` PROPOSAL)*
 
 **The user's request:** "2027 Federal tax figures are (I believe) now available - propose a plan for

@@ -1252,6 +1252,66 @@ function runTests() {
 		}
 	})();
 
+	// With the risk-based rule on, the run before its rails are solved is the plan WITHOUT its rule, so
+	// a load compares its figures, and a save records them, only once the rails land.
+	// ⚠ UNSAFE - MUTATES: the rule switch and menu, the last run's inputs, the load report, and the saved
+	// plans (one test entry, removed below); all restored.
+	(function riskBasedLoadAndSaveWaitForRails() {
+		if (!unsafeTest('riskBasedLoadAndSaveWaitForRails')) return;
+		if (typeof settleLoadCompare !== 'function' || !railsOn() || !lastSimInputs || !lastTotals) {
+			console.log('SKIP: rails or a run absent'); return;
+		}
+		const sw = document.getElementById('spendRule'), kind = document.getElementById('spendRuleKind');
+		const box = document.getElementById('scenarioLoadReport');
+		const nameEl = document.getElementById('scenarioName'), notesEl = document.getElementById('scenarioNotes');
+		if (!sw || !kind || !box || !nameEl) { console.log('SKIP: rule or Save/Load controls absent'); return; }
+		const was = { sw: sw.checked, kind: kind.value, sim: lastSimInputs, html: box.innerHTML, cls: box.className,
+		              name: nameEl.value, notes: notesEl ? notesEl.value : null, last: _lastLoadedPlanName };
+		const TEST = '__rbg_wait_test__';
+		const unsolved = () => { lastSimInputs = { ...was.sim, spendRule: 'rbg', rbgRails: undefined }; };
+		const solved   = () => { lastSimInputs = { ...was.sim, spendRule: 'rbg', rbgRails: { years: [] } }; };
+		try {
+			sw.checked = true; kind.value = 'rbg'; spendRuleChanged();
+			unsolved();
+			assertEqual(rbgAwaitingRails(), true, 'rbg wait: a run without its rails table is waiting');
+			const entry = { summary: currentRunSummary() };
+
+			reportSummaryDrift(entry, 'w');
+			assertEqual(!!_pendingLoadCompare, true, 'rbg wait: the load comparison is held');
+			assertEqual(/being solved/.test(box.textContent), true, 'rbg wait: and the report says so');
+			appendLoadReportNote('kept note');
+			settleLoadCompare();
+			assertEqual(!!_pendingLoadCompare, true, 'rbg wait: a solve that brought no table keeps it waiting');
+			solved();
+			settleLoadCompare();
+			assertEqual(_pendingLoadCompare, null, 'rbg wait: the rails landing settles it');
+			assertEqual(/reproduces the numbers/.test(box.textContent), true,
+				`rbg wait: then it compares: ${box.textContent.slice(0, 80)}`);
+			assertEqual(/kept note/.test(box.textContent), true, 'rbg wait: a note added while waiting survives the comparison');
+
+			unsolved(); reportSummaryDrift(entry, 'w'); _pendingLoadCompare.key = 'edited';
+			solved(); settleLoadCompare();
+			assertEqual(/changed before its rails were solved/.test(box.textContent), true,
+				'rbg wait: an edit while waiting is not compared');
+			unsolved(); reportSummaryDrift(entry, 'w'); settleLoadCompare('boom');
+			assertEqual(/could not be solved \(boom\)/.test(box.textContent), true, 'rbg wait: a failed solve says so');
+
+			unsolved(); nameEl.value = TEST; saveScenario();
+			assertEqual(getSavedScenarios()[TEST]?.summary, null, 'rbg wait: a save while waiting stores no statistics yet');
+			assertEqual(!!_pendingSaveStats, true, 'rbg wait: and holds them for the rails');
+			solved(); settleSaveStats();
+			assertEqual(_pendingSaveStats, null, 'rbg wait: the rails landing settles the save');
+			assertEqual(getSavedScenarios()[TEST]?.summary?.tiles?.spend, currentRunSummary().tiles.spend,
+				'rbg wait: and records the run that has its rule');
+		} finally {
+			_pendingLoadCompare = null; _pendingSaveStats = null;
+			try { const s = getSavedScenarios(); delete s[TEST]; localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch (e) { /* storage blocked */ }
+			lastSimInputs = was.sim; sw.checked = was.sw; kind.value = was.kind; toggleStrategyUI();
+			box.innerHTML = was.html; box.className = was.cls;
+			nameEl.value = was.name; if (notesEl) notesEl.value = was.notes; _lastLoadedPlanName = was.last;
+		}
+	})();
+
 	// ===== My Plan Only: the plan as set, and the same plan with Guardrails the other way around =====
 	// user, 2026-09-14. The two rows may differ in the spend rule and nothing else: the second is a fair
 	// measure of the switch only if it carries the plan's own conversions and stop year.

@@ -5136,6 +5136,8 @@ function railsComplete(msg, fingerprint, startFingerprint) {
     if (msg.error || !msg.cost) {
         RailsState.error = msg.error || 'no result';
         railsRenderPanel();
+        settleLoadCompare(RailsState.error);
+        settleSaveStats(RailsState.error);
         return;
     }
     if (isPath) {
@@ -5157,6 +5159,9 @@ function railsComplete(msg, fingerprint, startFingerprint) {
     // finds this fingerprint already solved and starts nothing.
     if (rbgRuleOn() && !_replayState && typeof runSimulation === 'function') runSimulation();
     else updateGuardrailsNote();
+    // A load or a save waiting on these rails finishes now that the plan runs with its rule.
+    settleLoadCompare();
+    settleSaveStats();
     // The plan may have moved while the job ran; with auto-run on, that is solved in turn.
     railsScheduleAutoRun();
 }
@@ -7571,7 +7576,11 @@ function saveScenario({ alsoExport = false } = {}) {
     const scenarioName = document.getElementById('scenarioName').value.trim() ||
         `${new Date().toISOString().slice(0, 19).replace('T', ' ')}`;
     const notesEl = document.getElementById('scenarioNotes');
-    const summary = currentRunSummary();
+    // With the risk-based rule waiting on its rails, the run on screen is the plan without its rule:
+    // store no statistics now, and let settleSaveStats record them when the rails land.
+    const awaitingRails = rbgAwaitingRails();
+    const summary = awaitingRails ? null : currentRunSummary();
+    _pendingSaveStats = null;
 
     try {
         const scenarios = getSavedScenarios();
@@ -7601,6 +7610,15 @@ function saveScenario({ alsoExport = false } = {}) {
         // The report describes the LAST LOAD. After a save it no longer describes the plan on screen.
         clearLoadReport();
 
+        if (awaitingRails) {
+            _pendingSaveStats = { name: scenarioName, savedAt: entry.savedAt, key: _rbgWaitKey(), alsoExport };
+            showMessage(`Scenario "${scenarioName}" ${replaced ? 'updated' : 'saved'}. It uses the risk-based ` +
+                'spend rule, whose rails are being solved. Its statistics are recorded once they are, in a few seconds.',
+                'success');
+            document.getElementById('scenarioName').value = scenarioName;
+            if (notesEl) notesEl.value = notesEl.value.trim();
+            return;
+        }
         // A plan saved before it was ever run carries no statistics, and saying so is better than a
         // saved plan that silently claims none exist.
         const note = summary ? '' : ' (no statistics recorded - run the plan first)';
@@ -8148,6 +8166,7 @@ function setLoadReport(type, headline, lines = []) {
 }
 
 function clearLoadReport() {
+    _pendingLoadCompare = null;
     const box = document.getElementById('scenarioLoadReport');
     if (!box) return;
     box.textContent = '';
@@ -8165,6 +8184,7 @@ function appendLoadReportNote(text) {
     p.textContent = text;
     box.appendChild(p);
     if (!box.className.includes('error')) box.className = 'scenario-message warning';
+    if (_pendingLoadCompare) _pendingLoadCompare.notes.push(text);
     return true;
 }
 
@@ -8176,8 +8196,87 @@ function appendLoadReportNote(text) {
  * drift: applyScenario leaves a field alone when the saved data omits its key, so a plan loaded on
  * top of a different one can inherit a stray input. Nothing detected that before.
  */
+// The risk-based rule is on, but the run on screen could not apply it: its rails are solved for each
+// plan in the background, and until they land the rule leaves spending on the plan's own path. Figures
+// read now are the plan WITHOUT its rule; railsComplete runs the plan again once the rails land.
+function rbgAwaitingRails() {
+    return rbgRuleOn() && railsOn() && !_replayState && !!lastSimInputs && !lastSimInputs.rbgRails;
+}
+
+// A load whose comparison waits for those rails: the entry, its name, the inputs it loaded (so an edit
+// made while waiting is caught rather than compared), and any notes appended to the report meanwhile,
+// which the deferred report would otherwise overwrite.
+let _pendingLoadCompare = null;
+
+// The plan as a load or a save left it, minus the rails table, which is what arrives while waiting.
+function _rbgWaitKey() {
+    const { rbgRails, ...rest } = getInputs();
+    return JSON.stringify(rest);
+}
+
+// A save made while the rails were still being solved. The plan is stored at once, without statistics
+// (they would be the plan without its rule); this records them, and runs a requested export, once
+// the plan runs with its rule.
+let _pendingSaveStats = null;
+
+// Called by railsComplete beside settleLoadCompare.
+function settleSaveStats(error = null) {
+    const p = _pendingSaveStats;
+    if (!p) return;
+    const sameInputs = _rbgWaitKey() === p.key;
+    if (!error && sameInputs && rbgAwaitingRails()) return;
+    _pendingSaveStats = null;
+    let scenarios, entry;
+    try { scenarios = getSavedScenarios(); entry = scenarios[p.name]; } catch (e) { return; }
+    // Saved over or deleted meanwhile: the newer save, or the deletion, has the last word.
+    if (!entry || entry.savedAt !== p.savedAt) return;
+    const reason = error ? `its rails could not be solved (${error})`
+                 : !sameInputs ? 'the plan was changed before its rails were solved' : null;
+    if (!reason) {
+        entry.summary = currentRunSummary();
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
+        } catch (e) {
+            showMessage(`Failed to record statistics for "${p.name}": ${e.message}`, 'error');
+            return;
+        }
+    }
+    if (p.alsoExport) exportScenario(p.name);
+    if (reason) showMessage(`Scenario "${p.name}" was saved without statistics: ${reason}.`, 'warning');
+    else showMessage(`Scenario "${p.name}": statistics recorded${p.alsoExport ? ' and exported' : ''}.`, 'success');
+}
+
+// Called by railsComplete after it re-runs the plan, and with the error when the solve failed.
+function settleLoadCompare(error = null) {
+    const p = _pendingLoadCompare;
+    if (!p) return;
+    const sameInputs = _rbgWaitKey() === p.key;
+    if (!error && sameInputs && rbgAwaitingRails()) return;   // a solve for some other plan landed
+    _pendingLoadCompare = null;
+    if (error) {
+        setLoadReport('warning', `Loaded "${p.name}", but the risk-based rule's rails could not be solved ` +
+            `(${error}), so its figures were not compared with the saved ones.`);
+    } else if (!sameInputs) {
+        setLoadReport('warning', `Loaded "${p.name}". The plan was changed before its rails were solved, ` +
+            'so its figures were not compared with the saved ones.');
+    } else {
+        reportSummaryDrift(p.entry, p.name);
+    }
+    for (const n of p.notes) appendLoadReportNote(n);
+}
+
 function reportSummaryDrift(entry, name) {
     const fresh = currentRunSummary();
+    _pendingLoadCompare = null;
+    // Comparing now would set the plan without its rule against the plan saved with it.
+    if (entry.summary && fresh && rbgAwaitingRails()) {
+        _pendingLoadCompare = { entry, name, key: _rbgWaitKey(), notes: [] };
+        const wait = `Loaded "${name}". It uses the risk-based spend rule, whose rails are being solved ` +
+            'for it. Its figures are compared with the saved ones once they are, in a few seconds.';
+        setLoadReport('success', wait);
+        showMessage(wait, 'success');
+        return;
+    }
     if (!entry.summary || !fresh) {
         showMessage(`Scenario "${name}" loaded.`, 'success');
         setLoadReport('success', `Loaded "${name}". It has no saved statistics to compare against.`);
